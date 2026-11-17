@@ -1,7 +1,8 @@
 //! `app.toast`: a short message shown over the window that does not stop work and goes away by
-//! itself (a toast). Scripts (`vc.run`), actions (a recorded step), MCP clients and the app's own
-//! code ([`Session::toast`]) raise one. The engine queues the messages and the desktop app takes
-//! them each frame ([`Session::take_toasts`]) and shows them.
+//! itself (a toast). Scripts (`vc.run`), actions (a recorded step), MCP clients and plug-ins raise
+//! one with the command, and the app's code can raise one with [`Session::toast`]. The engine
+//! queues the messages and the desktop app takes them each frame ([`Session::take_toasts`]) and
+//! shows them. A failed script run puts the documents back but keeps the messages it raised.
 
 use std::collections::VecDeque;
 
@@ -22,7 +23,7 @@ pub const MIN_SECONDS: f64 = 0.5;
 pub const MAX_SECONDS: f64 = 60.0;
 
 /// The most messages waiting for the app to take them: past it the oldest one goes. A session
-/// without a window (MCP, the command line) never takes them.
+/// without a window (the headless MCP server, `vectorcraft-cli run`) never takes them.
 pub const MAX_QUEUED: usize = 32;
 
 /// What kind of news a message is, which sets its color.
@@ -95,7 +96,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "Show Message",
         [],
         None,
-        "{message: string (1 to 500 characters, not only spaces), level?: \"info\" | \"success\" | \"warning\" | \"error\" (default \"info\"), seconds?: number 0.5 to 60 (default 4)} show `message` over the window without stopping work: it goes away after `seconds` or when clicked; messages stack at the window's bottom right, the newest lowest, at most 5 at once; edits no document; an action records it as a step → {message, level, seconds}",
+        "{message: string (1 to 500 characters, not only whitespace), level?: \"info\" | \"success\" | \"warning\" | \"error\" (default \"info\"), seconds?: number 0.5 to 60 (default 4)} show `message` over the window without stopping work: it goes away after `seconds` or when clicked; messages stack at the window's bottom right, the newest lowest, at most 5 at once; edits no document; an action records it as a step → {message, level, seconds}",
         always,
         run
     )]
@@ -116,7 +117,7 @@ fn parse(p: &Value) -> Result<Toast> {
         None => return Err(bad(ID, "`message` is required")),
     };
     if message.trim().is_empty() {
-        return Err(bad(ID, "`message` must have a character other than a space"));
+        return Err(bad(ID, "`message` must have a character other than whitespace"));
     }
     let chars = message.chars().count();
     if chars > MAX_CHARS {
@@ -229,6 +230,27 @@ mod tests {
             .unwrap();
         assert!(r.get("error").is_none_or(Value::is_null), "{r}");
         assert_eq!(s.take_toasts(), vec![Toast::new("Done: 2", Level::Success)]);
+    }
+
+    #[test]
+    fn a_failed_script_run_puts_the_documents_back_and_keeps_its_messages() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let art = format!("{:?}", s.active().unwrap().doc.layers);
+        let e = s
+            .execute(
+                "script.run",
+                &json!({
+                    "source": "vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10}); vc.run('app.toast', {message: 'Failed: no artboard'}); throw new Error('stop');",
+                    "name": "t.js",
+                    "answers": [],
+                }),
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("stop"), "{e}");
+        assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), art, "the rectangle is put back");
+        assert_eq!(s.take_toasts(), vec![Toast::new("Failed: no artboard", Level::Info)]);
     }
 
     #[test]

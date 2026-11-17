@@ -1,6 +1,6 @@
-//! Messages that `app.toast` and the app's own code ([`vectorcraft_engine::Session::toast`]) queue,
-//! shown over the window without taking the keyboard or stopping work: a stack at the window's
-//! bottom right, the newest lowest. Each one goes after its time or when clicked; past
+//! Messages that `app.toast` or a call of [`vectorcraft_engine::Session::toast`] queues, shown
+//! over the window without taking the keyboard or stopping work: a stack at the window's bottom
+//! right, the newest lowest. Each one goes after its time or when clicked; past
 //! [`MAX_SHOWN`] the oldest goes first. A message shows at most [`MAX_ROWS`] lines, and the whole
 //! text on hover; a stack taller than the window scrolls.
 
@@ -64,7 +64,7 @@ impl Shown {
 fn color(t: &Tokens, level: Level) -> egui::Color32 {
     match level {
         Level::Info => t.text_dim,
-        Level::Success => t.axis_y,
+        Level::Success => t.success,
         Level::Warning => t.warning,
         Level::Error => t.error,
     }
@@ -319,6 +319,9 @@ mod tests {
         pass_in(&mut app, &ctx, 0.0, vec![], height);
         let newest = app.toasts.list.last().unwrap().rect.unwrap();
         assert!(newest.top() >= MARGIN - 0.5 && newest.bottom() <= height - MARGIN + 0.5, "{newest:?}");
+        // The stack scrolls inside the window instead of growing past its top.
+        let stack = ctx.memory(|m| m.area_rect(egui::Id::unique("toasts"))).unwrap();
+        assert!(stack.top() >= MARGIN - 0.5 && stack.bottom() <= height - MARGIN + 0.5, "{stack:?}");
         assert_eq!(app.toasts.list.len(), MAX_SHOWN);
     }
 
