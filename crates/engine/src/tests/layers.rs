@@ -914,6 +914,12 @@ fn locate_layer_highlights_the_layer_holding_the_object() {
     let r = run(&mut s, "layer.locate", json!({"layersOnly": true}));
     assert_eq!(r, json!({"id": sub.0, "objectId": b.0, "ancestry": [layer.0, sub.0]}), "the group's sublayer");
     assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub]);
+    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "the Layers panel reveals the located row");
+    s.doc_mut().unwrap().locate_reveal = None;
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "layer.locate", json!({"layersOnly": true}));
+    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "again for a row already highlighted");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
     assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0, "layersOnly": true}))["id"], layer.0, "art directly in a layer");
     assert_eq!(s.doc().unwrap().highlighted_rows(), vec![layer]);
     let r = run(&mut s, "layer.locate", json!({"id": sub.0, "layersOnly": true}));
@@ -924,6 +930,7 @@ fn locate_layer_highlights_the_layer_holding_the_object() {
     for p in [json!({"id": b.0, "layersOnly": "yes"}), json!({"id": 999_999, "layersOnly": true})] {
         assert!(s.execute("layer.locate", &p).is_err(), "{p}");
         assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g], "{p}");
+        assert_eq!(s.doc().unwrap().locate_reveal, Some(g), "{p}");
     }
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("layer.locate", &json!({"layersOnly": true})).is_err(), "nothing selected");

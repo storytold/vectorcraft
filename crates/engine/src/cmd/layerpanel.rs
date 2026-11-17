@@ -132,7 +132,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Locate Object",
             ["Window", "Layers"],
             None,
-            "{id?, layersOnly?} (default: the last selected object) highlight the object's row; the Layers panel opens the layers around it and scrolls to it → {id, ancestry: [layer…, id]}. layersOnly (default false; the panel sends true while Show Layers Only is on, as Locate Layer) highlights the innermost layer or sublayer holding the object instead, or a layer id itself → {id: layer, objectId, ancestry: [layer…]}",
+            "{id?, layersOnly?} (default: the last selected object) highlight the object's row; the Layers panel opens the layers around it and scrolls to it, also when the row was already highlighted →{id, ancestry: [layer…, id]}. layersOnly (default false; the panel sends true while Show Layers Only is on, as Locate Layer) highlights the innermost layer or sublayer holding the object instead, or a layer id itself → {id: layer, objectId, ancestry: [layer…]}",
             has_doc,
             locate
         ),
@@ -446,6 +446,7 @@ fn locate(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let row = ancestry.last().copied().ok_or(EngineError::NoNode(id))?;
     st.layer_rows = vec![row];
+    st.locate_reveal = Some(row);
     st.revision += 1;
     let ancestry: Vec<u64> = ancestry.iter().map(|i| i.0).collect();
     Ok(if layers_only { json!({ "id": row.0, "objectId": id.0, "ancestry": ancestry }) } else { json!({ "id": id.0, "ancestry": ancestry }) })

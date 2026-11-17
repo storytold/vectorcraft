@@ -221,6 +221,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         reveal = rows.first().copied();
         ui.data_mut(|d| d.insert_temp(key("seen"), rows.clone()));
     }
+    // Locate Object or Locate Layer (`layer.locate`): the located row is revealed each time, also
+    // when it was already highlighted and a layer around it was closed since or the list scrolled
+    // away. A request for a row no longer highlighted is dropped.
+    let locate = app.session.active_mut().and_then(|st| st.locate_reveal.take()).filter(|id| rows.contains(id));
+    if let Some(id) = locate {
+        open_around(app, &doc, &[id]);
+        reveal = Some(id);
+    }
     let highlighted = reveal.is_some();
     // A new active layer (a canvas selection highlights no row): reveal it too, unless a row
     // highlighted in the panel holds the view.
