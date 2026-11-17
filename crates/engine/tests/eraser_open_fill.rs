@@ -1646,3 +1646,192 @@ fn eraser_copying_container_gradient_keeps_source_fit_through_earlier_copy() {
     assert_eq!(fitted.1, fitted.0, "pinning follows the earlier eligible copy split as rendering does");
     assert_eq!(fitted.1, placed.1, "both live copy stages preserve the same source placement after editing");
 }
+
+#[test]
+fn eraser_keeps_group_painted_open_paths_on_the_outline_route() {
+    for mode in ["fixed", "varied", "marquee"] {
+        for group_stroke in [false, true] {
+            let mut s = session();
+            let id = NodeId(
+                s.execute(
+                    "path.create",
+                    &json!({"anchors": [
+                        {"x": 100, "y": 100}, {"x": 200, "y": 100},
+                        {"x": 200, "y": 200}, {"x": 100, "y": 200}
+                    ]}),
+                )
+                .unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#0000ff"})).unwrap();
+            s.execute("paint.setStroke", &json!({"ids": [id.0], "none": true})).unwrap();
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+            let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+            if group_stroke {
+                s.execute("appearance.addStroke", &json!({"ids": [group.0], "target": "object"})).unwrap();
+                s.execute(
+                    "appearance.setItem",
+                    &json!({"ids": [group.0], "target": "object", "index": 0,
+                    "color": "#ff0000", "weight": 4}),
+                )
+                .unwrap();
+            }
+            s.execute("select.none", &json!({})).unwrap();
+            assert!(!path(&s, id).is_closed());
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(d.parent_of(id), Some(group));
+            assert!(d.node(id).unwrap().appearance.stroke_paint().is_none());
+            assert_eq!(d.node(group).unwrap().appearance.stroke_width(), if group_stroke { 4.0 } else { 0.0 });
+            let render = |s: &Session| {
+                vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+            };
+            let before_image = render(&s);
+            assert_eq!(before_image.pixel(150, 150), [0, 0, 255, 255]);
+            if group_stroke {
+                assert_eq!(before_image.pixel(150, 100), [255, 0, 0, 255], "the Group really paints the child's open outline");
+                assert_eq!(before_image.pixel(99, 125)[3], 0, "the missing closing edge is not stroked");
+            }
+            let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+            let history = s.doc().unwrap().history.undo.len();
+            let selection = s.doc().unwrap().selection.clone();
+            let paint = s.paint.clone();
+            // This ordinary Eraser gesture hits fill, at least 30 pt from every real outline.
+            let result = match mode {
+                "marquee" => s.execute("path.eraseRegion", &json!({"rect": [130, 145, 40, 10]})).unwrap(),
+                _ => erase(&mut s, json!({"points": [[130, 150], [170, 150]], "size": 10}), mode == "varied"),
+            };
+            if group_stroke {
+                assert_eq!(result["ids"], json!([]), "{mode}: a Group-painted open outline keeps main's miss behavior");
+                assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+                assert_eq!(s.doc().unwrap().history.undo.len(), history);
+                assert_eq!(s.doc().unwrap().selection, selection);
+                assert_eq!(render(&s).pixels, before_image.pixels);
+            } else {
+                assert!(!result["ids"].as_array().unwrap().is_empty(), "{mode}: the fill-only Group control still cuts as an area");
+                let after_image = render(&s);
+                assert_eq!(after_image.pixel(150, 150)[3], 0);
+                assert_eq!(after_image.pixel(120, 125), [0, 0, 255, 255]);
+            }
+            assert_eq!(s.paint, paint);
+        }
+    }
+}
+
+#[test]
+fn eraser_ancestor_stroke_classification_keeps_container_context() {
+    for container in ["nested", "layer", "compound", "clip"] {
+        for stroke in ["painted", "hidden", "none", "zero"] {
+            eraser_ancestor_stroke_case(container, stroke);
+        }
+    }
+}
+
+fn eraser_ancestor_stroke_case(container: &str, stroke: &str) {
+    let mut s = eraser_ancestor_stroke_scene(container, stroke);
+    let render = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default())
+    };
+    let before_image = render(&s);
+    assert_eq!(before_image.pixel(150, 150), [0, 0, 255, 255], "{container}/{stroke}: actual filled input");
+    let outline_route = stroke == "painted" && container != "clip";
+    if outline_route {
+        assert_eq!(before_image.pixel(150, 100), [255, 0, 0, 255], "{container}: actual ancestor stroke");
+    } else if container == "clip" && stroke == "painted" {
+        assert_eq!(before_image.pixel(150, 90), [255, 0, 0, 255], "the ancestor paints the clipping outline");
+        assert_eq!(before_image.pixel(150, 100), [0, 0, 255, 255], "the ancestor does not stroke the clipped child's outline");
+    }
+    let before = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+    let history = s.doc().unwrap().history.undo.len();
+    let selection = s.doc().unwrap().selection.clone();
+    let paint = s.paint.clone();
+    let result = erase(&mut s, json!({"points": [[130, 150], [170, 150]], "size": 10}), false);
+    if outline_route {
+        assert_eq!(result["ids"], json!([]), "{container}/{stroke}: preserve main's open-outline miss");
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert_eq!(render(&s).pixels, before_image.pixels);
+    } else {
+        assert!(!result["ids"].as_array().unwrap().is_empty(), "{container}/{stroke}: the eligible fill still cuts");
+        let after_image = render(&s);
+        assert_eq!(after_image.pixel(150, 150)[3], 0, "{container}/{stroke}");
+        assert_eq!(after_image.pixel(120, 125), [0, 0, 255, 255], "{container}/{stroke}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before);
+        assert_eq!(s.doc().unwrap().selection, selection);
+        assert_eq!(render(&s).pixels, before_image.pixels);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(render(&s).pixel(150, 150)[3], 0);
+    }
+    assert_eq!(s.paint, paint);
+}
+
+fn eraser_ancestor_stroke_scene(container: &str, stroke: &str) -> Session {
+    let mut s = session();
+    let id = NodeId(
+        s.execute(
+            "path.create",
+            &json!({"anchors": [
+                {"x": 100, "y": 100}, {"x": 200, "y": 100},
+                {"x": 200, "y": 200}, {"x": 100, "y": 200}
+            ]}),
+        )
+        .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("paint.setFill", &json!({"ids": [id.0], "color": "#0000ff"})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [id.0], "none": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let mut subject = id;
+    if container == "compound" {
+        let other = s
+            .execute(
+                "path.create",
+                &json!({"anchors": [
+                    {"x": 220, "y": 100}, {"x": 240, "y": 100},
+                    {"x": 240, "y": 120}, {"x": 220, "y": 120}
+                ]}),
+            )
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("paint.setFill", &json!({"ids": [other], "color": "#0000ff"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [other], "none": true})).unwrap();
+        s.execute("select.set", &json!({"ids": [id.0, other]})).unwrap();
+        subject = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Compound { children, .. } = &s.doc().unwrap().doc.node(subject).unwrap().kind else {
+            panic!("the public Make command produces a compound path")
+        };
+        assert_eq!(children.len(), 2);
+        assert!(children.iter().all(|child| !child.path_data().unwrap().is_closed()));
+    } else if container == "clip" {
+        let mask = s.execute("shape.rectangle", &json!({"x": 90, "y": 90, "width": 120, "height": 120})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [id.0, mask]})).unwrap();
+        subject = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+        assert!(s.doc().unwrap().doc.node(subject).unwrap().clips());
+    }
+    let owner = if container == "layer" {
+        s.doc().unwrap().doc.layer_of(id).unwrap()
+    } else {
+        s.execute("select.set", &json!({"ids": [subject.0]})).unwrap();
+        let inner = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+        if container == "nested" { NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap()) } else { inner }
+    };
+    s.execute("appearance.addStroke", &json!({"ids": [owner.0], "target": "object"})).unwrap();
+    s.execute(
+        "appearance.setItem",
+        &json!({"ids": [owner.0], "target": "object", "index": 0,
+        "color": "#ff0000", "weight": if stroke == "zero" { 0 } else { 4 }, "visible": stroke != "hidden"}),
+    )
+    .unwrap();
+    if stroke == "none" {
+        s.execute("appearance.setItem", &json!({"ids": [owner.0], "target": "object", "index": 0, "none": true})).unwrap();
+    }
+    // Select only the original open child (or the two-member compound). In the clip
+    // control, neither the mask nor the other container geometry is an Eraser target.
+    let selected = if container == "compound" { subject } else { id };
+    s.execute("select.set", &json!({"ids": [selected.0]})).unwrap();
+    s
+}

@@ -1,7 +1,7 @@
 use super::common::{
-    PenRecord, SIZE_VARIATIONS, SIZES, Sample, center_strokes, dist_to_polyline, fill_targets, has_fill, has_painted_stroke, ids_json, path_mut,
-    path_of, points_param, poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param, set_geometry, sibling_with, size_pressure,
-    target_paths, usize_opt,
+    PenRecord, SIZE_VARIATIONS, SIZES, Sample, center_strokes, dist_to_polyline, fill_targets, has_fill, has_painted_ancestor_stroke,
+    has_painted_stroke, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, ranged, replace_with_pieces, samples_param,
+    set_geometry, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, Document, EngineError, FillRule, Join, NodeId, NodeKind, Paint, ParamCurve, PathData, Point,
@@ -361,7 +361,8 @@ fn erase_as_area(doc: &Document, id: NodeId, pd: &PathData) -> bool {
     // paint it. Eligible fill-only compounds were collected as one parent target above.
     let compound_member =
         doc.parent_of(id).and_then(|parent| doc.node(parent)).is_some_and(|parent| matches!(parent.kind, NodeKind::Compound { .. }));
-    let filled_open = !compound_member && doc.node(id).is_some_and(|node| has_fill(node) && !has_painted_stroke(node));
+    let filled_open =
+        !compound_member && !has_painted_ancestor_stroke(doc, id) && doc.node(id).is_some_and(|node| has_fill(node) && !has_painted_stroke(node));
     pd.is_closed() || filled_open
 }
 

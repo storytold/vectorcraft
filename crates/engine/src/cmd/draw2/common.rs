@@ -357,13 +357,27 @@ pub(super) fn has_painted_stroke(n: &Node) -> bool {
     )
 }
 
+/// A container stroke that paints this target's open geometry. A clipping container's own
+/// paint follows its clipping outline, and a compound shape paints its combined area instead.
+/// Neither makes its descendants' implicit fill-closing edges into new stroked edges.
+pub(super) fn has_painted_ancestor_stroke(doc: &Document, id: NodeId) -> bool {
+    doc.ancestry(id)
+        .unwrap_or_default()
+        .into_iter()
+        .rev()
+        .skip(1)
+        .filter_map(|id| doc.node(id))
+        .take_while(|node| !node.clips() && !node.is_compound_shape())
+        .any(|node| matches!(node.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && has_painted_stroke(node))
+}
+
 /// [`target_paths`] for the tools that cut fills, with each target's geometry and fill rule: the
 /// members of a compound path whose members are all closed paths give the compound path itself,
 /// once, so its fill (holes included) is cut as one shape under its own fill rule.
 /// With `open_fills`, an open compound with a visible fill and no painted visible stroke does too.
 pub(super) fn fill_targets(doc: &Document, sel: &Selection, area: Rect, open_fills: bool) -> Result<Vec<(NodeId, PathData, FillRule)>> {
     let area_compound = |n: &Node| {
-        let filled = open_fills && has_fill(n) && !has_painted_stroke(n);
+        let filled = open_fills && has_fill(n) && !has_painted_stroke(n) && !has_painted_ancestor_stroke(doc, n.id);
         matches!(&n.kind, NodeKind::Compound { children, .. }
             if children.iter().all(|c| matches!(&c.kind, NodeKind::Path { path, .. } if path.is_closed() || filled)))
     };
