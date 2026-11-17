@@ -224,6 +224,45 @@ fn shadows_and_glows_keep_their_blend_modes() {
     assert_eq!(modes, [vectorcraft_color::BlendMode::Multiply, vectorcraft_color::BlendMode::Screen]);
 }
 
+/// Each copy of a group's Transform effect has its own image of the shadow listed before the
+/// effect, under that copy: the squares' shadow (40..60) paints over their copy moved 30 pt right
+/// (50..70), as on the canvas, and the copies' objects have ids of their own.
+#[test]
+fn each_copys_shadow_on_a_group_flattens_under_that_copy() {
+    let mut d = Document::new(200.0, 200.0);
+    let members = [20.0, 30.0].map(|x| Arc::new(rect(&mut d, Rect::new(x, 40.0, x + 10.0, 60.0), Color::rgb(1.0, 0.0, 0.0))));
+    let mut g = Node::group(d.alloc_id(), members.to_vec());
+    g.appearance.effects = vec![
+        Effect {
+            id: "stylize.dropShadow".into(),
+            params: json!({"x": 20.0, "y": 0.0, "blur": 0.0, "opacity": 100.0, "mode": "normal", "color": "#00ff00"}),
+            visible: true,
+        },
+        Effect { id: "distort.transform".into(), params: json!({"moveH": 30.0, "copies": 1}), visible: true },
+    ];
+    add(&mut d, g);
+    let canvas = render(&d);
+    let flat = crate::flatten_raster_effects(&d).unwrap();
+    let back = render(&flat);
+    let at = |r: &Rendered, x: usize| {
+        let i = (50 * r.width as usize + x) * 4;
+        (r.pixels[i], r.pixels[i + 1], r.pixels[i + 2])
+    };
+    for x in [55, 65, 85] {
+        let (want, got) = (at(&canvas, x), at(&back, x));
+        assert!(want.0.abs_diff(got.0) < 32 && want.1.abs_diff(got.1) < 32 && want.2.abs_diff(got.2) < 32, "x {x}: {want:?} {got:?}");
+    }
+    assert!(at(&back, 55).1 > 200 && at(&back, 55).0 < 60, "the squares' shadow over the copy: {:?}", at(&back, 55));
+    let (mut seen, mut count) = (std::collections::HashSet::new(), 0);
+    for l in &flat.layers {
+        l.walk(&mut |n| {
+            seen.insert(n.id);
+            count += 1;
+        });
+    }
+    assert_eq!(seen.len(), count, "each object has an id of its own");
+}
+
 #[test]
 fn pdf_resolution_cap_warns_once_for_original_object_when_appearance_items_split() {
     let mut d = Document::new(300.0, 300.0);

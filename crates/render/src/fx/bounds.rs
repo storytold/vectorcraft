@@ -791,9 +791,11 @@ pub(crate) fn three_d_art_bounds(symbols: &SymbolBoxes, art: &Node) -> Option<Re
     pieces(symbols, &art)
 }
 
-/// `b`, the bounds of what `n` draws, grown by how far `n`'s own raster effects paint past it.
+/// `b`, the bounds of what `n` draws, grown by how far `n`'s own raster effects paint past it: those
+/// around its whole art ([`effects::outer_effects`]), as the copies of a Transform effect that carry
+/// the ones listed before it are measured in `b`.
 pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) -> Rect {
-    let o = outset(symbols, &n.appearance.effects, b);
+    let o = outset(symbols, effects::outer_effects(n), b);
     b.inflate(o, o)
 }
 

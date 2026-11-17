@@ -361,6 +361,25 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en gruppes udfyldning eller streg tegner intet
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
+@msg	give one <filter> element	angiv ét <filter>-element
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementet skal have et id, filterets navn
+@msg	an SVG filter's id is at most {MAX_NAME} characters	et SVG-filters id er højst {MAX_NAME} tegn
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> er ikke et element i et SVG-filter
+@msg	an SVG filter has no event attributes such as {_1}	et SVG-filter har ingen hændelsesattributter som {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	et SVG-filters billeder er data:-URL'er i PNG, JPEG, GIF eller WebP
+@msg	the SVG filter isn't valid XML: {e}	SVG-filteret er ikke gyldig XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves for feTurbulence er højst {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} er højst {max}
+@msg	feConvolveMatrix's order	order for feConvolveMatrix
+@msg	feMorphology's radius	radius for feMorphology
+@msg	a blur's stdDeviation	stdDeviation for en sløring
+@msg	the SVG filter has no primitives	SVG-filteret har ingen filterprimitiver
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	et SVG-filter har højst {MAX_PRIMITIVES} filterprimitiver
+@msg	the SVG filter is too large once its attributes are written out	SVG-filteret er for stort, når dets attributter er skrevet ud
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	et SVG-filters billeder har i alt højst {MAX_IMAGE_PIXELS} pixels
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-filteret kan ikke tegnes: kontrollér dets filterprimitiver og deres input
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	et SVG-filters elementer er højst indlejret {MAX_DEPTH} niveauer dybt
+@msg	an SVG filter is at most {_1} KB	et SVG-filter er højst {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
@@ -719,7 +738,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Clear Recent Files	Ryd seneste filer
 	Show in Folder	Vis i mappe
 	Close	Luk
-@id	file.close	file.close
+@id	file.close	Luk
 	Close All	Luk alle
 	Save	Gem
 	Save As…	Gem som…
@@ -3187,7 +3206,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Zig Zag…	Zigzag…
 	Pathfinder	Pathfinder
 	Add	Foren
-@id	pathfinder.add	pathfinder.add
+@id	pathfinder.add	Foren
 	Intersect	Skæring
 	Exclude	Udeluk
 	Subtract	Træk fra

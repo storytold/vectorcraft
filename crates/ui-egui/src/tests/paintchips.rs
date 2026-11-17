@@ -312,8 +312,15 @@ fn the_popover_swatch_libraries_button_opens_the_libraries_menu() {
     click(&mut app, &ctx, fill.center(), Modifiers::NONE, control_bar);
     let libraries = *popover_bottom_buttons(&ctx).first().expect("the popover has a bottom bar");
     click(&mut app, &ctx, libraries.center(), Modifiers::NONE, control_bar);
-    let shapes = frame(&mut app, &ctx, vec![], Modifiers::NONE, control_bar);
-    assert!(text_rect(&shapes, "Swatch Tiles").is_some(), "the popover stays open");
+    // The popover's swatch list has no visible heading; screen readers find it as "Swatch Tiles".
+    ctx.enable_accesskit();
+    let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1400.0, 1000.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, ..Default::default() }, |ui| control_bar(&mut app, ui));
+    out.textures_delta.clear();
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    let list = nodes.iter().any(|(_, n)| n.label() == Some("Swatch Tiles") && n.role() == egui::accesskit::Role::List);
+    assert!(list, "the popover stays open");
+    let shapes: Vec<Shape> = out.shapes.into_iter().map(|c| c.shape).collect();
     let defaults = menu_item_rect(&shapes, "Default Swatches").expect("the libraries menu is open");
     assert!(menu_item_rect(&shapes, "Other Library…").is_some());
     let earth = menu_item_rect(&shapes, "Earth Tones").expect("the menu lists the built-in libraries");
