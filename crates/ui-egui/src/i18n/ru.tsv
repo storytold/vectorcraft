@@ -479,6 +479,7 @@ font-technology	Variable	Вариативные
 	Circle	Круг
 	Circle Tool	Инструмент «Круг»
 	Circle too large	Круг слишком большой
+	From Center	От центра
 	Classic Defaults	Классические значения по умолчанию
 	Clean Up…	Очистить…
 	Clear	Очистить
@@ -4850,6 +4851,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` должно быть цветом #rrggbb или названием цвета слоя
 @msg	unknown Live Paint option `{key}`	неизвестный параметр быстрой заливки `{key}`
 @msg	unknown Shape Builder option `{key}`	неизвестный параметр создания фигур `{key}`
+@msg	unknown Circle tool option `{key}`	неизвестный параметр инструмента «Круг» `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` должно быть цветом #rrggbb
 @msg	`{key}` must be a number	`{key}` должно быть числом
 @msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}
@@ -5046,6 +5048,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no active perspective plane	нет активной плоскости перспективы
 @msg	no anchor points selected	опорные точки не выделены
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` должен содержать две или три пары чисел [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` должен быть парой чисел [x, y], а `points` должен содержать одну пару [x, y]
+@msg	the point in `points` is on `center`	точка в `points` совпадает с `center`
 @msg	direct-select two or three anchor points, or give `points`	выделите прямым выделением две или три опорные точки или задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
 @msg	no app to open files here	здесь нет приложения для открытия файлов

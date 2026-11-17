@@ -6189,6 +6189,11 @@ one line (twice the triangle's area at most 10⁻¹⁰ of its longest side squar
 canvas (4,000,000 pt from the origin), when `points` is not two or three pairs of numbers, and when `points` is left
 out and the selection does not hold two or three anchor points of paths.
 
+`shape.circleThroughPoints {center: [x, y], points: [[x, y]]}` draws the circle centered at `center` whose edge passes
+through the one point in `points`: its radius is the distance between them. It returns an error and draws nothing when
+the point is on `center`, when the circle would reach past the canvas, and when `center` is not a pair of numbers or
+`points` does not hold exactly one pair. With `center`, the selected anchor points are not used.
+
 The Circle tool, after the Ellipse tool in its toolbar group, draws with this command. A drag from one point to
 another, or a click on each, draws the circle with the two points as the ends of a diameter. A click on a first point,
 then a press on a second point dragged to a third, draws the circle through the three. Shift keeps the second point at
@@ -6202,6 +6207,16 @@ line, or a circle past the canvas, show "Circle too large" by the pointer instea
 Escape, a dropped press, and an edit, Undo or Redo made outside the tool drop the first point. A second press within 3
 screen points of the first point, or one that snaps to it, is a press on it: let go there (a double-click), it places no second point, and
 dragged out, it draws the circle on the diameter it drags out.
+
+With From Center on (a checkbox in the Control bar, or `tool.setOption {tool: "circle", key: "fromCenter", value:
+true}`; it must be true or false, and it is saved with the preferences), the first point is the circle's
+center and the outline passes through the second point, which follows the pointer. A drag from the center, or a click
+on the center and then a click on a point of the outline, draws the circle with `center`. The second point snaps to Smart
+Guides, anchor points included, as the others do, so a circle centered on one corner of a rectangle can pass exactly through
+the opposite corner, with the diagonal as its radius. Shift keeps the second point at 45° steps from the center, and
+Alt rounds the diameter (twice the distance from the center) to the nearest ruler tick. The tool shows one radius, to
+the pointer. A second click on the center places nothing. The setting in force when the first point is placed applies
+to that circle.
 
 With the Ellipse tool, the first two Shift-clicks place points, and the third draws the circle through the three with
 this command. After two points the tool previews the circle through them and the pointer as a dashed outline. Once a

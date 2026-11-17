@@ -445,6 +445,7 @@ font-technology	Variable	可變
 	Circle	圓形
 	Circle Tool	圓形工具
 	Circle too large	圓形過大
+	From Center	從中心
 	Classic Defaults	經典預設值
 	Clean Up…	清除…
 	Clear	清除
@@ -2077,6 +2078,8 @@ file-filter	Templates	範本
 @msg	clipboard is empty	剪貼簿是空的
 @msg	no anchor points selected	未選取錨點
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` 必須是兩組或三組數字 [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` 必須是一組數字 [x, y]，且 `points` 中須有一組 [x, y]
+@msg	the point in `points` is on `center`	`points` 中的點與 `center` 重合
 @msg	direct-select two or three anchor points, or give `points`	請以直接選取方式選取兩個或三個錨點，或提供 `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
 @msg	select at least two objects	請選取至少兩個物件
@@ -2986,6 +2989,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` 必須是 #rrggbb 格式的顏色或圖層顏色名稱
 @msg	unknown Live Paint option `{key}`	未知的即時上色選項 `{key}`
 @msg	unknown Shape Builder option `{key}`	未知的形狀建立選項 `{key}`
+@msg	unknown Circle tool option `{key}`	未知的圓形工具選項 `{key}`
 @msg	a linked image can't become a gradient mesh: embed it first	連結的影像無法轉換為漸層網格：請先內嵌
 @msg	the image has no usable size or position	影像沒有可用的尺寸或位置
 @msg	the image's pixels can't be read	無法讀取影像的像素

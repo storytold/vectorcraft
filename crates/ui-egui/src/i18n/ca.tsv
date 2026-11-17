@@ -702,6 +702,7 @@ antiAlias	Sharp	Nítid
 	Circle	Cercle
 	Circle Tool	Eina de cercle
 	Circle too large	El cercle és massa gran
+	From Center	Des del centre
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -5584,6 +5585,7 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` ha de ser un color #rrggbb o el nom d’un color de capa
 @msg	unknown Live Paint option `{key}`	opció de pintura interactiva desconeguda `{key}`
 @msg	unknown Shape Builder option `{key}`	opció del constructor de formes desconeguda `{key}`
+@msg	unknown Circle tool option `{key}`	opció de l’eina Cercle desconeguda `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` ha de ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` ha de ser un nombre
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
@@ -6152,6 +6154,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no active perspective plane	no hi ha cap pla de perspectiva actiu
 @msg	no anchor points selected	no hi ha cap punt d’ancoratge seleccionat
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` han de ser dos o tres parells de nombres [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` ha de ser un parell de nombres [x, y], amb un parell [x, y] a `points`
+@msg	the point in `points` is on `center`	el punt de `points` és a `center`
 @msg	direct-select two or three anchor points, or give `points`	seleccioneu directament dos o tres punts d’ancoratge o indiqueu `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers

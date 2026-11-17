@@ -448,6 +448,7 @@ antiAlias	Sharp	Nítido
 	Circle	Círculo
 	Circle Tool	Ferramenta Círculo
 	Circle too large	Círculo grande demais
+	From Center	Do centro
 	Clean Up…	Limpar…
 	Clear	Limpar
 	Clear All Tabs	Limpar Todas as Paradas de Tabulação
@@ -4140,6 +4141,7 @@ axis	Both	Ambos
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` deve ser uma cor #rrggbb ou o nome de uma cor de camada
 @msg	unknown Live Paint option `{key}`	opção de Pintura ao Vivo desconhecida `{key}`
 @msg	unknown Shape Builder option `{key}`	opção do Construtor de Formas desconhecida `{key}`
+@msg	unknown Circle tool option `{key}`	opção da Ferramenta Círculo desconhecida `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` deve ser uma cor #rrggbb
 @msg	`{key}` must be a number	`{key}` deve ser um número
 @msg	`{key}` must be a number, not {v}	`{key}` deve ser um número, não {v}
@@ -4326,6 +4328,8 @@ axis	Both	Ambos
 @msg	no active perspective plane	nenhum plano de perspectiva ativo
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve ter dois ou três pares de números [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` deve ser um par de números [x, y], com um par [x, y] em `points`
+@msg	the point in `points` is on `center`	o ponto em `points` está em `center`
 @msg	direct-select two or three anchor points, or give `points`	selecione diretamente dois ou três pontos de ancoragem ou informe `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui

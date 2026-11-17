@@ -822,6 +822,7 @@ antiAlias	Sharp	शार्प
 	Circle	वृत्त
 	Circle Tool	वृत्त टूल
 	Circle too large	वृत्त बहुत बड़ा है
+	From Center	केंद्र से
 	Circle (open)	सर्किल (ओपन)
 	Circle:	वृत्त:
 	Classic	क्लासिक
@@ -6245,6 +6246,7 @@ antiAlias	Sharp	शार्प
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` एक #rrggbb रंग या लेयर रंग का नाम होना चाहिए
 @msg	unknown Live Paint option `{key}`	अज्ञात लाइव पेंट ऑप्शन `{key}`
 @msg	unknown Shape Builder option `{key}`	अज्ञात शेप बिल्डर ऑप्शन `{key}`
+@msg	unknown Circle tool option `{key}`	अज्ञात वृत्त टूल ऑप्शन `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` एक #rrggbb रंग होना चाहिए
 @msg	`{key}` must be a non-negative integer	`{key}` को एक गैर-नकारात्मक पूर्णांक होना चाहिए
 @msg	`{key}` must be a number	`{key}` एक संख्या होना चाहिए
@@ -7634,6 +7636,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` में संख्याओं के दो या तीन [x, y] जोड़े होने चाहिए
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` संख्याओं का एक [x, y] जोड़ा होना चाहिए, और `points` में एक [x, y] जोड़ा होना चाहिए
+@msg	the point in `points` is on `center`	`points` का बिंदु `center` पर है
 @msg	direct-select two or three anchor points, or give `points`	दो या तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
 @msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है

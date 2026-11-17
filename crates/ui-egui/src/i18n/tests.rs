@@ -475,6 +475,23 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The errors `tool.setOption` gives for the Circle tool's options (the tools crate is not one of
+/// [`MESSAGE_CRATES`]) are translated in every complete-message language, with the key kept.
+#[test]
+fn circle_tool_option_errors_translate() {
+    let errors = [serde_json::json!({ "fromCenter": 1 }), serde_json::json!({ "radius": 5 })].map(|v| {
+        let map = v.as_object().cloned().unwrap_or_default();
+        vectorcraft_tools::circle::check_options(&map).expect_err("refused")
+    });
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (error, key) in errors.iter().zip(["fromCenter", "radius"]) {
+            let shown = message(lang, error);
+            assert!(shown != *error && shown.contains(key), "{code}: {shown}");
+        }
+    }
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {

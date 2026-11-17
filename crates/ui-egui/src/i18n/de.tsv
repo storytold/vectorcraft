@@ -458,6 +458,7 @@ font-technology	Variable	Variabel
 	Circle	Kreis
 	Circle Tool	Kreis-Werkzeug
 	Circle too large	Kreis zu groß
+	From Center	Von der Mitte aus
 	Classic Defaults	Klassische Standardwerte
 	Clean Up…	Aufräumen…
 	Clear	Löschen
@@ -4722,6 +4723,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` muss eine Farbe der Form #rrggbb oder der Name einer Ebenenfarbe sein
 @msg	unknown Live Paint option `{key}`	unbekannte Option für Interaktiv malen `{key}`
 @msg	unknown Shape Builder option `{key}`	unbekannte Option für Formerstellung `{key}`
+@msg	unknown Circle tool option `{key}`	unbekannte Option für das Kreis-Werkzeug `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` muss eine Farbe der Form #rrggbb sein
 @msg	`{key}` must be a number	`{key}` muss eine Zahl sein
 @msg	`{key}` must be a number, not {v}	`{key}` muss eine Zahl sein, nicht {v}
@@ -4918,6 +4920,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no active perspective plane	keine aktive Perspektivebene
 @msg	no anchor points selected	keine Ankerpunkte ausgewählt
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` muss aus zwei oder drei Zahlenpaaren [x, y] bestehen
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` muss ein Zahlenpaar [x, y] sein, mit einem Paar [x, y] in `points`
+@msg	the point in `points` is on `center`	der Punkt in `points` liegt auf `center`
 @msg	direct-select two or three anchor points, or give `points`	wählen Sie zwei oder drei Ankerpunkte direkt aus oder geben Sie `points` an
 @msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien

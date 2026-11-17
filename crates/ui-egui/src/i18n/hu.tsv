@@ -643,6 +643,7 @@ font-technology	Variable	Változó
 	Circle	Kör
 	Circle Tool	Kör eszköz
 	Circle too large	A kör túl nagy
+	From Center	Középről
 	Circle (open)	Kör (nyitott)
 	Classic Defaults	Klasszikus alapértékek
 	Clean Up…	Tisztítás…
@@ -5182,6 +5183,7 @@ imageTrace	Outline	Körvonal
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`: #rrggbb szín vagy rétegszín neve kell
 @msg	unknown Live Paint option `{key}`	ismeretlen élő festés beállítás: `{key}`
 @msg	unknown Shape Builder option `{key}`	ismeretlen alakzatépítő beállítás: `{key}`
+@msg	unknown Circle tool option `{key}`	ismeretlen Kör eszköz beállítás: `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`: #rrggbb szín kell
 @msg	`{key}` must be a number	`{key}`: szám kell
 @msg	`{key}` must be a number, not {v}	`{key}`: szám kell, ez nem az: {v}
@@ -5685,6 +5687,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no active perspective plane	nincs aktív perspektivikus sík
 @msg	no anchor points selected	nincs kijelölt horgonypont
 @msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	a `center` egy [x, y] számpár legyen, a `points` pedig egy [x, y] párt tartalmazzon
+@msg	the point in `points` is on `center`	a `points` pontja a `center` helyén van
 @msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás

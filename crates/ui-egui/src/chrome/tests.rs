@@ -3767,6 +3767,27 @@ fn control_bar_overflow(app: &mut crate::VectorcraftApp, ctx: &egui::Context, sc
 /// tool's, in English and in German. Every control it shows is drawn whole, left of the panel menu
 /// button, which shows in every width, with the bar docked to the top or the bottom or floating. In a
 /// wide window, each of those groups shows its controls.
+/// A click on the Circle tool's From Center checkbox in the Control bar turns the option on, and a
+/// second click turns it off.
+#[test]
+fn the_circle_tool_s_from_center_checkbox_sets_the_option() {
+    use crate::tests_removeanchors::{click_control, control_frame};
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.select_tool("circle");
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let from_center = |app: &crate::VectorcraftApp| app.session.tool_options()["fromCenter"].clone();
+    assert_eq!(from_center(&app), json!(false));
+    for want in [true, false] {
+        let bar = control_frame(&mut app, &ctx, vec![]);
+        let at = bar.iter().find(|(t, _)| t == "From Center").map(|(_, r)| r.center()).expect("From Center shows");
+        click_control(&mut app, &ctx, at);
+        assert_eq!(from_center(&app), json!(want));
+    }
+}
+
 #[test]
 fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     use crate::tests_removeanchors::{control_frame, has};
@@ -3820,10 +3841,12 @@ fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     };
     // The tools' options, with a rectangle selected and with nothing selected.
     app.run("select.set", json!({ "ids": [id] })).unwrap();
-    for tool in ["rectangle", "ellipse", "polygon", "star", "spiral", "box3d", "dimension", "mirrorCut", "puppetWarp"] {
+    for tool in ["rectangle", "ellipse", "circle", "polygon", "star", "spiral", "box3d", "dimension", "mirrorCut", "puppetWarp"] {
         app.select_tool(tool);
         check(&mut app, tool);
     }
+    app.select_tool("circle");
+    wide(&mut app, "Circle", &["From Center"]);
     app.select_tool("polygon");
     wide(&mut app, "Polygon", &["Round", "Random", "Reset"]);
     app.select_tool("mirrorCut");

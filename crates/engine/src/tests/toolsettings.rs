@@ -30,6 +30,24 @@ fn blob_tip_options_report_and_persist() {
     assert_eq!((next.tool_options()["angle"].as_f64(), next.tool_options()["roundness"].as_f64()), (Some(45.0), Some(0.0)));
 }
 
+/// The Circle tool's From Center survives a tool switch and is saved with the preferences.
+#[test]
+fn circle_from_center_persists() {
+    let mut s = session();
+    select(&mut s, "circle");
+    assert_eq!(s.tool_options(), json!({"fromCenter": false}));
+    s.set_tool_option("fromCenter", &json!(true));
+    select(&mut s, "selection");
+    select(&mut s, "circle");
+    assert_eq!(s.tool_options(), json!({"fromCenter": true}));
+    select(&mut s, "selection");
+    let saved = serde_json::to_string(&s.prefs).unwrap();
+    let mut next = session();
+    next.apply_prefs(serde_json::from_str(&saved).unwrap());
+    select(&mut next, "circle");
+    assert_eq!(next.tool_options(), json!({"fromCenter": true}));
+}
+
 #[test]
 fn options_survive_a_tool_switch() {
     let mut s = session();

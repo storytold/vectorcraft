@@ -53,6 +53,8 @@ const ROWS: &[Row] = &[
     (&["star"], None, &["points"]),
     // The Ellipse dialog's Anchors.
     (&["ellipse"], None, &["anchors"]),
+    // The Circle tool's From Center.
+    (&[crate::circle::ID], None, &["fromCenter"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (

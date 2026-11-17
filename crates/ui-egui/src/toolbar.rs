@@ -495,10 +495,10 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 }
 
 /// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
-/// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
-/// [`crate::panels::artboards::control_bar`]. Each label with its field or menu, and each button,
-/// shows only while the row has room for it and `reserve` after it, and the controls after one left
-/// out are left out too ([`crate::chrome::Fit`]).
+/// Warp's mesh and pins, the Circle tool's From Center (set through `tool.setOption`). The Artboard
+/// tool's options are drawn by [`crate::panels::artboards::control_bar`]. Each label with its field
+/// or menu, and each button, shows only while the row has room for it and `reserve` after it, and
+/// the controls after one left out are left out too ([`crate::chrome::Fit`]).
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
     if crate::addons::shapes::control_bar(app, ui, reserve) {
         return;
@@ -518,6 +518,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) 
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return crop_options(app, ui, reserve);
     }
+    if app.session.tool_id() == vectorcraft_tools::circle::ID {
+        return circle_options(app, ui, reserve);
+    }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
@@ -536,6 +539,17 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) 
         if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, MIRROR_DROPDOWN_WIDTH).and_then(|i| choices.get(i)) {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
+    }
+    fit.separator(ui);
+}
+
+/// The Circle tool's Control bar: From Center (the first point is the circle's center and the
+/// outline passes through the second), while the row has room for it and `reserve` after it.
+fn circle_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
+    let on = app.session.tool_options()["fromCenter"].as_bool().unwrap_or(false);
+    let mut fit = crate::chrome::Fit::new(reserve);
+    if fit.room(ui, &[widgets::choice_width(ui, "From Center")]) && widgets::check(ui, "From Center", on, true) {
+        app.run("tool.setOption", json!({ "key": "fromCenter", "value": !on })).ok();
     }
     fit.separator(ui);
 }

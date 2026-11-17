@@ -1299,6 +1299,7 @@ antiAlias	Sharp	シャープ
 	Circle	円
 	Circle Tool	円ツール
 	Circle too large	円が大きすぎます
+	From Center	中心から
 	Clear All Tabs	すべてのタブを消去
 	Above Text	テキストの上
 	Position Panel Above Text	テキストの上にパネルを配置
@@ -4846,6 +4847,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	clipboard is empty	クリップボードが空です
 @msg	no anchor points selected	アンカーポイントが選択されていません
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` は 2 組または 3 組の数値 [x, y] にしてください
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` は数値の組 [x, y] にし、`points` には [x, y] を 1 組指定してください
+@msg	the point in `points` is on `center`	`points` の点が `center` と同じ位置にあります
 @msg	direct-select two or three anchor points, or give `points`	アンカーポイントを 2 つまたは 3 つダイレクト選択するか、`points` を指定してください
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
@@ -4910,6 +4913,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` は #rrggbb 形式のカラーかレイヤーカラー名にしてください
 @msg	unknown Live Paint option `{key}`	不明なライブペイントオプション `{key}`
 @msg	unknown Shape Builder option `{key}`	不明なシェイプ形成ツールオプション `{key}`
+@msg	unknown Circle tool option `{key}`	不明な円ツールオプション `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a string	`{key}` は文字列にしてください
 @msg	`{key}` must be a profile name or null	`{key}` はプロファイル名または null にしてください

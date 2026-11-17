@@ -483,6 +483,7 @@ font-technology	Variable	Variabili
 	Circle	Cerchio
 	Circle Tool	Strumento Cerchio
 	Circle too large	Cerchio troppo grande
+	From Center	Dal centro
 	Classic Defaults	Valori predefiniti classici
 	Clean Up…	Pulisci…
 	Clear	Cancella
@@ -4856,6 +4857,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` deve essere un colore #rrggbb o il nome di un colore del livello
 @msg	unknown Live Paint option `{key}`	opzione di pittura dinamica sconosciuta `{key}`
 @msg	unknown Shape Builder option `{key}`	opzione del generatore forme sconosciuta `{key}`
+@msg	unknown Circle tool option `{key}`	opzione dello strumento Cerchio sconosciuta `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` deve essere un colore #rrggbb
 @msg	`{key}` must be a number	`{key}` deve essere un numero
 @msg	`{key}` must be a number, not {v}	`{key}` deve essere un numero, non {v}
@@ -5052,6 +5054,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no active perspective plane	nessun piano prospettico attivo
 @msg	no anchor points selected	nessun punto di ancoraggio selezionato
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` deve essere composto da due o tre coppie di numeri [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` deve essere una coppia di numeri [x, y], con una coppia [x, y] in `points`
+@msg	the point in `points` is on `center`	il punto in `points` si trova su `center`
 @msg	direct-select two or three anchor points, or give `points`	seleziona con Selezione diretta due o tre punti di ancoraggio oppure indica `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	nessun cerchio passa per questi punti: due coincidono oppure tutti e tre sono allineati
 @msg	no app to open files here	nessuna app per aprire file qui

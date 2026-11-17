@@ -6348,6 +6348,7 @@ font-technology	Variable	ცვლადი
 	Circle	წრე
 	Circle Tool	წრის ხელსაწყო
 	Circle too large	წრე ზედმეტად დიდია
+	From Center	ცენტრიდან
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა
@@ -6831,6 +6832,8 @@ font-technology	Variable	ცვლადი
 @msg	no active perspective plane	აქტიური პერსპექტივის სიბრტყე არ არის
 @msg	no anchor points selected	საყრდენი წერტილები მონიშნული არ არის
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების ორი ან სამი [x, y] წყვილი
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` უნდა იყოს რიცხვების [x, y] წყვილი, ხოლო `points` უნდა შეიცავდეს ერთ [x, y] წყვილს
+@msg	the point in `points` is on `center`	`points`-ის წერტილი `center`-ზეა
 @msg	direct-select two or three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ ორი ან სამი საყრდენი წერტილი ან მიუთითეთ `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
@@ -8706,6 +8709,7 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` უნდა იყოს #rrggbb ფერი ან ფენის ფერის სახელი
 @msg	unknown Live Paint option `{key}`	ცოცხალი შეღებვის უცნობი პარამეტრი `{key}`
 @msg	unknown Shape Builder option `{key}`	ფიგურების კონსტრუქტორის უცნობი პარამეტრი `{key}`
+@msg	unknown Circle tool option `{key}`	წრის ხელსაწყოს უცნობი პარამეტრი `{key}`
 @msg	a key object sits on that point	ამ წერტილზე საკვანძო ობიექტი მდებარეობს
 @msg	a linked image can't become a gradient mesh: embed it first	დაკავშირებული გამოსახულება გრადიენტულ ბადედ ვერ გადაიქცევა: ჯერ ჩააშენეთ ის
 @msg	a mask has more than one art block	ნიღაბს ერთზე მეტი ნახატის ბლოკი აქვს

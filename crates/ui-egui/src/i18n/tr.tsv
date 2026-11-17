@@ -463,6 +463,7 @@ font-technology	Variable	Değişken
 	Circle	daire
 	Circle Tool	Daire Aracı
 	Circle too large	Daire çok büyük
+	From Center	Merkezden
 	Classic Defaults	Klasik Varsayılanlar
 	Clean Up…	Temizleme…
 	Clear	Temizle
@@ -4739,6 +4740,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no active perspective plane	aktif perspektif düzlemi yok
 @msg	no anchor points selected	bağlantı noktası seçilmedi
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` iki veya üç [x, y] sayı çifti olmalıdır
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	`center` bir [x, y] sayı çifti olmalı ve `points` bir [x, y] çifti içermelidir
+@msg	the point in `points` is on `center`	`points` içindeki nokta `center` üzerinde
 @msg	direct-select two or three anchor points, or give `points`	iki veya üç bağlantı noktasını doğrudan seçin veya `points` verin
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
@@ -6475,6 +6478,7 @@ theme	Appearance	Görünüm
 @msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` bir #rrggbb rengi ya da katman rengi adı olmalıdır
 @msg	unknown Live Paint option `{key}`	bilinmeyen Canlı Boyama seçeneği `{key}`
 @msg	unknown Shape Builder option `{key}`	bilinmeyen Şekil Oluşturucu seçeneği `{key}`
+@msg	unknown Circle tool option `{key}`	bilinmeyen Daire Aracı seçeneği `{key}`
 @msg	a key object sits on that point	bu noktanın üzerinde bir anahtar nesne bulunuyor
 @msg	a linked image can't become a gradient mesh: embed it first	bağlantılı bir görüntü degrade ağına dönüştürülemez: önce görüntüyü gömün
 @msg	a mask has more than one art block	bir maskede birden fazla çizim bloğu var

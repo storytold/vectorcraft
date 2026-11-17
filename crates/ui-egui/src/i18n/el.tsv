@@ -451,6 +451,7 @@ font-technology	Variable	Μεταβλητές
 	Circle	Κύκλος
 	Circle Tool	Εργαλείο κύκλου
 	Circle too large	Ο κύκλος είναι πολύ μεγάλος
+	From Center	Από το κέντρο
 	Classic Defaults	Κλασικές προεπιλογές
 	Clean Up…	Εκκαθάριση…
 	Clear	Εκκαθάριση
@@ -2721,6 +2722,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	`{key}` must be a #rrggbb color or a layer color name	Το `{key}` πρέπει να είναι χρώμα #rrggbb ή όνομα χρώματος επιπέδου
 @msg	unknown Live Paint option `{key}`	άγνωστη επιλογή δυναμικής βαφής `{key}`
 @msg	unknown Shape Builder option `{key}`	άγνωστη επιλογή δημιουργίας σχημάτων `{key}`
+@msg	unknown Circle tool option `{key}`	άγνωστη επιλογή εργαλείου κύκλου `{key}`
 @msg	`{key}` must be a #rrggbb colour	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a number	Το `{key}` πρέπει να είναι αριθμός
 @msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}
@@ -4976,6 +4978,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no active perspective plane	δεν υπάρχει ενεργό επίπεδο προοπτικής
 @msg	no anchor points selected	δεν έχουν επιλεγεί σημεία αγκύρωσης
 @msg	`points` must be two or three [x, y] pairs of numbers	το `points` πρέπει να είναι δύο ή τρία ζεύγη αριθμών [x, y]
+@msg	`center` must be an [x, y] pair of numbers, with one [x, y] pair in `points`	το `center` πρέπει να είναι ένα ζεύγος αριθμών [x, y], με ένα ζεύγος [x, y] στο `points`
+@msg	the point in `points` is on `center`	το σημείο στο `points` βρίσκεται πάνω στο `center`
 @msg	direct-select two or three anchor points, or give `points`	επιλέξτε άμεσα δύο ή τρία σημεία αγκύρωσης ή δώστε `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
