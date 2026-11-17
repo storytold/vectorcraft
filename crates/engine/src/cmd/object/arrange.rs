@@ -371,16 +371,21 @@ pub(super) fn isolate(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// Leaving isolation mode in `isolated` for `next` (None: out of isolation mode) adds the paths drawn
-/// in the Live Paint group isolation put new art in to that group, as `livePaint.merge` does, in one
-/// undo step ([`crate::cmd::buildcmds::merge_drawn_in_isolation`]), unless `next` is that group or is
-/// inside it; → the group when paths were added.
+/// in each Live Paint group that is `isolated` or holds it to that group, as `livePaint.merge` does,
+/// innermost group first, one undo step per group ([`crate::cmd::buildcmds::merge_drawn_in_isolation`]).
+/// A group that `next` is or is inside is skipped, since isolation stays in it. → the outermost group
+/// that paths were added to.
 fn add_drawn_live_paint(s: &mut Session, isolated: NodeId, next: Option<NodeId>) -> Result<Option<NodeId>> {
     let d = &s.doc()?.doc;
-    let Some(g) = crate::cmd::buildcmds::isolated_live_paint(d, isolated) else { return Ok(None) };
-    if next.is_some_and(|n| d.ancestry(n).is_some_and(|a| a.contains(&g))) {
-        return Ok(None);
+    let stays = next.and_then(|n| d.ancestry(n)).unwrap_or_default();
+    let left: Vec<NodeId> = crate::cmd::buildcmds::isolated_live_paints(d, isolated).into_iter().filter(|g| !stays.contains(g)).collect();
+    let mut added = None;
+    for g in left {
+        if crate::cmd::buildcmds::merge_drawn_in_isolation(s, g)? {
+            added = Some(g);
+        }
     }
-    Ok(crate::cmd::buildcmds::merge_drawn_in_isolation(s, g)?.then_some(g))
+    Ok(added)
 }
 
 pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {

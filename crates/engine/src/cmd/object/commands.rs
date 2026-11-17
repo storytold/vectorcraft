@@ -250,7 +250,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Exit Isolation Mode",
             [],
             None,
-            "{} leave isolation mode; leaving an isolated Live Paint group adds the paths, compound paths and groups of them drawn in it (shown and unlocked with everything in them) to the group as livePaint.merge does, in one undo step, and leaves type, images and other objects in it as they are; object.isolate on a level outside the group does the same",
+            "{} leave isolation mode; leaving an isolated Live Paint group adds the paths, compound paths and groups of them drawn in it (shown and unlocked with everything in them) to the group as livePaint.merge does, in one undo step, and leaves type, images and other objects in it as they are; object.isolate on a level outside the group does the same. Leaving a Live Paint group drawn in another isolated Live Paint group, and that group too, does this for each, innermost first, one undo step each",
             has_doc,
             exit_isolation
         ),

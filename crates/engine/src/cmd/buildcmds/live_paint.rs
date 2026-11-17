@@ -265,19 +265,22 @@ pub(super) fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
-/// The Live Paint group whose drawn art is added when isolation mode leaves `isolated`: the innermost
-/// Live Paint group that is `isolated` or holds it, such as a group drawn in an isolated Live Paint
-/// group and then isolated itself. None when `isolated` is not in a Live Paint group.
-pub(crate) fn isolated_live_paint(d: &Document, isolated: NodeId) -> Option<NodeId> {
-    d.ancestry(isolated)?.into_iter().rev().find(|id| d.node(*id).is_some_and(is_live_paint))
+/// The Live Paint groups whose drawn art can be added when isolation mode leaves `isolated`, innermost
+/// first: every Live Paint group that is `isolated` or holds it, such as a group drawn in an isolated
+/// Live Paint group and then isolated itself, and the group it was drawn in. Empty when `isolated` is
+/// not in a Live Paint group.
+pub(crate) fn isolated_live_paints(d: &Document, isolated: NodeId) -> Vec<NodeId> {
+    d.ancestry(isolated).unwrap_or_default().into_iter().rev().filter(|id| d.node(*id).is_some_and(is_live_paint)).collect()
 }
 
 /// The children of Live Paint group `g` besides its parts ([`others_in`]) that Live Paint takes
 /// ([`b::live_paint_takes`]) and that are shown and unlocked with everything in them, back to
-/// front: the paths drawn in it in isolation mode.
+/// front: the paths drawn in it in isolation mode. A Live Paint group's sources group, which is
+/// always hidden, does not count.
 fn drawn_in(g: &Node) -> Vec<NodeId> {
     fn open(n: &Node) -> bool {
-        n.visible && !n.locked && n.children().is_none_or(|ch| ch.iter().all(|c| open(c)))
+        let src = b::sources(n).filter(|_| is_live_paint(n)).map(|s| s.id);
+        n.visible && !n.locked && n.children().is_none_or(|ch| ch.iter().filter(|c| Some(c.id) != src).all(|c| open(c)))
     }
     others_in(g).filter(|c| open(c) && b::live_paint_takes(c)).map(|c| c.id).collect()
 }

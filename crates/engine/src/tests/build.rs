@@ -5102,6 +5102,55 @@ fn live_paint_isolation_adds_a_drawn_group_isolated_inside_it() {
     }
 }
 
+/// With Live Paint group `inner` made in isolated Live Paint group `outer` and then isolated itself,
+/// leaving both levels (`object.exitIsolation`, or `object.isolate` on the layer) adds the path drawn
+/// in `inner` to it and then `inner` and the path drawn directly in `outer` to `outer`, one undo step
+/// each. Isolating `outer` from `inner` adds only `inner`'s drawn path, and `outer` keeps its own.
+#[test]
+fn live_paint_isolation_merges_nested_live_paint_groups_it_leaves() {
+    use vectorcraft_tools::builder::{faces, sources};
+    for to in ["exit", "layer", "outer"] {
+        let mut s = session();
+        let outer = live(&mut s);
+        let layer = s.doc().unwrap().doc.parent_of(outer).unwrap();
+        s.execute("object.isolate", &json!({"id": outer.0})).unwrap();
+        let a = line_across(&mut s, 50.0);
+        assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(outer));
+        let inner = live(&mut s);
+        assert_eq!(s.doc().unwrap().doc.parent_of(inner), Some(outer), "the inner group is drawn in the outer one");
+        s.execute("object.isolate", &json!({"id": inner.0})).unwrap();
+        let b = line_across(&mut s, 30.0);
+        assert_eq!(s.doc().unwrap().doc.parent_of(b), Some(inner));
+        let steps = s.doc().unwrap().history.undo.len();
+        match to {
+            "exit" => s.execute("object.exitIsolation", &json!({})).unwrap(),
+            "layer" => s.execute("object.isolate", &json!({"id": layer.0})).unwrap(),
+            _ => s.execute("object.isolate", &json!({"id": outer.0})).unwrap(),
+        };
+        let d = &s.doc().unwrap().doc;
+        if to == "outer" {
+            assert_eq!(s.doc().unwrap().isolation, Some(outer));
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "only the inner group's path joins");
+            let n = node(&s, inner);
+            assert_eq!(d.parent_of(b), Some(sources(&n).unwrap().id), "the path drawn in the inner group joined it");
+            assert_eq!(d.parent_of(inner), Some(outer), "the inner group stays drawn in the outer one");
+            assert_eq!(d.parent_of(a), Some(outer), "the path drawn in the outer group stays as drawn");
+            continue;
+        }
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 2, "{to}: one undo step for each group");
+        assert!(d.node(inner).is_none(), "{to}: the inner group joined the outer one");
+        let n = node(&s, outer);
+        let src = sources(&n).unwrap().id;
+        assert_eq!(d.parent_of(a), Some(src), "{to}: the path drawn in the outer group joined it");
+        assert!(d.ancestry(b).unwrap().contains(&src), "{to}: the path drawn in the inner group is among the outer group's paths");
+        assert!(n.children().unwrap().iter().all(|c| c.id == src || c.path_data().is_some()), "{to}: only parts are left in the outer group");
+        assert!(faces(&n).len() > 3, "{to}: the added paths cut the outer group's faces");
+        if to == "exit" {
+            assert_eq!(s.doc().unwrap().selection.objects, vec![outer]);
+        }
+    }
+}
+
 /// A line from left of the [`live`] group to its right face, so it cuts the two faces left of it.
 fn line_to_right_face(s: &mut Session, y: f64) -> NodeId {
     let r = s.execute("path.create", &json!({"anchors": [{"x": -10, "y": y}, {"x": 105, "y": y}]})).unwrap();
