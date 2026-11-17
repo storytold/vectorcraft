@@ -7909,6 +7909,10 @@ breakText	Glyphs	Glyphes
 @msg	Some islands could not be joined to the area around the art	Certains îlots n’ont pas pu être reliés à la zone autour de l’illustration
 @msg	`width` must be from {lo} to {hi} pt	`width` doit être compris entre {lo} et {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle` doit être compris entre -180 et 180 degrés
+@msg	`roundness` must be from 0 to 100%	`roundness` doit être compris entre 0 et 100 %
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` doit être compris entre 0.01 et 100 pt
+@msg	style must be "pencil" or "brush"	style doit être "pencil" ou "brush"
+@msg	extend end must be "start" or "end"	l’extrémité de extend doit être "start" ou "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` doit être compris entre 1 et 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` doit être un nombre entier compris entre 1 et {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Cadre et lignes d’échenillage…
@@ -8413,7 +8417,6 @@ breakText	Glyphs	Glyphes
 @msg	anchor `smooth` must be true or false	`smooth` d’un point d’ancrage doit valoir true ou false
 @msg	anchor `{key}` must be [x, y]	`{key}` d’un point d’ancrage doit être [x, y]
 @msg	anchor `{key}` must be a number	`{key}` d’un point d’ancrage doit être un nombre
-@msg	angle and roundness must be finite	l’angle et l’arrondi doivent être finis
 @msg	angles must be a list as long as pins (degrees or null)	angles doit être une liste aussi longue que pins (degrés ou null)
 @msg	appearance must be flat|center|edge	appearance doit valoir flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply vaut "fill" ou "stroke", pas `{other}`

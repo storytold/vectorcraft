@@ -7507,6 +7507,10 @@ breakText	Glyphs	Glyphen
 @msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
 @msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
 @msg	`angle` must be from -180 to 180 degrees	`angle` muss zwischen -180 und 180 Grad liegen
+@msg	`roundness` must be from 0 to 100%	`roundness` muss zwischen 0 und 100 % liegen
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` muss zwischen 0.01 und 100 pt liegen
+@msg	style must be "pencil" or "brush"	style muss "pencil" oder "brush" sein
+@msg	extend end must be "start" or "end"	Das Ende von extend muss "start" oder "end" sein
 @msg	`roundness` must be from 1 to 100%	`roundness` muss zwischen 1 und 100 % liegen
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein
 	Weed Box and Lines…	Entgitterrahmen und -linien…
@@ -8247,7 +8251,6 @@ breakText	Glyphs	Glyphen
 @msg	anchor `smooth` must be true or false	Ankerpunkt-`smooth` muss true oder false sein
 @msg	anchor `{key}` must be [x, y]	Ankerpunkt-`{key}` muss [x, y] sein
 @msg	anchor `{key}` must be a number	Ankerpunkt-`{key}` muss eine Zahl sein
-@msg	angle and roundness must be finite	angle und roundness müssen endlich sein
 @msg	angles must be a list as long as pins (degrees or null)	angles muss eine Liste so lang wie pins sein (Grad oder null)
 @msg	appearance must be flat|center|edge	appearance muss flat|center|edge sein
 @msg	apply is "fill" or "stroke", not `{other}`	apply ist „fill“ oder „stroke“, nicht `{other}`
