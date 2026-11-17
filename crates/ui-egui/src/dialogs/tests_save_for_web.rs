@@ -783,6 +783,107 @@ fn colour_table_selection_and_delete_color() {
     assert_eq!((&d.fields["colorTable"]["deleted"], &d.fields["colorTable"]["customPalette"]), (&json!([]), &json!([])));
 }
 
+/// A shift by hand replaces a web shift and selects the color; a shift to the color itself takes it
+/// away; Unshift All Colors clears both kinds; Delete Color takes a deleted color's shift away.
+#[test]
+fn colour_table_shift_unshift_and_unshift_all() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    save_for_web::toggle(&mut d, "webShift", "#123456", true);
+    save_for_web::shift_color(&mut d, "#123456", "#FF8800");
+    assert_eq!(d.fields["colorTable"], json!({"webShift": [], "shifted": {"#123456": "#ff8800"}}));
+    assert_eq!(save_for_web::selection(&d), ["#123456"]);
+    // Not a color: nothing changes.
+    let before = d.fields.clone();
+    save_for_web::shift_color(&mut d, "nope", "#000000");
+    save_for_web::shift_color(&mut d, "#123456", "nope");
+    assert_eq!(d.fields, before);
+    save_for_web::shift_color(&mut d, "#ABCDEF", "#00ff00");
+    save_for_web::shift_color(&mut d, "#123456", "#123456");
+    assert_eq!(d.fields["colorTable"]["shifted"], json!({"#abcdef": "#00ff00"}));
+    save_for_web::toggle(&mut d, "webShift", "#222222", true);
+    save_for_web::unshift_all_colors(&mut d);
+    assert_eq!((&d.fields["colorTable"]["shifted"], &d.fields["colorTable"]["webShift"]), (&json!({}), &json!([])));
+    let order: Vec<String> = ["#000000", "#222222"].map(String::from).to_vec();
+    save_for_web::shift_color(&mut d, "#222222", "#ffffff");
+    save_for_web::delete_colors(&mut d, &order).unwrap();
+    assert_eq!((&d.fields["colorTable"]["shifted"], &d.fields["colorTable"]["deleted"]), (&json!({}), &json!(["#222222"])));
+}
+
+/// One frame of `app` in `ctx`, 50 ms after the last.
+fn tick(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) {
+    let time = ctx.input(|i| i.time) + 0.05;
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+    out.textures_delta.clear();
+}
+
+/// Double-click the color table's swatch of the source color `source`.
+fn double_click_swatch(app: &mut VectorcraftApp, ctx: &egui::Context, source: &str) {
+    for _ in 0..3 {
+        tick(app, ctx, vec![]);
+    }
+    let pos = ctx.read_response(save_for_web::swatch_id(source)).unwrap_or_else(|| panic!("no swatch for {source}")).rect.center();
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    tick(app, ctx, vec![egui::Event::PointerMoved(pos), button(true)]);
+    tick(app, ctx, vec![button(false)]);
+    tick(app, ctx, vec![button(true)]);
+    tick(app, ctx, vec![button(false)]);
+    tick(app, ctx, vec![]);
+}
+
+/// The color the open Color Picker shows.
+fn picker_color(app: &VectorcraftApp) -> Option<String> {
+    let d = app.ui.dialog.as_ref()?;
+    assert_eq!(d.kind, "colorPicker", "the Color Picker is open");
+    d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value).map(|c| c.to_hex())
+}
+
+/// A double-click on a swatch opens the Color Picker on its color. Cancel changes nothing; OK
+/// shifts the color in the table and the saved file. A double-click on a shifted swatch opens the
+/// picker on the source color, and Web Shift replaces the shift by hand.
+#[test]
+fn double_clicking_a_swatch_shifts_its_color() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-shift-color");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let shifted = |app: &VectorcraftApp| app.ui.dialog.as_ref().map(|d| d.fields["colorTable"]["shifted"].clone());
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    assert_eq!(picker_color(&app).as_deref(), Some("#0000ff"));
+    crate::dialogs::cancel(&mut app);
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!((kind(&app), shifted(&app)), (Some(save_for_web::KIND), Some(json!({}))), "Cancel shifts nothing");
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app).unwrap();
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!((kind(&app), shifted(&app)), (Some(save_for_web::KIND), Some(json!({"#0000ff": "#00ff00"}))), "OK shifts the color");
+    // The shifted swatch opens on its source color.
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    assert_eq!(picker_color(&app).as_deref(), Some("#0000ff"));
+    crate::dialogs::cancel(&mut app);
+    // Web Shift replaces the shift by hand.
+    click_text(&mut app, "Web Shift");
+    let t = app.ui.dialog.as_ref().unwrap().fields["colorTable"].clone();
+    assert_eq!((&t["shifted"], &t["webShift"]), (&json!({}), &json!(["#0000ff"])));
+    // Shifted again, the color reaches the saved file and is remembered.
+    double_click_swatch(&mut app, &ctx, "#0000ff");
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app).unwrap();
+    tick(&mut app, &ctx, vec![]);
+    let r = confirm(&mut app).unwrap();
+    let image = image::open(r["path"].as_str().unwrap()).unwrap().to_rgba8();
+    assert_eq!((image.get_pixel(50, 20).0, image.get_pixel(20, 14).0), ([0, 255, 0, 255], [204, 51, 0, 255]));
+    let remembered = app.session.last_web_settings().color_table;
+    assert_eq!((remembered.shifted.get("#0000ff").map(String::as_str), remembered.web_shift.len()), (Some("#00ff00"), 0));
+}
+
 /// Click the dialog's text `label` with the pointer (frames a quarter second apart).
 fn click_text(app: &mut VectorcraftApp, label: &str) {
     let ctx = egui::Context::default();

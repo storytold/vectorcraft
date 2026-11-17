@@ -9018,7 +9018,7 @@ File → Export → Save for Web (Legacy) writes optimised web images: `document
 …}` renders the artboard (`clipToArtboard`, the default; `artboard` picks one) or the visible art and the slices, at
 `width`, `height` or `percent`, and encodes it with the format's settings: for GIF and PNG-8 `reduction`, `colors`,
 `dither`, `ditherAmount`, `transparency`, `matte`, `interlaced`, `webSnap`, `lossy` (GIF) and `colorTable {locked,
-transparent, webShift, sort, deleted, customPalette}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
+transparent, webShift, sort, deleted, customPalette, shifted}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
 `transparency`, `matte` and `interlaced`. `metadata` (none, copyright, contact, all) writes File Info as PNG text or a
 GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. `<stem>` is the name of `path` without its extension, or
 without `path` the document's title with the characters Windows does not allow in a file name as `-` and a `-` after
@@ -9031,7 +9031,7 @@ couldn't be decoded and is missing from the image; the files are written all the
 
 `document.exportForWeb.preview` returns what Save writes for the same settings without writing it: `bytes` (the exact
 file size), `seconds` to download at `kbps` (default 56.6), the size, and for palette formats the colour table
-(`colors: [{color, source, transparent, locked, webShifted, webSafe}]`). The colour table's lists name colours by
+(`colors: [{color, source, transparent, locked, webShifted, shifted, webSafe}]`). The colour table's lists name colours by
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
 previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
 
@@ -9049,6 +9049,23 @@ Ctrl-click (Command-click on macOS) adds or removes one (`__colors` holds the se
 clicked). The trash button and Delete Color in the table's menu delete the selection in one edit, Restore Generated
 Table in that menu clears `deleted` and `customPalette`, and the table reads Custom while either is set. Choosing
 another reduction in the dialog also clears them.
+
+Shifting a color is `colorTable.shifted: {"#source": "#rrggbb"…}`, by `source`: every pixel of that color is
+written as the color given, in the preview and the file. The color is kept when the colors are reduced, as a
+locked one is: the shifted and locked colors take the palette's slots first, shifted ones before locked ones, and at
+least one slot is left for the reduction, so with `colors: 2` and transparent pixels none is kept and a color left out
+shifts nothing. As with a locked color, a kept source stays in the palette when the art no longer has it, and the
+pixels nearest to it are written in the new color. The preview marks it `shifted` and `locked`. A shift by hand wins over `webShift`, `webSnap` and
+`locked`; a color mapped to transparent stays transparent. Two colors may be shifted to the same color. A source the
+table does not hold shifts nothing, and the shift stays with the settings for when it comes back; another reduction
+keeps it. The settings store the map in lowercase, drop a color shifted to itself or deleted, and drop the `webShift`
+of a color shifted by hand. More than 256 entries, a key or value that is not a color such as `#ff8800` (`#rrggbbaa`
+included), and two keys that name one color are errors. Presets and `webExport.settings` keep the map. In the dialog a double-click on an
+opaque swatch opens the Color Picker on the color shown (on the source color for a color already shifted; an agent
+sets `__editColor: "#source"`). Its OK shifts the color (picking the source color takes the shift away), and Cancel
+leaves the table as it was. A shifted swatch shows the source color at its upper left and the new color at its lower
+right, with the lock mark, and Lock stays on until the color is unshifted. Web Shift replaces a shift by hand, and
+Unshift All Colors in the table's menu clears `shifted` and `webShift`. Only Web Colors in the picker starts off.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"png8","colorTable":{"deleted":["#ff0000"],"customPalette":["#0000ff","#00ff00","#ff0000"]}}}}

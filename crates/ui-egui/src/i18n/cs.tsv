@@ -3537,6 +3537,7 @@ theme	Appearance	Motiv
 	Delete Brush	Odstranit štětec
 	Delete Color	Odstranit barvu
 	Restore Generated Table	Obnovit vygenerovanou tabulku
+	Unshift All Colors	Zrušit posun všech barev
 	Delete Symbol	Odstranit symbol
 	Delete the selected symbol?	Odstranit vybraný symbol?
 	Delete the selected symbols?	Odstranit vybrané symboly?
@@ -5249,6 +5250,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	choose a location for the package	zvolte umístění balíčku
 @msg	clipboard is empty	schránka je prázdná
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: v tabulce barev musí zůstat alespoň jedna barva
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` označuje barvu, kterou označuje i jiný klíč
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` není barva jako "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: nejvýše {MAX_TABLE} barev
 @msg	command `{0}` is not available right now: {1}	příkaz `{0}` nyní není k dispozici: {1}
