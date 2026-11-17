@@ -246,7 +246,12 @@ fn spiral_decay_is_normalized_for_active_and_inactive_tools_and_preferences() {
     let mut s = session();
     for active in [false, true] {
         select(&mut s, if active { "spiral" } else { "selection" });
-        let options = s.set_tool_option_cmd(&json!({"tool": "spiral", "values": {"decay": 150, "segments": 4, "clockwise": false}})).unwrap();
+        // A decay past the 99.99 % a spiral draws is refused, and nothing changes.
+        let before = s.tool_options_of("spiral");
+        let refused = s.set_tool_option_cmd(&json!({"tool": "spiral", "values": {"decay": 150, "segments": 4, "clockwise": false}}));
+        assert_eq!(refused.err(), Some("tool `spiral`: `decay` must be a number from 5 to 99.99".to_string()));
+        assert_eq!(s.tool_options_of("spiral"), before);
+        let options = s.set_tool_option_cmd(&json!({"tool": "spiral", "values": {"decay": 99.99, "segments": 4, "clockwise": false}})).unwrap();
         assert_eq!(options["decay"], json!(99.99));
         assert_eq!(s.tool_options_of("spiral")["decay"], json!(99.99));
         assert_eq!(s.prefs.tool_settings["spiral"]["decay"], json!(99.99));

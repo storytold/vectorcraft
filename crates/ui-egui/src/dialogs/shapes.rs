@@ -270,8 +270,8 @@ fn arc_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
 const ARC_PREVIEW: egui::Vec2 = egui::vec2(160.0, 120.0);
 const ARC_PREVIEW_MARGIN: f32 = 12.0;
 
-/// The arc the Arc tool draws with the options OK sets from `d` ([`arc_options`], kept as the tool
-/// keeps them: a slope from -100 to 100, a Base Along of Y or else X), as `shape.arc` draws it
+/// The arc the Arc tool draws with the options OK sets from `d` ([`arc_options`]; a slope past -100
+/// or 100, which OK refuses, is drawn at that end, and a Base Along other than Y along X), as `shape.arc` draws it
 /// with its reference point at the origin and General › Constrain Angle `constrain` (degrees)
 /// turning it about that point. `None` when a length or the slope is not finite.
 fn arc_preview_path(d: &Dialog, constrain: f64) -> Option<vectorcraft_geom::path::PathData> {
@@ -523,7 +523,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
                 "cx": x,
                 "cy": y,
                 "radius": d.f64("radius", 50.0).max(0.01),
-                "decay": d.f64("decay", 80.0).clamp(5.0, 150.0),
+                "decay": d.f64("decay", 80.0).clamp(5.0, 99.99),
                 "segments": (d.f64("segments", 10.0) as u64).clamp(2, 1000),
                 "clockwise": d.bool("clockwise"),
             }),
@@ -646,6 +646,15 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
         assert_eq!(app.session.tool_options_of("spiral"), json!({"decay": 65.0, "segments": 12, "clockwise": true}));
+
+        // A decay typed past 99.99 % draws the spiral at 99.99 %, the most a spiral draws, and
+        // keeps that decay.
+        super::super::open_tool_dialog(&mut app, "spiral", json!({"x": 40.0, "y": 60.0}));
+        app.ui.dialog.as_mut().unwrap().fields.insert("decay".into(), json!(120.0));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+        assert_eq!(app.session.tool_options_of("spiral")["decay"], json!(99.99));
     }
 
     #[test]
@@ -731,21 +740,27 @@ mod tests {
         }
     }
 
-    /// For values the Arc tool does not keep as typed, the picture shows the arc of the options OK
-    /// sets: the same picture as a dialog holding those options.
+    /// For values the dialog reads as other values, the picture shows the arc of the options OK
+    /// sets: the same picture as a dialog holding those options. A slope outside -100 to 100 or a
+    /// Base Along other than X or Y is refused: OK leaves the dialog open and keeps the options.
     #[test]
     fn the_arc_preview_shows_the_options_ok_sets() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
-        for typed in [
-            json!({"slope": 140.0}),
-            json!({"slope": -250.0}),
-            json!({"slope": "steep"}),
-            json!({"lengthX": "wide"}),
-            json!({"lengthY": null}),
-            json!({"baseAlong": "z"}),
-            json!({"reference": 12}),
+        for (typed, error) in [
+            (json!({"slope": 140.0}), "`slope` must be a number from -100 to 100"),
+            (json!({"slope": -250.0}), "`slope` must be a number from -100 to 100"),
+            (json!({"baseAlong": "z"}), "`baseAlong` must be one of"),
         ] {
+            let before = app.session.tool_options_of("arc");
+            app.ui.dialog = Some(arc_dialog(typed.clone()));
+            let r = super::super::confirm(&mut app);
+            assert!(r.as_ref().is_err_and(|e| e.contains(error)), "{typed}: {r:?}");
+            assert!(app.ui.dialog.is_some(), "{typed}");
+            assert_eq!(app.session.tool_options_of("arc"), before, "{typed}");
+            app.ui.dialog = None;
+        }
+        for typed in [json!({"slope": "steep"}), json!({"lengthX": "wide"}), json!({"lengthY": null}), json!({"reference": 12})] {
             let d = arc_dialog(typed.clone());
             let shown = arc_preview_path(&d, 0.0).expect("an arc");
             app.ui.dialog = Some(d);
