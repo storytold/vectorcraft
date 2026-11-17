@@ -77,6 +77,9 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::tangent_circle::COMMAND => {
+            (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
+        }
         crate::addons::color::nearest::COMMAND => (crate::addons::color::nearest::KIND, crate::addons::color::nearest::fields()),
         crate::addons::color::legend::COMMAND => (crate::addons::color::legend::KIND, crate::addons::color::legend::fields()),
         crate::addons::typetools::COMMAND => (crate::addons::typetools::KIND, crate::addons::typetools::fields(app)),
@@ -192,6 +195,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
+    // Check Fold Lines shows its summary and lists its issues in the Fold Lines panel.
+    if id == crate::addons::packaging::CHECK {
+        crate::addons::packaging::check(app, p);
+        return;
+    }
     // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
     app.placing.for_user = id.starts_with("edit.paste");
     let r = app.run(id, p);
@@ -294,6 +302,13 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
     if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Check Spelling…: dialog to walk through unknown words.
+    if id == crate::dialogs::check_spelling::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
+        if let Err(e) = crate::dialogs::check_spelling::open(app) {
             app.status(e);
         }
         return true;

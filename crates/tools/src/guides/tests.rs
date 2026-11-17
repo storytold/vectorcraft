@@ -1120,14 +1120,15 @@ fn gradient_vector_ends_land_on_a_glyph_anchor() {
         let acts = tool.pointer(&c, &ev(PointerKind::Drag, near + Vec2::new(1.5, -1.0)));
         assert!(acts.is_empty(), "drag start, Snap to Glyph {glyphs}: {acts:?}");
         tool.pointer(&c, &ev(PointerKind::Up, near + Vec2::new(1.5, -1.0)));
-        // The end handle of the rectangle's gradient dragged to the click lands on the anchor.
+        // The end handle of the rectangle's gradient Alt-dragged to the click lands on the anchor.
         let c = ToolContext { snap_to_glyph: glyphs, ..cx(&d, &on_rect, &p) };
         let mut tool = GradientTool::default();
         // Hovering over the handle (on the rectangle's edge) shows no guides.
         tool.pointer(&c, &ev(PointerKind::Move, Point::new(400.0, 100.0)));
         assert!(!tool.overlays(&c).iter().any(|o| matches!(o, Overlay::Label { .. })), "hover over the handle");
-        tool.pointer(&c, &ev(PointerKind::Down, Point::new(400.0, 100.0)));
-        let v = preview(&tool.pointer(&c, &ev(PointerKind::Drag, click)));
+        let alt = |kind, q: Point| PointerEvent { mods: crate::Mods { alt: true, ..Default::default() }, ..ev(kind, q) };
+        tool.pointer(&c, &alt(PointerKind::Down, Point::new(400.0, 100.0)));
+        let v = preview(&tool.pointer(&c, &alt(PointerKind::Drag, click)));
         assert_eq!(lands(at(&v["end"])), glyphs, "end handle, Snap to Glyph {glyphs}: {v}");
         tool.pointer(&c, &ev(PointerKind::Up, click));
         // The start handle dragged to the click lands on the anchor.

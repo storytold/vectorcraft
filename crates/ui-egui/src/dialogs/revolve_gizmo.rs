@@ -42,8 +42,10 @@ fn drag_id() -> Id {
     Id::unique("revolve-gizmo-drag")
 }
 
+/// Is a rotation or light gesture in progress, on the artboard or on the classic 3D effects' track
+/// cube?
 pub(crate) fn dragging(ctx: &egui::Context) -> bool {
-    ctx.data(|m| m.get_temp::<Drag>(drag_id())).is_some()
+    ctx.data(|m| m.get_temp::<Drag>(drag_id())).is_some() || super::three_d_classic::cube_dragging(ctx)
 }
 
 pub(super) fn clear(ctx: &egui::Context) {

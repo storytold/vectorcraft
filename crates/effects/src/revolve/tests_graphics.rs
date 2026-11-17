@@ -280,6 +280,23 @@ fn under_several_lights_a_graphic_takes_each_faces_own_lit_art() {
 }
 
 #[test]
+fn under_a_colored_light_each_part_of_a_graphic_stays_right_after_its_face_over_the_underlay() {
+    let d = document();
+    let n = revolved(&CYLINDER, json!({"shade": true, "lightColor": "#ff8040", "graphics": [{"symbol": "Red"}]}));
+    let art = revolve_art_in(Some(&d), &n).unwrap();
+    // One run holds every face; a face with a part of the bar is a group of the face and that part.
+    let runs = super::tests::sealed_faces(&art);
+    assert_eq!(runs.len(), 1);
+    let carrying: Vec<&Arc<Node>> = runs[0].iter().filter(|f| matches!(f.kind, NodeKind::Group { clip: false, .. })).collect();
+    assert!(!carrying.is_empty());
+    assert!(carrying.iter().all(|f| f.children().is_some_and(|c| c.len() > 1 && parts(&c[0], false).is_empty())));
+    // Every part of the bar is drawn in the run, after its face, and none in the underlay.
+    let in_run: usize = carrying.iter().map(|f| parts(f, false).len()).sum();
+    assert!(in_run > 0);
+    assert_eq!(in_run, parts(&art, false).len());
+}
+
+#[test]
 fn graphics_past_the_point_limit_are_refused() {
     let mut d = document();
     let dots: Vec<Arc<Node>> = (0..2000)
