@@ -1365,6 +1365,10 @@ file-filter	Templates	Шаблоны
 	Font List	Список шрифтов
 	Show Similar Fonts	Показать похожие шрифты
 	Clear Similar Fonts	Сбросить похожие шрифты
+	Fonts used in this document	Шрифты, используемые в этом документе
+	This document uses no available fonts	В этом документе не используются доступные шрифты
+	Recently Added	Недавно добавленные
+	Fonts added in the last 30 days	Шрифты, добавленные за последние 30 дней
 	Font Preview Size	Размер предварительного просмотра шрифта
 	Font Size	Размер шрифта
 	Variable Font	Вариативный шрифт
@@ -4987,6 +4991,9 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no active document	нет активного документа
 @msg	no active perspective plane	нет активной плоскости перспективы
 @msg	no anchor points selected	опорные точки не выделены
+@msg	`points` must be three [x, y] pairs of numbers	`points` должен содержать три пары чисел [x, y]
+@msg	direct-select three anchor points, or give `points`	выделите прямым выделением три опорные точки или задайте `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
 @msg	no app to open files here	здесь нет приложения для открытия файлов
 @msg	no artboard	нет монтажной области
 @msg	no artboard {i} (0-based; the document has {_1})	нет монтажной области {i} (счёт с 0; в документе {_1})
@@ -7170,6 +7177,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Откройте документ, чтобы проверить его на проблемы.
 	Empty Text	Пустой текст
 	Unpainted Objects	Объекты без заливки и обводки
+	Empty Text Paths	Пустые текстовые контуры
 	Zero-Opacity Objects	Объекты с нулевой непрозрачностью
 	Duplicate Objects	Дублирующиеся объекты
 	Off-Artboard Art	Графика за пределами монтажных областей

@@ -3715,6 +3715,10 @@ theme	Appearance	Motiv
 	Font List	Seznam písem
 	Show Similar Fonts	Zobrazit podobná písma
 	Clear Similar Fonts	Zrušit podobná písma
+	Fonts used in this document	Písma použitá v tomto dokumentu
+	This document uses no available fonts	Tento dokument nepoužívá žádná dostupná písma
+	Recently Added	Nedávno přidané
+	Fonts added in the last 30 days	Písma přidaná za posledních 30 dní
 	Fonts in Document	Písma v dokumentu
 	Refresh Font List	Obnovit seznam písem
 	Replace Font	Nahradit písmo
@@ -5258,6 +5262,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
+@msg	`points` must be three [x, y] pairs of numbers	`points` musí být tři dvojice čísel [x, y]
+@msg	direct-select three anchor points, or give `points`	vyberte přímým výběrem tři kotevní body, nebo zadejte `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
 @msg	no artboard {i} (0-based; the document has {_1})	pracovní plocha {i} neexistuje (číslováno od 0; dokument jich má {_1})
@@ -7180,6 +7187,7 @@ anchor	Points:	Body:
 	Open a document to check it for issues.	Otevřete dokument a zkontrolujte jeho problémy.
 	Empty Text	Prázdný text
 	Unpainted Objects	Objekty bez barvy
+	Empty Text Paths	Prázdné textové cesty
 	Zero-Opacity Objects	Objekty s nulovým krytím
 	Duplicate Objects	Duplicitní objekty
 	Off-Artboard Art	Kresba mimo pracovní plochy

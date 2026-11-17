@@ -399,9 +399,7 @@ fn select_found(s: &mut Session, p: &Value, ids: &[NodeId]) -> Result<Value> {
     let compound = |n: &Node| matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. });
     let members = st.isolation.and_then(|i| st.doc.ancestry(i)).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(compound)));
     let found: BTreeSet<NodeId> = ids.iter().copied().collect();
-    super::select::select_where(s, "document.find", p, |d, n| {
-        found.contains(&n.id) && (members || !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
-    })
+    super::select::select_where(s, "document.find", p, |_, n, parent| found.contains(&n.id) && (members || !parent.is_some_and(compound)))
 }
 
 /// Render an artboard at an image's size, drawn as a PNG export draws it (linked images and placed

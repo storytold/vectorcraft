@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 craft-dxf = { workspace = true }
+craft-plotter = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

@@ -4006,6 +4006,10 @@ theme	Appearance	Vormgeving
 	Font List	Lettertypelijst
 	Show Similar Fonts	Vergelijkbare lettertypen tonen
 	Clear Similar Fonts	Vergelijkbare lettertypen wissen
+	Fonts used in this document	Lettertypen gebruikt in dit document
+	This document uses no available fonts	Dit document gebruikt geen beschikbare lettertypen
+	Recently Added	Recent toegevoegd
+	Fonts added in the last 30 days	Lettertypen die in de afgelopen 30 dagen zijn toegevoegd
 	Fonts in Document	Lettertypen in document
 	Refresh Font List	Lettertypelijst vernieuwen
 	Replace Font	Lettertype vervangen
@@ -5315,6 +5319,9 @@ imageTrace	Outline	Contour
 @msg	no active document	geen actief document
 @msg	no active perspective plane	geen actief perspectiefvlak
 @msg	no anchor points selected	geen ankerpunten geselecteerd
+@msg	`points` must be three [x, y] pairs of numbers	`points` moet uit drie getallenparen [x, y] bestaan
+@msg	direct-select three anchor points, or give `points`	selecteer met directe selectie drie ankerpunten of geef `points` op
+@msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
 @msg	no app to open files here	hier is geen app om bestanden mee te openen
 @msg	no artboard	geen tekengebied
 @msg	no artboard {i} (0-based; the document has {_1})	geen tekengebied {i} (vanaf 0; het document heeft er {_1})
@@ -9081,6 +9088,7 @@ anchor	Points:	Punten:
 	Open a document to check it for issues.	Open een document om het op problemen te controleren.
 	Empty Text	Lege tekst
 	Unpainted Objects	Objecten zonder verf
+	Empty Text Paths	Lege tekstpaden
 	Zero-Opacity Objects	Objecten met 0% dekking
 	Duplicate Objects	Dubbele objecten
 	Off-Artboard Art	Illustraties buiten de tekenborden

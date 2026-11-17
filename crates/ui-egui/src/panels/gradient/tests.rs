@@ -711,6 +711,27 @@ fn the_stop_eyedropper_arms_the_eyedropper_for_the_stop() {
     assert_eq!((app.session.tool_id(), app.session.tool_options()), ("eyedropper", json!({"stop": "gradient", "brushKeyColor": false})));
 }
 
+/// #8024: Escape ends the stop eyedropper's pick and returns to the Gradient tool. The stop keeps
+/// its color, the selection stays, and a held Escape's repeats end nothing else.
+#[test]
+fn escape_ends_the_stop_eyedropper_and_returns_to_the_gradient_tool() {
+    let mut app = app(json!({"gradient": {}}));
+    crate::shortcut_editor::sync(&app.ui);
+    app.select_tool("gradient");
+    app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+    let (paint, selected) = (current(&app), app.session.active().unwrap().selection.objects.clone());
+    stop_eyedropper(&mut app);
+    let key = |pressed, repeat| Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Modifiers::NONE };
+    let ctx = egui::Context::default();
+    for events in [vec![key(true, false)], vec![key(true, true)], vec![key(false, false)]] {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::shortcuts::handle(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+    }
+    assert_eq!(app.session.tool_id(), "gradient");
+    assert_eq!(current(&app), paint, "the stop keeps its color");
+    assert_eq!(app.session.active().unwrap().selection.objects, selected, "the selection stays");
+}
+
 /// The gradient panel names its Angle and Aspect Ratio inputs.
 #[test]
 fn angle_and_aspect_fields_are_named() {

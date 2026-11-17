@@ -308,24 +308,30 @@ pub(crate) fn selectable(d: &Document, iso: Option<NodeId>) -> Vec<NodeId> {
 /// them, leaving out every hidden or locked object with what it holds. `f` returns whether to
 /// visit the objects inside the one it is given.
 pub(crate) fn walk_selectable(d: &Document, iso: Option<NodeId>, mut f: impl FnMut(&Node) -> bool) {
-    fn inside(n: &Node, f: &mut impl FnMut(&Node) -> bool) {
-        if n.visible && !n.locked && f(n) {
+    walk_selectable_in(d, iso, |n, _| f(n));
+}
+
+/// [`walk_selectable`], handing `f` each object with the node that holds it in the tree: its
+/// layer, sublayer, group or other container, or `None` for a top-level layer.
+fn walk_selectable_in(d: &Document, iso: Option<NodeId>, mut f: impl FnMut(&Node, Option<&Node>) -> bool) {
+    fn inside(n: &Node, parent: Option<&Node>, f: &mut impl FnMut(&Node, Option<&Node>) -> bool) {
+        if n.visible && !n.locked && f(n, parent) {
             for c in n.children().into_iter().flatten() {
-                inside(c, f);
+                inside(c, Some(n), f);
             }
         }
     }
-    fn find(n: &Node, tops: &BTreeSet<NodeId>, f: &mut impl FnMut(&Node) -> bool) {
+    fn find(n: &Node, parent: Option<&Node>, tops: &BTreeSet<NodeId>, f: &mut impl FnMut(&Node, Option<&Node>) -> bool) {
         if tops.contains(&n.id) {
-            return inside(n, f);
+            return inside(n, parent, f);
         }
         for c in n.children().into_iter().flatten() {
-            find(c, tops, f);
+            find(c, Some(n), tops, f);
         }
     }
     let tops: BTreeSet<NodeId> = selectable(d, iso).into_iter().collect();
     for l in &d.layers {
-        find(l, &tops, &mut f);
+        find(l, None, &tops, &mut f);
     }
 }
 
@@ -1098,7 +1104,9 @@ fn select_color(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "give `fill`, `stroke` or both"));
     }
     let reads_as = |paint: Paint, hex: Option<&str>| hex.is_none_or(|h| paint.color().is_some_and(|c| c.to_hex() == h));
-    select_where(s, C, p, |d, n| paint_reported(d, n) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref()))
+    select_where(s, C, p, |_, n, parent| {
+        paint_reported(n, parent) && reads_as(fill_of(n), fill.as_deref()) && reads_as(stroke_of(n).0, stroke.as_deref())
+    })
 }
 
 /// The longest note, in bytes, that Select by Note searches for.
@@ -1219,11 +1227,11 @@ fn fold_case(c: char) -> impl Iterator<Item = char> {
     c.to_lowercase().map(|l| if l == 'ς' { 'σ' } else { l })
 }
 
-/// Does `document.inspect` report a fill and stroke for `n`? A compound path's are its own, though
-/// it holds its members, and its members report none.
-fn paint_reported(d: &Document, n: &Node) -> bool {
+/// Does `document.inspect` report a fill and stroke for `n`, held by `parent`? A compound path's
+/// are its own, though it holds its members, and its members report none.
+fn paint_reported(n: &Node, parent: Option<&Node>) -> bool {
     let compound = |n: &Node| matches!(n.kind, NodeKind::Compound { .. });
-    compound(n) || (!n.is_container() && !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
+    compound(n) || (!n.is_container() && !parent.is_some_and(compound))
 }
 
 /// The object Select > Same compares the others with, and whether isolation mode is inside a
@@ -1260,30 +1268,30 @@ fn same_fill(s: &mut Session, cmd: &str, eq: impl Fn(&Node, &Node) -> bool) -> R
 fn same_in(s: &mut Session, cmd: &str, live_paint: bool, eq: impl Fn(&Node, &Node) -> bool) -> Result<Value> {
     let st = s.doc()?;
     let (refn, members) = same_reference(st, cmd)?;
-    let group = live_paint_group(&st.doc, refn.id);
+    let group = live_paint_group(st.doc.parent_of(refn.id).and_then(|p| st.doc.node(p)));
     let refn = refn.clone();
-    select_where(s, cmd, &json!({}), |d, n| {
-        (!live_paint || live_paint_group(d, n.id) == group) && (if members { !n.is_container() } else { paint_reported(d, n) }) && eq(n, &refn)
-    })
+    select_where(s, cmd, &json!({}), |_, n, parent| same_candidate(n, parent, live_paint, group, members) && eq(n, &refn))
 }
 
-/// The Live Paint group `id` is a face or edge of.
-fn live_paint_group(d: &Document, id: NodeId) -> Option<NodeId> {
-    d.parent_of(id).filter(|p| d.node(*p).is_some_and(is_live_paint))
+/// Whether Select > Same compares `n`, held by `parent`, with its reference: with `live_paint`, only
+/// when `n` is a face or edge of the Live Paint group `group` (or of none, for `None`); in
+/// isolation mode inside a compound path (`members`), any object that is not a container;
+/// otherwise one that [`paint_reported`] accepts.
+fn same_candidate(n: &Node, parent: Option<&Node>, live_paint: bool, group: Option<NodeId>, members: bool) -> bool {
+    (!live_paint || live_paint_group(parent) == group) && (if members { !n.is_container() } else { paint_reported(n, parent) })
+}
+
+/// The Live Paint group an object held by `parent` is a face or edge of.
+fn live_paint_group(parent: Option<&Node>) -> Option<NodeId> {
+    parent.filter(|p| is_live_paint(p)).map(|p| p.id)
 }
 
 /// Select the objects [`walk_selectable`] visits that `f` accepts (not looking inside accepted
-/// ones); Select > Reselect repeats `cmd` with `p`.
-pub(crate) fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node) -> bool) -> Result<Value> {
+/// ones); `f` is given each object with the node that holds it. Select > Reselect repeats `cmd`
+/// with `p`.
+pub(crate) fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Document, &Node, Option<&Node>) -> bool) -> Result<Value> {
     let st = s.doc()?;
-    let mut ids = vec![];
-    walk_selectable(&st.doc, st.isolation, |n| {
-        if f(&st.doc, n) {
-            ids.push(n.id);
-            return false;
-        }
-        true
-    });
+    let ids = matching(&st.doc, st.isolation, |n, parent| f(&st.doc, n, parent));
     let from = st.selection.objects.clone();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     let st = s.doc_mut()?;
@@ -1292,12 +1300,26 @@ pub(crate) fn select_where(s: &mut Session, cmd: &str, p: &Value, f: impl Fn(&Do
     Ok(json!({ "count": st.selection.objects.len() }))
 }
 
+/// The objects [`walk_selectable`] visits that `f` accepts, in paint order, not looking inside
+/// accepted ones. `f` is given each object with the node that holds it.
+fn matching(d: &Document, iso: Option<NodeId>, f: impl Fn(&Node, Option<&Node>) -> bool) -> Vec<NodeId> {
+    let mut ids = vec![];
+    walk_selectable_in(d, iso, |n, parent| {
+        if f(n, parent) {
+            ids.push(n.id);
+            return false;
+        }
+        true
+    });
+    ids
+}
+
 fn same_graphic_style(s: &mut Session, _: &Value) -> Result<Value> {
     let cmd = "select.same.graphicStyle";
     let st = s.doc()?;
     let (refn, _) = same_reference(st, cmd)?;
     let id = super::style::linked_style(&st.doc, refn).map(|g| g.id).ok_or_else(|| bad(cmd, "the selection has no graphic style"))?;
-    select_where(s, cmd, &json!({}), |d, n| n.extras().graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
+    select_where(s, cmd, &json!({}), |d, n, _| n.extras().graphic_style == Some(id) && super::style::linked_style(d, n).is_some())
 }
 
 /// An appearance attribute Select > Same > Appearance Attribute matches.
@@ -1321,7 +1343,7 @@ fn same_attribute(s: &mut Session, p: &Value) -> Result<Value> {
             Attribute::Item(ap.items.iter().rev().find(|i| i.is_fill()).cloned().ok_or_else(|| bad(cmd, "the object has no fill, stroke or effect"))?)
         }
     };
-    select_where(s, cmd, p, |_, n| match &attr {
+    select_where(s, cmd, p, |_, n, _| match &attr {
         Attribute::Item(it) => n.appearance.items.contains(it),
         Attribute::Effect(e) => n.appearance.effects.iter().any(|x| x.id == e.id && x.params == e.params),
     })
@@ -1380,6 +1402,9 @@ fn not_pixel_aligned(s: &mut Session, _: &Value) -> Result<Value> {
     s.select(|_, sel| sel.set(ids))?;
     Ok(json!({ "count": s.doc()?.selection.objects.len() }))
 }
+
+#[cfg(test)]
+mod same_tests;
 
 #[cfg(test)]
 mod tests;
