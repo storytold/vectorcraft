@@ -402,7 +402,15 @@ fn linked_size_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     let mut rows: Option<egui::Rect> = None;
     egui::Grid::new("shape-size-dlg").num_columns(3).spacing([10.0, 8.0]).show(ui, |ui| {
         for (key, label) in [("width", "Width:"), ("height", "Height:")] {
-            let row = form::row_label(ui, label);
+            let row = if key == "height" && d.kind == "ellipse" {
+                let (row, pressed) = height_label_button(ui, label);
+                if pressed {
+                    copy_width_to_height(d);
+                }
+                row
+            } else {
+                form::row_label(ui, label)
+            };
             if ui.label_inputs_by(row.id, |ui| form::length(ui, d, key, unit, form::FIELD_W)) {
                 follow_link(d, key);
             }
@@ -424,6 +432,8 @@ fn linked_size_form(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     let resp = ui.interact(rect, ui.scope_id().with("shape-size-link"), egui::Sense::click());
     let icon = if on { "link" } else { "link-2-off" };
     if widgets::paint_icon_button(ui, resp, icon, "Constrain Width and Height Proportions", on).clicked() {
+        // Enter on the focused button turns the link on or off; it does not also press OK.
+        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
         d.fields.insert(LINK.into(), json!(!on));
         sync_link(ui.ctx(), d);
     }
@@ -466,6 +476,61 @@ fn follow_link(d: &mut Dialog, typed: &str) {
     let (other, v) = if typed == "width" { ("height", d.f64("width", 100.0) * ratio) } else { ("width", d.f64("height", 100.0) / ratio) };
     if v.is_finite() {
         d.fields.insert(other.into(), json!(v));
+    }
+}
+
+/// The Ellipse dialog's Height label: a button drawn as the other rows' labels are. Whether it was
+/// pressed: a click, or Enter or Space while it has the keyboard focus; that Enter does not also
+/// press OK. A click whose press took the focus from a field that then refused its text (Width
+/// left empty or not a distance) does not count, as such a click on OK does not. Screen readers
+/// read it as the button "Height:" (which also names the Height field) with the description "Copy
+/// Width to Height".
+fn height_label_button(ui: &mut egui::Ui, label: &str) -> (egui::Response, bool) {
+    let t = crate::theme::Tokens::get(ui.ctx());
+    let text = egui::RichText::new(tl!(label)).color(t.text_dim);
+    let resp = ui.add(egui::Button::new(text).frame(false)).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let resp = resp.on_hover_text(tl!("Copy Width to Height"));
+    let press = resp.id.with("press-pass");
+    if resp.contains_pointer() && ui.input(|i| i.pointer.any_pressed()) {
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.data_mut(|m| m.insert_temp(press, pass));
+    }
+    if !resp.clicked() {
+        // A press let go without a click (dragged off the button) leaves no press behind.
+        if ui.input(|i| i.pointer.any_released()) {
+            ui.data_mut(|m| m.remove::<u64>(press));
+        }
+        return (resp, false);
+    }
+    ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    let (pressed_at, refused_at, refused_now) = ui.data_mut(|m| {
+        let pressed_at = m.get_temp::<u64>(press);
+        m.remove::<u64>(press);
+        (pressed_at, m.get_temp::<u64>(widgets::dialog_reject_pass()), m.get_temp::<bool>(widgets::dialog_reject_commit_flag()))
+    });
+    let refused = refused_now == Some(true) || matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p);
+    (resp, !refused)
+}
+
+/// Height takes the Width the dialog holds (help page "Draw ellipses",
+/// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=140>).
+/// A Width that is missing, empty, not a distance or not finite leaves Height as it is. With the
+/// link on, the link keeps the circle from then on (proportions 1 : 1), or keeps no proportions
+/// when Width is 0; the link stays on.
+fn copy_width_to_height(d: &mut Dialog) {
+    let width = match d.fields.get("width") {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(s)) => Unit::Points.parse(s),
+        _ => None,
+    };
+    let Some(width) = width.filter(|w| w.is_finite()) else { return };
+    d.fields.insert("height".into(), json!(width));
+    if d.bool(LINK) {
+        if width != 0.0 {
+            d.fields.insert(RATIO.into(), json!(1.0));
+        } else {
+            d.fields.remove(RATIO);
+        }
     }
 }
 
@@ -1061,6 +1126,237 @@ mod tests {
         let anchors = h.get_by_role_and_label(Role::TextInput, "Anchors:").rect();
         assert!(anchors.center().y > height.center().y, "Anchors is below Height: {anchors:?} {height:?}");
         assert_eq!(ellipse_anchors(h.state().ui.dialog.as_ref().unwrap()), 4);
+    }
+
+    /// A harness drawing `app`'s dialog, with the app's fonts installed on its first frame.
+    fn dialog_harness(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                super::super::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(5);
+        h
+    }
+
+    /// The dialog's Width and Height in points.
+    fn dialog_size(h: &egui_kittest::Harness<'_, VectorcraftApp>) -> (f64, f64) {
+        let d = h.state().ui.dialog.as_ref().expect("the dialog is open");
+        (d.f64("width", -1.0), d.f64("height", -1.0))
+    }
+
+    /// Replaces the text of the field named `name` with `text` and leaves it with Tab.
+    fn retype(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str, text: &str) {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
+        h.get_by_role_and_label(Role::TextInput, name).focus();
+        h.run_steps(2);
+        h.key_press_modifiers(all, egui::Key::A);
+        h.get_by_role_and_label(Role::TextInput, name).type_text(text);
+        h.run_steps(2);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+    }
+
+    /// In the Ellipse dialog, a click on the word Height copies Width into Height, also a Width
+    /// typed and not yet committed; the fields keep their names. Cancel discards it; OK draws the
+    /// circle as one undo step.
+    #[test]
+    fn clicking_height_in_the_ellipse_dialog_copies_width_into_height() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("width".into(), json!(80.0));
+        d.fields.insert("height".into(), json!(30.0));
+        let mut h = dialog_harness(app);
+        h.check_accessibility();
+        let button = h.get_by_role_and_label(Role::Button, "Height:");
+        assert_eq!(button.accesskit_node().description().as_deref(), Some("Copy Width to Height"));
+        h.get_by_role_and_label(Role::Button, "Height:").click();
+        h.run_steps(2);
+        assert_eq!(dialog_size(&h), (80.0, 80.0));
+        let d = h.state().ui.dialog.as_ref().unwrap();
+        assert!(!d.bool(LINK) && !d.fields.contains_key(RATIO), "the link stays off");
+        // The value fields keep their names.
+        h.get_by_role_and_label(Role::TextInput, "Width:");
+        h.get_by_role_and_label(Role::TextInput, "Height:");
+
+        // A Width typed and not committed with Enter or Tab is the one copied.
+        let all = egui::Modifiers { ctrl: true, command: true, ..Default::default() };
+        h.get_by_role_and_label(Role::TextInput, "Width:").focus();
+        h.run_steps(2);
+        h.key_press_modifiers(all, egui::Key::A);
+        h.get_by_role_and_label(Role::TextInput, "Width:").type_text("50 pt");
+        h.run_steps(2);
+        h.get_by_role_and_label(Role::Button, "Height:").click();
+        h.run_steps(3);
+        assert_eq!(dialog_size(&h), (50.0, 50.0));
+
+        // A Width the field refuses when the click takes its focus (not a distance, or empty)
+        // is not copied: Height keeps its value.
+        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("height".into(), json!(30.0));
+        h.run_steps(2);
+        for typed in ["wide", ""] {
+            h.get_by_role_and_label(Role::TextInput, "Width:").focus();
+            h.run_steps(2);
+            h.key_press_modifiers(all, egui::Key::A);
+            if typed.is_empty() {
+                h.key_press(egui::Key::Backspace);
+            } else {
+                h.get_by_role_and_label(Role::TextInput, "Width:").type_text(typed);
+            }
+            h.run_steps(2);
+            h.get_by_role_and_label(Role::Button, "Height:").click();
+            h.run_steps(3);
+            assert_eq!(dialog_size(&h), (50.0, 30.0), "{typed:?}");
+        }
+        // The field shows its value again, and the next click copies it.
+        h.get_by_role_and_label(Role::Button, "Height:").click();
+        h.run_steps(3);
+        assert_eq!(dialog_size(&h), (50.0, 50.0));
+
+        // A Height typed and not committed does not outlast the copy: a distance is replaced by
+        // Width, and a Height the field refuses keeps the copy from happening, as it keeps OK from
+        // confirming.
+        for (typed, after) in [("70 pt", (50.0, 50.0)), ("tall", (50.0, 30.0))] {
+            h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("height".into(), json!(30.0));
+            h.run_steps(2);
+            h.get_by_role_and_label(Role::TextInput, "Height:").focus();
+            h.run_steps(2);
+            h.key_press_modifiers(all, egui::Key::A);
+            h.get_by_role_and_label(Role::TextInput, "Height:").type_text(typed);
+            h.run_steps(2);
+            h.get_by_role_and_label(Role::Button, "Height:").click();
+            h.run_steps(3);
+            assert_eq!(dialog_size(&h), after, "{typed:?}");
+        }
+
+        // Cancel: nothing is drawn.
+        let undo = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.state().session.active().unwrap().history.undo.len();
+        let before = undo(&h);
+        crate::dialogs::cancel(h.state_mut());
+        h.run_steps(2);
+        assert!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+        assert_eq!(undo(&h), before);
+
+        // OK: one circle, one undo step.
+        super::super::open_tool_dialog(h.state_mut(), "ellipse", json!({"x": 10.0, "y": 10.0}));
+        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("width".into(), json!(64.0));
+        h.run_steps(2);
+        h.get_by_role_and_label(Role::Button, "Height:").click();
+        h.run_steps(2);
+        super::super::confirm(h.state_mut()).unwrap();
+        assert!(h.state().ui.dialog.is_none());
+        assert_eq!(undo(&h), before + 1);
+        let doc = &h.state().session.doc().unwrap().doc;
+        let b = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+        assert!((b.width() - 64.0).abs() < 1e-6 && (b.height() - 64.0).abs() < 1e-6, "{b:?}");
+    }
+
+    /// The Height button works from the keyboard: Space and Enter copy Width into Height, and
+    /// that Enter does not press OK. With the link on, the link stays on and keeps the circle when
+    /// Width is typed next; a Width of 0 is copied and leaves the link no proportions to keep.
+    #[test]
+    fn the_ellipse_height_button_copies_width_from_the_keyboard_and_keeps_the_link_round() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        super::super::open_tool_dialog(&mut app, "ellipse", json!({"x": 10.0, "y": 10.0}));
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("width".into(), json!(80.0));
+        d.fields.insert("height".into(), json!(20.0));
+        d.fields.insert(LINK.into(), json!(true));
+        let mut h = dialog_harness(app);
+        assert_eq!(h.state().ui.dialog.as_ref().unwrap().f64(RATIO, 0.0), 0.25);
+        h.get_by_role_and_label(Role::Button, "Height:").focus();
+        h.run_steps(2);
+        h.key_press(egui::Key::Space);
+        h.run_steps(2);
+        assert_eq!(dialog_size(&h), (80.0, 80.0));
+        let d = h.state().ui.dialog.as_ref().unwrap();
+        assert!(d.bool(LINK), "the link stays on");
+        assert_eq!(d.f64(RATIO, 0.0), 1.0);
+        // The link now keeps the circle.
+        retype(&mut h, "Width:", "40 pt");
+        assert_eq!(dialog_size(&h), (40.0, 40.0));
+
+        // Enter on the button copies, and the dialog stays open.
+        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("width".into(), json!(0.0));
+        h.run_steps(2);
+        h.get_by_role_and_label(Role::Button, "Height:").focus();
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_some(), "Enter on the Height button does not press OK");
+        assert_eq!(dialog_size(&h), (0.0, 0.0));
+        let d = h.state().ui.dialog.as_ref().unwrap();
+        assert!(d.bool(LINK) && !d.fields.contains_key(RATIO), "no proportions to keep at 0");
+        assert!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+    }
+
+    /// Enter on the focused link button turns the link on and leaves the dialog open, as Space does.
+    #[test]
+    fn enter_on_the_link_button_turns_the_link_on_without_pressing_ok() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        const LINK_NAME: &str = "Constrain Width and Height Proportions";
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 10.0, "y": 10.0}));
+        let mut h = dialog_harness(app);
+        assert!(!h.state().ui.dialog.as_ref().unwrap().bool(LINK));
+        h.get_by_role_and_label(Role::Button, LINK_NAME).focus();
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        let d = h.state().ui.dialog.as_ref().expect("Enter on the link button does not press OK");
+        assert!(d.bool(LINK));
+        assert!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+    }
+
+    /// Rectangle and Rounded Rectangle keep plain Width and Height labels.
+    #[test]
+    fn only_the_ellipse_dialog_has_the_height_button() {
+        use egui::accesskit::Role;
+        use egui_kittest::kittest::Queryable;
+        for kind in ["rectangle", "roundedRectangle"] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+            super::super::open_tool_dialog(&mut app, kind, json!({"x": 10.0, "y": 10.0}));
+            let h = dialog_harness(app);
+            h.get_by_role_and_label(Role::TextInput, "Height:");
+            assert!(h.query_by_role_and_label(Role::Button, "Height:").is_none(), "{kind}");
+        }
+    }
+
+    /// A Width that is missing, empty, not a distance or not finite leaves Height as it is; a
+    /// Width with a unit is copied in points, and 0 is copied.
+    #[test]
+    fn copying_width_takes_only_a_width_that_reads() {
+        for width in [None, Some(json!("")), Some(json!("wide")), Some(json!("inf")), Some(json!(null)), Some(json!(true))] {
+            let mut d = Dialog::new("ellipse", json!({"height": 30.0}));
+            if let Some(w) = width.clone() {
+                d.fields.insert("width".into(), w);
+            }
+            copy_width_to_height(&mut d);
+            assert_eq!(d.fields.get("height"), Some(&json!(30.0)), "{width:?}");
+        }
+        for (width, want) in [(json!("1 in"), 72.0), (json!(0), 0.0), (json!(12.5), 12.5)] {
+            let mut d = Dialog::new("ellipse", json!({"width": width.clone(), "height": 30.0}));
+            copy_width_to_height(&mut d);
+            assert_eq!(d.f64("height", -1.0), want, "{width}");
+        }
     }
 
     #[test]

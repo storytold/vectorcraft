@@ -721,6 +721,10 @@ pub struct UiState {
     /// saved.
     #[serde(skip)]
     pub color_guide_base: Option<vectorcraft_color::Color>,
+    /// Color Guide panel: the spot color swatch the base is a tint of, when it was chosen from one
+    /// ([`crate::panels::color_guide::SpotBase`]). Not saved.
+    #[serde(skip)]
+    pub color_guide_spot: Option<crate::panels::color_guide::SpotBase>,
     /// Align panel: the Align To choice, Selection or Artboard, which Object → Align and the align
     /// buttons follow ([`crate::panels::align::with_align_to`]).
     #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
@@ -1239,6 +1243,7 @@ impl Default for UiState {
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
+            color_guide_spot: None,
             align_to: Default::default(),
             align_spacing: 0.0,
             color_mode: None,

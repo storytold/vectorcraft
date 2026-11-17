@@ -5252,6 +5252,62 @@ fn an_image_in_a_symbols_art_is_placed_from_the_canvas() {
 }
 
 #[test]
+fn a_mesh_in_a_symbols_art_is_placed_from_the_canvas() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242). A
+    // mesh's corners in a symbol's art are in the canvas's space turned y up about that point, as an
+    // image's matrix there is: (-8096, 8244.5) is (-5, -2.5) in the symbol's art.
+    let corners: String = [(-8096.0, 8244.5), (-8096.0, 8239.5), (-8086.0, 8239.5), (-8086.0, 8244.5)]
+        .iter()
+        .map(|(x, y)| format!("%_[0.5 1 {x} {y} {x} {y} 1 {x} {y} 1] /N X#\n"))
+        .collect();
+    let mesh = format!(
+        "/Mesh X!\n%_2 /Version X#\n%_/Cartesian /Type X#\n%_[1 1] /Size X#\n%_/Data X#\n%_[0 0] /P X#\n%_/DeviceGray /CS X#\n{corners}%_/E X#\n/End X!\n"
+    );
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Patch", &mesh, 5)), layer(""))).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let mut found = vec![];
+    let mut stack = vec![doc.symbols[0].art.clone()];
+    while let Some(n) = stack.pop() {
+        match &n.kind {
+            NodeKind::Mesh(m) => found.push(m.points.iter().map(|p| p.p).collect::<Vec<_>>()),
+            _ => stack.extend(n.children().into_iter().flatten().cloned()),
+        }
+    }
+    assert_eq!(found.len(), 1, "{:?}", doc.symbols[0].art);
+    let want = [Point::new(-5.0, -2.5), Point::new(5.0, -2.5), Point::new(-5.0, 2.5), Point::new(5.0, 2.5)];
+    assert!(want.iter().all(|w| found[0].iter().any(|p| (*p - *w).hypot() < 1e-9)), "{:?}", found[0]);
+    // Without a template box the mesh can't be placed, as an image there can't: the symbol isn't read
+    // whole and its instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Patch", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Patch", &mesh, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert!(!r.unread.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
+fn an_envelope_in_a_symbols_art_is_read_from_the_canvas() {
+    // An envelope's grid in a symbol's art is read in the space a gradient mesh's corners are read
+    // in there. A grid and contents written in the symbol's own space, as earlier VectorCraft builds
+    // wrote them, don't meet there: the envelope opens as the art it draws.
+    let drawn = format!("{RED}{}f\n", rect_path(30.0, 10.0, 170.0, 90.0));
+    let env = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn);
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Bent", &env, 5)), layer(""))).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let mut envelopes = 0;
+    doc.symbols[0].art.walk(&mut |n| envelopes += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(envelopes, 0, "{:?}", doc.symbols[0].art);
+    let mut paths = 0;
+    doc.symbols[0].art.walk(&mut |n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+    assert!(paths > 0, "{:?}", doc.symbols[0].art);
+    // Without a template box the grid can't be placed, as a gradient mesh there can't: the symbol
+    // isn't read whole and its instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Bent", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Bent", &env, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert!(!r.unread.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
 fn an_instance_keeps_its_hide_lock_transparency_and_clip() {
     let m = [1.0, 0.0, 0.0, -1.0, 20.0, 50.0];
     let art_ = format!(
@@ -6460,6 +6516,30 @@ fn a_brushs_opacity_mask_art_takes_ids_of_the_document() {
     }
     let unique: std::collections::HashSet<_> = all.iter().copied().collect();
     assert_eq!(unique.len(), all.len(), "{all:?}");
+}
+
+/// An Art brush's art is turned over with the art of its opacity mask, whether the mask moves with
+/// its object or not: the mask's art stays over the part of the object it is over in the section.
+#[test]
+fn an_art_brushs_opacity_mask_art_turns_over_with_its_object() {
+    let mut read = vec![];
+    for linked in [true, false] {
+        let mask_art: String = format!("1 g\n{}f\n", rect_path(0.0, 0.0, 40.0, 3.0)).lines().map(|l| format!("%_{l}\n")).collect();
+        let options = format!("%_1 /Bool (Clipping) ,\n%_{} /Bool (Linked) ,\n", u8::from(linked));
+        let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n{options}%_; (AI9_Mask) ,\n%_;\n");
+        let section = format!("%AI8_BeginBrushPattern\n(Ribbon art)\n0 A\n0 g\n{}f\n{mask}%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 40.0, 8.0));
+        let shape = format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+        let r = read_ok(&format!("{section}{}{}", plugin_object(ART_BRUSH, "Ribbon", RIBBON), layer(&shape)));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let vectorcraft_brush::BrushKind::Art(brush) = brush_named(&lib, "Ribbon") else { panic!("art: {:?}", r.warnings) };
+        let m = brush.art.extras().mask.as_deref().unwrap_or_else(|| panic!("the mask is read: {:#?}", brush.art));
+        assert_eq!(m.linked, linked);
+        let (object, over) = (brush.art.geometric_bounds().unwrap(), m.art.geometric_bounds().unwrap());
+        assert!((object.height() - 8.0).abs() < 1e-6 && (over.height() - 3.0).abs() < 1e-6, "linked {linked}: {over:?} over {object:?}");
+        assert!(over.y0 > object.y0 - 1e-6 && over.y1 < object.y1 + 1e-6, "linked {linked}: {over:?} over {object:?}");
+        read.push((object, over));
+    }
+    assert_eq!(read[0], read[1], "a mask is in the same place whether it moves with its object or not");
 }
 
 /// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
@@ -9354,8 +9434,10 @@ fn a_blend_comes_in_as_a_live_blend() {
 }
 
 /// A blend whose spine was never edited has no spine written, only its keys: its spine is the
-/// straight line between the keys' centres, in the record's order (here the left key, named `B`,
-/// first), and the blend comes in live.
+/// straight line between the keys' centers, in the record's order, and the blend comes in live.
+/// With the record naming the keys in their order (here the left key, named `B`, first) the blend
+/// has no spine of its own, which runs the same way; in the other order its spine is that line,
+/// from the right key to the left one.
 #[test]
 fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let spine_part = format!("%_N\n{}", blend_part("S", None));
@@ -9365,12 +9447,20 @@ fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
     assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
     assert_eq!(spec.spacing, vectorcraft_doc::live::BlendSpacing::Steps(3));
-    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
-    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!((&spec.spine, &spec.key_anchors), (&None, &vec![]), "a blend with no spine of its own");
+    let (spine, _) = vectorcraft_doc::blend::blend_spine(children, spec).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
     assert_eq!(points.len(), 2, "{points:?}");
     assert!((points[0].0 - 10.0).abs() < 0.01 && (points[1].0 - 110.0).abs() < 0.01, "from the left key to the right one: {points:?}");
-    assert_eq!(spec.key_anchors, vec![0, 1]);
     assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5);
+
+    let body = blend_file("", [Some("B"), Some("A")], &blend_record(&['A', 'B']));
+    let (blend, warnings) = read_blend(&body.replace(&spine_part, ""));
+    let NodeKind::Blend { spec, .. } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
+    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert!((points[0].0 - 110.0).abs() < 0.01 && (points[1].0 - 10.0).abs() < 0.01, "from the right key to the left one: {points:?}");
+    assert_eq!(spec.key_anchors, vec![1, 0]);
 }
 
 /// The tags after a blend's drawn steps are the live blend's.
