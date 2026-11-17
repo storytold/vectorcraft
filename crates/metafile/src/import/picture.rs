@@ -548,11 +548,12 @@ impl Mapper {
             (false, false) => "Regular",
         }
         .into();
-        // The face layout draws the type in (the fallback face for a font that isn't installed).
+        // The face the font maps to (the fallback face for a font that isn't installed). Characters
+        // it has no glyph for are drawn from other faces at the same size and Horizontal Scale.
         let face = vectorcraft_text::FontDb::global().style_face(&style);
         // A negative height is the em. A positive height is the character cell, and the em is
-        // the cell times unitsPerEm divided by the face's OS/2 usWinAscent plus usWinDescent
-        // (its own ascent plus descent when it has no OS/2 table).
+        // the cell times unitsPerEm divided by the face's OS/2 usWinAscent plus usWinDescent at
+        // its instance of a variable font (its own ascent plus descent when it has no OS/2 table).
         let cell_em = face.as_ref().and_then(|face| {
             let (a, d) = face.vertical_metrics();
             Some(face.units_per_em() / face.win_cell_height().unwrap_or(a + d)).filter(|r| r.is_finite() && *r > 0.0)

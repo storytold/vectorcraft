@@ -1598,7 +1598,8 @@ pub const PATH_ALIGN_TYPO_FAMILY: &str = "Pathalign Typo Sans";
 pub const PATH_ALIGN_HHEA_FAMILY: &str = "Pathalign Hhea Sans";
 /// A family of [`path_align_font`]: as [`PATH_ALIGN_TYPO_FAMILY`], as a variable font with one
 /// weight axis (400–700, named instances Regular and Bold) whose `MVAR` table raises the
-/// typographic ascender and descender by 100 at 700: a box from 0 to 1,000 in Bold.
+/// typographic ascender and descender by 100 at 700: a box from 0 to 1,000 in Bold. It also raises
+/// `usWinAscent` by 120 and `usWinDescent` by 80 at 700.
 pub const PATH_ALIGN_VARIABLE_FAMILY: &str = "Pathalign Variable Sans";
 /// A family of [`path_align_font`]: Japanese code page, with no reference ideograph and no ┼.
 pub const PATH_ALIGN_NONE_FAMILY: &str = "Pathalign None Sans";
@@ -1693,10 +1694,16 @@ pub fn path_align_font(family: &str) -> Option<Vec<u8>> {
     }
     if family == PATH_ALIGN_VARIABLE_FAMILY {
         let region = VariationRegion::new(vec![RegionAxisCoordinates::new(F2Dot14::from_f32(0.0), F2Dot14::from_f32(1.0), F2Dot14::from_f32(1.0))]);
-        // Two delta sets (hasc, hdsc) of one 16-bit delta each for the one region.
-        let data = ItemVariationData::new(2, 1, vec![0], [100_i16.to_be_bytes(), 100_i16.to_be_bytes()].concat());
+        // Four delta sets (hasc, hdsc, hcla, hcld) of one 16-bit delta each for the one region.
+        let deltas = [100_i16, 100, 120, 80].map(i16::to_be_bytes).concat();
+        let data = ItemVariationData::new(4, 1, vec![0], deltas);
         let store = ItemVariationStore::new(VariationRegionList::new(1, vec![region]), vec![Some(data)]);
-        let records = vec![ValueRecord::new(Tag::new(b"hasc"), 0, 0), ValueRecord::new(Tag::new(b"hdsc"), 0, 1)];
+        let records = vec![
+            ValueRecord::new(Tag::new(b"hasc"), 0, 0),
+            ValueRecord::new(Tag::new(b"hcla"), 0, 2),
+            ValueRecord::new(Tag::new(b"hcld"), 0, 3),
+            ValueRecord::new(Tag::new(b"hdsc"), 0, 1),
+        ];
         let axis = VariationAxisRecord {
             axis_tag: Tag::new(b"wght"),
             min_value: Fixed::from_i32(400),
