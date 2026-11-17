@@ -66,14 +66,31 @@ pub(crate) fn operands(app: &VectorcraftApp) -> usize {
 }
 
 /// An operation's button, lit while `selected`, greyed out and saying what it needs unless the
-/// selection has `min` operands.
-fn button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, n: usize, min: usize) -> bool {
+/// selection has `min` operands. While `mixed` it carries a question mark, and screen readers
+/// report its pressed state as mixed.
+fn button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, mixed: bool, n: usize, min: usize) -> bool {
     let resp = widgets::icon_button_enabled(ui, icon, tip, selected, n >= min, 34.0);
+    if mixed {
+        mixed_mark(ui, resp.rect);
+        ui.ctx().accesskit_node_builder(resp.id, |node| node.set_toggled(egui::accesskit::Toggled::Mixed));
+    }
     if n < min {
         resp.on_hover_text(tl!("Select two or more objects, or a group"));
         return false;
     }
     resp.clicked()
+}
+
+/// The question mark in the lower right corner of a button `rect`, on a disc of the panel color so
+/// it reads over the icon.
+fn mixed_mark(ui: &Ui, rect: egui::Rect) {
+    let t = crate::theme::Tokens::get(ui.ctx());
+    let side = (rect.width() * 0.42).round();
+    let mark = egui::Rect::from_min_size(rect.right_bottom() - egui::vec2(side, side), egui::vec2(side, side));
+    let painter = ui.painter().with_clip_rect(rect);
+    painter.circle_filled(mark.center(), side * 0.5, t.panel);
+    painter.circle_stroke(mark.center(), side * 0.5, egui::Stroke::new(1.0, t.border));
+    painter.text(mark.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(side * 0.8), t.text_strong);
 }
 
 /// A Shape Mode button clicked: Alt makes a compound shape of the selection in `mode`; with
@@ -98,9 +115,10 @@ fn shape_mode(app: &mut VectorcraftApp, ui: &Ui, op: &str, mode: ShapeMode, memb
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let n = operands(app);
     // The modes of the compound-shape members selected: their Shape Mode button lights when they
-    // share one.
+    // share one, and every Shape Mode button shows a question mark when they differ.
     let modes = vectorcraft_engine::cmd::selected_member_modes(&app.session);
     let shared = modes.first().copied().filter(|m| modes.iter().all(|x| x == m));
+    let mixed = !modes.is_empty() && shared.is_none();
     let expand = crate::menus::enabled(app, "object.compoundShape.expand");
     widgets::subheader(ui, tl!("Shape Modes:"));
     ui.horizontal(|ui| {
@@ -108,7 +126,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Selected members can always take a mode.
         let count = if modes.is_empty() { n } else { n.max(2) };
         for ((icon, tip, op), mode) in SHAPE_MODES.into_iter().zip(ShapeMode::ALL) {
-            if button(ui, icon, tip, shared == Some(mode), count, 2) {
+            if button(ui, icon, tip, shared == Some(mode), mixed, count, 2) {
                 shape_mode(app, ui, op, mode, !modes.is_empty());
             }
         }
@@ -122,7 +140,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.spacing_mut().item_spacing.x = 5.0;
         for (icon, tip, op) in PATHFINDERS {
             let min = minimum_operands(op);
-            if button(ui, icon, tip, false, n, min) {
+            if button(ui, icon, tip, false, false, n, min) {
                 run(app, op);
             }
         }
@@ -239,6 +257,111 @@ mod tests {
         assert_eq!(role_and_state(&panel, "Minus Front"), (Role::Button, Some(Toggled::True)), "the member's mode");
         assert!(!named(&panel, "Unite").is_disabled(), "a member takes another mode");
         assert_ne!(role_and_state(&panel, "Unite").1, Some(Toggled::True));
+    }
+
+    /// Two overlapping squares, the first at (`x`, 10), made into a Unite compound shape, which is
+    /// left selected; returns the ids of its two members.
+    fn compound_of_two(app: &mut VectorcraftApp, x: f64) -> [Value; 2] {
+        select_two_squares(app, x);
+        let ids = app.session.active().unwrap().selection.objects.clone();
+        app.run("object.compoundShape.make", json!({"mode": "add"})).unwrap();
+        [json!(ids[0].0), json!(ids[1].0)]
+    }
+
+    /// Selects `members` and gives them `mode`.
+    fn set_mode(app: &mut VectorcraftApp, members: &[&Value], mode: &str) {
+        app.run("select.set", json!({"ids": members})).unwrap();
+        app.run("object.compoundShape.setMode", json!({"mode": mode})).unwrap();
+    }
+
+    /// How many question marks the panel draws.
+    fn question_marks(app: &mut VectorcraftApp) -> usize {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(300.0, 200.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let texts = crate::tests_removeanchors::shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+        texts.iter().filter(|(t, _)| t == "?").count()
+    }
+
+    /// The pressed state screen readers get for each Shape Mode button.
+    fn shape_mode_states(app: &mut VectorcraftApp) -> Vec<Option<egui::accesskit::Toggled>> {
+        let panel = tree(|ui| show(app, ui));
+        SHAPE_MODES.into_iter().map(|(_, label, _)| role_and_state(&panel, label).1).collect()
+    }
+
+    /// Selected members in different modes put a question mark on each of the four Shape Mode
+    /// buttons, which stay enabled and which screen readers report as mixed; the Pathfinder buttons
+    /// are left as they are. A click gives every selected member the clicked mode in one undo step,
+    /// and the marks go.
+    #[test]
+    fn shape_modes_show_a_question_mark_while_the_selected_members_modes_differ() {
+        use egui::accesskit::Toggled;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let [a, b] = compound_of_two(&mut app, 10.0);
+        set_mode(&mut app, &[&b], "subtract");
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        assert_eq!(shape_mode_states(&mut app), [Some(Toggled::Mixed); 4]);
+        let panel = tree(|ui| show(&mut app, ui));
+        for (_, label, _) in SHAPE_MODES {
+            assert!(!named(&panel, label).is_disabled(), "{label}");
+        }
+        for (_, label, _) in PATHFINDERS {
+            assert_eq!(named(&panel, label).toggled(), None, "{label}");
+        }
+        assert_eq!(question_marks(&mut app), 4);
+
+        let undo = app.session.doc().unwrap().history.undo.len();
+        click_button(&mut app, "Intersect");
+        assert_eq!(vectorcraft_engine::cmd::selected_member_modes(&app.session), [ShapeMode::Intersect; 2]);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        assert_eq!(question_marks(&mut app), 0);
+        assert_eq!(shape_mode_states(&mut app), [None, None, Some(Toggled::True), None]);
+    }
+
+    /// Members of two compound shapes are compared together: in different modes the buttons carry
+    /// question marks, and in one mode that mode's button is lit.
+    #[test]
+    fn members_of_two_compound_shapes_are_compared_together() {
+        use egui::accesskit::Toggled;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let [a, _] = compound_of_two(&mut app, 10.0);
+        let [c, _] = compound_of_two(&mut app, 110.0);
+        set_mode(&mut app, &[&c], "exclude");
+        app.run("select.set", json!({"ids": [a, c]})).unwrap();
+        assert_eq!(question_marks(&mut app), 4);
+        assert_eq!(shape_mode_states(&mut app), [Some(Toggled::Mixed); 4]);
+        set_mode(&mut app, &[&a, &c], "exclude");
+        assert_eq!(question_marks(&mut app), 0);
+        assert_eq!(shape_mode_states(&mut app), [None, None, None, Some(Toggled::True)]);
+    }
+
+    /// No question marks without members in different modes: nothing selected, plain objects, a
+    /// whole compound shape, one member, members sharing a mode, and a whole compound shape with
+    /// one of its members.
+    #[test]
+    fn shape_modes_show_no_question_mark_without_mixed_members() {
+        use egui::accesskit::Toggled;
+        let mut app = two_squares();
+        assert_eq!((question_marks(&mut app), shape_mode_states(&mut app)), (0, vec![None; 4]), "two plain objects");
+        let [a, b] = compound_of_two(&mut app, 110.0);
+        let shape = app.session.active().unwrap().selection.objects[0];
+        set_mode(&mut app, &[&b], "subtract");
+        app.run("select.set", json!({"ids": [shape.0]})).unwrap();
+        assert_eq!((question_marks(&mut app), shape_mode_states(&mut app)), (0, vec![None; 4]), "the whole compound shape");
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        let lit = vec![None, Some(Toggled::True), None, None];
+        assert_eq!((question_marks(&mut app), shape_mode_states(&mut app)), (0, lit.clone()), "one member");
+        set_mode(&mut app, &[&a, &b], "subtract");
+        assert_eq!((question_marks(&mut app), shape_mode_states(&mut app)), (0, lit.clone()), "two members in one mode");
+        set_mode(&mut app, &[&a], "add");
+        app.run("select.set", json!({"ids": [shape.0, b]})).unwrap();
+        assert_eq!((question_marks(&mut app), shape_mode_states(&mut app)), (0, lit), "the shape and one member");
+        app.run("select.none", json!({})).unwrap();
+        assert_eq!(question_marks(&mut app), 0, "nothing selected");
     }
 
     /// The panel menu's Trap… is enabled for two objects and opens the Trap options; OK adds the

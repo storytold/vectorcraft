@@ -15,6 +15,7 @@ mod cmykblend;
 mod colorize;
 mod colrglyphs;
 mod container;
+mod curvedstrokeedges;
 mod dither;
 pub(super) mod fontchange;
 mod freeform;

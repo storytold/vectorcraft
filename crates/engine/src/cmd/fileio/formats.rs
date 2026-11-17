@@ -206,11 +206,15 @@ const LOSSLESS: FormatOption = FormatOption {
     name: "lossless",
     ty: "boolean",
     default: "true",
-    description: "lossless WebP; false asks for lossy, which isn't available yet (written lossless, with a warning)",
+    description: "lossless WebP (every pixel kept exactly); false writes lossy WebP at quality: a smaller file that loses some detail",
 };
 
-const WEBP_QUALITY: FormatOption =
-    FormatOption { name: "quality", ty: "integer", default: "90", description: "lossy quality 0–100 (for when lossy WebP is available)" };
+const WEBP_QUALITY: FormatOption = FormatOption {
+    name: "quality",
+    ty: "integer",
+    default: "90",
+    description: "lossy WebP quality 0–100 (with lossless false; higher keeps more detail in a larger file; more than 100 is refused)",
+};
 
 /// The options of the palette formats (PNG-8, GIF).
 const PALETTE_OPTIONS: &[FormatOption] = &[
