@@ -11525,7 +11525,9 @@ it while the drag sizes the halo: the halo's radius keeps the ratio to the point
 went down, through `growth` within 0 to 300 %. Letting the key go sizes the center with the drag again, and the flare
 keeps the new `growth`. While the rings' end point is placed, Up and Down Arrow add and remove rings (0 to 50; with
 Rings off they do nothing), and each press of backquote (the ~ key; a pointer event's `backquote` turning true) sends a
-new `ringSeed`, which moves the rings along the path and keeps their count and sizes. Each new flare starts from the
+new `ringSeed`, which moves the rings along the path and keeps their count and sizes. In VectorCraft, small seed
+values, including 0, distribute the first ring along the path; the same seed and parameters reproduce the same
+positions. Each new flare starts from the
 options' counts and growth, without a `ringSeed`. The Artboard tool's are the active artboard's Artboard Options
 (dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's; its `x` and `y`
 are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the

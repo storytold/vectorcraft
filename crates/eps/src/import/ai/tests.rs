@@ -5252,6 +5252,62 @@ fn an_image_in_a_symbols_art_is_placed_from_the_canvas() {
 }
 
 #[test]
+fn a_mesh_in_a_symbols_art_is_placed_from_the_canvas() {
+    // The template box's center is (100.5, 50.5): art space's origin is at canvas (8091, 8242). A
+    // mesh's corners in a symbol's art are in the canvas's space turned y up about that point, as an
+    // image's matrix there is: (-8096, 8244.5) is (-5, -2.5) in the symbol's art.
+    let corners: String = [(-8096.0, 8244.5), (-8096.0, 8239.5), (-8086.0, 8239.5), (-8086.0, 8244.5)]
+        .iter()
+        .map(|(x, y)| format!("%_[0.5 1 {x} {y} {x} {y} 1 {x} {y} 1] /N X#\n"))
+        .collect();
+    let mesh = format!(
+        "/Mesh X!\n%_2 /Version X#\n%_/Cartesian /Type X#\n%_[1 1] /Size X#\n%_/Data X#\n%_[0 0] /P X#\n%_/DeviceGray /CS X#\n{corners}%_/E X#\n/End X!\n"
+    );
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Patch", &mesh, 5)), layer(""))).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let mut found = vec![];
+    let mut stack = vec![doc.symbols[0].art.clone()];
+    while let Some(n) = stack.pop() {
+        match &n.kind {
+            NodeKind::Mesh(m) => found.push(m.points.iter().map(|p| p.p).collect::<Vec<_>>()),
+            _ => stack.extend(n.children().into_iter().flatten().cloned()),
+        }
+    }
+    assert_eq!(found.len(), 1, "{:?}", doc.symbols[0].art);
+    let want = [Point::new(-5.0, -2.5), Point::new(5.0, -2.5), Point::new(-5.0, 2.5), Point::new(5.0, 2.5)];
+    assert!(want.iter().all(|w| found[0].iter().any(|p| (*p - *w).hypot() < 1e-9)), "{:?}", found[0]);
+    // Without a template box the mesh can't be placed, as an image there can't: the symbol isn't read
+    // whole and its instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Patch", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Patch", &mesh, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert!(!r.unread.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
+fn an_envelope_in_a_symbols_art_is_read_from_the_canvas() {
+    // An envelope's grid in a symbol's art is read in the space a gradient mesh's corners are read
+    // in there. A grid and contents written in the symbol's own space, as earlier VectorCraft builds
+    // wrote them, don't meet there: the envelope opens as the art it draws.
+    let drawn = format!("{RED}{}f\n", rect_path(30.0, 10.0, 170.0, 90.0));
+    let env = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn);
+    let doc = read_ok(&format!("%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n{}{}", symbols(&symbol("Bent", &env, 5)), layer(""))).doc;
+    assert_eq!(doc.symbols.len(), 1);
+    let mut envelopes = 0;
+    doc.symbols[0].art.walk(&mut |n| envelopes += usize::from(matches!(n.kind, NodeKind::Envelope { .. })));
+    assert_eq!(envelopes, 0, "{:?}", doc.symbols[0].art);
+    let mut paths = 0;
+    doc.symbols[0].art.walk(&mut |n| paths += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+    assert!(paths > 0, "{:?}", doc.symbols[0].art);
+    // Without a template box the grid can't be placed, as a gradient mesh there can't: the symbol
+    // isn't read whole and its instance comes in as the page draws it.
+    let group = format!("0 Ae\nu\n{}{RED}{}f\nU\n", instance("Bent", [1.0, 0.0, 0.0, -1.0, 20.0, 50.0]), rect_path(10.0, 0.0, 14.0, 4.0));
+    let r = read_ok(&(symbols(&symbol("Bent", &env, 5)) + &layer(&group)));
+    assert!(r.doc.symbols.is_empty(), "{:?}", r.doc.symbols.iter().map(|s| &s.name).collect::<Vec<_>>());
+    assert!(!r.unread.is_empty(), "{:?}", r.warnings);
+}
+
+#[test]
 fn an_instance_keeps_its_hide_lock_transparency_and_clip() {
     let m = [1.0, 0.0, 0.0, -1.0, 20.0, 50.0];
     let art_ = format!(
