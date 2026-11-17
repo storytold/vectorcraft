@@ -912,7 +912,9 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Does merging `params` into Pathfinder effect `e` leave it drawing as it does: the same Pathfinder
 /// Options ([`effects::PathfinderEffectOptions`], so an effect saved without them and given their
-/// defaults is unchanged) and every other value given equal to the one it has?
+/// defaults is unchanged), each option given equal to the one it stores (a precision that Scale
+/// Strokes & Effects took past its range evaluates at the bound but is still edited), and every
+/// other value given equal to the one it has?
 fn pathfinder_edit_changes_nothing(e: &Effect, params: &Value) -> bool {
     if !effects::takes_pathfinder_options(&e.id) {
         return false;
@@ -924,7 +926,12 @@ fn pathfinder_edit_changes_nothing(e: &Effect, params: &Value) -> bool {
         m.extend(given.clone());
     }
     let others_same = given.iter().filter(|(k, _)| !effects::PATHFINDER_OPTION_KEYS.contains(&k.as_str())).all(|(k, v)| current.get(k) == Some(v));
-    others_same && effects::PathfinderEffectOptions::from_params(&current) == effects::PathfinderEffectOptions::from_params(&after)
+    let same_value = |a: &Value, b: &Value| a == b || a.as_f64().is_some_and(|x| b.as_f64() == Some(x));
+    let stored_same = given
+        .iter()
+        .filter(|(k, _)| effects::PATHFINDER_OPTION_KEYS.contains(&k.as_str()))
+        .all(|(k, v)| e.params.get(k).is_none_or(|stored| same_value(stored, v)));
+    others_same && stored_same && effects::PathfinderEffectOptions::from_params(&current) == effects::PathfinderEffectOptions::from_params(&after)
 }
 
 // ---------- Load Texture ----------

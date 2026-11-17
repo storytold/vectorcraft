@@ -1913,6 +1913,29 @@ fn pathfinder_effect_options_edit_as_one_step_and_refuse_bad_values() {
     assert_eq!(first_effect_params(&s), json!({}), "undo restores the options");
 }
 
+/// A precision that Scale Strokes & Effects took past the range evaluates at its bound, and setting
+/// the bound is still an edit: a later scale then starts from the value set.
+#[test]
+fn a_precision_set_after_a_scale_past_its_range_is_kept() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.add", "params": {"precision": 8}})).unwrap();
+    let precision = |s: &Session| first_effect_params(s)["precision"].as_f64();
+    s.execute("object.scale", &json!({"sx": 200, "strokes": true})).unwrap();
+    assert_eq!(precision(&s), Some(16.0));
+    let steps = s.doc().unwrap().history.undo.len();
+    let out = s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 10}})).unwrap();
+    assert_ne!(out, json!({"ids": []}), "an edit");
+    assert_eq!((precision(&s), s.doc().unwrap().history.undo.len()), (Some(10.0), steps + 1));
+    s.execute("object.scale", &json!({"sx": 50, "strokes": true})).unwrap();
+    assert_eq!(precision(&s), Some(5.0));
+    // The value it stores is still no edit.
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 5}})).unwrap(), json!({"ids": []}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
 /// A single group containing multiple overlapping paths is accepted by Crop.
 #[test]
 fn crop_operates_on_a_single_selected_group_of_paths() {
