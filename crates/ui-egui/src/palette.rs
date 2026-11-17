@@ -268,6 +268,17 @@ fn shown_label(lang: crate::i18n::Lang, label: &str) -> String {
     label.split(" › ").map(|s| crate::i18n::tr(lang, s)).collect::<Vec<_>>().join(" › ")
 }
 
+/// The label of the item of the menu bar that runs `e`, in `lang`. A built-in effect's item
+/// translates by its effect id first, as the Effect menu's does, and a live-effect plug-in's name
+/// does not translate.
+fn item_label(lang: crate::i18n::Lang, e: &Entry) -> &'static str {
+    match e.id.strip_prefix("effect:") {
+        Some(effect) if vectorcraft_plugins::effect::plugin_id(effect).is_some() => e.menu_item,
+        Some(effect) => crate::i18n::tr_id(lang, effect, e.menu_item),
+        None => crate::i18n::tr(lang, e.menu_item),
+    }
+}
+
 /// One palette entry, with what it shows and what a query matches worked out once.
 pub(crate) struct Entry {
     id: String,
@@ -343,7 +354,7 @@ fn entries_in(ctx: &egui::Context, lang: crate::i18n::Lang, native: bool) -> Arc
 fn catalog(lang: crate::i18n::Lang, native: bool) -> Catalog {
     let list = build_in(lang, native);
     let shown_homes: Vec<Option<String>> =
-        list.iter().map(|e| e.home.as_deref().map(|h| format!("{} › {}", shown_label(lang, h), crate::i18n::tr(lang, e.menu_item)))).collect();
+        list.iter().map(|e| e.home.as_deref().map(|h| format!("{} › {}", shown_label(lang, h), item_label(lang, e)))).collect();
     // A group's row in the `search` context gives its words in `lang`; a plain row is not read.
     let search_row = |key: &str| crate::i18n::tr_ctx_row(lang, words::CONTEXT, key).map(str::to_string);
     let index = search::Index::build(&list, &shown_homes, &params_texts(&list), search_row);
@@ -508,7 +519,7 @@ fn home_text(app: &VectorcraftApp, e: &Entry) -> String {
         return tool_home(app, tool);
     }
     match &e.home {
-        Some(path) if e.names_item => format!("{} › {}", shown_label(lang, path), crate::i18n::tr(lang, e.menu_item)),
+        Some(path) if e.names_item => format!("{} › {}", shown_label(lang, path), item_label(lang, e)),
         Some(path) => shown_label(lang, path),
         None => tl!("No menu item").to_string(),
     }
@@ -735,7 +746,7 @@ fn pointer(app: &VectorcraftApp, ctx: &egui::Context, e: &Entry) -> Pointer {
     // The native bar's application menu gives its items no label of their own.
     let full = match e.menu_item {
         "" => shown_label(lang, path),
-        item => format!("{} › {}", shown_label(lang, path), crate::i18n::tr(lang, item)),
+        _ => format!("{} › {}", shown_label(lang, path), item_label(lang, e)),
     };
     let in_bar = crate::i18n::fmt(tl!("In the menu bar: {path}"), &[("path", &full)]);
     if app.services.native_menu.is_some() {
@@ -3435,6 +3446,38 @@ mod tests {
         assert_eq!(window.highlighted(), "help.about");
         let menu = format!("In the menu bar: {}", crate::native_menu::APP_NAME);
         assert!(labels(&nodes).contains(&menu), "{:?}", labels(&nodes));
+    }
+
+    /// A built-in effect's item in the path translates by its effect id, as the Effect menu shows
+    /// it.
+    #[test]
+    fn the_path_names_an_effect_item_as_the_effect_menu_does() {
+        let mut window = Window::new();
+        window.app.services.native_menu = Some(crate::native_menu::NativeMenu::new(Box::new(NativeMenus)));
+        let fr = Lang::from_code("fr").unwrap();
+        crate::i18n::set_current(fr);
+        let list = entries(&window.ctx, fr);
+        let add = list.iter().find(|e| e.id == "effect:pathfinder.add").expect("the Add effect");
+        let shown = match pointer(&window.app, &window.ctx, add) {
+            Pointer::Footer(text) => text,
+            Pointer::At(_, text, _) => text,
+        };
+        crate::i18n::set_current(Lang::EN);
+        assert!(shown.ends_with(" › Réunion"), "{shown}");
+        // A live-effect plug-in's name stays as written, as the Effect menu shows it.
+        let plugin = Entry {
+            id: format!("effect:{}", vectorcraft_plugins::effect::effect_id("test.ui.add")),
+            shortcut: String::new(),
+            shown: "Add".into(),
+            haystack: String::new(),
+            home: Some("Effect › Plug-ins".into()),
+            menu_item: "Add",
+            kind: 0,
+            label_at: 0,
+            names_item: false,
+        };
+        assert_ne!(crate::i18n::tr(fr, "Add"), "Add");
+        assert_eq!(item_label(fr, &plugin), "Add");
     }
 
     /// A tool hidden in a group outlines its group's button and says how to open the group; once
