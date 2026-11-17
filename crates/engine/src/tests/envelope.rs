@@ -123,6 +123,74 @@ fn reset_with_warp_and_mesh_switch_the_kind_and_keep_the_content() {
     assert!(s.execute("object.envelope.resetWithMesh", &json!({})).is_err());
 }
 
+/// `object.mesh.addLine` at a point a mesh envelope already has (one stored without handles) adds
+/// no line and records no undo step, with or without a `color`; a point between its lines adds
+/// them as one step.
+#[test]
+fn mesh_envelope_add_line_at_a_mesh_point_records_no_undo_step() {
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithMesh", json!({"rows": 2, "cols": 2}));
+    let before = kind(&s, e);
+    assert!(matches!(&before, EnvelopeKind::Mesh { handles, .. } if handles.is_empty()), "{before:?}");
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = undo_len(&s);
+    for (x, y) in [(100.0, 100.0), (300.0, 200.0), (200.0, 150.0), (300.0, 150.0)] {
+        s.execute("object.mesh.addLine", &json!({"id": e.0, "x": x, "y": y})).unwrap();
+        assert_eq!((kind(&s, e), undo_len(&s)), (before.clone(), n), "({x}, {y}): nothing changed");
+    }
+    // An envelope's points carry no color, so a color there changes nothing either.
+    s.execute("object.mesh.addLine", &json!({"id": e.0, "x": 200, "y": 150, "color": "#00ff00"})).unwrap();
+    assert_eq!((kind(&s, e), undo_len(&s)), (before.clone(), n), "a color changes nothing");
+    s.execute("object.mesh.addLine", &json!({"id": e.0, "x": 150, "y": 125})).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Mesh { rows: 3, cols: 3, .. }), "{:?}", kind(&s, e));
+    assert_eq!(undo_len(&s), n + 1);
+}
+
+/// A new warp envelope bends with its style's Bézier net (`version` [`live::WARP_NET`]) and keeps
+/// it through Reset with Warp. One saved before the version existed keeps the earlier map when its
+/// warp or its options change.
+#[test]
+fn new_warp_envelopes_take_the_net_and_saved_ones_keep_their_map() {
+    // The surface point a quarter of the way along the top edge.
+    let quarter = |s: &Session, e| live::EnvelopeMap::of(&node(s, e)).unwrap().surface_mesh(4, 4, vectorcraft_color::Color::BLACK).points[1].p;
+    let at = |x, y| vectorcraft_geom::Point::new(x, y);
+    let mut s = session();
+    let (_, e) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "flag", "bend": 40}));
+    assert!(matches!(kind(&s, e), EnvelopeKind::Warp { version: live::WARP_NET, .. }), "{:?}", kind(&s, e));
+    assert_eq!(s.execute("object.envelope.info", &json!({})).unwrap()["version"], json!(live::WARP_NET));
+    // Flag moves the top edge 6 × bend × height × u(1 - u)(1 - 2u) down at u: 22.5 at u = 1/4.
+    assert!(quarter(&s, e).distance(at(150.0, 122.5)) < 1e-9, "{:?}", quarter(&s, e));
+    s.execute("object.envelope.resetWithWarp", &json!({"bend": -40})).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Warp { version: live::WARP_NET, .. }), "{:?}", kind(&s, e));
+    assert!(quarter(&s, e).distance(at(150.0, 77.5)) < 1e-9, "{:?}", quarter(&s, e));
+    // As a file saved before the version existed gives it.
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(NodeKind::Envelope { kind, .. }) = doc.node_mut(e).map(|n| &mut n.kind)
+        && let EnvelopeKind::Warp { version, .. } = &mut **kind
+    {
+        *version = 0;
+    }
+    s.execute("object.envelope.options", &json!({"fidelity": 75})).unwrap();
+    s.execute("object.envelope.resetWithWarp", &json!({"bend": 40})).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Warp { version: 0, .. }), "{:?}", kind(&s, e));
+    // The earlier map's flag: half the bend times sin(π x), x = -1/2 here, in half heights.
+    assert!(quarter(&s, e).distance(at(150.0, 90.0)) < 1e-9, "{:?}", quarter(&s, e));
+    // `version` moves a warp to a map, and a new warp can take the earlier one.
+    s.execute("object.envelope.options", &json!({"version": 1.0})).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Warp { version: live::WARP_NET, .. }), "{:?}", kind(&s, e));
+    assert!(quarter(&s, e).distance(at(150.0, 122.5)) < 1e-9, "{:?}", quarter(&s, e));
+    s.execute("object.envelope.resetWithWarp", &json!({"version": 0})).unwrap();
+    assert!(matches!(kind(&s, e), EnvelopeKind::Warp { version: 0, .. }), "{:?}", kind(&s, e));
+    let (_, old) = enveloped(&mut s, "object.envelope.makeWithWarp", json!({"style": "flag", "bend": 40, "version": 0}));
+    assert!(matches!(kind(&s, old), EnvelopeKind::Warp { version: 0, .. }), "{:?}", kind(&s, old));
+    for bad in [json!(2), json!(-1), json!(0.5), json!("1"), json!(null)] {
+        for cmd in ["object.envelope.makeWithWarp", "object.envelope.resetWithWarp", "object.envelope.options"] {
+            let r = s.execute(cmd, &json!({"version": bad}));
+            assert!(r.as_ref().is_err_and(|e| e.to_string().contains("`version` must be 0 or 1")), "{cmd} {bad}: {r:?}");
+        }
+    }
+}
+
 #[test]
 fn release_gives_back_the_warp_shape_as_a_mesh_and_keeps_the_transparency() {
     let mut s = session();
@@ -141,9 +209,9 @@ fn release_gives_back_the_warp_shape_as_a_mesh_and_keeps_the_transparency() {
     let content = node(&s, a);
     assert_eq!((content.opacity, content.blend, content.extras().mask.is_some()), (0.4, BlendMode::Multiply, true), "the content keeps the look");
     let NodeKind::Mesh(m) = node(&s, ids[1]).kind else { panic!("the warp's shape comes back as a mesh") };
-    // The mesh follows the arc: its outline reaches below the content's bottom edge at the sides.
+    // The mesh follows the arc: its top corners swing out past the content's sides and up.
     let b = m.outline().bounds().unwrap();
-    assert!(b.y1 > 201.0, "{b:?}");
+    assert!(b.x0 < 99.0 && b.x1 > 301.0 && b.y0 < 99.0, "{b:?}");
     assert_eq!(s.doc().unwrap().selection.objects, ids);
 }
 
@@ -722,6 +790,56 @@ fn an_envelope_of_type_that_draws_nothing_maps_from_its_laid_out_box() {
     sel(&mut s, &[t]);
     let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
     assert_box(src_of(&s, e), laid, "warp");
+}
+
+/// Type that draws nothing adds no box next to other content: Make with Warp and Make with Mesh
+/// around it and a rectangle, alone or in a group, map from the rectangle.
+#[test]
+fn type_that_draws_nothing_adds_no_box_next_to_other_content() {
+    for (cmd, params) in
+        [("object.envelope.makeWithWarp", json!({"style": "arc", "bend": 0})), ("object.envelope.makeWithMesh", json!({"rows": 1, "cols": 1}))]
+    {
+        for grouped in [false, true] {
+            let mut s = session();
+            let a = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+            let want = node(&s, a).geometric_bounds().unwrap();
+            let t = id_of(&s.execute("text.create", &json!({"x": 400, "y": 450, "text": "   ", "size": 96})).unwrap());
+            let laid = node(&s, t).geometric_bounds().unwrap();
+            assert!(laid.x1 > want.x1 && laid.y1 > want.y1, "the laid-out box {laid:?} reaches past {want:?}");
+            sel(&mut s, &[a, t]);
+            if grouped {
+                s.execute("object.group", &json!({})).unwrap();
+            }
+            let layer = s.doc().unwrap().doc.layers[0].clone();
+            assert_box(live::envelope_content_bounds(&[layer]).unwrap(), want, "content bounds");
+            let e = id_of(&s.execute(cmd, &params).unwrap());
+            assert_box(src_of(&s, e), want, &format!("{cmd}, grouped: {grouped}"));
+        }
+    }
+}
+
+/// Deleting every character of enveloped type in Edit Contents leaves the envelope mapping from
+/// the rectangle beside it; with nothing beside it, from the type's laid-out box.
+#[test]
+fn edit_contents_that_empties_type_maps_from_the_other_content() {
+    for with_rect in [true, false] {
+        let mut s = session();
+        let a = with_rect.then(|| rect(&mut s, 100.0, 100.0, 200.0, 100.0));
+        let rect_box = a.map(|a| node(&s, a).geometric_bounds().unwrap());
+        let t = id_of(&s.execute("text.create", &json!({"x": 400, "y": 450, "text": "Type", "size": 96})).unwrap());
+        sel(&mut s, &a.into_iter().chain([t]).collect::<Vec<_>>());
+        let e = id_of(&s.execute("object.envelope.makeWithWarp", &json!({"style": "arc", "bend": 0})).unwrap());
+        sel(&mut s, &[e]);
+        s.execute("object.envelope.editContents", &json!({"editing": true})).unwrap();
+        s.execute("text.setText", &json!({"ids": [t.0], "text": " "})).unwrap();
+        sel(&mut s, &[e]);
+        s.execute("object.envelope.editContents", &json!({"editing": false})).unwrap();
+        let NodeKind::Envelope { content, .. } = node(&s, e).kind else { panic!("envelope") };
+        let blank = content.iter().find(|c| c.id == t).expect("the type stays");
+        assert!(matches!(&blank.kind, NodeKind::Text(tx) if tx.plain_text().trim().is_empty()), "the type was emptied");
+        let want = rect_box.unwrap_or_else(|| blank.geometric_bounds().unwrap());
+        assert_box(src_of(&s, e), want, &format!("with a rectangle: {with_rect}"));
+    }
 }
 
 /// The strikethrough bar runs to the last glyph's advance, past its outline: the envelope maps

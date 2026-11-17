@@ -8,10 +8,9 @@ mod layers;
 mod profile;
 mod stroke_style;
 
-pub(crate) use layers::HEAD_REACH;
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
 pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
-pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
+pub use stroke_style::{ArrowAlign, Arrowhead, CustomArrowhead, Dash, LineCap, LineJoin, StrokeAlign};
 
 /// One entry of the appearance stack.
 // A stroke takes 328 bytes and a fill 104; an appearance holds a few of each.
@@ -272,6 +271,16 @@ impl Appearance {
             _ => None,
         })
     }
+    /// Does any fill draw: one that is shown, has paint and has an opacity above 0, wherever it
+    /// sits in the stack?
+    pub fn has_drawn_fill(&self) -> bool {
+        self.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() && f.opacity > 0.0))
+    }
+    /// Does any stroke draw: one that is shown, has paint, a weight above 0 and an opacity above
+    /// 0, wherever it sits in the stack?
+    pub fn has_drawn_stroke(&self) -> bool {
+        self.painted_strokes().any(|s| s.width > 0.0 && s.opacity > 0.0)
+    }
     /// Largest distance the painted area can extend beyond any geometry (see
     /// [`StrokeLayer::reach`]); paths measure their own with [`Self::stroked_bounds`].
     pub fn outset(&self) -> f64 {
@@ -445,13 +454,14 @@ impl Appearance {
         }
     }
     /// Map placed gradients through a warp, given its local affine approximation at a point (taken
-    /// at each gradient's centre: the start of a radial, the middle of a linear vector). Freeform
-    /// points each follow the warp at their own position.
+    /// at each gradient's center: the start of a radial, conic or diamond, the middle of a linear
+    /// vector).
+    /// Freeform points each follow the warp at their own position.
     pub fn warp_gradients(&mut self, near: &dyn Fn(vectorcraft_geom::Point) -> vectorcraft_geom::Affine) {
         for g in self.gradients_mut() {
             let freeform = g.freeform.take();
             if let Some(geom) = g.geom {
-                let c = if g.gradient.kind == vectorcraft_color::GradientKind::Radial { geom.start } else { geom.start.midpoint(geom.end) };
+                let c = if g.gradient.kind.is_centered() { geom.start } else { geom.start.midpoint(geom.end) };
                 g.transform(near(c));
             }
             g.freeform = freeform.map(|mut f| {

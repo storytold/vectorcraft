@@ -90,18 +90,24 @@ fn a_font_field_that_appears_under_a_still_pointer_leaves_the_wheel_until_the_po
 
 #[test]
 fn artboard_controls_leave_replaced_font_fields_wheel_available() {
-    let (ctx, mut app) = selected_type_with_control();
-    let mut texts = Vec::new();
-    for _ in 0..8 {
-        texts = frame(&mut app, &ctx, vec![]);
-    }
-    let fields: Vec<_> = texts.iter().filter(|(t, _)| t == "Inter").map(|(_, point)| *point).collect();
-    assert_eq!(fields.len(), 2, "Control and Properties each show a font field");
-    app.select_tool("artboard");
+    let laid_out = || {
+        let (ctx, mut app) = selected_type_with_control();
+        let mut texts = Vec::new();
+        for _ in 0..8 {
+            texts = frame(&mut app, &ctx, vec![]);
+        }
+        let fields: Vec<_> = texts.iter().filter(|(t, _)| t == "Inter").map(|(_, point)| *point).collect();
+        (ctx, app, fields)
+    };
+    let (_, _, fields) = laid_out();
+    assert_eq!(fields.len(), 3, "Control, Properties and the Contextual Task Bar each show a font field");
+    // Each field gets its own app, so a wheel stream begun over one field cannot decide another.
     for point in fields {
+        let (ctx, mut app, _) = laid_out();
+        app.select_tool("artboard");
         let mut raw = wheel_input(point);
         app.raw_input_hook(&ctx, &mut raw);
-        assert!(raw.events.iter().any(|e| matches!(e, Event::MouseWheel { .. })), "the Artboard tool replaces this font field");
+        assert!(raw.events.iter().any(|e| matches!(e, Event::MouseWheel { .. })), "the Artboard tool replaces the font field at {point:?}");
     }
 }
 

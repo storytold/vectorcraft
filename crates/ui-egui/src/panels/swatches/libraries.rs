@@ -83,7 +83,7 @@ impl LibraryKind for SwatchLibraries {
     }
     /// Ungrouped swatches, then each colour group's folder and swatches (a group whose name
     /// matches shows all of them), as in the Swatches panel.
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, Swatch>> {
+    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, Swatch>> {
         let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
         let row = |w: &'a Swatch| Row { name: &w.name, item: Some(w) };
         let mut out: Vec<Row<Swatch>> = lib.swatches.iter().filter(|w| found(&w.name)).map(row).collect();

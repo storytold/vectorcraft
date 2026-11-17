@@ -56,9 +56,12 @@ impl Document {
         if self.saved_selections.is_empty() {
             return;
         }
+        // A saved selection names objects; ruler guides are not among them.
         let mut ids = std::collections::HashSet::new();
         self.walk(|n| {
-            ids.insert(n.id);
+            if !n.is_ruler_guide() {
+                ids.insert(n.id);
+            }
         });
         let mut kept: Vec<SavedSelection> = vec![];
         for s in std::mem::take(&mut self.saved_selections) {
@@ -101,12 +104,13 @@ impl Document {
     /// Leave opacity-mask editing and symbol editing: drop the temporary editing layer, a working
     /// copy of art the mask or the symbol already holds (the engine syncs it after every edit). The
     /// layer is removed wherever it is, also as a sublayer of another layer; an id that names
-    /// anything other than a layer is left alone.
+    /// anything other than a layer is left alone. Ruler guides on the layer stay in the document
+    /// ([`Self::remove_edit_layer`]).
     pub fn drop_edit_modes(&mut self) {
         let layers = [self.mask_edit.take().map(|me| me.layer), self.symbol_edit.take().map(|se| se.layer)];
         for id in layers.into_iter().flatten() {
             if self.node(id).is_some_and(Node::is_layer) {
-                let _ = self.remove(id);
+                let _ = self.remove_edit_layer(id);
             }
         }
     }
@@ -123,18 +127,35 @@ impl Document {
         std::borrow::Cow::Owned(d)
     }
 
-    /// Does `wants` hold for a node anywhere in the document's art: the layers, symbol definitions,
-    /// graph designs, pattern swatches (the one being edited included) and their opacity masks?
-    pub fn any_node(&self, wants: impl Fn(&Node) -> bool) -> bool {
-        let roots = self
-            .layers
+    /// The roots of every tree of the document's art: the layers, symbol definitions, graph designs,
+    /// pattern swatches, the original of the pattern being edited and [`Self::mounted_art`].
+    /// Opacity masks hang off nodes in these trees.
+    pub fn art_roots(&self) -> impl Iterator<Item = &Arc<Node>> {
+        self.layers
             .iter()
             .chain(self.symbols.iter().map(|s| &s.art))
             .chain(self.graph_designs.iter().map(|g| &g.art))
             .chain(self.patterns.iter().flat_map(|p| p.art.iter()))
-            .chain(self.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()).flat_map(|p| p.art.iter()));
+            .chain(self.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()).flat_map(|p| p.art.iter()))
+            .chain(self.mounted_art.iter().map(|(n, _)| n))
+    }
+
+    /// [`Self::art_roots`], to change.
+    pub fn art_roots_mut(&mut self) -> impl Iterator<Item = &mut Arc<Node>> {
+        self.layers
+            .iter_mut()
+            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
+            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
+            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
+            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n))
+    }
+
+    /// Does `wants` hold for a node anywhere in the document's art ([`Self::art_roots`]) or its
+    /// opacity masks?
+    pub fn any_node(&self, wants: impl Fn(&Node) -> bool) -> bool {
         let mut any = false;
-        for root in roots {
+        for root in self.art_roots() {
             crate::swatches::walk_with_masks(root, &mut |n| any |= wants(n));
         }
         any
@@ -144,14 +165,7 @@ impl Document {
     /// [`Self::any_node`] looks). Only the trees that hold such a node are copied out of the art
     /// they share.
     pub fn edit_nodes_where(&mut self, wants: impl Fn(&Node) -> bool, mut f: impl FnMut(&mut Node)) {
-        let roots = self
-            .layers
-            .iter_mut()
-            .chain(self.symbols.iter_mut().map(|s| &mut s.art))
-            .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
-            .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()));
-        for root in roots {
+        for root in self.art_roots_mut() {
             edit_branches_where(root, &wants, &mut f);
         }
     }

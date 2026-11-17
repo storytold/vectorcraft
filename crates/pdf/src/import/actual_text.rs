@@ -11,6 +11,9 @@ pub(super) struct ActualText {
     depth: usize,
     owner: Option<usize>,
     pending: Option<String>,
+    /// The owner's replacement is empty: its content has no text, so its glyphs stay art
+    /// ([`Self::textless`], #6971).
+    empty: bool,
 }
 
 impl ActualText {
@@ -22,12 +25,19 @@ impl ActualText {
         if self.owner == Some(self.depth) {
             self.owner = None;
             self.pending = None;
+            self.empty = false;
         }
         self.depth = self.depth.saturating_sub(1);
     }
 
     pub(super) fn active(&self) -> bool {
         self.owner.is_some()
+    }
+
+    /// Inside a span whose replacement text is empty: the glyphs there are no text, but they
+    /// still draw, so they come in as outlines rather than as type with no characters (#6971).
+    pub(super) fn textless(&self) -> bool {
+        self.owner.is_some() && self.empty
     }
 
     pub(super) fn set(&mut self, bytes: &[u8]) -> bool {
@@ -39,8 +49,10 @@ impl ActualText {
         if self.depth == 0 || self.depth > 128 || bytes.len() > 64 * 1024 {
             return false;
         }
+        let text = crate::import_scan::text_string(bytes);
         self.owner = Some(self.depth);
-        self.pending = Some(crate::import_scan::text_string(bytes));
+        self.empty = text.is_empty();
+        self.pending = Some(text);
         true
     }
 }
@@ -89,6 +101,37 @@ impl Builder<'_> {
         {
             ink.apply_affine(m);
             line.ink.push(ink.bounding_box());
+        }
+        true
+    }
+
+    /// A Type 3 glyph under an active ActualText span.
+    pub(super) fn actual_type3_glyph(&mut self, key: u128, at: Placement, look: Look, opacity: f32, advance: f64) -> bool {
+        self.flush_glyphs();
+        self.flush_type3();
+        if let (Some(stroke), Some(line)) = (&look.stroke, &mut self.text)
+            && look.fill.is_none()
+            && line.stroke_actual(key, at, stroke.clone(), look.overprint_stroke)
+        {
+            return true;
+        }
+        let pending = self.actual.pending.take();
+        let content = match pending.as_deref() {
+            Some(text) if !text.is_empty() => TextContent::Actual(text),
+            _ => TextContent::Pen,
+        };
+        let place = |line: &mut TextLine| line.push_content(&look, at, opacity, advance, content);
+        if !self.text.as_mut().is_some_and(place) {
+            self.flush_text();
+            let mut line = TextLine::new(at, opacity);
+            if !place(&mut line) {
+                self.actual.pending = pending;
+                return false;
+            }
+            self.text = Some(line);
+        }
+        if let Some(line) = &mut self.text {
+            line.has_type3 = true;
         }
         true
     }

@@ -13,6 +13,7 @@
 mod calli;
 mod colorize;
 mod defaults;
+pub mod stored_art;
 pub mod track;
 mod warp;
 
@@ -351,7 +352,8 @@ pub enum Direction {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "mode")]
 pub enum ArtScale {
-    /// Keep the art's proportions (length follows the path; width scales with it).
+    /// Keep the art's proportions (length follows the path; width scales with it, times the
+    /// stroke weight and the brush width).
     Proportional,
     /// Stretch the art to the path length.
     #[default]
@@ -370,11 +372,14 @@ pub struct ArtBrush {
     pub scale: ArtScale,
     /// Width in percent.
     pub width: f64,
-    /// How the width varies along a stroke: `None` (Fixed) always `width`; Pressure goes from
-    /// `width` at the lightest pen pressure to [`Self::width_max`] at the heaviest.
+    /// How the width varies along a stroke: `None` (Fixed) always `width`; a mode that follows the
+    /// pen goes from `width` to [`Self::width_max`] over the ranges [`Variation`] gives: Pressure
+    /// from the lightest pressure to the heaviest, Tilt from the pen lying flat to upright, Bearing
+    /// and Rotation from −180° to 180° (half way at 0°).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_mode: Option<Variation>,
-    /// The width at the heaviest pen pressure (%), for Pressure (`width` without one).
+    /// The second width (%) of a mode that follows the pen: at the heaviest pressure, upright, or
+    /// at 180° (`width` without one).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width_max: Option<f64>,
     pub flip_along: bool,
@@ -388,11 +393,11 @@ impl ArtBrush {
     /// The range of the width (%).
     pub const WIDTH_RANGE: (f64, f64) = (1.0, 1000.0);
 
-    /// The widths (%) at the lightest and the heaviest pen pressure: `width` for both unless the
-    /// width follows the pressure.
+    /// The widths (%) where the pen reads 0 and 1 for the width's mode (the lightest and the
+    /// heaviest pressure, for Pressure): `width` for both unless the width follows the pen.
     pub fn width_range(&self) -> (f64, f64) {
         match self.width_mode {
-            Some(Variation::Pressure) => (self.width, self.width_max.unwrap_or(self.width)),
+            Some(m) if m.follows_pen() => (self.width, self.width_max.unwrap_or(self.width)),
             _ => (self.width, self.width),
         }
     }
@@ -713,8 +718,8 @@ impl Brush {
             }
             BrushKind::Art(a) => {
                 a.width = within(a.width, ArtBrush::WIDTH_RANGE, 100.0);
-                // The width follows the pen's pressure or stays fixed.
-                if a.width_mode != Some(Variation::Pressure) {
+                // The width follows the pen (its pressure, tilt, bearing or rotation) or stays fixed.
+                if !a.width_mode.is_some_and(Variation::follows_pen) {
                     a.width_mode = None;
                 }
                 a.width_max = a.width_max.map(|w| within(w, ArtBrush::WIDTH_RANGE, a.width));
@@ -759,14 +764,51 @@ pub fn library(doc: &Document) -> Vec<Brush> {
 }
 
 /// Parse a stored library value (malformed entries are skipped, values kept within their
-/// ranges; see [`Brush::from_json`]).
+/// ranges; see [`Brush::from_json`]). A name that repeats is kept by its first brush, and each
+/// later brush of that name is numbered ([`number_repeated_names`]).
 pub fn parse_library(v: &serde_json::Value) -> Vec<Brush> {
-    v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default()
+    let mut lib: Vec<Brush> = v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default();
+    number_repeated_names(&mut lib);
+    lib
 }
 
-/// Store `lib` as the document's brush library.
+/// Renames the second and later brushes of each repeated name in `lib` to the first "Name 2",
+/// "Name 3"… that no brush in `lib` has. The first brush of a name keeps it, so a stroke that names
+/// it draws the brush [`find`] gave it before.
+fn number_repeated_names(lib: &mut [Brush]) {
+    let mut seen = std::collections::HashSet::new();
+    if lib.iter().all(|b| seen.insert(b.name.as_str())) {
+        return;
+    }
+    let mut taken: std::collections::HashSet<String> = lib.iter().map(|b| b.name.clone()).collect();
+    let mut kept = std::collections::HashSet::new();
+    // The next number to try for each repeated name, so the brushes of one name try each number
+    // once between them.
+    let mut next: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    for b in lib.iter_mut() {
+        if kept.insert(b.name.clone()) {
+            continue;
+        }
+        let from = next.entry(b.name.clone()).or_insert(2);
+        // `taken` is finite, so one of the numbers is free.
+        if let Some((i, name)) = (*from..).map(|i| (i, format!("{} {i}", b.name))).find(|(_, n)| !taken.contains(n)) {
+            *from = i.saturating_add(1);
+            taken.insert(name.clone());
+            kept.insert(name.clone());
+            b.name = name;
+        }
+    }
+}
+
+/// Store `lib` as the document's brush library. When the art of a brush holds images or placed
+/// documents, each object in that art whose id is 0 or repeats another object's is given a new
+/// id ([`stored_art::StoredArt::persist_ids`]), so the Links panel lists it by the same id until it
+/// changes.
 pub fn store(doc: &mut Document, lib: &[Brush]) {
     doc.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap_or_default());
+    if lib.iter().any(|b| b.art().into_iter().any(stored_art::holds_files)) {
+        stored_art::StoredArt::persist_ids(doc);
+    }
 }
 
 /// Find a brush by name.
@@ -806,7 +848,7 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
     let mut out = match &brush.kind {
         BrushKind::Calligraphic(c) => calli::calligraphic(c, bp, w, stroke, &brush.name),
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, &stroke.paint, &brush.name),
-        BrushKind::Art(a) => warp::art(a, bp, w, stroke.pressure.as_ref()),
+        BrushKind::Art(a) => warp::art(a, bp, w, stroke),
         BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke, &brush.name),
         BrushKind::Pattern(p) => warp::pattern(p, bp, w),
     };
@@ -964,6 +1006,33 @@ pub fn node_bezpath(n: &Node) -> Option<BezPath> {
 /// Does `n` have a stroke with a brush?
 pub fn has_brush(n: &Node) -> bool {
     n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && s.visible))
+}
+
+/// How far brush art can paint past the visual box of `n`: `16 × w + 8`, where `w` is the widest
+/// stroke of `n` (at least 1), when `n` has a visible brushed stroke with a paint; 0 when it has
+/// none, as a brushed stroke without a paint draws no brush art. This is the room the renderer and
+/// the exports leave for brush art when they cull.
+pub fn reach(n: &Node) -> f64 {
+    let paints = |i: &AppearanceItem| matches!(i, AppearanceItem::Stroke(s) if s.visible && s.brush.is_some() && !s.paint.is_none());
+    if !n.appearance.items.iter().any(paints) {
+        return 0.0;
+    }
+    let w = n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max);
+    16.0 * w + 8.0
+}
+
+/// The largest [`reach`] of `n` and of the objects in it: the members of its groups, layers and
+/// live objects. Of a group or layer with a clipping path only the clipping path counts, as the
+/// clip keeps its members' brush art inside it. A compound path counts its own strokes only, as
+/// it is painted with its own appearance and not its paths'. Symbol art is not looked into
+/// ([`vectorcraft_doc::SymbolBoxes::with_brush_art`] measures it).
+pub fn reach_within(n: &Node) -> f64 {
+    let members = match &n.kind {
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => children.get(..1).unwrap_or_default(),
+        NodeKind::Compound { .. } => &[],
+        _ => n.children().map_or(&[][..], |c| &c[..]),
+    };
+    members.iter().map(|c| reach_within(c)).fold(reach(n), f64::max)
 }
 
 /// Expand a brushed path: a group of [the path with its fills and unbrushed strokes (if any

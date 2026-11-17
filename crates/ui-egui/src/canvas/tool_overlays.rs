@@ -166,41 +166,55 @@ fn auto_spell_checks(n: &Node) -> bool {
     !shown(&n.appearance.effects) && !n.appearance.items.iter().any(|i| shown(i.effects()))
 }
 
-/// The word with Auto Spell Check's red line at `p` (document space), on top of the others: in
-/// the topmost visible, unlocked type object whose unknown word's glyphs `p` is on, with what its
-/// language's dictionary suggests instead. For the context menu's suggestions, Ignore All and Add
+/// The word with Auto Spell Check's red line at `p` (document space): in the topmost visible type
+/// object whose glyphs `p` is on, when that object isn't locked and Auto Spell Check marks it and
+/// its word at `p` is one it underlines, with what its language's dictionary suggests instead. For the context menu's suggestions, Ignore All and Add
 /// to Dictionary ([Check and correct spelling](https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/check-and-correct-spelling.html)).
 pub(crate) fn misspelled_word_at(app: &mut VectorcraftApp, p: Point) -> Option<crate::state::ContextSpelling> {
     let st = app.session.active()?;
-    let mut hit = None;
-    fn walk(nodes: &[std::sync::Arc<Node>], f: &mut impl FnMut(&Node)) {
-        for n in nodes.iter().filter(|n| n.visible && !n.locked) {
-            f(n);
-            if let Some(children) = n.children() {
-                walk(children, f);
+    // The topmost type whose glyphs `p` is on, and whether it or a layer or group holding it is
+    // locked: a word under other type isn't the one right-clicked, whether that type's word there
+    // is right or not.
+    let mut top: Option<(vectorcraft_doc::NodeId, bool)> = None;
+    // Back to front as drawn at `p`: an Intertwine group's members by their tier there, those of
+    // one tier in their stacking order ([`vectorcraft_doc::intertwine`]).
+    fn walk(nodes: &[std::sync::Arc<Node>], p: Point, locked: bool, f: &mut impl FnMut(&Node, bool)) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            let locked = locked || n.locked;
+            f(n, locked);
+            let Some(children) = n.children() else { continue };
+            if matches!(n.kind, NodeKind::Intertwine { .. }) {
+                let mut drawn = children.to_vec();
+                drawn.sort_by_key(|c| vectorcraft_doc::intertwine::tier_at(c, p));
+                walk(&drawn, p, locked, f);
+            } else {
+                walk(children, p, locked, f);
             }
         }
     }
-    // Paint order: a later hit is on top.
-    walk(&st.doc.layers, &mut |n| {
+    // A later hit is on top.
+    walk(&st.doc.layers, p, false, &mut |n, locked| {
         let NodeKind::Text(tx) = &n.kind else { return };
-        if !auto_spell_checks(n) || n.geometric_bounds().is_none_or(|b| !b.contains(p)) {
-            return;
-        }
-        let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, &st.spelling_ignored, MAX_UNDERLINED);
-        if words.is_empty() {
+        if n.geometric_bounds().is_none_or(|b| !b.contains(p)) {
             return;
         }
         let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
-        for w in words {
-            let on = vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p));
-            if on {
-                hit = Some((n.id, w));
-            }
+        let on = vectorcraft_text::selection_quads(&lay, 0, tx.plain_text().len()).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p));
+        if on {
+            top = Some((n.id, locked));
         }
     });
-    let (id, w) = hit?;
-    let Some(NodeKind::Text(tx)) = st.doc.node(id).map(|n| &n.kind) else { return None };
+    let (id, locked) = top?;
+    let n = st.doc.node(id)?;
+    let NodeKind::Text(tx) = &n.kind else { return None };
+    if locked || !auto_spell_checks(n) {
+        return None;
+    }
+    let (words, _) = vectorcraft_engine::cmd::spelling::misspellings(tx, &st.spelling_ignored, MAX_UNDERLINED);
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), tx);
+    let w = words
+        .into_iter()
+        .find(|w| vectorcraft_text::selection_quads(&lay, w.range.start, w.range.end).iter().any(|q| in_quad(q.map(|c| tx.xf * c), p)))?;
     let word = tx.plain_text().get(w.range.clone())?.to_string();
     let uid = st.uid;
     let suggestions = app
@@ -515,6 +529,38 @@ pub(super) fn grid_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, x
             p.line_segment(ends, Stroke::new(6.0, t.measure_bg));
             p.line_segment(ends, Stroke::new(2.5, t.selection));
         } else {
+            p.circle_filled(c, HANDLE_RADIUS, t.measure_bg);
+            p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, t.selection));
+        }
+    }
+}
+
+/// A selected radial repeat's circle with its radius handle and its splitter on it, and its
+/// instances handle below it, at the places the Selection tool's hit testing finds them. The
+/// splitter also has a short line across the circle.
+pub(super) fn radial_repeat_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf: &Xf) {
+    use vectorcraft_tools::repeat_radial::{HANDLE_RADIUS, RadialHandles, RadialPart};
+    if app.session.tool_id() != "selection" || !app.ui.view.bounding_box {
+        return;
+    }
+    let frame = app.selection_box();
+    let Some(st) = app.session.active() else { return };
+    let Some(h) = RadialHandles::of(&st.doc, &st.selection, frame, xf.zoom) else { return };
+    let t = Tokens::get(p.ctx());
+    // The circle the instances' centers sit on, while it is a sensible size on screen.
+    let (c, r) = (xf.to_screen(h.center), (h.radius * xf.zoom) as f32);
+    if c.is_finite() && r.is_finite() && r > 0.5 && r < 20_000.0 {
+        p.circle_stroke(c, r, Stroke::new(3.0, t.measure_bg));
+        p.circle_stroke(c, r, Stroke::new(1.0, t.selection));
+    }
+    for (part, at) in h.parts() {
+        let c = xf.to_screen(at);
+        let across = (c - xf.to_screen(h.center)).normalized() * (HANDLE_RADIUS + 4.0);
+        if part == RadialPart::Splitter && c.is_finite() && across.is_finite() {
+            p.line_segment([c - across, c + across], Stroke::new(3.0, t.measure_bg));
+            p.line_segment([c - across, c + across], Stroke::new(1.5, t.selection));
+        }
+        if c.is_finite() {
             p.circle_filled(c, HANDLE_RADIUS, t.measure_bg);
             p.circle_stroke(c, HANDLE_RADIUS, Stroke::new(2.0, t.selection));
         }

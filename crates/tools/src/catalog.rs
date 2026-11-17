@@ -68,6 +68,9 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("eraser", "Eraser Tool", Some("Shift+E"), "tool-eraser"),
         t("scissors", "Scissors Tool", Some("C"), "tool-scissors"),
         t("knife", "Knife", None, "tool-knife"),
+        // Path Precision Tools' Trim at Crossings Tool, kept out of `addons::PATH_TOOLS` so that
+        // `all_tools` lists it once.
+        t(crate::addons::trim::ID, "Trim at Crossings Tool", None, "dc-pf-trim"),
         t("mirrorCut", "Mirror & Cut Tool", None, "tool-mirror-cut"),
         t("lineCut", "Line Cut Tool", None, "tool-line-cut"),
         t("rectCut", "Rectangle Cut Tool", None, "tool-rect-cut"),

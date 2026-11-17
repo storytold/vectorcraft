@@ -1074,9 +1074,49 @@ fn transform_effect_preview_commit_cancel_and_undo_cover_artwork_targets() {
                 }
                 "image" => {
                     let mut png = Vec::new();
-                    image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]))
-                        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-                        .unwrap();
+                    {
+                        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]))).into();
+                        let (__w, __h) = (__dyn.width(), __dyn.height());
+                        let (__layout, __sample, __raw) = match __dyn {
+                            image::DynamicImage::ImageLuma8(b) => {
+                                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageLumaA8(b) => {
+                                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageRgb8(b) => {
+                                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageRgba8(b) => {
+                                (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageLuma16(b) => (
+                                craft_image_codecs::ChannelLayout::Gray,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageLumaA16(b) => (
+                                craft_image_codecs::ChannelLayout::GrayA,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageRgb16(b) => (
+                                craft_image_codecs::ChannelLayout::Rgb,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageRgba16(b) => (
+                                craft_image_codecs::ChannelLayout::Rgba,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+                        };
+                        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+                        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                            .map(|__b| png.extend_from_slice(&__b))
+                    }
+                    .unwrap();
                     app.run(
                         "file.place",
                         json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false, "at": [30, 70]}),
@@ -1993,4 +2033,34 @@ fn the_drop_buttons_light_up_while_a_row_is_dragged() {
     drop_buttons_on(&ctx, &mut app, vec![button(held, false)]);
     assert_eq!(drop_buttons_on(&ctx, &mut app, vec![]), [false, false], "dark again once it is released");
     assert_eq!(stack_items(&app).len(), 2, "released elsewhere: nothing removed");
+}
+
+/// #6429: a dash length typed into the Stroke panel that the Appearance panel's "Stroke:" row or
+/// the Properties panel's Stroke link opens sticks when a click outside closes the popup, as it
+/// does when Enter ends the edit. The popup used to close without drawing again, so the field
+/// never saw itself lose the keyboard and the value went back.
+#[test]
+fn a_dash_typed_in_a_stroke_popup_sticks_when_a_click_outside_closes_it() {
+    type Panel = fn(&mut VectorcraftApp, &mut egui::Ui);
+    let hosts: [(&str, Panel); 2] = [("Stroke:", appearance::show), ("Stroke", super::properties::show)];
+    for (link, show) in hosts {
+        let mut app = app_with_rect();
+        run(&mut app, "stroke.set", json!({"dash": [10.0]}));
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, link).center(), show);
+        // The popup's first dash field: a click gives it the keyboard with its text selected.
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "10").center(), show);
+        frame_events(&ctx, &mut app, vec![egui::Event::Text("4".into())], show);
+        let dash = |app: &VectorcraftApp| current_stroke(app).and_then(|s| s.dash).map(|d| d.pattern);
+        assert_eq!(dash(&app), Some(vec![10.0]), "{link}: nothing set while typing");
+        click(&ctx, &mut app, egui::pos2(5.0, 3000.0), show);
+        let surrender = ctx.options(|o| o.input_options.surrender_focus_on);
+        assert_eq!(surrender, egui::SurrenderFocusOn::Clicks, "{link}: fields let go of the keyboard on a click again");
+        frame_events(&ctx, &mut app, vec![], show);
+        assert_eq!(dash(&app).and_then(|p| p.first().copied()), Some(4.0), "{link}: the typed dash stuck: {:?}", dash(&app));
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(!texts.iter().any(|(t, _)| t == "Dashed Line"), "{link}: the popup closed");
+    }
 }

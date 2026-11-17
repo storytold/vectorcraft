@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{ExportAsset, NodeId};
 
-use super::edit::{roots_of, selected_roots};
+use super::edit::{refuse_symbol_part, roots_of, selected_roots};
 use super::fileio::{
     DEFAULT_FORMAT_3D, FORMATS_3D, SCREEN_SETTINGS_KEYS, check_screen_settings, create_dir, export_crop, export_screens, mesh_file_names, mesh_files,
     safe_file_name, store_screen_settings, with_screen_export_preset, write_file,
@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assets",
             [],
             None,
-            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the bounds the renderer measures for what its art draws, effects included), format3D: usda|usdz|gltf|obj | null (a 3D asset's mesh format; null for art exported as pictures)}]} the Asset Export panel's assets, in order",
+            "{} → {assets: [{id, name, nodes: [id…], bounds: [x, y, width, height] | null (the crop: the bounds the renderer measures for what its art draws, effects included, with the clips of the groups and layers that hold it), format3D: usda|usdz|gltf|obj | null (a 3D asset's mesh format; null for art exported as pictures)}]} the Asset Export panel's assets, in order",
             has_doc,
             list
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Assets",
             [],
             None,
-            "{assets?: [asset id…] (default all but the 3D assets, which assets.export3D writes), folder?, zip?, openLocation?, formats?, preset?, settings?, prefix?, subfolders?, antiAlias?} each asset's art alone, cropped to it, in every format row: document.exportForScreens {assets} at the document's export settings (document.exportSettings) under the ones given; with subfolders false every file goes into the folder itself, mobile and density rows too → what document.exportForScreens returns (no folder: the files, or one zip, as dataBase64). Leaves the remembered settings as they are (assets.settings.set changes them)",
+            "{assets?: [asset id…] (default all but the 3D assets, which assets.export3D writes), folder?, zip?, openLocation?, formats?, preset?, settings?, prefix?, subfolders?, antiAlias?} each asset's art alone, cropped to it, in every format row: document.exportForScreens {assets} at the document's export settings (document.exportSettings) under the ones given; with subfolders false every file goes into the folder itself, mobile and density rows too → what document.exportForScreens returns (no folder: the files, or one zip, as dataBase64; warnings name a key in the rows or settings given that only another format takes, not one in the remembered settings). Leaves the remembered settings as they are (assets.settings.set changes them)",
             has_doc,
             export
         ),
@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export 3D Object",
             [],
             None,
-            "{ids?: [id…] (default: the selected objects), format?: usda|usdz|gltf|obj (default usda)} collect each object with an Extrude & Bevel, Revolve, Inflate or Rotate effect as a 3D asset of Window › Asset Export, named after the object (else Asset 1, Asset 2…): assets.export3D writes it as a mesh file. An object already collected as a 3D asset keeps it; an object without such an effect is refused → {assets: [asset id…] (in order), added: n}",
+            "{ids?: [id…] (default: the selected objects), format?: usda|usdz|gltf|obj (default usda)} collect each object with an Extrude & Bevel, Revolve, Inflate or Rotate effect as a 3D asset of Window › Asset Export, named after the object (else Asset 1, Asset 2…): assets.export3D writes it as a mesh file. An object already collected as a 3D asset keeps it; an object in ids without such an effect is refused. Without ids, the selected objects without one (on a group or layer, one on its fill or stroke draws nothing and does not count), and a selected object inside another selected object that has one, are left out; refused when none is left → {assets: [asset id…] (in order), added: n}",
             has_doc,
             add_3d
         ),
@@ -89,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Asset Export Settings",
             [],
             None,
-            "{exportPreset?: (a preset of document.exportPresets.list: its formats or preset, its format settings over the saved ones, its prefix (none when it has none), its folders (or subfolders: rows or none) with subfolders on for rows, and antiAlias; the other keys go over it), formats?, preset?: mobile|density|\"\" (none), settings?, prefix?, subfolders?, antiAlias?} change the export settings the Asset Export panel and Export for Screens share (document.exportSettings; the values of document.exportForScreens; null removes one): formats replace a preset, a preset replaces the formats → {settings}. Not an undo step",
+            "{exportPreset?: (a preset of document.exportPresets.list: its formats or preset, its format settings over the saved ones, its prefix (none when it has none), its folders (or subfolders: rows or none) with subfolders on for rows, and antiAlias; the other keys go over it), formats?, preset?: mobile|density|\"\" (none), settings?, prefix?, subfolders?: true|false (Create Sub-folders: true sorts the files into a folder per row; false puts assets.export's files in the folder itself and, given without exportPreset, sets a remembered folder per format or item to none as well), antiAlias?, openLocation?: true|false (Open Location after Export: remembered in document.exportSettings, not in presets or the reply; given alone to a document without settings, Create Sub-folders stays on)} change the export settings the Asset Export panel and Export for Screens share (document.exportSettings; the values of document.exportForScreens; null removes one): formats replace a preset, a preset replaces the formats → {settings}. Not an undo step",
             has_doc,
             settings_set
         ),
@@ -116,13 +116,15 @@ pub(crate) fn art_under(doc: &vectorcraft_doc::Document, id: NodeId, out: &mut V
     let Some(n) = doc.node(id) else { return };
     if n.is_layer() {
         if let Some(kids) = n.children() {
-            for c in kids {
+            for c in kids.iter().filter(|c| !c.is_ruler_guide()) {
                 art_under(doc, c.id, out);
             }
         }
         return;
     }
-    out.push(id);
+    if !n.is_ruler_guide() {
+        out.push(id);
+    }
 }
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
@@ -201,10 +203,36 @@ fn three_d_asset_ids(d: &vectorcraft_doc::Document, p: &Value, key: &str, cmd: &
     Ok(ids)
 }
 
+/// The selected objects `assets.add3D` collects without `ids`: those with a 3D effect it exports
+/// ([`vectorcraft_render::effects::exports_three_d`]; a path of a compound path counts as the
+/// compound path), layers included, in tree order, dropping
+/// each one inside another of them (that one's asset holds it). Refused while an object of a
+/// dynamic symbol instance's art is selected, as [`selected_roots`] is.
+fn selected_3d_roots(s: &Session) -> Result<Vec<NodeId>> {
+    refuse_symbol_part(s)?;
+    let st = s.doc()?;
+    // A path of a compound path stands for the compound path, which holds the paint and effects.
+    let found = st
+        .selection
+        .objects
+        .iter()
+        .map(|id| super::path::compound_or_self(&st.doc, *id))
+        .filter(|id| st.doc.node(*id).is_some_and(vectorcraft_render::effects::exports_three_d));
+    let mut paths: Vec<(Vec<usize>, NodeId)> = st.doc.index_paths(found).into_iter().map(|(id, path)| (path, id)).collect();
+    paths.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut kept: Vec<(Vec<usize>, NodeId)> = Vec::with_capacity(paths.len());
+    for (path, id) in paths {
+        if !kept.last().is_some_and(|(outer, _)| path.starts_with(outer)) {
+            kept.push((path, id));
+        }
+    }
+    Ok(kept.into_iter().map(|(_, id)| id).collect())
+}
+
 fn add_3d(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.add3D";
     let format = format_3d_param(p, C, Some(DEFAULT_FORMAT_3D))?;
-    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_roots(s)? };
+    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { selected_3d_roots(s)? };
     if ids.is_empty() {
         return Err(bad(C, "select an object with a 3D effect (or give its ids)"));
     }
@@ -213,7 +241,7 @@ fn add_3d(s: &mut Session, p: &Value) -> Result<Value> {
     ids.dedup();
     for id in &ids {
         let n = d.node(*id).ok_or_else(|| bad(C, format!("no such object {0}", id.0)))?;
-        if let Err(e) = vectorcraft_render::effects::three_d_meshes(n) {
+        if let Err(e) = vectorcraft_render::effects::three_d_meshes_in(Some(d), n) {
             let what = n.name.clone().unwrap_or_else(|| format!("#{}", id.0));
             return Err(bad(C, format!("{what} can't be exported in 3D: {e}")));
         }
@@ -281,7 +309,8 @@ fn export_3d(s: &mut Session, p: &Value) -> Result<Value> {
             a.nodes.iter().map(|node| d.node(*node).ok_or_else(|| bad(C, format!("no such object {0}", node.0)))).collect::<Result<Vec<_>>>()?;
         // The asset's objects share one budget of triangles.
         let what = &a.name;
-        let parts = vectorcraft_render::effects::three_d_meshes_of(nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
+        let parts =
+            vectorcraft_render::effects::three_d_meshes_of_in(Some(d), nodes).map_err(|e| bad(C, format!("{what} can't be exported in 3D: {e}")))?;
         let base = Some(safe_file_name(&a.name)).filter(|b| !b.is_empty()).unwrap_or_else(|| "Asset".into());
         let mut stem = base.clone();
         let mut k = 1;
@@ -426,25 +455,41 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         }
         q.insert("assets".into(), json!(all));
     }
-    export_screens(s, &Value::Object(q)).map_err(|e| of_cmd(C, e))
+    export_screens(s, &Value::Object(q), p).map_err(|e| of_cmd(C, e))
 }
 
 fn settings_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.settings.set";
     let o = p.as_object().ok_or_else(|| bad(C, "give the settings to change, e.g. {\"formats\": [{\"format\": \"png\", \"scale\": \"2x\"}]}"))?;
-    if let Some(k) = o.keys().find(|k| !SCREEN_SETTINGS_KEYS.contains(&k.as_str()) && k.as_str() != "exportPreset") {
-        return Err(bad(C, format!("`{k}` isn't an export setting: {}", SCREEN_SETTINGS_KEYS.join(", "))));
+    if let Some(k) = o.keys().find(|k| !SCREEN_SETTINGS_KEYS.contains(&k.as_str()) && !matches!(k.as_str(), "exportPreset" | "openLocation")) {
+        return Err(bad(C, format!("`{k}` isn't an export setting: {}, openLocation", SCREEN_SETTINGS_KEYS.join(", "))));
+    }
+    for k in ["subfolders", "openLocation"] {
+        if o.get(k).is_some_and(|v| !v.is_boolean() && !v.is_null()) {
+            return Err(bad(C, format!("`{k}` is true or false")));
+        }
     }
     let mut settings = s.doc()?.doc.export_settings.clone();
     let mut given = o.clone();
+    // Create Sub-folders is on for a document without settings (Export for Screens opens so), and
+    // Open Location after Export set on its own leaves it on.
+    if settings.is_empty() && o.len() == 1 && o.get("openLocation").is_some_and(Value::is_boolean) {
+        given.insert("subfolders".into(), json!(true));
+    }
     if let Some(name) = given.remove("exportPreset") {
         let name = name.as_str().ok_or_else(|| bad(C, "`exportPreset` is the name of a preset of document.exportPresets.list"))?;
         with_screen_export_preset(s, C, &mut settings, name)?;
     }
     // Create Sub-folders is Export for Screens' folder per row: the dialog opens on the choice.
+    // Turned off on its own (the panel menu), it also ends a remembered folder per format or item;
+    // with an export preset, that preset's folder per format or item stays.
+    let folders = settings.get("folders").and_then(Value::as_str).map(str::to_string);
+    let sorted = folders.as_deref().is_some_and(|f| f != "none");
     match given.get("subfolders").and_then(Value::as_bool) {
         Some(true) => _ = settings.insert("folders".into(), json!("rows")),
-        Some(false) if settings.get("folders").and_then(Value::as_str) == Some("rows") => _ = settings.insert("folders".into(), json!("none")),
+        Some(false) if folders.as_deref() == Some("rows") || (sorted && !o.contains_key("exportPreset")) => {
+            _ = settings.insert("folders".into(), json!("none"))
+        }
         _ => {}
     }
     overlay(&mut settings, &given);

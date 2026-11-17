@@ -1,4 +1,7 @@
-use super::super::tests_long_popups::{PopupWindow, assert_last_row_scrolls_into_view, assert_short_list_does_not_scroll, fx_menu_ends};
+use super::super::tests_long_popups::{
+    PopupWindow, assert_last_row_scrolls_into_view, assert_popup_stays_put, assert_rows_stay_on_one_line, assert_short_list_does_not_scroll,
+    fx_menu_ends,
+};
 use super::*;
 
 /// A selected rectangle, for the fill row's swatch picker and the Add Effect button.
@@ -63,6 +66,20 @@ fn a_short_swatch_picker_does_not_scroll() {
     assert_eq!(window.clickable(TILE), tiles, "a list that fits does not scroll");
 }
 
+/// The Add New Effect popup keeps each group's name on one line when its list scrolls: the scroll
+/// bar's column widens the popup instead of narrowing the rows.
+#[test]
+fn the_add_effect_popup_keeps_its_rows_on_one_line_when_it_scrolls() {
+    let mut groups: Vec<String> = vec![];
+    for effect in vectorcraft_effects::effect_catalog() {
+        let group = effect.menu.get(1).copied().unwrap_or("Other").to_string();
+        if !groups.contains(&group) {
+            groups.push(group);
+        }
+    }
+    assert_rows_stay_on_one_line(&mut app_with_a_selected_rectangle(), draw_bottom_bar, fx_button, &groups, "Distort & Transform", 120.0);
+}
+
 /// The Add New Effect button: the third of the bottom bar's 24 pt buttons.
 fn fx_button(window: &PopupWindow) -> egui::Pos2 {
     window.clickable(vec2(24.0, 24.0))[2].center()
@@ -79,6 +96,36 @@ fn the_add_effect_popup_scrolls_inside_a_short_window() {
     let (first, last) = fx_menu_ends();
     assert_last_row_scrolls_into_view(&mut app_with_a_selected_rectangle(), 150.0, draw_bottom_bar, fx_button, &first, &last);
     assert_short_list_does_not_scroll(&mut app_with_a_selected_rectangle(), draw_bottom_bar, fx_button, &first, &last);
+}
+
+/// The Add New Effect popup opened from a button `below` pt above the bottom of a window `height`
+/// pt tall stays at one place on every frame, inside the window.
+fn assert_add_effect_popup_stays_put(height: f32, below: f32) -> Rect {
+    let (first, _) = fx_menu_ends();
+    let draw = move |app: &mut VectorcraftApp, ui: &mut Ui| {
+        ui.add_space((height - below - 24.0).max(0.0));
+        draw_bottom_bar(app, ui);
+    };
+    assert_popup_stays_put(&mut app_with_a_selected_rectangle(), height, draw, fx_button, &first)
+}
+
+/// Opened from a button near the bottom of a short window, the Add New Effect popup stays at one
+/// place instead of being drawn above and below the button on alternate frames.
+#[test]
+fn the_add_effect_popup_stays_put_near_the_bottom_of_a_short_window() {
+    for height in [200.0, 300.0, 400.0, 600.0] {
+        let row = assert_add_effect_popup_stays_put(height, 8.0);
+        assert!(row.bottom() < height - 32.0, "in a {height} pt window the popup opens above the button: {row:?}");
+    }
+}
+
+/// Opened from a button near the top of a window, the popup opens below it and stays there.
+#[test]
+fn the_add_effect_popup_stays_put_below_a_button_near_the_top() {
+    for height in [200.0, 400.0, 900.0] {
+        let row = assert_add_effect_popup_stays_put(height, height - 32.0);
+        assert!(row.top() > 24.0, "in a {height} pt window the popup opens below the button: {row:?}");
+    }
 }
 
 /// Duplicating rows highlights the copies, each right above its original, as the Layers panel
@@ -418,9 +465,41 @@ fn a_plug_in_effect_s_editor_follows_its_manifest() {
 #[test]
 fn the_effect_editor_lists_a_loaded_glass_texture() {
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([90, 120, 150, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([90, 120, 150, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let stored = vectorcraft_engine::cmd::fileio::texture_image(&png).unwrap();
     let (mut app, ctx, id) = editing("distort.glass");
     app.run("effect.setParams", json!({"item": null, "index": 0, "params": {"texture": "loaded", "textureImage": stored}})).unwrap();
@@ -741,7 +820,41 @@ fn images_show_a_contents_row_with_new_fills_and_strokes_below_it() {
     run(&mut app, "file.new", json!({"width": 100, "height": 100}));
     let rows = |t: Vec<String>| t.into_iter().filter(|t| ["Fill:", "Stroke:", "Contents"].contains(&t.as_str())).collect::<Vec<_>>();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     run(&mut app, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png)}));
     assert_eq!(rows(frame(&mut app)), ["Contents"]);
     run(&mut app, "appearance.addStroke", json!({}));

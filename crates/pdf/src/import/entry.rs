@@ -171,14 +171,22 @@ pub const INVISIBLE_TEXT_NOTE: &str = "invisible text (such as a scanned page's 
 /// Warning: glyphs that differ from the installed font of their name were kept as outlines.
 pub const UNMATCHED_GLYPHS_NOTE: &str = "text whose glyphs differ from the installed font of the same name was kept as outlines";
 
+/// Warning: type in a script whose letters reorder and join (Indic scripts) that, set again from
+/// its characters, wouldn't draw the glyphs where the file drew them was kept as outlines (#5235).
+pub const RESHAPED_TEXT_NOTE: &str =
+    "text that would not look as it does in the file if set as type (a script whose letters join) was kept as outlines";
+
 /// The end of the warning that glyphs whose characters the file doesn't name were kept as
 /// outlines, after "text in" and the font's name.
 pub const UNNAMED_CHARACTERS_NOTE: &str = "whose characters the file doesn't name (U+FFFD) was kept as outlines";
 
 /// Is `note` one of the warnings that glyphs were kept as outlines ([`OUTLINED_TEXT_NOTE`],
-/// [`UNMATCHED_GLYPHS_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
+/// [`UNMATCHED_GLYPHS_NOTE`], [`RESHAPED_TEXT_NOTE`], [`UNNAMED_CHARACTERS_NOTE`])?
 pub fn is_outlines_note(note: &str) -> bool {
-    note == OUTLINED_TEXT_NOTE || note == UNMATCHED_GLYPHS_NOTE || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
+    note == OUTLINED_TEXT_NOTE
+        || note == UNMATCHED_GLYPHS_NOTE
+        || note == RESHAPED_TEXT_NOTE
+        || note.starts_with("text in ") && note.ends_with(UNNAMED_CHARACTERS_NOTE)
 }
 
 /// Is `n` glyphs kept as outlines (a path the import names `<Text Outlines>`)?
@@ -231,6 +239,14 @@ pub fn imports_of(bytes: &[u8]) -> usize {
     IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
 }
 
+/// The widest bleed of `pages` on each side (`[top, bottom, left, right]`, see [`crate::pages::bleed`]).
+fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft_pdf::syntax::page::Page<'d>>) -> [f64; 4] {
+    pages.fold([0.0; 4], |widest, page| {
+        let bleed = crate::pages::bleed(page);
+        std::array::from_fn(|i| widest[i].max(bleed[i]))
+    })
+}
+
 /// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
 fn read_opened(
     bytes: &[u8],
@@ -278,15 +294,17 @@ fn read_opened(
     let mut nesting = Nesting::new();
     // The top-level groups in the order the pages mark them, bottom first.
     let (mut order, mut known) = (vec![], HashSet::new());
+    // Artboards on the trim boxes have the bleed boxes round them as the document's bleed, so the
+    // art there shows and prints as bleed.
+    if opts.crop == CropTo::Trim {
+        doc.setup.bleed = widest_bleed(picked.iter().filter_map(|&n| pages.get(n)));
+    }
+    // The artboards are the gap apart plus the document's bleed on both sides, which export adds
+    // round every artboard, so no page's bleed reaches into the next artboard.
+    let [_, _, bleed_left, bleed_right] = doc.setup.bleed;
+    let spacing = opts.artboard_gap + bleed_left + bleed_right;
     for (i, &number) in picked.iter().enumerate() {
         let Some(page) = pages.get(number) else { continue };
-        // Artboards on the trim boxes have the bleed boxes round them as the document's bleed
-        // (the widest of the pages' on each side), so the art there shows and prints as bleed.
-        if opts.crop == CropTo::Trim {
-            for (side, b) in doc.setup.bleed.iter_mut().zip(crate::pages::bleed(page)) {
-                *side = side.max(b);
-            }
-        }
         // The chosen box sits at (x, 0); the page draws round it.
         let (init, frame) = crate::pages::frame(page, opts.crop);
         let mut ab = Rect::new(x, 0.0, x + frame.width(), frame.height());
@@ -363,7 +381,7 @@ fn read_opened(
             right = right.max(art.x1);
             ab = art;
         }
-        x = right + opts.artboard_gap;
+        x = right + spacing;
         clear = right.max(art_right) + opts.artboard_gap;
         doc.artboards.push(Artboard {
             id: i as u32 + 1,
@@ -375,6 +393,7 @@ fn read_opened(
             show_video_safe_areas: false,
             video_ruler_pixel_aspect_ratio: 1.0,
             color: None,
+            guide_label: None,
         });
         let page_layer = |b: &mut Builder<'_>, art: Vec<Arc<Node>>, shown: bool| {
             let name = if shown { format!("Page {}", number + 1) } else { format!("Page {} (unsorted)", number + 1) };

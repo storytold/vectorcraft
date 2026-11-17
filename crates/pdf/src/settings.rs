@@ -217,7 +217,7 @@ choice! {
 }
 
 /// Save PDF settings (the dialog's sections; what a preset stores).
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PdfSettings {
     pub standard: Standard,
@@ -236,6 +236,11 @@ pub struct PdfSettings {
     /// Keep the layers whose Print option is off (they are left out otherwise, unless
     /// `create_layers` is on).
     pub include_non_printing: bool,
+    /// Write a page with a side longer than 14,400 pt (200 in) at its size in points, without a
+    /// `UserUnit`, at every PDF version, in files without a standard (on by default; off, and in
+    /// PDF/A files: PDF 1.6 and later files that aren't PDF/X files write it with a `UserUnit`,
+    /// and PDF 1.5 files are written as PDF 1.6 for it).
+    pub long_pages_in_points: bool,
     pub compression: CompressionSettings,
     pub marks: MarkSettings,
     pub bleed: BleedSettings,
@@ -246,6 +251,29 @@ pub struct PdfSettings {
     /// flattened with: a built-in or saved preset's name; empty, High Resolution. The app flattens
     /// the document before writing; the writer doesn't read it.
     pub flattener_preset: String,
+}
+
+impl Default for PdfSettings {
+    fn default() -> Self {
+        Self {
+            standard: Standard::default(),
+            compatibility: Compatibility::default(),
+            preserve_editing: false,
+            thumbnails: false,
+            fast_web_view: false,
+            view_after_saving: false,
+            create_layers: false,
+            include_non_printing: false,
+            long_pages_in_points: true,
+            compression: CompressionSettings::default(),
+            marks: MarkSettings::default(),
+            bleed: BleedSettings::default(),
+            output: OutputSettings::default(),
+            advanced: AdvancedSettings::default(),
+            security: SecuritySettings::default(),
+            flattener_preset: String::new(),
+        }
+    }
 }
 
 /// Resampling and compression of one kind of image.
@@ -359,7 +387,12 @@ pub struct OutputSettings {
     /// Destination profile name (empty: the document's profile; [`DOCUMENT_CMYK`]: the CMYK
     /// profile in effect, whatever the document's colour mode).
     pub destination: String,
-    pub profiles: ProfileInclusion,
+    /// The Profile Inclusion setting; `None` (left out, `null` or `"default"`) when it isn't set:
+    /// colors are then written as with [`ProfileInclusion::None`], while gray and RGB images keep
+    /// the ICC profiles they carry. A set [`ProfileInclusion::None`] also leaves those out (see
+    /// [`crate::output`]).
+    #[serde(deserialize_with = "unset_or_choice")]
+    pub profiles: Option<ProfileInclusion>,
     /// PDF/X output intent profile name.
     pub output_intent: String,
     pub output_condition: String,
@@ -367,6 +400,19 @@ pub struct OutputSettings {
     pub registry: String,
     /// Mark the file as trapped.
     pub trapped: bool,
+}
+
+/// The JSON id of a setting that isn't set ([`OutputSettings::profiles`]), as `null` is.
+pub const UNSET_CHOICE: &str = "default";
+
+/// A choice that may be left unset: `null` and [`UNSET_CHOICE`] are `None`, a choice's id is that
+/// choice.
+fn unset_or_choice<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
+    match Option::<String>::deserialize(d)? {
+        None => Ok(None),
+        Some(id) if id == UNSET_CHOICE => Ok(None),
+        Some(id) => T::deserialize(serde::de::value::StringDeserializer::<D::Error>::new(id)).map(Some),
+    }
 }
 
 /// The Advanced section.

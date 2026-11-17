@@ -15,6 +15,7 @@ mod pngsuite;
 mod sha256;
 mod stats;
 mod test262;
+mod ui_commands;
 mod version;
 mod web_fonts;
 
@@ -30,11 +31,12 @@ commands:
   cursors         warn about Cursor values with no entry in crates/tools/src/cursors.toml (never fails)
   i18n-report     list the strings each language's catalog lacks, shown in English (fails only on a
                   broken scan; ci runs it too)
+  ui-commands     regenerate crates/mcp/src/ui_catalog.rs from desktop UI_COMMANDS; --check fails on drift
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
   test            the workspace tests (cargo nextest when installed, else cargo test), then the doctests
-  ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), layers, wasm (stops at first failure)
+  ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), ui-commands --check, layers, wasm (stops at first failure)
   corpus [--download] [--affinity]
                   show where test corpora live; --download fetches PngSuite into corpus/pngsuite,
                   --affinity the pinned public Affinity documents into corpus/affinity
@@ -59,6 +61,7 @@ fn main() -> ExitCode {
         Some("brands") => brands::run(&root()),
         Some("cursors") => cursors::run(&root()),
         Some("i18n-report") => cmd_i18n_report(),
+        Some("ui-commands") => ui_commands::run(&root(), rest.contains(&"--check")),
         Some("layers") => cmd_layers(),
         Some("pdf-deps") => pdf_deps::run(&root()),
         Some("wasm") => cmd_wasm(),
@@ -201,18 +204,25 @@ fn cmd_layers() -> Result<(), String> {
 }
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
-/// shell, and the web app (its wasm-only code is compiled by nothing else).
-fn wasm_set() -> Result<Vec<String>, String> {
-    let crates = layers::from_metadata(&metadata()?)?;
-    Ok(crates
+/// shell, and the web app (its wasm-only code is compiled by nothing else). Each comes with its
+/// package id, which `-p` takes where the name would be ambiguous: craft-libs builds against this
+/// repo's geom and pathops by git, so the graph can hold a second, older copy of a workspace crate.
+fn wasm_set() -> Result<Vec<(String, String)>, String> {
+    let meta = metadata()?;
+    let ids: std::collections::HashMap<&str, &str> =
+        meta["packages"].as_array().into_iter().flatten().filter_map(|p| Some((p["name"].as_str()?, p["id"].as_str()?))).collect();
+    layers::from_metadata(&meta)?
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
             _ => layers::short_name(&c.name) == "web",
         })
-        .map(|c| c.name)
-        .collect())
+        .map(|c| {
+            let id = ids.get(c.name.as_str()).ok_or_else(|| format!("cargo metadata: no package id for {}", c.name))?.to_string();
+            Ok((c.name, id))
+        })
+        .collect()
 }
 
 /// One `cargo check` over the whole wasm set: the crates share one build, and `--keep-going`
@@ -221,10 +231,11 @@ fn cmd_wasm() -> Result<(), String> {
     let set = wasm_set()?;
     let mut c = cargo();
     c.args(["check", "--target", "wasm32-unknown-unknown", "--keep-going"]);
-    for pkg in &set {
-        c.args(["-p", pkg]);
+    for (_, id) in &set {
+        c.args(["-p", id]);
     }
-    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), set.join(", ")))
+    let names: Vec<&str> = set.iter().map(|(name, _)| name.as_str()).collect();
+    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), names.join(", ")))
 }
 
 /// Whether `cargo nextest` is installed.
@@ -302,6 +313,7 @@ fn cmd_ci() -> Result<(), String> {
         ("brands", Box::new(|| brands::run(&root()))),
         ("cursors", Box::new(|| cursors::run(&root()))),
         ("i18n-report", Box::new(cmd_ci_i18n_report)),
+        ("ui-commands", Box::new(|| ui_commands::run(&root(), true))),
         ("layers", Box::new(cmd_layers)),
         ("wasm", Box::new(cmd_wasm)),
     ];

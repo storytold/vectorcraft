@@ -12,6 +12,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 use crate::*;
 
 mod import;
+mod pict;
 
 /// Add `n` (with a fresh id) on top of `d`'s first layer.
 pub(crate) fn add(d: &mut Document, mut n: Node) {
@@ -42,10 +43,15 @@ pub(crate) fn blue() -> Paint {
 
 /// A `w` × `h` PNG of `rgba`.
 pub(crate) fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
-    let img = image::RgbaImage::from_pixel(w, h, image::Rgba(rgba));
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
-    out
+    let img = craft_image_codecs::Image::from_raw(
+        w,
+        h,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.repeat((w * h) as usize),
+    )
+    .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 /// CRC-32 of a PNG chunk.
@@ -63,8 +69,12 @@ pub(crate) fn crc32(data: &[u8]) -> u32 {
 /// A 1 × 1 PNG whose IHDR claims `w` × `h` (and whose CRC matches): its size reads from the header,
 /// but its pixel data no longer matches, so decoding it fails.
 pub(crate) fn png_claiming(w: u32, h: u32) -> Vec<u8> {
-    let mut png = vec![];
-    image::GrayImage::new(1, 1).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(1, 1, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![0]).unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     png[16..20].copy_from_slice(&w.to_be_bytes());
     png[20..24].copy_from_slice(&h.to_be_bytes());
     let crc = crc32(&png[12..29]);
@@ -396,6 +406,22 @@ fn an_instance_whose_art_reaches_the_artboard_is_written() {
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let k = kinds(&emf_records(&emf(&d).bytes));
     assert!(k.contains(&39), "a brush fills the art: {k:?}");
+}
+
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it,
+/// in EMF (clipped) and in WMF (unclipped).
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut inst = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((30.0, 30.0)) });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+    let mut d = doc_with(100.0, 100.0, vec![inst]);
+    let art = path(shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), red(), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    for clips in [true, false] {
+        let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, clips).run();
+        let colors: Vec<[u8; 3]> = fills(&ops).into_iter().map(|(_, rgb)| rgb).collect();
+        assert_eq!(colors, [[0, 0, 255]], "clips: {clips}");
+    }
 }
 
 /// A pattern `name` repeating `art` every point.

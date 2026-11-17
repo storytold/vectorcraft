@@ -531,6 +531,139 @@ fn a_space_that_is_not_usable_is_refused_and_one_too_large_is_kept_to_the_path()
     assert_eq!(space(&s, g), (Some(100.0), 0.0));
 }
 
+/// The ids of group `g`'s objects in their order along the path, and of its children in the
+/// Layers panel's order.
+fn orders(s: &Session, g: NodeId) -> (Vec<NodeId>, Vec<NodeId>) {
+    let n = s.doc().unwrap().doc.node(g).unwrap();
+    let path = n.extras().objects_on_path.as_deref().unwrap().members.iter().map(|m| m.id).collect();
+    (path, n.children().unwrap().iter().map(|c| c.id).collect())
+}
+
+/// Three objects of different widths (20, 40 and 10 pt) attached to a 300 pt line from (50, 300),
+/// in that order, with a Space of 100 pt from 0, Pivot 4 and Rotate 0.
+fn three_on_a_line(s: &mut Session) -> (NodeId, [NodeId; 3], NodeId) {
+    let a = rect(s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(s, 100.0, 0.0, 40.0, 20.0);
+    let c = rect(s, 200.0, 0.0, 10.0, 20.0);
+    let path = line(s, (50.0, 300.0), (350.0, 300.0));
+    let g = attach(s, path, &[a, b, c], json!({}));
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 100})).unwrap();
+    (g, [a, b, c], path)
+}
+
+#[test]
+fn move_member_takes_the_target_s_place_and_shifts_the_objects_between() {
+    let mut s = session();
+    let (g, [a, b, c], path) = three_on_a_line(&mut s);
+    let (_, layers) = orders(&s, g);
+    let before = s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().cloned().unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    let v = s.execute("object.objectsOnPath.moveMember", &json!({"member": a.0, "target": c.0})).unwrap();
+    assert_eq!(v, json!({"group": g.0, "member": a.0, "index": 2}));
+    assert_eq!(orders(&s, g), (vec![b, c, a], layers.clone()), "the order along the path changes, the Layers order does not");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    assert_eq!(center(&s, b), Point::new(50.0, 300.0));
+    assert_eq!(center(&s, c), Point::new(150.0, 300.0));
+    assert_eq!(center(&s, a), Point::new(250.0, 300.0));
+    let after = s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().cloned().unwrap();
+    assert_eq!(
+        (after.path, after.pivot, after.rotate, after.spacing, after.start),
+        (path, before.pivot, before.rotate, before.spacing, before.start)
+    );
+    let w = bounds(&s, a);
+    assert!((w.width() - 20.0).abs() < 1e-9, "the object keeps its art: {w:?}");
+    // The last one back to the first place, with its group named.
+    let v = s.execute("object.objectsOnPath.moveMember", &json!({"group": g.0, "member": a.0, "target": b.0})).unwrap();
+    assert_eq!(v["index"], 0);
+    assert_eq!(orders(&s, g).0, [a, b, c]);
+    assert_eq!(center(&s, a), Point::new(50.0, 300.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(orders(&s, g).0, [b, c, a]);
+    assert_eq!(center(&s, a), Point::new(250.0, 300.0));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(orders(&s, g).0, [a, b, c]);
+    assert_eq!(center(&s, c), Point::new(250.0, 300.0));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(orders(&s, g).0, [b, c, a]);
+    // Onto its own place: nothing changes and no step is recorded.
+    let steps = s.doc().unwrap().history.undo.len();
+    let v = s.execute("object.objectsOnPath.moveMember", &json!({"member": c.0, "target": c.0})).unwrap();
+    assert_eq!(v["index"], 1);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // The order saves and reopens.
+    let data = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "objects.vectorcraft", "dataBase64": data})).unwrap();
+    assert_eq!(orders(&o, g), (vec![b, c, a], layers));
+    assert_eq!(center(&o, a), Point::new(250.0, 300.0));
+}
+
+#[test]
+fn move_member_refuses_what_is_not_an_object_on_the_same_path() {
+    let mut s = session();
+    let (g, [a, b, c], path) = three_on_a_line(&mut s);
+    let loose = rect(&mut s, 300.0, 20.0, 10.0, 10.0);
+    let x = rect(&mut s, 0.0, 200.0, 10.0, 10.0);
+    let other_line = line(&mut s, (50.0, 380.0), (350.0, 380.0));
+    let h = attach(&mut s, other_line, &[x], json!({}));
+    let err = |s: &mut Session, p: Value| s.execute("object.objectsOnPath.moveMember", &p).unwrap_err().to_string();
+    assert!(err(&mut s, json!({"member": path.0, "target": a.0})).contains("`member` must name an object attached"), "the path");
+    assert!(err(&mut s, json!({"member": a.0, "target": path.0})).contains("`target` must name"), "the path as the target");
+    assert!(err(&mut s, json!({"member": loose.0, "target": a.0})).contains("`member` must name"), "an object on no path");
+    assert!(err(&mut s, json!({"member": g.0, "target": a.0})).contains("`member` must name"), "the group itself");
+    assert!(err(&mut s, json!({"member": a.0, "target": x.0})).contains("same Objects on Path group"), "another group's object");
+    assert!(err(&mut s, json!({"member": a.0, "target": b.0, "group": h.0})).contains("`group` must be"), "another group named");
+    assert!(err(&mut s, json!({"target": b.0})).contains("missing `member`"));
+    assert!(err(&mut s, json!({"member": a.0})).contains("missing `target`"));
+    assert!(err(&mut s, json!({"member": 99999, "target": b.0})).contains("no such object"));
+    assert!(err(&mut s, json!({"member": "a", "target": b.0})).contains("invalid object id"));
+    // A locked object neither moves nor gives its place, and is not chosen.
+    select(&mut s, &[c]);
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(err(&mut s, json!({"member": c.0, "target": a.0})).contains("`member` names an object that is hidden or locked"));
+    assert!(err(&mut s, json!({"member": a.0, "target": c.0})).contains("`target` names an object that is hidden or locked"));
+    assert!(s.execute("object.objectsOnPath.selectMember", &json!({"member": c.0})).is_err());
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    // A locked object between the two keeps its place, and the others pass over it.
+    select(&mut s, &[b]);
+    s.execute("object.lock", &json!({})).unwrap();
+    let v = s.execute("object.objectsOnPath.moveMember", &json!({"member": a.0, "target": c.0})).unwrap();
+    assert_eq!(v["index"], 2);
+    assert_eq!(orders(&s, g).0, [c, b, a]);
+    assert_eq!(center(&s, b), Point::new(150.0, 300.0), "the locked object stays where it was");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    select(&mut s, &[g]);
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(g).unwrap().locked);
+    let e = err(&mut s, json!({"member": a.0, "target": b.0}));
+    assert!(e.contains("hidden or locked"), "a locked group: {e}");
+    assert!(s.execute("object.objectsOnPath.selectMember", &json!({"member": a.0})).is_err(), "a locked group's object is not chosen");
+    assert_eq!(orders(&s, g).0, [a, b, c], "nothing refused changed the order");
+}
+
+#[test]
+fn select_member_selects_the_group_with_the_object_chosen() {
+    let mut s = session();
+    let (g, [a, b, _], path) = three_on_a_line(&mut s);
+    let v = s.execute("object.objectsOnPath.selectMember", &json!({"member": b.0})).unwrap();
+    assert_eq!(v, json!({"group": g.0, "member": b.0}));
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!((sel.objects.as_slice(), sel.on_path_member), (&[g][..], Some(b)));
+    // Moving the chosen object keeps it chosen.
+    s.execute("object.objectsOnPath.moveMember", &json!({"member": b.0, "target": a.0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.on_path_member, Some(b));
+    assert!(s.execute("object.objectsOnPath.selectMember", &json!({"member": path.0})).is_err());
+    select(&mut s, &[g]);
+    assert_eq!(s.doc().unwrap().selection.on_path_member, None, "another selection clears it");
+    // Both take their objects without a selection.
+    select(&mut s, &[]);
+    s.execute("object.objectsOnPath.moveMember", &json!({"member": a.0, "target": b.0})).unwrap();
+    assert_eq!(orders(&s, g).0[..2], [a, b]);
+    s.execute("object.objectsOnPath.selectMember", &json!({"member": a.0})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.on_path_member, Some(a));
+}
+
 #[test]
 fn the_space_saves_and_reopens_and_goes_with_a_copy() {
     let mut s = session();
@@ -547,4 +680,198 @@ fn the_space_saves_and_reopens_and_goes_with_a_copy() {
     s.execute("edit.paste", &json!({})).unwrap();
     let copy = s.doc().unwrap().selection.objects.to_vec();
     assert_eq!(space(&s, copy[0]), (Some(40.0), 25.0));
+}
+
+/// Where `id` is in the tree: its parent and its index there (0 at the bottom).
+fn place_of(s: &Session, id: NodeId) -> (Option<NodeId>, usize) {
+    let (parent, index, _) = s.doc().unwrap().doc.position(id).unwrap();
+    (parent, index)
+}
+
+#[test]
+fn detach_takes_the_chosen_object_off_the_path_and_the_others_move_up_in_one_undo_step() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle, right], json!({"rotate": 30}));
+    let (layer, at) = place_of(&s, g);
+    s.execute("object.objectsOnPath.selectMember", &json!({"member": middle.0})).unwrap();
+    let drawn = s.doc().unwrap().doc.node(middle).unwrap().clone();
+    let steps = s.doc().unwrap().history.undo.len();
+    let v = s.execute("object.objectsOnPath.detach", &json!({})).unwrap();
+    assert_eq!(v, json!({"group": g.0, "member": middle.0}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    let (on_path, children) = orders(&s, g);
+    assert_eq!(on_path, [left, right]);
+    assert!(children.len() == 3 && !children.contains(&middle), "{children:?}");
+    assert_eq!(place_of(&s, middle), (layer, at + 1), "just above the group, in its layer");
+    assert_eq!(s.doc().unwrap().doc.node(middle), Some(&drawn), "the object keeps its art, place and rotation");
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!((sel.objects.as_slice(), sel.on_path_member), (&[middle][..], None), "the detached object alone is selected");
+    // The two left stay on the ends of the path; the path stays.
+    assert_eq!(center(&s, left), Point::new(50.0, 300.0));
+    assert_eq!(center(&s, right), Point::new(350.0, 300.0));
+    assert_eq!(s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().unwrap().path, path);
+    // The detached object is free: moving it moves it, and the group does not take it back.
+    s.execute("object.move", &json!({"ids": [middle.0], "dx": 0, "dy": -100})).unwrap();
+    assert_eq!(center(&s, middle), Point::new(200.0, 200.0));
+    assert_eq!(orders(&s, g).0, [left, right]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let (on_path, children) = orders(&s, g);
+    assert_eq!(on_path, [left, middle, right], "undo puts it back on the path");
+    assert!(children.contains(&middle), "{children:?}");
+    assert_eq!(center(&s, middle), Point::new(200.0, 300.0));
+    assert_eq!(center(&s, right), Point::new(350.0, 300.0));
+    let sel = &s.doc().unwrap().selection;
+    assert_eq!((sel.objects.as_slice(), sel.on_path_member), (&[g][..], Some(middle)), "and the choice back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(orders(&s, g).0, [left, right]);
+    assert_eq!(place_of(&s, middle), (layer, at + 1));
+}
+
+#[test]
+fn after_the_first_object_is_detached_the_second_takes_the_start() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle, right], json!({}));
+    select(&mut s, &[]);
+    let v = s.execute("object.objectsOnPath.detach", &json!({"member": left.0})).unwrap();
+    assert_eq!(v, json!({"group": g.0, "member": left.0}));
+    assert_eq!(orders(&s, g).0, [middle, right]);
+    assert_eq!(center(&s, middle), Point::new(50.0, 300.0), "the second object moves up to the start");
+    assert_eq!(center(&s, right), Point::new(350.0, 300.0));
+    assert_eq!(center(&s, left), Point::new(50.0, 300.0), "the detached object stays where it was drawn");
+    assert_eq!(s.doc().unwrap().selection.objects.to_vec(), [left]);
+}
+
+#[test]
+fn detach_on_a_closed_path_spreads_the_others_all_the_way_round_again() {
+    let mut s = session();
+    let ids: Vec<NodeId> = (0..4).map(|i| rect(&mut s, 10.0 + 40.0 * f64::from(i), 0.0, 10.0, 10.0)).collect();
+    let ring = rect(&mut s, 100.0, 100.0, 200.0, 200.0);
+    let g = attach(&mut s, ring, &ids, json!({}));
+    s.execute("object.objectsOnPath.detach", &json!({"member": ids[1].0})).unwrap();
+    assert_eq!(orders(&s, g).0, [ids[0], ids[2], ids[3]]);
+    let data = s.doc().unwrap().doc.node(ring).unwrap().path_data().unwrap().clone();
+    let stops = vectorcraft_doc::objects_on_path::stops(&data, 3, None, 0.0).unwrap();
+    for (id, (p, _)) in [ids[0], ids[2], ids[3]].iter().zip(stops) {
+        let c = center(&s, *id);
+        assert!((c.x - p.x).abs() < 1e-3 && (c.y - p.y).abs() < 1e-3, "a third of the way round apart: {c:?} {p:?}");
+    }
+}
+
+#[test]
+fn detach_keeps_a_space_value_and_the_start() {
+    let mut s = session();
+    let (g, [a, b, c], _) = three_on_a_line(&mut s);
+    s.execute("object.objectsOnPath.options", &json!({"start": 20})).unwrap();
+    s.execute("object.objectsOnPath.detach", &json!({"member": a.0})).unwrap();
+    assert_eq!(space(&s, g), (Some(100.0), 20.0));
+    assert_eq!(center(&s, b), Point::new(70.0, 300.0), "the second object moves up to the first place");
+    assert_eq!(center(&s, c), Point::new(170.0, 300.0));
+    // A Space value the path is too short for stays, and two objects get more of the path.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 200, "start": 0})).unwrap();
+    assert_eq!(center(&s, c), Point::new(350.0, 300.0), "three objects drawn 150 pt apart");
+    s.execute("object.objectsOnPath.detach", &json!({"member": b.0})).unwrap();
+    assert_eq!(space(&s, g), (Some(200.0), 0.0));
+    assert_eq!(center(&s, a), Point::new(50.0, 300.0));
+    assert_eq!(center(&s, c), Point::new(250.0, 300.0), "two objects 200 pt apart");
+}
+
+#[test]
+fn the_group_and_its_path_stay_with_one_object_or_none_left() {
+    let mut s = session();
+    let ([left, middle, _], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle], json!({"pivot": 7}));
+    s.execute("object.objectsOnPath.options", &json!({"spacing": 30})).unwrap();
+    s.execute("object.objectsOnPath.detach", &json!({"member": left.0})).unwrap();
+    assert_eq!(orders(&s, g), (vec![middle], vec![path, middle]));
+    let b = bounds(&s, middle);
+    assert!((b.center().x - 50.0).abs() < 1e-6 && (b.y1 - 300.0).abs() < 1e-6, "the one left on the start, by its Pivot: {b:?}");
+    s.execute("object.objectsOnPath.detach", &json!({"member": middle.0})).unwrap();
+    let n = s.doc().unwrap().doc.node(g).unwrap().clone();
+    let rec = n.extras().objects_on_path.as_deref().unwrap();
+    assert_eq!((rec.path, rec.members.len(), rec.pivot, rec.spacing), (path, 0, 7, Some(30.0)), "a live group with no objects");
+    assert_eq!(orders(&s, g).1, [path]);
+    // An object moved back in joins the path.
+    s.execute("layer.move", &json!({"ids": [left.0], "target": g.0, "place": "inside"})).unwrap();
+    assert_eq!(orders(&s, g).0, [left]);
+}
+
+#[test]
+fn detach_refuses_what_is_not_one_chosen_editable_object_on_a_path() {
+    let mut s = session();
+    let (g, [a, b, c], path) = three_on_a_line(&mut s);
+    let loose = rect(&mut s, 300.0, 20.0, 10.0, 10.0);
+    let err = |s: &mut Session, p: Value| s.execute("object.objectsOnPath.detach", &p).unwrap_err().to_string();
+    let choose = "choose the object to detach with its Select/Move widget";
+    let steps = s.doc().unwrap().history.undo.len();
+    select(&mut s, &[g]);
+    assert!(err(&mut s, json!({})).contains(choose), "the group without a chosen object");
+    select(&mut s, &[]);
+    assert!(err(&mut s, json!({})).contains(choose), "nothing selected");
+    assert!(err(&mut s, json!({"member": path.0})).contains("`member` must name an object attached"), "the path");
+    assert!(err(&mut s, json!({"member": g.0})).contains("`member` must name"), "the group itself");
+    assert!(err(&mut s, json!({"member": loose.0})).contains("`member` must name"), "an object on no path");
+    assert!(err(&mut s, json!({"member": 99999})).contains("no such object"));
+    assert!(err(&mut s, json!({"member": "a"})).contains("invalid object id"));
+    // Hidden and locked objects stay; a locked group keeps all of its objects.
+    select(&mut s, &[c]);
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(err(&mut s, json!({"member": c.0})).contains("`member` names an object that is hidden or locked"));
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    select(&mut s, &[b]);
+    s.execute("object.hide", &json!({})).unwrap();
+    assert!(err(&mut s, json!({"member": b.0})).contains("hidden or locked"), "a hidden object");
+    s.execute("object.showAll", &json!({})).unwrap();
+    select(&mut s, &[g]);
+    s.execute("object.lock", &json!({})).unwrap();
+    assert!(err(&mut s, json!({"member": a.0})).contains("the Objects on Path group is hidden or locked"));
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    assert_eq!(orders(&s, g).0, [a, b, c], "nothing refused detached anything");
+    let undone = s.doc().unwrap().history.undo.len();
+    assert_eq!(undone, steps + 6, "only the lock, hide and show steps");
+}
+
+#[test]
+fn an_object_detached_from_a_group_on_another_path_does_not_join_that_path() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let inner = attach(&mut s, path, &[left, middle], json!({}));
+    let outer_line = line(&mut s, (20.0, 380.0), (380.0, 380.0));
+    let outer = attach(&mut s, outer_line, &[inner, right], json!({}));
+    let outer_members = orders(&s, outer).0;
+    s.execute("object.objectsOnPath.detach", &json!({"member": left.0})).unwrap();
+    assert_eq!(orders(&s, inner).0, [middle]);
+    assert_eq!(orders(&s, outer).0, outer_members, "the outer path keeps its objects and takes no new one");
+    let (layer, at) = place_of(&s, outer);
+    assert_eq!(place_of(&s, left), (layer, at + 1), "above the outer group");
+}
+
+#[test]
+fn hidden_and_locked_objects_left_on_the_path_move_up_too() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle, right], json!({}));
+    select(&mut s, &[right]);
+    s.execute("object.lock", &json!({})).unwrap();
+    select(&mut s, &[middle]);
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("object.objectsOnPath.detach", &json!({"member": left.0})).unwrap();
+    assert_eq!(orders(&s, g).0, [middle, right]);
+    assert_eq!(center(&s, middle), Point::new(50.0, 300.0), "the hidden object moves up to the start");
+    assert_eq!(center(&s, right), Point::new(350.0, 300.0));
+}
+
+#[test]
+fn objects_moved_out_together_in_the_layers_panel_all_leave_the_path() {
+    let mut s = session();
+    let ([left, middle, right], path) = squares_and_line(&mut s);
+    let g = attach(&mut s, path, &[left, middle, right], json!({}));
+    s.execute("layer.move", &json!({"ids": [left.0, middle.0], "target": g.0, "place": "above"})).unwrap();
+    assert_eq!(orders(&s, g), (vec![right], vec![path, right]));
+    assert_eq!(center(&s, right), Point::new(50.0, 300.0), "the one left takes the start");
+    let (layer, at) = place_of(&s, g);
+    assert_eq!((place_of(&s, left), place_of(&s, middle)), ((layer, at + 1), (layer, at + 2)), "above the group, in their order");
 }

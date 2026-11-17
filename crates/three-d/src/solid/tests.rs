@@ -98,6 +98,33 @@ fn hidden_faces_draw_every_face_of_the_solid_behind_the_visible_ones() {
     }
 }
 
+/// Each facet says whether it is a piece of the solid's sides and whether it is turned away from
+/// the viewer: a box's walls and bevels are sides and its two caps are not; Inflate's sides are
+/// sides and its front is not.
+#[test]
+fn facets_tell_the_sides_from_the_ends_and_the_faces_turned_away() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: 20.0, rotation_y: 30.0, ..front() };
+    let bevel = Bevel { width: 10.0, height: 10.0, ..Bevel::default() };
+    for o in [Extrude { hidden: true, ..Extrude::default() }, Extrude { hidden: true, bevel: Some(bevel), ..Extrude::default() }] {
+        let all = extrude(&p, FillRule::EvenOdd, b, o, v).unwrap();
+        let ends: Vec<&Facet> = all.iter().filter(|f| !f.side).collect();
+        let [a, c] = ends[..] else { panic!("two caps among {} facets", all.len()) };
+        let along = a.normal[0] * c.normal[0] + a.normal[1] * c.normal[1] + a.normal[2] * c.normal[2];
+        assert!(close(along, -1.0, 1e-9), "the caps face opposite ways: {along}");
+        assert!(all.len() > 6 || o.bevel.is_none(), "the bevel adds sides");
+        // The faces turned away are drawn first, the others after them.
+        let away = all.iter().take_while(|f| f.away).count();
+        assert!(away > 0 && all[away..].iter().all(|f| !f.away), "{away} of {}", all.len());
+    }
+    let shown = extrude(&p, FillRule::EvenOdd, b, Extrude::default(), v).unwrap();
+    assert!(shown.iter().all(|f| !f.away));
+    let puff = inflate(&p, FillRule::EvenOdd, b, Inflate { depth: 20.0, ..Inflate::default() }, v).unwrap();
+    assert!(puff.iter().any(|f| f.side) && puff.iter().any(|f| !f.side));
+    let flat = inflate(&p, FillRule::EvenOdd, b, Inflate::default(), v).unwrap();
+    assert!(!flat.is_empty() && flat.iter().all(|f| !f.side));
+}
+
 #[test]
 fn taper_shrinks_the_back_and_twist_turns_it() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
@@ -127,6 +154,90 @@ fn taper_shrinks_the_back_and_twist_turns_it() {
     assert!(open.len() > 2 * 8, "{}", open.len());
 }
 
+/// A taper only scales each wall's far edge toward the center, so the wall stays one flat face;
+/// cut into slices, each joint between them showed a light tick. A twist bends the walls, which
+/// are still cut into slices.
+#[test]
+fn a_tapered_wall_is_one_flat_face_and_a_twisted_one_is_sliced() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let v = View { rotation_x: -35.0, rotation_y: 25.0, ..front() };
+    // Every side facet, the ones turned away included.
+    let sides = |o: Extrude, v: View| -> Vec<Facet> {
+        extrude(&p, FillRule::NonZero, b, Extrude { hidden: true, ..o }, v).unwrap().into_iter().filter(|f| f.side).collect()
+    };
+    let o = Extrude { depth: 40.0, taper: 0.475, ..Extrude::default() };
+    let walls = sides(o, v);
+    assert_eq!(walls.len(), 4, "one face for each of a square's four walls");
+    for f in &walls {
+        let [ring] = &f.view[..] else { panic!("{} contours", f.view.len()) };
+        let n = super::build::newell(std::slice::from_ref(ring));
+        let len = n.0.hypot(n.1).hypot(n.2);
+        let off = |q: &V3| ((q.0 - ring[0].0) * n.0 + (q.1 - ring[0].1) * n.1 + (q.2 - ring[0].2) * n.2) / len;
+        assert!(ring.iter().all(|q| off(q).abs() < 1e-9), "a flat wall: {:?}", ring.iter().map(off).collect::<Vec<_>>());
+    }
+    // Beveled, in perspective or hollow, a taper adds no faces either.
+    let bevel = Bevel { width: 8.0, height: 8.0, ..Bevel::default() };
+    let perspective = View { perspective: 60.0, ..v };
+    for (o, v) in [
+        (Extrude { bevel: Some(bevel), ..o }, v),
+        (Extrude { bevel: Some(Bevel { both_sides: true, ..bevel }), ..o }, v),
+        (Extrude { bevel: Some(Bevel { inside: true, shape: BevelShape::Step, ..bevel }), ..o }, v),
+        (o, perspective),
+        (Extrude { cap: false, ..o }, perspective),
+    ] {
+        assert_eq!(sides(o, v).len(), sides(Extrude { taper: 1.0, ..o }, v).len(), "{o:?} {v:?}");
+    }
+    // A curved outline's walls take one band each too: a taper adds no faces to a circle's.
+    let (cp, cb) = shape(&circle(Point::new(50.0, 50.0), 50.0));
+    let round = |o: Extrude| extrude(&cp, FillRule::NonZero, cb, Extrude { hidden: true, ..o }, v).unwrap().into_iter().filter(|f| f.side).count();
+    assert_eq!(round(o), round(Extrude { taper: 1.0, ..o }), "a tapered circle's walls");
+    // A twist still cuts each wall into at least 8 slices, tapered or not.
+    for taper in [1.0, o.taper] {
+        let twisted = sides(Extrude { twist: 30.0, taper, ..o }, v).len();
+        assert!(twisted >= 4 * 8, "{twisted} faces for a twisted square's walls");
+    }
+}
+
+/// A flat facet carries its plane: the depth it gives at each corner of its drawing is the corner's
+/// view-space depth, with and without perspective. A piece of a twisted wall whose corners lie off
+/// one plane has none.
+#[test]
+fn a_flat_facet_measures_its_depth_on_its_plane() {
+    let (p, b) = shape(&square(0.0, 0.0, 100.0));
+    let o = Extrude { depth: 60.0, cap: true, ..Extrude::default() };
+    for perspective in [0.0, 50.0] {
+        let view = View { rotation_x: -20.0, rotation_y: 30.0, perspective, ..front() };
+        let flat = extrude(&p, FillRule::EvenOdd, b, o, view).unwrap();
+        assert!(!flat.is_empty());
+        for f in &flat {
+            assert!(f.plane.is_some(), "{perspective}");
+            for (q, v) in f.contours.iter().flatten().zip(f.view.iter().flatten()) {
+                let d = f.depth_at(*q);
+                assert!(d.is_some_and(|d| close(d, v.2, 1e-6)), "{perspective}: {d:?} against {}", v.2);
+            }
+        }
+        let twisted = extrude(&p, FillRule::EvenOdd, b, Extrude { twist: 90.0, ..o }, view).unwrap();
+        assert!(twisted.iter().any(|f| f.side && f.plane.is_none()), "{perspective}");
+    }
+}
+
+/// A flat face with a corner at or past the eye, which the projection holds just in front of the
+/// eye, has no plane: its drawing no longer matches the plane's projection there.
+#[test]
+fn a_face_reaching_past_the_eye_has_no_plane() {
+    use super::build::{Builder, Keep, Order};
+    let (_, b) = shape(&square(0.0, 0.0, 100.0));
+    let camera = Camera::new(View { perspective: 50.0, ..front() }, b, 0.0);
+    let eye = camera.center_and_eye().1.unwrap();
+    for (far, has_plane) in [(eye / 2.0, true), (2.0 * eye, false)] {
+        let mut builder = Builder::new(&camera, false, false, Keep::Facets);
+        let corners = vec![V3(-10.0, -10.0, 0.0), V3(10.0, -10.0, 0.0), V3(0.0, 10.0, far)];
+        builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth).unwrap();
+        assert_eq!(builder.facets.len(), 1, "{far}");
+        assert_eq!(builder.facets[0].plane.is_some(), has_plane, "{far}");
+    }
+}
+
 #[test]
 fn a_bevel_inside_shrinks_the_cap_and_outside_grows_the_walls() {
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
@@ -142,6 +253,78 @@ fn a_bevel_inside_shrinks_the_cap_and_outside_grows_the_walls() {
     assert!(outside.iter().any(|f| close(signed_area(&f.contours[0]).abs(), 100.0 * 100.0, 1e-6)), "the cap is the art");
     // The chamfer's faces lean towards the light differently from the cap.
     assert!(inside.iter().any(|f| !close(f.brightness, inside[inside.len() - 1].brightness, 1e-3)));
+}
+
+/// A bevel past a sharp corner is cut square, as a bevel join cuts a stroke, instead of running
+/// out to a spike along the corner's bisector: seen straight on, no point of the solid lies further
+/// from the art than the miters of its corners of about 90° (14.6 pt for a 10 pt bevel), where the
+/// sharp corner's spike reached 40 pt. The bevel opens the corner of a thin spike (with its
+/// neighbor in the same compound path) when it is outside, and of a narrow notch when it is inside;
+/// the other two cases, where the inset edges meet, keep their limited miters and are checked too.
+#[test]
+fn a_bevel_cuts_sharp_corners_square() {
+    let poly = |pts: &[(f64, f64)]| {
+        let mut b = BezPath::new();
+        b.move_to(pts[0]);
+        pts[1..].iter().for_each(|p| b.line_to(*p));
+        b.close_path();
+        b
+    };
+    let spike = [(50.0, 0.0), (56.0, 100.0), (44.0, 100.0)];
+    let block = [(80.0, 40.0), (120.0, 40.0), (120.0, 100.0), (80.0, 100.0)];
+    let notched = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (52.0, 100.0), (50.0, 20.0), (48.0, 100.0), (0.0, 100.0)];
+    let mut both = poly(&spike);
+    both.extend(poly(&block).elements().iter().copied());
+    let bevel = Bevel { width: 10.0, height: 10.0, ..Bevel::default() };
+    let mut far_cases = vec![];
+    for (name, art, outline) in [("spike", both, vec![spike.to_vec(), block.to_vec()]), ("notch", poly(&notched), vec![notched.to_vec()])] {
+        let (p, b) = shape(&art);
+        let outline: Vec<Vec<Point>> = outline.iter().map(|r| r.iter().map(|q| Point::new(q.0, q.1)).collect()).collect();
+        for inside in [false, true] {
+            for shape in [BevelShape::Classic, BevelShape::Rounded] {
+                let o = Extrude { bevel: Some(Bevel { inside, shape, ..bevel }), ..Extrude::default() };
+                let f = extrude(&p, FillRule::NonZero, b, o, front()).unwrap();
+                let far = f.iter().flat_map(|f| f.contours.iter().flatten()).map(|q| edge_distance(&outline, *q)).fold(0.0, f64::max);
+                if far > 15.0 {
+                    far_cases.push(format!("{name} inside {inside} {shape:?}: a point {far} pt from the art"));
+                }
+                assert!(f.iter().all(|f| f.normal.iter().all(|v| v.is_finite())), "{name} inside {inside} {shape:?}");
+            }
+            // Turned, every face still has a normal it can be lit and sorted by.
+            let o = Extrude { bevel: Some(Bevel { inside, ..bevel }), ..Extrude::default() };
+            let f = extrude(&p, FillRule::NonZero, b, o, View::default()).unwrap();
+            assert!(f.iter().all(|f| f.normal.iter().all(|v| v.is_finite()) && f.brightness.is_finite()), "{name} inside {inside}");
+        }
+    }
+    assert!(far_cases.is_empty(), "{far_cases:#?}");
+}
+
+/// With the bevel outside, the cap is the outline itself, so a corner cut square keeps its two
+/// points together there: the cap's outline draws no straight segment of no length at that corner.
+#[test]
+fn a_cap_draws_no_empty_segment_at_a_corner_cut_square() {
+    use vectorcraft_geom::kurbo::PathEl;
+    let mut art = BezPath::new();
+    art.move_to((50.0, 0.0));
+    art.line_to((56.0, 100.0));
+    art.curve_to((56.0, 120.0), (44.0, 120.0), (44.0, 100.0));
+    art.close_path();
+    let (p, b) = shape(&art);
+    let o = Extrude { bevel: Some(Bevel { width: 10.0, height: 10.0, ..Bevel::default() }), ..Extrude::default() };
+    let f = extrude(&p, FillRule::NonZero, b, o, front()).unwrap();
+    let cap = f.iter().find(|f| f.depth == f64::MAX && f.outline.is_some()).unwrap();
+    let mut at = None;
+    for el in cap.path().to_bezpath().elements() {
+        match *el {
+            PathEl::MoveTo(q) => at = Some(q),
+            PathEl::LineTo(q) => {
+                assert_ne!(at, Some(q), "a segment of no length at {q:?}");
+                at = Some(q);
+            }
+            PathEl::QuadTo(_, q) | PathEl::CurveTo(_, _, q) => at = Some(q),
+            PathEl::ClosePath => {}
+        }
+    }
 }
 
 #[test]
@@ -277,11 +460,14 @@ fn malformed_and_degenerate_input_is_bounded() {
     // Too many anchors: refused, not truncated.
     let mut many = BezPath::new();
     many.move_to((0.0, 0.0));
-    for i in 0..3000 {
+    for i in 0..70_000 {
         many.line_to((f64::from(i), f64::from(i % 7)));
     }
     many.close_path();
-    assert!(extrude(&PathData::from_bezpath(&many), FillRule::EvenOdd, b, Extrude::default(), front()).is_err());
+    assert_eq!(
+        extrude(&PathData::from_bezpath(&many), FillRule::EvenOdd, b, Extrude::default(), front()).unwrap_err(),
+        "The shape is too complex for a 3D effect"
+    );
 }
 
 #[test]
@@ -313,6 +499,195 @@ fn a_wider_perspective_brings_the_eye_nearer() {
     assert!(close(last, 100.0 * eye / (eye - 50.0), 1e-6), "{last}");
 }
 
+/// A circle of four cubics about `c`.
+fn circle(c: Point, r: f64) -> BezPath {
+    let k = 0.552_284_749_830_793_6 * r;
+    let mut b = BezPath::new();
+    b.move_to((c.x + r, c.y));
+    b.curve_to((c.x + r, c.y + k), (c.x + k, c.y + r), (c.x, c.y + r));
+    b.curve_to((c.x - k, c.y + r), (c.x - r, c.y + k), (c.x - r, c.y));
+    b.curve_to((c.x - r, c.y - k), (c.x - k, c.y - r), (c.x, c.y - r));
+    b.curve_to((c.x + k, c.y - r), (c.x + r, c.y - k), (c.x + r, c.y));
+    b.close_path();
+    b
+}
+
+/// A "D" with its counter, as outlined type draws one: straight stems, round bowls, and corners
+/// where they meet.
+fn letter_d() -> BezPath {
+    let mut b = BezPath::new();
+    b.move_to((0.0, 0.0));
+    b.line_to((40.0, 0.0));
+    b.curve_to((95.0, 0.0), (95.0, 100.0), (40.0, 100.0));
+    b.line_to((0.0, 100.0));
+    b.close_path();
+    b.move_to((20.0, 20.0));
+    b.line_to((20.0, 80.0));
+    b.line_to((40.0, 80.0));
+    b.curve_to((70.0, 80.0), (70.0, 20.0), (40.0, 20.0));
+    b.close_path();
+    b
+}
+
+/// A path's curved segments, segments, smooth anchors and anchors.
+fn anatomy(p: &PathData) -> [usize; 4] {
+    let mut n = [0; 4];
+    for sp in &p.subpaths {
+        let count = if sp.closed { sp.anchors.len() } else { sp.anchors.len().saturating_sub(1) };
+        n[0] += (0..count).filter(|i| !sp.segment_is_line(*i)).count();
+        n[1] += count;
+        n[2] += sp.anchors.iter().filter(|a| a.kind == vectorcraft_geom::AnchorKind::Smooth).count();
+        n[3] += sp.anchors.len();
+    }
+    n
+}
+
+/// `b` flattened to within 1e-6 pt, each point moved by `map`.
+fn fine(b: &BezPath, map: impl Fn(Point) -> Point) -> Vec<Vec<Point>> {
+    let mut out: Vec<Vec<Point>> = vec![];
+    vectorcraft_geom::kurbo::flatten(b, 1e-6, |el| match el {
+        vectorcraft_geom::kurbo::PathEl::MoveTo(p) => out.push(vec![map(p)]),
+        vectorcraft_geom::kurbo::PathEl::LineTo(p) => out.last_mut().into_iter().for_each(|r| r.push(map(p))),
+        _ => {}
+    });
+    out
+}
+
+/// How far `p` lies from the closed polygons `target` at most, sampled along each segment.
+fn farthest(p: &PathData, target: &[Vec<Point>]) -> f64 {
+    let mut far = 0.0f64;
+    for sp in &p.subpaths {
+        let count = if sp.closed { sp.anchors.len() } else { sp.anchors.len().saturating_sub(1) };
+        for i in 0..count {
+            let c = sp.segment(i);
+            for k in 0..=32 {
+                let q = c.eval(f64::from(k) / 32.0);
+                assert!(q.x.is_finite() && q.y.is_finite(), "{q:?}");
+                far = far.max(edge_distance(target, q));
+            }
+        }
+    }
+    far
+}
+
+/// Seen straight on, the front cap of an extruded circle or letter is the art: each curve stays
+/// one cubic, smooth anchors stay smooth, and no point lies farther than the curve tolerance from
+/// the art. The facet's polygon, which visibility uses, is still the sampled outline.
+#[test]
+fn a_cap_keeps_the_curves_of_the_art() {
+    for art in [circle(Point::new(50.0, 50.0), 40.0), letter_d()] {
+        let (p, b) = shape(&art);
+        let f = extrude(&p, FillRule::EvenOdd, b, Extrude::default(), front()).unwrap();
+        assert_eq!(f.len(), 1);
+        let cap = f[0].path();
+        assert_eq!(anatomy(&cap), anatomy(&p), "{cap:?}");
+        assert!(f[0].contours.iter().map(Vec::len).sum::<usize>() > anatomy(&p)[3]);
+        let far = farthest(&cap, &fine(&art, |q| q));
+        assert!(far <= outline::CURVE_TOLERANCE, "{far}");
+    }
+}
+
+/// Turned and in perspective, the front cap's curves are fitted to the projected circle within
+/// the curve tolerance, every anchor stays smooth, and the walls' edges along it are curved too.
+#[test]
+fn a_cap_in_perspective_fits_the_projected_curves() {
+    let art = circle(Point::new(50.0, 50.0), 40.0);
+    let (p, b) = shape(&art);
+    let o = Extrude { depth: 50.0, ..Extrude::default() };
+    for view in [View { rotation_x: 20.0, rotation_y: 30.0, perspective: 60.0, ..front() }, View { perspective: 120.0, ..front() }] {
+        let f = extrude(&p, FillRule::EvenOdd, b, o, view).unwrap();
+        let cap = f.iter().find(|f| f.depth == f64::MAX).unwrap().path();
+        let [curves, segments, smooth, anchors] = anatomy(&cap);
+        assert!(curves >= 4 && curves == segments && smooth == anchors, "{:?}", anatomy(&cap));
+        let camera = Camera::new(view, b, o.depth);
+        let projected = fine(&art, |q| camera.project(camera.place(q, o.depth / 2.0)));
+        let far = farthest(&cap, &projected);
+        assert!(far <= outline::CURVE_TOLERANCE + 1e-6, "{far}");
+        if view.rotation_y != 0.0 {
+            assert!(f.iter().filter(|f| f.depth != f64::MAX).any(|f| anatomy(&f.path())[0] == 2), "the walls' edges along the circle are curved");
+        }
+    }
+}
+
+/// A cap inset by a bevel and the walls next to it draw the edge they share as the same curves, so
+/// no gap or overlap opens between them.
+#[test]
+fn a_beveled_cap_and_its_walls_share_their_curves() {
+    for (r, width) in [(40.0, 4.0), (400.0, 40.0)] {
+        for art in [circle(Point::new(r, r), r), letter_d()] {
+            let (p, b) = shape(&art);
+            let o = Extrude { depth: 50.0, bevel: Some(Bevel { inside: true, width, height: width, ..Bevel::default() }), ..Extrude::default() };
+            let f = extrude(&p, FillRule::EvenOdd, b, o, View { rotation_x: 20.0, rotation_y: 30.0, ..front() }).unwrap();
+            let caps: Vec<&Facet> = f.iter().filter(|f| f.depth == f64::MAX).collect();
+            let outlines: Vec<Vec<Point>> = caps.iter().flat_map(|f| fine(&f.path().to_bezpath(), |q| q)).collect();
+            let on_cap = |q: Point| caps.iter().flat_map(|f| f.contours.iter().flatten()).any(|v| v.distance(q) < 1e-9);
+            let (mut far, mut shared) = (0.0f64, 0);
+            for wall in f.iter().filter(|f| f.depth != f64::MAX && f.outline.is_some()) {
+                let path = wall.path();
+                for sp in &path.subpaths {
+                    for i in (0..sp.anchors.len()).filter(|i| !sp.segment_is_line(*i)) {
+                        let c = sp.segment(i);
+                        if !on_cap(c.p0) || !on_cap(c.p3) {
+                            continue;
+                        }
+                        shared += 1;
+                        for k in 0..=16 {
+                            far = far.max(edge_distance(&outlines, c.eval(f64::from(k) / 16.0)));
+                        }
+                    }
+                }
+            }
+            assert!(shared > 0, "no wall shares a curved edge with a cap");
+            assert!(far <= 1e-4, "{far}");
+        }
+    }
+}
+
+/// A twisted, tapered back cap follows the turned, scaled art; a cap inset by a bevel stays
+/// within the sampling tolerance of the solid; a tiny circle and a curve with a handle of zero
+/// length keep their cubics.
+#[test]
+fn twisted_beveled_tiny_and_degenerate_caps_keep_their_curves() {
+    let art = circle(Point::new(50.0, 50.0), 40.0);
+    let (p, b) = shape(&art);
+    let o = Extrude { depth: 50.0, twist: 45.0, taper: 0.5, ..Extrude::default() };
+    let behind = View { rotation_y: 180.0, ..front() };
+    let f = extrude(&p, FillRule::EvenOdd, b, o, behind).unwrap();
+    let cap = f.iter().find(|f| f.depth == f64::MAX).unwrap().path();
+    assert_eq!(anatomy(&cap)[0], 4);
+    let camera = Camera::new(behind, b, o.depth);
+    let back = fine(&art, |q| section(&[q], b, &o, 1.0).first().map_or(q, |q| camera.project(camera.place(*q, -o.depth / 2.0))));
+    let far = farthest(&cap, &back);
+    assert!(far <= outline::CURVE_TOLERANCE + 1e-6, "{far}");
+
+    // Where a curve meets a straight edge at a corner, the bevel's miter moves the cap's corner off
+    // the curve's offset; the cap's curves still meet it.
+    let bevel = Extrude { bevel: Some(Bevel { inside: true, width: 4.0, height: 4.0, ..Bevel::default() }), ..Extrude::default() };
+    for art in [art.clone(), letter_d()] {
+        let (p, b) = shape(&art);
+        let f = extrude(&p, FillRule::EvenOdd, b, bevel, front()).unwrap();
+        let cap = f.iter().find(|f| f.depth == f64::MAX).unwrap();
+        // An offset curve is no cubic: it may take several, but no edge of a curve stays straight.
+        let ([curves, segments, ..], [art_curves, art_segments, ..]) = (anatomy(&cap.path()), anatomy(&p));
+        assert!(curves >= art_curves && segments - curves == art_segments - art_curves, "{:?}", cap.path());
+        let far = farthest(&cap.path(), &cap.contours);
+        assert!(far <= 2.0 * 0.05, "{far}");
+    }
+
+    let mut flat = PathData::from_bezpath(&art);
+    if let Some(a) = flat.subpaths.first_mut().and_then(|sp| sp.anchors.first_mut()) {
+        a.h_out = a.p;
+    }
+    for p in [PathData::from_bezpath(&circle(Point::new(1.0, 1.0), 0.01)), flat] {
+        let b = p.bounds().unwrap();
+        let f = extrude(&p, FillRule::NonZero, b, Extrude::default(), front()).unwrap();
+        let cap = f[0].path();
+        assert_eq!(anatomy(&cap)[0], anatomy(&p)[0], "{cap:?}");
+        let far = farthest(&cap, &fine(&p.to_bezpath(), |q| q));
+        assert!(far <= outline::CURVE_TOLERANCE, "{far}");
+    }
+}
+
 #[test]
 fn the_inflate_membrane_matches_known_solutions() {
     // ∇²φ = −1, zero on the outline: a disc of radius r peaks at r²/4, a square of side l at
@@ -321,11 +696,11 @@ fn the_inflate_membrane_matches_known_solutions() {
     c.extend(vectorcraft_geom::kurbo::Shape::path_elements(&vectorcraft_geom::kurbo::Circle::new((100.0, 100.0), 50.0), 0.01));
     let (p, b) = shape(&c);
     let r = rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap();
-    let disc = Membrane::solve(&r, &Edges::new(&r), b.origin(), b.width() / 48.0, 49, 49);
+    let disc = Membrane::solve(&r, &Edges::new(&r).unwrap(), b.origin(), b.width() / 48.0, 49, 49);
     assert!(close(disc.peak, 50.0 * 50.0 / 4.0, 625.0 * 0.02), "{}", disc.peak);
     let (p, b) = shape(&square(0.0, 0.0, 100.0));
     let r = rings(&p, FillRule::EvenOdd, 100.0, MAX_SOLID_POINTS).unwrap();
-    let sq = Membrane::solve(&r, &Edges::new(&r), b.origin(), 100.0 / 48.0, 49, 49);
+    let sq = Membrane::solve(&r, &Edges::new(&r).unwrap(), b.origin(), 100.0 / 48.0, 49, 49);
     assert!(close(sq.peak, 0.07367 * 100.0 * 100.0, 736.7 * 0.02), "{}", sq.peak);
     // Smooth across the middle: no crease where a distance-to-the-edge height would have one
     // (the diagonals). The second difference along a diagonal stays small and even.
@@ -374,8 +749,7 @@ fn bumps(count: usize) -> (PathData, Rect) {
 }
 
 /// Curves are followed within a tolerance rather than by sixteen points each: small curves take a
-/// few points, so shapes of many curves (outlined type) fit; Rotate, which only turns the outline,
-/// takes far more.
+/// few points, so shapes of many curves (outlined type) fit, in a solid and in Rotate.
 #[test]
 fn small_curves_take_few_points_and_rotate_takes_large_outlines() {
     // 300 curves were 4,800 points at sixteen each, over the old limit of 1,024.
@@ -383,10 +757,13 @@ fn small_curves_take_few_points_and_rotate_takes_large_outlines() {
     assert!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).is_ok());
     assert!(inflate(&p, FillRule::EvenOdd, r, Inflate { volume: 20.0, ..Inflate::default() }, front()).is_ok());
     assert!(plane(&p, FillRule::EvenOdd, r, front()).is_ok());
-    // 4,000 curves: too many for a solid, not for Rotate.
+    // 4,000 curves fit a solid and Rotate alike; 70,000 fit neither.
     let (p, r) = bumps(4000);
-    assert!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).unwrap_err().contains("too complex"));
+    assert!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).is_ok());
     assert_eq!(plane(&p, FillRule::EvenOdd, r, front()).unwrap().len(), 1);
+    let (p, r) = bumps(70_000);
+    assert_eq!(extrude(&p, FillRule::EvenOdd, r, Extrude::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect");
+    assert_eq!(plane(&p, FillRule::EvenOdd, r, front()).unwrap_err(), "The shape is too complex for a 3D effect");
     // Each piece stays within the tolerance of the curve: a circle's chords sag at most 0.05 pt
     // here (1/2000 of its 100 pt size is less).
     let mut c = BezPath::new();
@@ -421,7 +798,7 @@ fn twisted_pieces_stay_within_the_facet_limit() {
 fn the_edge_index_finds_the_nearest_edge() {
     let (p, r) = bumps(200);
     let rings = rings(&p, FillRule::EvenOdd, r.width(), MAX_SOLID_POINTS).unwrap();
-    let edges = Edges::new(&rings);
+    let edges = Edges::new(&rings).unwrap();
     for k in 0..400 {
         let t = f64::from(k);
         let q = Point::new(-300.0 + (t * 37.0) % 1400.0, -50.0 + (t * 13.0) % 130.0);
@@ -437,7 +814,7 @@ fn the_edge_index_looks_along_the_side_from_outside() {
     let ring = |b: BezPath| rings(&shape(&b).0, FillRule::EvenOdd, 64.0, MAX_SOLID_POINTS).unwrap().remove(0);
     // Straight ahead of the point, a little further up its side, and the far corner (a 64 pt grid).
     let rings = vec![ring(square(2.5, 0.0, 1.0)), ring(square(0.0, 4.2, 0.8)), ring(square(63.0, 63.0, 1.0))];
-    let edges = Edges::new(&rings);
+    let edges = Edges::new(&rings).unwrap();
     let q = Point::new(-10.0, 0.5);
     let (fast, slow) = (edges.distance(q), edge_distance(&rings, q));
     assert!((fast - slow).abs() < 1e-9, "{fast} against {slow}");
@@ -725,6 +1102,105 @@ fn a_flat_twisted_inflate_matches_the_extrusion() {
     }
 }
 
+/// With no volume nothing puffs, so each shape's membrane is solved only when its solid is taken:
+/// a caller that stops early (past the object's face limit) solves none after. With volume, the
+/// eye waits on the highest puff, so every membrane is solved first.
+#[test]
+fn a_flat_inflate_solves_each_puff_as_its_solid_is_taken() {
+    let shapes: Vec<PathData> = (0..3).map(|i| shape(&square(120.0 * i as f64, 0.0, 100.0)).0).collect();
+    let shapes: Vec<(&PathData, FillRule)> = shapes.iter().map(|p| (p, FillRule::NonZero)).collect();
+    let b = Rect::new(0.0, 0.0, 340.0, 100.0);
+    let puffed = || PUFFED.with(std::cell::Cell::get);
+    let start = puffed();
+    let mut each = inflate_each(&shapes, b, Inflate { depth: 20.0, volume: 0.0, ..Inflate::default() }, front());
+    assert_eq!(puffed(), start, "no puff is solved before the first solid is taken");
+    assert!(each.next().is_some_and(|f| f.is_ok_and(|f| !f.is_empty())));
+    assert_eq!(puffed(), start + 1, "the later puffs wait until their solids are taken");
+    drop(each);
+    assert_eq!(puffed(), start + 1);
+    let start = puffed();
+    let each = inflate_each(&shapes, b, Inflate { depth: 20.0, ..Inflate::default() }, front());
+    assert_eq!(puffed(), start + 3, "with volume, every puff places the eye");
+    assert_eq!(each.count(), 3);
+}
+
+/// With no volume, solving each puff as its solid is taken gives the very solids that solving
+/// every puff first gives: their facets, their faces before projection and their projection, bit
+/// for bit, with an empty shape and one that cannot be inflated among them.
+#[test]
+fn a_flat_inflate_solved_as_taken_matches_one_solved_first() {
+    let mut frame = square(-10.0, -10.0, 260.0);
+    frame.extend(square(-8.0, -8.0, 256.0));
+    let mut circle = BezPath::new();
+    circle.extend(vectorcraft_geom::kurbo::Shape::path_elements(&vectorcraft_geom::kurbo::Circle::new((180.0, 60.0), 50.0), 0.01));
+    let mut bad = vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0)], true);
+    bad.anchors[1].h_out = Point::new(f64::NAN, 0.0);
+    let paths = [shape(&square(0.0, 0.0, 100.0)).0, shape(&frame).0, PathData::new(vec![]), PathData::new(vec![bad]), shape(&circle).0];
+    let shapes: Vec<(&PathData, FillRule)> = paths.iter().map(|p| (p, FillRule::EvenOdd)).collect();
+    let b = Rect::new(-10.0, -10.0, 250.0, 250.0);
+    let turned = View { rotation_x: -20.0, rotation_y: 30.0, ..front() };
+    let options = [
+        Inflate { volume: 0.0, ..Inflate::default() },
+        Inflate { volume: 0.0, depth: 40.0, twist: 90.0, taper: 0.5, ..Inflate::default() },
+        Inflate { volume: 0.0, depth: 10.0, both_sides: true, cap: false, ..Inflate::default() },
+    ];
+    for view in [front(), turned, View { perspective: 60.0, ..turned }, View { perspective: 100.0, rotation_y: 150.0, ..turned }] {
+        for o in options {
+            for (keep, facets, mesh) in [(build::Keep::Facets, true, false), (build::Keep::Faces, false, true), (build::Keep::Both, true, true)] {
+                let solids = |first: bool| {
+                    SOLVE_FIRST.with(|s| s.set(first));
+                    let out: Vec<Result<build::Built, String>> = inflate_faces(&shapes, b, o, view, keep).collect();
+                    SOLVE_FIRST.with(|s| s.set(false));
+                    out
+                };
+                let (taken, first) = (solids(false), solids(true));
+                assert_eq!(taken.len(), 5);
+                // The solid keeps its facets, its faces before projection, or both, as asked.
+                let built = |r: &Result<build::Built, String>| {
+                    r.as_ref().is_ok_and(|(f, m, _)| (!facets || !f.is_empty()) && (!mesh || m.as_ref().is_ok_and(|m| !m.is_empty())))
+                };
+                assert!(built(&taken[0]) && built(&taken[1]) && built(&taken[4]), "{o:?} {view:?} facets {facets} mesh {mesh}");
+                assert!(
+                    taken[2].as_ref().is_ok_and(|(f, m, p)| f.is_empty() && m.as_ref().is_ok_and(Vec::is_empty) && p.is_none()) && taken[3].is_err()
+                );
+                assert_eq!(format!("{taken:?}"), format!("{first:?}"), "{o:?} {view:?} facets {facets} mesh {mesh}");
+            }
+        }
+    }
+}
+
+/// With no volume, a shape with too many anchors or contours for the solid is refused before it
+/// is kept for later, with the error that solving every puff first gives it.
+#[test]
+fn a_flat_inflate_refuses_a_shape_past_the_point_limit_as_one_solved_first() {
+    use super::inflate::might_fit;
+    let many = MAX_SOLID_POINTS * 3 + 10;
+    let anchors: Vec<Point> = (0..many).map(|i| Point::new((i % 200) as f64, (i / 200) as f64 / 10.0)).collect();
+    let long = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&anchors, true)]);
+    let mut nan = anchors.clone();
+    if let Some(last) = nan.last_mut() {
+        *last = Point::new(f64::NAN, 0.0);
+    }
+    let invalid = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&nan, true)]);
+    let dots = PathData::new((0..=MAX_SOLID_POINTS).map(|i| vectorcraft_geom::SubPath::polyline(&[Point::new(i as f64, 0.0)], false)).collect());
+    let square = shape(&square(0.0, 0.0, 100.0)).0;
+    assert!(might_fit(&square) && !might_fit(&long) && !might_fit(&invalid) && !might_fit(&dots));
+    let paths = [square, long, invalid, dots];
+    let shapes: Vec<(&PathData, FillRule)> = paths.iter().map(|p| (p, FillRule::EvenOdd)).collect();
+    let b = Rect::new(-10.0, -10.0, 250.0, 250.0);
+    let o = Inflate { volume: 0.0, ..Inflate::default() };
+    let solids = |first: bool| {
+        SOLVE_FIRST.with(|s| s.set(first));
+        let out: Vec<Result<build::Built, String>> = inflate_faces(&shapes, b, o, front(), build::Keep::Facets).collect();
+        SOLVE_FIRST.with(|s| s.set(false));
+        out
+    };
+    let (taken, first) = (solids(false), solids(true));
+    assert!(taken[0].as_ref().is_ok_and(|(f, ..)| !f.is_empty()));
+    assert!(taken[1..].iter().all(Result::is_err), "{:?}", taken[1..].iter().map(|r| r.as_ref().err()).collect::<Vec<_>>());
+    assert_eq!(format!("{taken:?}"), format!("{first:?}"));
+}
+
 /// #1724: under the nonzero rule a contour inside another that runs the same way cuts no hole
 /// (the middle is filled, as the art is drawn); one running the other way does, and so does
 /// either under the even-odd rule.
@@ -981,7 +1457,7 @@ fn touching_contours_keep_their_parts_and_holes() {
 #[test]
 fn an_open_subpath_closes_straight_whether_or_not_contours_meet() {
     let open = vectorcraft_geom::SubPath {
-        anchors: vec![
+        anchors: vectorcraft_geom::anchors![
             vectorcraft_geom::Anchor {
                 p: Point::new(0.0, 0.0),
                 h_in: Point::new(0.0, -50.0),
@@ -1019,7 +1495,7 @@ fn flat_far_and_too_large_merges() {
     let squares: Vec<_> = (0..12).map(|i| rect(i as f64 * 20.0, 0.0, i as f64 * 20.0 + 10.0, 10.0)).collect();
     let line = vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 300.0), Point::new(50.0, 300.0), Point::new(100.0, 300.0)], false);
     let with_line = PathData::new(squares.iter().cloned().chain([line]).collect());
-    assert!(!rings::meets(&rings::sample(&with_line, 300.0, usize::MAX).unwrap(), &rings::closed_straight(&with_line)));
+    assert!(!rings::meets(&rings::sample(&with_line, 300.0, usize::MAX, rings::CURVE_PIECES).unwrap(), &rings::closed_straight(&with_line)));
     assert!(close(area(&plane(&with_line, FillRule::NonZero, with_line.bounds().unwrap(), front()).unwrap()), 1200.0, 1e-6));
     // Far from the origin the boolean snaps wider than 1e-6 (1.4e-6 at 9.9e7), and so does the
     // test for meeting: squares 1.35e-6 apart there are one outline, one cap of both areas.
@@ -1029,7 +1505,7 @@ fn flat_far_and_too_large_merges() {
     assert!(close(area(&cap), 200.0, 1e-3), "joined, not lost");
     // Handles count too: a lobe whose handles reach 1.3e8 widens the boolean's snapping to 1.85e-6.
     let lobe = vectorcraft_geom::SubPath {
-        anchors: vec![
+        anchors: vectorcraft_geom::anchors![
             vectorcraft_geom::Anchor {
                 p: Point::new(0.0, 1000.0),
                 h_in: Point::new(0.0, 1000.0),
@@ -1049,9 +1525,8 @@ fn flat_far_and_too_large_merges() {
     let b = wide.bounds().unwrap();
     let joined = plane(&wide, FillRule::NonZero, b, front()).unwrap();
     assert_eq!(joined.iter().map(|f| f.contours.len()).sum::<usize>(), 2, "the squares joined, the lobe apart");
-    // 24 bars each way: 192 points as drawn, some 2,400 once every hole between them is traced:
-    // past Extrude's and Inflate's 2,048 the shape is too complex (its contours as drawn cross, so
-    // they can't be built as they are), and Rotate's 65,536 takes it.
+    // 24 bars each way: 192 points as drawn, some 2,400 once every hole between them is traced,
+    // within the 65,536 points Extrude & Bevel, Inflate and Rotate take.
     let mut bars = vec![];
     for i in 0..24 {
         let x = i as f64 * 10.0;
@@ -1061,9 +1536,18 @@ fn flat_far_and_too_large_merges() {
     let grid = PathData::new(bars);
     let b = grid.bounds().unwrap();
     for rule in [FillRule::NonZero, FillRule::EvenOdd] {
-        assert_eq!(extrude(&grid, rule, b, Extrude::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect", "{rule:?}");
-        assert_eq!(inflate(&grid, rule, b, Inflate::default(), front()).unwrap_err(), "The shape is too complex for a 3D effect", "{rule:?}");
-        assert!(close(area(&plane(&grid, rule, b, front()).unwrap()), vectorcraft_pathops::area(&grid, rule), 1e-6), "{rule:?}: Rotate");
+        // With a limit of 2,048 points the grid fits as drawn and its merged outline does not: its
+        // contours as drawn cross, so they can't be built as they are.
+        assert!(rings::sample(&grid, 240.0, 2048, rings::CURVE_PIECES).is_ok());
+        assert_eq!(
+            rings::solid_rings(&grid, rule, 240.0, 2048, rings::CURVE_PIECES),
+            Err("The shape is too complex for a 3D effect".into()),
+            "{rule:?}"
+        );
+        let expected = vectorcraft_pathops::area(&grid, rule);
+        assert!(close(area(&extrude(&grid, rule, b, Extrude::default(), front()).unwrap()), expected, 1e-6), "{rule:?}: Extrude & Bevel");
+        assert!(!inflate(&grid, rule, b, Inflate::default(), front()).unwrap().is_empty(), "{rule:?}: Inflate");
+        assert!(close(area(&plane(&grid, rule, b, front()).unwrap()), expected, 1e-6), "{rule:?}: Rotate");
     }
 }
 
@@ -1076,7 +1560,7 @@ fn meets_within_twice_the_boolean_tolerance() {
     let rect = |x0: f64, y0: f64, x1: f64, y1: f64| {
         vectorcraft_geom::SubPath::polyline(&[Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)], true)
     };
-    let meets = |p: &PathData| rings::meets(&rings::sample(p, 300.0, usize::MAX).unwrap(), &rings::closed_straight(p));
+    let meets = |p: &PathData| rings::meets(&rings::sample(p, 300.0, usize::MAX, rings::CURVE_PIECES).unwrap(), &rings::closed_straight(p));
     // Two triangles whose facing 45° edges are 1.4e-6 apart, the second's corners 0.99e-6 lower on
     // the page (greater y) than the first's: snapped onto the first's heights, they are joined.
     let d = 0.99e-6;
@@ -1120,7 +1604,7 @@ fn meets_within_twice_the_boolean_tolerance() {
     // What the boolean is given decides the tolerance: an open subpath's end handles (closed
     // straight) and a one-anchor subpath (skipped) don't widen it.
     let ends = vectorcraft_geom::SubPath {
-        anchors: vec![
+        anchors: vectorcraft_geom::anchors![
             vectorcraft_geom::Anchor {
                 p: Point::new(0.0, 0.0),
                 h_in: Point::new(1e9, 0.0),
@@ -1136,7 +1620,8 @@ fn meets_within_twice_the_boolean_tolerance() {
         ],
         closed: false,
     };
-    let speck = vectorcraft_geom::SubPath { anchors: vec![vectorcraft_geom::Anchor::corner(Point::new(1e9, 1e9))], closed: true };
+    let speck =
+        vectorcraft_geom::SubPath { anchors: vectorcraft_geom::anchors![vectorcraft_geom::Anchor::corner(Point::new(1e9, 1e9))], closed: true };
     let quiet = PathData::new(vec![ends, speck]);
     assert_eq!(rings::touch(&rings::closed_straight(&quiet)), 1e-6);
     // A closing-side handle at either end alone is enough to close the subpath straight.
@@ -1159,7 +1644,7 @@ fn meets_within_twice_the_boolean_tolerance() {
 fn the_merged_rings_are_turned_as_a_whole() {
     let outline = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)];
     let hole = vec![Point::new(2.0, 2.0), Point::new(2.0, 8.0), Point::new(8.0, 8.0), Point::new(8.0, 2.0)];
-    let turned = rings::wound(vec![outline.iter().rev().copied().collect(), hole.iter().rev().copied().collect()]);
+    let turned = rings::wound::<Vec<Point>>(vec![outline.iter().rev().copied().collect(), hole.iter().rev().copied().collect()]);
     assert!(rings::signed_area(&turned[0]) > 0.0 && rings::signed_area(&turned[1]) < 0.0);
     let kept = rings::wound(vec![outline.clone(), hole.clone()]);
     assert_eq!(kept, vec![outline, hole]);
@@ -1169,7 +1654,7 @@ fn the_merged_rings_are_turned_as_a_whole() {
 #[test]
 fn a_one_anchor_subpath_builds_nothing() {
     let loop_ = vectorcraft_geom::SubPath {
-        anchors: vec![vectorcraft_geom::Anchor {
+        anchors: vectorcraft_geom::anchors![vectorcraft_geom::Anchor {
             p: Point::new(0.0, 0.0),
             h_in: Point::new(-20.0, 30.0),
             h_out: Point::new(20.0, 30.0),

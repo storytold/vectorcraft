@@ -355,6 +355,35 @@ fn new_color_group_from_artwork_lists_each_color_once_with_free_names() {
     assert_eq!(*doc(&s), before);
 }
 
+/// New Color Group takes the named solid swatches in the order given. A name listed twice takes
+/// the next swatch of that name, found ungrouped first and then in each colour group, and the
+/// lists the swatches leave keep their order. Gradients and names no swatch has take nothing.
+#[test]
+fn new_color_group_takes_named_swatches_in_order_from_every_list() {
+    let mut s = session();
+    let twin = vectorcraft_color::Swatch { name: "Red".into(), paint: Paint::solid(Color::rgb(0.5, 0.0, 0.0)), global: false, spot: false };
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc)
+        .swatch_groups
+        .iter_mut()
+        .find(|g| g.name == "Brights")
+        .unwrap()
+        .swatches
+        .push(twin.clone());
+    let red = doc(&s).swatch("Red").cloned().unwrap();
+    let mut ungrouped = names(&s, None);
+    let mut brights = names(&s, Some("Brights"));
+    let r = run(&mut s, "swatch.newGroup", json!({"name": "Mine", "swatches": ["Red", "Orange", "Sunset", "Red", "Missing", "Bright Red"]}));
+    assert_eq!(r["swatches"], json!(["Red", "Orange", "Red", "Bright Red"]));
+    let group = &doc(&s).swatch_groups.iter().find(|g| g.name == "Mine").unwrap().swatches;
+    assert_eq!(group[0], red);
+    assert_eq!(group[2], twin);
+    ungrouped.retain(|n| n != "Red" && n != "Orange");
+    brights.retain(|n| n != "Red" && n != "Bright Red");
+    assert_eq!(names(&s, None), ungrouped);
+    assert_eq!(names(&s, Some("Brights")), brights);
+    assert!(doc(&s).swatch("Sunset").is_some());
+}
+
 #[test]
 fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
     let mut s = session();

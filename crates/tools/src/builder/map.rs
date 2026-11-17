@@ -364,7 +364,8 @@ impl BuilderMap {
 }
 
 /// What a merge needs of each input besides the map: its outline as drawn ([`node_outline`]) and
-/// whether its fill closes its open subpaths (Consider Open Filled Paths as Closed, and a fill).
+/// whether its fill closes its open subpaths (Consider Open Filled Paths as Closed, and a fill row
+/// that draws).
 #[derive(Clone, Debug, PartialEq)]
 pub struct MergeInput {
     pub outline: Option<PathData>,
@@ -375,7 +376,7 @@ pub struct MergeInput {
 pub fn merge_inputs(leaves: &[&Node], open_filled_as_closed: bool) -> Vec<MergeInput> {
     leaves
         .iter()
-        .map(|l| MergeInput { outline: node_outline(l).map(|o| o.0), fill_closes: open_filled_as_closed && !l.appearance.fill_paint().is_none() })
+        .map(|l| MergeInput { outline: node_outline(l).map(|o| o.0), fill_closes: open_filled_as_closed && l.appearance.has_drawn_fill() })
         .collect()
 }
 

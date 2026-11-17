@@ -1,7 +1,7 @@
 use super::cid::{CidText, FontInfo};
 use super::{
     Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
-    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine,
+    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine, TypeStroke,
 };
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
@@ -62,6 +62,13 @@ pub(super) struct GlyphRun {
 /// swatch made for it.
 pub(super) type PatternReadings = (u32, Vec<(Vec<Paint>, String)>);
 
+/// A run of Type 3 glyph graphics preserved inside a named group.
+#[derive(Clone, Debug)]
+pub(super) struct Type3Run {
+    pub(super) nodes: Vec<Arc<Node>>,
+    pub(super) group: Option<usize>,
+}
+
 /// Builder state a nested interpretation (soft mask, pattern cell) starts afresh and gives back.
 pub(super) struct Saved {
     pub(super) stack: Vec<Frame>,
@@ -69,6 +76,7 @@ pub(super) struct Saved {
     pub(super) blend: BlendMode,
     pub(super) mask: Option<Arc<MaskSpec>>,
     pub(super) page: Rect,
+    pub(super) type3_run: Option<Type3Run>,
 }
 
 pub(super) struct Builder<'p> {
@@ -80,11 +88,19 @@ pub(super) struct Builder<'p> {
     pub(super) blend: BlendMode,
     pub(super) page: Rect,
     pub(super) glyphs: Option<GlyphRun>,
+    pub(super) type3_run: Option<Type3Run>,
     pub(super) text: Option<TextLine>,
+    /// The glyphs of the open line of type (`text`) that show, each as the outline it would be
+    /// kept as: what the line becomes when its type wouldn't draw as the file does
+    /// ([`super::reshaped`]).
+    pub(super) text_glyphs: Vec<GlyphRun>,
     pub(super) text_as: TextAs,
     pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,
     pub(super) image_keys: HashMap<u128, (String, u32, u32)>,
+    /// The scale factors of each decoded raster by its key: drawn again, it is placed from them
+    /// without its pixels being decoded and converted again.
+    pub(super) raster_scales: HashMap<u128, (f32, f32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
     /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
@@ -219,6 +235,23 @@ pub(super) fn line_width(p: &StrokeProps, scale: f64) -> f64 {
     if p.line_width == 0.0 { HAIRLINE } else { p.line_width as f64 * scale }
 }
 
+/// Do strokes `a` and `b` draw alike: both unstroked, or the same width, caps, joins, miter limit
+/// and dashes ([`stroke_layer`] takes all of them)?
+pub(super) fn same_stroke(a: Option<&StrokeProps>, b: Option<&StrokeProps>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            a.line_width == b.line_width
+                && a.line_cap == b.line_cap
+                && a.line_join == b.line_join
+                && a.miter_limit == b.miter_limit
+                && a.dash_array == b.dash_array
+                && a.dash_offset == b.dash_offset
+        }
+        _ => false,
+    }
+}
+
 pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f64) -> StrokeLayer {
     let mut st = StrokeLayer::new(paint, line_width(p, scale));
     st.opacity = opacity;
@@ -242,6 +275,13 @@ pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f
     // An invalid dash array (a negative value, or all zeros) strokes solid.
     st.dash = dash.is_dashed().then_some(dash);
     st
+}
+
+/// The stroke `p` draws type with in `paint` at `scale`: width, cap, join and miter limit as
+/// [`stroke_layer`] takes them (#7741).
+pub(super) fn type_stroke(paint: Paint, p: &StrokeProps, scale: f64) -> TypeStroke {
+    let st = stroke_layer(paint, 1.0, p, scale);
+    TypeStroke { paint: st.paint, width: st.width, cap: st.cap, join: st.join, miter_limit: st.miter_limit }
 }
 
 /// The most entries of a dash array kept (an even count keeps it a pattern of dashes and gaps).
@@ -296,17 +336,13 @@ pub(super) fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
 }
 
 pub(super) fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::RgbaImage::from_raw(w, h, rgba)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn gray_png(gray: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::GrayImage::from_raw(w, h, gray)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {

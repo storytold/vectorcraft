@@ -120,7 +120,7 @@ fn suffix(kind: &str, key: &str) -> Option<&'static str> {
 /// The fields of the form dialogs ([`grid`]) that the dialog's own body draws, by dialog kind.
 fn own_rows(kind: &str) -> &'static [&'static str] {
     match kind {
-        "artboardOptions" => &["color", super::artboard_options::PIXEL_ASPECT],
+        "artboardOptions" => &["color", super::artboard_options::GUIDE_LABEL, super::artboard_options::PIXEL_ASPECT],
         // The grids' Reference Point is their 9-point locator.
         "rectangularGrid" | "polarGrid" => &["reference"],
         _ => &[],
@@ -453,7 +453,14 @@ pub(super) fn param_fields(
                 if is_length(&k) {
                     // An effect's documented range keeps the field to the distance it applies.
                     let range = vectorcraft_effects::length_range(&d.str("__effect"), &k);
-                    if spinners {
+                    // A command's own range refuses a distance typed outside it.
+                    if let Some(bounds) = super::command::length_range(&d.str("__command"), &k) {
+                        let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
+                        if let Some(x) = crate::widgets::num_field_refusing(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {
+                            d.fields.insert(k.clone(), json!(x));
+                            changed = true;
+                        }
+                    } else if spinners {
                         let bounds = range.unwrap_or(if k == "blur" { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
                         let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
                         if let Some(x) = crate::widgets::spin_length_within(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {
@@ -988,7 +995,7 @@ pub(crate) fn preview(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mu
 
 /// As [`preview`], returning the command's result only when a new preview succeeds.
 /// A dialog can retain a small summary (such as point counts) in its private fields.
-pub(super) fn preview_result(
+pub(crate) fn preview_result(
     app: &mut crate::VectorcraftApp,
     ui: &mut egui::Ui,
     d: &mut Dialog,
