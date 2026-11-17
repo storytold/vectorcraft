@@ -386,6 +386,246 @@ fn rgb_values_are_written_again_unchanged_in_a_wide_gamut_working_space() {
     same_lines(&again.lines().map(String::from).collect::<Vec<_>>(), &first.lines().map(String::from).collect::<Vec<_>>());
 }
 
+/// With a working RGB space other than sRGB, type's RGB fill and stroke are written in the text
+/// document with their working RGB values, so they read back as the same colors.
+#[test]
+fn type_rgb_paints_read_back_unchanged_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_AI_EDITING_WIDE_GAMUT_TYPE";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ai_editing::tests::type_rgb_paints_read_back_unchanged_in_a_wide_gamut_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    use vectorcraft_doc::{CharStyle, TextObject};
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let (fill, stroke) = (Color::rgb(0.8, 0.4, 0.2), Color::rgb(0.1, 0.7, 0.3));
+    let st = CharStyle { stroke: solid(stroke), stroke_width: 1.0, ..style(14.0, fill) };
+    let n = text_node(&mut doc, TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "Wide", st));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let back = read_back(&doc);
+    let paints: Vec<(Paint, Paint)> = back.layers[0]
+        .children()
+        .unwrap()
+        .iter()
+        .filter_map(|n| if let NodeKind::Text(t) = &n.kind { Some(t) } else { None })
+        .flat_map(|t| t.runs.iter().map(|r| (r.style.fill.clone(), r.style.stroke.clone())))
+        .collect();
+    assert!(!paints.is_empty(), "the type is read back as type");
+    let near = |p: &Paint, want: Color| match (p, want) {
+        (Paint::Solid { color: Color::Rgb { r, g, b }, .. }, Color::Rgb { r: wr, g: wg, b: wb }) => {
+            (r - wr).abs() < 1e-4 && (g - wg).abs() < 1e-4 && (b - wb).abs() < 1e-4
+        }
+        _ => false,
+    };
+    for (f, s) in &paints {
+        assert!(near(f, fill), "fill {f:?} reads back as {fill:?}");
+        assert!(near(s, stroke), "stroke {s:?} reads back as {stroke:?}");
+    }
+}
+
+/// With a working RGB space other than sRGB, a Lab fill, a Lab gradient stop, type filled with a
+/// Lab color and a freeform gradient's average color are written as RGB values in the working RGB
+/// space, so they read back as RGB colors that show as the colors they were written for.
+#[test]
+fn lab_paints_read_back_as_the_same_color_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_AI_EDITING_WIDE_GAMUT_LAB";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ai_editing::tests::lab_paints_read_back_as_the_same_color_in_a_wide_gamut_working_space", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    use vectorcraft_doc::TextObject;
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let (fill, stop, ink) = (Color::lab(60.0, 20.0, -30.0), Color::lab(45.0, -25.0, 15.0), Color::lab(70.0, 10.0, 40.0));
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = square(&mut doc, Rect::new(10.0, 10.0, 30.0, 30.0), fill);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let stops = vec![GradientStop::new(0.0, Color::rgb(0.1, 0.7, 0.3)), GradientStop::new(1.0, stop)];
+    let paint = gradient_paint(Gradient::new(GradientKind::Linear, stops), None, None);
+    let n = painted(&mut doc, shapes::rectangle(Rect::new(40.0, 10.0, 60.0, 30.0)), vec![AppearanceItem::Fill(FillLayer::new(paint))]);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let n = text_node(&mut doc, TextObject::point(vectorcraft_geom::Point::new(20.0, 80.0), "Lab", style(14.0, ink)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    // A freeform gradient is written as the average of its stops' display colors.
+    let (a, b) = (Color::rgb(0.9, 0.2, 0.1), Color::lab(50.0, -40.0, -20.0));
+    let free = ramp(GradientKind::Freeform, &[(0.0, a, 1.0, 0.5), (1.0, b, 1.0, 0.5)]);
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(70.0, 10.0, 90.0, 30.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(free, None, None)))],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let average = {
+        let (a, b) = (a.to_rgb(), b.to_rgb());
+        [0, 1, 2].map(|i| (a[i] + b[i]) / 2.0)
+    };
+    let back = read_back(&doc);
+    let shows_as = |got: Color, want: [f32; 3], what: &str| {
+        assert!(matches!(got, Color::Rgb { .. }), "{what} reads back as RGB: {got:?}");
+        let g = got.to_rgb();
+        assert!(g.iter().zip(want).all(|(a, b)| (a - b).abs() < 2e-3), "{what} {got:?} shows as {g:?}, not {want:?}");
+    };
+    let mut solids = vec![(fill.to_rgb(), "fill"), (average, "freeform gradient's average")].into_iter();
+    let (mut stops, mut runs) = (0, 0);
+    for n in back.layers[0].children().unwrap() {
+        match (&n.kind, n.appearance.fill_paint()) {
+            (NodeKind::Text(t), _) => {
+                for r in &t.runs {
+                    let Paint::Solid { color, .. } = r.style.fill else { panic!("type fill {:?}", r.style.fill) };
+                    shows_as(color, ink.to_rgb(), "type fill");
+                    runs += 1;
+                }
+            }
+            (_, Paint::Solid { color, .. }) => {
+                let Some((want, what)) = solids.next() else { panic!("unexpected solid {color:?}") };
+                shows_as(color, want, what);
+            }
+            (_, Paint::Gradient(g)) => {
+                let last = g.gradient.stops.last().unwrap();
+                shows_as(last.color, stop.to_rgb(), "gradient stop");
+                stops += 1;
+            }
+            (_, p) => panic!("unexpected paint {p:?}"),
+        }
+    }
+    assert_eq!((solids.len(), stops), (0, 1));
+    assert!(runs > 0, "the type is read back as type");
+}
+
+/// With a working RGB space other than sRGB, the average color written for a gradient along a
+/// stroke and for a gradient that can't be placed, a stop of a spot color defined in Lab and type
+/// stroked with a Lab color are written as RGB values in the working RGB space, so each reads back
+/// as an RGB color that shows as the color it was written for.
+#[test]
+fn averages_lab_spot_stops_and_lab_type_strokes_read_back_as_the_same_color_in_a_wide_gamut_working_space() {
+    const CHILD: &str = "VECTORCRAFT_TEST_AI_EDITING_WIDE_GAMUT_AVERAGES";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: exercise this profile in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "ai_editing::tests::averages_lab_spot_stops_and_lab_type_strokes_read_back_as_the_same_color_in_a_wide_gamut_working_space",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated color profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms;
+    use vectorcraft_color::gradient::GradientGeom;
+    use vectorcraft_doc::{CharStyle, TextObject};
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..Default::default() }).unwrap();
+    assert!(!cms::active().rgb_is_srgb());
+    let shows_as = |got: Color, want: [f32; 3], what: &str| {
+        assert!(matches!(got, Color::Rgb { .. }), "{what} reads back as RGB: {got:?}");
+        let g = got.to_rgb();
+        assert!(g.iter().zip(want).all(|(a, b)| (a - b).abs() < 2e-3), "{what} {got:?} shows as {g:?}, not {want:?}");
+    };
+    let (a, b) = (Color::rgb(0.9, 0.2, 0.1), Color::lab(50.0, -40.0, -20.0));
+    let average = {
+        let (a, b) = (a.to_rgb(), b.to_rgb());
+        [0, 1, 2].map(|i| (a[i] + b[i]) / 2.0)
+    };
+    // Every solid paint of the art read back, in order.
+    let solids = |doc: &Document| {
+        let mut out = vec![];
+        read_back(doc).walk(|n| {
+            if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) {
+                out.extend(n.appearance.items.iter().filter_map(|i| match i.paint() {
+                    Paint::Solid { color, .. } => Some(*color),
+                    _ => None,
+                }));
+            }
+        });
+        out
+    };
+    // A gradient along a stroke: the stroke's outline in its average color.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut st = StrokeLayer::new(gradient_paint(ramp(GradientKind::Linear, &[(0.0, a, 1.0, 0.5), (1.0, b, 1.0, 0.5)]), None, None), 4.0);
+    st.gradient_mode = vectorcraft_doc::StrokeGradientMode::Along;
+    let n = painted(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), vec![AppearanceItem::Stroke(st)]);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let [got] = solids(&doc)[..] else { panic!("one solid paint: {:?}", solids(&doc)) };
+    shows_as(got, average, "a gradient along a stroke");
+    // A radial gradient flattened to a line: its average color.
+    let flat = GradientGeom { start: (20.0, 20.0).into(), end: (40.0, 20.0).into(), aspect: 0.0, focal: None };
+    let radial = ramp(GradientKind::Radial, &[(0.0, a, 1.0, 0.5), (1.0, b, 1.0, 0.5)]);
+    let doc = one_object(
+        shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 50.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(radial, Some(flat), None)))],
+    );
+    let [got] = solids(&doc)[..] else { panic!("one solid paint: {:?}", solids(&doc)) };
+    shows_as(got, average, "a gradient that can't be placed");
+    // A stop of a spot color defined in Lab, at full strength.
+    let moss = Color::lab(55.0, -30.0, 20.0);
+    let mut doc = Document::new(200.0, 100.0);
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Moss".into(), paint: solid(moss), global: true, spot: true });
+    doc.swatches = swatches.into();
+    let layer = doc.layers[0].id;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(0.1, 0.2, 0.3)), GradientStop { swatch: Some("Moss".into()), ..GradientStop::new(1.0, moss) }];
+    let fill = gradient_paint(Gradient::new(GradientKind::Linear, stops), None, None);
+    let n = painted(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), vec![AppearanceItem::Fill(FillLayer::new(fill))]);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let back = read_back(&doc);
+    let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.fill_paint() else { panic!("a gradient") };
+    shows_as(g.gradient.stops.last().unwrap().color, moss.to_rgb(), "a Lab spot color's stop");
+    // Type stroked with a Lab color.
+    let ink = Color::lab(40.0, 30.0, -50.0);
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let st = CharStyle { stroke: solid(ink), stroke_width: 1.0, ..style(14.0, Color::rgb(0.8, 0.4, 0.2)) };
+    let n = text_node(&mut doc, TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "Lab", st));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let back = read_back(&doc);
+    let mut runs = 0;
+    for n in back.layers[0].children().unwrap() {
+        if let NodeKind::Text(t) = &n.kind {
+            for r in &t.runs {
+                let Paint::Solid { color, .. } = r.style.stroke else { panic!("type stroke {:?}", r.style.stroke) };
+                shows_as(color, ink.to_rgb(), "type stroke");
+                runs += 1;
+            }
+        }
+    }
+    assert!(runs > 0, "the type is read back as type");
+}
+
 /// A gradient stop of a Lab spot color writes the RGB values of the Lab values as written (to four
 /// decimals, clamped to the range a reader reads), the same Lab values its CMYK equivalent and the
 /// palette's definition come from: for Lab values of many decimals and for Lab values out of range.
