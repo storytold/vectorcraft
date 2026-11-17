@@ -6,7 +6,7 @@ use vectorcraft_geom::{Affine, Anchor, ParamCurve, PathData, Point, Rect, SubPat
 use vectorcraft_pathops::addons::pathtools::insert_at;
 
 use crate::util::{
-    catmull_rom, fit_piece, flag, map_nonlinear_within, map_smooth_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic, smooth_points,
+    catmull_rom, fit_piece, flag, map_handles_within, map_nonlinear_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic, smooth_points,
 };
 
 fn diag(b: Rect) -> f64 {
@@ -328,7 +328,7 @@ pub fn tweak(path: &PathData, b: Rect, p: &Value) -> PathData {
 
 /// Twist: rotation that is strongest at the centre and fades to zero at the bounding circle,
 /// clockwise on the page for a positive `angle`, making at most `max` anchors. Its handles follow
-/// the rotation's derivative ([`map_smooth_within`]), so the pieces join without kinks (#7069).
+/// the rotation's directional derivative, including each side of the outer circle.
 pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     let ang = angle.clamp(-3600.0, 3600.0).to_radians();
     if ang == 0.0 {
@@ -345,7 +345,21 @@ pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
         c + Vec2::new(d.x * co - d.y * s, d.x * s + d.y * co)
     };
     let piece = (r / 8.0).min(r / (1.0 + ang.abs() * 2.0));
-    map_smooth_within(path, piece, max, f)
+    map_handles_within(path, piece, max, f, |p, h| {
+        let v = h - p;
+        if !v.hypot().is_finite() {
+            return f(p);
+        }
+        let d = p - c;
+        let length = d.hypot();
+        let radial = if length > 0.0 { (d / length).dot(v) } else { 0.0 };
+        // The clamped rotation has different inward and outward derivatives at the circle.
+        let gradient = if length < r || (length == r && radial < 0.0) { -ang / r * radial } else { 0.0 };
+        let tangent = v + Vec2::new(-d.y, d.x) * gradient;
+        let a = ang * (1.0 - length / r).max(0.0);
+        let (s, co) = a.sin_cos();
+        f(p) + Vec2::new(tangent.x * co - tangent.y * s, tangent.x * s + tangent.y * co)
+    })
 }
 
 const ZIGZAG_ARCLEN_ACCURACY: f64 = 1e-4;

@@ -1731,6 +1731,38 @@ fn twist_boundary_handles_follow_the_inward_tangent() {
 }
 
 #[test]
+fn twist_large_coordinate_joins_preserve_boundary_sides() {
+    use vectorcraft_geom::Anchor;
+
+    let center = 1e16;
+    for offset in [32.0, 64.0] {
+        let p = Point::new(center + offset, 0.0);
+        let line = PathData::single(SubPath::new(
+            vec![
+                Anchor::corner(Point::new(p.x - 18.0, 0.0)),
+                Anchor::with_handles(p, Point::new(p.x - 6.0, 0.0), Point::new(p.x + 6.0, 0.0)),
+                Anchor::corner(Point::new(p.x + 18.0, 0.0)),
+            ],
+            false,
+        ));
+        let out = crate::distort::twist(&line, Rect::new(center - 64.0, 0.0, center + 64.0, 0.0), 90.0, 3);
+        let join = &out.subpaths[0].anchors[1];
+        if offset == 64.0 {
+            assert_eq!(join.h_out, Point::new(p.x + 6.0, 0.0));
+            let actual = join.h_in - join.p;
+            let expected = vectorcraft_geom::Vec2::new(-1.0, std::f64::consts::FRAC_PI_2);
+            let error = actual.cross(expected).atan2(actual.dot(expected)).abs();
+            assert!(error < 1e-9, "{actual:?}");
+        } else {
+            let incoming = join.p - join.h_in;
+            let outgoing = join.h_out - join.p;
+            assert!(incoming.cross(outgoing).abs() < 1e-9, "{incoming:?} {outgoing:?}");
+            assert!(incoming.dot(outgoing) > 0.0);
+        }
+    }
+}
+
+#[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
     assert_eq!(out, square());
