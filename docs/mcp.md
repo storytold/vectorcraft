@@ -2258,6 +2258,11 @@ path to a value inside a list or an object, and the document and its undo histor
 → invalid parameters for `view.saved.edit`: `edits[0].delete` must be true or false, not 1
 ```
 
+A refused step of a `command.batch` gives its command's error as it is. A refused step of an `action.batch` is named
+by its place in `commands`, from 1, before its command's error: with `commands` of an Unlock All and the
+`view.saved.new` above, the error is
+``invalid parameters for `action.batch`: action step 2 (`view.saved.new`) failed: invalid parameters for `view.saved.new`: `zoom` must be a number > 0, not 0``.
+
 A schema nests at most 16 lists and objects. A value that would go past that depth is refused with the same kind of
 parameter error, ``invalid parameters for `<id>`: `<path>` is nested too deeply``, where `<path>` is the path to the
 value. A schema that is wrong in itself, such as one that nests past 16 levels or puts a list of ids or a point
@@ -6736,8 +6741,14 @@ A null is read as a key left out. When a step fails on a file or data set, that 
 place in the `commands` sent, from 1, counting the Open steps the batch skips: with `commands` of an Open, an Unlock
 All and an Align, a failed Align gives `` action step 3 (`object.align`) failed: `` and the reason. The batch's own
 opening of a source file, choosing of a data set and destination save, export or close give their errors without a
-step number. This numbering is VectorCraft's own rule. A `prefs.import` step is refused before any file is opened,
-with `` commands[1]: `prefs.import` runs on its own, not as a batch step `` (counted from 0, as for an unknown command). An action recorded in the Actions panel leaves the artboard out,
+step number. This numbering is VectorCraft's own rule. Before any file is opened, `action.batch` refuses a step
+without a command, with a command the engine does not have, with params its command refuses, or with
+`command.batch`, `action.batch` (batches cannot nest) or `prefs.import`, and names it the same way, from 1: with
+`commands` of an Unlock All and a `prefs.import`, the error is
+``invalid parameters for `action.batch`: action step 2 (`prefs.import`) failed: `prefs.import` runs on its own, not as a batch step``.
+Override Open skips `document.open` steps, and Override Save points `document.save` and `file.saveAs` steps at the
+destination folder. `file.open` and `file.save` are the app's commands, not the engine's, so a step with one is
+refused as an unknown command. An action recorded in the Actions panel leaves the artboard out,
 and its steps of these commands get the artboard that is active when the action plays. A press with the Selection,
 Direct Selection or Group Selection tool inside an artboard makes that artboard the active one; with the Selection
 tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection. Choosing the Artboard

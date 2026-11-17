@@ -928,9 +928,14 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
         crate::schemas::check(spec, params, false)?;
     }
     if matches!(id, "command.batch" | "action.batch") && !in_batch {
-        for step in params.get("commands").and_then(Value::as_array).into_iter().flatten() {
+        for (i, step) in params.get("commands").and_then(Value::as_array).into_iter().flatten().enumerate() {
             if let Some(step_id) = step.get("command").and_then(Value::as_str) {
-                check_params_in(step_id, step.get("params").unwrap_or(&Value::Null), true)?;
+                let checked = check_params_in(step_id, step.get("params").unwrap_or(&Value::Null), true);
+                // An `action.batch` names the step it refuses by its place, from 1, as its own checks and its steps' errors do.
+                match checked {
+                    Err(e) if id == "action.batch" => return Err(bad(id, super::fileio::action_step(i, step_id, &e.to_string()))),
+                    checked => checked?,
+                }
             }
         }
     }
