@@ -218,6 +218,9 @@
 	Mask	Maska
 	Rasterize…	Rasteriziraj…
 	Create Gradient Mesh…	Kreiraj gradijentnu mrežu…
+	Flat	Ravno
+	To Center	Prema sredini
+	To Edge	Prema ivici
 	Create Object Mosaic…	Kreiraj mozaik objekata…
 	Vector Halftone…	Vektorski polutonovi…
 	Create Trim Marks	Kreiraj oznake za obrezivanje
@@ -1167,6 +1170,18 @@ lighting	Light	Svjetlo
 	Placement Options…	Opcije postavljanja…
 	Plug-in…	Dodatak…
 	Preview in Browser	Pregledaj u pregledniku
+	Optimize to File Size…	Optimiziraj na veličinu datoteke…
+	Optimize to File Size	Optimiziraj na veličinu datoteke
+	Desired File Size:	Željena veličina datoteke:
+	Start With:	Počni sa:
+	Use:	Koristi:
+	Current Settings	Trenutne postavke
+	Auto Select GIF/JPEG	Automatski odaberi GIF/JPEG
+	Total of All Slices	Ukupno svih isječaka
+	Each Slice	Svaki isječak
+	Current Slice	Trenutni isječak
+	{size}, within {target}	{size}, unutar {target}
+	No setting tried fits in {target}; the smallest is {size}	Nijedna isprobana postavka ne stane u {target}; najmanja je {size}
 	Printer Setup…	Podešavanje štampača…
 	Printers	Štampači
 	Recent File	Nedavna datoteka
@@ -1304,6 +1319,7 @@ lighting	Light	Svjetlo
 	Search commands, tools, panels and effects	Pretraži naredbe, alate, panele i efekte
 	Style:	Stil:
 	Switch workspace	Promijeni radni prostor
+	Search commands	Pretraži naredbe
 	Show all open documents	Prikaži sve otvorene dokumente
 	Use 	Koristite 
 	 the object to select  |  	 objekat za odabir  |  
@@ -2825,7 +2841,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
-	Lossless (lossy WebP isn't available yet)	Bez gubitaka (WebP s gubicima još nije dostupan)
+	Lossless	Bez gubitaka
+	Lossy	S gubicima
 	Scans:	Skenovi:
 	Server-side (.map)	Na strani servera (.map)
 	{format} Options	Opcije za {format}
@@ -2839,6 +2856,9 @@ digits	Malayalam	Malajalam
 	Collate	Složi po kopijama
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitne boje se pretvaraju u njega; separacije se razdvajaju njime kad je CMYK profil.
 	Convert All Spot Colors to Process	Pretvori sve spot boje u procesne
+	Convert {name} to process	Pretvori {name} u procesnu
+	Keep {name} as spot	Zadrži {name} kao spot
+	Overprint Black	Pretisak crne
 	Default Printer	Zadani štampač
 	Document Ink Options	Opcije tinti dokumenta
 	Download:	Preuzimanje:
@@ -3612,6 +3632,10 @@ theme	Appearance	Izgled
 	Font List	Lista fontova
 	Show Similar Fonts	Prikaži slične fontove
 	Clear Similar Fonts	Očisti slične fontove
+	Fonts used in this document	Fontovi korišteni u ovom dokumentu
+	This document uses no available fonts	Ovaj dokument ne koristi dostupne fontove
+	Recently Added	Nedavno dodani
+	Fonts added in the last 30 days	Fontovi dodani u posljednjih 30 dana
 	Fonts in Document	Fontovi u dokumentu
 	Refresh Font List	Osvježi listu fontova
 	Replace Font	Zamijeni font
@@ -3883,6 +3907,7 @@ theme	Appearance	Izgled
 	Command Click to Select Objects Behind	Command-klik za odabir objekata iza
 	Constrain Angle	Ograniči ugao
 	Constrain Width and Height Proportions	Zadrži proporcije širine i visine
+	Copy Width to Height	Kopiraj širinu u visinu
 	Construction Guides	Konstrukcijske vodilice
 	Curvature Tool	Alat zakrivljenost
 	Data Recovery	Oporavak podataka
@@ -4405,12 +4430,85 @@ font-technology	Variable	Varijabilni
 	Preferences	Postavke
 	Previous	Prethodno
 	Restore every preference to its default (applied on OK)	Vrati svaku postavku na zadanu vrijednost (primjenjuje se na U redu)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Prikazuje na platnu traku s naredbama za odabir ili alat; skriva se dok prevlačite i u načinu prezentacije.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Koliko daleko tipka sa strelicom pomjera odabir; uz Shift ga pomjera deset puta dalje.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Ugao osa duž kojih pomjeraju tipke sa strelicama i na koje Shift ograničava crtanje i pomjeranje.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Poluprečnik ugla kojim crta alat Zaobljeni pravougaonik; promjena poluprečnika tokom crtanja mijenja i ovu vrijednost.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Koliko udesno i nadolje Zalijepi pomjera kopiju kada položaj nije zadan, na primjer iz skripte; Zalijepi u aplikaciji je stavlja u sredinu prikaza.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Sprječava da alat Pero briše sidrenu tačku na koju kliknete na odabranoj putanji ili dodaje tačku tamo gdje kliknete na njen segment.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Alati za crtanje prikazuju pokazivač u obliku krstića umjesto svoje ikone; Caps Lock čini isto dok je uključen.
+	Shows a tip when the pointer rests on a button or field that has one.	Prikazuje savjet kada se pokazivač zadrži na dugmetu ili polju koje ga ima.
+	Shows a warning before a script you choose runs.	Prikazuje upozorenje prije nego što se pokrene skripta koju odaberete.
+	Smooths the edges of artwork on the canvas.	Izglađuje rubove grafike na platnu.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Odabir › Isto › Boja ispune, Boja poteza i Ispuna i potez pronalaze samo istu nijansu globalnog ili spot uzorka, a ne bilo koju njegovu nijansu.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Prikazuje početni ekran kada nijedan dokument nije otvoren; kada je isključeno, prozor ostaje prazan dok ne kliknete Početna.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mjeri objekte zajedno s potezima i efektima koji mijenjaju oblik za veličinu, položaj i poravnanje; sjene, sjaj i zamućenja se ne mjere.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Pri zumu od 100% jedan inč dokumenta zauzima 96 tačaka ekrana umjesto 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dvostruki klik na grupu, putanju ili sliku alatom Odabir otvara ih u načinu izolacije.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Ispune i potezi s uzorkom transformišu se zajedno s grafikom, osim ako transformacija ili meni panela Transformiši ne odabere drugačije.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Poluprečnici dinamičnih uglova skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Debljine poteza, crtice i udaljenosti efekata skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
+	The mouse wheel zooms the canvas instead of scrolling it.	Točkić miša zumira platno umjesto da ga pomjera.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
+	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
+	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kreiraj oznake za obrezivanje crta oznake u japanskom stilu umjesto rimskih.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Nova grafika preuzima samo ispunu i potez odabira; kada je isključeno, preuzima cijeli izgled odabranog objekta.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Promjena širine ili visine u panelu Transformiši, panelu Svojstva ili kontrolnom panelu proporcionalno mijenja drugu dimenziju.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Svojstva dinamičnog pravougaonika prikazuju jedno polje Poluprečnik ugla za sva četiri ugla; kada je isključeno, svaki ugao ima svoje polje.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Šta transformišu izmjene u panelu Transformiši: objekat, pločice njegovog uzorka ili oboje; Zadano prati Transformiši pločice uzorka.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Kada je odabrana jedna instanca simbola, panel Transformiši koristi tačku registracije simbola kao referentnu tačku.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Zatamnjuje platno izvan radnih ploča dok je alat Radna ploča aktivan.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Kada je uključeno Zatamni područje izvan radne ploče, područje izvan radnih ploča ostaje tamno dok prevlačite alatom Radna ploča.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Koliko blizu, u pikselima, pokazivač mora biti objektu, sidrenoj tački ili ručki da bi ga klik odabrao.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Da li okvir alata za odabir bira objekte koje dodiruje ili samo one potpuno unutar njega; Smjer povlačenja bira one unutra pri povlačenju udesno. E obrće pravilo tokom povlačenja.
+	A click selects a filled object only on its path, not inside its fill.	Klik bira popunjen objekat samo na njegovoj putanji, ne unutar ispune.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Koliko blizu, u pikselima, tačka mora doći sidrenoj tački ili vodilici lenjira da bi je Prilijepi uz tačku prilijepio; uz uključene pametne vodilice važi njihova tolerancija hvatanja.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Uz alat za odabir, Cmd/Ctrl-klik bira objekat ispod odabranog na mjestu pokazivača; svaki sljedeći klik ide jedan objekat dublje.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Uvećaj i Umanji dovode središte odabira u sredinu prikaza.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Zaključana i skrivena grafika unutar radne ploče pomjera se, skalira i kopira s radnom pločom kao i ostala grafika.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Veličina sidrenih tačaka i krajeva ručki smjera na platnu; veće sidrene tačke mogu se uhvatiti i s veće udaljenosti.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Crta krajeve ručki smjera kao pune tačke, šuplje tačke ili veće pune tačke.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Uz alat za direktni odabir, sidrena tačka ispod pokazivača se ističe.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Prikazuje ručke smjera kada je odabrano više od jedne sidrene tačke; kad je isključeno, vide se samo dok je odabrana jedna sidrena tačka.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Widgeti uglova se skrivaju na uglovima čiji je ugao veći od ovoliko stepeni.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Alat pero prikazuje sljedeći segment od posljednje sidrene tačke do pokazivača prije nego kliknete.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Alat zakrivljenost prikazuje krivulju do pokazivača prije nego postavite sljedeću tačku.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jedinica za nove dokumente ugrađenih veličina, osim onih u pikselima, i za otvorene datoteke bez zapisane jedinice; ako je odaberete ovdje i kliknete U redu, postaje i jedinica aktivnog dokumenta.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Debljine poteza, crtice i razmaci prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Veličine teksta, prored i pomak osnovne linije prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
 	The unit for East Asian type measurements, which no field uses yet.	Jedinica za mjere istočnoazijskog teksta, koju još nijedno polje ne koristi.
 	When on, a number typed without a unit into a field in picas is read in points.	Kad je uključeno, broj unesen bez jedinice u polje u picama čita se u tačkama.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Uz XML ID nazivi objekata prikazuju se kao XML ID u Slojevima, Varijablama i Opcijama sloja.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Priljepljuje crtanje, pomicanje i skaliranje uz podjele mreže, čak i dok je mreža skrivena; dok je uključeno, „Prilijepi uz piksel“ se ne primjenjuje.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Boja vodilica koje nisu odabrane; radna ploča s „Oznakom vodilica“ crta svoje vodilice u boji oznake.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Crta vodilice kao pune linije ili kao tačke, uključujući vodilice koje su već u dokumentu.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Kad je uključeno, vodilice su zaključane pri pokretanju VectorCrafta; promjena ove opcije ih odmah zaključava ili otključava, a Prikaz › Vodilice › Zaključaj vodilice i dalje mijenja zaključavanje.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Kad je uključeno, držanje tipke Cmd/Ctrl na početku povlačenja s ravnala pravi vodilicu samo na aktivnoj radnoj ploči, a s alatom radna ploča vodilicu cijelog platna.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Boja mreže; linije između glavnih linija mreže crtaju se u blijeđoj nijansi te boje.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Crta mrežu kao linije ili kao tačke duž glavnih linija mreže na svakoj podjeli.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Razmak između glavnih linija mreže u svakom otvorenom dokumentu i u novim; dokument VectorCrafta otvara se s mrežom s kojom je sačuvan.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Na koliko dijelova se dijeli svaki glavni kvadrat mreže; „Priljepi uz mrežu“ priljepljuje uz te dijelove, čak i kad zum skriva njihove linije.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Crta mrežu iza crteža; kad je isključeno, mreža se crta preko njega.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	U pregledu piksela pri zumu od 600% ili više aktivni prikaz pokazuje liniju na rubu svakog piksela dokumenta preko crteža.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Boja ivice pločice i isprekidanih granica uzorka boje koje se prikazuju dok uređujete uzorak.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Hvata crtanje, pomjeranje i transformisanje uz obližnje objekte i prikazuje vodilice i oznake; Pregled piksela ih isključuje, a Priljepi uz mrežu umjesto toga hvata uz mrežu.
+	The color of Smart Guide lines and labels.	Boja linija i oznaka pametnih vodilica.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Prikazuje liniju duž ivice ili centra s kojim se objekti poravnavaju; kad je isključeno, objekti se i dalje poravnavaju bez linije, a Prilijepi uz glif ne djeluje.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	S alatom za odabir ocrtava neodabrani objekat ispod pokazivača bojom njegovog sloja dok ne prevlačite.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Prikazuje veličinu ili ugao pored pokazivača dok skalirate, rotirate, smičete ili odražavate objekte.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Dok crtate, tačke se hvataju uz linije pod odabranim uglovima kroz tačku od koje počinje segment ili oblik.
+	The set of angles the construction guides follow while Construction Guides is on.	Skup uglova koje prate konstrukcijske vodilice dok su Konstrukcijske vodilice uključene.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Imenuje za šta se tačka hvata, npr. sidrenu tačku, putanju ili poravnanje; kad je isključeno, tačke se hvataju isto, bez naziva.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Prikazuje pored pokazivača udaljenosti, uglove i koliko je objekat pomjeren dok crtate ili pomjerate.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Hvata pomjerene objekte ili objekte promijenjene veličine uz isti razmak kao između obližnjih objekata i označava jednake razmake.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Kad je nešto odabrano, držanje tipke Alt/Option iznad drugog objekta ili radne ploče prikazuje udaljenosti između njega i odabira.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Odabir vraćen prevlačenjem unutar tolerancije hvatanja od mjesta gdje je prevlačenje počelo vraća se tačno na to mjesto; kopija ne.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Koliko blizu na ekranu pokazivač ili prevučena tačka mora doći do objekta da bi ga pametne vodilice uhvatile; udaljenost je ista pri svakom zumu.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hvata kraj segmenta linije ili krug nacrtan iz središta tako da dodiruje obližnju krivu.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hvata kraj segmenta linije tako da pod pravim uglom susreće obližnji ravni segment.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće
@@ -4711,6 +4809,11 @@ imageTrace	Outline	Obris
 @msg	PDF writer error: {0}	greška PDF zapisivača: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Upakovano datoteka u {folder}: {n} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pregledaj u pregledniku zahtijeva desktop aplikaciju (web umjesto toga preuzima datoteke)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	navedite `desiredK`, željenu veličinu datoteke u K (1024 bajta): broj veći od 0 i najviše 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` je `current` ili `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` je `allSlices`, `eachSlice` ili `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` je broj isječka iz `slice.list`, uz `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimiziraj na veličinu datoteke: nema slike za mjerenje
 @msg	Release Guides: no guides	Oslobodi vodilice: nema vodilica
 @msg	Release: no layer to put the rectangle in	Oslobodi: nema sloja u koji bi se stavio pravougaonik
 @msg	Replace Spine: select a blend and a path	Zamijeni kičmu: odaberite stapanje i putanju
@@ -5882,6 +5985,19 @@ mark-style	Japanese	Japanski
 	Transform Objects	Transformiši objekte
 @msg	unknown parameter `{key}`; did you mean `{near}`?	nepoznat parametar `{key}`; da li ste mislili `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	nepoznat parametar `{key}`; naredba ne prima parametre
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	nepoznat parametar `{key}`; `{object}` prima: {keys}
+@msg	unknown parameter `{key}`; {why_not}	nepoznat parametar `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	nijedan format ga ne prima (pogledajte document.formats)
+@msg	no save format takes it (see file.formatOptions)	nijedan format za spremanje ga ne prima (pogledajte file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF ga ne prima (pogledajte document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS ga ne prima (pogledajte document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF ga ne prima (pogledajte document.formats)
+@msg	{name} must be {range} (got {v})	{name} mora biti {range} (dobiveno {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Grafički procesor koji je prvi pokušan nije mogao prikazati prozor, pa se VectorCraft ponovo pokrenuo na {summary} (Postavke › Performanse › Grafički procesor › Automatski koristi onaj koji pokreće vaš ekran)
+@msg	Sent “{title}” to {to}	“{title}” je poslano na {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” je poslano na {to}. Odgovor reda za štampanje: {note}
+@msg	the default printer	zadani štampač
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rasterski efekti na objektu {object}: traženo {requested} ppi, postignuto {achieved} ppi zbog ograničenja od 64 miliona piksela
 @msg	unknown parameter `{key}`; the command takes: {keys}	nepoznat parametar `{key}`; naredba prima: {keys}
 	Load EPS into Clipboard	Učitaj EPS u međuspremnik
 @msg	an image of {w} × {h} pixels is too large to draw	slika od {w} × {h} piksela prevelika je za crtanje
@@ -6498,6 +6614,7 @@ anchor	Points:	Tačke:
 	Open a document to check it for issues.	Otvorite dokument da ga provjerite na probleme.
 	Empty Text	Prazan tekst
 	Unpainted Objects	Neobojeni objekti
+	Empty Text Paths	Prazne tekstualne putanje
 	Zero-Opacity Objects	Objekti s nultom neprozirnošću
 	Duplicate Objects	Duplirani objekti
 	Off-Artboard Art	Grafika izvan radne ploče

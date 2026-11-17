@@ -153,6 +153,8 @@ antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强
 	Anti-aliasing:	消除锯齿：
+	Art Optimized	图稿优化
+	Type Optimized	文字优化
 	Appearance	外观
 	Appearance Attribute	外观属性
 	Appearance Item	外观项目
@@ -552,6 +554,7 @@ antiAlias	Sharp	锐利
 	Consolidate All Windows	合并所有窗口
 	Constrain Angle	约束角度
 	Constrain Width and Height Proportions	约束宽高比例
+	Copy Width to Height	将宽度复制到高度
 	Construction Guides	构造参考线
 	Contextual Alternates	上下文替代
 	Contextual Task Bar	上下文任务栏
@@ -562,6 +565,8 @@ antiAlias	Sharp	锐利
 	Control	控制栏
 	Convert	转换
 	Convert All Spot Colors to Process	将所有专色转换为印刷色
+	Convert {name} to process	将 {name} 转换为印刷色
+	Keep {name} as spot	将 {name} 保留为专色
 	Convert All Strokes to Outlines	将所有描边转换为轮廓
 	Convert All Text to Outlines	将所有文字转换为轮廓
 	Convert Anchor Point	转换锚点
@@ -636,6 +641,9 @@ antiAlias	Sharp	锐利
 	Create from Selection	从选区创建
 	Create From:	创建自：
 	Create Gradient Mesh…	创建渐变网格…
+	Flat	平面
+	To Center	向中心
+	To Edge	向边缘
 	Create Graph	创建图表
 	Create New Layer	创建新图层
 	Create New Sublayer	创建新子图层
@@ -1303,6 +1311,10 @@ file-filter	Templates	模板
 	Font List	字体列表
 	Show Similar Fonts	显示相似字体
 	Clear Similar Fonts	清除相似字体
+	Fonts used in this document	此文档中使用的字体
+	This document uses no available fonts	此文档未使用任何可用字体
+	Recently Added	最近添加
+	Fonts added in the last 30 days	最近 30 天内添加的字体
 	Font Preview Size	字体预览大小
 	Font Size	字号
 	Variable Font	可变字体
@@ -1939,7 +1951,8 @@ file-filter	Templates	模板
 	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 从标尺拖动创建画板参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
-	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)
+	Lossless	无失真
+	Lossy	有失真
 	Lossy:	有损：
 	Low	低
 	lowercase	小写
@@ -2604,6 +2617,18 @@ diagnostics	ui	界面
 	Preview	预览
 	Preview:	预览：
 	Preview in Browser	在浏览器中预览
+	Optimize to File Size…	优化到文件大小…
+	Optimize to File Size	优化到文件大小
+	Desired File Size:	所需文件大小：
+	Start With:	起始设置：
+	Use:	使用：
+	Current Settings	当前设置
+	Auto Select GIF/JPEG	自动选择 GIF/JPEG
+	Total of All Slices	所有切片总计
+	Each Slice	每个切片
+	Current Slice	当前切片
+	{size}, within {target}	{size}，不超过 {target}
+	No setting tried fits in {target}; the smallest is {size}	尝试过的设置都无法小于 {target}；最小为 {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	在浏览器中预览需要桌面版应用程序 (网页版会改为下载文件)
 	Preview Mode	预览模式
 	Preview the document as it is now	按当前状态预览文档
@@ -2952,12 +2977,85 @@ digits	Malayalam	马拉雅拉姆数字
 	Responsive	响应式
 	Restore	恢复
 	Restore every preference to its default (applied on OK)	把所有首选项恢复为默认值 (点击确定后应用)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	在画布上显示针对所选对象或工具的命令栏；拖动时和演示模式下会隐藏。
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	按一次箭头键移动所选对象的距离；按住 Shift 时移动十倍距离。
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	箭头键沿其移动、Shift 将绘制和移动约束到的坐标轴角度。
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	圆角矩形工具绘制时使用的圆角半径；在绘制时更改半径也会更改此值。
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	未指定位置时（例如从脚本粘贴），粘贴将副本向右和向下移动的距离；在应用中粘贴会把副本放在视图中央。
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	阻止钢笔工具删除在所选路径上点击的锚点，或在点击路径段的位置添加锚点。
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	绘图工具显示十字指针而不是工具图标；Caps Lock 打开时效果相同。
+	Shows a tip when the pointer rests on a button or field that has one.	指针停在带有提示的按钮或字段上时显示提示。
+	Shows a warning before a script you choose runs.	在你选择的脚本运行前显示警告。
+	Smooths the edges of artwork on the canvas.	使画布上图稿的边缘平滑。
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	选择 › 相同 › 填色、描边颜色和填色和描边只匹配全局色板或专色色板的相同色调，而不是其任意色调。
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	没有打开文档时显示主页屏幕；关闭时，窗口保持空白，直到你点击主页。
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	在尺寸、位置和对齐中按对象的描边和改变形状的效果测量对象；阴影、发光和模糊不计入测量。
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	缩放为 100% 时，文档的一英寸占 96 个屏幕点，而不是 72 个。
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	用选择工具双击编组、路径或图像时，会在隔离模式中打开它。
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	图案填色和描边随图稿一起变换，除非变换命令或变换面板的菜单另有选择。
+	Live corner radii scale with the art, unless the scale chooses otherwise.	实时转角半径随图稿一起缩放，除非缩放命令另有选择。
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	描边粗细、虚线和效果距离随图稿一起缩放，除非缩放命令另有选择。
+	The mouse wheel zooms the canvas instead of scrolling it.	鼠标滚轮缩放画布，而不是滚动画布。
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
+	Dragging sideways on a numeric field's label changes the field's value.	在数值字段的标签上横向拖动可更改字段的值。
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
+	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	创建裁切标记绘制日式标记，而不是西式标记。
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	新图稿只采用所选对象的填色和描边；关闭时，采用所选对象的全部外观。
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	在变换面板、属性面板或控制栏中更改宽度或高度时，另一项按比例更改。
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	实时矩形的属性中为四个角显示一个圆角半径字段；关闭时，每个角都有自己的字段。
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	变换面板中的编辑所变换的内容：对象、其图案拼贴或两者；默认跟随变换图案拼贴。
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	选中一个符号实例时，变换面板使用符号的注册点作为参考点。
+	Darkens the canvas outside the artboards while the Artboard tool is active.	使用画板工具时调暗画板以外的画布。
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	调暗画板外的区域打开时，用画板工具拖动期间画板以外的区域保持变暗。
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	点击时指针需距离对象、锚点或手柄多少像素以内才能选中它。
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	选择工具的框选择它接触到的对象，还是只选择完全在框内的对象；拖动方向在向右拖动时选择框内的对象。拖动时按 E 可反转规则。
+	A click selects a filled object only on its path, not inside its fill.	点击只在填充对象的路径上选中它，而不是在填充内部。
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	点需距离锚点或标尺参考线多少像素以内，对齐点才会将其对齐；打开智能参考线时改用智能参考线的吸附容差。
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	使用选择工具时，按住 Cmd/Ctrl 点击会选中指针处所选对象下方的对象；每再点击一次就再往下一个对象。
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	放大和缩小会将所选内容的中心移到视图中央。
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	画板内锁定和隐藏的图稿会像其他图稿一样随画板移动、缩放和复制。
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	画布上锚点和方向手柄端点的大小；锚点越大，也能从越远处抓取。
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	将方向手柄的端点绘制为实心点、空心点或更大的实心点。
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	使用直接选择工具时，指针下方的锚点会高亮显示。
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	选中多个锚点时显示方向手柄；关闭时，仅在只选中一个锚点时显示。
+	Corner widgets hide on corners whose angle is greater than this many degrees.	角度大于此度数的转角上隐藏角控件。
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	点击之前，钢笔工具会预览从最后一个锚点到指针的下一段。
+	The Curvature tool previews the curve to the pointer before you place the next point.	放置下一个点之前，曲率工具会预览到指针的曲线。
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	除像素尺寸外，以内置尺寸新建的文档和未记录单位的已打开文件使用此单位；在此选择并点击确定，也会更改当前文档的单位。
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	描边粗细、虚线和间隔以此单位显示，为其输入的数字也按此单位读取。
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	字号、行距和基线偏移以此单位显示，为其输入的数字也按此单位读取。
 	The unit for East Asian type measurements, which no field uses yet.	用于东亚文字度量的单位，目前还没有字段使用。
 	When on, a number typed without a unit into a field in picas is read in points.	开启后，在以派卡为单位的字段中输入的不带单位的数字按点读取。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	选择 XML ID 时，图层、变量和图层选项中的对象名称显示为 XML ID。
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	即使网格已隐藏，绘制、移动和缩放也会对齐到网格的细分；开启期间，“对齐像素”不起作用。
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	未选中参考线的颜色；设置了参考线标签的画板会用标签颜色绘制自己的参考线。
+	Draws guides as solid lines or as dots, including the guides already in the document.	将参考线绘制为实线或点，包括文档中已有的参考线。
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	开启后，VectorCraft 启动时参考线处于锁定状态；更改此选项会立即锁定或解锁参考线，“视图 › 参考线 › 锁定参考线”仍可更改锁定状态。
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	开启后，从标尺开始拖动时按住 Cmd/Ctrl，会只在当前画板上创建参考线；使用画板工具时则创建贯穿整个画布的参考线。
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	网格的颜色；主网格线之间的线条以该颜色较淡的色调绘制。
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	将网格绘制为线条，或在每个细分处沿主网格线绘制为点。
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	所有已打开文档和新文档中主网格线之间的距离；VectorCraft 文档打开时使用保存时的网格。
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	每个主网格方格分成多少份；即使缩放使这些线条不显示，“对齐网格”仍对齐到这些分格。
+	Draws the grid behind the artwork; off, the grid is drawn over it.	将网格绘制在图稿后面；关闭时网格绘制在图稿上面。
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	在像素预览中缩放到 600% 或以上时，当前视图会在图稿上方沿文档每个像素的边缘显示线条。
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	编辑图案时显示的拼贴边缘和虚线色板边界的颜色。
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	将绘制、移动和变换吸附到附近的图稿，并显示参考线和标签；像素预览会将其关闭，开启对齐网格时则改为对齐网格。
+	The color of Smart Guide lines and labels.	智能参考线的线条和标签颜色。
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	沿图稿对齐的边缘或中心显示一条线；关闭时图稿仍会对齐，只是不显示线条，且靠齐字符不起作用。
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	使用选择工具且未拖动时，用图层颜色勾勒指针下未选中的对象。
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	缩放、旋转、倾斜或镜像图稿时，在指针旁显示尺寸或角度。
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	绘制时，点会吸附到经过线段或形状起点、按所选角度延伸的线上。
+	The set of angles the construction guides follow while Construction Guides is on.	构造参考线开启时，构造参考线所遵循的角度组合。
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	显示点吸附到的对象名称，如锚点、路径或对齐；关闭时点仍以相同方式吸附，只是不显示名称。
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	绘制或移动时，在指针旁显示距离、角度和图稿移动的距离。
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	将移动或调整大小的图稿吸附到与附近对象之间相同的间距，并标出相等的间距。
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	选中对象后，在另一个对象或画板上按住 Alt/Option 会显示它与所选对象之间的距离。
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	拖回到距拖动起点吸附容差以内的所选对象会精确回到原处；副本不会。
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指针或拖动的点在屏幕上需离图稿多近，智能参考线才会吸附；该距离在任何缩放比例下都相同。
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	吸附线段的端点或从中心绘制的圆，使其与附近的曲线相切。
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
@@ -3160,6 +3258,7 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
+	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
 	Section Symbol	章节符号
@@ -4442,6 +4541,9 @@ imageTrace	Outline	轮廓
 @msg	image would be too large; lower the resolution	图像将过大；请降低分辨率
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
+@msg	`points` must be three [x, y] pairs of numbers	`points` 必须是三对数字 [x, y]
+@msg	direct-select three anchor points, or give `points`	请直接选择三个锚点，或提供 `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
@@ -4819,6 +4921,11 @@ imageTrace	Outline	轮廓
 @msg	1 hidden object	1 个隐藏的对象
 @msg	{n} hidden objects	{n} 个隐藏的对象
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	“在浏览器中预览”需要桌面应用 (网页版会改为下载文件)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	请给出 `desiredK`，即以 K (1024 字节) 为单位的所需文件大小：大于 0 且不超过 1048576 的数字
+@msg	`startWith` is `current` or `auto`	`startWith` 为 `current` 或 `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` 为 `allSlices`、`eachSlice` 或 `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` 是 `slice.list` 中的切片编号，需配合 `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	优化到文件大小：没有可测量的图像
 @msg	no file system here	此处没有文件系统
 @msg	nothing to preview	没有可预览的内容
 @msg	Saved {n} files beside {path}	已在 {path} 旁保存 {n} 个文件
@@ -6163,6 +6270,19 @@ lighting	Light	光源
 	Transform Objects	变换对象
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	未知参数 `{key}`；`{object}` 接受：{keys}
+@msg	unknown parameter `{key}`; {why_not}	未知参数 `{key}`；{why_not}
+@msg	no format takes it (see document.formats)	没有格式接受它 (参见 document.formats)
+@msg	no save format takes it (see file.formatOptions)	没有存储格式接受它 (参见 file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF 不接受它 (参见 document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS 不接受它 (参见 document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF 不接受它 (参见 document.formats)
+@msg	{name} must be {range} (got {v})	{name} 必须为 {range} (实际为 {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	首先尝试的图形处理器无法显示窗口，因此 VectorCraft 已在 {summary} 上重新启动 (设置 › 性能 › 图形处理器 › 自动 会使用驱动显示器的处理器)
+@msg	Sent “{title}” to {to}	已将 “{title}” 发送到 {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	已将 “{title}” 发送到 {to}。打印队列的回复：{note}
+@msg	the default printer	默认打印机
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	对象 {object} 上的栅格效果：请求 {requested} ppi，受 6400 万像素上限限制，实际为 {achieved} ppi
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 @msg	the params must be an object, not {got}	参数必须是对象，而不是 {got}
 @msg	unknown parameter `{path}`; the object takes no keys	未知参数 `{path}`；该对象不接受任何键
@@ -6972,6 +7092,7 @@ anchor	Points:	点：
 	Open a document to check it for issues.	打开文档以检查其中的问题。
 	Empty Text	空文本
 	Unpainted Objects	无上色对象
+	Empty Text Paths	空文本路径
 	Zero-Opacity Objects	不透明度为零的对象
 	Duplicate Objects	重复对象
 	Off-Artboard Art	画板外的图稿
@@ -7646,6 +7767,11 @@ breakText	Glyphs	字形
 @msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
 @msg	`angle` must be from -180 to 180 degrees	`angle` 必须介于 -180 到 180 度之间
+@msg	`roundness` must be from 0 to 100%	`roundness` 必须介于 0 到 100% 之间
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 必须介于 0.01 到 100 pt 之间
+@msg	style must be "pencil" or "brush"	style 必须为 "pencil" 或 "brush"
+@msg	extend end must be "start" or "end"	extend 的端点必须为 "start" 或 "end"
+@msg	connect end must be "start" or "end"	connect 的端点必须为 "start" 或 "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` 必须介于 1 到 100% 之间
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
 	Weed Box and Lines…	除废框和除废线…
@@ -8043,8 +8169,6 @@ breakText	Glyphs	字形
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的参数 `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	未知的参数 `{within}settings.{format}`；{why}
-@msg	unknown parameter `{within}{key}`; {why}	未知的参数 `{within}{key}`；{why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	未知的减色方式 `{reduction}` (selective、perceptual、adaptive、web、gray、blackWhite、uniform 或 document)
 @msg	unmatched ')'	不匹配的 ')'
 @msg	unterminated character class	字符类没有结束
@@ -8416,7 +8540,6 @@ breakText	Glyphs	字形
 @msg	anchor `smooth` must be true or false	锚点的 `smooth` 必须为 true 或 false
 @msg	anchor `{key}` must be [x, y]	锚点的 `{key}` 必须是 [x, y]
 @msg	anchor `{key}` must be a number	锚点的 `{key}` 必须是数字
-@msg	angle and roundness must be finite	angle 和 roundness 必须是有限值
 @msg	angles must be a list as long as pins (degrees or null)	angles 必须是与 pins 等长的列表 (度数或 null)
 @msg	appearance must be flat|center|edge	appearance 必须是 flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply 为 "fill" 或 "stroke"，不能是 `{other}`
@@ -9466,7 +9589,6 @@ breakText	Glyphs	字形
 @msg	{label} must be a number from 1 to 10000	{label} 必须是 1 到 10000 之间的数字
 @msg	{name} `{s}`: {ids}	{name} `{s}`：{ids}
 @msg	{name} is built in and can't be deleted	{name} 是内置项，不能删除
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} 必须为 {lo}–{hi}{unit} (实际为 {v})
 @msg	{name}: CRC or size mismatch	{name}：CRC 或大小不匹配
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}：只能读取此 Affinity 文件的嵌入预览；请使用 文件 › 打开 查看预览及其警告，或在置入前先从 Affinity 导出 SVG 或 PDF
 @msg	{name}: {e}	{name}：{e}
@@ -9527,6 +9649,7 @@ breakText	Glyphs	字形
 @msg	Too many Revolve faces for visibility evaluation	回转的面过多，无法进行可见性计算
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 最多从色板交换文件中读取 {ASE_MAX_ENTRIES} 个颜色和组，而此库有 {entries} 个
 @msg	WebP encoding failed: {e}	WebP 编码失败：{e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 编码失败：图像太大，无法生成有失真 WebP：请降低分辨率或选择无失真
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必须是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList
