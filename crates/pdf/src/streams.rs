@@ -15,9 +15,21 @@ use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, 
 /// million, 4 bytes each).
 pub(crate) const MAX_DECODED: usize = 256 << 20;
 
+/// Whether this build reads the larger images of [`image_limits`]: a 64-bit build that isn't for
+/// the web.
+pub(crate) const LARGE_IMAGES: bool = cfg!(all(target_pointer_width = "64", not(target_family = "wasm")));
+
+/// The most bytes one image XObject may decode to and the most pixels it may have, for a build
+/// that reads `large` images: 4 GB and 2^30 pixels (31404 × 31403 pixels are 2.96 GB in RGB and
+/// 3.94 GB in CMYK), otherwise 1 GB and 2^28 pixels (an A0 sheet scanned at 300 ppi is 418 MB in
+/// RGB and 557 MB in CMYK). The shared reader takes the same two figures ([`crate::pages::open_options`]).
+pub(crate) const fn image_limits(large: bool) -> (u64, u64) {
+    if large { (1 << 32, 1 << 30) } else { (1 << 30, 1 << 28) }
+}
+
 /// The most an image XObject may decode to when its own size asks for more than
-/// [`MAX_DECODED`]: 1 GB (an A0 sheet scanned at 300 ppi is 418 MB in RGB, 557 MB in CMYK).
-const MAX_IMAGE_DECODED: usize = 1 << 30;
+/// [`MAX_DECODED`]: the bytes of [`image_limits`] for this build.
+const MAX_IMAGE_DECODED: usize = image_limits(LARGE_IMAGES).0 as usize;
 
 /// The longest row a predictor may have, in bytes.
 const MAX_ROW: usize = 1 << 24;
@@ -826,6 +838,43 @@ mod tests {
         let info = crate::info(&pdf, None);
         assert!(info.is_ok(), "{:?}", info.err());
         assert_eq!(info.map(|i| i.pages.len()).unwrap(), 1);
+    }
+
+    #[test]
+    fn a_64_bit_desktop_build_reads_larger_images_and_others_keep_their_limits() {
+        assert_eq!(image_limits(false), (1 << 30, 1 << 28));
+        assert_eq!(image_limits(true), (1 << 32, 1 << 30));
+        assert_eq!(LARGE_IMAGES, cfg!(all(target_pointer_width = "64", not(target_family = "wasm"))));
+        let (bytes, pixels) = image_limits(LARGE_IMAGES);
+        assert_eq!(MAX_IMAGE_DECODED as u64, bytes);
+        let limits = crate::pages::open_options().decode_limits;
+        assert_eq!((limits.max_decoded_image(), limits.max_image_pixels()), (bytes, pixels));
+        // An image past the limit is refused with the same message, naming this build's limit.
+        let d = dict("<< /Subtype /Image /Width 70000 /Height 70000 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode >>");
+        assert_eq!(budget(&d), MAX_IMAGE_DECODED);
+        let most = if LARGE_IMAGES { "4 GB" } else { "1 GB" };
+        assert_eq!(crate::pages::decoded_size(MAX_IMAGE_DECODED), most);
+    }
+
+    #[test]
+    fn an_image_past_1_gb_and_2_to_the_28_pixels_opens_on_a_64_bit_desktop_build() {
+        if !LARGE_IMAGES {
+            return;
+        }
+        // 18919 × 18919 RGB pixels: 358 million pixels, 1.07 GB decoded (#4366).
+        let side = 18919;
+        let doc = crate::import(&one_image_pdf(side, side)).unwrap();
+        let blobs: Vec<_> = doc.images.values().collect();
+        let [blob] = blobs[..] else { panic!("one image expected, found {}", blobs.len()) };
+        // Opaque: stored as RGB, without an alpha channel.
+        let (w, h, layout) = {
+            use image::ImageDecoder as _;
+            let decoder = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().unwrap().into_decoder().unwrap();
+            let (w, h) = decoder.dimensions();
+            (w, h, decoder.original_color_type())
+        };
+        assert_eq!((w, h), (side as u32, side as u32));
+        assert_eq!(layout, image::ExtendedColorType::Rgb8);
     }
 
     #[test]
