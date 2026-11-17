@@ -105,7 +105,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 4–8 | no | [target-app-parity.md](target-app-parity.md) |
 | 15 | [G15 Performance budgets and a GPU renderer](#g15-performance-budgets-and-a-gpu-renderer) | 15–25 | budgets only | [hardware-parity.md](hardware-parity.md) |
-| 16 | [G16 Localization: the three missing key languages](#g16-localization-the-three-missing-key-languages) | 50–85 | no | [localization-parity.md](localization-parity.md) |
+| 16 | [G16 Localization: remaining language work](#g16-localization-remaining-language-work) | 50–85 | no | [localization-parity.md](localization-parity.md) |
 | 17 | [G17 Ecosystem: third-party plug-ins](#g17-ecosystem-third-party-plug-ins) | 20–45 | no | — |
 | 18 | [G18 Generative AI features](#g18-generative-ai-features) | 30–60 | no | — |
 | 19 | [G19 Accessibility](#g19-accessibility) | 15–25 | no | [ui-parity.md](ui-parity.md) |
@@ -802,7 +802,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Crop and Outline landed in #1173.
 - **Estimate:** 15–25 h (the budget run and fixes block beta).
 
-## G16 Localization: the three missing key languages
+## G16 Localization: remaining language work
 
 - **Evidence (2026-11-06):** Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged. See [Hindi notes](localization-hi.md).
 
