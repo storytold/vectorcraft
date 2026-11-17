@@ -1010,6 +1010,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-atomic"
+version = "0.1.0"
+source = "git+https://github.com/Dasemu/craft-libs?rev=77f66b33f7366abb9927113f1f5e427e2593ef84#77f66b33f7366abb9927113f1f5e427e2593ef84"
+dependencies = [
+ "rustix 1.1.6",
+]
+
+[[package]]
 name = "craft-codepage"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd#a499742a9389f47d10cdc61e4cdbf4e5f07f48cd"
@@ -1230,6 +1238,19 @@ version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=a7fb55eaf9a15c21e8ce0b13cf605dc54fd15f57#a7fb55eaf9a15c21e8ce0b13cf605dc54fd15f57"
 dependencies = [
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "craft-plugin"
+version = "0.1.0"
+source = "git+https://github.com/Dasemu/craft-libs?rev=77f66b33f7366abb9927113f1f5e427e2593ef84#77f66b33f7366abb9927113f1f5e427e2593ef84"
+dependencies = [
+ "craft-atomic",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+ "wasmi",
 ]
 
 [[package]]
@@ -6827,6 +6848,7 @@ dependencies = [
  "craft-docpath",
  "craft-image-codecs 0.1.0 (git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd)",
  "craft-jxl",
+ "craft-plugin",
  "craft-proof",
  "craft-stream-codecs",
  "craft-xml 0.1.0 (git+https://github.com/storytold/craft-libs?rev=a499742a9389f47d10cdc61e4cdbf4e5f07f48cd)",

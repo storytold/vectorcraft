@@ -363,6 +363,14 @@ fn not_granted(name: &str, permission: Permission) -> EngineError {
 /// is one ([`FilterRun::hand_in`]), else the plug-in's, run now. → `{plugin, ids}`: what it made or
 /// changed, which is then selected.
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
+    // A shared command plug-in (RFC-0041): `{id, command?, params?}`.
+    if let Some(id) = str_param(p, "id")
+        && registry::get(id).is_none()
+        && s.craft_plugins.get(id).is_some()
+    {
+        let params = p.get("params").cloned().unwrap_or_else(|| json!({}));
+        return super::craftplugin::run(s, id, str_param(p, "command"), &params, None);
+    }
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
     let handed = s.plugin_output.take();
     let r = FilterRun::prepare(s, p)?;
@@ -390,8 +398,13 @@ pub fn command_id(plugin: &str, command: &str) -> String {
 /// Is `id` shaped as a plug-in command's id (`plugin.<plug-in id>.<command id>`)? This module's
 /// own `plugin.*` commands have no dot after the prefix, and a command id has none.
 pub fn is_command_id(id: &str) -> bool {
-    id.strip_prefix(vectorcraft_plugins::PREFIX).is_some_and(|rest| rest.contains('.'))
+    id.strip_prefix(vectorcraft_plugins::PREFIX).is_some_and(|rest| rest.contains('.')) && !SHARED_COMMANDS.contains(&id)
 }
+
+/// The `plugin.*` commands every Craft app shares (RFC-0041) whose ids have a dot after the prefix:
+/// commands of this module, not plug-in commands. A plug-in with id `catalog` can't add commands
+/// with these ids.
+const SHARED_COMMANDS: &[&str] = &["plugin.catalog.list", "plugin.catalog.add"];
 
 /// The installed plug-in and its command that command id `id` names.
 pub fn command_of(id: &str) -> Option<(Arc<Plugin>, Command)> {
@@ -726,6 +739,17 @@ pub(crate) fn hold_plugin_changes() -> std::sync::MutexGuard<'static, ()> {
 /// process using the same folder changes it before or after; when the store can't be locked, nothing
 /// is installed.
 fn install(s: &mut Session, p: &Value) -> Result<Value> {
+    // A `.craftplugin` bundle, a catalog's package or a GitHub repository's release (RFC-0041).
+    if super::craftplugin::names_bundle(p) {
+        return super::craftplugin::install_cmd(s, p);
+    }
+    install_given(s, p, None)
+}
+
+/// [`install`] of the module `given` (one a `.craftplugin` bundle carried, checked by
+/// [`super::craftplugin`]), or of the one `p` names (`path` or `dataBase64`) when `None`. The rest
+/// of `p` (`replace`, `allowHeavy`, `grant`, `hash`) applies alike.
+pub(crate) fn install_given(s: &mut Session, p: &Value, given: Option<(Plugin, Vec<u8>)>) -> Result<Value> {
     const C: &str = "plugin.install";
     // One use: spent whatever this install does.
     let approval = s.plugin_install_approval.take();
@@ -735,7 +759,10 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let allow_heavy = switch_or(p, "allowHeavy", false, C)?;
     let grant = grant_param(C, p)?;
-    let (plugin, bytes) = load_given(C, p)?;
+    let (plugin, bytes) = match given {
+        Some(given) => given,
+        None => load_given(C, p)?,
+    };
     // `hash` pins the module the user was shown: one with other bytes is refused.
     if let Some(h) = p.get("hash").filter(|v| !v.is_null())
         && h.as_str() != Some(plugin.hash())
@@ -1104,12 +1131,18 @@ fn shown_report(mut report: Value) -> Value {
     report
 }
 
-fn list(_: &mut Session, _: &Value) -> Result<Value> {
+fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let folder = FOLDER.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(_, _, r)| shown_report(r.clone()));
     let disabled: Vec<Value> = safe_mode::disabled().iter().map(shown_item).collect();
-    Ok(
-        json!({"plugins": registry::list().iter().map(|p| describe_installed(p)).collect::<Vec<_>>(), "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled}),
-    )
+    let mut plugins: Vec<Value> = registry::list().iter().map(|p| describe_installed(p)).collect();
+    // The shared command plug-ins (RFC-0041), after VectorCraft's own.
+    let shared = s.command_plugins();
+    plugins.extend(shared.list().iter().map(super::craftplugin::Plugin::describe));
+    let mut v = json!({"plugins": plugins, "folder": folder, "safeMode": safe_mode::active(), "disabled": disabled});
+    if !shared.problems().is_empty() {
+        v["problems"] = json!(shared.problems());
+    }
+    Ok(v)
 }
 
 /// `plugin.safeMode`: whether Safe Mode is on and why, the plug-ins disabled for the next launch,
@@ -1186,7 +1219,15 @@ fn set_enabled(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"changed": changed, "saved": saved, "disabled": safe_mode::disabled().iter().map(shown_item).collect::<Vec<_>>()}))
 }
 
-fn info(_: &mut Session, p: &Value) -> Result<Value> {
+fn info(s: &mut Session, p: &Value) -> Result<Value> {
+    if let Some(id) = str_param(p, "id")
+        && registry::get(id).is_none()
+        && let Some(shared) = s.craft_plugins.get(id)
+    {
+        let mut v = shared.describe();
+        v["manifest"] = serde_json::to_value(&shared.manifest).unwrap_or(Value::Null);
+        return Ok(v);
+    }
     let plugin = plugin_by_id("plugin.info", p)?;
     let mut v = describe_installed(&plugin);
     v["manifest"] = serde_json::to_value(plugin.manifest()).unwrap_or(Value::Null);
@@ -1197,6 +1238,10 @@ fn info(_: &mut Session, p: &Value) -> Result<Value> {
 
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_param(p, "id").ok_or_else(|| bad("plugin.remove", "missing `id`"))?;
+    // A shared command plug-in: its folder in the store, with its settings.
+    if registry::get(id).is_none() && super::craftplugin::remove(s, "plugin.remove", id)? {
+        return Ok(json!({"removed": id}));
+    }
     // An install in another session or process finishes its store writes first. When the store
     // can't be locked, nothing is removed.
     let _held = hold_plugin_changes();
@@ -1258,7 +1303,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "List Plug-ins",
             [],
             None,
-            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\", author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
+            "{} → {plugins: [{id, name, version, kind: \"filter\"|\"effect\"|\"exporter\"|\"importer\"|\"command\" (a shared command plug-in: its craft-plugin.json manifest plus sha256, source, stored and shared: true), author, description, params (doc), paramsSchema, effect? (the effect id of a live effect: plugin.<id>), format? and extensions? (an exporter's or importer's format id, plugin.<id>, for document.export or document.open's importer, and its file extensions), budget?: \"heavy\" (a filter that may compute for longer, see plugin.install's allowHeavy), inputs?: [\"type\"|\"image\"|\"symbolInstance\"] (the objects besides paths a filter reads, see plugin.run), size, source, permissions: [name] (what it may do: the ones its manifest lists, else the ones its kind implies; progress: it may report its progress, see Cancel and write log lines; settings: it may keep settings of its own; cache: it may keep a cache of its own; commands: a filter may run the commands its commandAllowlist names, see docs/plugins.md), commandAllowlist?: [command id] (the commands a filter with the commands permission may run while it runs, with vc_call), hash (the module's SHA-256), api (the plug-in API level it was built for, 1 or 2), paintOutput?: true (a live effect whose pieces have paints of their own, see docs/plugins.md), cacheBytes (the bytes its cache holds; see plugin.clearCache), commands?: [{id, command (its command id, plugin.<id>.<command id>, which runs it), label, params (doc), paramsSchema}] (the menu commands a filter or live effect adds)}], folder: the Additional Plug-ins Folder load report {folder, loaded, failed: [{file, error}]} | null (under automation read roots, a folder outside them is null, and a failed file and a plug-in's source outside them are named by their file name), safeMode: bool (no plug-in loads or runs, see plugin.safeMode), disabled: [{id, file, name, label}] (turned off for the next launch, see plugin.setEnabled)}",
             always,
             list
         ),
@@ -1276,7 +1321,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Run Plug-in",
             [],
             None,
-            "{id, params?: {…} (the plug-in's parameters; or give them as top-level keys; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}",
+            "{id, command?: a command plug-in's command id (default: its first), params?: {…} (the plug-in's parameters; or give them as top-level keys, except for a command plug-in; missing ones take their defaults, see plugin.info), ids?: [object id] (left out or null: the selection), …the plug-in's parameters as top-level keys} run an object filter on the selected paths and compound paths (inside selected groups and layers too; hidden, locked, guide and clipping paths, compound paths that clip a clip group and paths inside a group that clips one are left out): it may change, delete or add objects, as one undo step; the result is selected, except the objects it locked or made guides. A filter whose manifest lists inputs (type, image, symbolInstance; it lists doc.read in permissions, so plugin.install needs grant) is also given the selected objects of those kinds to read, in paint order from the bottom, with at most 16 MiB of pixels and 16 MiB of type runs per run (an object that doesn't fit what the objects before it left comes with pixelsOmitted or truncated; an image that reaches the decoder counts toward the pixels even when decoding fails); every object counts toward the input's half of the plug-in's memory cap, ids, bounds, transforms and names included, and an object whose fields besides its pixels and runs don't fit fails the run with a memory-budget error naming it and its size (a path or compound path fails it with the memory-budget error for a selection too large to hand over), and more than 100,000 of these objects fail it with an object-budget error: its output returns each as {id} or exactly as given, or the run is refused and nothing changes. With nothing selected it gets no objects (generators add theirs to the current layer). A filter with a commandAllowlist runs the commands it names while it runs (vc_call, see docs/plugins.md): its calls and its output are one undo step, and a run that fails or makes a call that fails changes nothing → {plugin, ids}. A shared command plug-in (kind command) runs its command with params, calling VectorCraft's commands under its permissions, as one undo step named after it; a run that fails changes nothing → {plugin, command, output, notes, logs, calls, fuel, panel}",
             has_doc,
             run
         ),
@@ -1285,7 +1330,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Install Plug-in",
             [],
             None,
-            "{path: a .wasm file (desktop) | dataBase64: the module (+ name?: shown as its source), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
+            "{path: a .wasm file, or a .craftplugin bundle (desktop) | dataBase64: the module (+ name?: shown as its source) | data: a .craftplugin bundle in base64 (+ name?) | repo: owner/repo or owner/repo@tag (its latest or tagged GitHub release's one .craftplugin asset, checked against the release's SHA256SUMS) | catalog: a catalog URL (https:// on GitHub's hosts, or file://; refused under automation roots) with id: the package id (+ version?: one of its releases; default the newest for this VectorCraft), review?: bool (a bundle only: check it and return what the install confirmation shows, {id, name, version, kind, permissions, commands, sha256, source, inCatalog: bool|null (false: a repository in no catalog added), replaces, permissionsChanged, stored, module? (a VectorCraft kind: its plugin.inspect entry)}, installing nothing; the install that follows with the same params takes the bundle reviewed without downloading it again), sha256?: string (a bundle only: its SHA-256 as review gave it; other bytes are refused), replace?: bool (true once the user agreed: a module with other bytes than the plug-in installed with its id, or with none installed, one whose id has settings or a cache in the plug-in store, installs only with it, takes that plug-in's place and gets its settings and cache; false: one whose id is installed is refused; left out, the same module installs again), name?: file name (with dataBase64), allowHeavy?: bool (a filter whose manifest asks for a heavy budget, budget \"heavy\" in plugin.inspect, installs only with it), grant?: [permission] (a plug-in whose manifest lists permissions, needsApproval in plugin.inspect, installs only when grant holds every one of them; the grant is recorded with the module's hash and covers only that module, so a module with other bytes needs a new grant even when it lists the same permissions; installing a module that lists no permissions forgets the grant held for its id; a refused install keeps the grant, a failed write of the module to the plug-in store leaves the grant in the store, and a stored module that is disabled or not read in Safe Mode keeps the grant for its id; with a plug-in store attached, only the grants kept there count; a request's allowHeavy and grant are refused unless the session was started with vectorcraft-cli --allow-plugin-grants: in the desktop app a person approves the install, see ui.installPlugin, and a module whose hash is already recorded, by a person's approval or by a grant accepted under that flag, needs no grant), hash?: string (the module's SHA-256 as plugin.inspect gave it: a module with other bytes is refused)} validate and install a WebAssembly plug-in for this session (a bundle of kind command goes to the shared store, one subfolder of the Plug-ins folder per plug-in, or for the session without a store; a bundle of a VectorCraft kind installs its module as dataBase64 would, with grant, allowHeavy, replace and hash as for a module) (with a plug-in store, the install waits while another window or process changes the store and writes the module and its grant before that window or process changes it again; when the store's disabled.lock can't be locked, nothing is installed) (a module whose commandAllowlist names a command no plug-in may call, such as one that reads or writes files, is refused) → its plugin.list entry, plus unknownCommands?: [id] (commandAllowlist ids no command has; a call of one fails)",
             always,
             install
         ),
@@ -1303,7 +1348,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Plug-in",
             [],
             None,
-            "{id} uninstall a plug-in (its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
+            "{id} uninstall a plug-in (a command plug-in: its folder in the shared store, with its settings; its live effects then leave the geometry as it is) and delete the settings and cache it kept (when their folder can't be moved aside, or its grant can't be removed from the plug-in store, the command fails and the plug-in stays installed; when the settings can't be moved back either, the error names the folder they stay in, and the next load, install or removal of the plug-in moves them back); for an id that isn't installed, deletes the settings and cache the plug-in store still keeps for it; it waits while another window or process changes the plug-in store, and when the store's disabled.lock can't be locked, the command fails and nothing is removed → {removed}",
             always,
             remove
         ),
@@ -1342,6 +1387,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{id | file: a plug-in as plugin.safeMode's disabled lists it or as plugin.list's source (under automation read roots, a file outside them by the file name shown, when no other listed file has it), enabled: bool} turn a plug-in on or off for the next launch (Help › Safe Mode's Enable on Re-launch); nothing loads, unloads or is uninstalled now. Turning on by id also turns on the file the plug-in is stored in. Turning on one that isn't disabled is an error. plugin.install of a disabled plug-in turns it on → {changed, saved: false when the change isn't in the plug-in folder for the next launch (a session without one, or the list there can't be read or written or is full; it is saved with the next change that saves), disabled}",
             always,
             set_enabled
+        ),
+        cmd!(
+            query "plugin.update",
+            "Update Plug-ins",
+            [],
+            None,
+            "{id?: a command plug-in (default: every one installed from a catalog or a repository), install?: bool (default false: only check)} look for a newer release where each came from → {plugins: [{id, version, upToDate?, available?: version or tag, install?: the plugin.install params that get it, updated?, needsReview?: true when its permissions or kind changed (install it with plugin.install {review: true} first), error?}]}",
+            always,
+            super::craftplugin::update
+        ),
+        cmd!(
+            query "plugin.catalog.list",
+            "List Plug-in Catalog",
+            [],
+            None,
+            "{url?: a catalog URL (default: every catalog added with plugin.catalog.add)} → {catalogs, packages: [{catalog, id, name, version (its newest release for this VectorCraft), author, description, license, repo, kind, sha256, installed: version | null}], warnings}",
+            always,
+            super::craftplugin::catalog_list
+        ),
+        cmd!(
+            query "plugin.catalog.add",
+            "Add Plug-in Catalog",
+            [],
+            None,
+            "{url: a catalog's index.json (https:// on GitHub's hosts, or file://), remove?: bool (take it out instead)} keep the catalog for plugin.catalog.list and for telling whether a repository is in a catalog (in the Plug-ins folder, catalogs.json) → {catalogs}",
+            always,
+            super::craftplugin::catalog_add
         ),
     ]
 }

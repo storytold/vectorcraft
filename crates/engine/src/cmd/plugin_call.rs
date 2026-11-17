@@ -31,7 +31,7 @@ use crate::{EngineError, Result, Session};
 
 /// Command ids a plug-in may never call, by their start: plug-ins, scripts and actions, files,
 /// documents and links, the clipboard, preferences, the view and the app, and the undo history.
-const DENIED_PREFIXES: &[&str] = &[
+pub(crate) const DENIED_PREFIXES: &[&str] = &[
     "plugin.",
     "script.",
     "action.",
@@ -348,7 +348,7 @@ pub(crate) fn names_key(text: &str, key: &str) -> bool {
 /// [`NESTED_NOT_FILES`] key list for `id`, aren't counted. A call or a recorded step inside `args`
 /// is read as part of `id`'s arguments, not as the command it names. The walk keeps its own stack,
 /// so deep arguments can't overflow the thread's.
-fn names_file(id: &str, args: &Value) -> bool {
+pub(crate) fn names_file(id: &str, args: &Value) -> bool {
     let mut stack: Vec<(&Value, ParamsPlace)> = vec![(args, ParamsPlace::of(id))];
     while let Some((v, place)) = stack.pop() {
         match v {
@@ -375,7 +375,7 @@ const PLUGIN_KEYS: &[&str] = &["effect", "effects", "id", "command", "commands"]
 /// Does `v` name a plug-in anywhere: an effect or a command ([`PLUGIN_KEYS`]) whose id starts with
 /// `plugin.`, at any depth? A call that does is refused, so a plug-in never runs another, or
 /// itself. Other strings, such as text, may start with `plugin.`.
-fn names_plugin(v: &Value) -> bool {
+pub(crate) fn names_plugin(v: &Value) -> bool {
     names_plugin_in(v, false)
 }
 
@@ -423,7 +423,7 @@ impl Calls {
 
     /// Is `s` still as the run needs it: the same documents open, the same one active and the
     /// interaction holding the run's changes still open?
-    fn kept(&self, s: &Session) -> bool {
+    pub(crate) fn kept(&self, s: &Session) -> bool {
         s.active().map(|d| d.uid) == self.document
             && s.docs.iter().map(|d| d.uid).eq(self.open.iter().copied())
             && (!self.interaction || s.in_interaction())
@@ -463,7 +463,7 @@ pub(crate) fn call(s: &mut Session, run: &Calls, id: &str, args: &Value) -> std:
 /// Runs command `id` with `args` in `s` with no file or folder readable or writable: every path the
 /// command reaches through the checked file access ([`crate::file_access`]) is refused, whatever
 /// param carries it.
-fn execute_confined(s: &mut Session, id: &str, args: &Value) -> Result<Value> {
+pub(crate) fn execute_confined(s: &mut Session, id: &str, args: &Value) -> Result<Value> {
     crate::file_access::confine(Some(&crate::file_access::AutomationRoots::none()), || s.execute(id, args))
 }
 
@@ -499,21 +499,43 @@ pub(crate) fn transaction(s: &mut Session, label: &str, f: impl FnOnce(&mut Sess
             Ok(v)
         }
         Err(e) => {
-            let open = std::mem::replace(&mut s.docs, start);
-            for st in &mut s.docs {
-                // Past the newest revision the document reached, so the restored one redraws.
-                let newest = open.iter().filter(|d| d.uid == st.uid).map(|d| d.revision).max().unwrap_or(st.revision);
-                st.revision = newest.max(st.revision).saturating_add(1);
-                crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection);
-            }
-            s.active = active;
+            Checkpoint { docs: start, active, saved }.restore(s);
             if own && let Some(st) = s.active_mut() {
                 st.interaction = None;
             }
-            saved.restore(s);
-            s.sync_front_profiles();
             Err(e)
         }
+    }
+}
+
+/// Every document as it is (its art, selection, interaction and history), which one is active, and
+/// the session state commands a plug-in may call change ([`Saved`]): what [`transaction`] puts back
+/// when a run fails, and what a shared command plug-in's call puts back when it is refused after it
+/// ran (`cmd::craftplugin`).
+pub(crate) struct Checkpoint {
+    docs: Vec<crate::DocState>,
+    active: Option<usize>,
+    saved: Saved,
+}
+
+impl Checkpoint {
+    /// The checkpoint of `s` as it is now.
+    pub(crate) fn of(s: &Session) -> Checkpoint {
+        Checkpoint { docs: s.docs.clone(), active: s.active, saved: Saved::of(s) }
+    }
+
+    /// Puts `s` back as it was at the checkpoint; each document's revision moves past the newest it
+    /// reached, so the restored one redraws.
+    pub(crate) fn restore(self, s: &mut Session) {
+        let open = std::mem::replace(&mut s.docs, self.docs);
+        for st in &mut s.docs {
+            let newest = open.iter().filter(|d| d.uid == st.uid).map(|d| d.revision).max().unwrap_or(st.revision);
+            st.revision = newest.max(st.revision).saturating_add(1);
+            crate::deselect_hidden(&s.menu, &st.doc, &mut st.selection);
+        }
+        s.active = self.active;
+        self.saved.restore(s);
+        s.sync_front_profiles();
     }
 }
 

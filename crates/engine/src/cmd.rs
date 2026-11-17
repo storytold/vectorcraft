@@ -17,6 +17,7 @@ pub mod colormgmt;
 pub mod colortheme;
 pub mod compositefonts;
 mod compoundshape;
+pub mod craftplugin;
 pub(crate) mod create;
 mod css;
 mod cut;

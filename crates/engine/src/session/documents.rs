@@ -101,6 +101,7 @@ impl Session {
             plugin_output: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
+            craft_plugins: Default::default(),
             recent_urls: vec![],
             trace_preset_changes: Default::default(),
             ui_language: None,

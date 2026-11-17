@@ -201,7 +201,7 @@ pub(crate) fn holds(old: impl Read, bytes: &[u8]) -> bool {
 
 /// Write `bytes` to `dir/file`, making the folder; nothing is written when the file has them
 /// already. A failure is logged: remembering is best effort and never fails the command.
-fn put(dir: &Path, file: &str, bytes: &[u8]) -> bool {
+pub(crate) fn put(dir: &Path, file: &str, bytes: &[u8]) -> bool {
     let path = dir.join(file);
     if std::fs::File::open(&path).is_ok_and(|old| holds(old, bytes)) {
         return true;
@@ -448,6 +448,10 @@ impl Session {
     /// ([`DISABLED_FILE`]), and install the stored ones ([`Session::load_stored_plugins`]).
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
         let path = dir.join(DISABLED_FILE);
+        // The shared command plug-ins' store is the same folder: one subfolder per plug-in, named
+        // by a hash of its id, beside the `*.wasm` modules read below (`cmd::craftplugin`).
+        #[cfg(not(target_arch = "wasm32"))]
+        self.craft_plugins.open_store(&dir);
         self.plugin_dir = Some(dir);
         // A `plugin.install` in another session or process writes the store before this reads it.
         let _held = crate::cmd::plugin::hold_plugin_changes();
