@@ -7899,6 +7899,11 @@ breakText	Glyphs	Glifák
 @msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
 @msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
 @msg	`angle` must be from -180 to 180 degrees	Az `angle` értéke -180 és 180 fok között lehet
+@msg	`roundness` must be from 0 to 100%	A `roundness` értéke 0 és 100% között lehet
+@msg	`fidelity` must be from 0.01 to 100 pt	A `fidelity` értéke 0.01 és 100 pt között lehet
+@msg	style must be "pencil" or "brush"	A style értéke "pencil" vagy "brush" lehet
+@msg	extend end must be "start" or "end"	Az extend vége "start" vagy "end" lehet
+@msg	connect end must be "start" or "end"	A connect vége "start" vagy "end" lehet
 @msg	`roundness` must be from 1 to 100%	A `roundness` értéke 1 és 100% között lehet
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
 	Weed Box and Lines…	Gyomláló keret és vonalak…
@@ -8422,7 +8427,6 @@ breakText	Glyphs	Glifák
 @msg	anchor `smooth` must be true or false	horgonypont, `smooth`: true vagy false kell
 @msg	anchor `{key}` must be [x, y]	horgonypont, `{key}`: [x, y] kell
 @msg	anchor `{key}` must be a number	horgonypont, `{key}`: szám kell
-@msg	angle and roundness must be finite	angle és roundness: véges érték kell
 @msg	angles must be a list as long as pins (degrees or null)	angles: a pins listával azonos hosszúságú lista kell (fok vagy null)
 @msg	appearance must be flat|center|edge	appearance: flat|center|edge kell
 @msg	apply is "fill" or "stroke", not `{other}`	apply: "fill" vagy "stroke", ez nem az: `{other}`

@@ -297,3 +297,52 @@ fn a_stroke_of_another_glyph_where_one_was_filled_stays_its_own_type() {
     let want = [("A".to_string(), 60.0, true, true), ("B".to_string(), 60.0, true, false), ("X".to_string(), 60.0, false, true)];
     assert_eq!(word_runs(content), want, "{content}");
 }
+
+/// Helvetica PDF page drawing `content` (fill cream, stroke black, 3 points wide), imported: each
+/// type object's runs in drawing order, as their text and whether they are filled and stroked.
+fn type_runs(content: &str) -> Vec<Vec<(String, bool, bool)>> {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let resources = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>";
+    let content = format!("0 0 0 RG 1 1 0.8 rg 3 w {content}");
+    let bytes = pdf(&[PdfPage { resources: resources.into(), ..PdfPage::new(300.0, 200.0, &content) }], None);
+    let d = import(&bytes).unwrap();
+    let mut types = vec![];
+    d.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            types.push(t.runs.iter().map(|r| (r.text.clone(), !r.style.fill.is_none(), !r.style.stroke.is_none())).collect());
+        }
+    });
+    types
+}
+
+/// A glyph filled only (mode 0) right after one filled and stroked (mode 2) is filled only: it
+/// joins the same type object, but not the stroked run, whether the glyphs before were filled
+/// only, filled and stroked, or both, and a glyph filled and stroked after it is stroked again
+/// (#8300).
+#[test]
+fn a_glyph_filled_only_after_one_filled_and_stroked_is_not_stroked() {
+    let run = |text: &str, stroked: bool| (text.to_string(), true, stroked);
+    let cases = [
+        ("2 Tr (B) Tj 0 Tr (C) Tj", vec![run("B", true), run("C", false)]),
+        ("0 Tr (A) Tj 2 Tr (B) Tj 0 Tr (C) Tj", vec![run("A", false), run("B", true), run("C", false)]),
+        ("2 Tr (B) Tj 0 Tr (C) Tj 2 Tr (D) Tj", vec![run("B", true), run("C", false), run("D", true)]),
+        ("2 Tr (AB) Tj 0 Tr (CD) Tj", vec![run("AB", true), run("CD", false)]),
+        ("0 Tr (A) Tj 2 Tr (BC) Tj", vec![run("A", false), run("BC", true)]),
+    ];
+    for (show, want) in cases {
+        let content = format!("BT /F1 48 Tf 20 80 Td {show} 0 Tr ET");
+        assert_eq!(type_runs(&content), [want], "{content}");
+    }
+}
+
+/// Fill and stroke rendering glyph by glyph, and a word filled whole then stroked whole at the
+/// same place, still come in as one run filled and stroked (#8300).
+#[test]
+fn glyphs_filled_and_stroked_one_by_one_stay_one_run() {
+    for content in [
+        "BT /F1 48 Tf 20 80 Td 2 Tr (A) Tj (B) Tj (C) Tj 0 Tr ET",
+        "BT /F1 48 Tf 1 0 0 1 20 80 Tm 0 Tr (ABC) Tj 1 Tr 1 0 0 1 20 80 Tm (ABC) Tj 0 Tr ET",
+    ] {
+        assert_eq!(type_runs(content), [vec![("ABC".to_string(), true, true)]], "{content}");
+    }
+}
