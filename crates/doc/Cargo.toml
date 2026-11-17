@@ -13,6 +13,7 @@ workspace = true
 spine-count = []
 
 [dependencies]
+vectorcraft-barcode = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 kurbo = { workspace = true }

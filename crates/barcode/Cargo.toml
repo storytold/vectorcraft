@@ -1,0 +1,16 @@
+[package]
+name = "vectorcraft-barcode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VectorCraft barcode and QR Code encoders, written from the public symbology standards"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
