@@ -324,6 +324,37 @@ fn bunri_kinshi_toggle_follows_kinsoku_and_the_selected_paragraphs() {
     assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
 }
 
+/// Kurikaeshi Moji Shori: new type has it off; the menu item turns it on for the paragraphs the Type
+/// tool's selection touches in one undo step, a click while the selected paragraphs differ turns it
+/// on for all of them, and a click while all have it turns it off. Reset Panel turns it off.
+#[test]
+fn kurikaeshi_moji_shori_toggle_follows_the_selected_paragraphs() {
+    let (mut app, id) = editing_text("時々\nすゝ\n");
+    app.session.prefs.show_east_asian_options = true;
+    let flags = |app: &VectorcraftApp| {
+        let node = app.session.active().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap();
+        let NodeKind::Text(text) = &node.kind else { panic!("text") };
+        (text.para_at(0).kurikaeshi_moji_shori, text.para_at(1).kurikaeshi_moji_shori)
+    };
+    assert_eq!(flags(&app), (false, false), "new type has it off");
+    select_range(&mut app, 0, 3);
+    let history = app.session.active().unwrap().history.undo.len();
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (true, false));
+    assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (true, true), "mixed: a click turns it on for all");
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    assert_eq!(flags(&app), (false, false), "all on: a click turns it off");
+    app.session.set_tool_option("selectAll", &json!(true));
+    toggle_kurikaeshi_moji_shori(&mut app);
+    app.session.set_tool_option("selectAll", &json!(true));
+    reset_panel(&mut app);
+    assert_eq!(flags(&app), (false, false), "Reset Panel turns it off");
+}
+
 #[test]
 fn paragraph_mixed_indent_fields_show_blank() {
     let (mut app, id) = editing_text("A\nB\n");

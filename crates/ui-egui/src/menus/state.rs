@@ -282,7 +282,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             .dialog
             .as_ref()
             .is_some_and(|d| crate::dialogs::para_style_options::is_paragraph_dialog(d) && crate::dialogs::para_style_options::can_reset(d)),
-        "ui.newArtboard" | "artboard.selectAll" => app.session.active().is_some(),
+        "ui.newArtboard" | "artboard.selectAll" | crate::dialogs::check_spelling::COMMAND => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),

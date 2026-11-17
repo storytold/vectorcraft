@@ -643,6 +643,45 @@ fn window_panels_peek_rejects_what_it_cannot_show_and_changes_nothing() {
 }
 
 #[test]
+fn panels_shown_by_window_panels_peek_stay_until_the_pointer_moves_or_leaves_the_window() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    assert_eq!(h.app.run("window.panels.peek", json!({"side": "right"})).unwrap(), json!("right"));
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some(), "with no pointer movement, the panels stay");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], json!("right"));
+    h.frame(vec![Event::PointerMoved(wide.center())]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_none(), "the pointer moved away from them, so they hide");
+    // The pointer leaving the window counts as moving away.
+    h.app.run("window.panels.peek", json!({"side": "right"})).unwrap();
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_some());
+    h.frame(vec![Event::PointerGone]);
+    wait(&mut h, peek::GRACE * 2.0);
+    assert!(h.tab("properties").is_none(), "the pointer left the window, so they hide");
+    assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+}
+
+#[test]
+fn panels_held_by_a_flyout_hide_after_it_closes_with_the_pointer_still_away_from_them() {
+    let mut h = Harness::new();
+    let wide = hide_with_tab(&mut h);
+    // The pointer rests on the canvas, then outside the window, while a flyout holds the panels.
+    for away in [vec![Event::PointerMoved(wide.center())], vec![Event::PointerGone]] {
+        h.app.run("window.panels.peek", json!({"side": "right"})).unwrap();
+        h.app.ui.open_panel = Some("swatches".into());
+        h.frame(away);
+        wait(&mut h, peek::GRACE * 2.0);
+        assert!(h.tab("properties").is_some(), "an open flyout keeps them");
+        h.app.ui.open_panel = None;
+        wait(&mut h, peek::GRACE * 2.0);
+        assert!(h.tab("properties").is_none(), "the flyout closed with the pointer away from them, so they hide");
+        assert_eq!(inspect(&h.app, &h.ctx)["peek"], Value::Null);
+    }
+}
+
+#[test]
 fn edge_panels_are_the_docked_panels_on_each_side_of_the_canvas() {
     let layout = default_from(DockTab::ALL[0], &[], false, None, None);
     let right = peek::edge_panels(&layout, peek::Edge::Right);
@@ -1701,4 +1740,117 @@ fn rail_flyout_collapse_arrow_closes_the_opening_icon_after_switching_tabs() {
     assert!(h.app.ui.open_panel.is_none());
     assert!(craft_ui::docking::flyout::<String>(&h.ctx, area_id()).is_none());
     assert_eq!(h.layout(), before, "all tabs and their active state stay in the rail");
+}
+
+/// The texts `panel`'s menu draws, in the harness's context.
+fn panel_menu_texts(h: &mut Harness, panel: &str) -> Vec<String> {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().trim().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let app = &mut h.app;
+    let mut out = h.ctx.run_ui(egui::RawInput { screen_rect: Some(SCREEN), ..Default::default() }, |ui| {
+        crate::panels::panel_menu_items(app, ui, panel);
+    });
+    out.textures_delta.clear();
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    v
+}
+
+fn cycle_button(h: &Harness, panel: &str) -> Option<Rect> {
+    let panel = panel.to_string();
+    h.ctx.read_response(area_id().with(("header", &panel)).with(("cycle-display-sizes", &panel))).map(|r| r.rect)
+}
+
+/// Each panel with display sizes steps between the states its panel menu's Show/Hide Options
+/// item sets, and the smallest size goes back to the largest.
+#[test]
+fn cycle_options_steps_through_the_states_the_panel_menu_sets() {
+    let mut h = Harness::new();
+    for panel in ["align", "attributes", "character", "color", "gradient", "info", "paragraph", "stroke", "transform"] {
+        assert!(panel_menu_texts(&mut h, panel).iter().any(|t| t == "Hide Options"), "{panel} starts with its options");
+        let r = h.app.run("window.panel.cycleOptions", json!({"panel": panel})).unwrap();
+        assert_eq!(r, json!({"panel": panel, "size": 1, "sizes": 2}), "{panel}");
+        assert!(panel_menu_texts(&mut h, panel).iter().any(|t| t == "Show Options"), "{panel} hides its options");
+        let r = h.app.run("window.panel.cycleOptions", json!({"panel": panel})).unwrap();
+        assert_eq!(r["size"], 0, "{panel}");
+        assert!(panel_menu_texts(&mut h, panel).iter().any(|t| t == "Hide Options"), "{panel} shows them again");
+    }
+    // The Flattener Preview's options start hidden: its first step shows them, as Show Options does.
+    assert!(!h.app.ui.flattener_preview.show_options);
+    let r = h.app.run("window.panel.cycleOptions", json!({"panel": "Flattener Preview"})).unwrap();
+    assert_eq!(r, json!({"panel": crate::panels::flattener_preview::ID, "size": 0, "sizes": 2}));
+    assert!(h.app.ui.flattener_preview.show_options);
+    h.app.run("window.panel.cycleOptions", json!({"panel": crate::panels::flattener_preview::ID})).unwrap();
+    assert!(!h.app.ui.flattener_preview.show_options);
+    // Transparency: thumbnails and options, thumbnails alone, neither, and back.
+    let shown = |h: &mut Harness| {
+        let t = panel_menu_texts(h, "transparency");
+        (t.iter().any(|t| t == "Hide Thumbnails"), t.iter().any(|t| t == "Hide Options"))
+    };
+    assert_eq!(shown(&mut h), (true, true));
+    for (size, want) in [(1, (true, false)), (2, (false, false)), (0, (true, true))] {
+        let r = h.app.run("window.panel.cycleOptions", json!({"panel": "transparency"})).unwrap();
+        assert_eq!((r["size"].clone(), r["sizes"].clone()), (json!(size), json!(3)));
+        assert_eq!(shown(&mut h), want, "size {size}");
+    }
+    // Options hidden with the thumbnails shown matches no size, so the next step is the largest.
+    crate::panels::set_pstate(&h.ctx, "tr-hide-thumbs", true);
+    assert_eq!(h.app.run("window.panel.cycleOptions", json!({"panel": "transparency"})).unwrap()["size"], 0);
+    assert_eq!(shown(&mut h), (true, true));
+}
+
+/// An unknown panel, a panel without display sizes or a missing `panel` is an error, and the
+/// panels keep their sizes.
+#[test]
+fn cycle_options_rejects_panels_without_sizes() {
+    let mut h = Harness::new();
+    for (params, error) in [
+        (json!({"panel": "nope"}), "unknown panel `nope`"),
+        (json!({}), "unknown panel ``"),
+        (json!({"panel": 3}), "unknown panel ``"),
+        (json!({"panel": "layers"}), "`layers` has no display sizes to cycle"),
+        (json!({"panel": "swatches"}), "`swatches` has no display sizes to cycle"),
+    ] {
+        assert_eq!(h.app.run("window.panel.cycleOptions", params.clone()).unwrap_err(), error, "{params}");
+    }
+    assert!(panel_menu_texts(&mut h, "stroke").iter().any(|t| t == "Hide Options"));
+    assert!(!h.app.ui.color_hide_options);
+}
+
+/// The double triangle shows on the tab strip of a panel with display sizes, docked or floating,
+/// and a click on it shows the panel's next size; other panels have none.
+#[test]
+fn the_double_triangle_on_the_tab_strip_cycles_the_display_sizes() {
+    let mut h = Harness::new();
+    h.ctx.enable_accesskit();
+    h.frame(vec![]);
+    assert!(cycle_button(&h, "properties").is_none() && cycle_button(&h, "layers").is_none(), "the main column's panels have no sizes");
+    h.app.run("window.panel.float", json!({"panel": "stroke"})).unwrap();
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let control = cycle_button(&h, "stroke").expect("a floating Stroke panel has the double triangle");
+    assert!(h.nodes.iter().any(|(_, node)| node.label() == Some("Cycle Display Sizes")), "screen readers name it");
+    let menu = h.ctx.read_response(area_id().with(("header", &"stroke".to_string())).with(("panel-menu", &"stroke".to_string()))).unwrap().rect;
+    assert!(!menu.intersects(control), "the double triangle and the menu have separate hit targets");
+    h.click(control.center());
+    assert!(crate::panels::pstate::<bool>(&h.ctx, "stroke-hide-options"), "a click hides the options");
+    assert!(floating_window(&h.layout(), "stroke").is_some(), "the panel stays where it is");
+    h.click(control.center());
+    assert!(!crate::panels::pstate::<bool>(&h.ctx, "stroke-hide-options"), "a second click shows them again");
+    // A docked panel's tab strip has it too, and a floating panel without sizes does not.
+    h.app.run("window.panel.dock", json!({"panel": "color", "anchor": "layers", "zone": "below"})).unwrap();
+    h.app.run("window.panel.float", json!({"panel": "swatches"})).unwrap();
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let control = cycle_button(&h, "color").expect("a docked Color panel has the double triangle");
+    h.click(control.center());
+    assert!(h.app.ui.color_hide_options);
+    assert!(cycle_button(&h, "swatches").is_none());
 }

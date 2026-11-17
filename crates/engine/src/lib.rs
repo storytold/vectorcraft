@@ -179,6 +179,9 @@ pub struct Session {
     /// The Scripts folder, whose scripts File › Scripts lists; `None`: no folder
     /// ([`Session::attach_scripts_dir`]).
     scripts_dir: Option<std::path::PathBuf>,
+    /// The folder of File Info's metadata templates; `None`: no folder
+    /// ([`Session::attach_metadata_templates_dir`]).
+    metadata_templates_dir: Option<std::path::PathBuf>,
     /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
     /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
     new_doc_profile_dir: Option<std::path::PathBuf>,

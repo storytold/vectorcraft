@@ -189,9 +189,9 @@ pub fn open(app: &mut VectorcraftApp) {
 }
 
 /// The options format `id` starts with in Format Settings: the raster options dialogs' defaults
-/// (without quality and image maps: the rows choose quality, a map is another file), the SVG
-/// Options' first-use ones (without artboards and images: a linked image is another file), or the
-/// default PDF preset.
+/// (without image maps, a map being another file, and without quality but WebP's: JPEG rows choose
+/// their quality), the SVG Options' first-use ones (without artboards and images: a linked image is
+/// another file), or the default PDF preset.
 fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
     let mut o = match (id, fileio::format(id)) {
         ("svg", _) => svg_options::first_use(),
@@ -199,8 +199,11 @@ fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
         (_, Some(f)) => png_options::defaults(app, f),
         _ => Map::new(),
     };
-    for k in ["quality", "imageMap", "useArtboards", "images"] {
+    for k in ["imageMap", "useArtboards", "images"] {
         o.remove(k);
+    }
+    if id != "webp" {
+        o.remove("quality");
     }
     o
 }
@@ -638,15 +641,16 @@ fn edit_artboard_name(
             widgets::reject_dialog_commit(ui.ctx());
         }
         let response = ui.put(rect, egui::TextEdit::singleline(text).id(field).font(egui::FontId::proportional(11.0)).desired_width(rect.width()));
-        if *focus {
-            widgets::focus_field(ui, field, text);
-            *focus = false;
-        } else if cancel || enter || response.lost_focus() {
+        // Escape and Enter also end the edit in the first frame that draws the field.
+        if cancel || enter || (!*focus && response.lost_focus()) {
             if !cancel {
                 *rename = Some((*b, std::mem::take(text)));
             }
             response.surrender_focus();
             *editing = None;
+        } else if *focus {
+            widgets::focus_field(ui, field, text);
+            *focus = false;
         }
         (false, true)
     } else {
@@ -654,6 +658,10 @@ fn edit_artboard_name(
         if let Some(board) = board
             && response.double_clicked()
         {
+            // A name still typed for an artboard whose field this frame has not drawn yet is kept.
+            if let Some((b, text, _)) = editing.take() {
+                *rename = Some((b, text));
+            }
             *editing = Some((board, name.into(), true));
             ui.ctx().request_repaint();
             // If both releases arrived this frame, the first click did not toggle the row.

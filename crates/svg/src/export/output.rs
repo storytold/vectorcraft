@@ -164,14 +164,22 @@ impl Writer<'_> {
     }
 
     /// Reserve ids for every named object up front so generated def ids never collide with them.
+    /// Symbols' art takes no ids, also where the drawing holds it placed by an instance (every
+    /// instance of the symbol writes it).
     pub(super) fn assign_name_ids(&mut self) {
         if self.opts.object_ids == ObjectIds::Minimal {
             return;
         }
+        let mut art = HashSet::new();
+        for s in &self.doc.symbols {
+            s.art.walk(&mut |n| {
+                art.insert(n.id);
+            });
+        }
         let mut named: Vec<(NodeId, String)> = Vec::new();
         self.doc.walk(|n| {
             // Ruler guides are not written, so their names reserve no id.
-            if n.is_ruler_guide() {
+            if n.is_ruler_guide() || art.contains(&n.id) {
                 return;
             }
             if let Some(name) = &n.name {

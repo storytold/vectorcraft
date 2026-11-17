@@ -151,6 +151,32 @@ fn style_names_are_unique() {
     assert_ne!(style(&s, "Y copy").id, style(&s, "Y").id);
 }
 
+#[test]
+fn duplicate_puts_the_copy_at_the_end_of_the_list_in_one_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "graphicStyle.new", json!({"name": "S"}));
+    let names = |s: &Session| s.doc().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let before = names(&s);
+    // A style that is not last: the copy still goes after every other style.
+    let first = before[0].clone();
+    assert_ne!(first, *before.last().unwrap());
+    assert_eq!(run(&mut s, "graphicStyle.duplicate", json!({"name": first}))["name"], format!("{first} copy"));
+    let after = names(&s);
+    assert_eq!(after[..before.len()], before[..]);
+    assert_eq!(after.last(), Some(&format!("{first} copy")));
+    let (src, copy) = (style(&s, &first), style(&s, &format!("{first} copy")));
+    assert_eq!(copy.appearance, src.appearance);
+    assert_ne!(copy.id, src.id);
+    // Nothing is linked to the copy, and the source keeps its links.
+    assert!(linked(&mut s, &format!("{first} copy")).is_empty());
+    assert_eq!(linked(&mut s, "S"), vec![a.0]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(names(&s), before);
+    assert!(s.execute("graphicStyle.duplicate", &json!({"name": "nope"})).is_err());
+    assert_eq!(names(&s), before);
+}
+
 /// Three rectangles: `a` (the source of style "S"), `b` and `c`, all linked to "S".
 fn linked_three(s: &mut Session) -> (NodeId, NodeId, NodeId) {
     let a = rect(s, 10.0);
