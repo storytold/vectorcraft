@@ -599,9 +599,10 @@ const MAX_SAVED_RECENT_COMMANDS: usize = 20;
 /// Puts `id` first in the Recent Commands ids `list`, removing its earlier place, and keeps the
 /// newest [`MAX_RECENT_COMMANDS`] ids that are `known`. An id that is not `known` now (a plug-in
 /// that is disabled or not loaded yet) keeps its place among them, so it shows again when its
-/// command comes back. The list never holds more than [`MAX_SAVED_RECENT_COMMANDS`] ids.
+/// command comes back. The palette's own toggle, saved before its picks were left out, is dropped
+/// so that it does not take a place. The list never holds more than [`MAX_SAVED_RECENT_COMMANDS`] ids.
 fn remember(list: &mut Vec<String>, id: &str, known: impl Fn(&str) -> bool) {
-    list.retain(|c| c != id);
+    list.retain(|c| c != id && c != PALETTE_TOGGLE);
     list.insert(0, id.to_string());
     let mut kept = 0;
     let end = list.iter().position(|c| {
@@ -1321,6 +1322,24 @@ mod tests {
         remember(&mut list, "paint.swap", known);
         assert_eq!(list.len(), MAX_SAVED_RECENT_COMMANDS);
         assert_eq!(list.first().map(String::as_str), Some("paint.swap"));
+    }
+
+    /// A palette toggle saved in a full Recent Commands list does not take one of its places: after
+    /// another pick the list keeps that pick and the seven newest commands before it, and the
+    /// toggle is dropped.
+    #[test]
+    fn a_saved_palette_toggle_does_not_take_a_recent_place() {
+        let entries = build(Lang::EN);
+        let known = |c: &str| entries.iter().any(|e| e.id == c);
+        assert!(known(PALETTE_TOGGLE), "the toggle has a result");
+        let others: Vec<String> =
+            entries.iter().filter(|e| e.id != PALETTE_TOGGLE && e.id != "paint.swap").take(MAX_RECENT_COMMANDS).map(|e| e.id.clone()).collect();
+        let mut list: Vec<String> = std::iter::once(PALETTE_TOGGLE.to_string()).chain(others.iter().cloned()).collect();
+        remember(&mut list, "paint.swap", known);
+        let expected: Vec<String> = std::iter::once("paint.swap".to_string()).chain(others.iter().take(MAX_RECENT_COMMANDS - 1).cloned()).collect();
+        assert_eq!(list, expected);
+        let shown: Vec<&str> = recent(&entries, &list).iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(shown.len(), MAX_RECENT_COMMANDS);
     }
 
     /// The open palette drawn over `app`, after the frame's keys go to the shortcuts as in the app,
