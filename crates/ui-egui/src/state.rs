@@ -503,6 +503,9 @@ pub struct UiState {
     /// Edit Toolbar's All Tools drawer is open beside the toolbar (`window.editToolbar`).
     #[serde(skip)]
     pub tools_drawer: bool,
+    /// The All Tools drawer's transient filter, cleared whenever the drawer opens.
+    #[serde(skip)]
+    pub tools_drawer_query: String,
     /// The toolbars made with New Toolbar, in the order they were made.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub custom_toolbars: Vec<CustomToolbar>,
@@ -1092,6 +1095,7 @@ impl UiState {
         self.dialog = None;
         self.flyout = None;
         self.tools_drawer = false;
+        self.tools_drawer_query.clear();
         self.drawer_toolbar = None;
         crate::custom_toolbars::sanitize(&mut self.custom_toolbars);
         self.palette_open = false;
@@ -1174,6 +1178,7 @@ impl Default for UiState {
             toolbar_edits: ToolbarEdits::default(),
             toolbar_show: ToolbarShow::default(),
             tools_drawer: false,
+            tools_drawer_query: String::new(),
             custom_toolbars: vec![],
             drawer_toolbar: None,
             floating_panels: vec![],
