@@ -413,6 +413,42 @@ fn a_pattern_painted_with_another_pattern_is_not_matched_by_the_inner_patterns_n
     assert_eq!((&again["added"], &again["existing"]), (&json!([]), &json!(["Tiles 2"])), "{again}");
 }
 
+/// A global color that a library pattern's art links to, added in the same call after the pattern
+/// swatch, is the swatch the pattern brought with it: it is added once, not again as a numbered
+/// copy, and goes into the library swatch's color group.
+#[test]
+fn a_color_a_pattern_brings_is_not_added_twice_in_one_call() {
+    use std::sync::Arc;
+    use vectorcraft_doc::pattern::pattern_paint;
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": "#123456", "global": true}));
+    s.edit("Pattern", |d, _| {
+        let ink = Paint::Solid { color: Color::rgb8(0x12, 0x34, 0x56), swatch: Some("Ink".into()), tint: 1.0 };
+        let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 6.0, 6.0));
+        let square = vectorcraft_doc::Node::path(d.alloc_id(), square, vectorcraft_doc::Appearance::basic(ink, Paint::None, 0.0));
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Squares", vec![Arc::new(square)]) });
+        d.swatches.push(vectorcraft_color::Swatch { name: "Tiles".into(), paint: pattern_paint("Squares"), global: false, spot: false });
+        // `Ink` goes into a color group of its own.
+        let i = d.swatches.iter().position(|w| w.name == "Ink").unwrap();
+        let ink = d.swatches.remove(i);
+        d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Inks".into(), swatches: vec![ink] });
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Squares.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles", "Inks"]}));
+    let d = doc(&s);
+    let inks: Vec<&str> = d.swatches_iter().filter(|w| w.name.starts_with("Ink")).map(|w| w.name.as_str()).collect();
+    assert_eq!(inks, ["Ink"], "{r}");
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Tiles", "Ink"]), &json!([])), "{r}");
+    let group = d.swatch_groups.iter().find(|g| g.name == "Inks").map(|g| g.swatches.iter().map(|w| w.name.as_str()).collect::<Vec<_>>());
+    assert_eq!(group, Some(vec!["Ink"]), "{r}");
+    assert!(d.swatches.iter().all(|w| w.name != "Ink"), "{r}");
+}
+
 #[test]
 fn swatch_exchange_files_load_add_and_list_as_user_libraries() {
     let bytes = vectorcraft_testkit::ase::sample();

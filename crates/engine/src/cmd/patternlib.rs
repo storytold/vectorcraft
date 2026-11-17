@@ -87,10 +87,21 @@ pub fn swatch_source(w: &Swatch) -> Option<Arc<Document>> {
 
 /// Add pattern `name` of library `lib` to `d` with the resources its art uses, as pasting art
 /// painted with it does: the same pattern there already is used, and a name another pattern or
-/// swatch has gets a number → the pattern's name in `d`.
-pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> Result<String> {
+/// swatch has gets a number → the pattern's name in `d`, and the swatches the import added for
+/// the pattern's art: (the swatch's name in `lib`, its name in `d`), pattern swatches left out.
+pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> Result<(String, Vec<(String, String)>)> {
+    let had: std::collections::HashSet<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
     let imported = gather(lib, name).import_into(d, &SwatchChoices::default(), false)?;
-    Ok(imported_name(&imported, name))
+    let from = |to: &str| {
+        let renamed = imported.renamed.iter().find(|r| r["kind"] == "swatch" && r["to"] == to).and_then(|r| r["from"].as_str());
+        renamed.unwrap_or(to).to_string()
+    };
+    let added = d
+        .swatches_iter()
+        .filter(|w| !had.contains(&w.name) && !matches!(w.paint, Paint::Pattern { .. }))
+        .map(|w| (from(&w.name), w.name.clone()))
+        .collect();
+    Ok((imported_name(&imported, name), added))
 }
 
 /// Pattern `name` of `lib` with the resources its art uses, as an object painted with it is copied.

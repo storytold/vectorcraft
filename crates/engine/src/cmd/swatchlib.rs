@@ -970,13 +970,17 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
             let before = d.swatch_groups.len();
             let mut placed: Vec<(&str, usize)> = vec![];
             let mut taken = taken_names(d);
+            // The swatches the patterns imported in this call brought with their art: (library
+            // name, document name).
+            let mut brought: Vec<(String, String)> = vec![];
             for (group, w) in fresh {
                 let (name, sw) = if let (Paint::Pattern { pattern, .. }, Some(src)) = (&w.paint, &patterns) {
                     // The pattern comes with its swatch; a pattern the document has without one
                     // gets one. The swatch a pattern that comes in brings is named after the pattern:
                     // it takes the library swatch's name and color group instead.
                     let had = taken_names(d);
-                    let target = patternlib::import(d, src, pattern)?;
+                    let (target, colors) = patternlib::import(d, src, pattern)?;
+                    brought.extend(colors);
                     if let Some(name) = library_pattern_swatch(d, w, &target).filter(|n| had.contains(n)) {
                         reused.push((w.name.clone(), name));
                         taken = taken_names(d);
@@ -1000,8 +1004,20 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     };
                     (name.clone(), Swatch { name, paint, global: false, spot: false })
                 } else {
-                    let name = free_in(&mut taken, &w.name);
-                    (name.clone(), Swatch { name, ..(*w).clone() })
+                    // A color a pattern added earlier in this call brought with its art is that
+                    // swatch: it moves to the library swatch's place.
+                    let at = brought.iter().position(|(from, _)| *from == w.name);
+                    let moved = at.map(|i| brought.swap_remove(i).1).and_then(|n| {
+                        let i = d.swatches.iter().position(|x| x.name == n)?;
+                        Some(d.swatches.remove(i))
+                    });
+                    match moved {
+                        Some(sw) => (sw.name.clone(), sw),
+                        None => {
+                            let name = free_in(&mut taken, &w.name);
+                            (name.clone(), Swatch { name, ..(*w).clone() })
+                        }
+                    }
                 };
                 match group {
                     Some(g) => {
