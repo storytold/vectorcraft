@@ -1381,6 +1381,28 @@ fn a_stack_with_one_pattern_twice_keeps_the_drawn_look() {
     assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
+/// A stack that fills with a pattern once, whose drawn look fills with it twice at different
+/// placements, keeps the drawn look: which placement is the style's isn't known. A look filling with
+/// it twice at the same placement still comes in as the path with that fill.
+#[test]
+fn a_look_placing_a_stacks_pattern_twice_keeps_the_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let other = "25 30 1.5 .75 30 1 45 10 0 [.8 .1 -.2 1.1 4 -6]";
+    let pattern = fill_filter(&format!("(Dots) {ops} p"));
+    let read = |second: &str| {
+        let look = format!("(Dots) {ops} p\n{rect}f\n(Dots) {second} p\n{rect}f\n");
+        read_ok(&format!("{}{DOTS}{}", stacked_style(std::slice::from_ref(&pattern)), stacked_object(&look, &format!("{rect}n"))))
+    };
+    let r = read(other);
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let r = read(ops);
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Path { .. })), "the path: {a:#?} {:?}", r.warnings);
+}
+
 /// A style's pattern fill under an effect on the object keeps the drawn look, a conservative rule
 /// (in one file a Scribble over a pattern fill drew unlike its look; why isn't established).
 #[test]
