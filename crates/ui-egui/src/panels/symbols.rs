@@ -380,11 +380,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.min_rect()
     });
     let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
-    if !over_symbol
-        && let Some(ids) = widgets::art_drop(ui, &zone)
-        && let Err(e) = app.run("symbol.new", json!({ "ids": ids, "type": "dynamic" }))
-    {
-        app.status(e);
+    if !over_symbol && let Some(ids) = widgets::art_drop(ui, &zone) {
+        // Shift held at the release keeps the dropped art as ordinary art.
+        let mut p = json!({ "ids": ids, "type": "dynamic" });
+        if modifiers_at_release(ui).shift {
+            p["keepArt"] = json!(true);
+        }
+        if let Err(e) = app.run("symbol.new", p) {
+            app.status(e);
+        }
     }
     // Redefine Symbol with the dropped art, which becomes an instance of it, in one undo step.
     if let Some((name, ids)) = redefine
@@ -426,8 +430,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         } else if new.clicked() {
             // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
-            // dialog's default.
-            let (cmd, p) = if ui.input(|i| i.modifiers.alt) { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
+            // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
+            let m = ui.input(|i| i.modifiers);
+            let (cmd, mut p) = if m.alt { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
+            if m.shift {
+                p["keepArt"] = json!(true);
+            }
             app.run(cmd, p).ok();
         }
         // Alt deletes an unused symbol without asking; a symbol with instances still asks.
@@ -452,9 +460,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
     // Shift keeps the selected art as ordinary art instead of making it an instance.
-    let redefine = if ui.input(|i| i.modifiers.shift) { json!({"name": sel, "keepArt": true}) } else { name.clone() };
+    let shift = ui.input(|i| i.modifiers.shift);
+    let redefine = if shift { json!({"name": sel, "keepArt": true}) } else { name.clone() };
+    let new = if shift { json!({"keepArt": true}) } else { json!({}) };
     let items: [(&str, bool, &str, Value); 3] = [
-        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", json!({})),
+        (tl!("New Symbol…"), has_sel, "ui.symbolOptions", new),
         (tl!("Redefine Symbol"), has_sel && sel.is_some(), "symbol.update", redefine),
         (tl!("Duplicate Symbol"), sel.is_some(), "symbol.duplicate", name.clone()),
     ];
@@ -573,14 +583,20 @@ fn art_redefine_drop(ui: &Ui, item: &egui::Response, doc: &Document, uid: Option
 /// Whether Alt (Option) is held for a drop: when the primary button went up in this frame, as it
 /// went up, else now.
 fn alt_at_release(ui: &Ui) -> bool {
+    modifiers_at_release(ui).alt
+}
+
+/// The modifiers held for a drop: when the primary button went up in this frame, as it went up,
+/// else now.
+fn modifiers_at_release(ui: &Ui) -> egui::Modifiers {
     ui.input(|i| {
         i.events
             .iter()
             .find_map(|e| match e {
-                egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(modifiers.alt),
+                egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(*modifiers),
                 _ => None,
             })
-            .unwrap_or(i.modifiers.alt)
+            .unwrap_or(i.modifiers)
     })
 }
 
@@ -926,6 +942,112 @@ mod tests {
         assert_eq!(app.session.active().unwrap().selection.objects, vec![rect], "and stays selected");
         click_menu_held(&ctx, &mut app, "Redefine Symbol", egui::Modifiers::NONE);
         assert_eq!(art(&app, "Dot"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// `leaf_and_dot` with a selected 60 × 20 rectangle; returns its id.
+    fn leaf_dot_and_rect() -> (VectorcraftApp, NodeId) {
+        let mut app = leaf_and_dot();
+        let rect = NodeId(app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 60, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        (app, rect)
+    }
+
+    /// New Symbol… in the panel menu with Shift held opens Symbol Options, and its OK makes the
+    /// symbol and leaves the selected art as ordinary art, still selected, in one undo step, though
+    /// Shift is let go before OK; Cancel makes no symbol. Without Shift, OK makes the art an
+    /// instance.
+    #[test]
+    fn shift_new_symbol_in_the_menu_keeps_the_art_as_ordinary_art() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        click_menu_held(&ctx, &mut app, "New Symbol…", egui::Modifiers::SHIFT);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_options::KIND));
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "Cancel makes no symbol");
+        click_menu_held(&ctx, &mut app, "New Symbol…", egui::Modifiers::SHIFT);
+        menu_frame(&ctx, &mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+        let undo = undo_len(&app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol"]);
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect], "and stays selected");
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+        click_menu_held(&ctx, &mut app, "New Symbol…", egui::Modifiers::NONE);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol 2"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// Clicks the panel's New Symbol button with `modifiers` held.
+    fn click_new(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame_held(&ctx, app, vec![], modifiers);
+        let at = clickable(&out).into_iter().find(|(l, _)| l == "New Symbol").expect("a New Symbol button").1;
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+    }
+
+    /// The New Symbol button with Shift held opens Symbol Options, whose OK keeps the selected art
+    /// as ordinary art; with Shift and Alt it makes the symbol at once under the default name and
+    /// keeps the art. Alt alone still makes the art an instance at once.
+    #[test]
+    fn shift_new_symbol_button_keeps_the_art_with_or_without_alt() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        click_new(&mut app, egui::Modifiers::SHIFT);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_options::KIND));
+        assert_eq!(symbols(&mut app).len(), 2, "no symbol before OK");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "Shift: the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect]);
+        let undo = undo_len(&app);
+        click_new(&mut app, egui::Modifiers::SHIFT | egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot", "New Symbol", "New Symbol 2"]);
+        assert_eq!(art(&app, "New Symbol 2"), (0, 1), "Shift and Alt: the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect]);
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+        click_new(&mut app, egui::Modifiers::ALT);
+        assert_eq!(art(&app, "New Symbol 3"), (1, 0), "Alt alone: the rectangle becomes an instance");
+    }
+
+    /// Art dropped on the panel with Shift held as the primary button goes up becomes a new
+    /// symbol and stays ordinary art, still selected, though Shift is let go later in the same
+    /// frame; dropped without Shift, it becomes an instance.
+    #[test]
+    fn shift_art_drop_on_the_panel_keeps_the_art_as_ordinary_art() {
+        let (mut app, rect) = leaf_dot_and_rect();
+        let ctx = egui::Context::default();
+        let at = pos2(180.0, 60.0);
+        let release = |modifiers| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![rect]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::SHIFT);
+        let undo = undo_len(&app);
+        let let_go = egui::Event::ModifiersChanged(egui::Modifiers::NONE);
+        frame_held(&ctx, &mut app, vec![release(egui::Modifiers::SHIFT), let_go], egui::Modifiers::SHIFT);
+        assert_eq!(symbols(&mut app).len(), 3, "a new symbol");
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "the rectangle stays ordinary art");
+        assert_eq!(app.session.active().unwrap().selection.objects, vec![rect], "and stays selected");
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![rect]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+        frame_held(&ctx, &mut app, vec![release(egui::Modifiers::NONE)], egui::Modifiers::NONE);
+        assert_eq!(art(&app, "New Symbol 2"), (1, 0), "without Shift the rectangle becomes an instance");
+    }
+
+    /// `ui.symbolOptions` takes `keepArt` only as true or false, and only for a new symbol.
+    #[test]
+    fn symbol_options_checks_keep_art() {
+        let (mut app, _) = leaf_dot_and_rect();
+        for bad in [json!("yes"), json!(1)] {
+            let e = app.run("ui.symbolOptions", json!({ "keepArt": bad })).unwrap_err();
+            assert!(e.contains("`keepArt` must be true or false"), "{bad}: {e}");
+        }
+        let e = app.run("ui.symbolOptions", json!({"edit": true, "name": "Dot", "keepArt": true})).unwrap_err();
+        assert!(e.contains("only to a new symbol"), "{e}");
+        assert_eq!(dialog_kind(&app), None);
+        app.run("ui.symbolOptions", json!({"edit": true, "name": "Dot", "keepArt": false})).unwrap();
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_options::KIND));
     }
 
     /// #4918: Select All Unused picks the symbols nothing places, Delete Symbol asks once and
