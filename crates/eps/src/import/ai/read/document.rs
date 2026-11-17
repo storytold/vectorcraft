@@ -452,6 +452,8 @@ pub fn graphic_styles(data: &[u8], large_canvas: bool, names: &mut obj::Names) -
     r.large_canvas = large_canvas.then_some(1.0);
     // The styles come before the art, so an error in the art leaves them read.
     let _ = r.run();
+    // No layer checks the symbols here: the heads of those defined after the styles.
+    r.read_arrowheads();
     let styles = r.graphic_styles().0;
     let used: Vec<&str> = styles.iter().map(|s| s.name.as_str()).collect();
     names.absorb_among(std::mem::take(&mut r.names), &used);

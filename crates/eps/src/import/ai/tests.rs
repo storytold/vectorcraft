@@ -6526,6 +6526,20 @@ fn a_head_that_stays_put_leaves_a_moving_heads_placement_open() {
 }
 
 #[test]
+fn a_style_library_reads_the_heads_of_symbols_defined_after_its_styles() {
+    // A graphic style library has no layers, so nothing past its styles reads the heads again.
+    use vectorcraft_doc::Arrowhead;
+    let data = stream(&format!(
+        "%AI9_BeginArtStyles\n{}%AI9_EndArtStyles\n{}%AI9_BeginArtStyleList\n(Arrowed)\n%AI9_EndArtStyleList\n",
+        arrow_style("Arrowed", END_WEDGE, 2.0),
+        symbols(&symbol("Wedge", WEDGE_ART, 5))
+    ));
+    let (styles, _) = graphic_styles(data.as_bytes(), false, &mut obj::Names::default());
+    let stroke = styles.iter().find(|g| g.name == "Arrowed").and_then(|g| g.appearance.stroke());
+    assert!(matches!(stroke.and_then(|s| s.end_arrow.as_ref()), Some(Arrowhead::Custom(h)) if h.name == "Wedge"), "{styles:?}");
+}
+
+#[test]
 fn an_arrowhead_entry_without_heads_leaves_the_stroke_read() {
     // Only beside heads does an arrowhead entry this doesn't read keep the drawn look.
     let r = read_ok(&arrowed_file(WEDGE_ART, "1 /Int (BSArrowSomethingElse) ,\n", 2.0, "0 G\n2 w\n0 50 m\n100 50 l\nS\n"));
