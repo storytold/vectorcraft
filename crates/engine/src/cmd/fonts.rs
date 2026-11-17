@@ -58,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Show Similar Fonts",
             [],
             None,
-            "{family (any of its names), limit?: whole number 1..100000 (default: all)} → {family: the family's own name, families: [names]}: the families `text.fontList` lists, ordered as a font menu's Show Similar Fonts orders them: the family itself first, then those that set the same script (Japanese, Thai or neither), then the others, each group nearest first by VectorCraft's own measure of the faces nearest an upright Regular (OS/2 PANOSE digits, weight and width classes, x-height, cap height and average character width, the italic angle, and the kind); an error when the family isn't available or the font menus don't list it, or `limit` is not a whole number from 1 to 100000",
+            "{family (any of its names), limit?: whole number 1..100000 (default: all)} → {family: the family's own name, families: [names]}: the families `text.fontList` lists, ordered as a font menu's Show Similar Fonts orders them: the family itself first, then those that set the same script (Japanese, Thai or neither), then the others, each group nearest first by VectorCraft's own measure of the faces nearest an upright Regular (OS/2 PANOSE digits, weight and width classes, x-height, cap height and average character width, the italic angle, and the kind; a family that shares none of these numbers with it comes after those that share one); an error when the family isn't available or the font menus don't list it, or `limit` is not a whole number from 1 to 100000",
             always,
             similar_fonts
         ),

@@ -774,3 +774,47 @@ fn compact_picker_shrinks_then_scrolls_without_enlarging_the_window() {
         assert!(app.ui.dialog.is_none());
     }
 }
+
+/// Type all three Lab components through the numeric fields, then apply the picked color.
+#[test]
+fn native_lab_entry_in_color_picker() {
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::Queryable;
+
+    let mut app = app();
+    app.run("ui.colorPicker", json!({"color": {"l": 50, "a": 0, "b": 0}})).unwrap();
+    let mut first = true;
+    let builder = egui_kittest::Harness::builder().with_size(screen());
+    let builder = if std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR").is_some() { builder.wgpu() } else { builder };
+    let mut h = builder.build_ui_state(
+        move |ui, app: &mut VectorcraftApp| {
+            if std::mem::replace(&mut first, false) {
+                crate::theme::install_fonts(ui.ctx());
+                return;
+            }
+            super::super::show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    for (label, text) in [("L", "70"), ("a", "-25"), ("b", "40")] {
+        h.get_by_role_and_label(Role::TextInput, label).focus();
+        h.run_steps(2);
+        h.key_press_modifiers(egui::Modifiers { ctrl: true, command: true, ..Default::default() }, egui::Key::A);
+        h.get_by_role_and_label(Role::TextInput, label).type_text(text);
+        h.key_press(egui::Key::Tab);
+        h.run_steps(2);
+        assert!(matches!(picked(h.state().ui.dialog.as_ref().unwrap()).color, Color::Lab { .. }), "{label} keeps Lab");
+    }
+    let expected = Color::lab(70.0, -25.0, 40.0);
+    assert_eq!(picked(h.state().ui.dialog.as_ref().unwrap()).color, expected);
+    if let Some(dir) = std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        h.render().unwrap().save(dir.join("picker-lab.png")).unwrap();
+    }
+    h.get_by_role_and_label(Role::Button, "OK").click();
+    h.run_steps(2);
+    assert!(h.state().ui.dialog.is_none());
+    assert_eq!(crate::panels::current_paints(h.state()).0.color(), Some(expected));
+}

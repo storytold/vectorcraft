@@ -111,7 +111,7 @@ When the interface thread stays in one part of a frame for 3 s (VectorCraft's ow
 
 ## macOS: the menu bar
 
-On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search icon and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
+On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search field and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
 
 - **One menu model.** `crates/ui-egui/src/native_menu.rs` (platform-free, tested on every platform) builds the menu bar from the in-window menus (`menus::menu_tree`, each item through `menus::entry`, which the in-window menus draw too) and lays it out the Mac way: the VectorCraft menu holds About, Settings ▸ (one item per Preferences page, General… ⌘K), Language ▸, Appearance ▸ (UI brightness), Services, Hide VectorCraft ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All and Quit ⌘Q (the app's own `app.quit`, so unsaved documents are asked about); those leave Edit and Help. The in-window bar itself never shows the VectorCraft menu (it starts at File, as in Illustrator, on every platform): Language and Appearance have no in-window menu and are synthesized in `mac_layout`, and Quit is File › Exit in the window, relabelled to Quit in the App menu. Window starts with Minimize ⌃⌘M and Zoom and ends with Bring All to Front, and Help is the system's Help menu (its search field). A system key a command (or a user's shortcut) already has stays the command's, and the log says so.
 - **The native side** is `apps/vectorcraft/src/mac_menu.rs`: muda (`=0.21.1`, default features off, macOS only, no `unsafe`) builds the `NSMenu`s. Labels, enabled and checked are updated in place when anything they show may have changed (a command ran, the document, its history or selection changed, a click or a key press); a change of structure (a recent file, the language, a shortcut) rebuilds the menus. While an interaction is open (for example a move, scale or shape drag, a dialog's preview or the font menu's preview), the app updates them for the document's changes only when the interaction begins and when it ends.
@@ -497,7 +497,36 @@ to the source tab resumes a move (Alt copies). Escape or release outside the can
 Changing the source revision or unexpectedly changing/closing the destination cancels a stale
 transfer; focus loss, touch cancellation and multitouch cancel too. Moving tabs under a stationary
 pointer does not activate further tabs until the pointer moves. The close icon does not activate a tab during a drag. Overflow-menu hover activation and
-cross-window dragging remain outside this change.
+dragging into a floating document window that is an OS window of its own remain outside this change.
+
+Under Window › Arrange › Tile, a Selection move released over another document's pane copies the
+artwork into that document through `edit.dropSelection`, with no tab hover first. The pane becomes
+the current window, the grab point lands under the pointer in that pane's own zoom and rotation, and
+the source move is rolled back, including when the pointer enters the pane and the button is released
+in the same frame. A release over another view of the source document (Window › New Window) moves the
+artwork there with `object.move`, and Alt copies it. While the artwork is held over a pane, the cursor
+shows a copy or a move. A release over a pane's rulers or scroll bars, or after Escape, changes
+neither document. A press in another pane with no artwork carried still only makes its document
+current. Page 14 of [the help page](https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf)
+describes documents arranged side by side, with items dragged from one document into another.
+Evidence: the `canvas::panes` tests drive real pointer frames from the current pane into another
+document's pane, back the other way, into another view, through a tab into a third document's pane,
+and off a pane's art area.
+
+The same release works for documents in floating windows (Window › Arrange › Float in Window) where
+those windows are drawn inside the main window: on the web, on Wayland and with a control channel
+attached. A Selection move released over the art area of another document's floating window copies
+the artwork into that document, and one released over the pane the main window draws while the
+current document floats copies it into the main window's document. A floating window that shows
+another view of the source document takes a move, and Alt copies. The release is taken at the start
+of the frame, before any canvas sees it, so a release in the first frame over a window still drops the
+artwork. A release on a window's title bar, rulers or scroll bars, or after Escape, changes neither
+document. A floating window that is an OS window of its own, the default on Windows, macOS and X11,
+does not take the artwork: its pointer positions are in that window's points, not the main window's.
+Evidence: the `doc_windows` tests drive real pointer frames from the main window's canvas into a
+floating window (rotated and zoomed, and in the frame the pointer arrives), from a floating window
+into the main window's pane, into a floating view of the same document, and onto a title bar and
+after Escape, and check that no OS window's pane is noted.
 The cited regressions assert the internal clipboard; they do not exercise the native
 system-clipboard adapter. Tab activation resets the Selection tool through
 `Session::set_active`; gesture regressions verify it is idle after switching, dropping

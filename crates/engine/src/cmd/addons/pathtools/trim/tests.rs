@@ -2,8 +2,9 @@
 //! one undo step, and what takes no part.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{NodeId, NodeKind};
+use vectorcraft_doc::{NodeId, NodeKind, Selection};
 use vectorcraft_geom::{PathData, Point};
+use vectorcraft_tools::addons::trim::plan::{self, Limits, Stretches};
 
 use crate::Session;
 
@@ -418,6 +419,139 @@ fn the_selection_stays_as_it_was_and_the_pieces_of_a_selected_path_are_selected(
     s.execute("select.set", &json!({"ids": [made[1].0]})).unwrap();
     assert_eq!(s.execute(TRIM, &json!({"at": [250, 100]})).unwrap(), json!({"ids": [], "removed": 1}));
     assert!(s.doc().unwrap().selection.is_empty(), "a removed path leaves the selection");
+}
+
+/// Run the command with `p`, and check that it leaves the selection exactly as changing it one
+/// id at a time does: for each trimmed path in the plan's order, its anchors and segments let go,
+/// a path with no pieces left removed, and each piece of a selected path added; then each emptied
+/// compound path removed. Returns the selection.
+fn same_selection_as_one_id_at_a_time(s: &mut Session, p: Value) -> Selection {
+    let st = s.doc().unwrap();
+    let pick = super::pick(&p).unwrap();
+    let root = crate::cmd::ordinary_isolation(st);
+    let plan: Vec<(NodeId, usize)> =
+        plan::plan(&st.doc, root, &pick, Limits::COMMAND, &mut Stretches::default()).unwrap().into_iter().map(|t| (t.id, t.pieces.len())).collect();
+    let mut compounds: Vec<NodeId> = plan
+        .iter()
+        .filter_map(|(id, _)| st.doc.parent_of(*id))
+        .filter(|c| matches!(st.doc.node(*c).map(|n| &n.kind), Some(NodeKind::Compound { .. })))
+        .collect();
+    compounds.dedup();
+    let mut want = st.selection.clone();
+    let made = ids(&s.execute(TRIM, &p).unwrap());
+    assert_eq!(made.len(), plan.iter().map(|(_, n)| n).sum::<usize>());
+    let mut made = made.into_iter();
+    for (id, n) in plan {
+        let selected = want.contains(id);
+        want.anchors.remove(&id);
+        want.segments.remove(&id);
+        let pieces: Vec<NodeId> = made.by_ref().take(n).collect();
+        if pieces.is_empty() {
+            want.remove(id);
+        } else if selected {
+            for piece in pieces {
+                if !want.contains(piece) {
+                    want.add(piece);
+                }
+            }
+        }
+    }
+    let st = s.doc().unwrap();
+    for c in compounds {
+        if st.doc.node(c).is_none() {
+            want.remove(c);
+        }
+    }
+    want.prune(&st.doc);
+    assert_eq!(st.selection, want);
+    st.selection.clone()
+}
+
+/// Two lines across split by a rectangle, one of them selected; a selected line nothing crosses
+/// and a selected compound path of two such lines, which the rectangle removes whole; and a
+/// selected line elsewhere with an anchor and a segment direct-selected. Returns (the selected
+/// line across, the line removed whole, the compound path, the line elsewhere).
+fn trim_scene(s: &mut Session) -> (NodeId, NodeId, NodeId, NodeId) {
+    let (h, ..) = across_and_uprights(s);
+    line(s, &[(0.0, 120.0), (300.0, 120.0)], false);
+    let alone = line(s, &[(145.0, 200.0), (155.0, 200.0)], false);
+    let c1 = line(s, &[(145.0, 170.0), (155.0, 170.0)], false);
+    let c2 = line(s, &[(145.0, 180.0), (155.0, 180.0)], false);
+    s.execute("select.set", &json!({"ids": [c1.0, c2.0]})).unwrap();
+    let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let elsewhere = line(s, &[(0.0, 250.0), (10.0, 250.0), (20.0, 250.0)], false);
+    s.execute("select.set", &json!({"ids": [elsewhere.0, h.0, alone.0, compound.0]})).unwrap();
+    s.edit("direct", |_, sel| {
+        sel.anchors.insert(elsewhere, [(0, 1)].into());
+        sel.anchors.insert(h, [(0, 0)].into());
+        sel.segments.insert(elsewhere, [(0, 0)].into());
+        Ok(())
+    })
+    .unwrap();
+    (h, alone, compound, elsewhere)
+}
+
+#[test]
+fn the_selection_after_a_trim_is_the_one_changing_it_one_id_at_a_time_gives() {
+    // A removed key object stops being the key.
+    let mut s = session();
+    let (h, alone, compound, elsewhere) = trim_scene(&mut s);
+    s.edit("key", |_, sel| {
+        sel.key = Some(alone);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 120]}));
+    assert_eq!(sel.key, None);
+    assert!(!sel.contains(alone) && !sel.contains(compound));
+    assert_eq!(&sel.objects[..2], [elsewhere, h]);
+    assert_eq!(sel.objects.len(), 3, "{:?}", sel.objects);
+    assert!(sel.anchors.contains_key(&elsewhere) && sel.segments.contains_key(&elsewhere) && !sel.anchors.contains_key(&h));
+    // A key object that keeps its first piece stays the key.
+    let mut s = session();
+    let (h, alone, compound, _) = trim_scene(&mut s);
+    s.edit("key", |_, sel| {
+        sel.key = Some(h);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 120]}));
+    assert_eq!(sel.key, Some(h));
+    assert!(!sel.contains(alone) && !sel.contains(compound));
+    // Trimming only paths that are not selected leaves a targeted object targeted.
+    let mut s = session();
+    let (h, _, _, elsewhere) = trim_scene(&mut s);
+    s.execute("select.set", &json!({"ids": [elsewhere.0]})).unwrap();
+    s.edit("target", |_, sel| {
+        sel.target = Some(elsewhere);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 40]}));
+    assert_eq!((sel.objects.as_slice(), sel.target), ([elsewhere].as_slice(), Some(elsewhere)));
+    assert!(exists(&s, h));
+    // A selected path that gains a piece changes the object selection, which lets go of the target.
+    let mut s = session();
+    let (h, _, _, elsewhere) = trim_scene(&mut s);
+    s.execute("select.set", &json!({"ids": [elsewhere.0, h.0]})).unwrap();
+    s.edit("target", |_, sel| {
+        sel.target = Some(elsewhere);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 90, 20, 40]}));
+    assert_eq!((sel.objects.len(), sel.target), (3, None));
+    // So does a selected path that is removed whole.
+    let mut s = session();
+    let (_, alone, _, elsewhere) = trim_scene(&mut s);
+    s.execute("select.set", &json!({"ids": [elsewhere.0, alone.0]})).unwrap();
+    s.edit("target", |_, sel| {
+        sel.target = Some(elsewhere);
+        Ok(())
+    })
+    .unwrap();
+    let sel = same_selection_as_one_id_at_a_time(&mut s, json!({"rect": [140, 190, 20, 20]}));
+    assert_eq!((sel.objects.as_slice(), sel.target), ([elsewhere].as_slice(), None));
 }
 
 #[test]

@@ -48,6 +48,42 @@ fn chords_cross(a: &CubicBez, b: &CubicBez) -> Option<(f64, f64)> {
     (within(s) && within(u)).then(|| (s.clamp(0.0, 1.0), u.clamp(0.0, 1.0)))
 }
 
+/// `(s, t)` moved to where `a` and `b` cross exactly, by Newton's method on a(s) = b(t), or as it
+/// was when that doesn't settle within both segments, closer than it started, and within the
+/// distance a piece bent by [`FLAT`] can shift a crossing at their angle there.
+fn refined(a: &CubicBez, b: &CubicBez, (s0, t0): (f64, f64)) -> (f64, f64) {
+    let gap = |s: f64, t: f64| a.eval(s).distance(b.eval(t));
+    let start = gap(s0, t0);
+    if start <= 1e-12 || !start.is_finite() {
+        return (s0, t0);
+    }
+    let (da, db) = (a.deriv(), b.deriv());
+    let (mut s, mut t) = (s0, t0);
+    for _ in 0..8 {
+        let f = a.eval(s) - b.eval(t);
+        let (u, v) = (da.eval(s).to_vec2(), db.eval(t).to_vec2());
+        // a(s + ds) - b(t + dt) ≈ f + u ds - v dt, which is zero for these steps.
+        let den = u.cross(v);
+        let (ds, dt) = (-f.cross(v) / den, u.cross(f) / den);
+        if !(ds.is_finite() && dt.is_finite()) {
+            return (s0, t0);
+        }
+        (s, t) = (s + ds, t + dt);
+        if !(-1e-12..=1.0 + 1e-12).contains(&s) || !(-1e-12..=1.0 + 1e-12).contains(&t) {
+            return (s0, t0);
+        }
+        if gap(s, t) <= 1e-12 {
+            break;
+        }
+    }
+    let (s, t) = (s.clamp(0.0, 1.0), t.clamp(0.0, 1.0));
+    let (u, v) = (da.eval(s).to_vec2(), db.eval(t).to_vec2());
+    let sin = u.cross(v).abs() / (u.hypot() * v.hypot());
+    let reach = 4.0 * FLAT / sin + SAME;
+    let moved = a.eval(s).distance(a.eval(s0)).max(b.eval(t).distance(b.eval(t0)));
+    if gap(s, t) < start.min(1e-9) && moved <= reach { (s, t) } else { (s0, t0) }
+}
+
 /// Where segments `a` and `b` cross: (t on `a`, t on `b`) pairs, halving both while their control
 /// boxes meet until each piece is straight. `None` once `budget` steps are spent.
 fn segment_crossings(a: &CubicBez, b: &CubicBez, budget: &mut usize) -> Option<Vec<(f64, f64)>> {
@@ -79,6 +115,11 @@ fn segment_crossings(a: &CubicBez, b: &CubicBez, budget: &mut usize) -> Option<V
             let bm = (b0 + b1) / 2.0;
             stack.extend([(a0, a1, b0, bm, d), (a0, a1, bm, b1, d)]);
         }
+    }
+    // A piece counts as straight while it bends by up to FLAT, so where the curves meet at a shallow
+    // angle the chords cross some way along from where the curves do.
+    for f in &mut found {
+        *f = refined(a, b, *f);
     }
     found.sort_by(|x, y| x.0.total_cmp(&y.0));
     // The same crossing found by neighbouring pieces counts once.

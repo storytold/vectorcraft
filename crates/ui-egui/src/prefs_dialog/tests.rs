@@ -1773,8 +1773,8 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "General:"))]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
     assert!(painted(&texts, general), "the General row's sentence shows: {texts:?}");
-    // Go to the General category and point at a row with no sentence.
-    let button = at(&texts, "General");
+    // Go to the Type category and point at a row with no sentence.
+    let button = at(&texts, "Type");
     let press = |pressed| egui::Event::PointerButton { pos: button, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(button), press(true), press(false)]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
@@ -1788,14 +1788,93 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
     empty(&after, "on the line after changing category");
-    assert_eq!(descriptions::description("keyboardIncrement"), None);
-    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "Keyboard Increment:"))]);
+    assert_eq!(descriptions::description("typeSizeIncrement"), None);
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "Size/Leading:"))]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on Keyboard Increment");
+    empty(&after, "on Size/Leading");
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on the line after Keyboard Increment");
+    empty(&after, "on the line after Size/Leading");
     assert_eq!(preferences_window(&ctx).size(), size);
+}
+
+/// Every setting the General category shows has exactly one sentence, and no key has two.
+#[test]
+fn every_general_setting_has_one_description() {
+    let mut bad = vec![];
+    for s in settings().filter(|s| s.category == "General") {
+        match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
+            1 => {}
+            n => bad.push(format!("`{}` ({}) has {n} sentences", s.key, s.label)),
+        }
+        if descriptions::description(s.key).is_some_and(|d| d.trim().is_empty()) {
+            bad.push(format!("`{}` has an empty sentence", s.key));
+        }
+    }
+    for (i, (key, _)) in descriptions::DESCRIPTIONS.iter().enumerate() {
+        if descriptions::DESCRIPTIONS[..i].iter().any(|(k, _)| k == key) {
+            bad.push(format!("`{key}` is listed twice"));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// Cmd/Ctrl-wheel scrolls sideways with Zoom with Mouse Wheel on as well as off
+/// (`canvas::tests::zoom_with_mouse_wheel_preference`), so the sentence for Scroll Sideways with
+/// Cmd/Ctrl + Wheel does not make the sideways scroll depend on that setting.
+#[test]
+fn the_sideways_scroll_sentence_does_not_depend_on_zoom_with_mouse_wheel() {
+    let zoom = settings().find(|s| s.key == "zoomWithMouseWheel").expect("General has Zoom with Mouse Wheel").label;
+    let sideways = descriptions::description("ctrlWheelScrollsSideways").expect("Scroll Sideways with Cmd/Ctrl + Wheel has a sentence");
+    assert!(!sideways.contains(zoom.trim_end_matches(':')), "`{sideways}` names `{zoom}`");
+    assert!(sideways.contains("Cmd/Ctrl") && sideways.contains("sideways"), "`{sideways}` describes the sideways scroll");
+}
+
+/// The pointer over General's Contextual Task Bar row and over its Keyboard Increment row shows
+/// each row's sentence.
+#[test]
+fn hovering_a_general_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let task_bar = descriptions::description("__taskBar").expect("Enable Contextual Task Bar has a sentence");
+    let increment = descriptions::description("keyboardIncrement").expect("Keyboard Increment has a sentence");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Enable Contextual Task Bar"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, task_bar) && !painted(&after, increment), "the task bar row's sentence shows: {after:?}");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Keyboard Increment:"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, increment) && !painted(&after, task_bar), "the Keyboard Increment row's sentence shows: {after:?}");
+}
+
+/// Tab from the search field reaches General's first control, the Contextual Task Bar box: the line
+/// shows its sentence and a screen reader gets it as the control's description.
+#[test]
+fn keyboard_focus_on_a_general_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let task_bar = descriptions::description("__taskBar").expect("Enable Contextual Task Bar has a sentence");
+    let mut shown = None;
+    for _ in 0..40 {
+        let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+        if painted(&texts, task_bar) {
+            shown = Some(described);
+            break;
+        }
+    }
+    let described = shown.expect("Tab reaches the Contextual Task Bar row and its sentence shows");
+    assert!(described.iter().any(|d| d == task_bar), "the focused control carries the sentence: {described:?}");
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the

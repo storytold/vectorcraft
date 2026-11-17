@@ -244,7 +244,7 @@ impl Gen<'_> {
             let slot = g.series_paints.get(s);
             let fill =
                 slot.and_then(|p| p.fill.clone().or_else(|| p.stroke.clone().filter(|st| !st.is_none()))).unwrap_or_else(|| default_series_paint(s));
-            return self.path(band, fill, Paint::solid(Color::BLACK), 0.25);
+            return self.path(band, fill, Paint::solid(Color::BLACK), vectorcraft_doc::FILLED_LINE_OUTLINE_WIDTH);
         }
         let (fill, stroke, w) = series_marks(g, s, false, default_series_paint(s), 1.0);
         self.path(pd, fill, stroke, w)

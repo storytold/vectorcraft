@@ -748,8 +748,15 @@ impl<'p> Builder<'p> {
                 self.opaque.insert(mkey);
                 return None;
             };
-            let mut png = Vec::new();
-            image::GrayImage::from_raw(a.width, a.height, a.data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+            let raw = craft_image_codecs::Image::from_raw(
+                a.width,
+                a.height,
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U8,
+                a.data,
+            )
+            .ok()?;
+            let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
             let blob = ImageBlob::new("image/png", png);
             let k = blob.content_key();
             self.images.insert(k.clone(), blob);

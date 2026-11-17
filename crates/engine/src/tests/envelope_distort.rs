@@ -117,7 +117,41 @@ fn the_frame_round_trips_natively() {
 fn red_image(s: &mut Session) -> NodeId {
     let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, sel| {
         d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(png));
         let id = d.alloc_id();
@@ -159,7 +193,41 @@ fn a_colorized_image_keeps_its_color_in_an_envelope() {
     let mut s = session();
     let img = image::GrayImage::from_pixel(4, 4, image::Luma([0]));
     let mut png = vec![];
-    image::DynamicImage::ImageLuma8(img).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(img);
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let im = s
         .edit("Place", |d, sel| {
             d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(png));
@@ -187,7 +255,41 @@ fn a_colorized_image_keeps_its_color_in_an_envelope() {
 fn two_color_image(s: &mut Session) -> NodeId {
     let img = image::RgbaImage::from_fn(2, 2, |x, _| if x == 0 { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 255, 255]) });
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     s.edit("Place", |d, sel| {
         d.images.insert("two".into(), vectorcraft_doc::ImageBlob::png(png));
         let id = d.alloc_id();
