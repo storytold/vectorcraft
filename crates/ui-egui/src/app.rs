@@ -602,10 +602,6 @@ impl VectorcraftApp {
         if self.ui.toolbar && self.ui.screen_mode < 3 {
             tools_float::set_window_dock_zone(&ctx, ui.available_rect_before_wrap());
         }
-        if !self.ui.tools_beside_canvas {
-            // A canvas-edge target left from before the setting was turned off docks nothing.
-            tools_float::clear_canvas_dock_zone(&ctx);
-        }
         // Beside the canvas, docked Tools draws inside the canvas panel (`toolbar::show_beside_canvas`).
         // So does Tools docked on the right, left of the panels.
         if self.ui.toolbar && self.ui.screen_mode < 3 && ((!self.ui.tools_beside_canvas && !self.ui.toolbar_right) || self.ui.toolbar_pos.is_some()) {

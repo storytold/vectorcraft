@@ -542,7 +542,8 @@ pub struct UiState {
     pub toolbar_pos: Option<[f32; 2]>,
     /// The docked Tools panel sits between the left-side panels and the canvas instead of at the
     /// window's left edge (Window › Toolbars › Keep Tools Beside the Canvas,
-    /// `window.toolsBesideCanvas`). Off by default, and off in state saved without it.
+    /// `window.toolsBesideCanvas`). Dropping Tools on the canvas's left edge turns it on, and on the
+    /// window's left edge turns it off. Off by default, and off in state saved without it.
     #[serde(default)]
     pub tools_beside_canvas: bool,
     /// The docked Tools panel stands on the right, between the canvas and the panels, instead of on
