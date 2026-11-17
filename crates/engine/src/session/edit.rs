@@ -53,7 +53,8 @@ impl Session {
                     let mut symbol_synced =
                         if st.doc.symbol_edit.is_some() { cmd::symboledit::sync(&before, Arc::make_mut(&mut st.doc)) } else { Ok(()) };
                     // Inline graphics in text follow their symbols.
-                    cmd::inline::refresh(&before, Arc::make_mut(&mut st.doc));
+                    let measured = cmd::inline::refresh(st.inline_resolved.as_ref(), &before, Arc::make_mut(&mut st.doc));
+                    let mut resolved = measured.map(|m| (st.doc.clone(), m));
                     // The document the passes below start from, for the symbol to follow what they
                     // change on its editing layer.
                     let synced = st.doc.symbol_edit.is_some().then(|| st.doc.clone());
@@ -86,7 +87,10 @@ impl Session {
                         let new = art(&st.doc);
                         if symbol_synced.is_ok() && !matches!((&old, &new), (Some(a), Some(b)) if Arc::ptr_eq(a, b)) {
                             let resynced = st.doc.clone();
-                            cmd::inline::refresh(synced, Arc::make_mut(&mut st.doc));
+                            let last = resolved.as_ref().or(st.inline_resolved.as_ref());
+                            if let Some(m) = cmd::inline::refresh(last, synced, Arc::make_mut(&mut st.doc)) {
+                                resolved = Some((st.doc.clone(), m));
+                            }
                             if !st.doc.text_threads.is_empty() {
                                 cmd::threads::reflow(&resynced, Arc::make_mut(&mut st.doc));
                             }
@@ -100,6 +104,7 @@ impl Session {
                     if !st.doc.variables.bindings.is_empty() {
                         Arc::make_mut(&mut st.doc).prune_variable_bindings();
                     }
+                    st.inline_resolved = resolved;
                     if let Err(e) = symbol_synced {
                         Err(e)
                     } else if st.doc.too_deep(Some(&before)) {
