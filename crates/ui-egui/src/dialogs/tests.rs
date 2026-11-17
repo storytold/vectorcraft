@@ -2887,6 +2887,62 @@ fn a_drag_on_a_blob_brush_tip_dot_sets_the_roundness() {
     assert_eq!(values(&app), (46.0, 1.0), "Tab goes on to the Roundness slider");
 }
 
+/// The Eraser Tool Options show the same tip preview as the Blob Brush, with the Angle and
+/// Roundness sliders for screen readers. A drag on the arrowhead sets only the Angle, and a drag on
+/// a black dot sets only the Roundness, which stays within the Eraser's 1% to 100% for a drag and
+/// for the keys. The fields show the new values, OK sets the tool's options to them, and Cancel
+/// leaves the options as they were.
+#[test]
+fn the_eraser_tip_preview_sets_the_angle_and_roundness_by_dragging() {
+    use egui::Key::{ArrowDown, Home};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "eraser"})).unwrap();
+    let values = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().expect("Eraser Tool Options is open");
+        (d.f64("angle", f64::NAN), d.f64("roundness", f64::NAN))
+    };
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (_, value, text) = slider_node(&out, "Angle");
+    assert_eq!((value, text.as_deref()), (Some(0.0), Some("0°")));
+    let (_, value, text) = slider_node(&out, "Roundness");
+    assert_eq!((value, text.as_deref()), (Some(100.0), Some("100%")));
+    let center = f.control(&mut app, "Angle", egui::accesskit::Role::Slider);
+    // At 0° the arrowhead points right, 22 pt to 28 pt from the center.
+    f.drag(&mut app, center + egui::vec2(25.0, 0.0), egui::vec2(-5.0, -20.0));
+    assert_eq!(values(&app), (45.0, 100.0), "the arrowhead dragged up to the right");
+    // At 45° and 100% the dots are 18 pt from the center, up to the left and down to the right.
+    let v = egui::vec2(1.0, 1.0).normalized();
+    f.drag(&mut app, center + v * 18.0, -v * 9.0);
+    assert_eq!(values(&app), (45.0, 50.0), "the dot dragged half way to the center");
+    f.drag(&mut app, center + v * 9.0, -v * 9.0);
+    assert_eq!(values(&app), (45.0, 1.0), "the dot dragged to the center stops at 1%");
+    f.key(&mut app, ArrowDown, M::NONE);
+    f.key(&mut app, Home, M::NONE);
+    assert_eq!(values(&app), (45.0, 1.0), "the keys stop at 1%");
+    let out = f.run(&mut app, vec![]);
+    assert_eq!(slider_node(&out, "Roundness").2.as_deref(), Some("1%"));
+    let d = app.ui.dialog.as_mut().expect("Eraser Tool Options is open");
+    d.fields.insert("roundness".into(), json!(30));
+    let out = f.run(&mut app, vec![]);
+    assert_eq!(slider_node(&out, "Roundness").2.as_deref(), Some("30%"), "the preview follows the field");
+    confirm(&mut app).unwrap();
+    let o = app.session.tool_options_of("eraser");
+    assert_eq!((o["angle"].as_f64(), o["roundness"].as_f64()), (Some(45.0), Some(30.0)));
+    app.run("tool.options", json!({"tool": "eraser"})).unwrap();
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    f.run(&mut app, vec![]);
+    let center = f.control(&mut app, "Angle", egui::accesskit::Role::Slider);
+    f.drag(&mut app, center + egui::vec2(18.0, 18.0), egui::vec2(2.0, 2.0));
+    assert_eq!(values(&app), (-45.0, 30.0), "the drag points the Angle down to the right");
+    app.ui.dialog = None;
+    let o = app.session.tool_options_of("eraser");
+    assert_eq!((o["angle"].as_f64(), o["roundness"].as_f64()), (Some(45.0), Some(30.0)), "Cancel keeps the options");
+}
+
 /// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the
 /// set-value action, a fraction rounds to the whole degrees the field shows, a number past -180° to
 /// 180° sets the nearer end, the last request in a frame wins, and a value that is not a finite
