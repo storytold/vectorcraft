@@ -53,9 +53,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: deterministically places every ring along the path, including the first for small seed values, keeping their count and sizes)} → {id}",
             has_doc,
             flare
+        ),
+        cmd!(
+            "shape.circleThroughPoints",
+            "Circle Through Points",
+            [],
+            None,
+            "{points?: [[x, y], [x, y], [x, y]] (left out: the three selected anchor points, where a path selected whole counts all its anchors and selected segments' ends do not count)} → {id, cx, cy, radius}: a circle with the current paint whose edge passes through the three points, not pixel-aligned even while Align New Objects to Pixel Grid is on; two points that are the same or three on one line are an error, and nothing is drawn",
+            has_doc,
+            circle_through_points
         ),
         cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2, fill?: bool (Fill Line: the current fill, else none)} → {id}", has_doc, line),
         cmd!("shape.spiral", "Spiral", [], None, "{cx, cy, radius, decay=80 (%), segments=10, clockwise?} → {id}", has_doc, spiral),
@@ -131,14 +140,21 @@ pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewAr
 /// [`add_look`] that selects the new object only when `select` is set; otherwise the selection
 /// stays as it was.
 pub(crate) fn insert_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>, select: bool) -> Result<Value> {
-    insert_look_turned(s, label, kind, look, name, select, 0.0)
+    insert_look_turned(s, label, kind, look, name, select, 0.0, true)
 }
 
 /// [`add_art`] for an object made turned by a `rotation` param (degrees, clockwise on the page):
 /// its bounding box turns with it, as after the Rotate tool.
 fn add_art_turned(s: &mut Session, label: &str, kind: NodeKind, rotation: f64) -> Result<Value> {
     let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
-    insert_look_turned(s, label, kind, look, None, true, bbox_turn(rotation))
+    insert_look_turned(s, label, kind, look, None, true, bbox_turn(rotation), true)
+}
+
+/// [`add_art`] for an object whose geometry must stay where it was computed: it is not
+/// pixel-aligned, even while the document's Align New Objects to Pixel Grid is on.
+fn add_art_unaligned(s: &mut Session, label: &str, kind: NodeKind) -> Result<Value> {
+    let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
+    insert_look_turned(s, label, kind, look, None, true, 0.0, false)
 }
 
 /// The bounding-box angle (counter-clockwise, as `Node::bbox_angle` and the Rotate tool keep it)
@@ -162,8 +178,10 @@ fn constrained_turn(s: &Session, rotation: f64) -> f64 {
     }
 }
 
-/// [`insert_look`] with the new object's bounding box turned to `bbox_angle`. A new path or
-/// compound path is pixel-aligned while the document's Align New Objects to Pixel Grid is on.
+/// [`insert_look`] with the new object's bounding box turned to `bbox_angle`. With `align`, a new
+/// path or compound path is pixel-aligned while the document's Align New Objects to Pixel Grid is
+/// on.
+#[allow(clippy::too_many_arguments)]
 fn insert_look_turned(
     s: &mut Session,
     label: &str,
@@ -172,6 +190,7 @@ fn insert_look_turned(
     name: Option<String>,
     select: bool,
     bbox_angle: f64,
+    align: bool,
 ) -> Result<Value> {
     let parent = s.doc()?.target_parent()?;
     let mode = s.draw_mode;
@@ -181,7 +200,9 @@ fn insert_look_turned(
         let id = d.alloc_id();
         let mut n = Node::new(id, kind);
         look.apply(d, &mut n);
-        super::object::align_new_object(d, &mut n);
+        if align {
+            super::object::align_new_object(d, &mut n);
+        }
         n.name = name;
         n.bbox_angle = bbox_angle;
         let mut into = None;
@@ -390,6 +411,71 @@ fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     add_art_turned(s, "Ellipse", path_kind(live.to_path(), Some(live)), rotation)
 }
 
+/// A live ellipse whose edge passes through three points: `points`, or the three selected anchor
+/// points ([`selected_anchor_points`]). One undo step, named as an Ellipse tool drag is.
+fn circle_through_points(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "shape.circleThroughPoints";
+    let points = match p.get("points").filter(|v| !v.is_null()) {
+        Some(v) => three_points(v).ok_or_else(|| bad(C, "`points` must be three [x, y] pairs of numbers"))?,
+        None => selected_anchor_points(s)?.ok_or_else(|| bad(C, "direct-select three anchor points, or give `points`"))?,
+    };
+    let [a, b, c] = points;
+    let (center, radius) = shapes::circle_through(a, b, c)
+        .ok_or_else(|| bad(C, "no circle passes through these points: two are the same or all three lie on one line"))?;
+    let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+    let live = LiveShape::Ellipse { w: r.width(), h: r.height(), pie: (0.0, 360.0), xf: Affine::translate(r.origin().to_vec2()) };
+    // Not pixel-aligned: the circle stays through the points.
+    let mut out = add_art_unaligned(s, "Ellipse", path_kind(live.to_path(), Some(live)))?;
+    out["cx"] = json!(center.x);
+    out["cy"] = json!(center.y);
+    out["radius"] = json!(radius);
+    Ok(out)
+}
+
+/// The three points `[[x, y], [x, y], [x, y]]` holds, each pair two finite numbers.
+fn three_points(v: &Value) -> Option<[Point; 3]> {
+    let pair = |v: &Value| match v.as_array().map(Vec::as_slice) {
+        Some([x, y]) => x.as_f64().zip(y.as_f64()).filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| Point::new(x, y)),
+        _ => None,
+    };
+    match v.as_array().map(Vec::as_slice) {
+        Some([a, b, c]) => Some([pair(a)?, pair(b)?, pair(c)?]),
+        _ => None,
+    }
+}
+
+/// The positions of the selected anchor points, when there are exactly three. They are counted as
+/// the other anchor commands count them ([`super::path::anchor_targets`]): a selected path with
+/// anchors picked by Direct Selection gives those, and a path selected whole gives all of its own.
+/// A selected segment's ends are not selected anchor points, so a selection with segments gives
+/// none; so does a selection holding an object that is not a path, or an anchor that is gone.
+fn selected_anchor_points(s: &Session) -> Result<Option<[Point; 3]>> {
+    let st = s.doc()?;
+    if st.selection.segments.values().any(|set| !set.is_empty()) {
+        return Ok(None);
+    }
+    let mut points = Vec::with_capacity(4);
+    for id in &st.selection.objects {
+        let Some(pd) = st.doc.node(*id).and_then(|n| n.path_data()) else { return Ok(None) };
+        match st.selection.anchors.get(id) {
+            Some(set) => {
+                for &(si, ai) in set.iter().take(4) {
+                    let Some(a) = pd.subpaths.get(si).and_then(|sp| sp.anchors.get(ai)) else { return Ok(None) };
+                    points.push(a.p);
+                }
+            }
+            None => points.extend(pd.anchors().take(4).map(|(_, _, a)| a.p)),
+        }
+        if points.len() > 3 {
+            return Ok(None);
+        }
+    }
+    Ok(match points.as_slice() {
+        &[a, b, c] => Some([a, b, c]),
+        _ => None,
+    })
+}
+
 /// The whole-number count `p` gives for `key` (`5` or `5.0`), or `default` when it is left out or
 /// null. A fraction, a negative, a non-finite or a non-number is an error rather than the default.
 fn count_or(p: &Value, key: &str, default: u64, cmd: &str) -> Result<u64> {
@@ -479,7 +565,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("shape.flare", format!("`{key}` must be a whole number of at least 0, not {v}"))),
     };
-    // The generator's state is odd (never 0).
+    // Xorshift64. Both streams start from a nonzero state.
     let random = |mut state: u64| {
         move || {
             state ^= state << 13;
@@ -494,7 +580,13 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         Some(r) if r >= 1 << 53 => return Err(bad("shape.flare", format!("`ringSeed` must be below 2^53, not {r}"))),
         r => r,
     };
-    let mut ring_at = ring_seed.map(|r| random((r << 1) | 1));
+    let mut ring_at = ring_seed.map(|r| {
+        // SplitMix64 initializes the ring-position stream.
+        let mut z = r.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        random(z ^ (z >> 31))
+    });
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
@@ -651,7 +743,7 @@ fn arc(s: &mut Session, p: &Value) -> Result<Value> {
         if s.paint.stroke.is_none() { vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK) } else { s.paint.stroke.clone() },
         s.paint.stroke_width.max(0.1),
     );
-    insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, bbox_angle)
+    insert_look_turned(s, "Arc", path_kind(path, None), look, None, true, bbox_angle, true)
 }
 
 /// The grid `paths` (bottom first) as one selected group in the new-art stroke, filled with the
@@ -831,7 +923,8 @@ fn text_create(s: &mut Session, p: &Value) -> Result<Value> {
         // Lays the text out (and sizes an Auto Size frame).
         super::typecmd::refresh_bounds(&mut t);
     }
-    let made = insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation))?;
+    let made =
+        insert_look_turned(s, "Type", NodeKind::Text(Box::new(t)), NewArt::plain(Appearance::default()), None, true, bbox_turn(rotation), true)?;
     let id = made.get("id").and_then(Value::as_u64).map(NodeId);
     let made = super::typecmd::with_bounds(s, id, made);
     let mut made = super::typecmd::with_overflow(s, id.as_slice(), made);
