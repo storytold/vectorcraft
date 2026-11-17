@@ -1,12 +1,14 @@
 //! Sample Color from Screen (`ui.sampleScreenColor`): the system's color sampler picks a color
 //! anywhere on the screen ([`crate::Services::screen_color`]: `NSColorSampler` on macOS, the XDG
-//! desktop portal's `PickColor` on Linux, the browser's EyeDropper where the browser has one). The
-//! command shows the sampler and answers at once. The color arrives in a later frame ([`poll`])
-//! and becomes the fill or the stroke through `paint.setFill` / `paint.setStroke` (one undo step),
-//! or the open Color Picker's color. When the person cancels the sampler (Escape on macOS and in
-//! browsers), the colors stay as they were.
+//! desktop portal's `PickColor` on Linux, a copy of the screen shown in a window of the app's own on
+//! Windows, the browser's EyeDropper where the browser has one). The command shows the sampler and
+//! answers at once. The color arrives in a later frame ([`poll`]) and becomes the fill or the
+//! stroke through `paint.setFill` / `paint.setStroke` (one undo step), or the open Color Picker's
+//! color. When the person cancels the sampler (Escape on macOS, Windows and in browsers), the
+//! colors stay as they were.
 //!
-//! The sampler answers in sRGB (macOS clips a color outside sRGB to it). [`sampled`] converts that
+//! The sampler answers in sRGB (macOS clips a color outside sRGB to it; Windows reads the screen's
+//! 8-bit colors as sRGB). [`sampled`] converts that
 //! into the working RGB space, so when the working space is not sRGB, a color inside sRGB looks as
 //! it did on the screen.
 

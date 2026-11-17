@@ -231,6 +231,9 @@
 	Mask	Maski
 	Rasterize…	Rasteroi…
 	Create Gradient Mesh…	Luo liukuväriverkko…
+	Flat	Tasainen
+	To Center	Keskustaa kohti
+	To Edge	Reunaa kohti
 	Create Object Mosaic…	Luo objektimosaiikki…
 	Vector Halftone…	Vektorirasterointi…
 	Create Trim Marks	Luo leikkuumerkit
@@ -1169,6 +1172,18 @@ lighting	Light	Valo
 	Placement Options…	Sijoitusasetukset…
 	Plug-in…	Laajennus…
 	Preview in Browser	Esikatsele selaimessa
+	Optimize to File Size…	Optimoi tiedostokokoon…
+	Optimize to File Size	Optimoi tiedostokokoon
+	Desired File Size:	Haluttu tiedostokoko:
+	Start With:	Aloita:
+	Use:	Käytä:
+	Current Settings	Nykyiset asetukset
+	Auto Select GIF/JPEG	Valitse GIF/JPEG automaattisesti
+	Total of All Slices	Kaikki siivut yhteensä
+	Each Slice	Jokainen siivu
+	Current Slice	Nykyinen siivu
+	{size}, within {target}	{size}, enintään {target}
+	No setting tried fits in {target}; the smallest is {size}	Mikään kokeiltu asetus ei mahdu kokoon {target}; pienin on {size}
 	Printer Setup…	Tulostimen asetukset…
 	Printers	Tulostimet
 	Recent File	Viimeisin tiedosto
@@ -1306,6 +1321,7 @@ lighting	Light	Valo
 	Search commands, tools, panels and effects	Hae komentoja, työkaluja, paneeleita ja tehosteita
 	Style:	Tyyli:
 	Switch workspace	Vaihda työtilaa
+	Search commands	Hae komentoja
 	Show all open documents	Näytä kaikki avoimet asiakirjat
 	Use 	Käytä 
 	 the object to select  |  	 objektia valitaksesi sen  |  
@@ -2853,7 +2869,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Piilota videoviivaimet
 	Client-side (.html)	Asiakaspuoli (.html)
 	Color Reduction:	Värien vähennys:
-	Lossless (lossy WebP isn't available yet)	Häviötön (häviöllinen WebP ei ole vielä käytettävissä)
+	Lossless	Häviötön
+	Lossy	Häviöllinen
 	Scans:	Läpikäynnit:
 	Server-side (.map)	Palvelinpuoli (.map)
 	{format} Options	{format}-asetukset
@@ -2867,6 +2884,8 @@ digits	Malayalam	Malajalam
 	Collate	Lajittele
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Yhdistelmävärit muunnetaan siihen; erottelut tehdään sen mukaan, kun se on CMYK-profiili.
 	Convert All Spot Colors to Process	Muunna kaikki spottivärit prosessiväreiksi
+	Convert {name} to process	Muunna {name} prosessiväriksi
+	Keep {name} as spot	Säilytä {name} spottivärinä
 	Default Printer	Oletustulostin
 	Document Ink Options	Asiakirjan musteasetukset
 	Download:	Lataus:
@@ -3653,6 +3672,10 @@ theme	Appearance	Ulkoasu
 	Font List	Fonttiluettelo
 	Show Similar Fonts	Näytä samankaltaiset fontit
 	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
+	Fonts used in this document	Tässä asiakirjassa käytetyt fontit
+	This document uses no available fonts	Tämä asiakirja ei käytä saatavilla olevia fontteja
+	Recently Added	Äskettäin lisätyt
+	Fonts added in the last 30 days	Viimeisten 30 päivän aikana lisätyt fontit
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti
@@ -3924,6 +3947,7 @@ theme	Appearance	Ulkoasu
 	Command Click to Select Objects Behind	Valitse takana olevat objektit Komento-napsautuksella
 	Constrain Angle	Rajoita kulmaa
 	Constrain Width and Height Proportions	Säilytä leveyden ja korkeuden suhde
+	Copy Width to Height	Kopioi leveys korkeudeksi
 	Construction Guides	Rakenneapuviivat
 	Curvature Tool	Kaarevuustyökalu
 	Data Recovery	Tietojen palautus
@@ -4429,12 +4453,85 @@ font-technology	Variable	Muuttuvat
 	Preferences	Asetukset
 	Previous	Edellinen
 	Restore every preference to its default (applied on OK)	Palauta kaikki asetukset oletuksiin (käytetään, kun valitaan OK)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Näyttää piirtopinnalla komentopalkin valinnalle tai työkalulle; se piiloutuu vetämisen ajaksi ja esitystilassa.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Kuinka pitkälle nuolinäppäin siirtää valintaa; vaihtonäppäimen kanssa se siirtää kymmenen kertaa pidemmälle.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Niiden akselien kulma, joita pitkin nuolinäppäimet siirtävät ja joihin vaihtonäppäin rajoittaa piirtämisen ja siirtämisen.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Kulman säde, jolla Pyöristetty suorakulmio -työkalu piirtää; säteen muuttaminen piirtämisen aikana muuttaa myös tätä arvoa.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Kuinka paljon oikealle ja alas Liitä siirtää kopiota, kun sijaintia ei anneta, kuten komentosarjasta; sovelluksessa Liitä keskittää kopion näkymään.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Estää Kynä-työkalua poistamasta ankkuripistettä, jota napsautat valitulla polulla, tai lisäämästä pistettä kohtaan, jossa napsautat sen segmenttiä.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Piirtotyökalut näyttävät kuvakkeensa sijaan ristikko-osoittimen; Caps Lock tekee saman, kun se on käytössä.
+	Shows a tip when the pointer rests on a button or field that has one.	Näyttää vihjeen, kun osoitin pysähtyy painikkeen tai kentän päälle, jolla on vihje.
+	Shows a warning before a script you choose runs.	Näyttää varoituksen ennen kuin valitsemasi komentosarja suoritetaan.
+	Smooths the edges of artwork on the canvas.	Pehmentää piirtopinnalla olevan grafiikan reunat.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Valinta › Sama › Täyttöväri, Viivan väri sekä Täyttö ja viiva löytävät vain globaalin tai spottivärimallin saman sävyn, eivät mitä tahansa sen sävyä.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Näyttää aloitusnäytön, kun yhtään asiakirjaa ei ole auki; kun asetus ei ole käytössä, ikkuna pysyy tyhjänä, kunnes napsautat Aloitus.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mittaa objektit viivoineen ja muotoa muuttavine tehosteineen kokoa, sijaintia ja tasausta varten; varjoja, hehkuja ja sumennuksia ei mitata.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100 %:n zoomauksella asiakirjan tuuma vie 96 näyttöpistettä 72:n sijaan.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ryhmän, polun tai kuvan kaksoisnapsautus Valinta-työkalulla avaa sen eristystilaan.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Kuviotäytöt ja -viivat muuntuvat grafiikan mukana, ellei muunnos tai Muunna-paneelin valikko valitse toisin.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynaamisten kulmien säteet skaalautuvat grafiikan mukana, ellei skaalaus valitse toisin.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Viivojen paksuudet, katkoviivat ja tehosteiden etäisyydet skaalautuvat grafiikan mukana, ellei skaalaus valitse toisin.
+	The mouse wheel zooms the canvas instead of scrolling it.	Hiiren rulla zoomaa piirtopintaa vierittämisen sijaan.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
+	Dragging sideways on a numeric field's label changes the field's value.	Numerokentän nimiön vetäminen sivuttain muuttaa kentän arvoa.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
+	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Luo leikkuumerkit piirtää japanilaistyyliset merkit roomalaisten sijaan.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Uusi grafiikka saa vain valinnan täytön ja viivan; kun asetus ei ole käytössä, se saa valitun objektin koko ulkoasun.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Leveyden tai korkeuden muuttaminen Muunna-paneelissa, Ominaisuudet-paneelissa tai ohjauspalkissa muuttaa toista samassa suhteessa.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Dynaamisen suorakulmion ominaisuuksissa on yksi Kulman säde -kenttä kaikille neljälle kulmalle; kun asetus ei ole käytössä, jokaisella kulmalla on oma kenttänsä.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Mitä Muunna-paneelin muokkaukset muuntavat: objektin, sen kuvioruudut tai molemmat; Oletus noudattaa asetusta Muunna kuvioruudut.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Kun yksi symbolin esiintymä on valittuna, Muunna-paneeli käyttää symbolin kohdistuspistettä viitepisteenä.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Tummentaa piirtopinnan piirtoalustojen ulkopuolelta, kun Piirtoalusta-työkalu on käytössä.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Kun Himmennä piirtoalustan ulkopuolinen alue on käytössä, piirtoalustojen ulkopuolinen alue pysyy tummana, kun vedät Piirtoalusta-työkalulla.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Kuinka lähellä, pikseleinä, osoittimen on oltava objektia, ankkuripistettä tai kahvaa, jotta napsautus valitsee sen.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Valitseeko valintatyökalun kehys objektit, joita se koskettaa, vai vain kokonaan sisällä olevat; Vetosuunta valitsee sisällä olevat, kun vedät oikealle. E kääntää säännön vedon aikana.
+	A click selects a filled object only on its path, not inside its fill.	Napsautus valitsee täytetyn objektin vain sen polulta, ei täytön sisältä.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Kuinka lähelle, pikseleinä, pisteen on tultava ankkuripistettä tai viivaimen apuviivaa, jotta Kohdista pisteeseen kohdistaa sen; kun älykkäät apuviivat ovat käytössä, käytetään niiden tartuntatoleranssia.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Valintatyökalulla Cmd/Ctrl-napsautus valitsee valitun alla olevan objektin osoittimen kohdalta; jokainen seuraava napsautus menee yhden objektin syvemmälle.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Lähennä ja Loitonna tuovat valinnan keskipisteen näkymän keskelle.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Lukittu ja piilotettu kuvitus piirtoalustan sisällä siirtyy, skaalautuu ja kopioituu piirtoalustan mukana kuten muukin kuvitus.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Ankkuripisteiden ja suuntakahvojen päiden koko piirtoalueella; suurempiin ankkuripisteisiin voi tarttua myös kauempaa.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Piirtää suuntakahvojen päät täytettyinä pisteinä, onttoina pisteinä tai suurempina täytettyinä pisteinä.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Suoravalintatyökalulla osoittimen alla oleva ankkuripiste korostetaan.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Näyttää suuntakahvat, kun valittuna on useampi kuin yksi ankkuripiste; pois päältä ne näkyvät vain, kun valittuna on yksi ankkuripiste.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Kulmasäätimet piilotetaan kulmista, joiden kulma on suurempi kuin tämä astemäärä.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Kynätyökalu esikatselee seuraavan segmentin viimeisestä ankkuripisteestä osoittimeen ennen napsautusta.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Kaarevuustyökalu esikatselee käyrän osoittimeen asti ennen kuin sijoitat seuraavan pisteen.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Yksikkö uusille asiakirjoille valmiissa kooissa pikselikokoja lukuun ottamatta ja avatuille tiedostoille, joihin ei ole tallennettu yksikköä; kun valitset sen tässä ja napsautat OK, siitä tulee myös aktiivisen asiakirjan yksikkö.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Viivan paksuudet, katkoviivat ja välit näytetään tässä yksikössä, ja niille kirjoitetut luvut luetaan siinä.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Tekstin koot, riviväli ja perusviivan siirto näytetään tässä yksikössä, ja niille kirjoitetut luvut luetaan siinä.
 	The unit for East Asian type measurements, which no field uses yet.	Itä-Aasian tekstin mittojen yksikkö, jota mikään kenttä ei vielä käytä.
 	When on, a number typed without a unit into a field in picas is read in points.	Kun asetus on käytössä, picoina näytettävään kenttään ilman yksikköä kirjoitettu luku luetaan pisteinä.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-tunnus-asetuksella objektien nimet näytetään XML-tunnuksina kohteissa Tasot, Muuttujat ja Tason asetukset.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Kohdistaa piirtämisen, siirtämisen ja skaalaamisen ruudukon jakoihin myös silloin, kun ruudukko on piilossa; kun asetus on päällä, Kohdista pikseliin ei ole käytössä.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Valitsemattomien apuviivojen väri; piirtoalusta, jolla on apuviivojen tunniste, piirtää omat apuviivansa tunnisteen värillä.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Piirtää apuviivat yhtenäisinä viivoina tai pisteinä, myös asiakirjassa jo olevat apuviivat.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Kun asetus on päällä, apuviivat ovat lukittuina VectorCraftin käynnistyessä; asetuksen muuttaminen lukitsee tai avaa ne heti, ja Näytä › Apuviivat › Lukitse apuviivat muuttaa lukitusta edelleen.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Kun asetus on päällä, Cmd/Ctrl pohjassa viivaimesta vetämisen alussa tekee apuviivan vain aktiiviselle piirtoalustalle, tai piirtoalustatyökalulla koko piirtopohjan apuviivan.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Ruudukon väri; pääruudukkoviivojen väliset viivat piirretään sen vaaleammalla sävyllä.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Piirtää ruudukon viivoina tai pisteinä pääruudukkoviivoja pitkin jokaisen jaon kohdalla.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Pääruudukkoviivojen etäisyys kaikissa avoimissa asiakirjoissa ja uusissa; VectorCraft-asiakirja avautuu ruudukolla, jonka kanssa se tallennettiin.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Moneenko osaan kukin pääruudukon ruutu jaetaan; Kohdista ruudukkoon kohdistaa näihin osiin myös silloin, kun zoomaus piilottaa niiden viivat.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Piirtää ruudukon kuvituksen taakse; pois päältä ruudukko piirretään sen päälle.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Pikseliesikatselussa 600 %:n tai suuremmalla zoomauksella aktiivinen näkymä näyttää kuvituksen päällä viivan jokaisen asiakirjan pikselin reunassa.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Ruudun reunan ja katkoviivaisten värimallin rajojen väri, jotka näkyvät kuviota muokattaessa.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Kohdistaa piirtämisen, siirtämisen ja muuntamisen lähellä olevaan grafiikkaan ja näyttää apuviivat ja selitteet; pikseliesikatselu poistaa ne käytöstä, ja Kohdista ruudukkoon kohdistaa niiden sijaan ruudukkoon.
+	The color of Smart Guide lines and labels.	Älykkäiden apuviivojen viivojen ja selitteiden väri.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Näyttää viivan sitä reunaa tai keskikohtaa pitkin, johon grafiikka tasautuu; pois päältä grafiikka tasautuu yhä ilman viivaa, eikä Kohdista merkkiin ole käytössä.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Valintatyökalulla osoittimen alla oleva valitsematon objekti saa ääriviivan tasonsa värillä, kun et vedä.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Näyttää koon tai kulman osoittimen vieressä, kun skaalaat, kierrät, vinoutat tai peilaat grafiikkaa.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Piirtäessä pisteet kohdistuvat valituissa kulmissa kulkeviin viivoihin, jotka kulkevat segmentin tai muodon alkupisteen kautta.
+	The set of angles the construction guides follow while Construction Guides is on.	Kulmat, joita rakenneapuviivat seuraavat, kun Rakenneapuviivat on käytössä.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Nimeää, mihin piste kohdistuu, esimerkiksi ankkuripisteen, polun tai tasauksen; pois päältä pisteet kohdistuvat samoin ilman nimiä.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Näyttää osoittimen vieressä etäisyydet, kulmat ja kuinka paljon grafiikka on siirtynyt, kun piirrät tai siirrät.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Kohdistaa siirretyn tai koon muuttaneen grafiikan samaan väliin kuin lähellä olevien objektien välillä ja merkitsee yhtä suuret välit.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Kun jotain on valittuna, Alt/Option-näppäimen pitäminen toisen objektin tai piirtoalustan päällä näyttää etäisyydet sen ja valinnan välillä.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Valinta, joka vedetään takaisin tartuntatoleranssin sisään vedon alkukohdasta, palaa täsmälleen siihen kohtaan; kopio ei palaa.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Kuinka lähelle grafiikkaa osoittimen tai vedettävän pisteen on tultava näytöllä, jotta älykkäät apuviivat kohdistavat siihen; etäisyys on sama kaikilla zoomauksilla.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Kohdistaa janan pään tai keskipisteestä piirretyn ympyrän niin, että se koskettaa lähellä olevaa käyrää.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Kohdistaa janan pään niin, että se kohtaa lähellä olevan suoran segmentin suorassa kulmassa.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
@@ -4905,6 +5002,11 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	PDF writer error: {0}	PDF-kirjoittimen virhe: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketoitiin {n} tiedosto kansioon {folder} ({note})|Paketoitiin {n} tiedostoa kansioon {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Esikatselu selaimessa vaatii työpöytäsovelluksen (verkkoversio lataa tiedostot sen sijaan)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	anna `desiredK`, haluttu tiedostokoko yksikössä K (1024 tavua): luku, joka on yli 0 ja enintään 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` on `current` tai `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` on `allSlices`, `eachSlice` tai `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` on siivun numero luettelosta `slice.list`, kun `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimoi tiedostokokoon: mitattavaa kuvaa ei ole
 @msg	Release Guides: no guides	Vapauta apuviivat: ei apuviivoja
 @msg	Release: no layer to put the rectangle in	Vapauta: ei tasoa, johon suorakulmion voisi sijoittaa
 @msg	Replace Spine: select a blend and a path	Korvaa selkäranka: valitse sulautus ja polku
@@ -5141,6 +5243,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no active document	ei aktiivista asiakirjaa
 @msg	no active perspective plane	ei aktiivista perspektiivitasoa
 @msg	no anchor points selected	ankkuripisteitä ei ole valittu
+@msg	`points` must be three [x, y] pairs of numbers	`points` on annettava kolmena lukuparina [x, y]
+@msg	direct-select three anchor points, or give `points`	valitse suoraan kolme ankkuripistettä tai anna `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
 @msg	no artboard {i} (0-based; the document has {_1})	ei piirtoalustaa {i} (0-pohjainen; asiakirjassa on {_1})
@@ -6202,6 +6307,19 @@ mark-style	Japanese	Japanilainen
 	Transform Objects	Muunna objekteja
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tuntematon parametri `{key}`; tarkoititko `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tuntematon parametri `{key}`; komento ei ota parametreja
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	tuntematon parametri `{key}`; kohteen `{object}` avaimet: {keys}
+@msg	unknown parameter `{key}`; {why_not}	tuntematon parametri `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	mikään muoto ei käytä sitä (katso document.formats)
+@msg	no save format takes it (see file.formatOptions)	mikään tallennusmuoto ei käytä sitä (katso file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF ei käytä sitä (katso document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS ei käytä sitä (katso document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF ei käytä sitä (katso document.formats)
+@msg	{name} must be {range} (got {v})	arvon {name} on oltava {range} (saatiin {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Ensin kokeiltu grafiikkasuoritin ei pystynyt näyttämään ikkunaa, joten VectorCraft käynnistyi uudelleen: {summary} (Asetukset › Suorituskyky › Grafiikkasuoritin › Automaattinen käyttää näyttöäsi ohjaavaa suoritinta)
+@msg	Sent “{title}” to {to}	“{title}” lähetettiin kohteeseen {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” lähetettiin kohteeseen {to}. Tulostusjonon vastaus: {note}
+@msg	the default printer	oletustulostin
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rasteritehosteet objektissa {object}: pyydettiin {requested} ppi, saatiin {achieved} ppi 64 miljoonan pikselin rajan vuoksi
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}
 @msg	the params must be an object, not {got}	parametrien on oltava objekti, ei {got}
 @msg	unknown parameter `{path}`; the object takes no keys	tuntematon parametri `{path}`; objekti ei ota avaimia
@@ -7193,6 +7311,7 @@ anchor	Points:	Pisteet:
 	Open a document to check it for issues.	Avaa asiakirja tarkistaaksesi sen ongelmat.
 	Empty Text	Tyhjä teksti
 	Unpainted Objects	Värittömät objektit
+	Empty Text Paths	Tyhjät tekstipolut
 	Zero-Opacity Objects	Täysin läpinäkyvät objektit
 	Duplicate Objects	Objektien kaksoiskappaleet
 	Off-Artboard Art	Piirtoalustojen ulkopuolinen grafiikka
@@ -7885,6 +8004,11 @@ breakText	Glyphs	Merkit
 @msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
 @msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle`-arvon on oltava -180–180 astetta
+@msg	`roundness` must be from 0 to 100%	`roundness`-arvon on oltava 0–100 %
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity`-arvon on oltava 0.01–100 pt
+@msg	style must be "pencil" or "brush"	style-arvon on oltava "pencil" tai "brush"
+@msg	extend end must be "start" or "end"	extend-pään on oltava "start" tai "end"
+@msg	connect end must be "start" or "end"	connect-pään on oltava "start" tai "end"
 @msg	`roundness` must be from 1 to 100%	`roundness`-arvon on oltava 1–100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Karsintakehys ja -viivat…
@@ -7946,6 +8070,7 @@ breakText	Glyphs	Merkit
 @msg	Too many Revolve faces for visibility evaluation	Pyöräytä-tehosteessa on liian monta tahkoa näkyvyyden arviointiin
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lukee värimallien vaihtotiedostosta enintään {ASE_MAX_ENTRIES} väriä ja ryhmää, ja tässä kirjastossa niitä on {entries}
 @msg	WebP encoding failed: {e}	WebP-koodaus epäonnistui: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-koodaus epäonnistui: kuva on liian suuri häviölliseen WebP-muotoon: pienennä tarkkuutta tai valitse Häviötön
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` on oltava kokonaisluku

@@ -1,6 +1,6 @@
 use vectorcraft_geom::Point;
 
-use super::exporter::{GlyphLine, MAX_INLINE_DEPTH, in_range, norm, to_path, writable, xf};
+use super::exporter::{GlyphLine, MAX_INLINE_DEPTH, blend, in_range, norm, to_path, writable, xf};
 use super::images::embed;
 use super::{
     Affine, AppearanceItem, BezPath, BlendMode, Color, Cow, Embedding, Exporter, Fill, FillRule, Glyph, GlyphId, KrillaGlyph, ListMarker, Mark, Node,
@@ -56,7 +56,7 @@ impl Exporter<'_> {
             let fill = &run.style.fill;
             // Colour bitmap glyphs (emoji) real text doesn't write: all of them, or those it leaves.
             let mut images: Option<Vec<usize>> = None;
-            self.overprinting(s, run.style.overprint_fill, fill, |ex, s| {
+            self.char_overprinting(s, run.style.overprint_fill, fill, |ex, s| {
                 s.push_transform(&text_space);
                 // The outlines left to fill as paths: all of them, or those real text leaves.
                 let outlines = match plain.as_deref().filter(|_| !fill.is_none() && !ex.area_paint(fill, true)) {
@@ -121,7 +121,7 @@ impl Exporter<'_> {
             if let Some(path) = path {
                 // Character strokes are drawn in text space, with their cap, join and dashes.
                 let st = run.style.stroke_layer();
-                self.overprinting(s, st.overprint, &st.paint, |ex, s| {
+                self.char_overprinting(s, st.overprint, &st.paint, |ex, s| {
                     s.push_transform(&text_space);
                     ex.stroke(s, &bp, &path, FillRule::NonZero, &st, page, layout.bounds);
                     s.pop();
@@ -157,9 +157,16 @@ impl Exporter<'_> {
                     if !ex.area(s, path, krilla::paint::FillRule::NonZero, &fl.paint, (fl.opacity, fl.blend), tb, bp.bounding_box(), true)
                         && let Some(paint) = ex.paint(s, &fl.paint, tb)
                     {
+                        let bl = fl.blend != BlendMode::Normal;
+                        if bl {
+                            s.push_blend_mode(blend(fl.blend));
+                        }
                         s.set_stroke(None);
                         s.set_fill(Some(Fill { paint, opacity: norm(fl.opacity), rule: krilla::paint::FillRule::NonZero }));
                         s.draw_path(path);
+                        if bl {
+                            s.pop();
+                        }
                     }
                 }),
                 AppearanceItem::Stroke(st) if st.visible && st.width > 0.0 => {

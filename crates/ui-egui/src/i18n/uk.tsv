@@ -199,6 +199,8 @@ antiAlias	Sharp	Різке
 	Crisp	Чітке
 	Strong	Сильне
 	Anti-aliasing:	Згладжування:
+	Art Optimized	Оптимізовано для графіки
+	Type Optimized	Оптимізовано для тексту
 	Any Kind	Будь-який тип
 	Font Technology	Технологія шрифту
 font-technology	Variable	Варіативні
@@ -601,6 +603,7 @@ font-technology	Variable	Варіативні
 	Consolidate All Windows	Об’єднати всі вікна
 	Constrain Angle	Обмежити кут
 	Constrain Width and Height Proportions	Зберігати пропорції ширини та висоти
+	Copy Width to Height	Копіювати ширину у висоту
 	Construction Guides	Напрямні побудови
 	Contextual Alternates	Контекстні альтернативи
 	Contextual Task Bar	Контекстна панель завдань
@@ -611,6 +614,8 @@ font-technology	Variable	Варіативні
 	Control	Панель керування
 	Convert	Перетворити
 	Convert All Spot Colors to Process	Перетворити всі плашкові кольори на складові
+	Convert {name} to process	Перетворити {name} на складовий колір
+	Keep {name} as spot	Залишити {name} плашковим кольором
 	Convert All Strokes to Outlines	Перетворити всі обведення на контури
 	Convert All Text to Outlines	Перетворити весь текст на контури
 	Convert Anchor Point	Перетворити опорну точку
@@ -686,6 +691,9 @@ font-technology	Variable	Варіативні
 	Create from Selection	Створити із виділення
 	Create From:	Створити з:
 	Create Gradient Mesh…	Створити градієнтну сітку…
+	Flat	Плаский
+	To Center	До центру
+	To Edge	До краю
 	Create Graph	Створити діаграму
 	Create New Layer	Створити новий шар
 	Create New Sublayer	Створити новий підшар
@@ -1368,6 +1376,10 @@ file-filter	Templates	Шаблони
 	Font List	Список шрифтів
 	Show Similar Fonts	Показати схожі шрифти
 	Clear Similar Fonts	Скинути схожі шрифти
+	Fonts used in this document	Шрифти, використані в цьому документі
+	This document uses no available fonts	Цей документ не використовує доступних шрифтів
+	Recently Added	Нещодавно додані
+	Fonts added in the last 30 days	Шрифти, додані за останні 30 днів
 	Font Preview Size	Розмір попереднього перегляду шрифту
 	Font Size	Розмір шрифту
 	Variable Font	Варіативний шрифт
@@ -2063,7 +2075,8 @@ file-filter	Templates	Шаблони
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
-	Lossless (lossy WebP isn't available yet)	Без втрат (WebP із втратами поки недоступний)
+	Lossless	Без втрат
+	Lossy	Із втратами
 	Lossy:	Із втратами:
 	Low	Низька
 	lowercase	малі
@@ -2745,6 +2758,18 @@ diagnostics	ui	інтерфейс
 	Preview:	Перегляд:
 	Preview All Layers	Переглянути всі шари
 	Preview in Browser	Переглянути у браузері
+	Optimize to File Size…	Оптимізувати за розміром файлу…
+	Optimize to File Size	Оптимізувати за розміром файлу
+	Desired File Size:	Бажаний розмір файлу:
+	Start With:	Почати з:
+	Use:	Використати:
+	Current Settings	Поточні налаштування
+	Auto Select GIF/JPEG	Автовибір GIF/JPEG
+	Total of All Slices	Сума всіх фрагментів
+	Each Slice	Кожен фрагмент
+	Current Slice	Поточний фрагмент
+	{size}, within {target}	{size}, у межах {target}
+	No setting tried fits in {target}; the smallest is {size}	Жодне випробуване налаштування не вміщується в {target}; найменший розмір {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
 	Preview Mode	Режим перегляду
 	Preview the document as it is now	Переглянути документ у поточному вигляді
@@ -3093,12 +3118,85 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Показує на полотні панель команд для виділення або інструмента; вона ховається під час перетягування та в режимі презентації.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Наскільки клавіша зі стрілкою зсуває виділення; із Shift вона зсуває його вдесятеро далі.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Кут осей, уздовж яких зсувають клавіші зі стрілками і до яких Shift прив’язує малювання та переміщення.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Радіус кута, з яким малює інструмент «Округлений прямокутник»; зміна радіуса під час малювання змінює й це значення.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Наскільки «Вставити» зсуває копію праворуч і вниз, коли положення не задано, наприклад зі скрипту; «Вставити» в застосунку розміщує її в центрі вигляду.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Не дає інструменту «Перо» видаляти опорну точку, на яку ви клацаєте на виділеному контурі, або додавати точку там, де ви клацаєте на його сегменті.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Інструменти малювання показують вказівник-перехрестя замість свого значка; Caps Lock робить те саме, поки він увімкнений.
+	Shows a tip when the pointer rests on a button or field that has one.	Показує підказку, коли вказівник зупиняється на кнопці або полі, що її мають.
+	Shows a warning before a script you choose runs.	Показує попередження перед запуском вибраного вами скрипту.
+	Smooths the edges of artwork on the canvas.	Згладжує краї графіки на полотні.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Виділення › Те саме › Колір заливки», «Колір обведення» та «Заливка та обведення» знаходять лише той самий відтінок глобального або плашкового зразка, а не будь-який його відтінок.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показує початковий екран, коли немає відкритих документів; якщо вимкнено, вікно лишається порожнім, доки ви не натиснете «Додому».
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Вимірює об’єкти з обведеннями та ефектами, що змінюють форму, для розміру, положення й вирівнювання; тіні, світіння та розмиття не враховуються.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	За масштабу 100 % один дюйм документа займає 96 екранних пунктів замість 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Подвійне клацання на групі, контурі або зображенні інструментом «Виділення» відкриває їх у режимі ізоляції.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки й обведення візерунком трансформуються разом із графікою, якщо трансформування або меню панелі «Трансформувати» не задає іншого.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Радіуси динамічних кутів масштабуються разом із графікою, якщо масштабування не задає іншого.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Товщина обведень, штрихи та відстані ефектів масштабуються разом із графікою, якщо масштабування не задає іншого.
+	The mouse wheel zooms the canvas instead of scrolling it.	Колесо миші масштабує полотно, а не прокручує його.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
+	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
+	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	«Створити мітки підрізування» малює мітки в японському стилі замість західних.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Нові об’єкти отримують лише заливку та обведення виділення; якщо вимкнено, вони отримують усе оформлення виділеного об’єкта.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Зміна ширини або висоти на панелі «Трансформувати», панелі «Властивості» або панелі керування пропорційно змінює інший розмір.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Властивості динамічного прямокутника показують одне поле «Радіус кута» для всіх чотирьох кутів; якщо вимкнено, кожен кут має власне поле.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Що трансформують зміни на панелі «Трансформувати»: об’єкт, плитки його візерунка або обидва; «За замовчуванням» слідує «Трансформувати плитки візерунка».
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Коли виділено один екземпляр символу, панель «Трансформувати» використовує точку реєстрації символу як опорну точку.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Затемнює полотно поза монтажними областями, поки активний інструмент «Монтажна область».
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Коли ввімкнено «Затемнювати ділянку поза монтажною областю», ділянка поза монтажними областями лишається темною, поки ви перетягуєте інструментом «Монтажна область».
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Наскільки близько, у пікселях, вказівник має бути до об’єкта, опорної точки або маркера, щоб клацання виділило його.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Чи виділяє рамка інструмента «Виділення» зачеплені об’єкти, чи лише ті, що цілком усередині; «Напрямок перетягування» виділяє ті, що всередині, під час перетягування праворуч. E змінює правило під час перетягування.
+	A click selects a filled object only on its path, not inside its fill.	Клацання виділяє об’єкт із заливкою лише на його контурі, а не всередині заливки.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Наскільки близько, у пікселях, точка має підійти до опорної точки або напрямної лінійки, щоб «Прив’язати до точки» прив’язало її; з увімкненими розумними напрямними діє їхній допуск прив’язки.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	З інструментом «Виділення» Cmd/Ctrl+клацання виділяє об’єкт під виділеним у місці вказівника; кожне наступне клацання йде на один об’єкт глибше.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	«Збільшити» і «Зменшити» переносять центр виділення в середину вигляду.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Заблоковані й приховані об’єкти всередині монтажної області переміщуються, масштабуються й копіюються разом із нею, як і решта об’єктів.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Розмір опорних точок і кінців маркерів напрямку на полотні; більші опорні точки можна захопити й з більшої відстані.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Малює кінці маркерів напрямку суцільними точками, порожнистими точками або більшими суцільними точками.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	З інструментом «Пряме виділення» опорна точка під вказівником підсвічується.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Показує маркери напрямку, коли виділено більше однієї опорної точки; якщо вимкнено, вони видні лише при одній виділеній опорній точці.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Кутові віджети приховуються на кутах, більших за це число градусів.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Інструмент «Перо» показує, перш ніж ви клацнете, наступний сегмент від останньої опорної точки до вказівника.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Інструмент «Кривизна» показує криву до вказівника, перш ніж ви поставите наступну точку.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Одиниця нових документів вбудованих розмірів, крім розмірів у пікселях, і відкритих файлів без записаної одиниці; якщо вибрати її тут і натиснути ОК, вона стане й одиницею активного документа.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Товщина обведення, штрихи й зазори показуються в цій одиниці, і введені для них числа читаються в ній.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Розміри тексту, інтерліньяж і зміщення базової лінії показуються в цій одиниці, і введені для них числа читаються в ній.
 	The unit for East Asian type measurements, which no field uses yet.	Одиниця для розмірів східноазіатського тексту, якої поки не використовує жодне поле.
 	When on, a number typed without a unit into a field in picas is read in points.	Якщо ввімкнено, число, введене без одиниці в поле в піках, читається в пунктах.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	З XML ID назви об’єктів показуються як XML ID у «Шарах», «Змінних» і «Параметрах шару».
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Прив’язує малювання, переміщення й масштабування до поділок сітки, навіть коли сітку приховано; поки параметр увімкнено, «Прив’язати до пікселя» не діє.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Колір невиділених напрямних; монтажна область із «Міткою напрямних» малює свої напрямні кольором мітки.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Малює напрямні суцільними лініями або крапками, включно з напрямними, які вже є в документі.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Якщо параметр увімкнено, напрямні заблоковані під час запуску VectorCraft; зміна параметра одразу блокує або розблоковує їх, а «Перегляд › Напрямні › Заблокувати напрямні» і далі змінює блокування.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Якщо параметр увімкнено, Cmd/Ctrl, утримувана на початку перетягування з лінійки, створює напрямну лише на активній монтажній області, а з інструментом «Монтажна область» напрямну на все полотно.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Колір сітки; лінії між основними лініями сітки малюються блідішим відтінком цього кольору.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Малює сітку лініями або крапками вздовж основних ліній сітки на кожній поділці.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Відстань між основними лініями сітки в усіх відкритих документах і в нових; документ VectorCraft відкривається із сіткою, з якою його збережено.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	На скільки частин ділиться кожен основний квадрат сітки; «Прив’язати до сітки» прив’язує до цих частин, навіть коли масштаб приховує їхні лінії.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Малює сітку за графікою; якщо параметр вимкнено, сітка малюється поверх неї.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	У «Перегляді пікселів» за масштабу 600% і більше активний вигляд показує поверх графіки лінію по краю кожного пікселя документа.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Колір краю плитки та пунктирних меж зразка, які видно під час редагування візерунка.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Прив’язує малювання, переміщення й трансформування до найближчих об’єктів і показує напрямні та мітки; перегляд пікселів їх вимикає, а «Прив’язати до сітки» замість них прив’язує до сітки.
+	The color of Smart Guide lines and labels.	Колір ліній і міток розумних напрямних.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Показує лінію вздовж краю або центру, з яким вирівнюються об’єкти; коли параметр вимкнено, вони вирівнюються без лінії, а «Прив’язати до гліфу» не діє.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	З інструментом виділення обводить невиділений об’єкт під вказівником кольором його шару, поки ви не перетягуєте.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Показує розмір або кут поруч із вказівником, поки ви масштабуєте, обертаєте, нахиляєте або відображаєте об’єкти.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Під час малювання точки прив’язуються до ліній під вибраними кутами, що проходять через точку початку сегмента або фігури.
+	The set of angles the construction guides follow while Construction Guides is on.	Набір кутів, за якими йдуть напрямні побудови, поки ввімкнено «Напрямні побудови».
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Називає те, до чого прив’язується точка: опорну точку, контур або вирівнювання; коли параметр вимкнено, точки прив’язуються так само, але без назв.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Показує поруч із вказівником відстані, кути й зміщення об’єктів під час малювання або переміщення.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Прив’язує переміщені об’єкти або об’єкти зі зміненим розміром до такого самого проміжку, як між найближчими об’єктами, і позначає рівні проміжки.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Коли щось виділено, утримання Alt/Option над іншим об’єктом або монтажною областю показує відстані між ним і виділенням.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Виділення, перетягнуте назад у межі допуску прив’язки від місця початку перетягування, повертається точно туди; копія не повертається.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Наскільки близько на екрані вказівник або перетягувана точка мають підійти до об’єкта, щоб розумні напрямні їх прив’язали; відстань однакова за будь-якого масштабу.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Прив’язує кінець відрізка або коло, намальоване від центру, так, щоб воно торкалося найближчої кривої.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Прив’язує кінець відрізка так, щоб він зустрічав найближчий прямий сегмент під прямим кутом.
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
@@ -3333,6 +3431,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
+	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
 	Section Symbol	Символ параграфа
@@ -4684,6 +4783,11 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	PDF writer error: {0}	Помилка запису PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файли: {n} {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Перегляд у браузері вимагає настільної програми (web-версія завантажує файли)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажіть `desiredK`, бажаний розмір файлу в K (1024 байти): число більше за 0 і не більше 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` має значення `current` або `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` має значення `allSlices`, `eachSlice` або `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` задає номер фрагмента зі `slice.list`, разом з `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Оптимізувати за розміром файлу: немає зображення для вимірювання
 @msg	Release Guides: no guides	Звільнення напрямних: немає напрямних
 @msg	Release: no layer to put the rectangle in	Звільнення: немає шару для приміщення прямокутника
 @msg	Replace Spine: select a blend and a path	Заміна осі: виділіть перехід і контур
@@ -4929,6 +5033,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
 @msg	no anchor points selected	опорні точки не виділені
+@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
+@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})
@@ -5888,6 +5995,19 @@ lighting	Light	Світло
 	Transform Objects	Трансформувати об’єкти
 @msg	unknown parameter `{key}`; did you mean `{near}`?	невідомий параметр `{key}`; можливо, ви мали на увазі `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	невідомий параметр `{key}`; команда не має параметрів
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	невідомий параметр `{key}`; `{object}` приймає: {keys}
+@msg	unknown parameter `{key}`; {why_not}	невідомий параметр `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	жоден формат його не приймає (див. document.formats)
+@msg	no save format takes it (see file.formatOptions)	жоден формат збереження його не приймає (див. file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF його не приймає (див. document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS його не приймає (див. document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF його не приймає (див. document.formats)
+@msg	{name} must be {range} (got {v})	{name} має бути {range} (отримано {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Графічний процесор, обраний першим, не зміг показати вікно, тому VectorCraft запустився знову на {summary} (Налаштування › Продуктивність › Графічний процесор › Автоматично використовує той, до якого під’єднано дисплей)
+@msg	Sent “{title}” to {to}	“{title}” відправлено: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” відправлено: {to}. Відповідь черги друку: {note}
+@msg	the default printer	принтер за замовчуванням
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растрові ефекти об’єкта {object}: запитано {requested} ppi, отримано {achieved} ppi через обмеження у 64 мільйони пікселів
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 @msg	the params must be an object, not {got}	параметри мають бути об'єктом, а не {got}
 @msg	unknown parameter `{path}`; the object takes no keys	невідомий параметр `{path}`; об'єкт не приймає ключів
@@ -6739,6 +6859,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Відкрийте документ, щоб перевірити його на проблеми.
 	Empty Text	Порожній текст
 	Unpainted Objects	Об’єкти без заливки й обведення
+	Empty Text Paths	Порожні текстові контури
 	Zero-Opacity Objects	Об’єкти з нульовою непрозорістю
 	Duplicate Objects	Дублікати об’єктів
 	Off-Artboard Art	Графіка поза монтажними областями
@@ -7350,6 +7471,7 @@ breakText	Glyphs	Гліфи
 @msg	Too many Revolve faces for visibility evaluation	Забагато граней обертання для обчислення видимості
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читає з файлу обміну зразками не більше {ASE_MAX_ENTRIES} кольорів і груп, а в цій бібліотеці їх {entries}
 @msg	WebP encoding failed: {e}	Не вдалося закодувати WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Не вдалося закодувати WebP: зображення завелике для WebP із втратами: зменште роздільність або виберіть «Без втрат»
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList
@@ -7533,6 +7655,11 @@ breakText	Glyphs	Гліфи
 @msg	Some islands could not be joined to the area around the art	Деякі острівці не вдалося з’єднати з областю навколо графіки
 @msg	`width` must be from {lo} to {hi} pt	`width` має бути від {lo} до {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle` має бути від -180 до 180 градусів
+@msg	`roundness` must be from 0 to 100%	`roundness` має бути від 0 до 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` має бути від 0.01 до 100 pt
+@msg	style must be "pencil" or "brush"	style має бути "pencil" або "brush"
+@msg	extend end must be "start" or "end"	кінець extend має бути "start" або "end"
+@msg	connect end must be "start" or "end"	кінець connect має бути "start" або "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` має бути від 1 до 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` має бути цілим числом від 1 до {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Рамка й лінії вибірки…
@@ -8044,7 +8171,6 @@ breakText	Glyphs	Гліфи
 @msg	anchor `smooth` must be true or false	`smooth` опорної точки має бути true або false
 @msg	anchor `{key}` must be [x, y]	`{key}` опорної точки має бути [x, y]
 @msg	anchor `{key}` must be a number	`{key}` опорної точки має бути числом
-@msg	angle and roundness must be finite	angle і roundness мають бути скінченними
 @msg	angles must be a list as long as pins (degrees or null)	angles має бути списком такої самої довжини, як pins (градуси або null)
 @msg	appearance must be flat|center|edge	appearance має бути flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply — це "fill" або "stroke", а не `{other}`
@@ -9192,8 +9318,6 @@ breakText	Glyphs	Гліфи
 @msg	unknown panel	невідома панель
 @msg	unknown panel `{panel}`	невідома панель `{panel}`
 @msg	unknown parameter `{key}`	невідомий параметр `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	невідомий параметр `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	невідомий параметр `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	невідомий pieLegend `{v}` (none, standard або wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	невідомий piePosition `{v}` (even, ratio або stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	невідомий pieSort `{v}` (none, all або first)
@@ -9319,7 +9443,6 @@ breakText	Glyphs	Гліфи
 @msg	{label} must be a number from 1 to 10000	{label} має бути числом від 1 до 10000
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} є вбудованим, його не можна видалити
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} має бути {lo}–{hi}{unit} (отримано {v})
 @msg	{name}: CRC or size mismatch	{name}: невідповідність CRC або розміру
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: вдалося прочитати лише вбудований попередній перегляд цього файлу Affinity; скористайтеся командою Файл › Відкрити, щоб побачити його з попередженням, або перед розміщенням експортуйте SVG чи PDF з Affinity
 @msg	{name}: {e}	{name}: {e}

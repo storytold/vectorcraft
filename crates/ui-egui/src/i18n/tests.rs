@@ -1,4 +1,4 @@
-use super::catalog::{Catalog, parse_entries, placeholders};
+use super::catalog::{Catalog, matchable, parse_entries, placeholders, unmatchable_rows};
 use super::*;
 
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
@@ -1944,8 +1944,7 @@ fn untranslated_report() {
 
     for code in COMPLETE_MESSAGES {
         let lang = Lang::from_code(code).expect("registered");
-        let (entries, _) = parse_entries(lang.0.source);
-        let rows: BTreeSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        let rows = message_rows(lang.0.source);
         add(code, "messages", messages.iter().filter(|m| !rows.contains(m.as_str())).cloned().collect::<BTreeSet<_>>());
         let meanings = vectorcraft_eps::POSTSCRIPT_ERRORS.iter().filter(|(_, m)| message(lang, m) == *m).map(|(_, m)| m.to_string());
         add(code, "PostScript error meanings", meanings.collect());
@@ -2652,6 +2651,145 @@ fn package_status_message_templates_parse() {
     assert!(Catalog::parse("@msg\tPackaged {n} file(s) in {folder}{note}\tbad\n").message("Packaged 1 file(s) in /a b").is_none());
 }
 
+/// The sources of the `@msg` rows of the catalog file `text` that its catalog shows. A row the
+/// catalog leaves out ([`unmatchable_rows`]) is not one: its messages are shown in English.
+fn message_rows(text: &str) -> std::collections::BTreeSet<String> {
+    let left_out = unmatchable_rows(text);
+    let (entries, _) = parse_entries(text);
+    entries.into_iter().filter(|(ctx, src, _)| ctx == "@msg" && !left_out.contains(src)).map(|(_, src, _)| src).collect()
+}
+
+/// [`untranslated_report`] lists a message as missing when the catalog leaves its row out.
+#[test]
+fn a_row_the_catalog_leaves_out_does_not_count_as_translated() {
+    let text = concat!(
+        "@msg\t{name} must be {lo}–{hi}{unit} (got {v})\t{name}: {lo}–{hi}{unit}, {v}\n",
+        "@msg\t{name} must be {range} (got {v})\t{name}: {range}, {v}\n",
+        "@msg\t{e}\t{e}\n",
+        "@msg\tnothing selected\tnada seleccionado\n",
+        "@msgplural\t{n}{what} left|{n} {what} left\t{n} {what}|{n} {what}\n",
+    );
+    assert_eq!(unmatchable_rows(text), ["{name} must be {lo}–{hi}{unit} (got {v})", "{e}", "{n}{what} left|{n} {what} left"]);
+    assert_eq!(message_rows(text).into_iter().collect::<Vec<_>>(), ["nothing selected", "{name} must be {range} (got {v})"]);
+}
+
+/// Every `@msg` and `@msgplural` row of the bundled catalogs has a source that messages can be
+/// matched against: text, and no two placeholders in a row.
+#[test]
+fn bundled_catalogs_have_no_message_row_they_leave_out() {
+    for l in &LANGUAGES {
+        let left_out = unmatchable_rows(l.source);
+        assert!(left_out.is_empty(), "{}: no message matches these rows (two placeholders in a row, or no text): {left_out:?}", l.code);
+    }
+}
+
+/// The status messages the desktop app makes (`apps/vectorcraft/src`, test modules aside), read as
+/// [`message_literals`] reads the crates'. [`untranslated_report`] does not list them.
+fn desktop_app_messages() -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/vectorcraft/src")];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if path.is_dir() {
+                if name != "tests" {
+                    stack.push(path);
+                }
+            } else if name.ends_with(".rs") && !name.starts_with("tests") && !name.ends_with("_tests.rs") {
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                out.extend(source_messages(without_test_module(&text), &[], &std::collections::BTreeMap::new()));
+            }
+        }
+    }
+    out
+}
+
+/// Every status and error message is made with text between its placeholders, so a catalog row
+/// can match it: values that stand side by side (a key and the object it is in, a range and its
+/// unit) are joined into one value before the message is made.
+#[test]
+fn message_templates_have_text_between_their_placeholders() {
+    let app = desktop_app_messages();
+    assert!(app.iter().any(|m| m.starts_with("The graphics processor tried first")), "the desktop app scan found {} messages", app.len());
+    let mut messages = message_literals();
+    messages.extend(app);
+    // A message that is one value alone (`{e}`) passes another message on.
+    let passes_on = |m: &str| m.starts_with('{') && m.ends_with('}') && m.matches('{').count() == 1;
+    let unmatchable: Vec<&String> = messages.iter().filter(|m| m.contains('{') && !passes_on(m) && !matchable(m)).collect();
+    assert!(unmatchable.is_empty(), "no catalog row can match these messages; join the values that stand side by side first: {unmatchable:#?}");
+}
+
+/// Messages whose side-by-side values are joined before the message is made (a key with the
+/// objects it is in, a range with its unit, an object's id with its name) are translated whole in
+/// every complete-message language, the reason a key is refused for included.
+#[test]
+fn messages_with_joined_values_translate_whole() {
+    use serde_json::json;
+    let refusal = |id: &str, params: serde_json::Value| vectorcraft_engine::cmd::params::check_params(id, &params).expect_err("refused").to_string();
+    let setting = |checked: Result<(), vectorcraft_pdf::PdfError>| checked.expect_err("refused").to_string();
+    let mut marks = vectorcraft_pdf::PdfSettings::default();
+    marks.marks.weight = 9.0;
+    let gpu = "The graphics processor tried first couldn't show the window, so VectorCraft started again on Fast GPU";
+    // Each message with the values it keeps and English words its translations do not.
+    let messages: Vec<(String, Vec<&str>, Vec<&str>)> = vec![
+        (refusal("document.exportPdf", json!({"marks": {"ofset": 1}})), vec!["`marks.ofset`", "`marks.offset`"], vec!["unknown", "mean"]),
+        (refusal("document.exportPdf", json!({"marks": {"zz": 1}})), vec!["`marks.zz`", "`marks`", "weight"], vec!["unknown", "takes"]),
+        (refusal("document.exportForScreens", json!({"settings": {"zz": {}}})), vec!["`settings.zz`", "`settings`"], vec!["unknown", "takes"]),
+        (refusal("document.export", json!({"noSuchOption": 1})), vec!["`noSuchOption`", "document.formats"], vec!["unknown", "takes"]),
+        (
+            refusal("document.save", json!({"path": "a.pdf", "options": {"noSuchOption": 1}})),
+            vec!["`options.noSuchOption`", "file.formatOptions"],
+            vec!["unknown", "takes"],
+        ),
+        (
+            refusal("document.exportPdf", json!({"noSuchOption": 1})),
+            vec!["`noSuchOption`", "PDF", "document.formats"],
+            vec!["unknown", "doesn", "take"],
+        ),
+        (
+            refusal("document.exportEps", json!({"noSuchOption": 1})),
+            vec!["`noSuchOption`", "EPS", "document.formats"],
+            vec!["unknown", "doesn", "take"],
+        ),
+        (
+            refusal("document.exportDxf", json!({"noSuchOption": 1})),
+            vec!["`noSuchOption`", "DXF", "document.formats"],
+            vec!["unknown", "doesn", "take"],
+        ),
+        (setting(vectorcraft_pdf::PrintSettings { copies: 0, ..Default::default() }.check()), vec!["copies", "1–999", "0"], vec!["must", "got"]),
+        (setting(marks.check_values()), vec!["marks.weight", "0.05–2 pt", "9"], vec!["must", "got"]),
+        (gpu.to_string(), vec!["Fast GPU"], vec!["tried", "started"]),
+        (
+            format!("{gpu} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)"),
+            vec!["Fast GPU"],
+            vec!["tried", "started", "uses", "drives"],
+        ),
+        ("Sent “Poster” to the default printer".to_string(), vec!["“Poster”"], vec!["Sent", "default"]),
+        ("Sent “Poster” to Office Laser".to_string(), vec!["“Poster”", "Office Laser"], vec!["Sent"]),
+        (
+            "Sent “Poster” to Office Laser (Floor 2). The spooler replied: job 12".to_string(),
+            vec!["“Poster”", "Office Laser (Floor 2)", "job 12"],
+            vec!["Sent", "spooler", "replied"],
+        ),
+        ("`canceled` is not an available name".to_string(), vec!["`canceled`"], vec![]),
+        ("a graphic style named `canceled` already exists".to_string(), vec!["`canceled`"], vec![]),
+        (
+            "raster effects on object 7 (Logo): requested 300.0 ppi, achieved 72.0 ppi due to the 64 million pixel cap".to_string(),
+            vec!["7", "Logo", "300.0", "72.0"],
+            vec!["requested", "achieved"],
+        ),
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (english, kept, words) in &messages {
+            let shown = message(lang, english);
+            assert!(kept.iter().all(|value| shown.contains(value)), "{code}: {english} -> {shown}");
+            assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !words.contains(&w)), "{code}: {english} -> {shown}");
+        }
+    }
+}
+
 /// A placeholder that occurs twice in a template matches the same text both times, so a template
 /// that ends with the name it starts with does not swallow a line that wraps its message.
 #[test]
@@ -3088,6 +3226,67 @@ fn three_d_refusals_translate_with_their_values() {
         assert!(label != "Extrude & Bevel" && symbol.contains(&label), "{code}: the effect's name is translated: {symbol}");
     }
     assert_eq!(message(de(), &errors[1].0), "ungültige Parameter für `effect.apply`: Licht: intensity muss eine Zahl von 0 bis 100 sein");
+}
+
+/// The Blob Brush's range refusals (`path.blob` `angle`, `roundness` and `fidelity`) show in every
+/// complete-message language with the key and the range numbers as given; the error the command
+/// returns stays English.
+#[test]
+fn blob_brush_range_refusals_translate_with_their_values() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let refusals = [
+        (json!({"angle": 200}), "`angle`", ["-180", "180"]),
+        (json!({"roundness": 101}), "`roundness`", ["0", "100"]),
+        (json!({"fidelity": 0}), "`fidelity`", ["0.01", "100"]),
+    ];
+    for (extra, key, numbers) in &refusals {
+        let mut p = json!({"points": [[10, 10], [60, 10]]});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let e = s.execute("path.blob", &p).unwrap_err().to_string();
+        assert!(e.starts_with("invalid parameters for `path.blob`: ") && e.contains(key) && e.contains(" must be from "), "{e}");
+        assert_eq!(message(Lang::EN, &e), e);
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            assert!(!shown.contains(" must be from ") && shown.contains("`path.blob`") && shown.contains(key), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
+    assert_eq!(
+        message(de(), &s.execute("path.blob", &json!({"points": [[10, 10], [60, 10]], "angle": -181})).unwrap_err().to_string()),
+        "ungültige Parameter für `path.blob`: `angle` muss zwischen -180 und 180 Grad liegen"
+    );
+}
+
+/// `path.freehand`'s refusals of an unknown `style`, `extend` end or `connect` end show in every
+/// complete-message language with the accepted values as given.
+#[test]
+fn freehand_choice_refusals_translate_with_their_values() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let a = s.execute("path.create", &json!({"d": "M10 10 L20 10"})).unwrap()["id"].clone();
+    let b = s.execute("path.create", &json!({"d": "M10 50 L20 50"})).unwrap()["id"].clone();
+    let points = json!([[20, 10], [30, 30], [20, 50]]);
+    let refusals = [
+        (json!({"points": points, "style": "ink"}), ["pencil", "brush"]),
+        (json!({"points": points, "extend": {"id": a, "end": "middle"}}), ["start", "end"]),
+        (json!({"points": points, "extend": {"id": a}, "connect": {"id": b, "end": "middle"}}), ["start", "end"]),
+    ];
+    // A catalog may translate the parameter's name (Hindi कनेक्ट) and put the accepted values in its
+    // own quotation marks (German „start“); the values themselves stay as written.
+    let quotes = [("\"", "\""), ("„", "“"), ("“", "”"), ("«", "»"), ("« ", " »"), ("「", "」"), ("‘", "’")];
+    for (p, values) in &refusals {
+        let e = s.execute("path.freehand", p).unwrap_err().to_string();
+        assert!(e.starts_with("invalid parameters for `path.freehand`: ") && e.contains(" must be "), "{e}");
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            assert!(!shown.contains(" must be ") && shown.contains("`path.freehand`"), "{code}: {e} -> {shown}");
+            let quoted = |v: &str| quotes.iter().any(|(open, close)| shown.contains(&format!("{open}{v}{close}")));
+            assert!(values.iter().all(|v| quoted(v)), "{code}: {e} -> {shown}");
+        }
+    }
 }
 
 /// The values SVG filter refusals put in `{what}` that are messages of their own: the attributes
