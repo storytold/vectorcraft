@@ -1856,6 +1856,81 @@ fn break_link_then_update_redefines_all_instances() {
     assert!((bounds(&s, other).center().x - 300.0).abs() < 1e-6);
 }
 
+/// Redefine Symbol with `keepArt: true` updates the symbol and its instances from the selection,
+/// and the selected art stays ordinary art in its place, with its ids, still selected; the result
+/// has no instance id. One undo step takes the definition back. Without `keepArt`, or with false,
+/// the art becomes an instance.
+#[test]
+fn redefine_with_keep_art_leaves_the_art_as_ordinary_art() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let b = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let spot = |s: &Session, id: NodeId| s.doc().unwrap().doc.position(id).map(|(p, i, _)| (p, i));
+    let before = (node(&s, a), node(&s, b), spot(&s, a), spot(&s, b));
+    let symbol_art = |s: &Session| s.doc().unwrap().doc.symbols.iter().find(|x| x.name == name).map(|x| x.art.clone()).unwrap();
+    let old_art = symbol_art(&s);
+    let steps = s.doc().unwrap().history.undo.len();
+    select(&mut s, &[a, b]);
+    let r = s.execute("symbol.update", &json!({"name": name, "keepArt": true})).unwrap();
+    assert_eq!(r, json!({"name": name, "id": null}));
+    assert_eq!((node(&s, a), node(&s, b), spot(&s, a), spot(&s, b)), before, "the art is unchanged and in its place");
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b], "the art stays selected");
+    let instances = |s: &Session| {
+        let mut n = 0;
+        s.doc().unwrap().doc.walk(|c| n += usize::from(matches!(c.kind, NodeKind::SymbolInstance { .. })));
+        n
+    };
+    assert_eq!(instances(&s), 1, "no new instance");
+    // The instance shows the new art: the 120 × 50 pair.
+    let w = bounds(&s, inst);
+    assert!((w.width() - 120.0).abs() < 1e-6 && (w.height() - 50.0).abs() < 1e-6, "{w:?}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(symbol_art(&s), old_art, "undo takes the definition back");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!((bounds(&s, inst).width() - 120.0).abs() < 1e-6, "{:?}", bounds(&s, inst));
+    // false, like no keepArt, makes the art an instance.
+    for p in [json!({"name": name, "ids": [a.0], "keepArt": false}), json!({"name": name, "ids": [b.0]})] {
+        let r = s.execute("symbol.update", &p).unwrap();
+        let id = NodeId(r["id"].as_u64().expect("an instance id"));
+        assert!(matches!(node(&s, id).kind, NodeKind::SymbolInstance { .. }), "{p}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![id], "{p}");
+    }
+    assert!(s.doc().unwrap().doc.node(a).is_none() && s.doc().unwrap().doc.node(b).is_none());
+}
+
+/// Redefine Symbol with `keepArt: true` and explicit ids keeps the named art selected only where
+/// it can be selected: locked or hidden art is left out. A `keepArt` that is not true or false is
+/// refused, with no change and no undo step.
+#[test]
+fn redefine_with_keep_art_selects_only_selectable_art_and_refuses_a_bad_switch() {
+    let mut s = session();
+    let (_, name, _) = make_symbol(&mut s);
+    let a = rect(&mut s, 20.0, 200.0, 60.0, 30.0);
+    let locked = rect(&mut s, 100.0, 200.0, 40.0, 50.0);
+    let hidden = rect(&mut s, 200.0, 200.0, 40.0, 50.0);
+    {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.node_mut(locked).unwrap().locked = true;
+        doc.node_mut(hidden).unwrap().visible = false;
+    }
+    for bad in [json!("true"), json!(1), json!([true])] {
+        let before = s.doc().unwrap().doc.clone();
+        let steps = s.doc().unwrap().history.undo.len();
+        let e = s.execute("symbol.update", &json!({"name": name, "ids": [a.0], "keepArt": bad})).unwrap_err();
+        assert!(e.to_string().contains("`keepArt` must be true or false"), "{bad}: {e}");
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "{bad}: the document is unchanged");
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{bad}: no undo step");
+    }
+    select(&mut s, &[]);
+    s.execute("symbol.update", &json!({"name": name, "ids": [a.0, locked.0, hidden.0], "keepArt": true})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a], "only the selectable art is selected");
+    for id in [a, locked, hidden] {
+        assert!(matches!(node(&s, id).kind, NodeKind::Path { .. }), "{id:?} stays ordinary art");
+    }
+}
+
 /// Redefine Symbol refuses art that holds an instance of the symbol it redefines, directly, in a
 /// group, in an opacity mask, or through the art of another symbol it holds an instance of, and
 /// then changes nothing and adds no undo step. An instance of an unrelated symbol still redefines
