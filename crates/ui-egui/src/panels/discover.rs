@@ -79,7 +79,7 @@ fn refresh(app: &mut VectorcraftApp) {
                 };
                 hit.english_label = entry.label.clone();
                 hit.english_path = entry.path.clone();
-                hit.label = crate::i18n::tr(lang, &hit.english_label).into();
+                hit.label = menus::shown_label(app, &hit.id, &hit.params, &hit.english_label);
                 hit.path = hit.english_path.iter().map(|part| crate::i18n::tr(lang, part).into()).collect();
                 hit.shortcut = menus::item_shortcut(&hit.id, &hit.params).or_else(|| menus::shortcut_of(&hit.id)).unwrap_or_default().into();
             }
@@ -118,13 +118,13 @@ fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
     }
     for entry in menus::menu_entries(app) {
         let Some(id) = entry.command else { continue };
-        let label = crate::i18n::tr(lang, &entry.label);
+        let label = menus::shown_label(app, &id, &entry.params, &entry.label);
         let path: Vec<String> = entry.path.iter().map(|part| crate::i18n::tr(lang, part).into()).collect();
         if matches(&query, &format!("{} {label} {} {} {id}", entry.label, entry.path.join(" "), path.join(" "))) {
             hits.push(Hit {
                 kind: "command",
                 id,
-                label: label.into(),
+                label,
                 path,
                 shortcut: entry.shortcut,
                 english_label: entry.label,

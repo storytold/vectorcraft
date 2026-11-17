@@ -193,6 +193,29 @@ fn discover_command_results_follow_their_menu_label() {
     assert_eq!(back["results"][index]["label"], "Hide Grid");
 }
 
+/// Help finds a command by the label its menu shows in the UI language, also where the menu names
+/// an effect by its own id (Effect › Pathfinder › Add reads Réunion in French).
+#[test]
+fn discover_finds_commands_by_their_shown_menu_label() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    let shown = crate::i18n::tr_id(fr, "pathfinder.add", "Add");
+    assert_ne!(shown, crate::i18n::tr(fr, "Add"));
+    crate::i18n::set_current(fr);
+    let found = app.run("help.discover.search", json!({"query": shown}));
+    let effect = crate::i18n::tr(fr, "Effect").to_string();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let found = found.unwrap();
+    let hits = found["results"].as_array().unwrap();
+    assert!(
+        hits.iter().any(|hit| hit["kind"] == "command"
+            && hit["id"].as_str().is_some_and(|id| id.starts_with("effect."))
+            && hit["label"] == shown
+            && hit["path"][0] == effect),
+        "{found}"
+    );
+}
+
 #[test]
 fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
