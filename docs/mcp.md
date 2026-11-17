@@ -1098,7 +1098,9 @@ dynamic symbol instance also of the instance and the groups of the symbol's art 
 which type's character paint does not use, and of a stop or point; a translucent group or layer draws the art inside
 it, the art behind the object included, over what is outside it) and with the blend modes it is drawn with (its
 fill or stroke row's, the object's and those of its groups and layer, innermost first, each blending the result with
-the background; the modes inside an object, group or layer that isolates its blending do not apply);
+the art below it inside the object, groups and layer around it, the object's rows below its row included, or with
+the background when `against` or `opacity` is given;
+inside an object, group or layer that isolates its blending, the modes blend only with the art it holds);
 `opacity` (0 to 100) replaces that opacity. A given `color` is drawn in Normal mode, at `opacity` or fully opaque.
 `against` takes a color, or `"below"` (the default, also for `null`): the color VectorCraft draws at the center of the
 selection's bounds with the selected objects hidden, as the canvas shows it (locked art, opacity, blend modes and
@@ -1106,10 +1108,13 @@ images included; template layers and guides left out, as exports leave them out;
 is drawn); a picked object of a dynamic symbol instance hides only itself, and the color is read at its own center.
 These are errors: `"below"` with nothing selected; a "?" proxy (hidden objects count there, as in the Color panel);
 selected objects that draw one color with different blend modes, or at different opacities without `opacity` (with
-`"below"`, also in different translucent groups or layers), where hidden objects do not count; and a proxy of None, a
-pattern or a hidden row without `color`. `against` in the answer is the background as a working RGB `#rrggbb`, the form
-`against` takes; the sampled background is rounded to 8 bits, so giving it back answers the same ratio. Headless MCP
-answers it too.
+`"below"`, also in different groups or layers that are translucent, have a blend mode or isolate their blending),
+where hidden objects do not count; and a proxy of None, a pattern or a hidden row without `color`. `against` in the
+answer is the background as a working RGB `#rrggbb`, the form `against` takes; the sampled background is rounded to 8
+bits, so giving it back answers the same ratio, except when `opacity` is omitted and a group or layer around the
+object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over
+rows below it: there `"below"` reads the art below each such level, and a given background stands for that art.
+Headless MCP answers it too.
 
 Color Themes (local only: no online service) keeps five-colour themes in the preferences. `colorTheme.save
 {colors: [...]}` saves up to five colours as they are, `colorTheme.save {color, rule}` saves the five-colour theme a

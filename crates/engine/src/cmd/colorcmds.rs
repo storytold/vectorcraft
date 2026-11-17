@@ -141,7 +141,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Contrast",
             [],
             None,
-            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`)} the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the background; the modes inside an object, group or layer that isolates its blending do not apply; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}",
+            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`)} the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the art below it inside the object, groups and layer around it, the object's rows below its row included (with `against` or `opacity` given, with the background); inside an object, group or layer that isolates its blending, the modes blend only with the art it holds; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio unless `opacity` is omitted and a group or layer around the object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over rows below it, since a given background stands for the art below each such level), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}",
             always,
             contrast
         ),
@@ -1012,9 +1012,9 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
     };
     let below = p.get("against").is_none_or(|v| v.is_null() || v.as_str() == Some("below"));
-    let (color, drawn, mode, around) = match p.get("color") {
+    let (color, drawn) = match p.get("color") {
         None | Some(Value::Null) => proxy_color(s, opacity.is_some(), below).map_err(|e| bad(C, e))?,
-        Some(v) => (color_value(v).ok_or_else(|| bad(C, "invalid `color`"))?, 1.0, vec![], vec![]),
+        Some(v) => (color_value(v).ok_or_else(|| bad(C, "invalid `color`"))?, Drawn::default()),
     };
     let rich_black = s.prefs.black_on_screen == "rich";
     let cms = vectorcraft_color::cms::active();
@@ -1028,7 +1028,7 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
         None => {
             // The sample in working RGB, rounded to 8 bits: the background the answer writes is the
             // one the ratio uses, and giving it back answers the same ratio.
-            let working = to_8bit(cms.srgb_to_rgb(color_below(s, rich_black, None).map_err(|e| bad(C, e))?));
+            let working = to_8bit(cms.srgb_to_rgb(color_below(s, rich_black, None, &[], None).map_err(|e| bad(C, e))?.0));
             (cms.rgb_to_srgb(working.map(|v| f32::from(v) / 255.0)), working)
         }
         Some(v) => {
@@ -1037,27 +1037,68 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
             (shown, to_8bit(cms.srgb_to_rgb(shown)))
         }
     };
-    // Each blend mode, innermost first, replaces the color with its blend with the background
-    // where it covers it.
-    let blended = mode.iter().fold(shown(&color), |c, m| vectorcraft_color::blend::blend_rgb(*m, against, c));
-    let front = match opacity {
-        Some(o) => wcag::over(blended, o, against),
-        None => {
-            // A translucent group or layer draws the art inside it, the art behind the object
-            // included, over what is outside it: the color is drawn opaque through each such level
-            // from the outermost in, over the color read with that level hidden, then at the
-            // object's own opacity over the background.
-            let mut x = blended;
-            for (a, level) in around.iter().rev().filter(|(a, _)| *a < 1.0) {
-                let outside = match level.filter(|_| below) {
-                    Some(id) => color_below(s, rich_black, Some(id)).map_err(|e| bad(C, e))?,
-                    None => against,
-                };
-                x = wcag::over(x, *a, outside);
-            }
-            wcag::over(x, drawn, against)
+    // Innermost first: the row (inside the object), the object, then its groups and layer. A given
+    // opacity takes the place of the object's and of its groups' and layer's.
+    let row = drawn.row.map(|(blend, o)| Step {
+        blend,
+        opacity: if opacity.is_some() { 1.0 } else { o },
+        isolate: false,
+        hide: Some(Part::Rows),
+        within: Part::Rows,
+    });
+    let object = Step { blend: drawn.blend, opacity: opacity.unwrap_or(drawn.opacity), isolate: drawn.isolate, hide: None, within: Part::Object };
+    let groups = drawn.around.iter().map(|l| Step {
+        blend: l.blend,
+        opacity: if opacity.is_some() { 1.0 } else { l.opacity },
+        isolate: l.isolate,
+        hide: Some(l.part.clone()),
+        within: l.part.clone(),
+    });
+    let steps = row.into_iter().chain([object]).chain(groups).collect::<Vec<_>>();
+    // With the background sampled and no opacity given, each level blends with and draws over the
+    // art below it inside the levels around it, as the canvas composites groups; otherwise the
+    // background stands for that art. Inside an object, group or layer that isolates its blending,
+    // the art below is only what that level holds (nothing, for a given background).
+    let sampled = below && opacity.is_none();
+    // A level with a blend mode that does not isolate draws what is inside it over the art below it,
+    // then takes that art back out by the alpha of what it holds drawn alone, and blends the rest:
+    // `alone` is that alpha for the nearest such level around, from the levels inside it so far.
+    let blends = |a: &Step| a.blend != BlendMode::Normal && !a.isolate;
+    let mut x = (shown(&color), 1.0f32);
+    let mut alone = 1.0f32;
+    for (k, step) in steps.iter().enumerate() {
+        if step.blend == BlendMode::Normal && step.opacity >= 1.0 && x.1 >= 1.0 && alone >= 1.0 {
+            continue;
         }
-    };
+        let above = &steps[k + 1..];
+        let scope = above.iter().find(|a| a.isolate);
+        let full = above.iter().filter(|a| a.blend != BlendMode::Normal || a.opacity < 1.0).map(|a| &a.within).collect::<Vec<_>>();
+        let read = |scope: Option<&Part>| color_below(s, rich_black, step.hide.as_ref(), &full, scope).map_err(|e| bad(C, e));
+        let backdrop = match scope {
+            Some(_) if !sampled => ([0.0; 3], 0.0),
+            None if !sampled => (against, 1.0),
+            // The background itself, as the answer writes it.
+            None if step.hide.is_none() && full.is_empty() => (against, 1.0),
+            _ => read(scope.map(|a| &a.within))?,
+        };
+        // The alpha of the art below the level inside the nearest blending level around it (none
+        // for a given background).
+        let inner = match above.iter().take_while(|a| !a.isolate).find(|a| blends(a)) {
+            Some(group) if sampled => read(Some(&group.within))?.1,
+            _ => 0.0,
+        };
+        let source = if !blends(step) {
+            x
+        } else if alone <= 0.0 {
+            (x.0, 0.0)
+        } else {
+            (std::array::from_fn(|i| ((x.0[i] * x.1 - (1.0 - alone) * backdrop.0[i] * backdrop.1) / alone).clamp(0.0, 1.0)), alone)
+        };
+        let drawn = alone * step.opacity.clamp(0.0, 1.0);
+        x = composite(step.blend, source, step.opacity, backdrop);
+        alone = drawn + inner * (1.0 - drawn);
+    }
+    let front = if x.1 >= 1.0 { x.0 } else { wcag::over(x.0, x.1, against) };
     let ratio = wcag::contrast_ratio(front, against);
     let levels = |c: Category| {
         let (aa, aaa) = c.passes(ratio);
@@ -1076,22 +1117,104 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
     }))
 }
 
-/// The opacity of each object around the proxy's object that draws it, innermost first, with the
-/// object to hide to read what is outside it (`None` for a group of a symbol's art).
-type Around = Vec<Level>;
+/// An object around the proxy's object: one in the document, or a group of the picked object's
+/// dynamic symbol instance's art, by its path in the art (the art's root for an empty path). For
+/// [`color_below`], also the objects the proxy's color comes from, or their rows from the one the
+/// proxy shows up.
+#[derive(Clone, PartialEq)]
+enum Part {
+    Doc(NodeId),
+    Art(Vec<u32>),
+    Object,
+    Rows,
+}
 
-/// One object of [`Around`]: its opacity and the object to hide.
-type Level = (f32, Option<NodeId>);
+/// An object around the proxy's object that draws it: its opacity, blend mode, whether it isolates
+/// the blending inside it, and which object it is.
+#[derive(Clone, PartialEq)]
+struct Level {
+    opacity: f32,
+    blend: BlendMode,
+    isolate: bool,
+    part: Part,
+}
 
-/// The active proxy's color (its selected gradient stop or freeform point, else the first), the
-/// opacity it is drawn with inside its object: the object's opacity times that of its fill or
-/// stroke row (none for type's character paint or a colorize color) and of a stop or point, the
-/// blend modes it is drawn with, innermost first ([`drawn_modes`]), and the opacities of the groups
-/// and layer around the object ([`Around`]). With `given_opacity`, the opacities of the selected
-/// objects are not compared, since the given opacity takes their place; with `below` (the
-/// background is sampled), objects in different translucent groups or layers differ, since each
-/// such level is hidden to read what is outside it.
-fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Result<(Color, f32, Vec<BlendMode>, Around), String> {
+/// How the proxy's color is drawn: the object's opacity, its fill or stroke row's blend mode and
+/// opacity (none for type's character paint or a colorize color), each times that of a stop or
+/// point when it holds the paint, the object's blend mode and whether it isolates its blending, and
+/// the groups and layer around the object, innermost first.
+#[derive(Clone, PartialEq)]
+struct Drawn {
+    opacity: f32,
+    row: Option<(BlendMode, f32)>,
+    blend: BlendMode,
+    isolate: bool,
+    around: Vec<Level>,
+}
+
+impl Default for Drawn {
+    fn default() -> Self {
+        Self { opacity: 1.0, row: None, blend: BlendMode::Normal, isolate: false, around: vec![] }
+    }
+}
+
+/// One level [`contrast`] draws the color through: the row, the object, or a [`Level`]. `hide` is
+/// what [`color_below`] hides to read the art below it (`None`: the selection), and `within` the
+/// object whose art is read inside it.
+struct Step {
+    blend: BlendMode,
+    opacity: f32,
+    isolate: bool,
+    hide: Option<Part>,
+    within: Part,
+}
+
+/// `x` (a display sRGB color and its alpha) drawn at `opacity` with blend mode `mode` over `backdrop`
+/// (likewise), as the PDF compositing formulas give it: the mode applies where the backdrop is
+/// drawn, and over nothing the color stays as it is.
+fn composite(mode: BlendMode, x: ([f32; 3], f32), opacity: f32, backdrop: ([f32; 3], f32)) -> ([f32; 3], f32) {
+    let (b, ab) = backdrop;
+    let a = x.1 * if opacity.is_finite() { opacity.clamp(0.0, 1.0) } else { 1.0 };
+    let mixed = vectorcraft_color::blend::blend_rgb(mode, b, x.0);
+    let out = a + ab * (1.0 - a);
+    if out <= 0.0 {
+        return (b, 0.0);
+    }
+    (std::array::from_fn(|i| (a * ((1.0 - ab) * x.0[i] + ab * mixed[i]) + ab * (1.0 - a) * b[i]) / out), out)
+}
+
+/// Whether `a` and `b` draw a color alike: the same blend modes and isolation, and unless
+/// `given_opacity` (which takes the place of their opacities) the same opacities. With `below`, the
+/// levels that change what they draw must be the same objects too, since the art below each one is
+/// read with that object hidden.
+fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
+    let counts = |l: &&Level| l.blend != BlendMode::Normal || l.isolate || (!given_opacity && l.opacity < 1.0);
+    let level = |x: &Level, y: &Level| {
+        x.blend == y.blend
+            && x.isolate == y.isolate
+            && (given_opacity || (x.opacity - y.opacity).abs() < 1e-6)
+            && (!below || given_opacity || x.part == y.part)
+    };
+    let (la, lb) = (a.around.iter().filter(counts).collect::<Vec<_>>(), b.around.iter().filter(counts).collect::<Vec<_>>());
+    // A row in Normal mode draws as type's character paint does, and an object's isolation only
+    // changes a row's blending.
+    let row = |d: &Drawn| d.row.map(|r| r.0).filter(|m| *m != BlendMode::Normal);
+    let total = |d: &Drawn| d.opacity * d.row.map_or(1.0, |r| r.1);
+    row(a) == row(b)
+        && a.blend == b.blend
+        && (row(a).is_none() || a.isolate == b.isolate)
+        && (given_opacity || (total(a) - total(b)).abs() < 1e-6)
+        && (given_opacity || row(a).is_none() || (a.opacity - b.opacity).abs() < 1e-6)
+        && la.len() == lb.len()
+        && la.iter().zip(&lb).all(|(x, y)| level(x, y))
+}
+
+/// The active proxy's color (its selected gradient stop or freeform point, else the first) and how
+/// it is drawn ([`Drawn`]). With `given_opacity`, the opacities of the selected objects are not
+/// compared, since the given opacity takes their place; with `below` (the background is sampled),
+/// objects in different translucent or blending groups or layers differ, since the art below each
+/// such level is read with it hidden.
+fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Result<(Color, Drawn), String> {
     let stroke = !s.fill_active;
     let (fill_mixed, stroke_mixed) = s.proxy_mixed();
     if if stroke { stroke_mixed } else { fill_mixed } {
@@ -1099,7 +1222,7 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
     }
     let (fill, stroke_paint) = s.proxy_paints();
     let source = || s.proxy_source(stroke).map(|(n, item)| drawn_settings(s, &n, item, stroke)).transpose();
-    let (layer, mode, around);
+    let drawing;
     // Selected objects that share a color but draw it differently have no one answer.
     if let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) {
         let item = s.appearance_item();
@@ -1113,36 +1236,32 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
                 drawn.push(drawn_settings(s, n, item, stroke)?);
             }
         }
-        (layer, mode, around) = match drawn.first() {
+        drawing = match drawn.first() {
             Some(first) => first.clone(),
-            None => source()?.unwrap_or((1.0, vec![], vec![])),
+            None => source()?.unwrap_or_default(),
         };
-        // Only the groups and layers that draw at less than full opacity change the answer.
-        let translucent = |a: &Around| a.iter().filter(|x| x.0 < 1.0).copied().collect::<Vec<_>>();
-        let levels = translucent(&around);
-        let same = |(o, m, a): &(f32, Vec<BlendMode>, Around)| {
-            let a = translucent(a);
-            let level = |x: &Level, y: &Level| (x.0 - y.0).abs() < 1e-6 && (!below || x.1 == y.1);
-            let opacities = given_opacity || ((o - layer).abs() < 1e-6 && a.len() == levels.len() && a.iter().zip(&levels).all(|(x, y)| level(x, y)));
-            *m == mode && opacities
-        };
-        if !drawn.iter().all(same) {
+        if !drawn.iter().all(|d| draws_alike(d, &drawing, given_opacity, below)) {
             return Err("the selected objects' colors differ: give `color`".into());
         }
     } else {
-        (layer, mode, around) = source()?.unwrap_or((1.0, vec![], vec![]));
+        drawing = source()?.unwrap_or_default();
     }
+    // A stop's or point's opacity applies where its paint is drawn: in its row, else in the object.
+    let at = |opacity: f32| match drawing.row {
+        Some((m, o)) => Drawn { row: Some((m, o * opacity)), ..drawing.clone() },
+        None => Drawn { opacity: drawing.opacity * opacity, ..drawing.clone() },
+    };
     let no_color = || "the active fill or stroke has no color: give `color`".to_string();
     match if stroke { stroke_paint } else { fill } {
-        Paint::Solid { color, .. } => Ok((stained(s, color), layer, mode, around)),
+        Paint::Solid { color, .. } => Ok((stained(s, color), drawing)),
         Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Freeform => {
             let f = g.freeform_on(vectorcraft_geom::Rect::new(0.0, 0.0, 1.0, 1.0));
             let i = s.selected_freeform_point().filter(|i| *i < f.points.len()).unwrap_or(0);
-            f.points.get(i).map(|pt| (pt.color, layer * pt.opacity, mode, around)).ok_or_else(no_color)
+            f.points.get(i).map(|pt| (pt.color, at(pt.opacity))).ok_or_else(no_color)
         }
         Paint::Gradient(g) => {
             let i = s.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
-            g.gradient.stops.get(i).map(|st| (st.color, layer * st.opacity, mode, around)).ok_or_else(no_color)
+            g.gradient.stops.get(i).map(|st| (st.color, at(st.opacity))).ok_or_else(no_color)
         }
         Paint::None | Paint::Pattern { .. } => Err(no_color()),
     }
@@ -1160,10 +1279,9 @@ fn shown_sources(n: &Node, item: Option<usize>, stroke: bool) -> Vec<(&Node, Opt
     nodes.into_iter().map(|c| (c, None)).collect()
 }
 
-/// How object `n` draws its fill or stroke (`item`, else the proxy's row): its opacity times that of
-/// the row (none for type's character paint or a colorize color), the blend modes, innermost first
-/// ([`drawn_modes`]), and the groups and layer around it ([`Around`]). An error for a hidden row.
-fn drawn_settings(s: &Session, n: &Node, item: Option<usize>, stroke: bool) -> std::result::Result<(f32, Vec<BlendMode>, Around), String> {
+/// How object `n` draws its fill or stroke (`item`, else the proxy's row), as [`Drawn`] gives it. An
+/// error for a hidden row.
+fn drawn_settings(s: &Session, n: &Node, item: Option<usize>, stroke: bool) -> std::result::Result<Drawn, String> {
     let item = n.appearance.item_of_kind(item, !stroke);
     // Without a targeted row, type shows its characters' paint and a colorized image its
     // colorize color, which no fill or stroke row's opacity applies to.
@@ -1176,14 +1294,10 @@ fn drawn_settings(s: &Session, n: &Node, item: Option<usize>, stroke: bool) -> s
     if own.is_some_and(|o| !o.2) {
         return Err("the active fill or stroke is hidden: give `color`".to_string());
     }
-    // The groups and layer the object is in draw it at their opacity too (`outer` lists the
-    // outermost first).
-    let outer = enclosing(s, n.id);
-    let opacity = n.opacity * own.map_or(1.0, |o| o.0);
-    let around: Around = outer.iter().rev().map(|a| (a.0, a.3)).collect();
-    // Innermost first: the row (which the object holds), the object, then its groups and layer.
-    let levels = own.map(|o| (o.1, false)).into_iter().chain([(n.blend, n.isolate)]).chain(outer.iter().rev().map(|a| (a.1, a.2)));
-    Ok((opacity, drawn_modes(levels.collect()), around))
+    // The groups and layer the object is in draw it too (`enclosing` lists the outermost first).
+    let mut around = enclosing(s, n.id);
+    around.reverse();
+    Ok(Drawn { opacity: n.opacity, row: own.map(|o| (o.1, o.0)), blend: n.blend, isolate: n.isolate, around })
 }
 
 /// `color` as the canvas draws the picked object of a dynamic symbol instance that a fill stains
@@ -1201,28 +1315,18 @@ fn stained(s: &Session, color: Color) -> Color {
     }
 }
 
-/// The blend modes that apply to a color drawn through `levels` (each a blend mode and whether that
-/// level isolates the blending inside it, innermost first), innermost first. Inside a level that
-/// does not isolate, blending reaches the art below, so each mode blends the result of the ones
-/// inside it with the background; inside one that does, the art is blended with nothing, so the
-/// modes inside the outermost isolating level do not apply.
-fn drawn_modes(levels: Vec<(BlendMode, bool)>) -> Vec<BlendMode> {
-    let first = levels.iter().rposition(|l| l.1).unwrap_or(0);
-    levels.into_iter().skip(first).map(|l| l.0).filter(|m| *m != BlendMode::Normal).collect()
-}
-
-/// The opacity, blend mode and isolation of each object that draws the proxy's object `id`, with
-/// its id in the document (`None` for a group of a symbol's art), outermost first: its groups and
+/// The objects that draw the proxy's object `id` ([`Level`]), outermost first: its groups and
 /// layer, and for a picked object of a dynamic symbol instance, the instance, its groups and layer,
 /// and the groups of the symbol's art around the object.
-fn enclosing(s: &Session, id: NodeId) -> Vec<(f32, BlendMode, bool, Option<NodeId>)> {
+fn enclosing(s: &Session, id: NodeId) -> Vec<Level> {
     let Some(st) = s.active() else { return vec![] };
     let doc = &st.doc;
+    let level = |n: &Node, part: Part| Level { opacity: n.opacity, blend: n.blend, isolate: n.isolate, part };
     // `ancestry` lists the object itself last.
     let in_doc = |id: NodeId, own: bool| {
         let ids = doc.ancestry(id).unwrap_or_default();
         let nodes = ids.into_iter().filter(|a| own || *a != id).filter_map(|a| doc.node(a));
-        nodes.map(|a| (a.opacity, a.blend, a.isolate, Some(a.id))).collect::<Vec<_>>()
+        nodes.map(|a| level(a, Part::Doc(a.id))).collect::<Vec<_>>()
     };
     let Some(sp) = st.selection.symbol_part.as_ref() else { return in_doc(id, false) };
     let art = doc.node(sp.instance).and_then(|inst| {
@@ -1236,11 +1340,11 @@ fn enclosing(s: &Session, id: NodeId) -> Vec<(f32, BlendMode, bool, Option<NodeI
     if let Some((_, groups)) = sp.path.split_last() {
         // The art's root and each group on the way to the object, not the object itself.
         let mut n = &art;
-        out.push((n.opacity, n.blend, n.isolate, None));
-        for &i in groups {
+        out.push(level(n, Part::Art(vec![])));
+        for (k, &i) in groups.iter().enumerate() {
             let Some(c) = n.children().and_then(|c| c.get(usize::try_from(i).ok()?)) else { break };
             n = c;
-            out.push((n.opacity, n.blend, n.isolate, None));
+            out.push(level(n, Part::Art(groups[..=k].to_vec())));
         }
     }
     out
@@ -1249,73 +1353,201 @@ fn enclosing(s: &Session, id: NodeId) -> Vec<(f32, BlendMode, bool, Option<NodeI
 /// The display sRGB VectorCraft draws at the center of the selection's bounds with the selected
 /// objects hidden: the average of a small square rendered as the canvas renders it (artboards, the
 /// on-screen Appearance of Black, no proof, no template layers or guides), over white where nothing
-/// is drawn. With `instead`, that object (a group or layer around the selection) is hidden in place
-/// of the selection.
-fn color_below(s: &Session, rich_black: bool, instead: Option<NodeId>) -> std::result::Result<[f32; 3], String> {
+/// is drawn, with its alpha. With `hide`, that object (a group or layer around the selection) is
+/// hidden in place of the selection, or for [`Part::Rows`], the proxy's row and the rows above it;
+/// the objects of `full` draw at full opacity in Normal mode; and with `scope` (a group or layer
+/// around the selection, or the proxy's objects), only the art inside it is drawn, over nothing,
+/// without artboards.
+fn color_below(
+    s: &Session,
+    rich_black: bool,
+    hide: Option<&Part>,
+    full: &[&Part],
+    scope: Option<&Part>,
+) -> std::result::Result<([f32; 3], f32), String> {
     super::has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     let ids = st.selection.objects.clone();
     // A picked object of a dynamic symbol instance hides only itself: the rest of the instance
     // stays in the sample, measured at the object's center.
-    let part = st.selection.symbol_part.as_ref().and_then(|sp| {
+    let picked = st.selection.symbol_part.as_ref().and_then(|sp| {
         let inst = st.doc.node(sp.instance)?;
         let center = kurbo::Shape::bounding_box(&vectorcraft_doc::hit::symbol_part_outline(&st.doc, inst, &sp.path)?).center();
-        let copy = if instead.is_some() { None } else { Some(without_symbol_part(&st.doc, sp)?) };
-        Some((center, copy))
+        vectorcraft_doc::symbol_overrides::part(inst_art(&st.doc, sp.instance)?, &sp.path)?;
+        Some((sp, center))
     });
-    let center = match &part {
-        Some((center, _)) => *center,
+    let center = match picked {
+        Some((_, center)) => center,
         None => st.doc.bounds_of(&ids, false).ok_or("nothing selected")?.center(),
     };
-    let (doc, hidden) = match (&part, instead) {
-        (_, Some(id)) => (&*st.doc, vec![id]),
-        (Some((_, Some(copy))), None) => (copy, vec![]),
-        _ => (&*st.doc, ids),
+    // The objects the proxy's color comes from, with the row each shows (`proxy_color`); for a picked
+    // object, the object itself at `sp.path`, with its topmost row of the kind.
+    let (stroke, item) = (!s.fill_active, s.appearance_item());
+    let shown = |id: NodeId| st.doc.ancestry(id).unwrap_or_default().iter().all(|a| st.doc.node(*a).is_some_and(|x| x.visible));
+    let painted = match picked {
+        Some(_) => vec![],
+        None => {
+            let nodes = st.selection.subjects().iter().filter_map(|id| st.doc.node(*id));
+            nodes.flat_map(|n| shown_sources(n, item, stroke)).filter(|(c, _)| shown(c.id)).map(|(c, item)| (c.id, item)).collect::<Vec<_>>()
+        }
     };
+    let own = |p: Option<&Part>| matches!(p, Some(Part::Art(_) | Part::Object | Part::Rows));
+    let art_edits = picked.is_some() && (hide.is_none() || own(hide) || full.iter().any(|p| own(Some(p))) || own(scope));
+    let mut copy = (art_edits || !full.is_empty() || hide == Some(&Part::Rows)).then(|| Document::clone(&st.doc));
+    let mut hidden = vec![];
+    // The art of the picked object's instance in `copy`, as a copy of its symbol that only this
+    // instance draws, so other instances of the symbol keep it.
+    let symbol = match (picked, copy.as_mut()) {
+        (Some((sp, _)), Some(doc)) if art_edits => Some(own_symbol(doc, sp.instance).ok_or("the picked object is not found")?),
+        _ => None,
+    };
+    let lost = || "the picked object is not found".to_string();
+    match (hide, picked) {
+        (None, Some((sp, _))) => art_mut(copy.as_mut(), symbol, &sp.path).ok_or_else(lost)?.visible = false,
+        (None, None) => hidden.extend(ids),
+        (Some(Part::Doc(id)), _) => hidden.push(*id),
+        // The art's root is all the instance draws.
+        (Some(Part::Art(path)), Some((sp, _))) if path.is_empty() => hidden.push(sp.instance),
+        (Some(Part::Art(path)), _) => art_mut(copy.as_mut(), symbol, path).ok_or_else(lost)?.visible = false,
+        (Some(Part::Rows), Some((sp, _))) => hide_rows(art_mut(copy.as_mut(), symbol, &sp.path).ok_or_else(lost)?, None, stroke),
+        (Some(Part::Rows), None) => {
+            for (id, item) in &painted {
+                if let Some(n) = copy.as_mut().and_then(|d| d.node_mut(*id)) {
+                    hide_rows(n, *item, stroke);
+                }
+            }
+        }
+        (Some(Part::Object), _) => return Err(lost()),
+    }
+    // The levels around the one read draw what is inside them as it is. An instance's override of
+    // an object of its art's opacity or blend mode is dropped with it.
+    let plain = |n: &mut Node| {
+        n.opacity = 1.0;
+        n.blend = BlendMode::Normal;
+    };
+    let plain_art = |copy: &mut Option<Document>, path: &[u32]| -> std::result::Result<(), String> {
+        plain(art_mut(copy.as_mut(), symbol, path).ok_or_else(lost)?);
+        let sp = picked.ok_or_else(lost)?.0;
+        if let Some(e) = copy.as_mut().and_then(|d| d.node_mut(sp.instance)).and_then(Node::extras_if_any) {
+            for o in e.symbol_overrides.iter_mut().filter(|o| o.path == path) {
+                (o.opacity, o.blend) = (None, None);
+            }
+        }
+        Ok(())
+    };
+    for p in full {
+        let ids = match (p, picked) {
+            (Part::Doc(id), _) => vec![*id],
+            (Part::Art(path), _) => {
+                plain_art(&mut copy, path)?;
+                continue;
+            }
+            (Part::Object, Some((sp, _))) => {
+                plain_art(&mut copy, &sp.path)?;
+                continue;
+            }
+            (Part::Object, None) => painted.iter().map(|p| p.0).collect(),
+            (Part::Rows, _) => continue,
+        };
+        for id in ids {
+            if let Some(n) = copy.as_mut().and_then(|d| d.node_mut(id)) {
+                plain(n);
+            }
+        }
+    }
+    // Inside a level, only the art that level holds is drawn, over nothing.
+    if let Some(scope) = scope {
+        let (keep, path) = match (scope, picked) {
+            (Part::Doc(id), _) => (vec![*id], &[][..]),
+            (Part::Art(path), Some((sp, _))) => (vec![sp.instance], &path[..]),
+            (Part::Object, Some((sp, _))) => (vec![sp.instance], &sp.path[..]),
+            (Part::Object, None) => (painted.iter().map(|p| p.0).collect(), &[][..]),
+            _ => return Err(lost()),
+        };
+        // Everything that is neither on the way to a kept object nor inside one is hidden.
+        let on_way = keep.iter().flat_map(|k| st.doc.ancestry(*k).unwrap_or_default()).collect::<HashSet<_>>();
+        let parents = std::iter::once(None).chain(on_way.iter().filter(|a| !keep.contains(a)).map(|a| Some(*a)));
+        for parent in parents {
+            hidden.extend(st.doc.children(parent).into_iter().flatten().map(|n| n.id).filter(|n| !on_way.contains(n)));
+        }
+        for (k, &keep) in path.iter().enumerate() {
+            let group = art_mut(copy.as_mut(), symbol, &path[..k]).and_then(Node::children_mut).ok_or_else(lost)?;
+            for (i, c) in group.iter_mut().enumerate() {
+                if u32::try_from(i).ok() != Some(keep) {
+                    Arc::make_mut(c).visible = false;
+                }
+            }
+        }
+    }
     let h = BELOW_SIDE / 2.0;
     let region = vectorcraft_geom::Rect::new(center.x - h, center.y - h, center.x + h, center.y + h);
     // Template layers and guides are aids to drawing, not artwork: left out as exports leave them.
     let opts = vectorcraft_render::RenderOptions {
-        background: Some([255, 255, 255, 255]),
-        artboards: true,
+        background: scope.is_none().then_some([255, 255, 255, 255]),
+        artboards: scope.is_none(),
         hidden,
         rich_black,
         skip_templates: true,
         ..Default::default()
     };
-    let img = vectorcraft_render::Renderer::new().render_region_with(doc, region, BELOW_SCALE, &opts);
+    let img = vectorcraft_render::Renderer::new().render_region_with(copy.as_ref().unwrap_or(&st.doc), region, BELOW_SCALE, &opts);
     let px = img.pixels.as_chunks::<4>().0;
     if px.is_empty() {
-        return Ok([1.0; 3]);
+        return Ok(if scope.is_none() { ([1.0; 3], 1.0) } else { ([0.0; 3], 0.0) });
     }
-    // Over the opaque background every pixel is opaque, so premultiplied values are the colors.
-    let mut sum = [0.0f64; 3];
+    // The pixels are premultiplied: the average color is their sum over their alpha's.
+    let mut sum = [0.0f64; 4];
     for p in px {
         for (s, v) in sum.iter_mut().zip(p) {
             *s += f64::from(*v);
         }
     }
-    Ok(sum.map(|v| (v / (px.len() as f64 * 255.0)) as f32))
+    let alpha = sum[3] / (px.len() as f64 * 255.0);
+    if alpha <= 0.0 {
+        return Ok(([0.0; 3], 0.0));
+    }
+    let rgb = [0, 1, 2].map(|i| (sum[i] / (px.len() as f64 * 255.0) / alpha).clamp(0.0, 1.0) as f32);
+    Ok((rgb, alpha as f32))
 }
 
-/// A copy of `doc` in which the instance of `sp` shows its symbol's art without the picked object:
-/// the instance draws a copy of the symbol whose object at `sp.path` is hidden, so other instances
-/// of the symbol keep it. `None` when the instance or the object is not found.
-fn without_symbol_part(doc: &Document, sp: &vectorcraft_doc::SymbolPart) -> Option<Document> {
-    let NodeKind::SymbolInstance { symbol, .. } = &doc.node(sp.instance)?.kind else { return None };
-    let mut sym = doc.symbols.iter().find(|s| s.name == *symbol)?.clone();
-    vectorcraft_doc::symbol_overrides::part(&sym.art, &sp.path)?;
-    let mut n = Arc::make_mut(&mut sym.art);
-    for &i in &sp.path {
+/// Hides fill or stroke row `item` of `n` (else its topmost row of the kind) and every row above it.
+fn hide_rows(n: &mut Node, item: Option<usize>, stroke: bool) {
+    let a = &mut n.appearance;
+    let Some(i) = a.item_of_kind(item, !stroke).or_else(|| a.items.iter().rposition(|r| r.is_fill() != stroke)) else { return };
+    for r in a.items.iter_mut().skip(i) {
+        match r {
+            vectorcraft_doc::AppearanceItem::Fill(f) => f.visible = false,
+            vectorcraft_doc::AppearanceItem::Stroke(s) => s.visible = false,
+        }
+    }
+}
+
+/// The art the symbol instance `inst` of `doc` draws, as its symbol holds it.
+fn inst_art(doc: &Document, inst: NodeId) -> Option<&Arc<Node>> {
+    let NodeKind::SymbolInstance { symbol, .. } = &doc.node(inst)?.kind else { return None };
+    doc.symbols.iter().find(|s| s.name == *symbol).map(|s| &s.art)
+}
+
+/// The object at `path` in the art of `doc`'s symbol at index `symbol` (the art's root for an empty
+/// path).
+fn art_mut<'a>(doc: Option<&'a mut Document>, symbol: Option<usize>, path: &[u32]) -> Option<&'a mut Node> {
+    let mut n = Arc::make_mut(&mut doc?.symbols.get_mut(symbol?)?.art);
+    for &i in path {
         n = Arc::make_mut(n.children_mut()?.get_mut(usize::try_from(i).ok()?)?);
     }
-    n.visible = false;
-    let mut out = doc.clone();
-    sym.name = unique_name(&sym.name, |name| out.symbols.iter().any(|s| s.name == name));
+    Some(n)
+}
+
+/// Makes the symbol instance `inst` of `doc` draw a copy of its symbol, so that a change to the copy
+/// leaves other instances as they are. Returns the copy's index in the document's symbols.
+fn own_symbol(doc: &mut Document, inst: NodeId) -> Option<usize> {
+    let NodeKind::SymbolInstance { symbol, .. } = &doc.node(inst)?.kind else { return None };
+    let mut sym = doc.symbols.iter().find(|s| s.name == *symbol)?.clone();
+    sym.name = unique_name(&sym.name, |name| doc.symbols.iter().any(|s| s.name == name));
     let name = sym.name.clone();
-    out.symbols.push(sym);
-    if let NodeKind::SymbolInstance { symbol, .. } = &mut out.node_mut(sp.instance)?.kind {
+    doc.symbols.push(sym);
+    if let NodeKind::SymbolInstance { symbol, .. } = &mut doc.node_mut(inst)?.kind {
         *symbol = name;
     }
-    Some(out)
+    Some(doc.symbols.len() - 1)
 }

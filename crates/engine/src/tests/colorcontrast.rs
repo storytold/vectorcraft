@@ -182,6 +182,179 @@ fn a_translucent_group_draws_the_art_behind_the_object_once() {
     assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
 }
 
+/// The pixel the canvas draws at (100, 100), and its contrast against the answer's `against`.
+fn canvas_ratio(s: &Session, r: &Value) -> ([u8; 4], f64) {
+    let doc = &s.doc().unwrap().doc;
+    let img = vectorcraft_render::Renderer::new().render_region(doc, vectorcraft_geom::Rect::new(99.0, 99.0, 101.0, 101.0), 1.0, true);
+    let p = img.pixel(1, 1);
+    let behind = vectorcraft_color::Color::from_hex(r["against"].as_str().unwrap()).unwrap().to_rgb_uncalibrated();
+    (p, vectorcraft_color::wcag::contrast_ratio([p[0], p[1], p[2]].map(|v| f32::from(v) / 255.0), behind))
+}
+
+/// A selected white Multiply square over a white one in a 50 % group over black: the square
+/// multiplies with the white inside the group, and the group's opacity applies once.
+#[test]
+fn a_blend_mode_in_a_translucent_group_blends_with_the_art_inside_it() {
+    let mut s = session();
+    let id = |v: Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 160, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let back = id(s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 120, "height": 120})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    let square = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "multiply"})).unwrap();
+    s.execute("object.group", &json!({"ids": [back.0, square.0]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    s.active_mut().unwrap().selection.objects = vec![square];
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    assert!((i32::from(p[0]) - 128).abs() < 3, "the canvas draws half gray: {p:?}");
+    assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
+}
+
+/// In a dynamic symbol instance whose art is a 50 % group of a black square over a white one, over
+/// black, the picked black square draws over the black outside the group, not over the group's
+/// white.
+#[test]
+fn a_picked_symbol_object_in_a_translucent_group_of_the_art_draws_over_what_is_outside_it() {
+    let mut s = session();
+    let id = |v: Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 160, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let white = id(s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 120, "height": 120})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    let black = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    let group = id(s.execute("object.group", &json!({"ids": [white.0, black.0]})).unwrap());
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    let inst = id(s.execute("symbol.new", &json!({"name": "Pair", "ids": [group.0], "type": "dynamic"})).unwrap());
+    let doc = &s.doc().unwrap().doc;
+    let art = &doc.symbols.iter().find(|x| x.name == "Pair").unwrap().art;
+    let path = if vectorcraft_doc::symbol_overrides::part(art, &[0, 1]).is_some() { vec![0, 1] } else { vec![1] };
+    let st = s.active_mut().unwrap();
+    st.selection.objects = vec![inst];
+    st.selection.symbol_part = Some(vectorcraft_doc::SymbolPart { instance: inst, path });
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    assert!(p[0] < 3, "the canvas draws black: {p:?}");
+    assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
+}
+
+/// As above with the group's 50 % set by the instance instead of the symbol, and the picked black
+/// square itself at 50 %: the square draws over the group's white, read with the instance's
+/// opacity for the group taken out, then the group's 50 % applies once over the black outside.
+#[test]
+fn an_instances_opacity_for_a_group_of_its_art_applies_once() {
+    let mut s = session();
+    let id = |v: Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 160, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let white = id(s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 120, "height": 120})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    let black = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    let group = id(s.execute("object.group", &json!({"ids": [white.0, black.0]})).unwrap());
+    let inst = id(s.execute("symbol.new", &json!({"name": "Pair", "ids": [group.0], "type": "dynamic"})).unwrap());
+    let doc = &s.doc().unwrap().doc;
+    let art = &doc.symbols.iter().find(|x| x.name == "Pair").unwrap().art;
+    let path = if vectorcraft_doc::symbol_overrides::part(art, &[0, 1]).is_some() { vec![0, 1] } else { vec![1] };
+    let st = s.active_mut().unwrap();
+    let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(inst).unwrap();
+    let over = vectorcraft_doc::SymbolOverride { path: path[..path.len() - 1].to_vec(), opacity: Some(0.5), ..Default::default() };
+    n.extras_mut().symbol_overrides = vec![over];
+    st.selection.objects = vec![inst];
+    st.selection.symbol_part = Some(vectorcraft_doc::SymbolPart { instance: inst, path });
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    assert!((i32::from(p[0]) - 64).abs() < 3, "the canvas draws a quarter gray: {p:?}");
+    assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
+}
+
+/// An object that isolates its blending, with a white Multiply fill over a blue one, over red: the
+/// white multiplies with the blue row below it.
+#[test]
+fn a_row_in_an_isolating_object_blends_with_the_rows_below_it() {
+    let mut s = blended_over_red("normal");
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let st = s.active().unwrap();
+    let items = &st.doc.node(st.selection.objects[0]).unwrap().appearance.items;
+    let top = items.iter().rposition(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+    s.execute("appearance.setItem", &json!({"index": top, "color": "#ffffff", "blend": "multiply"})).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+    s.execute("transparency.set", &json!({"item": null, "isolate": true})).unwrap();
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    assert!(p[0] < 3 && p[2] > 252, "the canvas draws blue: {p:?}");
+    assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
+}
+
+/// A 50 % white fill over an opaque blue one draws over the blue, not over the red art behind it.
+#[test]
+fn a_translucent_row_draws_over_the_rows_below_it() {
+    let mut s = blended_over_red("normal");
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let st = s.active().unwrap();
+    let items = &st.doc.node(st.selection.objects[0]).unwrap().appearance.items;
+    let top = items.iter().rposition(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+    s.execute("appearance.setItem", &json!({"index": top, "color": "#ffffff", "opacity": 50})).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    assert!((i32::from(p[0]) - 128).abs() < 3 && p[2] > 252, "the canvas draws the white at 50 % over the blue: {p:?}");
+    assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
+}
+
+/// A path's Normal fill row and type's character paint draw one black alike.
+#[test]
+fn a_normal_fill_row_and_type_of_one_color_leave_one_answer() {
+    let mut s = session();
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    let a = id(s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    let t = id(s.execute("text.create", &json!({"x": 80, "y": 60, "text": "Label", "size": 24, "color": "#000000"})).unwrap());
+    s.execute("select.set", &json!({"ids": [a, t]})).unwrap();
+    let r = s.execute("color.contrast", &json!({"against": "#ffffff"})).unwrap();
+    assert!((ratio(&r) - 21.0).abs() < 1e-6, "{r}");
+}
+
+/// In a group that isolates its blending, a selected white Multiply square blends with the blue
+/// art the group holds, and with nothing outside it.
+#[test]
+fn a_blend_mode_in_an_isolating_group_blends_with_the_art_inside_it_only() {
+    let mut s = session();
+    let id = |v: Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 160, "height": 160})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("object.lock", &json!({})).unwrap();
+    let back = id(s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 120, "height": 120})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    let square = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"blend": "multiply"})).unwrap();
+    s.execute("object.group", &json!({"ids": [back.0, square.0]})).unwrap();
+    s.execute("transparency.set", &json!({"isolate": true})).unwrap();
+    s.active_mut().unwrap().selection.objects = vec![square];
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    assert!(p[0] < 3 && p[2] > 252, "the canvas draws blue: {p:?}");
+    assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
+    // With the blue art out of the group, the square blends with nothing and draws white over red.
+    s.execute("select.set", &json!({"ids": [back.0]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.active_mut().unwrap().selection.objects = vec![square];
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let (p, drawn) = canvas_ratio(&s, &r);
+    assert!(p[1] > 252, "the canvas draws white: {p:?}");
+    assert!((ratio(&r) - drawn).abs() < 0.02, "{r} against {drawn}");
+}
+
 #[test]
 fn template_layers_and_guides_are_left_out_of_the_background() {
     let mut s = session();
@@ -324,6 +497,31 @@ fn the_background_written_back_answers_the_same_ratio() {
     assert!(hex != "#ffffff" && hex != "#2050a0", "the sample straddles the edge: {below}");
     let given = s.execute("color.contrast", &json!({"against": hex})).unwrap();
     assert!((ratio(&below) - ratio(&given)).abs() < 1e-6, "{below} {given}");
+}
+
+/// In a 50 % group, a selected black square over a red one draws over the white outside the group,
+/// while a given background stands for the art below every level, so giving the answer's `against`
+/// back draws the black at 50 % over it instead.
+#[test]
+fn a_background_given_back_stands_for_the_art_outside_a_translucent_group() {
+    let mut s = session();
+    let id = |v: Value| vectorcraft_doc::NodeId(v["id"].as_u64().unwrap());
+    let red = id(s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 120, "height": 120})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let black = id(s.execute("shape.rectangle", &json!({"x": 60, "y": 60, "width": 80, "height": 80})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("object.group", &json!({"ids": [red.0, black.0]})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    s.active_mut().unwrap().selection.objects = vec![black];
+    let below = s.execute("color.contrast", &json!({})).unwrap();
+    let (_, drawn) = canvas_ratio(&s, &below);
+    assert!((ratio(&below) - drawn).abs() < 0.02, "{below} against {drawn}");
+    let hex = below["against"].as_str().unwrap();
+    let behind = vectorcraft_color::Color::from_hex(hex).unwrap().to_rgb_uncalibrated();
+    let given = s.execute("color.contrast", &json!({"against": hex})).unwrap();
+    let want = vectorcraft_color::wcag::contrast_ratio(vectorcraft_color::wcag::over([0.0; 3], 0.5, behind), behind);
+    assert!((ratio(&given) - want).abs() < 1e-3, "{given}");
+    assert!((ratio(&below) - ratio(&given)).abs() > 0.1, "{below} {given}");
 }
 
 #[test]
