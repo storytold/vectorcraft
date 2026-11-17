@@ -17,6 +17,61 @@ fn basic_ops() {
 }
 
 #[test]
+fn remove_all_does_what_removing_each_does() {
+    let mut s = Selection::default();
+    for i in 1..=6 {
+        s.add(NodeId(i));
+    }
+    for i in [2, 4, 5] {
+        s.anchors.insert(NodeId(i), BTreeSet::from([(0, 1)]));
+        s.segments.insert(NodeId(i), BTreeSet::from([(0, 0)]));
+    }
+    s.key = Some(NodeId(4));
+    s.target = Some(NodeId(3));
+    s.slices = vec![NodeId(9)];
+    s.guides = vec![NodeId(10)];
+    s.on_path_member = Some(NodeId(11));
+    let mut one_by_one = s.clone();
+    for id in [NodeId(4), NodeId(1), NodeId(4), NodeId(7)] {
+        one_by_one.remove(id);
+    }
+    let mut all = s.clone();
+    all.remove_all([NodeId(4), NodeId(1), NodeId(4), NodeId(7)]);
+    assert_eq!(all, one_by_one);
+    assert_eq!(all.objects, [NodeId(2), NodeId(3), NodeId(5), NodeId(6)]);
+    // Removing nothing leaves the selection as it was.
+    let mut none = s.clone();
+    none.remove_all([]);
+    assert_eq!(none, s);
+}
+
+#[test]
+fn remove_all_does_what_removing_each_does_to_a_key_anchor_and_symbol_part() {
+    for kept in [false, true] {
+        let mut s = Selection::default();
+        for i in 1..=4 {
+            s.add(NodeId(i));
+        }
+        s.anchors.insert(NodeId(2), BTreeSet::from([(0, 0), (0, 1)]));
+        s.anchors.insert(NodeId(3), BTreeSet::from([(0, 2)]));
+        s.key_anchor = Some((NodeId(2), (0, 0)));
+        s.symbol_part = Some(SymbolPart { instance: NodeId(1), path: vec![0] });
+        s.guides = vec![NodeId(10)];
+        s.key_guide = Some(NodeId(10));
+        let ids = if kept { [NodeId(3), NodeId(8), NodeId(3)] } else { [NodeId(2), NodeId(8), NodeId(2)] };
+        let mut one_by_one = s.clone();
+        for id in ids {
+            one_by_one.remove(id);
+        }
+        let mut all = s.clone();
+        all.remove_all(ids);
+        assert_eq!(all, one_by_one);
+        assert_eq!(all.key_anchor.is_some(), kept);
+        assert_eq!((all.symbol_part.clone(), all.guides.clone(), all.key_guide), (None, vec![NodeId(10)], Some(NodeId(10))));
+    }
+}
+
+#[test]
 fn guides_are_selected_on_their_own() {
     let mut s = Selection::default();
     s.add(NodeId(1));

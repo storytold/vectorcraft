@@ -98,7 +98,7 @@ pub(crate) struct Interp<'a> {
     /// The font a `kshow` procedure sees as current while type in a CIDFont only named is set in
     /// a font of its own (see `text`).
     pub kshow_font: Option<DictRef>,
-    /// The `cshow` procedure running over type in a CIDFont only named, with the font it sees as
+    /// The `cshow` procedure running over a composite font's type, with the font it sees as
     /// current (see `text`).
     pub cshow: Option<super::text::CShowFont>,
     pub g: GState,

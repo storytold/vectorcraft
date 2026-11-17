@@ -126,6 +126,34 @@ fn spot_tints_print_their_percentage_of_the_plate() {
     assert!(pdf.contains("cs 0.4 scn"), "the tint is the Separation value");
 }
 
+/// Extrude & Bevel (Classic) with Preserve Spot Colors keeps a spot fill's plate in PDF: the faces
+/// are tints of the Separation, and with the option off they are process colors.
+#[test]
+fn classic_3d_preserve_spot_colors_keeps_the_spot_plate_in_pdf() {
+    let pdf = |preserve: bool| {
+        let mut s = inks();
+        rect(&mut s);
+        run(&mut s, "paint.setFill", json!({"swatch": "Ink"}));
+        run(&mut s, "paint.setStroke", json!({"none": true}));
+        let params = json!({"preserveSpotColors": preserve, "highlightIntensity": 100, "highlightSize": 100, "lightHeight": 60});
+        run(&mut s, "effect.apply", json!({"effect": "threeD.classicExtrude", "params": params}));
+        let bytes =
+            vectorcraft_pdf::export(doc(&s), &vectorcraft_pdf::PdfOptions { created: Some(0), ..vectorcraft_pdf::PdfOptions::uncompressed() })
+                .unwrap();
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    // The Separation values the page sets ("/CS1 cs 0.6 scn").
+    let tints = |pdf: &str| -> std::collections::BTreeSet<String> {
+        pdf.split(" scn").filter_map(|s| s.rsplit("cs ").next().filter(|t| t.parse::<f32>().is_ok()).map(str::to_string)).collect()
+    };
+    let kept = pdf(true);
+    assert!(kept.contains("/Separation/Ink/DeviceCMYK"), "the faces print on the Ink plate");
+    assert!(tints(&kept).len() > 1, "the highlight prints lighter tints of the ink: {:?}", tints(&kept));
+    assert!(kept.contains("/Multiply"), "the shading is black multiplied over the ink");
+    // Off, only a face left unshaded keeps the swatch, at its full tint.
+    assert!(tints(&pdf(false)).len() <= 1, "without the option shaded faces are process mixes");
+}
+
 #[test]
 fn global_mode_shifts_tints_of_linked_colours_only() {
     let mut s = inks();

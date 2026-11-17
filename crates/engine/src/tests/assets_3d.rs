@@ -89,6 +89,45 @@ fn export_3d_object_refuses_objects_without_a_3d_effect_and_bad_formats() {
     assert_eq!(r["added"], 1);
 }
 
+/// Without `ids`, the selected objects without a 3D effect, a group whose 3D effect is on its fill
+/// (it draws nothing to export) and a 3D object inside another selected one are left out; a
+/// selection with none left is refused.
+#[test]
+fn export_3d_object_leaves_flat_objects_in_the_selection_out() {
+    let mut s = session();
+    let plain = run(&mut s, "shape.rectangle", json!({"x": 10.0, "y": 100.0, "width": 40.0, "height": 30.0}))["id"].as_u64().unwrap();
+    let filled = run(&mut s, "shape.rectangle", json!({"x": 10.0, "y": 200.0, "width": 40.0, "height": 30.0}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [filled]}));
+    let group = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [group]}));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "effect.apply", json!({"effect": "threeD.extrude"}));
+    // `effect.apply` puts a group's 3D effect on the group itself; a file can hold one on its fill.
+    s.edit("fill", |d, _| {
+        let n = d.node_mut(vectorcraft_doc::NodeId(group)).unwrap();
+        let fx = n.appearance.effects.remove(0);
+        n.appearance.items[0].effects_mut().push(fx);
+        Ok(())
+    })
+    .unwrap();
+    run(&mut s, "select.set", json!({"ids": [plain, group]}));
+    let before = undo_len(&s);
+    assert!(s.execute("assets.add3D", &json!({})).is_err(), "no object with a 3D effect to export");
+    assert_eq!(undo_len(&s), before);
+    let inner = extruded(&mut s, 100.0, "Inner");
+    let other = run(&mut s, "shape.rectangle", json!({"x": 200.0, "y": 10.0, "width": 40.0, "height": 30.0}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [inner, other]}));
+    let outer = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [outer]}));
+    run(&mut s, "effect.apply", json!({"effect": "threeD.extrude"}));
+    run(&mut s, "select.set", json!({"ids": [plain, group, inner, outer]}));
+    let r = run(&mut s, "assets.add3D", json!({}));
+    assert_eq!(r["added"], 1, "{r}");
+    let nodes: Vec<Value> = run(&mut s, "assets.list", json!({}))["assets"].as_array().unwrap().iter().map(|a| a["nodes"].clone()).collect();
+    assert_eq!(nodes, [json!([outer])]);
+    assert!(s.execute("assets.add3D", &json!({"ids": [plain, outer]})).is_err(), "ids are still refused");
+}
+
 #[test]
 fn the_format_is_set_per_asset_and_only_a_change_is_an_undo_step() {
     let mut s = session();

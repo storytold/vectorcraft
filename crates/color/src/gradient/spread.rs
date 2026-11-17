@@ -59,6 +59,9 @@ impl Gradient {
         if !self.is_spread() || matches!(kind, GradientKind::Conic | GradientKind::Freeform) || self.stops.is_empty() {
             return None;
         }
+        if self.mirrors_a_hue_turn() {
+            return self.as_classic_curve().padded_within(geom, area, max_stops);
+        }
         let period = geom.period(kind, self.repeat_count());
         let corners = [Point::new(area.x0, area.y0), Point::new(area.x1, area.y0), Point::new(area.x1, area.y1), Point::new(area.x0, area.y1)];
         let ts = corners.map(|p| period.param_at(kind, p));
@@ -128,6 +131,9 @@ impl Gradient {
         if self.stops.is_empty() {
             return Cow::Owned(Gradient { spread: GradientSpread::Pad, repeats: 1, ..self.clone() });
         }
+        if self.mirrors_a_hue_turn() {
+            return Cow::Owned(self.as_classic_curve().unrolled_within(max_stops).into_owned());
+        }
         let n = self.repeat_count() as usize;
         let budget = max_stops.min(MAX_SPREAD_STOPS);
         let kept = n.min(budget / 2).max(1);
@@ -159,10 +165,20 @@ impl Gradient {
         if !self.is_spread() || self.stops.is_empty() {
             return None;
         }
+        if self.mirrors_a_hue_turn() {
+            return self.as_classic_curve().cycle();
+        }
         let one = whole_run(&self.stops);
         let runs = if self.spread == GradientSpread::Reflect { 2 } else { 1 };
         let stops = self.runs(&one, false, 0.0, runs, runs as f64);
         Some((Gradient { stops, spread: GradientSpread::Pad, repeats: 1, ..self.clone() }, runs as u32))
+    }
+
+    /// Does the gradient reflect while mixing around the hue wheel? A mirrored run of its stops
+    /// would turn the wheel the other way, and one gradient has one method, so its runs are
+    /// written from its curve's stops ([`Self::as_classic_curve`]), which mirror as they are.
+    fn mirrors_a_hue_turn(&self) -> bool {
+        self.method.is_hue() && self.spread == GradientSpread::Reflect
     }
 
     /// `n` runs of `one` (one run of the stops, [`whole_run`]) on a line of `of` runs from 0 to 1,

@@ -80,11 +80,16 @@ pub(super) fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value>
     if st.doc.children(Some(layer)).is_some_and(|c| c.iter().rev().filter(art).map(|n| n.id).take(ids.len()).eq(ids.iter().rev().copied())) {
         return ok();
     }
-    s.edit("Send to Current Layer", |d, _| {
+    let placed: Vec<(NodeId, Option<NodeId>)> = ids.iter().map(|i| (*i, st.doc.parent_of(*i))).collect();
+    let left = crate::cmd::intertwine::groups_of(&st.doc, &ids);
+    s.edit("Send to Current Layer", |d, sel| {
         let moved = d.remove_many(&ids)?;
         let ch = d.children_mut(Some(layer))?;
         let at = Node::guide_run_start(ch);
         ch.splice(at..at, moved);
+        // Members sent out of an Intertwine group leave it as ordinary art.
+        crate::cmd::intertwine::settle_members(d, &placed, &left)?;
+        sel.prune(d);
         Ok(())
     })?;
     ok()
@@ -169,28 +174,47 @@ pub(super) fn lock(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
-/// The selected objects ([`selected_roots`]) that Lock › Selection and Hide › Selection change: in
-/// isolation mode, only those inside the isolated object, where a path of the isolated compound
-/// path is an object of its own.
+/// The selected objects ([`selected_roots`]) and ruler guides that Lock › Selection and Hide ›
+/// Selection change: in isolation mode, only the objects inside the isolated object, where a path
+/// of the isolated compound path is an object of its own. A guide counts while it can be edited
+/// (it and its layer shown and unlocked, and Lock Guides off).
 fn selected_lock_hide_roots(s: &Session) -> Result<Vec<NodeId>> {
-    match crate::cmd::ordinary_isolation(s.doc()?) {
+    let st = s.doc()?;
+    match crate::cmd::ordinary_isolation(st) {
         Some(root) => crate::cmd::edit::selected_roots_inside(s, root, false),
-        None => selected_roots(s),
+        None => {
+            let mut ids = selected_roots(s)?;
+            if !s.guides_locked() {
+                let d = &st.doc;
+                ids.extend(st.selection.guides.iter().copied().filter(|id| d.ruler_guide(*id).is_some_and(|g| d.guide_editable(&g))));
+            }
+            Ok(ids)
+        }
     }
 }
 
+/// The objects and ruler guides in `d` that `f` picks (layers never).
 fn collect_flag(d: &Document, f: impl Fn(&Node) -> bool) -> Vec<NodeId> {
     let mut v = vec![];
     d.walk(|n| {
-        if !n.is_layer() && !n.is_ruler_guide() && f(n) {
+        if !n.is_layer() && f(n) {
             v.push(n.id)
         }
     });
     v
 }
 
+/// Select what Unlock All or Show All changed (`ids`): the objects, and the ruler guides among
+/// them as guides (a guide that still can't be edited is then dropped from the selection).
+fn select_changed(d: &Document, sel: &mut vectorcraft_doc::Selection, ids: &[NodeId]) {
+    let guides: std::collections::HashSet<NodeId> = d.ruler_guides().into_iter().filter_map(|g| g.id).collect();
+    let (on_guides, objects): (Vec<NodeId>, Vec<NodeId>) = ids.iter().copied().partition(|id| guides.contains(id));
+    sel.set(objects);
+    sel.guides = on_guides;
+}
+
 /// The objects that `f` picks for `object.unlockAll` and `object.showAll` (`cmd`): in the whole
-/// document, inside the isolated object in isolation mode, or with `scope: "group"` inside the
+/// document (its ruler guides included), inside the isolated object in isolation mode, or with `scope: "group"` inside the
 /// groups that hold the selected objects (in isolation mode, only the objects of those groups
 /// that are inside the isolated object). A selected group is the group that holds its own
 /// members, and the objects of a group inside another such group are taken once. With
@@ -253,7 +277,7 @@ pub(super) fn unlock_all(s: &mut Session, p: &Value) -> Result<Value> {
                 n.locked = false;
             }
         }
-        sel.set(ids.iter().copied());
+        select_changed(d, sel, &ids);
         Ok(())
     })?;
     Ok(json!({ "count": ids.len() }))
@@ -292,7 +316,7 @@ pub(super) fn show_all(s: &mut Session, p: &Value) -> Result<Value> {
                 n.visible = true;
             }
         }
-        sel.set(ids.iter().copied());
+        select_changed(d, sel, &ids);
         Ok(())
     })?;
     Ok(json!({ "count": ids.len() }))

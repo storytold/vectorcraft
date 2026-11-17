@@ -134,6 +134,28 @@ fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
+/// The dialog kind of the question Reset Actions asks in the Actions panel menu
+/// ([`ask_reset_actions`]). Fields: `message`, `detail`, `append` (set by Append).
+pub const RESET_ACTIONS: &str = "resetActions";
+
+pub(super) const RESET_ACTIONS_SPEC: DialogSpec = DialogSpec { confirm: reset_actions, alternate: Some(("Append", "append")), ..SPEC };
+
+/// Ask whether to replace the Actions panel's sets with the built-in set. OK replaces them, Append
+/// adds the built-in set after them ([`crate::panels::actions::reset`]), and Cancel or Escape
+/// changes nothing.
+pub(crate) fn ask_reset_actions(app: &mut VectorcraftApp) {
+    let message = tl!("Replace the current actions with the default set?");
+    let detail = tl!("Append adds the default set after the current sets instead.");
+    app.ui.dialog = Some(Dialog::new(RESET_ACTIONS, json!({"message": message, "detail": detail, "append": false})));
+}
+
+/// OK or Append on [`ask_reset_actions`]: closes, then resets the action sets.
+fn reset_actions(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mode = if d.fields.get("append").and_then(Value::as_bool) == Some(true) { "append" } else { "replace" };
+    app.ui.dialog = None;
+    app.run(crate::panels::actions::RESET, json!({ "mode": mode }))
+}
+
 /// Most messages kept for later while a dialog is open ([`tell`]).
 const MAX_WAITING: usize = 16;
 

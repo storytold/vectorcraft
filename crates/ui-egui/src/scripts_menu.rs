@@ -16,6 +16,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::scripts::NOT_LISTED;
 use vectorcraft_engine::script::folder::{Entry, Listing};
 
 use crate::VectorcraftApp;
@@ -241,15 +242,16 @@ pub fn readable(p: &Value) -> bool {
     p.get("path").and_then(Value::as_str).is_some_and(|path| vectorcraft_engine::file_access::check_read(path).is_ok())
 }
 
-/// `ui.runInstalledScript {path}`: run the listed script at `path`. A script that is no longer in
-/// the folder is not run, and the folder is read again. The script runs from its file, so its
-/// `#include` lines and `$.evalFile` read beside it.
+/// `ui.runInstalledScript {path}`: run the listed script at `path`. `script.run` reads the file
+/// once, checks it as a listed script and runs that text, so its `#include` lines and `$.evalFile`
+/// read in the folder that read found. A script that is no longer in the folder is not run, and the
+/// folder is read again.
 pub fn run(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let path = p.get("path").and_then(Value::as_str).ok_or("missing `path`")?;
-    app.session.installed_script(path).map_err(|e| {
-        let ctx = app.ui_ctx.clone();
-        refresh(app, ctx.as_ref());
-        e.to_string()
-    })?;
-    app.run("script.run", json!({ "path": path }))
+    app.run("script.run", json!({ "path": path, "installed": true })).inspect_err(|e| {
+        if e == NOT_LISTED {
+            let ctx = app.ui_ctx.clone();
+            refresh(app, ctx.as_ref());
+        }
+    })
 }

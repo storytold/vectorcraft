@@ -578,3 +578,62 @@ fn every_section_draws_its_fields() {
         }
     }
 }
+
+/// The texts of one headless frame at a screen `w` by `h`, with their screen rects.
+fn texts_at(ctx: &egui::Context, app: &mut VectorcraftApp, w: f32, h: f32) -> Vec<(String, egui::Rect)> {
+    fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+            _ => {}
+        }
+    }
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+    out.textures_delta.clear();
+    let mut texts = vec![];
+    for c in &out.shapes {
+        collect(&c.shape, &mut texts);
+    }
+    texts
+}
+
+/// Going from a shorter section to a longer one keeps OK and Cancel on a small screen in the first
+/// frame after the switch, not only once the window has measured itself again.
+#[test]
+fn switching_to_a_long_section_keeps_the_buttons_on_a_small_screen() {
+    let mut app = app();
+    let mut attrs: Value = serde_json::from_str(KEPT).unwrap();
+    for (key, value) in [
+        ("right_indent", json!(4.0)),
+        ("first_line_indent", json!(12.0)),
+        ("space_after", json!(6.0)),
+        ("composer", json!("singleLine")),
+        ("roman_hanging", json!(true)),
+        ("hyphenate", json!(true)),
+        ("justification", json!({"auto_leading": 150.0})),
+        ("korean_line_break_anywhere", json!(true)),
+    ] {
+        attrs[key] = value;
+    }
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": attrs})).unwrap();
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    for h in [500.0, 560.0, 640.0, 720.0] {
+        for to in SECTIONS {
+            for from in SECTIONS.into_iter().filter(|s| *s != to) {
+                let ctx = egui::Context::default();
+                crate::theme::install_fonts(&ctx);
+                set(&mut app, "section", json!(from));
+                for _ in 0..5 {
+                    let _ = texts_at(&ctx, &mut app, 900.0, h);
+                }
+                set(&mut app, "section", json!(to));
+                let texts = texts_at(&ctx, &mut app, 900.0, h);
+                for label in ["OK", "Cancel"] {
+                    let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
+                    assert!(r.bottom() <= h + 1.0, "{label} stays on a {h}-point screen going from {from} to {to}: {r:?}");
+                }
+            }
+        }
+    }
+}

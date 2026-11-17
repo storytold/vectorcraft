@@ -2,7 +2,7 @@
 
 use serde_json::json;
 use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, Paint};
-use vectorcraft_doc::{Appearance, NodeId, NodeKind};
+use vectorcraft_doc::{Appearance, NodeId, NodeKind, selection::Selection};
 use vectorcraft_engine::Session;
 use vectorcraft_geom::{Affine, Anchor, PathData, Rect, SubPath};
 use vectorcraft_testkit::{invariants::check_session, raster::render_artboard};
@@ -224,6 +224,151 @@ fn deletion_split_preserves_gradient_placement() {
             }
         }
     }
+}
+
+/// Subpath `i` of a multi-subpath test path: four cubic anchors on their own row, so every piece
+/// that survives a deletion can be matched exactly.
+fn row(i: usize, closed: bool) -> SubPath {
+    let y = 10.0 + 3.0 * i as f64;
+    let anchors = (0..4)
+        .map(|k| {
+            let mut a = Anchor::corner((10.0 + 20.0 * f64::from(k), y).into());
+            a.h_in = a.p + (-3.0, -1.0);
+            a.h_out = a.p + (3.0, 1.0);
+            a
+        })
+        .collect();
+    SubPath::new(anchors, closed)
+}
+
+/// An open piece made of `indexes` of `sp`, its unused end handles retracted as deletion leaves them.
+fn piece(sp: &SubPath, indexes: &[usize]) -> SubPath {
+    let mut run: Vec<Anchor> = indexes.iter().map(|&i| sp.anchors[i]).collect();
+    if let Some(first) = run.first_mut() {
+        first.h_in = first.p;
+    }
+    if let Some(last) = run.last_mut() {
+        last.h_out = last.p;
+    }
+    SubPath::new(run, false)
+}
+
+/// Put `subpaths` into a new path object and return its ID.
+fn multi_subpath_path(s: &mut Session, subpaths: Vec<SubPath>) -> NodeId {
+    let id = rectangle(s);
+    *std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap() = PathData::new(subpaths);
+    id
+}
+
+/// Run `command` on the current selection, check the path's surviving subpaths and that one Undo
+/// restores the document and `before_selection` and one Redo repeats the edit, then check that a
+/// second Clear removes the survivors.
+fn delete_and_check(s: &mut Session, command: &str, id: NodeId, expected: &[SubPath], before_selection: &Selection) {
+    let before_doc = serde_json::to_value(&s.doc().unwrap().doc).unwrap();
+    let history = s.doc().unwrap().history.undo.len();
+    s.execute(command, &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.node(id).unwrap().path_data().unwrap().subpaths, expected, "{command}");
+    assert_eq!(st.selection.objects, [id], "{command}: a multi-subpath path keeps its object");
+    assert!(st.selection.anchors.is_empty() && st.selection.segments.is_empty());
+    assert_eq!(st.history.undo.len(), history + 1);
+    let after_doc = serde_json::to_value(&st.doc).unwrap();
+    let after_selection = st.selection.clone();
+    check_session(s).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), before_doc);
+    assert_eq!(&s.doc().unwrap().selection, before_selection);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(serde_json::to_value(&s.doc().unwrap().doc).unwrap(), after_doc);
+    assert_eq!(s.doc().unwrap().selection, after_selection);
+    s.execute("edit.clear", &json!({})).unwrap();
+    assert!(s.doc().unwrap().doc.node(id).is_none(), "{command}: the second Clear removes the survivors");
+}
+
+/// Selected anchors on many subpaths each remove only their own subpath's anchors; anchors named on
+/// a subpath or index the path does not have remove nothing.
+#[test]
+fn deleting_anchors_on_many_subpaths_removes_each_subpaths_own_anchors() {
+    for command in ["edit.clear", "path.deleteAnchors", "edit.cut"] {
+        let mut s = session();
+        let subpaths: Vec<SubPath> = (0..6).map(|i| row(i, i % 2 == 1)).collect();
+        let id = multi_subpath_path(&mut s, subpaths.clone());
+        s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 1], [1, 2], [2, 0], [2, 9], [4, 3], [5, 1], [7, 1]]})).unwrap();
+        // Subpath 3 has no selected anchor and stays closed and unchanged.
+        let expected = [
+            piece(&subpaths[0], &[2, 3]),
+            piece(&subpaths[1], &[3, 0, 1]),
+            piece(&subpaths[2], &[1, 2, 3]),
+            subpaths[3].clone(),
+            piece(&subpaths[4], &[0, 1, 2]),
+            piece(&subpaths[5], &[2, 3, 0]),
+        ];
+        let before = s.doc().unwrap().selection.clone();
+        delete_and_check(&mut s, command, id, &expected, &before);
+    }
+}
+
+/// Selected segments on many subpaths each cut only their own subpath; a segment reference to a
+/// subpath or segment the path does not have cuts nothing.
+#[test]
+fn deleting_segments_on_many_subpaths_cuts_each_subpaths_own_segments() {
+    for command in ["edit.clear", "path.deleteAnchors", "edit.cut"] {
+        let mut s = session();
+        let subpaths: Vec<SubPath> = (0..6).map(|i| row(i, i % 2 == 1)).collect();
+        let id = multi_subpath_path(&mut s, subpaths.clone());
+        s.execute("select.segments", &json!({"id": id.0, "segments": [[0, 1], [1, 3], [4, 0], [5, 1]]})).unwrap();
+        // Undo prunes the restored selection (`Selection::prune`), which drops references to
+        // segments the path does not have, so it restores the selection as it is here.
+        let before = s.doc().unwrap().selection.clone();
+        // `select.segments` refuses references to missing segments, so these are added directly.
+        let refs = s.doc_mut().unwrap().selection.segments.get_mut(&id).unwrap();
+        refs.extend([(2, 9), (7, 0)]);
+        let expected = [
+            piece(&subpaths[0], &[0, 1]),
+            piece(&subpaths[0], &[2, 3]),
+            piece(&subpaths[1], &[0, 1, 2, 3]),
+            subpaths[2].clone(),
+            subpaths[3].clone(),
+            piece(&subpaths[4], &[1, 2, 3]),
+            piece(&subpaths[5], &[2, 3, 0, 1]),
+        ];
+        delete_and_check(&mut s, command, id, &expected, &before);
+    }
+}
+
+/// One selected interior anchor on each of many subpaths removes exactly that anchor from each,
+/// keeping the subpaths in their original order.
+#[test]
+fn deleting_one_anchor_on_each_of_many_subpaths_keeps_subpath_order() {
+    let mut s = session();
+    let subpaths: Vec<SubPath> = (0..400).map(|i| row(i, false)).collect();
+    let id = multi_subpath_path(&mut s, subpaths.clone());
+    let refs: Vec<[usize; 2]> = (0..400).filter(|i| i % 7 != 3).map(|i| [i, 1]).collect();
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": refs})).unwrap();
+    let expected: Vec<SubPath> = subpaths.iter().enumerate().map(|(i, sp)| if i % 7 == 3 { sp.clone() } else { piece(sp, &[2, 3]) }).collect();
+    let before = s.doc().unwrap().selection.clone();
+    delete_and_check(&mut s, "edit.clear", id, &expected, &before);
+}
+
+/// Cut Path cuts each subpath of a multi-subpath path only at that subpath's selected anchors.
+#[test]
+fn cutting_at_anchors_on_many_subpaths_cuts_each_subpath_at_its_own_anchors() {
+    let mut s = session();
+    let subpaths: Vec<SubPath> = (0..6).map(|i| row(i, i % 2 == 1)).collect();
+    let id = multi_subpath_path(&mut s, subpaths.clone());
+    let refs = [(0, 1), (1, 2), (2, 9), (4, 2), (5, 0), (5, 2), (7, 1)];
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": refs.map(|(a, b)| [a, b])})).unwrap();
+    s.execute("path.cutAtAnchors", &json!({})).unwrap();
+    let expected: Vec<SubPath> = subpaths
+        .iter()
+        .enumerate()
+        .flat_map(|(si, sp)| sp.cut_at(&refs.iter().filter(|r| r.0 == si).map(|r| r.1).collect::<std::collections::BTreeSet<_>>()))
+        .collect();
+    // Subpaths 0 and 4 become two pieces each, closed subpath 1 opens into one, closed subpath 5
+    // becomes two, and subpaths 2 and 3 stay as they were.
+    assert_eq!(expected.len(), 9);
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths, expected);
+    check_session(&s).unwrap();
 }
 
 /// A connected remainder keeps automatic fitting; pinning is needed only for separate objects.

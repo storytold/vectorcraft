@@ -78,6 +78,8 @@ impl Document {
             units_from_file: _,
             index: _,
             guide_cache: _,
+            inline_cycles: _,
+            mounted_art: _,
         } = self;
         *version == other.version
             && *title == other.title
@@ -262,6 +264,8 @@ impl Document {
             units_from_file: false,
             index: Default::default(),
             guide_cache: Default::default(),
+            inline_cycles: Default::default(),
+            mounted_art: vec![],
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
@@ -286,7 +290,9 @@ impl Document {
         self.next_id = self.next_id.max(id);
     }
 
-    /// Ensure `next_id` is above every id in the tree (after deserializing foreign data).
+    /// Ensure `next_id` is above every id in the tree (after deserializing foreign data), then give
+    /// the objects outside the layer tree (opacity-mask art, symbols, graph designs and patterns)
+    /// whose id is missing or already taken a new one, so each stored object has an id of its own.
     pub fn fix_next_id(&mut self) {
         // Ids from [`MAX_NEXT_ID`] up (a damaged or hand-made file: #1718) are left out, as is a
         // counter up there: new ids start under them and never reach them, where counting on from
@@ -297,13 +303,12 @@ impl Document {
                 max = max.max(id);
             }
         };
-        for l in &self.layers {
-            l.walk(&mut |n| see(n.id.0));
-        }
+        self.visit_stored(|n, _| see(n.id.0));
         self.slices.iter().for_each(|s| see(s.id.0));
         self.assets.iter().for_each(|a| see(a.id));
         let counter = Some(self.next_id).filter(|n| *n <= MAX_NEXT_ID).unwrap_or(0);
         self.next_id = counter.max(max.saturating_add(1));
+        self.renumber_stored_duplicates();
     }
 
     /// Find a node anywhere in the tree.
@@ -747,6 +752,18 @@ impl Document {
 
     /// [`Document::locked_artboards`] leaving out artboard `index`.
     pub fn locked_artboards_except(&self, index: usize) -> LockedArtboards<'_> {
+        self.locks_except(index, false)
+    }
+
+    /// [`Document::locked_artboards`] starting with the symbol art boxes earlier hit tests kept
+    /// ([`Document::kept_symbol_boxes`]). Kept boxes made after it keep its measurements too
+    /// ([`crate::symbols::KeptBoxes::keeping`]).
+    pub(crate) fn locked_artboards_kept(&self) -> LockedArtboards<'_> {
+        self.locks_except(usize::MAX, true)
+    }
+
+    /// [`Document::locked_artboards_except`], with `kept` measuring with kept art boxes.
+    fn locks_except(&self, index: usize, kept: bool) -> LockedArtboards<'_> {
         // Art flush with an edge from outside can overlap it by a rounding error, as in
         // `art_bounds_on` (#1295).
         let rects: Vec<Rect> =
@@ -765,7 +782,9 @@ impl Document {
         if let Some(layer) = self.pattern_edit.as_ref().filter(|_| !rects.is_empty()).and_then(|e| self.layers.iter().find(|l| l.id == e.layer)) {
             objects(layer, &mut pattern_art);
         }
-        LockedArtboards { rects, symbols: self.symbol_boxes(), new_art: self.new_art.get(), pattern_art, held: Default::default() }
+        // Nothing is measured without a locked artboard.
+        let symbols = if kept && !rects.is_empty() { self.symbol_boxes_from_kept() } else { self.symbol_boxes() };
+        LockedArtboards { rects, symbols, new_art: self.new_art.get(), pattern_art, held: Default::default() }
     }
 
     /// Is `id` on a locked artboard ([`LockedArtboards::holds_id`])? A layer or sublayer is on none.

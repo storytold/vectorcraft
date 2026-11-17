@@ -4,10 +4,14 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod clipfx;
 mod imageoutline;
+mod painted;
 mod rasterfollow;
 mod scale;
+mod solidcontext;
 mod transformfx;
+mod typestroke;
 
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
@@ -1568,6 +1572,27 @@ fn outline_object_is_a_geometry_effect_that_keeps_the_path() {
     assert_eq!(apply_geometry(&[fx("path.outlineObject", json!({})), offset.clone()], &square(), b), apply_geometry(&[offset], &square(), b));
 }
 
+/// A symbol instance given to Pathfinder and compound shapes as its art: the group takes the
+/// instance's box angle and the art turns with it, turned with the instance or reset to 0.
+#[test]
+fn outline_object_turns_an_instances_art_with_its_box() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::orient::transformed_angle;
+    use vectorcraft_doc::{Appearance, Document, NodeId, Symbol};
+    let mut d = Document::new(500.0, 500.0);
+    d.symbols.push(Symbol { dynamic: false, name: "s".into(), art: Arc::new(Node::path(NodeId(0), square(), Appearance::default())) });
+    let xf = Affine::translate((200.0, 100.0)) * Affine::rotate(0.35);
+    for box_angle in [transformed_angle(0.0, xf), 0.0] {
+        let mut inst = Node::new(NodeId(3), NodeKind::SymbolInstance { symbol: "s".into(), xf });
+        inst.bbox_angle = box_angle;
+        let out = outline_object(Some(&d), &inst).unwrap();
+        let mut angles = vec![];
+        out.walk(&mut |c| angles.push(c.bbox_angle));
+        assert!(angles.len() == 2 && angles.iter().all(|a| close(*a, box_angle, 1e-9)), "{box_angle}: {angles:?}");
+    }
+}
+
 #[test]
 fn convert_to_shape_sizes() {
     let r = run("convertToShape.rectangle", json!({"extraW": 20, "extraH": 10}), &square()).bounds().unwrap();
@@ -1660,6 +1685,27 @@ fn twist_turns_clockwise_for_positive_angles() {
     let turned = |angle: f64| apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &right, bounds).subpaths[0].anchors[0].p;
     assert!(turned(45.0).y > 50.5, "{:?}", turned(45.0));
     assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
+}
+
+/// Twist turns a line into a smooth spiral: the points it adds join their pieces without a kink,
+/// however far it turns (#7069).
+#[test]
+fn twist_joins_its_pieces_smoothly() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(40.0, 30.0), Point::new(60.0, 30.0)], false));
+    let bounds = Rect::new(40.0, 30.0, 60.0, 30.0);
+    for angle in [90.0, 400.0, -720.0] {
+        let out = apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &line, bounds);
+        let anchors = &out.subpaths[0].anchors;
+        assert!(anchors.len() > 8, "{angle}°: {} anchors", anchors.len());
+        for a in anchors.iter().skip(1).take(anchors.len() - 2) {
+            let (into, out) = (a.p - a.h_in, a.h_out - a.p);
+            if into.hypot() < 1e-9 || out.hypot() < 1e-9 {
+                continue;
+            }
+            let kink = (into.x * out.y - into.y * out.x).atan2(into.dot(out)).to_degrees().abs();
+            assert!(kink < 1.0, "{angle}°: a kink of {kink:.1}° at {:?}", a.p);
+        }
+    }
 }
 
 #[test]
@@ -1826,6 +1872,7 @@ fn rasterize_compose_leaves_the_raster_alone_when_the_sizes_do_not_fit() {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(1.0, 1.0),
+        size: vectorcraft_geom::Vec2::new(2.0, 2.0),
         channels: pixel::Channels::Rgb,
         line: 1.0,
         extent: std::f64::consts::SQRT_2,

@@ -980,7 +980,7 @@ fn reset_defaults(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(added)
     })?;
     if replace {
-        map_default_paints(s, &mut |_, l, _| unlink_dead(&live, l));
+        map_default_paints(s, &mut |_, l, _| unlink_dead(&live, l))?;
     }
     Ok(json!({ "added": added }))
 }
