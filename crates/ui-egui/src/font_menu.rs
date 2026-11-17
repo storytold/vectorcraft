@@ -1529,6 +1529,8 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool, row: Opt
                     width += gap + resp.rect.width();
                     if resp.clicked() {
                         ui.data_mut(|d| d.insert_temp(preview_size_id(), size));
+                        // A focused button is activated by Enter; the list must not read it as a pick.
+                        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
                     }
                 }
             });

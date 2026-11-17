@@ -1502,6 +1502,64 @@ fn the_preview_size_row_asks_for_the_size_clicked() {
     super::wait_for_samples(&ctx);
 }
 
+/// Enter on a focused size button asks for that size and picks no font: the key is not also read as
+/// the list's Enter, which would apply the highlighted font and close the menu.
+#[test]
+fn enter_on_a_focused_size_button_picks_no_font() {
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    // The Recently Added filter gives the list rows from the bundled fonts alone.
+    let mut st = super::MenuState { added_only: true, added: added_in(&db, &["Source Serif 4", "Inter"], None), ..Default::default() };
+    let id = egui::Id::unique("size-enter");
+    let look = super::MenuLook { row: super::preview_row("small"), clock: Some(clock()), ..Default::default() };
+    let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 900.0));
+    let frame = |st: &mut super::MenuState, events: Vec<egui::Event>| {
+        let mut pick = None;
+        let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(area), ..Default::default() }, |ui| {
+            pick = super::list_of(ui, &db, id, st, "Inter", None, look).inner;
+        });
+        out.textures_delta.clear();
+        (out.shapes, pick)
+    };
+    frame(&mut st, vec![]);
+    let (shapes, _) = frame(&mut st, vec![]);
+    let at = text_at(&shapes, |t| t == "Large").expect("Large is drawn");
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut st, vec![egui::Event::PointerMoved(at), button(true)]);
+    frame(&mut st, vec![button(false)]);
+    ctx.data_mut(|d| d.remove_temp::<&'static str>(super::preview_size_id()));
+    let enter = |pressed| egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: Some(egui::Key::Enter),
+        pressed,
+        repeat: false,
+        modifiers: Default::default(),
+    };
+    let tab =
+        |pressed| egui::Event::Key { key: egui::Key::Tab, physical_key: Some(egui::Key::Tab), pressed, repeat: false, modifiers: Default::default() };
+    assert!(!listed_families(&st).is_empty(), "the list has rows an Enter could pick");
+    // Tab moves the focus along the controls until it is on the Large button, where Enter is pressed.
+    let mut found = None;
+    for _ in 0..60 {
+        frame(&mut st, vec![tab(true)]);
+        frame(&mut st, vec![tab(false)]);
+        let on_large = ctx.memory(|m| m.focused()).and_then(|f| ctx.read_response(f)).is_some_and(|r| r.rect.contains(at));
+        if !on_large {
+            continue;
+        }
+        let (_, pick) = frame(&mut st, vec![enter(true)]);
+        frame(&mut st, vec![enter(false)]);
+        if ctx.data_mut(|d| d.remove_temp::<&'static str>(super::preview_size_id())) == Some("large") {
+            found = Some(pick);
+            break;
+        }
+    }
+    let pick = found.expect("Enter on the focused Large button asks for the size");
+    assert!(pick.is_none(), "Enter on the size button picks no font: {pick:?}");
+    super::wait_for_samples(&ctx);
+}
+
 /// The size a font menu's button asked for becomes Font Preview Size, which sizes every font
 /// menu's rows, and the host is asked to write the preferences file. The document is left as it
 /// was: a font previewed on the selected type stays previewed, and the change adds no undo step.
