@@ -594,6 +594,11 @@ pub struct UiState {
     pub status_notes: Option<(String, Vec<String>)>,
     pub palette_open: bool,
     pub palette_query: String,
+    /// Set when the palette's shortcut, its command or the search icon opens or closes the palette,
+    /// so that the palette starts at its first row the next time it is drawn, even when it closed
+    /// and opened again before then. Not saved.
+    #[serde(skip)]
+    pub palette_toggled: bool,
     /// Screen mode: 0 normal, 1 full screen with menu, 2 full screen, 3 presentation. Not saved:
     /// the app always starts in Normal Screen Mode, with its menus and panels (#472: a saved
     /// Presentation Mode came back on restart with no way out).
@@ -1205,6 +1210,7 @@ impl Default for UiState {
             status_notes: None,
             palette_open: false,
             palette_query: String::new(),
+            palette_toggled: false,
             screen_mode: 0,
             tiled: false,
             floating: Vec::new(),
