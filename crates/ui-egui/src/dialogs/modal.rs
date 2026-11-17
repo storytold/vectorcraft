@@ -2,8 +2,9 @@
 //! window with no title bar that opens centred and moves by dragging its heading (the band from its
 //! top edge down to the heading), as a title bar would, showing the arrow until it is dragged. Where
 //! it was moved to stays, per window, for the session, and the window never leaves the screen. Rows
-//! too many for the screen's height scroll inside it ([`scrolled_rows`]), so its heading and buttons
-//! stay in view.
+//! too many for the screen's height scroll inside it ([`scrolled_rows`], [`body_rows`]), so its
+//! heading and buttons stay in view. A window without such rows that is still too tall or too wide
+//! for the screen scrolls as a whole on that axis.
 
 use egui::{Id, Rect, Vec2};
 
@@ -25,6 +26,16 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
         // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
         ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
     });
+    // Not drawn in the pass before this one: the window just opened, and what scrolls in it starts
+    // at its top, wherever it was left when the window last closed.
+    let pass = ctx.cumulative_pass_nr();
+    let last = ctx.data_mut(|m| std::mem::replace(m.get_temp_mut_or(id.with(SHOWN_KEY), u64::MAX), pass));
+    if last == u64::MAX || last.saturating_add(1) < pass {
+        ctx.data_mut(|m| {
+            m.insert_temp(id.with(TOP_ROWS_KEY), true);
+            m.insert_temp(id.with(TOP_WHOLE_KEY), true);
+        });
+    }
     let shown = egui::Window::new(title)
         .id(id)
         .order(egui::Order::Foreground)
@@ -33,9 +44,41 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
         .title_bar(false)
         .anchor(egui::Align2::CENTER_CENTER, offset(ctx, id, initial))
         .frame(egui::Frame::window(&ctx.global_style()).fill(t.panel).inner_margin(egui::Margin::same(margin)))
-        .show(ctx, add)?;
-    keep_rest(ctx, id, shown.response.rect.height());
+        .show(ctx, |ui| {
+            // A window whose contents are wider than the screen has room for, or taller without
+            // rows that scroll ([`scrolled_rows`], [`body_rows`]), scrolls as a whole on that axis,
+            // so none of it is out of reach. The contents keep their ids whether the window scrolls
+            // or not, so a field being edited keeps its text when that changes.
+            let [wide, tall] = ctx.data(|m| m.get_temp::<[bool; 2]>(id.with(WHOLE_KEY))).unwrap_or_default();
+            let scope = egui::UiBuilder::new().scope_id(id.with("modal-contents"));
+            let (r, contents) = if wide || tall {
+                let room = whole_room(ctx, margin);
+                let mut area = egui::ScrollArea::new([wide, tall]);
+                if ctx.data_mut(|m| m.remove_temp::<bool>(id.with(TOP_WHOLE_KEY))).is_some() {
+                    area = area.scroll_offset(Vec2::ZERO);
+                }
+                let out = area
+                    .id_salt("modal-whole")
+                    .max_width(room.x)
+                    .max_height(room.y)
+                    .min_scrolled_width(room.x)
+                    .min_scrolled_height(room.y)
+                    .show(ui, |ui| ui.scope_builder(scope, add).inner);
+                (out.inner, out.content_size)
+            } else {
+                let r = ui.scope_builder(scope, add).inner;
+                (r, ui.min_rect().size())
+            };
+            ctx.data_mut(|m| m.insert_temp(id.with(CONTENTS_KEY), contents));
+            r
+        })?;
+    keep_rest(ctx, id, shown.response.rect.height(), margin);
     shown.inner
+}
+
+/// The room for the contents of a modal window with `margin` inside its frame.
+fn whole_room(ctx: &egui::Context, margin: i8) -> Vec2 {
+    (ctx.content_rect().size() - Vec2::splat(2.0 * (super::EDGE_GAP + f32::from(margin)))).max(Vec2::ZERO)
 }
 
 /// The layer of the backdrop behind a modal dialog window, which takes the clicks the rest of
@@ -73,34 +116,119 @@ pub(super) fn handle(id: Id) -> Id {
     id.with("modal-drag")
 }
 
-/// Under a modal window's id: how tall its [`scrolled_rows`] were drawn this frame, and how tall
-/// the rest of it was when last drawn.
+/// Under a modal window's id: how tall its [`scrolled_rows`] (or [`body_rows`]) were drawn this
+/// frame, and how tall the rest of it was when last drawn.
 const ROWS_KEY: &str = "modal-rows";
 const REST_KEY: &str = "modal-rest";
+/// Under a modal window's id: its contents drew [`scrolled_rows`] of their own or fit themselves to
+/// the screen ([`fits_itself`]) this frame (`OWN_ROWS_KEY`), or last frame (`OWN_BEFORE_KEY`).
+const OWN_ROWS_KEY: &str = "modal-own-rows";
+const OWN_BEFORE_KEY: &str = "modal-own-before";
+/// Under a modal window's id: how tall its [`body_rows`] would be without scrolling, this frame.
+const BODY_KEY: &str = "modal-body";
+/// Under a modal window's id: how large its contents would be without scrolling as a whole, this
+/// frame.
+const CONTENTS_KEY: &str = "modal-contents";
+/// Under a modal window's id, for the next frame: its [`body_rows`] scroll (`TALL_KEY`), and on
+/// which axes ([wide, tall]) it scrolls as a whole (`WHOLE_KEY`).
+const TALL_KEY: &str = "modal-tall";
+const WHOLE_KEY: &str = "modal-whole";
+/// Under a modal window's id: the pass it was last drawn in (`SHOWN_KEY`), and, since it opened,
+/// its rows (`TOP_ROWS_KEY`) or the window as a whole (`TOP_WHOLE_KEY`) have not scrolled yet, so
+/// they start at the top when they first do.
+const SHOWN_KEY: &str = "modal-shown";
+const TOP_ROWS_KEY: &str = "modal-top-rows";
+const TOP_WHOLE_KEY: &str = "modal-top-whole";
 
 /// Rows of the modal window `ui` is in (one list of them per window) that scroll if the window
 /// would be taller than the screen. Their height is the screen's less the rest of the window as
 /// last drawn (a frame late, as only the drawn window knows its height).
 /// Rows that fit are as tall as they are.
 pub(crate) fn scrolled_rows<R>(ui: &mut egui::Ui, salt: impl egui::AsIdSalt, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    fits_itself(ui);
+    let (r, drawn, _) = rows(ui, salt, true, add);
+    ui.ctx().data_mut(|m| m.insert_temp(ui.layer_id().id.with(ROWS_KEY), drawn));
+    r
+}
+
+/// Mark the contents of the modal window `ui` is in as fitting themselves to the screen (sizing
+/// what scrolls in them from the screen's height), so neither [`body_rows`] nor the window
+/// scroll them again.
+pub(crate) fn fits_itself(ui: &egui::Ui) {
+    ui.ctx().data_mut(|m| m.insert_temp(ui.layer_id().id.with(OWN_ROWS_KEY), true));
+}
+
+/// The body of a shared dialog window. While the window would be taller than the screen has room
+/// for, the body scrolls as [`scrolled_rows`] do, so the heading and the buttons stay in view;
+/// otherwise it is drawn as it is. A body that fits itself ([`fits_itself`]) is drawn as it is.
+pub(crate) fn body_rows<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let id = ui.layer_id().id;
+    let own = ui.ctx().data(|m| m.get_temp::<bool>(id.with(OWN_BEFORE_KEY))).unwrap_or(false);
+    let tall = !own && ui.ctx().data(|m| m.get_temp::<bool>(id.with(TALL_KEY))).unwrap_or(false);
+    let (r, drawn, body) = rows(ui, "dialog-body", tall, add);
+    if !ui.ctx().data(|m| m.get_temp::<bool>(id.with(OWN_ROWS_KEY))).unwrap_or(false) {
+        ui.ctx().data_mut(|m| {
+            m.insert_temp(id.with(ROWS_KEY), drawn);
+            m.insert_temp(id.with(BODY_KEY), body);
+        });
+    }
+    r
+}
+
+/// [`scrolled_rows`] without marking the window's body as having rows of its own or keeping their
+/// height. Also returns how tall the rows were drawn and how tall they would be without scrolling.
+/// Rows that do not `scroll` are as tall as they are, with no
+/// scroll area (which would take the scroll requests of their fields from the window's). The rows
+/// keep their ids either way, so a field being edited keeps its text when they start or stop
+/// scrolling.
+fn rows<R>(ui: &mut egui::Ui, salt: impl egui::AsIdSalt, scroll: bool, add: impl FnOnce(&mut egui::Ui) -> R) -> (R, f32, f32) {
     let id = ui.layer_id().id;
     let rest = ui.ctx().data(|m| m.get_temp::<f32>(id.with(REST_KEY))).unwrap_or(0.0);
     let room = (ui.ctx().content_rect().height() - rest - 2.0 * super::EDGE_GAP).max(0.0);
+    let scope = egui::UiBuilder::new().scope_id(ui.make_persistent_id(&salt).with("modal-rows"));
+    if !scroll {
+        let rows = ui.scope_builder(scope, add);
+        let height = rows.response.rect.height();
+        return (rows.inner, height, height);
+    }
     // As tall as the room at once: by itself a scroll area grows a frame at a time with the window.
-    let rows = ui.scope(|ui| egui::ScrollArea::vertical().id_salt(salt).max_height(room).min_scrolled_height(room).show(ui, add).inner);
-    ui.ctx().data_mut(|m| m.insert_temp(id.with(ROWS_KEY), rows.response.rect.height()));
-    rows.inner
+    let mut area = egui::ScrollArea::vertical().id_salt(salt).max_height(room).min_scrolled_height(room);
+    if ui.ctx().data_mut(|m| m.remove_temp::<bool>(id.with(TOP_ROWS_KEY))).is_some() {
+        area = area.scroll_offset(Vec2::ZERO);
+    }
+    let rows = ui.scope(|ui| area.show(ui, |ui| ui.scope_builder(scope, add).inner));
+    (rows.inner.inner, rows.response.rect.height(), rows.inner.content_size.y)
 }
 
-/// After modal window `id` is drawn `height` tall: keep the height of all of it but its
-/// [`scrolled_rows`] for the next frame. If the rows were sized by a different one (the window just
-/// opened, or what is around them changed), the next frame is drawn at once, for the rows to fit
-/// without waiting for input.
-fn keep_rest(ctx: &egui::Context, id: Id, height: f32) {
-    let Some(rows) = ctx.data_mut(|m| m.remove_temp::<f32>(id.with(ROWS_KEY))) else { return };
-    let rest = (height - rows).max(0.0);
-    let used = ctx.data_mut(|m| std::mem::replace(m.get_temp_mut_or(id.with(REST_KEY), 0.0), rest));
-    if (used - rest).abs() > 0.5 {
+/// After modal window `id` (with `margin` inside its frame) is drawn `height` tall: keep the height
+/// of all of it but its [`scrolled_rows`] for the next frame. If the rows were sized by a different
+/// one (the window just opened, or what is around them changed), the next frame is drawn at once,
+/// for the rows to fit without waiting for input. From the next frame on, [`body_rows`] scroll
+/// while the window would be taller than the screen has room for without them scrolling; a window
+/// without rows that scroll scrolls as a whole while its contents would be taller than the room,
+/// and any window scrolls sideways while its contents would be wider.
+fn keep_rest(ctx: &egui::Context, id: Id, height: f32, margin: i8) {
+    let rows = ctx.data_mut(|m| m.remove_temp::<f32>(id.with(ROWS_KEY)));
+    let body = ctx.data_mut(|m| m.remove_temp::<f32>(id.with(BODY_KEY)));
+    let contents = ctx.data_mut(|m| m.remove_temp::<Vec2>(id.with(CONTENTS_KEY))).unwrap_or_default();
+    let own = ctx.data_mut(|m| m.remove_temp::<bool>(id.with(OWN_ROWS_KEY))).unwrap_or(false);
+    ctx.data_mut(|m| m.insert_temp(id.with(OWN_BEFORE_KEY), own));
+    let room = whole_room(ctx, margin);
+    let screen = ctx.content_rect().height() - 2.0 * super::EDGE_GAP;
+    let tall = match (rows, body) {
+        (Some(rows), Some(body)) if !own => height - rows + body > screen + 0.5,
+        _ => false,
+    };
+    let whole = [!own && contents.x > room.x + 0.5, !own && rows.is_none() && contents.y > room.y + 0.5];
+    let was_tall = ctx.data_mut(|m| std::mem::replace(m.get_temp_mut_or(id.with(TALL_KEY), false), tall));
+    let was_whole = ctx.data_mut(|m| std::mem::replace(m.get_temp_mut_or(id.with(WHOLE_KEY), [false; 2]), whole));
+    let mut repaint = tall != was_tall || whole != was_whole;
+    if let Some(rows) = rows {
+        let rest = (height - rows).max(0.0);
+        let used = ctx.data_mut(|m| std::mem::replace(m.get_temp_mut_or(id.with(REST_KEY), 0.0), rest));
+        repaint |= (used - rest).abs() > 0.5;
+    }
+    if repaint {
         ctx.request_repaint();
     }
 }
@@ -145,5 +273,110 @@ mod tests {
         assert_eq!(on_screen(r(700.0, -20.0, 200.0, 100.0), screen), r(600.0, 0.0, 200.0, 100.0));
         // Larger than the screen: its top left stays in view.
         assert_eq!(on_screen(r(-10.0, -10.0, 900.0, 700.0), screen), r(0.0, 0.0, 900.0, 700.0));
+    }
+
+    /// Draw `frames` frames of a 400×300 screen from `time`, the first with `events`, with a modal
+    /// window open when `open`: a heading and 60 rows, in [`scrolled_rows`] when `in_rows`. Returns
+    /// whether the first row could be seen in the last frame (inside the screen and its clip).
+    fn first_row_seen(ctx: &egui::Context, open: bool, in_rows: bool, events: Vec<egui::Event>, time: &mut f64, frames: usize) -> bool {
+        let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0));
+        let add = |ui: &mut egui::Ui| {
+            for i in 0..60 {
+                ui.label(format!("Row {i}"));
+            }
+        };
+        let mut events = Some(events);
+        let mut seen = false;
+        for _ in 0..frames {
+            *time += 1.0 / 60.0;
+            let input =
+                egui::RawInput { screen_rect: Some(screen), events: events.take().unwrap_or_default(), time: Some(*time), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| {
+                if open {
+                    show(ui.ctx(), "Test", Id::unique("modal-reopen-test"), 0.0, 8, |ui| {
+                        heading(ui, "Top");
+                        if in_rows {
+                            scrolled_rows(ui, "rows", add);
+                        } else {
+                            add(ui);
+                        }
+                    });
+                }
+            });
+            out.textures_delta.clear();
+            seen = out.shapes.iter().any(|c| match &c.shape {
+                egui::Shape::Text(t) => {
+                    let r = t.visual_bounding_rect();
+                    t.galley.text() == "Row 0" && screen.contains_rect(r) && c.clip_rect.contains_rect(r)
+                }
+                _ => false,
+            });
+        }
+        seen
+    }
+
+    #[test]
+    fn a_window_that_scrolled_opens_again_at_its_top() {
+        for in_rows in [false, true] {
+            let ctx = egui::Context::default();
+            crate::theme::apply(&ctx, Default::default());
+            let mut time = 0.0;
+            assert!(first_row_seen(&ctx, true, in_rows, vec![], &mut time, 4), "rows {in_rows}: the window opens at its top");
+            let wheel = egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -3000.0),
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                modifiers: egui::Modifiers::NONE,
+            };
+            let events = vec![egui::Event::PointerMoved(egui::pos2(200.0, 200.0)), wheel];
+            assert!(!first_row_seen(&ctx, true, in_rows, events, &mut time, 60), "rows {in_rows}: the wheel scrolls the first row away");
+            first_row_seen(&ctx, false, in_rows, vec![], &mut time, 2);
+            assert!(first_row_seen(&ctx, true, in_rows, vec![], &mut time, 4), "rows {in_rows}: opened again, the window starts at its top");
+        }
+    }
+
+    #[test]
+    fn a_field_keeps_its_id_when_the_window_starts_or_stops_scrolling() {
+        // A field's typed text and focus are kept under its id, so the id must not change when the
+        // screen's height changes whether the body or the window scrolls.
+        for in_body in [false, true] {
+            let ctx = egui::Context::default();
+            crate::theme::apply(&ctx, Default::default());
+            let window = Id::unique("modal-field-id-test");
+            let mut time = 0.0;
+            let mut field_at = |height: f32| {
+                let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, height));
+                let mut field = None;
+                for _ in 0..4 {
+                    time += 1.0 / 60.0;
+                    let input = egui::RawInput { screen_rect: Some(screen), time: Some(time), ..Default::default() };
+                    let mut out = ctx.run_ui(input, |ui| {
+                        show(ui.ctx(), "Test", window, 0.0, 8, |ui| {
+                            heading(ui, "Top");
+                            let add = |ui: &mut egui::Ui| {
+                                let r = ui.text_edit_singleline(&mut String::from("12"));
+                                for i in 0..30 {
+                                    ui.label(format!("Row {i}"));
+                                }
+                                r.id
+                            };
+                            field = Some(if in_body { body_rows(ui, add) } else { add(ui) });
+                        });
+                    });
+                    out.textures_delta.clear();
+                }
+                let key = if in_body { window.with(TALL_KEY) } else { window.with(WHOLE_KEY) };
+                let scrolls = ctx.data(|m| m.get_temp::<bool>(key).unwrap_or(false) || m.get_temp::<[bool; 2]>(key).is_some_and(|a| a[1]));
+                (field, scrolls)
+            };
+            let (tall_id, tall_scrolls) = field_at(900.0);
+            let (short_id, short_scrolls) = field_at(300.0);
+            let (again_id, again_scrolls) = field_at(900.0);
+            assert!(!tall_scrolls && short_scrolls && !again_scrolls, "body {in_body}: only the short screen scrolls");
+            assert!(tall_id.is_some(), "body {in_body}: the field is drawn");
+            assert_eq!(tall_id, short_id, "body {in_body}: the field keeps its id when the window starts scrolling");
+            assert_eq!(short_id, again_id, "body {in_body}: the field keeps its id when the window stops scrolling");
+        }
     }
 }
