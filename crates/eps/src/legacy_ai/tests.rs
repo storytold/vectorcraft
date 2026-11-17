@@ -1413,6 +1413,153 @@ fn names_outside_windows_1252_are_replaced_and_kept_apart() {
     assert_eq!(inks(&read), want);
 }
 
+/// `doc` written with [`Numbered::take`](super::writer::Numbered::take) numbering names by its
+/// counters (`scanned` false) or by searching the names given for each number it tries.
+fn export_numbering(doc: &Document, scanned: bool) -> LegacyAiOutput {
+    let o = LegacyAiOptions { created: Some(0), ..LegacyAiOptions::default() };
+    super::writer::SCANNED_NAMES.with(|s| s.set(scanned));
+    let out = export_legacy_ai(doc, &o);
+    super::writer::SCANNED_NAMES.with(|s| s.set(false));
+    out.unwrap()
+}
+
+/// A linear gradient from `color` to white, named `swatch`.
+fn gradient_from(color: Color, swatch: Option<&str>) -> Paint {
+    let g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, color), GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))]);
+    let mut paint = GradientPaint::new(g);
+    paint.swatch = swatch.map(String::from);
+    Paint::Gradient(Box::new(paint))
+}
+
+/// A name the counters give is the first free `name 2`, `name 3`… for every order of names, those
+/// already numbered (`Sky 2`, `Gradient 2 2`) and the empty name included.
+#[test]
+fn numbered_names_are_the_first_free_number() {
+    let bases = ["Gradient", "Gradient 2", "Gradient 3", "Gradient 2 2", "Sky", "Sky 2", "Sky 4", "?", "? 2", ""];
+    let mut seed = 7u32;
+    let order: Vec<&str> = (0..3000)
+        .map(|_| {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            bases[(seed >> 16) as usize % bases.len()]
+        })
+        .collect();
+    let names = |scanned: bool| {
+        super::writer::SCANNED_NAMES.with(|s| s.set(scanned));
+        let mut numbered = super::writer::Numbered::default();
+        let names: Vec<String> = order.iter().map(|b| numbered.take((*b).to_string())).collect();
+        super::writer::SCANNED_NAMES.with(|s| s.set(false));
+        names
+    };
+    let (counted, scanned) = (names(false), names(true));
+    for (i, (c, s)) in counted.iter().zip(&scanned).enumerate() {
+        assert_eq!(c, s, "name {i}, {:?}", order[i]);
+    }
+    let given: std::collections::HashSet<&String> = counted.iter().collect();
+    assert_eq!(given.len(), counted.len(), "every name is given once");
+}
+
+/// Gradient definitions and spot colors whose names collide are numbered as the file has always
+/// numbered them: a gradient's swatch name or `Gradient`, then the first free number, with equal
+/// gradients sharing a definition. The whole file is the same either way.
+#[test]
+fn colliding_gradient_and_spot_names_are_numbered_as_before() {
+    let mut doc = spots_and_gradient(&["\u{8d64}", "?", "\u{9752}", "? 2"], "Gradient 3");
+    let layer = doc.layers[0].id;
+    let swatches = [None, None, Some("Gradient"), None, Some("\u{6e10}"), Some("?"), None, Some("Gradient 2"), Some("")];
+    for (i, swatch) in swatches.into_iter().enumerate() {
+        let c = i as f32 / 10.0;
+        for repeat in 0..2 {
+            let x = 10.0 + 15.0 * i as f64;
+            let r = Rect::new(x, 60.0 + 15.0 * f64::from(repeat), x + 10.0, 70.0 + 15.0 * f64::from(repeat));
+            let n = shape(&mut doc, shapes::rectangle(r), gradient_from(Color::cmyk(c, 1.0 - c, 0.5, 0.0), swatch), Paint::None);
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+    }
+    let out = export_numbering(&doc, false);
+    let before = export_numbering(&doc, true);
+    let text = String::from_utf8(out.bytes).unwrap();
+    assert_eq!(text, String::from_utf8(before.bytes).unwrap());
+    assert_eq!(out.warnings, before.warnings);
+    let defined: Vec<&str> = text.lines().filter_map(|l| l.strip_suffix(" 0 2 Bd")).collect();
+    let want = [
+        "(Gradient 3)",
+        "(Gradient)",
+        "(Gradient 2)",
+        "(Gradient 4)",
+        "(Gradient 5)",
+        "(?)",
+        "(? 2)",
+        "(Gradient 6)",
+        "(Gradient 2 2)",
+        "(Gradient 7)",
+    ];
+    assert_eq!(defined, want);
+    for name in want {
+        assert_eq!(text.matches(&format!("1 {name} ")).count(), if name == "(Gradient 3)" { 1 } else { 2 }, "{name}");
+    }
+    assert!(text.contains("%%DocumentCustomColors: (?)\n%%+ (? 2)\n%%+ (? 3)\n%%+ (? 2 2)\n"), "{text}");
+}
+
+/// The time this thread has run, and how it was measured.
+fn thread_time() -> (std::time::Duration, &'static str) {
+    if let Some(ns) = std::fs::read_to_string("/proc/thread-self/schedstat").ok().and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok()) {
+        return (std::time::Duration::from_nanos(ns), "thread CPU time");
+    }
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    (START.get_or_init(std::time::Instant::now).elapsed(), "wall-clock time")
+}
+
+/// The time to write 1,500 objects that each have a gradient of their own and no swatch name,
+/// with a few named ones that collide, numbering names by counters and by searching the names
+/// given: the median of 7 runs of each, alternating, with the files compared. Run with
+/// `cargo test --release -p vectorcraft-eps --lib -- --ignored --nocapture many_unnamed_gradients`.
+#[test]
+#[ignore = "timing"]
+fn many_unnamed_gradients_are_named_quickly() {
+    let mut doc = Document::new(1000.0, 1000.0);
+    let layer = doc.layers[0].id;
+    let count = 1500u16;
+    for i in 0..count + 4 {
+        let swatch = match i {
+            0 => Some("Gradient 3"),
+            1 => Some("Gradient"),
+            2 | 3 => Some("Sky"),
+            _ => None,
+        };
+        let t = f32::from(i) / f32::from(count + 4);
+        let (x, y) = (f64::from(i % 40) * 25.0, f64::from(i / 40) * 25.0);
+        let paint = gradient_from(Color::rgb(t, 1.0 - t, (t * 7.0).fract()), swatch);
+        let n = shape(&mut doc, shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)), paint, Paint::None);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let mut times = [vec![], vec![]];
+    let mut files: [Option<Vec<u8>>; 2] = [None, None];
+    let mut how = "";
+    for _ in 0..7 {
+        for (k, scanned) in [false, true].into_iter().enumerate() {
+            let (start, h) = thread_time();
+            let out = export_numbering(&doc, scanned);
+            times[k].push(thread_time().0.saturating_sub(start));
+            how = h;
+            let defs = String::from_utf8_lossy(&out.bytes).lines().filter(|l| l.ends_with(" Bd")).count();
+            assert_eq!(defs, usize::from(count) + 4);
+            files[k].get_or_insert(out.bytes);
+        }
+    }
+    assert_eq!(files[0], files[1]);
+    for t in &mut times {
+        t.sort();
+    }
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    println!("{} gradient definitions, median of 7 runs ({how}):", count + 4);
+    println!("| naming | median (ms) | runs (ms) |");
+    println!("|---|---:|---|");
+    for (k, label) in ["counters", "search of the names given"].into_iter().enumerate() {
+        let runs: Vec<String> = times[k].iter().map(|d| format!("{:.1}", ms(*d))).collect();
+        println!("| {label} | {:.1} | {} |", ms(times[k][3]), runs.join(", "));
+    }
+}
+
 /// #6502: the legacy writer gives Yellow, Magenta and Cyan (presets 4, 5 and 6) the file's
 /// indexes 6, 4 and 5, and they open as the same presets.
 #[test]

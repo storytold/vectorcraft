@@ -608,6 +608,7 @@ font-technology	Variable	Variables
 	Consolidate All Windows	Regrouper toutes les fenêtres
 	Constrain Angle	Contraindre l’angle
 	Constrain Width and Height Proportions	Conserver les proportions de largeur et de hauteur
+	Copy Width to Height	Copier la largeur dans la hauteur
 	Construction Guides	Repères de construction
 	Contextual Alternates	Variantes contextuelles
 	Contextual Task Bar	Barre des tâches contextuelle
@@ -693,6 +694,9 @@ font-technology	Variable	Variables
 	Create from Selection	Créer à partir de la sélection
 	Create From:	Créer à partir de :
 	Create Gradient Mesh…	Créer un filet de dégradé…
+	Flat	Plat
+	To Center	Vers le centre
+	To Edge	Vers le bord
 	Create Graph	Créer un graphe
 	Create New Layer	Créer un calque
 	Create New Sublayer	Créer un sous-calque
@@ -1345,6 +1349,10 @@ font-technology	Variable	Variables
 	Font List	Liste des polices
 	Show Similar Fonts	Afficher les polices similaires
 	Clear Similar Fonts	Effacer les polices similaires
+	Fonts used in this document	Polices utilisées dans ce document
+	This document uses no available fonts	Ce document n’utilise aucune police disponible
+	Recently Added	Ajoutées récemment
+	Fonts added in the last 30 days	Polices ajoutées au cours des 30 derniers jours
 	Font Preview Size	Taille de l’aperçu des polices
 	Font Size	Taille de police
 	Variable Font	Police variable
@@ -2023,7 +2031,8 @@ font-technology	Variable	Variables
 	Lock Others	Verrouiller les autres
 	Lock Slices	Verrouiller les tranches
 	Lock Station Point	Verrouiller le point d’observation
-	Lossless (lossy WebP isn't available yet)	Sans perte (le WebP avec perte n’est pas encore disponible)
+	Lossless	Sans perte
+	Lossy	Avec perte
 	Lossy:	Avec perte :
 	Low	Faible
 	lowercase	minuscules
@@ -2528,8 +2537,8 @@ font-technology	Variable	Variables
 	Outline Text	Vectoriser le texte
 	Outlines and Rules	Contours et filets
 	Output	Sortie
-	Output All Blacks Accurately	Rendre tous les noirs avec précision
-	Output All Blacks as Rich Black	Rendre tous les noirs en noir intense
+	Output All Blacks Accurately	Reproduire tous les noirs avec précision
+	Output All Blacks as Rich Black	Reproduire tous les noirs en noir intense
 	Output Black	Noir de sortie
 	Output condition:	Condition de sortie :
 	Output Intent	Mode de sortie
@@ -3048,6 +3057,38 @@ digits	Malayalam	Malayalam
 	Responsive	Adaptatif
 	Restore	Restaurer
 	Restore every preference to its default (applied on OK)	Rétablir toutes les préférences à leur valeur par défaut (appliqué avec OK)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Affiche sur la zone de travail une barre de commandes pour la sélection ou l’outil. Elle se masque pendant un glissement et en mode Présentation.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Distance dont une touche fléchée déplace la sélection. Avec Maj, elle la déplace dix fois plus loin.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Angle des axes le long desquels les touches fléchées déplacent et auxquels Maj contraint le dessin et le déplacement.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Rayon d’angle avec lequel l’outil Rectangle arrondi dessine. Modifier le rayon pendant le dessin modifie aussi cette valeur.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Distance vers la droite et vers le bas dont Coller décale la copie quand aucune position n’est donnée, comme depuis un script. Coller dans l’application la centre dans la vue.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Empêche l’outil Plume de supprimer le point d’ancrage cliqué sur un tracé sélectionné, ou d’en ajouter un là où vous cliquez sur son segment.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Les outils de dessin affichent un pointeur en croix au lieu de leur icône. Le Verrouillage majuscules fait de même tant qu’il est activé.
+	Shows a tip when the pointer rests on a button or field that has one.	Affiche une info-bulle quand le pointeur s’arrête sur un bouton ou un champ qui en a une.
+	Shows a warning before a script you choose runs.	Affiche un avertissement avant l’exécution d’un script que vous choisissez.
+	Smooths the edges of artwork on the canvas.	Lisse les bords des illustrations sur la zone de travail.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Sélection › Identique › Couleur de fond, Couleur du contour et Fond et contour ne retiennent que la même teinte d’une nuance globale ou d’une couleur d’accompagnement, et non toutes ses teintes.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Affiche l’écran d’accueil quand aucun document n’est ouvert. Désactivée, la fenêtre reste vide jusqu’à ce que vous cliquiez sur Accueil.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mesure les objets avec leurs contours et leurs effets qui modifient la forme pour la taille, la position et l’alignement. Les ombres, lueurs et flous ne sont pas mesurés.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	À 100 % de zoom, un pouce du document occupe 96 points d’écran au lieu de 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Un double-clic sur un groupe, un tracé ou une image avec l’outil Sélection l’ouvre en mode Isolation.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Les fonds et contours de motif se transforment avec l’illustration, sauf si une transformation ou le menu du panneau Transformation en décide autrement.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Les rayons d’angle dynamiques se mettent à l’échelle avec l’illustration, sauf si la mise à l’échelle en décide autrement.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Les épaisseurs de contour, les tirets et les distances des effets se mettent à l’échelle avec l’illustration, sauf si la mise à l’échelle en décide autrement.
+	The mouse wheel zooms the canvas instead of scrolling it.	La molette de la souris zoome sur la zone de travail au lieu de la faire défiler.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La molette de la souris avec Cmd/Ctrl enfoncée fait défiler la zone de travail latéralement.
+	Dragging sideways on a numeric field's label changes the field's value.	Faire glisser latéralement le libellé d’un champ numérique modifie la valeur du champ.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un geste de rotation à deux doigts sur un pavé tactile fait pivoter la vue de la zone de travail.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Maintenir le raccourci d’un outil choisit cet outil jusqu’à ce que vous le relâchiez, puis l’outil précédent est de nouveau choisi.
+	Shows the bounding box while you move the selection or draw a shape.	Affiche le cadre de sélection pendant que vous déplacez la sélection ou dessinez une forme.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Créer des traits de coupe dessine des traits de style japonais au lieu de traits romains.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Une nouvelle illustration ne reprend que le fond et le contour de la sélection. Désactivée, elle reprend tout l’aspect de l’objet sélectionné.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Modifier la largeur ou la hauteur dans le panneau Transformation, le panneau Propriétés ou le panneau Contrôle modifie l’autre proportionnellement.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Les propriétés d’un rectangle dynamique affichent un seul champ Rayon de l’angle pour les quatre angles. Désactivée, chaque angle a son propre champ.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Les modifications du panneau Transformation transforment l’objet, ses carreaux de motif ou les deux, et Par défaut suit Transformer les carreaux de motif.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Quand une occurrence de symbole est sélectionnée, le panneau Transformation utilise le point d’alignement du symbole comme point de référence.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Assombrit la zone de travail hors des plans de travail tant que l’outil Plan de travail est actif.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Avec Assombrir la zone hors du plan de travail activé, la zone hors des plans de travail reste sombre pendant que vous faites glisser avec l’outil Plan de travail.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	L’unité des nouveaux documents de tailles prédéfinies, sauf les tailles en pixels, et des fichiers ouverts qui n’enregistrent aucune unité, et si vous la choisissez ici puis cliquez sur OK, elle devient aussi l’unité du document actif.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Les épaisseurs de contour, les tirets et les espaces s’affichent dans cette unité, et les nombres saisis pour eux sont lus dans cette unité.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Les tailles de texte, l’interlignage et le décalage de la ligne de base s’affichent dans cette unité, et les nombres saisis pour eux sont lus dans cette unité.
@@ -3260,7 +3301,7 @@ digits	Malayalam	Malayalam
 	Screen	Superposition
 	Screen (72 ppi)	Écran (72 ppp)
 	Screen Mode	Mode d’affichage
-	Screens	Écrans
+	Screens	Trames
 	Scribble…	Gribouillage…
 	Script / Brush	Manuscrite / Pinceau
 	Scripts	Scripts
@@ -3281,11 +3322,12 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects	Chercher commandes, outils, panneaux et effets
 	Search commands, tools, panels and effects…	Chercher commandes, outils, panneaux et effets…
 	No commands match	Aucune commande ne correspond
-	{pos} of {total}: {name}	{pos} sur {total} : {name}
+	{pos} of {total}: {name}	{pos} sur {total} : {name}
 @plural	{n} result|{n} results	{n} résultat|{n} résultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} sur {n} résultat. Continuez à taper pour les affiner.|{shown} sur {n} résultats. Continuez à taper pour les affiner.
 	Recent Commands	Commandes récentes
 	No recent commands	Aucune commande récente
+	Search commands	Chercher des commandes
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire
 	Section Symbol	Symbole de section
@@ -4879,6 +4921,9 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no active document	aucun document actif
 @msg	no active perspective plane	aucun plan de perspective actif
 @msg	no anchor points selected	aucun point d’ancrage sélectionné
+@msg	`points` must be three [x, y] pairs of numbers	`points` doit contenir trois paires de nombres [x, y]
+@msg	direct-select three anchor points, or give `points`	sélectionnez trois points d’ancrage avec l’outil Sélection directe, ou indiquez `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	aucun cercle ne passe par ces points : deux sont identiques ou les trois sont alignés
 @msg	no app to open files here	aucune application pour ouvrir des fichiers ici
 @msg	no artboard	aucun plan de travail
 @msg	no artboard {i} (0-based; the document has {_1})	aucun plan de travail {i} (numérotation à partir de 0 ; le document en a {_1})
@@ -5575,7 +5620,7 @@ effect	Soft	Doux
 	On Both Sides	Des deux côtés
 	Short	Courte
 	Full Width	Toute la largeur
-	Distort	Déformation
+	Distort	Distorsion
 	Diffuse Glow…	Lueur diffuse…
 	Glass…	Verre…
 	Ocean Ripple…	Océan…
@@ -5792,6 +5837,24 @@ lighting	Light	Lumière
 @msg	Revolve requires a shape with at least two anchors	Révolution nécessite une forme comportant au moins deux points d’ancrage
 @msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} sur un groupe nécessite des tracés, tracés transparents, textes, groupes, groupes de découpe, dégradés de formes et occurrences de symbole : libérez ou développez d’abord ces éléments : {what}.
 @msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} sur un groupe accepte au plus {MAX_MEMBERS} objets
+@msg	the <filter> element needs an id, the filter's name	l’élément <filter> doit avoir un id, le nom du filtre
+@msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG compte au plus {MAX_NAME} caractères
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> n’est pas un élément de filtre SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtre SVG n’a pas d’attributs d’événement tels que {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	les images d’un filtre SVG sont des URL data: PNG, JPEG, GIF ou WebP
+@msg	the SVG filter isn't valid XML: {e}	le filtre SVG n’est pas du XML valide : {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence vaut au plus {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} vaut au plus {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation d’un flou
+@msg	the SVG filter has no primitives	le filtre SVG n’a aucune primitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtre SVG a au plus {MAX_PRIMITIVES} primitives
+@msg	the SVG filter is too large once its attributes are written out	le filtre SVG est trop volumineux une fois ses attributs écrits
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	les images d’un filtre SVG comptent au plus {MAX_IMAGE_PIXELS} pixels au total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	le filtre SVG ne peut pas être dessiné : vérifiez ses primitives et leurs entrées
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	les éléments d’un filtre SVG s’imbriquent sur au plus {MAX_DEPTH} niveaux
+@msg	an SVG filter is at most {_1} KB	un filtre SVG fait au plus {_1} Ko
 @msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Un effet 3D sur un groupe ou un calque s’applique au groupe lui-même, pas à son fond ni à son contour
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien à exporter
@@ -7111,6 +7174,7 @@ anchor	Points:	Points :
 	Open a document to check it for issues.	Ouvrez un document pour y rechercher des problèmes.
 	Empty Text	Texte vide
 	Unpainted Objects	Objets sans fond ni contour
+	Empty Text Paths	Tracés de texte vides
 	Zero-Opacity Objects	Objets à opacité nulle
 	Duplicate Objects	Objets en double
 	Off-Artboard Art	Illustration hors des plans de travail
@@ -9656,6 +9720,7 @@ breakText	Glyphs	Glyphes
 @msg	Too many Revolve faces for visibility evaluation	Trop de faces de révolution pour évaluer la visibilité
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lit au plus {ASE_MAX_ENTRIES} couleurs et groupes d’un fichier d’échange de nuances, et cette bibliothèque en contient {entries}
 @msg	WebP encoding failed: {e}	Échec de l’encodage WebP : {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Échec de l’encodage WebP : l’image est trop grande pour le WebP avec perte : réduisez la résolution ou choisissez Sans perte
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}` : {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` vaut smallThumb, mediumThumb, largeThumb, smallList ou largeList

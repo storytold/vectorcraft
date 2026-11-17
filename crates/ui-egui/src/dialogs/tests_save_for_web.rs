@@ -289,6 +289,76 @@ fn save_remembers_and_writes_and_done_only_remembers() {
     assert!(!dir.join("Untitled-1.png").exists());
 }
 
+/// `ui.dialogReset` puts the remembered settings back (the defaults when none are remembered) on
+/// the document's active artboard, drops a pending preset, the preset name being typed and the
+/// selected color, keeps the view, zoom, speed and path, writes and remembers nothing, and leaves
+/// the dialog open; settings changed after it are remembered as usual.
+#[test]
+fn reset_puts_the_remembered_settings_back() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset");
+    let (mut app, _) = app(&dir, false);
+    let defaults = vectorcraft_engine::cmd::webexport::WebSettings::default().to_json();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [
+        ("format", json!("jpg")),
+        ("quality", json!(20)),
+        ("colorTable", json!({"locked": ["nope"]})),
+        ("preset", json!("PNG-24")),
+        ("__presetName", json!("Mine")),
+        ("__color", json!("#cc3300")),
+        ("__zoom", json!("200")),
+        ("__kbps", json!(1024)),
+        ("path", json!("elsewhere.png")),
+    ] {
+        set(&mut app, k, v);
+    }
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    for (k, v) in defaults.as_object().unwrap() {
+        let want = if k == "artboard" { &json!(0) } else { v };
+        assert_eq!(d.fields.get(k), Some(want), "{k}");
+    }
+    for k in ["preset", "__presetName", "__color"] {
+        assert!(!d.fields.contains_key(k), "{k}");
+    }
+    assert_eq!((d.str("__zoom"), d.f64("__kbps", 0.0), d.str("path")), ("200".into(), 1024.0, "elsewhere.png".into()));
+    assert_eq!(app.session.last_web_settings().to_json(), defaults, "Reset remembers nothing");
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "Reset writes nothing");
+    set(&mut app, "quality", json!(55));
+    set(&mut app, "discard", json!(true));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.last_web_settings().quality, 55);
+
+    // Remembered on another document's second artboard: Reset keeps this document's active one.
+    let mut app = two_artboards(&vectorcraft_testkit::temp_dir("sfw-reset-artboard"));
+    app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+    app.run("webExport.settings", json!({"artboard": 1, "quality": 40})).unwrap();
+    app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "quality", json!(90));
+    set(&mut app, "artboard", json!(3));
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.fields["artboard"].clone(), d.f64("quality", 0.0)), (json!(0), 40.0));
+}
+
+/// A Done that failed on a bad setting leaves `discard` in the dialog; Reset drops it, so Save…
+/// after Reset writes the file instead of only remembering the settings.
+#[test]
+fn reset_drops_a_done_that_failed() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset-done");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "colorTable", json!({"locked": ["nope"]}));
+    set(&mut app, "discard", json!(true));
+    assert!(confirm(&mut app).is_err());
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("discard"));
+    let r = confirm(&mut app).unwrap();
+    let path = r["path"].as_str().expect("Save… writes a file");
+    assert!(std::path::Path::new(path).exists(), "{path}");
+}
+
 #[test]
 fn html_output_with_slices_saves_the_page_and_images() {
     let dir = vectorcraft_testkit::temp_dir("sfw-html");

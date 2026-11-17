@@ -9354,8 +9354,10 @@ fn a_blend_comes_in_as_a_live_blend() {
 }
 
 /// A blend whose spine was never edited has no spine written, only its keys: its spine is the
-/// straight line between the keys' centres, in the record's order (here the left key, named `B`,
-/// first), and the blend comes in live.
+/// straight line between the keys' centers, in the record's order, and the blend comes in live.
+/// With the record naming the keys in their order (here the left key, named `B`, first) the blend
+/// has no spine of its own, which runs the same way; in the other order its spine is that line,
+/// from the right key to the left one.
 #[test]
 fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let spine_part = format!("%_N\n{}", blend_part("S", None));
@@ -9365,12 +9367,20 @@ fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
     assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
     assert_eq!(spec.spacing, vectorcraft_doc::live::BlendSpacing::Steps(3));
-    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
-    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!((&spec.spine, &spec.key_anchors), (&None, &vec![]), "a blend with no spine of its own");
+    let (spine, _) = vectorcraft_doc::blend::blend_spine(children, spec).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
     assert_eq!(points.len(), 2, "{points:?}");
     assert!((points[0].0 - 10.0).abs() < 0.01 && (points[1].0 - 110.0).abs() < 0.01, "from the left key to the right one: {points:?}");
-    assert_eq!(spec.key_anchors, vec![0, 1]);
     assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5);
+
+    let body = blend_file("", [Some("B"), Some("A")], &blend_record(&['A', 'B']));
+    let (blend, warnings) = read_blend(&body.replace(&spine_part, ""));
+    let NodeKind::Blend { spec, .. } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
+    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert!((points[0].0 - 110.0).abs() < 0.01 && (points[1].0 - 10.0).abs() < 0.01, "from the right key to the left one: {points:?}");
+    assert_eq!(spec.key_anchors, vec![1, 0]);
 }
 
 /// The tags after a blend's drawn steps are the live blend's.
