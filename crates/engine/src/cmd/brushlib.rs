@@ -179,6 +179,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
     BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
+    BuiltinBrushLibrary { id: "artistic", name: "Artistic", make: artistic },
 ];
 
 /// Built-in library `id`, made once.
@@ -230,6 +231,42 @@ fn ring(c: Point, outer: f64, inner: f64) -> Node {
 
 fn art(name: &str, art: Node, colorization: Colorization) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, colorization, ..Default::default() }) }
+}
+
+/// Artistic: four original vector compositions that stretch along a path and take its color.
+fn artistic() -> BrushLibrary {
+    let orbit = group(vec![
+        black(band(100.0, 1.4, 64, |x| 3.0 * (x * std::f64::consts::TAU / 40.0).sin())),
+        black(band(100.0, 1.4, 64, |x| -3.0 * (x * std::f64::consts::TAU / 40.0).sin())),
+    ]);
+    let mut petals = vec![black(band(100.0, 0.8, 4, |_| 0.0))];
+    for i in 0..6 {
+        let x = 9.0 + 16.0 * i as f64;
+        let side = if i % 2 == 0 { 1.0 } else { -1.0 };
+        petals.push(black(polygon(&[(x - 6.0, 0.0), (x - 2.0, 5.0 * side), (x + 5.0, 7.0 * side), (x + 2.0, 2.0 * side)])));
+    }
+    let mut lattice = vec![black(band(100.0, 0.9, 4, |_| 0.0))];
+    for i in 0..5 {
+        let x = 20.0 * i as f64;
+        lattice.push(black(polygon(&[(x, -4.0), (x + 1.0, -4.0), (x + 20.0, 4.0), (x + 19.0, 4.0)])));
+        lattice.push(black(polygon(&[(x, 4.0), (x + 1.0, 4.0), (x + 20.0, -4.0), (x + 19.0, -4.0)])));
+    }
+    let mut facets = Vec::new();
+    for i in 0..8 {
+        let x = 12.5 * i as f64;
+        let high = if i % 2 == 0 { 6.0 } else { 3.5 };
+        facets.push(black(polygon(&[(x, -high), (x + 11.0, -high / 2.0), (x + 12.5, 0.0), (x + 11.0, high / 2.0), (x, high)])));
+    }
+    built(
+        "Artistic",
+        Document::new(100.0, 100.0),
+        vec![
+            art("Orbit Lines", orbit, Colorization::Tints),
+            art("Petal Garland", group(petals), Colorization::Tints),
+            art("Lattice Braid", group(lattice), Colorization::Tints),
+            art("Facet Sweep", group(facets), Colorization::Tints),
+        ],
+    )
 }
 
 /// Art Ribbons: art brushes, 100 pt long, drawn here; Striped Ribbon is filled with the library's

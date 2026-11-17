@@ -9601,3 +9601,7 @@ digits	Hindi	Hindi
 @msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, gångjärn: {hinges}, fel: {errors}, varningar: {warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
+	Orbit Lines	Banlinjer
+	Petal Garland	Kronbladsgirlang
+	Lattice Braid	Gallerfläta
+	Facet Sweep	Fasetterat drag
