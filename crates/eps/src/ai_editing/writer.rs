@@ -50,7 +50,7 @@ pub(super) use paints::{
 #[cfg(test)]
 pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
 #[cfg(test)]
-pub(super) use texts::TYPE_ATTRIBUTES;
+pub(super) use texts::{FONT_RESOLVES, RESOLVE_EACH_RUN, TYPE_ATTRIBUTES};
 #[cfg(test)]
 pub(super) use variables::{ACTIVE, BINDINGS, LIMITS, VALUES};
 
@@ -1604,7 +1604,7 @@ impl<'a> Writer<'a> {
             let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id), &self.wraps_held);
             placed.map(|p| (p, self.texts.take_lost()))
         } else {
-            self.texts.add(t, self.canvas).map(|story| ((story, 0), texts::loses(t)))
+            self.texts.add(t, self.canvas).map(|story| ((story, 0), self.texts.loses(t)))
         };
         let Some(((story, frame), lost)) = placed else {
             // The text document can't hold it: the outlines count their own objects.
