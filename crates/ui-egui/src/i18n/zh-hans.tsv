@@ -1303,6 +1303,10 @@ file-filter	Templates	模板
 	Font List	字体列表
 	Show Similar Fonts	显示相似字体
 	Clear Similar Fonts	清除相似字体
+	Fonts used in this document	此文档中使用的字体
+	This document uses no available fonts	此文档未使用任何可用字体
+	Recently Added	最近添加
+	Fonts added in the last 30 days	最近 30 天内添加的字体
 	Font Preview Size	字体预览大小
 	Font Size	字号
 	Variable Font	可变字体
@@ -4442,6 +4446,9 @@ imageTrace	Outline	轮廓
 @msg	image would be too large; lower the resolution	图像将过大；请降低分辨率
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
+@msg	`points` must be three [x, y] pairs of numbers	`points` 必须是三对数字 [x, y]
+@msg	direct-select three anchor points, or give `points`	请直接选择三个锚点，或提供 `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
@@ -6972,6 +6979,7 @@ anchor	Points:	点：
 	Open a document to check it for issues.	打开文档以检查其中的问题。
 	Empty Text	空文本
 	Unpainted Objects	无上色对象
+	Empty Text Paths	空文本路径
 	Zero-Opacity Objects	不透明度为零的对象
 	Duplicate Objects	重复对象
 	Off-Artboard Art	画板外的图稿

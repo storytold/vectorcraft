@@ -1591,6 +1591,10 @@ file-filter	Templates	Mẫu
 	Font List	Danh sách phông
 	Show Similar Fonts	Hiển thị phông tương tự
 	Clear Similar Fonts	Xóa phông tương tự
+	Fonts used in this document	Phông được dùng trong tài liệu này
+	This document uses no available fonts	Tài liệu này không dùng phông nào có sẵn
+	Recently Added	Mới thêm gần đây
+	Fonts added in the last 30 days	Phông được thêm trong 30 ngày qua
 	Font Preview Size	Cỡ xem trước phông
 	Font Size	Cỡ chữ
 	Variable Font	Phông chữ biến thiên
@@ -5266,6 +5270,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no active document	không có tài liệu đang hoạt động
 @msg	no active perspective plane	không có mặt phẳng phối cảnh đang hoạt động
 @msg	no anchor points selected	chưa chọn điểm neo
+@msg	`points` must be three [x, y] pairs of numbers	`points` phải là ba cặp số [x, y]
+@msg	direct-select three anchor points, or give `points`	hãy chọn trực tiếp ba điểm neo hoặc cung cấp `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
 @msg	no artboard {i} (0-based; the document has {_1})	không có bảng vẽ {i} (bắt đầu từ 0; tài liệu có {_1})
@@ -6770,6 +6777,7 @@ anchor	Points:	Điểm:
 	Open a document to check it for issues.	Mở một tài liệu để kiểm tra vấn đề.
 	Empty Text	Văn bản trống
 	Unpainted Objects	Đối tượng không tô màu
+	Empty Text Paths	Đường dẫn văn bản trống
 	Zero-Opacity Objects	Đối tượng có độ mờ đục bằng 0
 	Duplicate Objects	Đối tượng trùng lặp
 	Off-Artboard Art	Hình vẽ ngoài bảng vẽ

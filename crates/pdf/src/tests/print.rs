@@ -106,6 +106,28 @@ fn defaults_and_json() {
 }
 
 #[test]
+fn the_scale_link_is_on_for_new_settings_and_off_for_a_saved_scale_without_it() {
+    let s = PrintSettings::default();
+    assert!(s.scale.linked, "new settings keep W and H equal");
+    assert_eq!(serde_json::to_value(&s).unwrap()["scale"], json!({"width": 100.0, "height": 100.0, "linked": true}));
+    // Settings without a scale are new settings; a scale saved before the link reads as unlinked,
+    // so its width and height print as they did.
+    assert!(settings(json!({"copies": 2})).scale.linked);
+    let old = settings(json!({"scaling": "custom", "scale": {"width": 50, "height": 200}}));
+    assert_eq!((old.scale.width, old.scale.height, old.scale.linked), (50.0, 200.0, false));
+    assert!(old.check().is_ok());
+    // Linked, the two must be equal; the range still holds for both.
+    let apart = settings(json!({"scale": {"width": 50, "height": 200, "linked": true}}));
+    assert!(matches!(apart.check(), Err(PdfError::BadSetting(_))));
+    for bad in
+        [json!({"width": 0, "height": 0, "linked": true}), json!({"width": 1001, "height": 1001, "linked": true}), json!({"width": -5, "height": 50})]
+    {
+        assert!(matches!(settings(json!({ "scale": bad })).check(), Err(PdfError::BadSetting(_))), "{bad}");
+    }
+    assert!(settings(json!({"scale": {"width": 1000, "height": 1000, "linked": true}})).check().is_ok());
+}
+
+#[test]
 fn japanese_paper_sizes() {
     // The Japanese papers: JIS B4, B5 and B6 are the sizes Japanese printing uses (JIS X 6310),
     // a little larger than ISO's; the others are はがき, 往復はがき, 封筒 and 四六判.
