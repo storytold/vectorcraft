@@ -23,6 +23,12 @@ There are four kinds of plug-in:
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the `plugin.*` commands
 in `crates/engine/src/cmd/plugin.rs`).
 
+A fifth kind is shared with the other Craft apps: **command plug-ins** (`"kind": "command"`), which act on the document
+only through VectorCraft's commands. They, and installing any plug-in from a `.craftplugin` bundle, a catalog or a
+GitHub repository, come from the shared [`craft-plugin`](https://github.com/storytold/craft-libs/tree/main/crates/plugin)
+crate ([RFC-0041](https://github.com/storytold/craft-contrib/blob/main/rfcs/0041-shared-plugin-runtime.md)); see
+[Shared plug-ins](#shared-plug-ins-command-plug-ins-bundles-catalogs-and-github).
+
 ## Using plug-ins
 
 | Command | Params | What it does |
@@ -113,6 +119,69 @@ picked or typed folder whose contents can't be listed, and `prefs.set` refuses s
 Plug-ins are installed **per process**, not per document. Documents store a live effect as an ordinary effect record
 (`{"id": "plugin.<id>", "params": {…}}`): while the plug-in is installed it is drawn, exported and expanded; without it
 the object is drawn as if the effect weren't there, and the record is kept for when the plug-in comes back.
+
+## Shared plug-ins: command plug-ins, bundles, catalogs and GitHub
+
+VectorCraft runs the `command` kind every Craft app shares, and installs plug-ins the way every Craft app does. The
+ABI, the manifest (`craft-plugin.json`), the `.craftplugin` bundle and the catalog format are documented in the
+[craft-plugin README](https://github.com/storytold/craft-libs/blob/main/crates/plugin/README.md); this section is
+VectorCraft's side (`crates/engine/src/cmd/craftplugin.rs`, `crates/ui-egui/src/plugin_bundles.rs`). The four kinds
+above keep their own ABI, manifest and permissions.
+
+**Using them.** Installed command plug-ins are listed in **Object › Plug-ins** after the filters: a plug-in with one
+command is one item, one with several a submenu named after it. A command with parameters opens a dialog generated from
+its manifest's `params` (text, number, slider, checkbox, select, list); OK runs it. **Object › Plug-ins › Manage
+Plug-ins…** lists the command plug-ins installed (Remove, Update), installs from a `.craftplugin` file (Install from
+File…, which Install Plug-in… also picks), from a GitHub repository (`owner/repo` or `owner/repo@tag`) or from a
+catalog's package, and adds catalogs. Every install first shows what the plug-in is: its kind, its source, the
+bundle's SHA-256 and its permissions, and says plainly when a repository is in no catalog you use; only a person's OK
+installs it (the same approval as Install Plug-in…, so automation can't confirm it). Downloads run off the UI thread.
+
+**Where they are kept.** In the same `Plug-ins` folder next to the preferences as VectorCraft's own modules: a command
+plug-in's bundle is in a subfolder named by a hash of its id (`<32 hex digits>/<sha256>.craftplugin`, `source.json` with
+where it came from, and `settings.json` with its settings), beside the flat `*.wasm` files, `grants.json`,
+`disabled.json` and `storage/` of the other kinds, which are read and written as before: nothing moves, and plug-ins
+installed by earlier versions keep loading. The catalogs added are in `catalogs.json` there. Without a `Plug-ins`
+folder (the web build, a run without preferences, a session confined to automation roots) plug-ins are installed for
+the session.
+
+**Bundles of VectorCraft's own kinds.** A bundle whose manifest's `kind` is `filter`, `effect`, `exporter` or
+`importer` (and whose `apps.vectorcraft.api` is VectorCraft's plug-in API level, 1 or 2) carries a module of that
+kind: its embedded manifest must have the bundle's id and kind. It installs exactly as `plugin.install {dataBase64}`
+installs the module (its permissions to grant, a heavy budget, `replace`), into the flat `*.wasm` store, so such
+plug-ins can be published on GitHub and in catalogs too. Their source isn't kept, so `plugin.update` doesn't update
+them; install the new release again.
+
+**Commands.**
+
+| Command | Params | What it does |
+|---|---|---|
+| `plugin.install` | `{path: "x.craftplugin"}` (desktop) \| `{data: base64, name?}` \| `{repo: "owner/repo[@tag]"}` \| `{catalog: url, id, version?}`, `review?: bool`, `sha256?` | Obtains the bundle (a repository's latest or tagged release, its one `.craftplugin` asset checked against the release's `SHA256SUMS`; a catalog's package pinned by URL, size and SHA-256), checks it and installs it. `review: true` installs nothing and returns what the confirmation shows (`kind`, `permissions`, `commands`, `sha256`, `source`, `inCatalog`, `replaces`, `permissionsChanged`, and for VectorCraft's kinds `module`, its `plugin.inspect` entry); the install that follows with the same parameters takes the bundle reviewed without downloading it again, and with `sha256` refuses other bytes. The `.wasm` parameters (`path` to a `.wasm`, `dataBase64`, `replace`, `allowHeavy`, `grant`, `hash`) are unchanged. |
+| `plugin.list` | `{}` | Lists command plug-ins after the others, with `kind: "command"`, their manifest, `sha256`, `source`, `stored` and `shared: true`; `problems` lists store folders that couldn't be read. |
+| `plugin.run` | `{id, command?, params?}` | Runs a command plug-in's command (default its first), as below. The filter parameters are unchanged. |
+| `plugin.remove` | `{id}` | Removes a command plug-in's folder, with its settings. |
+| `plugin.update` | `{id?, install?: bool}` | Checks command plug-ins installed from a catalog or a repository for a newer release; with `install: true` installs each whose permissions and kind are unchanged and marks the others `needsReview` (install them with `review: true` first). |
+| `plugin.catalog.list` | `{url?}` | The packages of a catalog (default: every catalog added) VectorCraft can run, with their newest release for it. |
+| `plugin.catalog.add` | `{url, remove?: bool}` | Adds a catalog (`https://` on GitHub's hosts, or `file://`), or takes it out. |
+
+`plugin.info {id}` describes a command plug-in too. Only `https://` on GitHub's hosts is downloaded; `file://`
+catalogs are refused while automation is confined to folders. The CLI and MCP reach these commands like any other;
+without a network client (the CLI, MCP) only files, `data` and `file://` catalogs install.
+
+**Running.** `AppInfo { id: "vectorcraft", api: 1..=6, kinds: ["command"] }`: a manifest must name `vectorcraft` in
+`apps`. A run is one undo step named after the plug-in (and the command, when it has several). Each `call` is checked
+before it runs: [`ALWAYS_DENIED`](https://github.com/storytold/craft-libs/blob/main/crates/plugin/README.md#permissions)
+(`plugin.*`, `file.*`, `edit.undo`, `edit.redo`, `app.*`, `pref.*`, `window.*`), VectorCraft's own refused commands
+(the prefixes the filters' [command calls](#command-calls) refuse: scripts and actions, documents, links, libraries,
+the clipboard, preferences, the view, printing, exports…), the manifest's `permissions.commands`, and the same rules as
+`vc_call`: only reviewed commands, nothing whose params name a file, a folder or a plug-in. A refused call returns
+"`<id>` isn't available to plugins". The call runs with no file or folder readable or writable. After it ran, a call
+that changed which documents are open is put back and refused, and so is one that changed the document for a plug-in
+whose `access` is `read` ("`<id>` edits the document, and <name> may only read it"). A run that traps, runs out of
+fuel, ends with a non-zero status or passes a refusal on leaves every document, its selection and its undo history as
+they were. Settings (`setting_get`/`setting_set`) are kept per plug-in, at most 64 KiB, keys up to 128 characters.
+`notify` messages are returned as `notes` (the status bar shows the first). Panels (`ui_show`) aren't shown yet: the
+run's result says so in `panel`.
 
 ## The sandbox
 
