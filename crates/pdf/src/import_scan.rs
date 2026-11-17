@@ -280,6 +280,10 @@ pub(crate) struct Scan {
     /// Something overprints with overprint mode 0, where a `DeviceCMYK` colour's zero components
     /// knock out; the document's overprint is the nonzero one (mode 1).
     pub zero_mode: bool,
+    /// The images the page draws (image XObjects by object, inline images as `None`), each with
+    /// whether it is drawn where a `/DefaultCMYK` is in scope, which replaces DeviceCMYK there
+    /// (ISO 32000-2 §8.6.5.6). An image drawn both ways is `true`.
+    pub cmyk_defaults: HashMap<Option<ObjectIdentifier>, bool>,
     /// The colorant names of the Separation and DeviceN spaces the page sets (`cs`, `CS`), and of
     /// those of the shading patterns it sets (`scn`, `SCN`) and of the shadings it draws (`sh`),
     /// each once (none when the page uses more than [`MAX_INKS`] inks or changes ink more than
@@ -710,6 +714,12 @@ impl Walker<'_, '_> {
         }
     }
 
+    /// An image drawn with `res` in scope, as the interpreter looks up its `/DefaultCMYK`.
+    fn drawn_image(&mut self, id: Option<ObjectIdentifier>, res: &Resources<'_>) {
+        let default = res.get_color_space(&Name::new_unescaped(b"DefaultCMYK")).is_some();
+        *self.out.cmyk_defaults.entry(id).or_default() |= default;
+    }
+
     fn walk(&mut self, data: &[u8], res: &Resources<'_>, depth: u32) {
         let mut iter = TypedIter::new(data);
         self.note_fonts(res);
@@ -874,12 +884,17 @@ impl Walker<'_, '_> {
                 | TypedInstruction::ShowTexts(_)
                 | TypedInstruction::NextLineAndShowText(_)
                 | TypedInstruction::ShowTextWithParameters(_) => self.shown(),
+                TypedInstruction::InlineImage(_) => self.drawn_image(None, res),
                 TypedInstruction::XObject(x) => {
                     if !self.is_visible() {
                         continue;
                     }
                     let Some(s) = res.get_x_object(x.0) else { continue };
                     let d = s.dict();
+                    if d.get::<Name<'_>>(b"Subtype").as_deref() == Some(b"Image") {
+                        self.drawn_image(d.obj_id(), res);
+                        continue;
+                    }
                     if d.get::<Name<'_>>(b"Subtype").as_deref() != Some(b"Form") || d.get::<[f32; 4]>(b"BBox").is_none() {
                         continue;
                     }

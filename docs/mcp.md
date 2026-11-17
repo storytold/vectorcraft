@@ -1450,8 +1450,9 @@ Imported colours keep their model:
 DeviceCMYK and CMYK ICC colours stay CMYK (a file painted mostly in CMYK opens as a CMYK document), DeviceGray is Gray,
 and Separation and DeviceN inks become spot swatches the art links to at its tint (gradient stops too). CMYK images
 (DeviceCMYK, or ICC-based with four components) keep their ink amounts: a CMYK JPEG as it is, any other as a CMYK TIFF
-(masked CMYK images, and ones with 1, 2 or 4 bits per sample, open in RGB with a warning). Placing a CMYK TIFF keeps it
-CMYK too.
+(masked CMYK images, and ones with 1, 2 or 4 bits per sample, open in RGB with a warning). In a file with a CMYK
+`/GTS_PDFX` output intent, a DeviceCMYK image carries the output intent's profile, except where it is drawn with a
+`/DefaultCMYK` in the resources in scope. Placing a CMYK TIFF keeps it CMYK too.
 `colorMode: "rgb" | "cmyk"` opens any file in that mode instead, its colours converted as `file.documentColorMode` does
 (`grays` too):
 
