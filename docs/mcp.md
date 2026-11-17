@@ -6187,8 +6187,9 @@ itself. It leaves out hidden objects, guides, objects at 0% opacity and paths wi
 measure objects with brushed strokes or an opacity mask, area type, type on a path, or groups that hold one of them.
 It leaves out template layers, layers with an opacity mask, and layers that don't print unless `includeNonPrinting` is
 on. The export writes the art and the page boxes unchanged. A page of the
-art's bounds (`useArtboards: false`) does not warn. Export for Screens does not warn for a PDF row when Include Bleed
-grows the artboards, or for a page of assets, layers or a selection. `.ai` saves do not warn. When OK in File ›
+art's bounds (`useArtboards: false`) does not warn. Export for Screens warns for a PDF row of an artboard, with or
+without Include Bleed. With Include Bleed the page's trim is the artboard and the bleed lies around it. It does not
+warn for a page of assets, layers or a selection. `.ai` saves do not warn. When OK in File ›
 Document Setup raises the bleed on a side, the status bar counts the objects that stop short of the new bleed on the
 sides OK raised, on every artboard.
 
