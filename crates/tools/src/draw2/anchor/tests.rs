@@ -488,7 +488,8 @@ fn scissors_shows_paths_alignment_and_configured_anchor_snaps() {
         ((151.5, 431.0), true, true, 4.0, Some("align"), (150.0, 431.0), false),
         ((201.0, 105.5), true, true, 8.0, Some("anchor"), (200.0, 100.0), true),
         ((201.0, 105.5), true, true, 4.0, Some("path"), (200.0, 105.5), true),
-        ((201.0, 105.5), false, true, 8.0, Some("anchor"), (200.0, 100.0), true),
+        // Snap to Point keeps the anchor target without Smart Guides labels.
+        ((201.0, 105.5), false, true, 8.0, None, (200.0, 100.0), true),
         // Outside Smart Guides' reach, but inside the legacy 4.5 px anchor pick radius.
         ((200.0, 104.25), true, true, 4.0, Some("path"), (200.0, 104.25), true),
         ((200.0, 104.25), false, false, 4.0, None, (200.0, 100.0), true),
@@ -500,7 +501,7 @@ fn scissors_shows_paths_alignment_and_configured_anchor_snaps() {
         let target = Point::from(target);
         let labels = scissors_labels(&tool, &c);
         if let Some(label) = label {
-            assert_eq!(labels.len(), 1, "{labels:?}");
+            assert_eq!(labels.len(), 1, "at={at:?}, smart={smart}, point={point}, reach={reach}, want={label}: {labels:?}");
             assert_eq!(labels[0].0, label);
             assert!(labels[0].1.distance(target) < 1e-6, "{labels:?}");
         } else {
