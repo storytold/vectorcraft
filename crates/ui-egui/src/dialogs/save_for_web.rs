@@ -11,7 +11,9 @@
 //! `__color` (the colour table's selected colour, by source), `__presetName` (shown while saving a
 //! preset) and `__hasSlices`. Save… remembers
 //! the settings and writes the files (`file.saveForWeb`); Done only remembers them; Preview in
-//! Browser opens the HTML page (`file.saveForWeb.browser`). The previews are what Save writes:
+//! Browser opens the HTML page (`file.saveForWeb.browser`). While Alt (Option on macOS) is held,
+//! Cancel reads Reset, which puts the remembered settings back and leaves the dialog open
+//! (`ui.dialogReset`). The previews are what Save writes:
 //! [`webexport::preview_image`], decoded back, cached until the art or a setting changes.
 
 use std::sync::Arc;
@@ -39,6 +41,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok: Some("Save…"),
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
+    reset: Some(reset),
     min_width: PREVIEW_W + GAP + SIDE_W,
     inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
@@ -71,14 +74,8 @@ const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), (
 
 /// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let n = app.session.active().ok_or("no document")?.doc.artboards.len();
-    let mut s = app.session.last_web_settings();
-    s.artboard = Some(crate::panels::artboards::selected(app, n));
-    // A document with no artboards has no valid index.
-    if s.artboard.is_some_and(|a| a >= n) {
-        s.artboard = None;
-    }
-    let mut fields = settings_fields(&s);
+    app.session.active().ok_or("no document")?;
+    let mut fields = settings_fields(&remembered(app));
     let slices = app.session.active().is_some_and(|st| !st.doc.slice_layout().is_empty());
     fields.extend([
         ("__view".into(), json!("2up")),
@@ -88,6 +85,28 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     ]);
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(Value::Null)
+}
+
+/// The remembered settings (the defaults when none are remembered) on the document's active
+/// artboard; no artboard when the document has none.
+fn remembered(app: &VectorcraftApp) -> WebSettings {
+    let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
+    let mut s = app.session.last_web_settings();
+    s.artboard = Some(crate::panels::artboards::selected(app, n)).filter(|a| *a < n);
+    s
+}
+
+/// Reset (Cancel with Alt or Option held, or `ui.dialogReset`): the settings go back to the
+/// remembered ones on the document's active artboard ([`remembered`]), and a pending `preset`, a
+/// pending Done (`discard`, which a failed Done leaves), the preset name being typed and the
+/// selected color table entry are dropped. The view, zoom, connection speed and `path` stay,
+/// nothing is remembered or written, and the dialog stays open.
+fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    for key in ["preset", "discard", "__presetName", "__color"] {
+        d.fields.remove(key);
+    }
+    d.fields.extend(settings_fields(&remembered(app)));
+    Ok(())
 }
 
 /// The settings as dialog fields.

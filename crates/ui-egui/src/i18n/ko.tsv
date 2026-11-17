@@ -1359,6 +1359,7 @@ antiAlias	Sharp	날카롭게
 	Conflict {n} of {count}	충돌 {n}/{count}
 	Constrain Angle	각도 제한
 	Constrain Width and Height Proportions	너비와 높이 비율 고정
+	Copy Width to Height	너비를 높이로 복사
 	Construction Guides	작도 안내선
 	Contextual Alternates	문맥 대체 글자
 	Convert	변환
@@ -1859,6 +1860,10 @@ antiAlias	Sharp	날카롭게
 	Font List	글꼴 목록
 	Show Similar Fonts	유사한 글꼴 표시
 	Clear Similar Fonts	유사한 글꼴 지우기
+	Fonts used in this document	이 문서에서 사용된 글꼴
+	This document uses no available fonts	이 문서는 사용 가능한 글꼴을 사용하지 않습니다
+	Recently Added	최근 추가됨
+	Fonts added in the last 30 days	최근 30일 동안 추가된 글꼴
 	Font Preview Size	글꼴 미리 보기 크기
 	Font:	글꼴:
 	Fonts	글꼴
@@ -2316,7 +2321,8 @@ antiAlias	Sharp	날카롭게
 	Location	위치
 	Location:	위치:
 	Lock (⌘2)	잠금 (⌘2)
-	Lossless (lossy WebP isn't available yet)	무손실 (손실 WebP는 아직 지원되지 않음)
+	Lossless	무손실
+	Lossy	손실
 	Lossy:	손실 압축:
 	Luminosity	광도
 	Magic Wand Options	마술봉 옵션
@@ -3067,6 +3073,38 @@ mark-style	Japanese	일본식
 	Restore	복원
 	Restore Recovered Documents	복구된 문서 복원
 	Restore every preference to its default (applied on OK)	모든 환경 설정을 기본값으로 복원(확인 시 적용)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	캔버스에 선택 영역이나 도구에 맞는 명령 막대를 표시합니다. 드래그하는 동안과 프레젠테이션 모드에서는 숨겨집니다.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	화살표 키로 선택 영역을 이동하는 거리입니다. Shift 키를 누르면 10배 멀리 이동합니다.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	화살표 키로 이동하는 축과 Shift 키로 그리기와 이동을 고정하는 축의 각도입니다.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	둥근 사각형 도구로 그릴 때 쓰는 모퉁이 반지름입니다. 그리는 동안 반지름을 바꾸면 이 값도 바뀝니다.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	스크립트에서처럼 위치가 지정되지 않았을 때 붙여넣기가 사본을 오른쪽과 아래로 옮기는 거리입니다. 앱에서 붙여넣기를 하면 사본이 보기의 가운데에 놓입니다.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	펜 도구가 선택한 패스에서 클릭한 고정점을 삭제하거나 세그먼트를 클릭한 위치에 고정점을 추가하지 않게 합니다.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	그리기 도구의 포인터를 아이콘 대신 십자선으로 표시합니다. Caps Lock이 켜져 있는 동안에도 같습니다.
+	Shows a tip when the pointer rests on a button or field that has one.	도움말이 있는 버튼이나 필드에 포인터를 올려 두면 도움말을 표시합니다.
+	Shows a warning before a script you choose runs.	선택한 스크립트를 실행하기 전에 경고를 표시합니다.
+	Smooths the edges of artwork on the canvas.	캔버스에 있는 아트웍의 가장자리를 매끄럽게 표시합니다.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	선택 › 동일 › 칠 색상, 선 색상, 칠 및 선은 전역 또는 별색 견본의 같은 색조만 찾고, 다른 색조는 찾지 않습니다.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	열린 문서가 없을 때 홈 화면을 표시합니다. 끄면 홈을 클릭할 때까지 창이 비어 있습니다.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	크기, 위치, 정렬을 위해 선과 모양을 바꾸는 효과를 포함하여 개체를 측정합니다. 그림자, 광선, 흐림 효과는 측정하지 않습니다.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 확대/축소에서 문서의 1인치가 72가 아닌 96 화면 포인트를 차지합니다.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	선택 도구로 그룹, 패스 또는 이미지를 두 번 클릭하면 격리 모드로 엽니다.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	변형 명령이나 변형 패널의 메뉴에서 달리 선택하지 않는 한, 패턴 칠과 선이 아트웍과 함께 변형됩니다.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 라이브 모퉁이 반지름이 아트웍과 함께 크기 조정됩니다.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 선 두께, 대시, 효과 거리가 아트웍과 함께 크기 조정됩니다.
+	The mouse wheel zooms the canvas instead of scrolling it.	마우스 휠로 캔버스를 스크롤하지 않고 확대/축소합니다.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
+	Dragging sideways on a numeric field's label changes the field's value.	숫자 필드의 레이블을 옆으로 드래그하면 필드 값이 바뀝니다.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
+	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	트림 마크 만들기에서 서양식 대신 일본식 표시를 그립니다.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	새 아트웍이 선택 영역의 칠과 선만 가져옵니다. 끄면 선택한 개체의 모양 전체를 가져옵니다.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	변형 패널, 속성 패널 또는 컨트롤 패널에서 폭이나 높이를 바꾸면 다른 값도 비율에 맞게 바뀝니다.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	라이브 사각형의 속성에 네 모퉁이 모두에 쓰는 모퉁이 반지름 필드 하나를 표시합니다. 끄면 모퉁이마다 필드가 따로 있습니다.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	변형 패널에서 편집할 때 변형되는 대상으로, 개체, 패턴 타일 또는 둘 다입니다. 기본값은 패턴 타일 변형을 따릅니다.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	심볼 인스턴스 하나를 선택하면 변형 패널은 심볼의 등록 지점을 참조점으로 사용합니다.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	아트보드 도구를 사용하는 동안 아트보드 바깥의 캔버스를 어둡게 표시합니다.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	아트보드 외부 영역 어둡게 표시가 켜져 있으면 아트보드 도구로 드래그하는 동안에도 아트보드 바깥 영역이 어둡게 유지됩니다.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	픽셀 크기가 아닌 기본 제공 크기의 새 문서와 단위가 기록되지 않은 열린 파일에 쓰는 단위이며, 여기서 고르고 확인을 누르면 활성 문서의 단위도 바뀝니다.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	선 두께, 대시, 간격이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	글자 크기, 행간, 기준선 이동이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
@@ -3208,6 +3246,7 @@ mark-style	Japanese	일본식
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
 	Recent Commands	최근 명령
 	No recent commands	최근 명령 없음
+	Search commands	명령 검색
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
 	Select All Assets	모든 에셋 선택
@@ -4671,6 +4710,9 @@ theme	Appearance	외관
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
+@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
+@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
 @msg	no saved presets	저장된 프리셋이 없습니다
@@ -6721,6 +6763,7 @@ anchor	Points:	포인트:
 	Open a document to check it for issues.	문서를 열면 문제를 점검할 수 있습니다.
 	Empty Text	빈 텍스트
 	Unpainted Objects	칠하지 않은 오브젝트
+	Empty Text Paths	빈 텍스트 패스
 	Zero-Opacity Objects	불투명도 0% 오브젝트
 	Duplicate Objects	중복 오브젝트
 	Off-Artboard Art	아트보드 밖의 아트워크
@@ -7461,6 +7504,7 @@ breakText	Glyphs	글리프
 @msg	Too many Revolve faces for visibility evaluation	회전체의 면이 너무 많아 가시성을 계산할 수 없습니다
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft는 견본 교환 파일에서 색상과 그룹을 최대 {ASE_MAX_ENTRIES}개까지 읽는데, 이 라이브러리에는 {entries}개가 있습니다
 @msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 인코딩 실패: 이미지가 너무 커서 손실 WebP로 만들 수 없습니다: 해상도를 낮추거나 무손실을 선택하세요
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index`은(는) 정수여야 합니다

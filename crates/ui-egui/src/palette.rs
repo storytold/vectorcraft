@@ -467,29 +467,30 @@ fn footer(listed: usize, total: usize) -> String {
     }
 }
 
-/// How many times each key that moves the highlighted result was pressed this frame.
+/// The keys that move the highlighted result, in the order they were pressed this frame.
 #[derive(Default)]
-struct Moves {
-    down: usize,
-    up: usize,
-    page_down: usize,
-    page_up: usize,
-}
+struct Moves(Vec<egui::Key>);
 
 impl Moves {
+    /// The keys that move the highlighted result.
+    const KEYS: [egui::Key; 4] = [egui::Key::ArrowDown, egui::Key::ArrowUp, egui::Key::PageDown, egui::Key::PageUp];
+
     fn any(&self) -> bool {
-        self.down + self.up + self.page_down + self.page_up > 0
+        !self.0.is_empty()
     }
 
-    /// The highlighted result of `n` after these moves from `sel`, a page being `page` rows: Up and
-    /// Down wrap at the ends, Page Up and Page Down stop at them.
+    /// The highlighted result of `n` after these moves from `sel`, taken in the order they were
+    /// pressed, a page being `page` rows: Up and Down wrap at the ends, Page Up and Page Down stop
+    /// at them.
     fn apply(&self, sel: usize, n: usize, page: usize) -> usize {
         let Some(last) = n.checked_sub(1) else { return 0 };
-        let sel = sel.min(last);
-        let sel = (sel + self.down % n) % n;
-        let sel = (sel + n - self.up % n) % n;
-        let sel = sel.saturating_add(page.saturating_mul(self.page_down)).min(last);
-        sel.saturating_sub(page.saturating_mul(self.page_up))
+        self.0.iter().fold(sel.min(last), |sel, key| match key {
+            egui::Key::ArrowDown => (sel + 1) % n,
+            egui::Key::ArrowUp => (sel + last) % n,
+            egui::Key::PageDown => sel.saturating_add(page).min(last),
+            egui::Key::PageUp => sel.saturating_sub(page),
+            _ => sel,
+        })
     }
 }
 
@@ -655,13 +656,15 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut moves = Moves::default();
     if n > 0 && !list_open {
         ctx.input_mut(|i| {
-            let mut key = |k| i.count_and_consume_key(egui::Modifiers::NONE, k);
-            moves = Moves {
-                down: key(egui::Key::ArrowDown),
-                up: key(egui::Key::ArrowUp),
-                page_down: key(egui::Key::PageDown),
-                page_up: key(egui::Key::PageUp),
-            };
+            i.events.retain(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. }
+                    if Moves::KEYS.contains(key) && modifiers.matches_logically(egui::Modifiers::NONE) =>
+                {
+                    moves.0.push(*key);
+                    false
+                }
+                _ => true,
+            });
         });
     }
     let screen = ctx.content_rect();
@@ -778,9 +781,9 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                     });
                     let before = offset;
                     offset = out.state.clamped_offset().y;
-                    // After a scroll with the wheel or the scroll bar, the highlight moves to the
-                    // nearest row in view, so Enter runs a result that can be seen.
-                    if !new_query && !moves.any() && (offset - before).abs() > 0.5 {
+                    // After a scroll with the wheel or the scroll bar, by any amount, the highlight
+                    // moves to the nearest row in view, so Enter runs a result that can be seen.
+                    if !new_query && !moves.any() && (offset - before).abs() > 0.0 {
                         sel = nearest_in_view(sel, offset, view, n);
                     }
                 });
@@ -2044,14 +2047,17 @@ mod tests {
     /// Down wrap.
     #[test]
     fn page_keys_move_by_a_page_without_wrapping() {
-        let moves = |down, up, page_down, page_up| Moves { down, up, page_down, page_up };
-        assert_eq!(moves(0, 0, 1, 0).apply(0, 50, 12), 12);
-        assert_eq!(moves(0, 0, 1, 0).apply(45, 50, 12), 49);
-        assert_eq!(moves(0, 0, 0, 1).apply(5, 50, 12), 0);
-        assert_eq!(moves(1, 0, 0, 0).apply(49, 50, 12), 0);
-        assert_eq!(moves(0, 1, 0, 0).apply(0, 50, 12), 49);
-        assert_eq!(moves(3, 0, 0, 0).apply(48, 50, 12), 1);
-        assert_eq!(moves(1, 0, 0, 0).apply(0, 0, 12), 0);
+        use egui::Key::{ArrowDown, ArrowUp, PageDown, PageUp};
+        let moves = |keys: &[egui::Key]| Moves(keys.to_vec());
+        assert_eq!(moves(&[PageDown]).apply(0, 50, 12), 12);
+        assert_eq!(moves(&[PageDown]).apply(45, 50, 12), 49);
+        assert_eq!(moves(&[PageUp]).apply(5, 50, 12), 0);
+        assert_eq!(moves(&[ArrowDown]).apply(49, 50, 12), 0);
+        assert_eq!(moves(&[ArrowUp]).apply(0, 50, 12), 49);
+        assert_eq!(moves(&[ArrowDown; 3]).apply(48, 50, 12), 1);
+        assert_eq!(moves(&[ArrowDown]).apply(0, 0, 12), 0);
+        assert_eq!(moves(&[PageDown, ArrowUp]).apply(0, 50, 12), 11, "in the order pressed");
+        assert_eq!(moves(&[ArrowUp, PageDown]).apply(0, 50, 12), 49, "in the order pressed");
         let mut open = Open::new("select", WINDOW);
         open.press(egui::Key::PageDown, 1);
         assert_eq!(open.highlighted(), VISIBLE_ROWS);
@@ -2101,6 +2107,56 @@ mod tests {
         assert_eq!(lit.len(), 1, "{lit:?}");
         assert!(lit[0].2 >= f64::from(popup.top()) && lit[0].3 <= f64::from(popup.bottom()), "{lit:?} in {popup:?}");
         assert_eq!(lit[0].0, row_label(entries(&open.ctx, Lang::EN).iter().find(|e| e.id == open.listed()[sel]).unwrap()));
+    }
+
+    /// Page Down, Up and Enter pressed in one frame move the highlight in that order, and Enter
+    /// runs the result they moved it to.
+    #[test]
+    fn keys_in_one_frame_move_the_highlight_in_the_order_pressed() {
+        let mut open = Open::new("show panel", WINDOW);
+        let listed = open.listed();
+        assert!(listed.len() > VISIBLE_ROWS, "{listed:?}");
+        let panel = listed[VISIBLE_ROWS - 1].strip_prefix("panel:").expect("a panel's result").to_string();
+        assert!(!crate::panel_docking::showing(&open.app.ui, &panel), "{panel}");
+        let key = |k| egui::Event::Key { key: k, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![key(egui::Key::PageDown), key(egui::Key::ArrowUp), key(egui::Key::Enter)]);
+        assert!(!open.app.ui.palette_open);
+        assert!(crate::panel_docking::showing(&open.app.ui, &panel), "{panel}: {}", open.app.ui.status);
+    }
+
+    /// A scroll in steps of less than half a point a frame still moves the highlight onto a row in
+    /// view once the highlighted row leaves it.
+    #[test]
+    fn a_scroll_in_small_steps_keeps_the_highlight_in_view() {
+        let mut open = Open::new("select", WINDOW);
+        let nodes = open.frame(vec![]);
+        let first = rows(&nodes).into_iter().next().unwrap();
+        let at = egui::pos2(open.popup().center().x, ((first.2 + first.3) / 2.0) as f32);
+        open.frame(vec![egui::Event::PointerMoved(at)]);
+        let wheel = egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -0.4),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut nodes = Vec::new();
+        for _ in 0..200 {
+            nodes = open.frame(vec![wheel.clone()]);
+        }
+        for _ in 0..120 {
+            if !open.repaint {
+                break;
+            }
+            nodes = open.frame(vec![]);
+        }
+        let offset = open.ctx.data(|d| d.get_temp::<Highlight>(egui::Id::unique("palette-selected"))).unwrap().2;
+        assert!(offset > ROW_HEIGHT, "the list scrolled past the first row: {offset}");
+        assert!(open.highlighted() > 0, "the highlight left the row scrolled out of view");
+        let popup = open.popup();
+        let lit: Vec<_> = rows(&nodes).into_iter().filter(|r| r.1).collect();
+        assert_eq!(lit.len(), 1, "{lit:?}");
+        assert!(lit[0].2 >= f64::from(popup.top()) && lit[0].3 <= f64::from(popup.bottom()), "{lit:?} in {popup:?}");
     }
 
     /// When the window shrinks so the list shows fewer rows, the list scrolls to keep the
@@ -2487,13 +2543,13 @@ mod tests {
         }
     }
 
-    /// The click on the app bar's search button that opens the palette leaves it open; the next
-    /// click on the button closes it.
+    /// The click on the app bar's search field that opens the palette leaves it open; the next
+    /// click on the field closes it.
     #[test]
     fn the_click_that_opens_the_palette_does_not_close_it() {
         let mut window = Window::new();
         let nodes = window.frame(vec![]);
-        let at = button_at(&nodes, "Search commands, tools, panels and effects");
+        let at = button_at(&nodes, "Search commands");
         window.click(at);
         assert!(window.app.ui.palette_open, "the click opens the palette");
         window.frame(vec![]);
