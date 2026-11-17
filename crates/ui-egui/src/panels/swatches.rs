@@ -46,7 +46,7 @@ pub(crate) use libraries::{
 };
 #[cfg(test)]
 pub(crate) use tiles::describe;
-pub(crate) use tiles::{draw_folder, folder_tile, global_mark, list_row, list_row_name, tile_grid};
+pub(crate) use tiles::{CMYK_INKS, draw_folder, folder_tile, global_mark, list_row, list_row_name, tile_grid};
 
 /// View modes of the swatch list (and of the library panels: `ui.libraryPanel {view}`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -190,13 +190,14 @@ fn swatch_params(e: &Entry) -> Option<Value> {
 /// Apply a clicked swatch to the active proxy (Alt: the inactive one). An Alt-click on a color
 /// swatch with a gradient stop selected recolors the stop as dropping the swatch on it does,
 /// and with a freeform gradient point selected it recolors the point. A color swatch also becomes
-/// the Color Guide's base color.
+/// the Color Guide's base color, linked to the spot color it is or is a tint of.
 fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
     let Some(params) = swatch_params(e) else { return };
-    if let Entry::Swatch { paint, .. } = e
+    if let Entry::Swatch { name, paint, .. } = e
         && let Some(c) = paint.color()
     {
-        super::color_guide::choose_base(app, c);
+        let link = app.session.active().and_then(|st| st.doc.swatch_link(name));
+        super::color_guide::choose_linked_base(app, c, link);
     }
     if super::alt_held(ui)
         && let Some(c) = drag_of(e, vec![]).color()

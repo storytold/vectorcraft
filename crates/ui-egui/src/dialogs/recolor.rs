@@ -30,7 +30,11 @@
 //! Remove Color tool removes the color whose marker is clicked; a bar's right-click menu has Remove
 //! Color too. The base color can't be removed. A removed color's row goes, unless it has current
 //! colors and art or a group is open: it then keeps them, with no new color, so that art keeps its
-//! colors and the group's swatch at that place goes. With art, the Prominent Colors bar under the wheel shows the new
+//! colors and the group's swatch at that place goes. Under the tools, a button switches both wheels
+//! to hue and brightness (black at the center, full brightness at the edge, at the base color's
+//! saturation; a marker drag sets hue and brightness, Add Color adds the hue and brightness clicked
+//! at the base color's saturation, and the slider under the wheel is a Saturation slider) and back;
+//! switching changes no color, and the dialog opens on hue and saturation. With art, the Prominent Colors bar under the wheel shows the new
 //! colors, each part as wide as its row's share of the art's uses, the largest first; dragging the
 //! edge between two parts moves width between them, and when the drag ends the rows' current
 //! colors move toward those widths (`recolor.weigh`), and the art previews them. The New Color
@@ -60,7 +64,8 @@
 //! (`{saturation, brightness, temperature, luminosity}` in percent, sent as `recolor.apply`'s
 //! `globalAdjust` in every slider mode), `display` (the Edit tab's `smooth`, `segmented` or `bars`;
 //! unset: `smooth`), `wheelTool` (`add`: the Add Color tool, `remove`: the Remove Color tool;
-//! unset: neither, a click on the wheel selects a marker), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
+//! unset: neither, a click on the wheel selects a marker), `wheelAxes` (`hueBrightness`: the wheels
+//! show hue and brightness; `hueSaturation`, unset or any other value: hue and saturation), `themePicker` (the Color Theme Picker is on), `themePicks` (its picks, as
 //! `recolor.pickTheme`'s `picks`; a new list recolors the rows), `weights` (one per row, as
 //! `recolor.weigh`'s; a new list moves the rows' current colors toward them), `findColors` (Find is
 //! on; it shows the art so on the Assign tab, with art and rows selected). Changing `colors`, a
@@ -799,8 +804,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             None => form::preview(app, ui, d, "Recolor Artwork", CMD, apply_params(d)),
         }
     }
-    if let Some(c) = pick.and_then(|i| Some((i, to_color(rows(d).get(i)?)?))) {
-        *d = super::color_picker::over_recolor(d, c.1, c.0);
+    if let Some((i, swatches)) = pick
+        && let Some(row) = rows(d).get(i)
+    {
+        let c = to_color(row).or_else(|| from_colors(row).first().copied()).unwrap_or_default();
+        *d = super::color_picker::over_recolor(d, c, i, swatches);
     }
     false
 }
@@ -868,8 +876,8 @@ fn chip(ui: &Ui, r: Rect, c: Color, dim: bool) {
 }
 
 /// The Assign tab. Returns true when the rows changed, and the row whose new colour was
-/// double-clicked.
-fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> (bool, Option<usize>) {
+/// double-clicked or chosen via "Pick from Swatches" (with `true` for swatches view).
+fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Value>) -> (bool, Option<(usize, bool)>) {
     let t = Tokens::get(ui.ctx());
     let mut changed = false;
     let total: usize = rows.iter().map(|r| r["from"].as_array().map_or(0, Vec::len)).sum();
@@ -907,7 +915,8 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
     });
     let mut sel = selection(d);
     let mut clicked: Option<usize> = None;
-    let mut pick: Option<usize> = None;
+    let mut pick: Option<(usize, bool)> = None;
+    let mut limit_to: Option<String> = None;
     let shown: Vec<Color> = rows.iter().map(|r| new_shown(app, d, r)).collect();
     widgets::list_box(ui, |ui| {
         egui::ScrollArea::vertical().id_salt("recolor-rows").max_height(TABLE_H).show(ui, |ui| {
@@ -956,7 +965,7 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                         clicked = Some(i);
                     }
                     if nresp.double_clicked() && has_new {
-                        pick = Some(i);
+                        pick = Some((i, false));
                     }
                     ui.add_space(6.0);
                     let hex = if has_new { crate::panels::color::hex_digits(&to) } else { String::new() };
@@ -967,6 +976,40 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
                         set_to(row, &keep_model(to, c));
                         changed = true;
                     }
+                    let mut row_menu = |ui: &mut Ui| {
+                        if widgets::menu_item(ui, tl!("Pick from Swatches"), true, false) {
+                            pick = Some((i, true));
+                            ui.close();
+                        }
+                        ui.menu_button(tl!("Limit to Library"), |ui| {
+                            let cur = d.str("limitTo");
+                            if widgets::menu_item(ui, tl!("None"), true, cur.is_empty()) {
+                                limit_to = Some("".to_string());
+                                ui.close();
+                            }
+                            ui.separator();
+                            if let Some(k) = crate::panels::swatches::library_list(app, ui, &cur) {
+                                limit_to = Some(k);
+                                ui.close();
+                            }
+                        });
+                    };
+                    if (cr.secondary_clicked() || nresp.secondary_clicked()) && !sel.contains(&i) {
+                        clicked = Some(i);
+                    }
+                    cr.context_menu(&mut row_menu);
+                    nresp.context_menu(&mut row_menu);
+                    let empty_w = ui.available_width();
+                    if empty_w > 0.0 {
+                        let (_, empty_resp) = ui.allocate_exact_size(vec2(empty_w, 20.0), Sense::click());
+                        if empty_resp.clicked() {
+                            clicked = Some(i);
+                        }
+                        if empty_resp.secondary_clicked() && !sel.contains(&i) {
+                            clicked = Some(i);
+                        }
+                        empty_resp.context_menu(&mut row_menu);
+                    }
                 });
                 if sel.contains(&i) {
                     ui.painter().set(bg, egui::Shape::rect_filled(r.response.rect.expand2(vec2(2.0, 1.0)), 2.0, t.row_selected));
@@ -974,6 +1017,10 @@ fn assign_tab(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut 
             }
         });
     });
+    if let Some(k) = limit_to {
+        d.fields.insert("limitTo".into(), json!(k));
+        changed = true;
+    }
     if let Some(i) = clicked {
         let m = ui.input(|i| i.modifiers);
         match sel.iter().position(|s| *s == i) {
@@ -1446,12 +1493,27 @@ const DRAG: &str = "__drag";
 /// The field of the Edit tab's wheel tools: `add` (Add Color) or `remove` (Remove Color).
 const WHEEL_TOOL: &str = "wheelTool";
 
-/// The new color the Add Color tool gives a click at hue `h` (degrees) and saturation `s`: at the
-/// brightness of `base` (the base color, whose brightness the wheel shows; full without one), the
-/// segmented wheel's patch color with `segmented`, in `base`'s model.
-fn added_color(base: Option<Color>, h: f32, s: f32, segmented: bool) -> Color {
-    let v = base.map_or(1.0, |b| b.to_hsb()[2]);
-    let c = if segmented { widgets::segment_color(h, s, v) } else { Color::from_hsb(h, s, v) };
+/// The field of what the Edit tab's wheels show: `hueBrightness` (hue and brightness), or anything
+/// else (hue and saturation).
+const WHEEL_AXES: &str = "wheelAxes";
+
+/// What the Edit tab's wheels show, from [`WHEEL_AXES`].
+fn wheel_axes(d: &Dialog) -> widgets::WheelAxes {
+    if d.str(WHEEL_AXES) == "hueBrightness" { widgets::WheelAxes::HueBrightness } else { widgets::WheelAxes::HueSaturation }
+}
+
+/// The new color the Add Color tool gives a click at hue `h` (degrees) and `t`, the saturation (or
+/// with [`widgets::WheelAxes::HueBrightness`] the brightness) clicked: with the other component of
+/// `base` (the base color, whose other component the wheel shows; full without one), the segmented
+/// wheel's patch color with `segmented`, in `base`'s model.
+fn added_color(base: Option<Color>, h: f32, t: f32, segmented: bool, axes: widgets::WheelAxes) -> Color {
+    let o = base.map_or(1.0, |b| b.to_hsb()[axes.other()]);
+    let c = if segmented {
+        widgets::segment_color_on(axes, h, t, o)
+    } else {
+        let [h, s, v] = axes.hsb(h, t, o);
+        Color::from_hsb(h, s, v)
+    };
     base.map_or(c, |b| keep_model(b, c))
 }
 
@@ -1552,6 +1614,7 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
     let marked = base.and_then(|b| active.iter().position(|&i| i == b));
     let display = d.str("display");
     let tool = d.str(WHEEL_TOOL);
+    let axes = wheel_axes(d);
     // The tools act on either wheel, not on the color bars.
     let on_wheel = display != "bars";
     let mut w = widgets::WheelResponse::default();
@@ -1576,18 +1639,25 @@ fn edit_tab(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, rows: &mut Vec<Va
                     d.fields.insert(WHEEL_TOOL.into(), if on { Value::Null } else { json!(id) });
                 }
             }
+            // What the wheels show: a click switches between hue and saturation, and hue and
+            // brightness. It changes no color.
+            ui.add_space(8.0);
+            let bright = axes == widgets::WheelAxes::HueBrightness;
+            let tip = if bright { tl!("Show saturation and hue on wheel") } else { tl!("Show brightness and hue on wheel") };
+            if widgets::icon_button_enabled(ui, "sun", tip, bright && on_wheel, on_wheel, 24.0).clicked() {
+                d.fields.insert(WHEEL_AXES.into(), json!(if bright { "hueSaturation" } else { "hueBrightness" }));
+            }
         });
         ui.vertical(|ui| match display.as_str() {
-            "segmented" => w = widgets::segmented_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
             "bars" => changed |= color_bars(ui, d, rows, &active, base),
-            _ => w = widgets::harmony_wheel(ui, "recolor-wheel", WHEEL, &colors, marked),
+            _ => w = widgets::wheel_of(ui, "recolor-wheel", WHEEL, &colors, marked, display == "segmented", axes),
         });
     });
     // A click with a wheel tool adds a color there, or removes the color of the marker clicked.
     let clicked = w.clicked.filter(|_| on_wheel && matches!(tool.as_str(), "add" | "remove"));
-    if let Some((hit, [h, s])) = clicked {
+    if let Some((hit, [h, out])) = clicked {
         if tool == "add" {
-            let c = added_color(base.and_then(|b| to_color(&rows[b])), h, s, display == "segmented");
+            let c = added_color(base.and_then(|b| to_color(&rows[b])), h, out, display == "segmented", axes);
             let i = add_color(rows, &c);
             d.fields.insert("__sel".into(), json!([i]));
             d.fields.remove(COMPS);
@@ -1839,12 +1909,35 @@ mod tests {
     #[test]
     fn an_added_color_takes_the_base_colors_brightness_and_model() {
         let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+        let sat = widgets::WheelAxes::HueSaturation;
         let base = Color::from_hsb(10.0, 0.8, 0.6);
-        assert!(near(added_color(Some(base), 120.0, 0.5, false).to_hsb(), [120.0, 0.5, 0.6]));
-        assert!(near(added_color(None, 200.0, 0.25, false).to_hsb(), [200.0, 0.25, 1.0]));
-        assert!(near(added_color(None, 7.0, 0.95, true).to_hsb(), [0.0, 0.9, 1.0]), "the patch's color");
+        assert!(near(added_color(Some(base), 120.0, 0.5, false, sat).to_hsb(), [120.0, 0.5, 0.6]));
+        assert!(near(added_color(None, 200.0, 0.25, false, sat).to_hsb(), [200.0, 0.25, 1.0]));
+        assert!(near(added_color(None, 7.0, 0.95, true, sat).to_hsb(), [0.0, 0.9, 1.0]), "the patch's color");
         let cmyk = color_value(&json!("cmyk 0 100 100 0")).unwrap();
-        assert!(matches!(added_color(Some(cmyk), 120.0, 0.5, false), Color::Cmyk { .. }));
+        assert!(matches!(added_color(Some(cmyk), 120.0, 0.5, false, sat), Color::Cmyk { .. }));
+    }
+
+    /// On the hue and brightness wheel an added color is the hue and brightness clicked at the base
+    /// color's saturation (full without one), the patch's color on the segmented wheel (its ring is
+    /// a brightness step), in the base color's model. A black base adds a gray of the brightness
+    /// clicked, and the wheel's center is black.
+    #[test]
+    fn an_added_color_on_the_brightness_wheel_takes_the_base_colors_saturation() {
+        let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+        let bright = widgets::WheelAxes::HueBrightness;
+        let base = Color::from_hsb(10.0, 0.8, 0.6);
+        assert!(near(added_color(Some(base), 120.0, 0.5, false, bright).to_hsb(), [120.0, 0.8, 0.5]));
+        assert!(near(added_color(None, 200.0, 0.25, false, bright).to_hsb(), [200.0, 1.0, 0.25]));
+        assert!(near(added_color(Some(base), 7.0, 0.95, true, bright).to_hsb(), [0.0, 0.8, 0.9]), "the patch's color");
+        assert!(near(added_color(Some(base), 7.0, 0.0, true, bright).to_hsb(), [0.0, 0.8, 0.1]), "the innermost ring");
+        let black = Color::from_hsb(0.0, 0.0, 0.0);
+        let [_, s, v] = added_color(Some(black), 90.0, 0.4, false, bright).to_hsb();
+        assert!(s.abs() < 1e-3 && (v - 0.4).abs() < 1e-3, "a gray: {s} {v}");
+        let [_, _, v] = added_color(Some(base), 33.0, 0.0, false, bright).to_hsb();
+        assert!(v.abs() < 1e-3, "black at the center");
+        let cmyk = color_value(&json!("cmyk 0 100 100 0")).unwrap();
+        assert!(matches!(added_color(Some(cmyk), 120.0, 0.5, false, bright), Color::Cmyk { .. }));
     }
 
     /// With a color group and art, a row without a new color removes its swatch in its place, the
@@ -2176,6 +2269,14 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let to = super::rows(app.ui.dialog.as_ref().unwrap())[i]["to"].clone();
         assert!(to.as_str().is_some_and(|k| k.starts_with("cmyk ")), "a color picked as RGB is CMYK in a CMYK document: {to}");
+
+        let rect = settled(&mut app, &ctx, 3.0, i).unwrap();
+        double_click(&mut app, &ctx, rect, 3.1, i);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("color".into(), json!({"l": 55.0, "a": 20.0, "b": -30.0}));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let to = super::rows(app.ui.dialog.as_ref().unwrap())[i]["to"].clone();
+        assert_eq!(to, "lab 55 20 -30", "a Lab color picked in the picker is kept as Lab: {to}");
     }
 
     /// A 15 pt square at (`x`, 10) filled with `fill`, without a stroke.
