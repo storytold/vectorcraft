@@ -10,7 +10,7 @@ workspace = true
 
 [dependencies]
 # Pending shared extraction; pin the immutable official PR head until it merges.
-craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "524aaa78b8a04c0497fd28b9f12438ca3711e648", default-features = false }
+craft-font-catalog = { git = "https://github.com/storytold/craft-libs", rev = "3d1b0b5edfb55c056a4de539751d647ae60a3dcf", default-features = false }
 vectorcraft-geom = { workspace = true }
 vectorcraft-doc = { workspace = true }
 kurbo = { workspace = true }
