@@ -31,8 +31,10 @@ Window → Help Bar toggles the bottom tool-help strip independently of the stat
 
 **Feature evidence last updated:** 2026-11-03.
 
-Enclosing Lasso is an add-on under Object › Plug-ins with its own heading in All Tools. It has
-no default shortcut or Basic toolbar slot. It selects whole objects only
+Enclosing Lasso is an add-on under Object › Plug-ins. Its tool is also in the Lasso tool's group
+in both shipped toolbars, after the Lasso, and All Tools lists it there, under Select. A toolbar
+edited before it joined keeps its saved layout until Reset Toolbar. It has no default shortcut;
+one can be set in Edit › Keyboard Shortcuts › Tools. It selects whole objects only
 when their geometry is fully enclosed by the freehand loop. Shift adds, Alt subtracts, and
 Escape cancels. Ordinary group members can be selected separately; compound paths stay whole.
 Path checks follow curves, excluding stroke width and effects; other objects use their geometric
