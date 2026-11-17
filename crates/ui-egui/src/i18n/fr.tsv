@@ -4590,7 +4590,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l’application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
-@msg	Script file access denied: {path}	Accès du script aux fichiers refusé : {path}
+@msg	Script file access denied: {path}	Accès du script aux fichiers refusé : {path}
 @msg	Script file access to the app's own folders is not allowed	L’accès du script aux dossiers propres à l’application n’est pas autorisé
 @msg	Script file cannot encode the text	Le fichier du script ne peut pas encoder le texte
 @msg	Script file could not be written	Le fichier du script n’a pas pu être écrit
@@ -4603,14 +4603,14 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	Script folder is not empty	Le dossier du script n’est pas vide
 @msg	Script files cannot make aliases	Les fichiers du script ne peuvent pas créer d’alias
 @msg	Script file hidden setting cannot be changed	Le réglage masqué du fichier du script ne peut pas être modifié
-@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name} : une boîte de dialogue de fichiers ne peut pas s’ouvrir dans un rappel d’une fonction intégrée, d’un accesseur, d’une conversion ou d’un fichier exécuté par $.evalFile ; appelez-la depuis le propre code du script
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name} : une boîte de dialogue de fichiers ne peut pas s’ouvrir dans un rappel d’une fonction intégrée, d’un accesseur, d’une conversion ou d’un fichier exécuté par $.evalFile ; appelez-la depuis le propre code du script
 @msg	the script wrote more file data than one run may write (32 MiB)	le script a écrit plus de données de fichiers qu’une exécution ne peut en écrire (32 Mio)
-@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pour la boîte de dialogue de fichiers d’un script doit être l’une des valeurs : once, always, deny, stop
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pour la boîte de dialogue de fichiers d’un script doit être l’une des valeurs : once, always, deny, stop
 @msg	choose a file or folder first, or deny	choisissez d’abord un fichier ou un dossier, ou refusez
-@msg	the script file permissions could not be saved: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être enregistrées : {e}
+@msg	the script file permissions could not be saved: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être enregistrées : {e}
 @msg	this script's file access can be allowed only once	l’accès aux fichiers de ce script ne peut être autorisé qu’une fois
 @msg	Only the person at the keyboard can allow a script's file access	Seule la personne au clavier peut autoriser l’accès aux fichiers d’un script
-@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script reçoit au plus 2 048 fichiers : les fichiers choisis après eux ont été laissés de côté
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script reçoit au plus 2 048 fichiers : les fichiers choisis après eux ont été laissés de côté
 @msg	Copied the link info	Informations sur le lien copiées
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
