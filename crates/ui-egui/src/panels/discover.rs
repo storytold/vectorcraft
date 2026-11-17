@@ -32,8 +32,9 @@ pub struct View {
     pub results: Vec<Hit>,
     pub selected: Option<usize>,
     pub focus: bool,
-    /// The shortcut generation and language the results were last brought up to date for.
-    current_for: Option<(u64, crate::i18n::Lang)>,
+    /// The menu state ([`crate::native_menu::state_hash`]: commands run, shortcuts, the language,
+    /// recent files and more) the results were last brought up to date for.
+    current_for: Option<u64>,
 }
 
 fn matches(query: &str, text: &str) -> bool {
@@ -41,32 +42,55 @@ fn matches(query: &str, text: &str) -> bool {
     query.split_whitespace().all(|word| text.contains(word))
 }
 
-fn now() -> (u64, crate::i18n::Lang) {
-    (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::i18n::current())
+fn now(app: &VectorcraftApp) -> u64 {
+    crate::native_menu::state_hash(app, None)
 }
 
-/// Updates the retained results' labels, menu paths and shortcuts after a shortcut or the UI
-/// language changes, keeping the query, the results' order and the selected result.
+/// Updates the retained results' labels, menu paths and shortcuts after the menu state changes (a
+/// command, a shortcut or the UI language), keeping the query, the results' order and the selected
+/// result. A command result takes its menu item's current label and place (Show Grid becomes Hide
+/// Grid), and leaves the results when no menu lists it any more, such as a recent file that was
+/// removed.
 fn refresh(app: &mut VectorcraftApp) {
-    let stamp = now();
+    let stamp = now(app);
     if app.ui.discover.current_for == Some(stamp) {
         return;
     }
-    let lang = stamp.1;
-    for hit in &mut app.ui.discover.results {
+    let lang = crate::i18n::current();
+    let entries = if app.ui.discover.results.iter().any(|hit| hit.kind == "command") { menus::menu_entries(app) } else { Vec::new() };
+    let mut by_command: std::collections::HashMap<(&str, String), Vec<&menus::MenuEntry>> = std::collections::HashMap::new();
+    for entry in &entries {
+        if let Some(id) = entry.command.as_deref() {
+            by_command.entry((id, entry.params.to_string())).or_default().push(entry);
+        }
+    }
+    let selected = app.ui.discover.selected.take();
+    let mut kept = Vec::with_capacity(app.ui.discover.results.len());
+    for (index, mut hit) in std::mem::take(&mut app.ui.discover.results).into_iter().enumerate() {
         match hit.kind {
             "tool" => {
                 hit.label = crate::i18n::tr(lang, &hit.english_label).into();
                 hit.shortcut = crate::shortcut_editor::tool_shortcut(&hit.id).unwrap_or_default().into();
             }
             "command" => {
+                let same = by_command.get(&(hit.id.as_str(), hit.params.to_string())).map_or(&[][..], Vec::as_slice);
+                let Some(entry) = same.iter().find(|e| e.path == hit.english_path).or_else(|| same.first()) else {
+                    continue;
+                };
+                hit.english_label = entry.label.clone();
+                hit.english_path = entry.path.clone();
                 hit.label = crate::i18n::tr(lang, &hit.english_label).into();
                 hit.path = hit.english_path.iter().map(|part| crate::i18n::tr(lang, part).into()).collect();
                 hit.shortcut = menus::item_shortcut(&hit.id, &hit.params).or_else(|| menus::shortcut_of(&hit.id)).unwrap_or_default().into();
             }
             _ => {}
         }
+        if selected == Some(index) {
+            app.ui.discover.selected = Some(kept.len());
+        }
+        kept.push(hit);
     }
+    app.ui.discover.results = kept;
     app.ui.discover.current_for = Some(stamp);
 }
 
@@ -133,7 +157,7 @@ fn results(app: &VectorcraftApp) -> Value {
 }
 
 fn set_query(app: &mut VectorcraftApp, query: &str) {
-    app.ui.discover.current_for = Some(now());
+    app.ui.discover.current_for = Some(now(app));
     app.ui.discover.results = search(app, query);
     app.ui.discover.query = query.into();
     app.ui.discover.selected = None;
@@ -141,6 +165,9 @@ fn set_query(app: &mut VectorcraftApp, query: &str) {
 
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let spec = menus::UI_COMMANDS.iter().find(|spec| spec.0 == id && id.starts_with("help.discover"))?;
+    if !(p.is_object() || p.is_null()) {
+        return Some(Err("`params` must be an object".into()));
+    }
     if let Err(e) = vectorcraft_engine::cmd::params::check_keys(id, spec.3, p) {
         return Some(Err(e.to_string()));
     }

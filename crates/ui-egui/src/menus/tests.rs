@@ -166,9 +166,31 @@ fn discover_rejects_invalid_search_and_selection_parameters() {
     for index in [json!(-1), json!(1.5), json!(1000000), json!("0"), Value::Null] {
         assert!(app.run("help.discover.choose", json!({"index": index})).is_err());
     }
+    for params in [json!(5), json!("rectangle"), json!([1]), json!(true)] {
+        for id in ["help.discover", "help.discover.search", "help.discover.choose", "help.discover.back"] {
+            assert!(app.run(id, params.clone()).is_err(), "{id} {params}");
+        }
+        assert_eq!(app.ui.discover.query, before);
+    }
     app.run("help.discover.search", json!({"query": "   "})).unwrap();
     assert!(app.ui.discover.results.is_empty());
     assert!(app.run("help.discover.choose", json!({"index": 0})).is_err());
+}
+
+/// A kept command result follows its menu item: Show Grid reads Hide Grid once the grid shows.
+#[test]
+fn discover_command_results_follow_their_menu_label() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let found = app.run("help.discover.search", json!({"query": "view.grid"})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "view.grid" && hit["path"][0] == "View").unwrap();
+    assert_eq!(found["results"][index]["label"], "Show Grid");
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    app.run("view.grid", json!({})).unwrap();
+    let back = app.run("help.discover", json!({})).unwrap();
+    assert_eq!(back["selected"], index);
+    assert_eq!(back["results"][index]["label"], "Hide Grid");
 }
 
 #[test]

@@ -3269,13 +3269,17 @@ the results. VectorCraft limits a query to 1024 characters and rejects a longer 
 words without regard to case, using translated tool and command labels as well as their English
 labels, ids, and menu paths. Tutorial text remains in English. After a shortcut or the interface
 language changes, the kept results show the current shortcuts, labels, and menu paths, with the
-query and the selected result unchanged.
+query and the selected result unchanged. A command result also shows its menu item's current
+label (Show Grid becomes Hide Grid), and a command that no menu lists any more, such as a removed
+recent file, drops out of the results. Parameters other than an object are an error.
 
 `help.discover.choose {index}` shows that result. A tool result marks its toolbar location without
 choosing the tool. A command result shows its menu path and current shortcut without running it.
 A tutorial result shows its numbered steps; a tool link in a step marks that tool's location.
 The reply is `{result, location}`, with the chosen result and the tool-location reply, tutorial
-id, or command path. An invalid index returns an error and preserves the selected result.
+id, or command path. An invalid index returns an error and preserves the selected result. When a
+tool cannot be marked because Tab or Presentation Mode hides the toolbars, the panel shows the
+tool-location reply's `reason` in the status bar.
 
 Home clears the search. Back and `help.discover.back {}` return to its results with the query
 preserved. Escape in the search field closes the panel. Escape on the canvas still cancels an
