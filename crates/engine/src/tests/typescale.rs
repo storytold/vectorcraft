@@ -462,3 +462,36 @@ fn scale_text_attributes_keeps_a_path_types_path() {
     near(text(&s, id).runs[0].style.size, 24.0);
     same_place(&before, &placed(&s, id));
 }
+
+/// A non-uniform scale on type on a path: only the uniform part is baked and the stretch stays in
+/// the transform, so the brackets, which sit at fractions of the path's length, stay where they
+/// were. Baking the stretch into the path would move them: on this path, scaled 3 × 2, the length
+/// grows from 200 to 500 and not in proportion, so the same fraction lands elsewhere.
+#[test]
+fn scale_text_attributes_keeps_path_type_on_a_stretched_path_where_it_was() {
+    let mut s = session();
+    let pid = s.execute("path.create", &json!({ "d": "M0 0 L100 0 L100 100" })).unwrap()["id"].as_u64().unwrap();
+    let id = NodeId(
+        s.execute("text.createInPath", &json!({"path": pid, "mode": "onPath", "text": "Corner", "size": 12, "at": [60, 0]})).unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 300, "sy": 200, "origin": [0, 0]})).unwrap();
+    let before = placed(&s, id);
+    let brackets = |s: &Session| match text(s, id).kind {
+        vectorcraft_doc::TextKind::OnPath { start, end, .. } => (start, end),
+        k => panic!("not path type: {k:?}"),
+    };
+    let before_brackets = brackets(&s);
+    s.execute("type.scaleTextAttributes", &json!({})).unwrap();
+    near(text(&s, id).runs[0].style.size, 24.0);
+    near(text(&s, id).runs[0].style.h_scale, 100.0);
+    let left = text(&s, id).style_scale().unwrap();
+    near(left.points, 1.0);
+    near(left.horizontal, 1.5);
+    assert_eq!(brackets(&s), before_brackets);
+    same_place(&before, &placed(&s, id));
+    // Only the stretch is left: there is nothing more to bake.
+    assert!(s.execute("type.scaleTextAttributes", &json!({})).is_err());
+}
