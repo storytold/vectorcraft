@@ -138,6 +138,9 @@ hayro-ccitt = "0.3"
 jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 # Substring search for the EPS reader's PostScript `search`.
 memchr = "2"
+# Full Unicode case folding for All Tools (caseless: MIT), with canonical NFC search keys.
+caseless = "0.2.2"
+unicode-normalization = "0.1.26"
 # The WHATWG Encoding Standard's legacy encodings: names in legacy .ai files read in the code page
 # the user picks (Mac OS Roman, Korean, Japanese, Chinese).
 encoding_rs = "0.8.42"

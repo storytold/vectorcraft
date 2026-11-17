@@ -18,8 +18,10 @@
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
+use caseless::Caseless;
 use egui::{DragAndDrop, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
+use unicode_normalization::UnicodeNormalization;
 use vectorcraft_tools::{TOOL_GROUPS, ToolInfo, tool_info};
 
 use crate::state::{ToolbarCategory, ToolbarEdits};
@@ -35,6 +37,22 @@ const WIDTH: f32 = 268.0;
 const GAP: f32 = 4.0;
 /// Size of the tool following the pointer while it is dragged.
 const GHOST: f32 = 30.0;
+
+/// A localized substring-search key. Full folding keeps expansions such as ß/ss and
+/// both Greek sigmas equal. NFC composes dotted I before Turkish tailoring and keeps
+/// canonically equivalent keys equal after folding, without removing accents.
+fn fold_tool_search(text: &str, lang: crate::i18n::Lang) -> String {
+    let turkic = lang.code() == "tr";
+    text.nfc()
+        .map(|c| match (turkic, c) {
+            (true, 'I') => 'ı',
+            (true, 'İ') => 'i',
+            _ => c,
+        })
+        .default_case_fold()
+        .nfc()
+        .collect()
+}
 
 /// A tool dragged between the drawer and the toolbar (egui's drag-and-drop payload).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -550,8 +568,9 @@ pub(crate) fn drawer(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 }
             });
             ui.add_space(4.0);
-            let query = app.ui.tools_drawer_query.trim().to_lowercase();
-            let matches = |tool: &ToolInfo| query.is_empty() || tl!(tool.label).to_lowercase().contains(&query);
+            let lang = crate::i18n::current();
+            let query = fold_tool_search(app.ui.tools_drawer_query.trim(), lang);
+            let matches = |tool: &ToolInfo| query.is_empty() || fold_tool_search(tl!(tool.label), lang).contains(&query);
             // Keep the same bounded drawer after adding the search row.
             let room = (screen.bottom() - top - GAP - 104.0 - search.response.rect.height() - 4.0).max(120.0);
             let mut area = egui::ScrollArea::vertical().max_height(room).min_scrolled_height(room).auto_shrink([false, true]);

@@ -534,3 +534,59 @@ fn learn_reveal_clears_a_stale_filter_and_marks_the_real_target_row() {
     assert_eq!(inert(&app), before);
     assert_eq!(toolbar_contents(&app), contents);
 }
+
+/// The positive lowercase query must reach a real painted row before the uppercase
+/// assertion can diagnose matching. All input goes through the existing App fixture.
+fn assert_localized_case_query(locale: &str, english: &str, lowercase: &str, uppercase: &str) {
+    let screen = vec2(1000.0, 800.0);
+    let (mut app, ctx) = fixture(screen);
+    let lang = vectorcraft_ui_egui::i18n::Lang::from_code(locale).unwrap();
+    app.session.prefs.interface_language = locale.into();
+    let _ = settle(&mut app, &ctx, screen);
+    assert_eq!(vectorcraft_ui_egui::i18n::current().code(), locale);
+    let label = vectorcraft_ui_egui::i18n::tr(lang, english).to_string();
+    assert_ne!(label, english, "this fixture uses a real translated catalog row");
+    let before = inert(&app);
+    let toolbar = toolbar_contents(&app);
+    let shown = query(&mut app, &ctx, screen, lowercase);
+    assert!(visible_tools(&shown, area(&ctx)).contains(&label), "{locale}: lowercase positive control {label}");
+    assert_eq!(app.ui.tools_drawer_query, lowercase, "real lowercase text input reached Search");
+    assert_eq!(inert(&app), before);
+    assert_eq!(toolbar_contents(&app), toolbar);
+    assert_eq!(app.session.tool_id(), "selection");
+    let shown = query(&mut app, &ctx, screen, uppercase);
+    assert_eq!(app.ui.tools_drawer_query, uppercase, "real uppercase text input reached Search");
+    assert_eq!(inert(&app), before);
+    assert_eq!(toolbar_contents(&app), toolbar);
+    assert_eq!(app.session.tool_id(), "selection");
+    assert!(!app.ui.palette_open, "this is the drawer's own Search");
+    assert!(inside(search_node(&shown, area(&ctx)), area(&ctx)));
+    assert!(Rect::from_min_size(Pos2::ZERO, screen).expand(1.0).contains_rect(area(&ctx)));
+    let visible = visible_tools(&shown, area(&ctx));
+    assert!(visible.contains(&label), "{locale}: uppercase {uppercase:?} must retain {label:?}; actual rows: {visible:?}");
+}
+
+#[test]
+fn localized_tool_search_turkish_case_and_canonical_text() {
+    let _language = ui_guard();
+    // ARACI is broad: Selection is the first matching row, while Width may be offscreen.
+    assert_localized_case_query("tr", "Selection Tool", "aracı", "ARACI");
+    assert_localized_case_query("tr", "Width Tool", "genişlik aracı", "GENİŞLİK ARACI");
+    assert_localized_case_query("tr", "Width Tool", "genişlik aracı", "GENI\u{307}ŞLI\u{307}K ARACI");
+}
+
+#[test]
+fn localized_tool_search_greek_final_and_medial_sigma() {
+    let _language = ui_guard();
+    assert_localized_case_query("el", "Add Anchor Point Tool", "προσ", "ΠΡΟΣ");
+}
+
+#[test]
+fn localized_tool_search_full_fold_keeps_georgian_and_german_expansion() {
+    let _language = ui_guard();
+    // Georgian uppercase is an existing-behavior control before the ß/ss falsifier.
+    let lang = vectorcraft_ui_egui::i18n::Lang::from_code("ka").unwrap();
+    let label = vectorcraft_ui_egui::i18n::tr(lang, "Width Tool").to_string();
+    assert_localized_case_query("ka", "Width Tool", &label, &label.to_uppercase());
+    assert_localized_case_query("de", "Dimension Tool", "bemaßungswerkzeug", "BEMASSUNGSWERKZEUG");
+}
