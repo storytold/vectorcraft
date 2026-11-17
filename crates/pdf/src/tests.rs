@@ -223,6 +223,60 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     assert!(fills.contains(&[255, 0, 0, 255]) && fills.contains(&[0, 0, 255, 255]), "{fills:?}");
 }
 
+/// 2,000 symbols, then two named "Mark" (a red square, then a blue one), with an instance of
+/// "Mark" at (25, 25) and, in a knockout group above a green square, a half-opaque one at (70, 70).
+/// With `second` the blue square's symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = doc(100.0, 100.0);
+    for i in 0..2000 {
+        let art = rect_node(Rect::new(0.0, 0.0, 1.0, 1.0), Color::BLACK);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb(1.0, 0.0, 0.0)), (second, Color::rgb(0.0, 0.0, 1.0))] {
+        let art = rect_node(Rect::new(-10.0, -10.0, 10.0, 10.0), color);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((25.0, 25.0)) }));
+    let green = rect_node(Rect::new(60.0, 60.0, 80.0, 80.0), Color::rgb(0.0, 1.0, 0.0));
+    let mut above = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((70.0, 70.0)) });
+    above.opacity = 0.5;
+    let mut group = Node::group(NodeId(0), vec![Arc::new(green), Arc::new(above)]);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    d
+}
+
+/// Instances among many symbols are written with the first symbol of their name, the same bytes
+/// as when no other symbol has that name.
+#[test]
+fn instances_are_written_with_the_first_symbol_of_their_name() {
+    let d = marks("Mark");
+    assert!(uncompressed(&d) == uncompressed(&marks("Other")), "the files differ");
+    let fills: Vec<[u8; 4]> = leaves(&roundtrip(&d)).iter().filter_map(|n| Some(n.appearance.fill_paint().color()?.to_rgba8(1.0))).collect();
+    assert!(fills.contains(&[255, 0, 0, 255]) && !fills.contains(&[0, 0, 255, 255]), "{fills:?}");
+}
+
+/// An export of 300 instances with drop shadows, among 2,000 symbols, reads the symbol list once
+/// to find their symbols.
+#[test]
+fn an_export_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 5.0, f64::from(i / 20) * 5.0)) * Affine::scale(0.2);
+        let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        add(&mut d, n);
+    }
+    let before = vectorcraft_doc::symbols_read();
+    export(&d, &PdfOptions::default()).expect("export");
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+}
+
 #[test]
 fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     // The symbol's art: a line from (0, 40) to (0, 60) with a 1 pt stroke painted by a 20 pt round
