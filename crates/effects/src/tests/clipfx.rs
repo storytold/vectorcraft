@@ -636,6 +636,9 @@ fn painted_clipping_type_survives_enclosing_geometry_effect() {
                 let (region, fills, strokes, inside) = found.unwrap_or_else(|| panic!("{case}: no clip group"));
                 if effect.id == "distort.transform" {
                     assert!((region.y0 - plain.y0 - 10.0).abs() < 0.5 && (region.x0 - plain.x0).abs() < 0.5, "{case}: {region:?} from {plain:?}");
+                } else {
+                    let grown = Rect::new(plain.x0 - 1.0, plain.y0 - 1.0, plain.x1 + 1.0, plain.y1 + 1.0);
+                    assert!(near_rect(region, grown), "{case}: {region:?} is {plain:?} offset by 1 pt");
                 }
                 assert_eq!(fills.is_some(), fill, "{case}: fill art {fills:?}");
                 assert_eq!(strokes.is_some(), stroke, "{case}: stroke art {strokes:?}");
