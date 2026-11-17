@@ -1152,6 +1152,13 @@ pub fn read_info(p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// Resolution at a placed image's transform: 72 points per inch over each pixel axis.
+pub(super) fn effective_ppi(xf: Affine) -> [f64; 2] {
+    let [a, b, c, d, ..] = xf.as_coeffs();
+    let ppi = |x: f64, y: f64| Some(x.hypot(y)).filter(|l| *l > 1e-12).map_or(0.0, |l| 72.0 / l);
+    [ppi(a, b), ppi(c, d)]
+}
+
 pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "image.info";
     let st = s.doc()?;
@@ -1165,9 +1172,6 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = super::links::with_brush_art(&st.doc);
     let n = doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &n.kind else { return Err(bad(C, format!("object {} is not an image", id.0))) };
-    // Effective resolution: 72 pt per inch over the points one pixel spans along each axis.
-    let [a, b, c, d, ..] = im.xf.as_coeffs();
-    let ppi = |x: f64, y: f64| Some(x.hypot(y)).filter(|l| *l > 1e-12).map_or(0.0, |l| 72.0 / l);
     let size = n.geometric_bounds().unwrap_or_default();
     // A linked file outside the read roots of the caller asking now is left unnamed, as in Link Info.
     let doc_path = super::links::LinkBase::of(st).doc;
@@ -1179,7 +1183,7 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
         "colorMode": st.doc.images.get(&im.key).map_or("RGB", |b| color_mode(&b.bytes)),
         "pixelWidth": im.width,
         "pixelHeight": im.height,
-        "ppi": [ppi(a, b), ppi(c, d)],
+        "ppi": effective_ppi(im.xf),
         "width": size.width(),
         "height": size.height(),
     }))
