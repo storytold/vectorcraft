@@ -261,7 +261,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
 }
 
 /// Forget the replacement search: the next open starts with an empty one.
-fn clear_search(ctx: &egui::Context) {
+pub(crate) fn clear_search(ctx: &egui::Context) {
     let (source_key, query_id) = (egui::Id::unique("ff-search-source"), egui::Id::unique("ff-search"));
     ctx.data_mut(|m| {
         m.remove::<String>(source_key);
@@ -286,6 +286,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let mut close = false;
     let mut find_in_folder = false;
     let mut act: Option<&str> = None;
+    // Escape over an open dropdown list closes only the list, which closes itself while it is drawn.
+    let popup_open = egui::Popup::is_any_open(ctx);
     // The replacement-font search, kept in egui memory: cleared when the dialog closes, and when
     // the source changes.
     let source_key = egui::Id::unique("ff-search-source");
@@ -421,16 +423,20 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             Err(e) => app.ui.status = e,
         }
     }
-    if close || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if close || (!popup_open && crate::shortcuts::pressed_anew(ctx, egui::Key::Escape)) {
         app.ui.dialog = None;
         // The next open starts with an empty search.
         clear_search(ctx);
     } else if app.ui.dialog.is_some() {
         app.ui.dialog = Some(d);
     }
-    // Missing Fonts takes the dialog's place, searching the folder picked.
-    if find_in_folder && let Err(e) = app.run("ui.findFontsInFolder", json!({})) {
-        app.ui.status = e;
+    // Missing Fonts takes the dialog's place, searching the folder picked; the next Find Font
+    // starts with an empty search.
+    if find_in_folder {
+        match app.run("ui.findFontsInFolder", json!({})) {
+            Ok(_) => clear_search(ctx),
+            Err(e) => app.ui.status = e,
+        }
     }
 }
 
@@ -1010,6 +1016,148 @@ mod tests {
         assert!(app.ui.dialog.is_none(), "Escape closes the dialog");
         assert_eq!(ctx.data(|m| m.get_temp::<String>(query_id)), None, "the search text is gone");
         assert_eq!(ctx.data(|m| m.get_temp::<String>(source_id)), None, "the source it was typed under is gone");
+    }
+
+    /// A context with the app's fonts and theme that the app knows as its own, for [`app_frame`].
+    fn app_ctx(app: &mut VectorcraftApp) -> egui::Context {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        app.ui_ctx = Some(ctx.clone());
+        ctx
+    }
+
+    /// One 1200 × 900 frame with `events` through the app's key handling and then the dialogs, as
+    /// the app runs them; the center of the text `label` if the frame shows it.
+    fn app_frame(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>, label: &str) -> Option<egui::Pos2> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0));
+        let raw = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            crate::shortcuts::handle(app, ui.ctx());
+            crate::dialogs::show(app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == label => Some(egui::Rect::from_min_size(t.pos, t.galley.size()).center()),
+            _ => None,
+        })
+    }
+
+    /// Clicks the text `label` through [`app_frame`].
+    fn app_click(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
+        app_frame(ctx, app, vec![], label);
+        let at = app_frame(ctx, app, vec![], label).unwrap_or_else(|| panic!("no {label:?} shown"));
+        let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        app_frame(ctx, app, vec![egui::Event::PointerMoved(at), button(true)], label);
+        app_frame(ctx, app, vec![button(false)], label);
+        app_frame(ctx, app, vec![], label);
+    }
+
+    /// An Escape key event: pressed, or let go.
+    fn escape_key(pressed: bool, repeat: bool) -> egui::Event {
+        egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat, modifiers: Default::default() }
+    }
+
+    /// Presses and lets go of Escape through [`app_frame`].
+    fn app_escape(ctx: &egui::Context, app: &mut VectorcraftApp) {
+        app_frame(ctx, app, vec![escape_key(true, false)], "");
+        app_frame(ctx, app, vec![escape_key(false, false)], "");
+    }
+
+    /// Types `query` into the replacement search under the dialog's source, as the search field
+    /// keeps it.
+    fn seed_search(ctx: &egui::Context, app: &VectorcraftApp, query: &str) {
+        let source = app.ui.dialog.as_ref().expect("Find Font is open").str("replaceFrom");
+        ctx.data_mut(|m| {
+            m.insert_temp(egui::Id::unique("ff-search-source"), source);
+            m.insert_temp(egui::Id::unique("ff-search"), query.to_string());
+        });
+    }
+
+    /// The replacement search and the source it was typed under, as egui memory keeps them.
+    fn search_state(ctx: &egui::Context) -> (Option<String>, Option<String>) {
+        ctx.data(|m| (m.get_temp::<String>(egui::Id::unique("ff-search")), m.get_temp::<String>(egui::Id::unique("ff-search-source"))))
+    }
+
+    /// Escape with Replace With Font From's or Find In's list open closes only the list: Find Font
+    /// stays open with its source and its search, holding Escape down leaves it open, and the next
+    /// press closes it and forgets the search.
+    #[test]
+    fn escape_over_an_open_dropdown_closes_only_the_dropdown() {
+        for current in ["System", "Document"] {
+            let mut app = two_font_document();
+            let ctx = app_ctx(&mut app);
+            open(&mut app);
+            app_frame(&ctx, &mut app, vec![], "");
+            seed_search(&ctx, &app, "inter");
+            app_click(&ctx, &mut app, current);
+            assert!(egui::Popup::is_any_open(&ctx), "{current}: the list is open");
+            app_frame(&ctx, &mut app, vec![escape_key(true, false)], "");
+            for _ in 0..3 {
+                app_frame(&ctx, &mut app, vec![escape_key(true, true)], "");
+            }
+            app_frame(&ctx, &mut app, vec![escape_key(false, false)], "");
+            assert!(!egui::Popup::is_any_open(&ctx), "{current}: Escape closes the list");
+            let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{current}: Find Font stays open"));
+            assert_eq!((d.kind.as_str(), d.str("replaceFrom"), d.str("findIn")), ("findFont", "system".into(), "document".into()), "{current}");
+            assert_eq!(search_state(&ctx), (Some("inter".into()), Some("system".into())), "{current}: the search is kept");
+            app_escape(&ctx, &mut app);
+            assert!(app.ui.dialog.is_none(), "{current}: the next Escape closes Find Font");
+            assert_eq!(search_state(&ctx), (None, None), "{current}: closing forgets the search");
+        }
+    }
+
+    /// Escape and Done, through the app's key handling, each close Find Font and forget the
+    /// replacement search and its source.
+    #[test]
+    fn escape_and_done_through_the_app_clear_the_replacement_search() {
+        for how in ["Escape", "Done"] {
+            let mut app = two_font_document();
+            let ctx = app_ctx(&mut app);
+            open(&mut app);
+            app_frame(&ctx, &mut app, vec![], "");
+            seed_search(&ctx, &app, "inter");
+            if how == "Escape" {
+                app_escape(&ctx, &mut app);
+            } else {
+                app_click(&ctx, &mut app, "Done");
+            }
+            assert!(app.ui.dialog.is_none(), "{how} closes Find Font");
+            assert_eq!(search_state(&ctx), (None, None), "{how} forgets the search");
+            open(&mut app);
+            app_frame(&ctx, &mut app, vec![], "");
+            assert_eq!(search_state(&ctx), (Some(String::new()), Some("system".into())), "{how}: the next open starts with an empty search");
+        }
+    }
+
+    /// Find in Folder… that opens Missing Fonts forgets Find Font's search; with no folder picked,
+    /// Find Font stays open with its search.
+    #[test]
+    fn find_in_folder_forgets_the_search_once_missing_fonts_opens() {
+        let dir = std::fs::canonicalize(vectorcraft_testkit::temp_dir("find-font-folder-search")).unwrap();
+        for picks in [false, true] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.search_rules = Some(vectorcraft_engine::cmd::findfiles::Rules { user_content: vec![dir.clone()], ..Default::default() });
+            app.session.search_threads = Some(1);
+            app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Missing Family"})).unwrap();
+            let picked = picks.then(|| dir.to_string_lossy().into_owned());
+            app.services.pick_folder = Some(Box::new(move || picked.clone()));
+            let ctx = app_ctx(&mut app);
+            open(&mut app);
+            app_frame(&ctx, &mut app, vec![], "");
+            seed_search(&ctx, &app, "inter");
+            app_click(&ctx, &mut app, "Find in Folder…");
+            let kind = app.ui.dialog.as_ref().map(|d| d.kind.clone());
+            if picks {
+                assert_eq!(kind.as_deref(), Some(crate::dialogs::missing_fonts::KIND), "Missing Fonts takes Find Font's place");
+                assert_eq!(search_state(&ctx), (None, None), "the search is forgotten");
+                crate::dialogs::cancel(&mut app);
+            } else {
+                assert_eq!(kind.as_deref(), Some("findFont"), "with no folder picked, Find Font stays open");
+                assert_eq!(search_state(&ctx), (Some("inter".into()), Some("system".into())), "and keeps its search");
+            }
+        }
     }
 
     /// The wheel over the rows scrolls them, and leaves the document's font list where it was: two
