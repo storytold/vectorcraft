@@ -285,6 +285,39 @@ fn a_line_set_after_cancel_save_stays() {
     assert_eq!(app.ui.status, "Another command's line");
 }
 
+/// A Cancel that comes once the encoder has filled a streamed save, while the host's writer is still
+/// flushing it, stops the save as any other Cancel does: the writer's last check refuses to put the
+/// file in place, and the save reports it canceled, not failed.
+#[test]
+fn a_cancel_after_a_streamed_save_is_filled_cancels_it() {
+    let (gate, filled) = (Gate::default(), Gate::default());
+    let (g, w) = (gate.clone(), filled.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(|_: &str, _: &[u8]| Ok(()))),
+        stream_shared: Some(Arc::new(move |_: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
+            fill(&mut Vec::new()).map_err(|e| e.to_string())?;
+            w.open();
+            g.wait();
+            // The atomic writer's last check before the file is put in place.
+            vectorcraft_engine::cancel::check().map_err(|e| std::io::Error::other(e).to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let r = app.run("file.save", json!({"path": "/docs/streamed.vectorcraft"})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    filled.wait();
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 1);
+    gate.open();
+    background::wait_all(&mut app);
+    assert!(app.ui.dialog.is_none(), "no error is shown");
+    assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    let st = app.session.active().unwrap();
+    assert!(st.is_dirty() && st.path.is_none(), "the canceled save left the document as it was");
+}
+
 #[test]
 fn quitting_waits_for_background_saves() {
     let gate = Gate::default();

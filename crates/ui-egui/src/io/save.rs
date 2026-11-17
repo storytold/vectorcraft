@@ -542,6 +542,18 @@ pub(crate) fn saved_status(path: &str, r: &Value) -> String {
     }
 }
 
+/// A string writer's error during a save: [`EngineError::Cancelled`] when the save was canceled and
+/// the writer stopped on that Cancel (its message is the Cancel's own, alone or after the path), so
+/// the file was not put in place. Any other message, such as one naming the copies a failed
+/// replacement kept, stays [`EngineError::Other`].
+fn writer_error(e: String) -> EngineError {
+    use vectorcraft_engine::cancel;
+    let stopped = [EngineError::Cancelled.to_string(), cancel::Cancelled.to_string()]
+        .iter()
+        .any(|c| e == *c || e.strip_suffix(c.as_str()).is_some_and(|rest| rest.ends_with(": ")));
+    if stopped && cancel::is_cancelled() { EngineError::Cancelled } else { EngineError::Other(e) }
+}
+
 /// Write a planned save through the services and report it in the status bar.
 /// With Background Save on, the file is encoded and written from a snapshot off the UI thread
 /// ([`background`]): this returns `{path, background: true, status, format, warnings}` at once
@@ -610,8 +622,8 @@ fn write_plan(
         let r = match (save_stream, save_write, stream) {
             (Some(stream), _, _) => job.write_streamed(&mut |p, fill| observed(p, stream(p, fill))),
             (_, Some(write), _) => job.write_unless(check, |p, b| observed(p, write(p, b))),
-            (_, _, Some(stream)) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(EngineError::Other)),
-            _ => job.write_unless(check, |p, b| write(p, b).map_err(EngineError::Other)),
+            (_, _, Some(stream)) => job.write_streamed(&mut |p, fill| stream(p, fill).map_err(writer_error)),
+            _ => job.write_unless(check, |p, b| write(p, b).map_err(writer_error)),
         };
         match r {
             // Nothing written: the file is as it was.
