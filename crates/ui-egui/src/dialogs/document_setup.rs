@@ -180,17 +180,18 @@ fn grid_color_box_id(index: usize) -> egui::Id {
     egui::Id::unique(("grid-color-box", index))
 }
 
+/// The grid colors' hex codes that Document Setup `d` holds now (empty strings for entries that are
+/// not strings).
+fn grid_colors(d: &Dialog) -> Vec<String> {
+    d.fields.get("gridColors").and_then(Value::as_array).map(|a| a.iter().map(|c| c.as_str().unwrap_or("").to_string()).collect()).unwrap_or_default()
+}
+
 fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     widgets::subheader(ui, tl!("Transparency Grid"));
     let sizes: Vec<(&str, &str)> = GridSize::ALL.iter().map(|g| (g.id(), g.label())).collect();
     choice(ui, d, "gridSize", tl!("Grid Size:"), &sizes);
-    let colors: Vec<String> = d
-        .fields
-        .get("gridColors")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().map(|c| c.as_str().unwrap_or("").to_string()).collect())
-        .unwrap_or_default();
+    let colors = grid_colors(d);
     let preset = GRID_COLOR_PRESETS
         .iter()
         .find(|(_, pair)| colors.len() == 2 && colors.iter().zip(pair).all(|(h, c)| h.eq_ignore_ascii_case(&c.to_hex())))
@@ -203,7 +204,10 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     // The two colours (the first is also the paper colour): editing either makes them Custom. A
     // click on a color's box, or Space or Enter with the keyboard on it, opens the Color Picker on
-    // that color (white when its hex is not a color), and the picker's OK sets that color.
+    // that color (white when its hex is not a color), and the picker's OK sets that color. The
+    // picker opens after the row, on the color Document Setup holds then: a press on a box ends a
+    // hex field's editing in the same frame, and that field's edit is the color the picker opens on.
+    // A hex field's edit replaces its own color in the pair Document Setup holds when it commits.
     let mut pick = None;
     widgets::label_row(ui, "", LABEL, |ui| {
         for i in 0..2 {
@@ -218,7 +222,7 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                     inp.consume_key(egui::Modifiers::NONE, egui::Key::Space) | inp.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
                 });
             if resp.clicked() || keyed {
-                pick = Some((i, colour.unwrap_or(vectorcraft_color::Color::WHITE)));
+                pick = Some(i);
             }
             if resp.hovered() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -231,7 +235,7 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 ui.painter().rect_stroke(chip.expand(2.0), 3.0, ui.visuals().selection.stroke, egui::StrokeKind::Outside);
             }
             if let Some(c) = widgets::hex_field_named(ui, ("grid-color", i), Some(&name), hex).and_then(|h| vectorcraft_color::Color::from_hex(&h)) {
-                let mut v = colors.clone();
+                let mut v = grid_colors(d);
                 v.resize(2, "#ffffff".into());
                 v[i] = c.to_hex();
                 d.fields.insert("gridColors".into(), json!(v));
@@ -239,8 +243,9 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             ui.add_space(10.0);
         }
     });
-    if let Some((i, c)) = pick {
-        *d = super::color_picker::over_list_entry(d, "gridColors", i, c);
+    if let Some(i) = pick {
+        let c = grid_colors(d).get(i).and_then(|h| vectorcraft_color::Color::from_hex(h.trim_start_matches('#')));
+        *d = super::color_picker::over_list_entry(d, "gridColors", i, c.unwrap_or(vectorcraft_color::Color::WHITE));
     }
     ui.add_space(4.0);
     check(ui, d, "simulatePaper", tl!("Simulate Colored Paper"));
@@ -769,6 +774,77 @@ mod tests {
             assert_eq!(app.session.active().unwrap().doc.setup.grid_colors_name(), "Light");
             assert_eq!(undo_steps(&app), 0, "cancel {cancel}");
         }
+    }
+
+    /// Clicks the hex field that shows `digits` and types `typed` over its text, leaving the edit
+    /// pending; returns the field's id.
+    fn type_into_hex_field(app: &mut VectorcraftApp, ctx: &egui::Context, digits: &str, typed: &str) -> egui::Id {
+        let texts = dialog_frame(app, ctx, vec![]);
+        let at = texts.iter().find(|(t, _)| t == digits).unwrap_or_else(|| panic!("no field {digits}: {texts:?}")).1.center();
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        dialog_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+        dialog_frame(app, ctx, vec![button(false)]);
+        let field = ctx.memory(|m| m.focused()).unwrap_or_else(|| panic!("field {digits} has no focus"));
+        dialog_frame(app, ctx, vec![Event::Text(typed.into())]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(field), "the edit in {digits} is pending");
+        field
+    }
+
+    /// A click on a grid color's box whose press and release come in one frame, while that
+    /// color's hex field holds an edit, opens the Color Picker on the edited color: the press
+    /// commits the edit before the picker opens. The picker's unchanged OK keeps the edit, and the
+    /// other color stays as it was.
+    #[test]
+    fn a_grid_color_box_clicked_during_a_hex_edit_opens_the_picker_on_the_edit() {
+        for index in [0, 1] {
+            let (mut app, ctx) = transparency_tab();
+            type_into_hex_field(&mut app, &ctx, LIGHT[index].trim_start_matches('#'), "123456");
+            let at = ctx.read_response(super::grid_color_box_id(index)).unwrap_or_else(|| panic!("no box {index}")).rect.center();
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            dialog_frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true), button(false)]);
+            let case = format!("box {index}");
+            assert_picker_over_setup(&app, "#123456", &case);
+            let mut pair = LIGHT;
+            pair[index] = "#123456";
+            assert_eq!(dialog_grid(&crate::dialogs::parent(app.ui.dialog.as_ref().unwrap()).unwrap()), pair.map(hex).to_vec(), "{case}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, pair.map(hex).to_vec()), "{case}");
+        }
+    }
+
+    /// A hex field's edit that commits in the frame a Grid Colors preset is chosen replaces only
+    /// its own color in the preset's pair: the other color is the preset's. The test gives the
+    /// field the focus while the Grid Colors menu is open, then chooses a preset with a click whose
+    /// press and release come in one frame.
+    #[test]
+    fn a_hex_edit_committed_with_a_preset_choice_keeps_the_presets_other_color() {
+        let field = {
+            let (mut app, ctx) = transparency_tab();
+            type_into_hex_field(&mut app, &ctx, "ffffff", "123456")
+        };
+        let (mut app, ctx) = transparency_tab();
+        let click = |app: &mut VectorcraftApp, label: &str, frames: usize| {
+            let texts = dialog_frame(app, &ctx, vec![]);
+            let at = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no {label}: {texts:?}")).1.center();
+            let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+            if frames == 1 {
+                dialog_frame(app, &ctx, vec![Event::PointerMoved(at), button(true), button(false)]);
+            } else {
+                dialog_frame(app, &ctx, vec![Event::PointerMoved(at), button(true)]);
+                dialog_frame(app, &ctx, vec![button(false)]);
+            }
+        };
+        click(&mut app, "Light", 2);
+        ctx.memory_mut(|m| m.request_focus(field));
+        dialog_frame(&mut app, &ctx, vec![]);
+        let select_all = Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND };
+        dialog_frame(&mut app, &ctx, vec![select_all, Event::Text("123456".into())]);
+        assert_eq!(ctx.memory(|m| m.focused()), Some(field), "the edit is pending");
+        let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+        assert!(texts.iter().any(|t| t == "123456") && texts.iter().any(|t| t == "Blue"), "{texts:?}");
+        click(&mut app, "Blue", 1);
+        assert_eq!(dialog_grid(app.ui.dialog.as_ref().unwrap()), ["#123456", "#c4dcff"].map(hex).to_vec());
     }
 
     /// The picker's OK sets nothing when the dialog under it has no such color or is gone: it is
