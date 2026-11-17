@@ -281,6 +281,32 @@ fn a_stop_names_the_files_the_run_left_written() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// While a run waits at its file dialog, the app's frame logic does not ask for a frame on every
+/// frame.
+#[test]
+fn a_run_waiting_at_its_file_dialog_lets_the_app_idle() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": "Folder.selectDialog('Folder');" })).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    assert!(app.session.script_picker().is_some(), "the run waits at its folder dialog");
+    let ctx = egui::Context::default();
+    let mut wait = std::time::Duration::ZERO;
+    for frame in 0..4 {
+        let time = f64::from(frame);
+        app.now_override = Some(time);
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+        let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| app.logic(ui.ctx()));
+        out.textures_delta.clear();
+        wait = out.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay);
+    }
+    assert!(app.session.script_picker().is_some(), "the run still waits");
+    assert!(wait > std::time::Duration::from_millis(100), "{wait:?}: {:?}", ctx.repaint_causes());
+    assert!(app.session.script_request_stop());
+    finish(&mut app);
+}
+
 /// A script's open dialog with `multiSelect` shows the host's dialog for several files, with the
 /// file types of the script's filter, and the script gets every file picked.
 #[test]
