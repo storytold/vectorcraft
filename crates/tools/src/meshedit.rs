@@ -66,6 +66,16 @@ pub fn part_points(m: &GradientMesh, p: Point, point_tol: f64, line_tol: f64) ->
     Some(vec![m.idx(r, c), m.idx(r, c + 1), m.idx(r + 1, c), m.idx(r + 1, c + 1)])
 }
 
+/// The points of gradient mesh `m` that a color dropped at `p`, or an Eyedropper click there,
+/// recolors: the point within `point_tol`, else the four points around the patch under `p`.
+pub fn color_points(m: &GradientMesh, p: Point, point_tol: f64) -> Option<Vec<usize>> {
+    if let Some(i) = m.point_near(p, point_tol) {
+        return Some(vec![i]);
+    }
+    let (r, c, ..) = m.locate(p)?;
+    Some(vec![m.idx(r, c), m.idx(r, c + 1), m.idx(r + 1, c), m.idx(r + 1, c + 1)])
+}
+
 /// What a press on a mesh grabs: the mesh, the point and (on the focused point) a handle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MeshGrab {
