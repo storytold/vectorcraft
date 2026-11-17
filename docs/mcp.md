@@ -6327,6 +6327,21 @@ and Shift steps follow the box the same way; a Reflect axis drawn with the tool 
 {"name":"run_command","arguments":{"command":"object.reflect","params":{"axis":"vertical","basis":"page"}}}
 ```
 
+## Shear along an angled axis
+
+`object.shear` takes `axis` as `"horizontal"`, `"vertical"` or a number of degrees from -359 to 359. A number is a
+line on the page at that angle, counter-clockwise from horizontal, as `object.reflect`'s numeric `axis` is, and the art
+slides along that line about `origin` by the shear `angle`, which stays a separate value. 0 shears as `"horizontal"`
+and 90 as `"vertical"`. An angle outside the range, a number given as a string, or any other value is an error, and
+nothing changes. The Shear dialog's Axis has Horizontal, Vertical and Angle; the Axis Angle field beside it starts at
+0° and takes input while Angle is chosen. The [help page](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/shear-objects.html)
+describes the Angle axis as a custom slant direction between -359° and 359°, measured from the horizontal. The
+counter-clockwise direction on the page and the 0° starting value are VectorCraft's own.
+
+```json
+{"name":"run_command","arguments":{"command":"object.shear","params":{"angle":30,"axis":45}}}
+```
+
 ## Free Distort on a turned bounding box
 
 `object.distort` maps the corners of `from` (TL, TR, BR, BL) onto `corners`, which are page coordinates. With
@@ -6821,8 +6836,8 @@ wide.
 
 `object.align` needs `horizontal` or `vertical`. The three Align commands, `object.reflect` and `object.shear` return
 an error that lists the choices of a `horizontal`, `vertical`, `to`, `axis` or `bounds` param given another value
-(`object.reflect` also takes an angle and names the value given), and one for a `spacing` that is not a number; nothing
-moves.
+(`object.reflect` and `object.shear` also take an angle and name the value given; `object.shear`'s angle runs from -359
+to 359), and one for a `spacing` that is not a number; nothing moves.
 
 ## Glyph bounds for type
 

@@ -5608,6 +5608,7 @@ axis	Both	Ambos
 	[Normal Paragraph Style]	[Estilo de Parágrafo Normal]
 	Joins	Junções
 	Axis	Eixo
+	Axis Angle	Ângulo do eixo
 	Run	Executar
 	Run Script	Executar script
 	Stop Script	Parar script

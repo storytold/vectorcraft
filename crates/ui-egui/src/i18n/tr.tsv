@@ -4232,6 +4232,7 @@ imageTrace	Outline	Kontur
 	Bevel	Eğim
 	Offset	Ofset
 	Axis	Eksen
+	Axis Angle	Eksen açısı
 axis	Horizontal	Yatay
 axis	Vertical	Dikey
 axis	Both	Her İkisi

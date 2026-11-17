@@ -4453,6 +4453,7 @@ imageTrace	Outline	Contour
 	Bevel	Biseauté
 	Offset	Décalage
 	Axis	Axe
+	Axis Angle	Angle de l’axe
 axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Les deux

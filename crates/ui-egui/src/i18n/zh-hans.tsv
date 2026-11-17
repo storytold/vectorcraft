@@ -5842,6 +5842,7 @@ font-technology	Variable	可变
 	Bevel	斜角
 	Offset	偏移
 	Axis	轴
+	Axis Angle	轴角度
 axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	两者

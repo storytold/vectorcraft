@@ -4380,6 +4380,7 @@ imageTrace	Outline	Kontur
 	Bevel	Fasning
 	Offset	Förskjutning
 	Axis	Axel
+	Axis Angle	Axelvinkel
 axis	Horizontal	Horisontell
 axis	Vertical	Vertikal
 axis	Both	Båda

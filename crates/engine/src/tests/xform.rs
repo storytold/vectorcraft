@@ -480,8 +480,8 @@ fn reflect_and_shear_tools() {
     assert!((b.width() - 150.0).abs() < 1e-6, "{b:?}");
 }
 
-/// Reflect and Shear return an error for an `axis` they don't take (Reflect's names it and also
-/// takes an angle): nothing moves and no undo step is recorded. A null `axis` counts as not given: Reflect
+/// Reflect and Shear return an error for an `axis` they don't take, naming it (both also take an
+/// angle, Shear's from -359° to 359°): nothing moves and no undo step is recorded. A null `axis` counts as not given: Reflect
 /// then reflects across the vertical axis and Shear shears along the horizontal one.
 #[test]
 fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
@@ -489,13 +489,17 @@ fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
     let a = rect(&mut s, 10.0, 20.0, 30.0, 10.0);
     let n = undo_len(&s);
     let reflect = "axis must be \"vertical\", \"horizontal\" or an angle in degrees";
-    let shear = "`axis` must be one of horizontal, vertical";
+    let shear = "axis must be \"horizontal\", \"vertical\" or an angle in degrees from -359 to 359";
     for (cmd, p, msg) in [
         ("object.reflect", json!({"axis": "diagonal", "origin": [0, 0]}), format!("{reflect}, not `diagonal`")),
         ("object.reflect", json!({"axis": "45", "origin": [0, 0]}), format!("{reflect}, not `45`")),
         ("object.reflect", json!({"axis": true, "origin": [0, 0]}), format!("{reflect}, not `true`")),
-        ("object.shear", json!({"angle": 30, "axis": "diagonal"}), shear.to_string()),
-        ("object.shear", json!({"angle": 30, "axis": 90}), shear.to_string()),
+        ("object.shear", json!({"angle": 30, "axis": "diagonal"}), format!("{shear}, not `diagonal`")),
+        ("object.shear", json!({"angle": 30, "axis": "90"}), format!("{shear}, not `90`")),
+        ("object.shear", json!({"angle": 30, "axis": 360}), format!("{shear}, not `360`")),
+        ("object.shear", json!({"angle": 30, "axis": -359.5}), format!("{shear}, not `-359.5`")),
+        ("object.shear", json!({"angle": 30, "axis": [45]}), format!("{shear}, not `[45]`")),
+        ("object.shear", json!({"angle": 30, "axis": false}), format!("{shear}, not `false`")),
     ] {
         let e = s.execute(cmd, &p).expect_err(&format!("{cmd} {p}"));
         assert_eq!(e.to_string(), format!("invalid parameters for `{cmd}`: {msg}"));
@@ -509,6 +513,56 @@ fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
     s.execute("object.shear", &json!({"angle": 45, "axis": null, "origin": [0, 0]})).unwrap();
     let b = bounds(&s, a);
     assert!((b.y0 + 30.0).abs() < 1e-6 && (b.y1 + 20.0).abs() < 1e-6 && b.width() > 30.0, "along the horizontal axis: {b:?}");
+}
+
+/// Shear along an axis at an angle, counter-clockwise from horizontal on the page: each point
+/// slides along the axis by the tangent of the shear angle times its distance across the axis
+/// from the origin. -359° and 359° are taken, the shear is one undo step and Transform Again
+/// repeats it; 0° and 90° shear as the named axes do, and a copy leaves the original in place.
+#[test]
+fn shear_along_an_axis_at_an_angle() {
+    let anchors = |s: &Session, id: NodeId| -> Vec<Point> {
+        s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect()
+    };
+    // The axis's direction and the direction a quarter turn counter-clockwise from it, with y down.
+    let sheared = |p: Point, o: Point, axis: f64, angle: f64| {
+        let (a, k) = (axis.to_radians(), angle.to_radians().tan());
+        let (along, across) = (Vec2::new(a.cos(), -a.sin()), Vec2::new(-a.sin(), -a.cos()));
+        p + along * (k * (p - o).dot(across))
+    };
+    let near = |a: &[Point], b: &[Point]| a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 1e-9);
+    let o = Point::new(20.0, 30.0);
+    for (axis, angle) in [(45.0, 30.0), (-120.5, 20.0), (359.0, 30.0), (-359.0, -30.0), (30.0, 30.0)] {
+        let mut s = session();
+        let a = rect(&mut s, 100.0, 100.0, 60.0, 20.0);
+        let before = anchors(&s, a);
+        let n = undo_len(&s);
+        s.execute("object.shear", &json!({"angle": angle, "axis": axis, "origin": [o.x, o.y]})).unwrap();
+        let want: Vec<Point> = before.iter().map(|p| sheared(*p, o, axis, angle)).collect();
+        assert!(near(&anchors(&s, a), &want), "{axis}° {angle}°: {:?}, not {want:?}", anchors(&s, a));
+        assert_eq!(undo_len(&s), n + 1, "one undo step");
+        s.execute("object.transformAgain", &json!({})).unwrap();
+        let again: Vec<Point> = want.iter().map(|p| sheared(*p, o, axis, angle)).collect();
+        assert!(near(&anchors(&s, a), &again), "Transform Again at {axis}°: {:?}", anchors(&s, a));
+    }
+    for (named, axis) in [("horizontal", 0.0), ("vertical", 90.0), ("vertical", -270.0)] {
+        let mut s = session();
+        let a = rect(&mut s, 100.0, 100.0, 60.0, 20.0);
+        s.execute("object.shear", &json!({"angle": 30, "axis": named, "origin": [o.x, o.y]})).unwrap();
+        let by_name = anchors(&s, a);
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.execute("object.shear", &json!({"angle": 30, "axis": axis, "origin": [o.x, o.y]})).unwrap();
+        assert!(near(&anchors(&s, a), &by_name), "{axis}° shears as {named}: {:?}, not {by_name:?}", anchors(&s, a));
+    }
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 60.0, 20.0);
+    let before = anchors(&s, a);
+    s.execute("object.shear", &json!({"angle": 30, "axis": 45, "origin": [o.x, o.y], "copy": true})).unwrap();
+    assert!(near(&anchors(&s, a), &before), "the original stays: {:?}", anchors(&s, a));
+    let copy = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_ne!(copy, a, "the copy is selected");
+    let want: Vec<Point> = before.iter().map(|p| sheared(*p, o, 45.0, 30.0)).collect();
+    assert!(near(&anchors(&s, copy), &want), "the copy is sheared: {:?}", anchors(&s, copy));
 }
 
 #[test]
