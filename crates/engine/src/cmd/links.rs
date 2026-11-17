@@ -509,7 +509,16 @@ pub(crate) fn linked_files(d: &Document, base: LinkBase) -> Vec<LinkedFile> {
         .filter(|g| seen.insert(g.link.path.clone()))
         .map(|g| {
             let named = fileio::format_for_name(g.link.name()).or_else(|| fileio::readable_format_for_name(g.link.name()));
-            let own = |b: &&ImageBlob| !b.is_proxy() && named.is_some_and(|f| f.mime == b.mime);
+            // A placed document's PostScript bytes are its file's own only when its name is one that
+            // PostScript is read from (`.eps`, `.epsf`, `.ps`, a PostScript `.ai` or `.ait`).
+            let postscript_name = matches!(fileio::extension(g.link.name()).as_str(), "eps" | "epsf" | "ps" | "ai" | "ait");
+            let postscript = |b: &ImageBlob| {
+                g.document.is_some()
+                    && postscript_name
+                    && b.mime == super::place::document::POSTSCRIPT
+                    && super::place::document::is_postscript(&b.bytes)
+            };
+            let own = |b: &&ImageBlob| !b.is_proxy() && (named.is_some_and(|f| f.mime == b.mime) || postscript(b));
             let found = locate(&g.link, base);
             let found_path = found.as_ref().map(|f| f.path.clone());
             let bytes = found.and_then(|mut f| f.read().ok()).or_else(|| d.images.get(&g.key).filter(own).map(|b| b.bytes.to_vec()));
@@ -593,8 +602,8 @@ pub(crate) fn store_image(d: &mut Document, key: &str, full: ImageBlob, linked: 
 /// Whether `bytes` are a PNG, JPEG, GIF or WebP file: the formats [`fileio::raster_image`] keeps
 /// as they are after reading only their header.
 pub(crate) fn kept_unread(bytes: &[u8]) -> bool {
-    use image::ImageFormat as F;
-    matches!(image::guess_format(bytes), Ok(F::Png | F::Jpeg | F::Gif | F::WebP))
+    use craft_image_codecs::Format as F;
+    matches!(craft_image_codecs::detect(bytes), Some(F::Png | F::Jpeg | F::Gif | F::WebP))
 }
 
 /// `blob`, an image [`fileio::raster_image`] read from a file, ready to keep. When `unread` (the
@@ -2361,12 +2370,20 @@ fn format_label(d: &Document, im: &ImageObject) -> &'static str {
         .map_or("Image", |f| f.label)
 }
 
-/// A placed document's `links.list` fields: `format` (`VectorCraft`, or the PDF or `.ai` file's
-/// format), `document: true` and its artboard's or page's size (`pageWidth`, `pageHeight`, pt)
-/// instead of pixels.
-fn document_row(p: &PlacedDocument) -> Value {
-    let pdf = fileio::format_for_name(p.link.name()).filter(|f| matches!(f.id, "pdf" | "ai" | "ait"));
-    json!({ "format": pdf.map_or("VectorCraft", |f| f.label), "document": true, "pageWidth": p.width, "pageHeight": p.height })
+/// A placed document's `links.list` fields (of `d`): `format` (`VectorCraft`, the PDF or `.ai`
+/// file's format, or for an EPS or PostScript file `EPS` or `PostScript`), `document: true` and its
+/// artboard's or page's size (`pageWidth`, `pageHeight`, pt) instead of pixels. A PostScript `.ai`
+/// is told by its stored bytes or, when a save kept only its preview, by its key.
+fn document_row(d: &Document, p: &PlacedDocument) -> Value {
+    use super::place::document::{POSTSCRIPT, is_postscript_ai_key};
+    let postscript = d.images.get(&p.key).is_some_and(|b| b.mime == POSTSCRIPT) || is_postscript_ai_key(&p.key);
+    let format = match fileio::format_for_name(p.link.name()) {
+        Some(f) if matches!(f.id, "eps" | "ps") => f.label,
+        _ if postscript => "PostScript",
+        Some(f) if matches!(f.id, "pdf" | "ai" | "ait") => f.label,
+        _ => "VectorCraft",
+    };
+    json!({ "format": format, "document": true, "pageWidth": p.width, "pageHeight": p.height })
 }
 
 /// The size in bytes of the file that link `l` (of `st`) names, as Link Info shows it: the file's
@@ -2488,7 +2505,7 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 (im.link.as_ref(), row)
             }
-            NodeKind::PlacedDocument(p) => (Some(&p.link), document_row(p)),
+            NodeKind::PlacedDocument(p) => (Some(&p.link), document_row(&doc, p)),
             _ => continue,
         };
         let name = link.map_or_else(|| n.display_name(), |l| l.name().to_string());
@@ -2639,12 +2656,34 @@ const UNEMBED_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "tif", "tif
 
 /// Encoded image `bytes` re-encoded in the format of extension `ext` (JPEG without alpha).
 fn convert_image(bytes: &[u8], ext: &str) -> std::result::Result<Vec<u8>, String> {
-    let format = image::ImageFormat::from_extension(ext).ok_or_else(|| format!("can't write .{ext} images"))?;
-    let img = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
-    let img = if format == image::ImageFormat::Jpeg { image::DynamicImage::ImageRgb8(img.to_rgb8()) } else { img };
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), format).map_err(|e| e.to_string())?;
-    Ok(out)
+    let format = match ext.to_ascii_lowercase().as_str() {
+        "png" => craft_image_codecs::Format::Png,
+        "jpg" | "jpeg" => craft_image_codecs::Format::Jpeg,
+        "gif" => craft_image_codecs::Format::Gif,
+        "webp" => craft_image_codecs::Format::WebP,
+        "tif" | "tiff" => craft_image_codecs::Format::Tiff,
+        "bmp" => craft_image_codecs::Format::Bmp,
+        _ => return Err(format!("can't write .{ext} images")),
+    };
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC;
+    opts.limits.max_width = u32::MAX;
+    opts.limits.max_height = u32::MAX;
+    let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| e.to_string())?;
+    let raw = if format == craft_image_codecs::Format::Jpeg {
+        let rgb: Vec<u8> = img.to_rgba8().as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
+        craft_image_codecs::Image::from_raw(
+            img.width(),
+            img.height(),
+            craft_image_codecs::ChannelLayout::Rgb,
+            craft_image_codecs::SampleType::U8,
+            rgb,
+        )
+        .map_err(|e| e.to_string())?
+    } else {
+        img
+    };
+    craft_image_codecs::encode(&raw, format, &craft_image_codecs::EncodeOptions::default()).map_err(|e| e.to_string())
 }
 
 fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
@@ -2744,7 +2783,7 @@ fn placed_info(st: &crate::DocState, doc: &Document, id: NodeId) -> Result<Value
     let NodeKind::PlacedDocument(pl) = &n.kind else { return Err(bad("links.info", format!("object {} is not a placed document", id.0))) };
     let size = n.geometric_bounds().unwrap_or_default();
     let (scale, rotation) = scale_rotation(pl.xf, (1.0, 1.0));
-    let mut out = document_row(pl);
+    let mut out = document_row(doc, pl);
     let fields = [
         ("id", json!(id.0)),
         ("name", json!(n.display_name())),

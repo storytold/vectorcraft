@@ -800,7 +800,41 @@ fn unsupported() -> Document {
     doc.insert(Some(layer), usize::MAX, ring).unwrap();
     let mut png = vec![];
     let img = image::RgbaImage::from_raw(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -1394,7 +1428,41 @@ fn an_adjusted_image_in_a_symbol_is_written_in_its_adjusted_color() {
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
     let mut png = vec![];
-    image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     doc.images.insert(key.clone(), blob);
@@ -1554,7 +1622,41 @@ fn effects_on_a_fill_are_reported_left_out() {
 #[test]
 fn images_of_more_pixels_than_the_reader_reads_are_mid_gray() {
     let mut png = vec![];
-    image::GrayImage::new(6000, 6000).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::GrayImage::new(6000, 6000)).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut doc = Document::new(200.0, 100.0);
     let layer = doc.layers[0].id;
     let im = image_node(&mut doc, ImageBlob::png(png), (10, 10), Affine::IDENTITY, None);
@@ -2632,23 +2734,29 @@ fn a_clipping_path_keeps_its_gradient() {
 
 #[test]
 fn freeform_gradients_are_written_as_their_average_color() {
-    let mut doc = Document::new(200.0, 100.0);
-    let layer = doc.layers[0].id;
-    let g = ramp(GradientKind::Freeform, &[(0.0, Color::rgb(1.0, 1.0, 1.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 0.0), 1.0, 0.5)]);
-    let n = painted(
-        &mut doc,
-        shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
-        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
-    );
-    doc.insert(Some(layer), usize::MAX, n).unwrap();
-    let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert!(out.warnings.iter().any(|w| w == writer::GRADIENTS), "{:?}", out.warnings);
-    let back = read_back(&doc);
-    assert_eq!(paint(back.layers[0].children().unwrap()[0].appearance.items[0].paint()), paint(&solid(Color::rgb(0.5, 0.5, 0.5))));
+    use vectorcraft_color::gradient::GradientMethod;
+    // The average of its points' colors, whatever its method.
+    for method in [GradientMethod::Classic, GradientMethod::Perceptual, GradientMethod::HueClockwise] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut g = ramp(GradientKind::Freeform, &[(0.0, Color::rgb(1.0, 1.0, 1.0), 1.0, 0.5), (1.0, Color::rgb(0.0, 0.0, 0.0), 1.0, 0.5)]);
+        g.method = method;
+        let n = painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+            vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+        );
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert_eq!(out.warnings, [writer::GRADIENTS], "{method:?}");
+        let back = read_back(&doc);
+        assert_eq!(paint(back.layers[0].children().unwrap()[0].appearance.items[0].paint()), paint(&solid(Color::rgb(0.5, 0.5, 0.5))), "{method:?}");
+    }
 }
 
-/// A gradient that dithers or mixes perceptually is written as a classic one; a stop linked to a
-/// global process color is written as its color; each with a warning.
+/// A gradient that dithers is written without its noise; a Perceptual gradient or one mixed around
+/// the hue wheel as the stops on its curve; a stop linked to a global process color as its color;
+/// each with a warning.
 #[test]
 fn gradient_options_and_links_the_data_cant_hold_are_reported() {
     let mut doc = Document::new(200.0, 100.0);
@@ -2662,7 +2770,7 @@ fn gradient_options_and_links_the_data_cant_hold_are_reported() {
     );
     doc.insert(Some(layer), usize::MAX, n).unwrap();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert_eq!(out.warnings, [writer::GRADIENT_MIX]);
+    assert_eq!(out.warnings, [writer::GRADIENT_DITHER]);
     // A swatch of such a gradient that nothing uses.
     let mut swatch_only = Document::new(200.0, 100.0);
     let mut dithered = sunset();
@@ -2671,7 +2779,7 @@ fn gradient_options_and_links_the_data_cant_hold_are_reported() {
     swatches.push(Swatch { name: "Dithered".into(), paint: gradient_paint(dithered, None, None), global: false, spot: false });
     swatch_only.swatches = swatches.into();
     let out = export_ai_editing(&swatch_only, &opts()).unwrap();
-    assert!(out.warnings.iter().any(|w| w == writer::GRADIENT_MIX), "{:?}", out.warnings);
+    assert!(out.warnings.iter().any(|w| w == writer::GRADIENT_DITHER), "{:?}", out.warnings);
     // A gradient along a stroke: the stroke's outline in its average color.
     let mut along = Document::new(200.0, 100.0);
     let layer = along.layers[0].id;
@@ -2698,7 +2806,7 @@ fn gradient_options_and_links_the_data_cant_hold_are_reported() {
     );
     doc.insert(Some(layer), usize::MAX, n).unwrap();
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert_eq!(out.warnings, [writer::GRADIENT_MIX, writer::STOP_LINKS]);
+    assert_eq!(out.warnings, [writer::GRADIENT_PERCEPTUAL, writer::STOP_LINKS]);
     let back = read_back(&doc);
     let Paint::Gradient(g) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
     assert_eq!((color(&g.gradient.stops[0].color), g.gradient.stops[0].swatch.as_deref()), (color(&BRAND), None));
@@ -2730,6 +2838,124 @@ fn gradient_options_and_links_the_data_cant_hold_are_reported() {
             assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03) && (ao - bo).abs() < 0.03, "{method:?} at {t}: {a:?} {ao} vs {b:?} {bo}");
         }
     }
+}
+
+/// Do `got`'s colors and opacities lie within 0.03 of `want`'s along the whole ramp?
+fn same_curve(want: &Gradient, got: &Gradient, what: &str) {
+    for k in 0..=100 {
+        let t = k as f32 / 100.0;
+        let ((a, ao), (b, bo)) = (want.sample(t), got.sample(t));
+        let (a, b) = (a.to_rgb(), b.to_rgb());
+        assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.03) && (ao - bo).abs() < 0.03, "{what} at {t}: {a:?} {ao} vs {b:?} {bo}");
+    }
+}
+
+/// The data's gradients mix their stops' colors directly: a Perceptual gradient swatch is written
+/// under its name as a classic gradient of the stops on its curve, no more than the reader reads,
+/// and art painted with it uses that definition; both open with the colors they had, with a
+/// warning. With Dither, dither's loss is reported as well. A Classic gradient keeps its own stops
+/// without either warning.
+#[test]
+fn perceptual_gradients_are_written_with_the_stops_on_their_curve() {
+    use vectorcraft_color::gradient::GradientMethod;
+    let classic = sunset();
+    let want = Gradient { method: GradientMethod::Perceptual, ..classic.clone() };
+    // The same stops mixed directly stray from the Perceptual curve.
+    assert!(
+        (0..=100).any(|k| {
+            let t = k as f32 / 100.0;
+            want.sample(t).0.to_rgb().iter().zip(classic.sample(t).0.to_rgb()).any(|(a, b)| (a - b).abs() > 0.05)
+        }),
+        "the methods mix alike"
+    );
+    let gradient_names =
+        |doc: &Document| -> Vec<String> { program(doc).lines().filter_map(|l| l.strip_prefix("%AI5_BeginGradient: ")).map(String::from).collect() };
+    let with = |g: &Gradient, swatch: Option<&str>| {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+        swatches.push(Swatch { name: "Dusk".into(), paint: gradient_paint(g.clone(), None, None), global: false, spot: false });
+        doc.swatches = swatches.into();
+        let n = painted(
+            &mut doc,
+            shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+            vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g.clone(), None, swatch)))],
+        );
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        doc
+    };
+
+    let doc = with(&want, Some("Dusk"));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::GRADIENT_PERCEPTUAL]);
+    let names = gradient_names(&doc);
+    assert!(names.iter().any(|n| n == "(Dusk)") && !names.iter().any(|n| n == "(Gradient)"), "the art uses the swatch's definition: {names:?}");
+    let back = read_back(&doc);
+    let Some(Paint::Gradient(swatch)) = back.swatch("Dusk").map(|s| &s.paint) else { panic!("the swatch is lost") };
+    assert!(swatch.gradient.method.is_classic());
+    let written = swatch.gradient.stops.len();
+    assert!((want.stops.len() + 1..=crate::import::MAX_GRADIENT_STOPS).contains(&written), "{written} stops");
+    same_curve(&want, &swatch.gradient, "the swatch");
+    let Paint::Gradient(fill) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
+    assert_eq!(fill.gradient.stops.len(), written);
+    same_curve(&want, &fill.gradient, "the fill");
+
+    // Perceptual with Dither: both losses.
+    let dithered = Gradient { dither: true, ..want.clone() };
+    let doc = with(&dithered, None);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::GRADIENT_PERCEPTUAL, writer::GRADIENT_DITHER]);
+    let back = read_back(&doc);
+    let Paint::Gradient(fill) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
+    same_curve(&want, &fill.gradient, "the dithered fill");
+
+    // More stops than the reader reads: the average of its own stops, as a classic gradient's.
+    for method in [GradientMethod::Perceptual, GradientMethod::HueClockwise] {
+        let stops = (0..300)
+            .map(|i| GradientStop::new(i as f32 / 299.0, if i % 2 == 0 { Color::rgb(1.0, 0.0, 0.0) } else { Color::rgb(0.0, 0.0, 1.0) }))
+            .collect();
+        let many = Gradient { method, ..Gradient::new(GradientKind::Linear, stops) };
+        let doc = with(&many, None);
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::GRADIENT_SHAPES), "{method:?}: {:?}", out.warnings);
+        assert!(!out.warnings.iter().any(|w| w == writer::GRADIENT_PERCEPTUAL || w == writer::GRADIENT_HUE), "{method:?}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        assert_eq!(paint(back.layers[0].children().unwrap()[0].appearance.items[0].paint()), paint(&solid(Color::rgb(0.5, 0.0, 0.5))), "{method:?}");
+    }
+
+    // Classic: its own stops, under the swatch's name, without a warning.
+    let doc = with(&classic, Some("Dusk"));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let Some(Paint::Gradient(swatch)) = back.swatch("Dusk").map(|s| &s.paint) else { panic!("the swatch is lost") };
+    assert_eq!(swatch.gradient.stops.len(), classic.stops.len());
+    let Paint::Gradient(fill) = back.layers[0].children().unwrap()[0].appearance.items[0].paint() else { panic!("a gradient") };
+    assert_eq!(fill.gradient.stops.len(), classic.stops.len());
+}
+
+/// A gradient mixed around the hue wheel whose stop is linked to a global process color loses the
+/// link with its stops on the curve, and says so.
+#[test]
+fn hue_gradients_report_the_links_their_curve_drops() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut swatches: Vec<Swatch> = doc.swatches.iter().cloned().collect();
+    swatches.push(Swatch { name: "Brand".into(), paint: solid(BRAND), global: true, spot: false });
+    doc.swatches = swatches.into();
+    let mut g = sunset();
+    g.method = vectorcraft_color::gradient::GradientMethod::HueClockwise;
+    if let Some(s) = g.stops.first_mut() {
+        s.set_color(BRAND, Some(("Brand".into(), 1.0)));
+    }
+    let n = painted(
+        &mut doc,
+        shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+        vec![AppearanceItem::Fill(FillLayer::new(gradient_paint(g, None, None)))],
+    );
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::GRADIENT_HUE, writer::STOP_LINKS]);
 }
 
 /// A pattern whose art reaches past its tile is written as its tiles cut to the shape: a definition
@@ -3156,7 +3382,41 @@ fn a_pattern_swatchs_own_placement_is_reported_left_out() {
 /// `img` as PNG bytes.
 fn png_of(img: image::DynamicImage) -> Vec<u8> {
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img;
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     png
 }
 
@@ -3233,7 +3493,28 @@ fn pictures(doc: &Document, nodes: &[Arc<Node>], path: &str, out: &mut Vec<Strin
             let blob = doc.image_blob(im).unwrap();
             let pixels = match blob.cmyk() {
                 Some(inks) if blob.is_cmyk() => format!("cmyk {:?}", inks.data),
-                _ => format!("rgba {:?}", image::load_from_memory(&blob.bytes).unwrap().to_rgba8().into_raw()),
+                _ => format!(
+                    "rgba {:?}",
+                    craft_image_codecs::decode(&blob.bytes)
+                        .map(|__cimg| {
+                            let (__w, __h) = __cimg.dimensions();
+                            match (__cimg.layout(), __cimg.sample_type()) {
+                                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                }
+                                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                }
+                                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                                }
+                                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                            }
+                        })
+                        .unwrap()
+                        .to_rgba8()
+                        .into_raw()
+                ),
             };
             let xf: Vec<String> = im.xf.as_coeffs().iter().map(|v| r3(*v)).collect();
             let link = im.link.as_ref().map(|l| (l.path.clone(), l.relative.clone()));
@@ -3516,7 +3797,24 @@ fn a_smaller_preview_takes_no_color_from_see_through_pixels() {
     let back = read_back(&doc);
     let NodeKind::Image(im) = &back.layers[0].children().unwrap()[0].kind else { panic!("not an image") };
     assert_eq!(im.width, 256);
-    let px = image::load_from_memory(&back.image_blob(im).unwrap().bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&back.image_blob(im).unwrap().bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert!(px.pixels().all(|p| p.0[0] == 0), "{:?}", px.pixels().take(4).collect::<Vec<_>>());
     assert!(px.pixels().filter(|p| p.0[3] > 0).count() > 400);
 }
@@ -5032,7 +5330,43 @@ fn beside(doc: &mut Document, kind: Beside, x: f64, state: (f32, BlendMode, bool
         Beside::Image => {
             let mut png = vec![];
             let img = image::RgbaImage::from_raw(1, 1, vec![255, 0, 0, 255]).unwrap();
-            img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+            {
+                let __dyn: image::DynamicImage = img.into();
+                let (__w, __h) = (__dyn.width(), __dyn.height());
+                let (__layout, __sample, __raw) = match __dyn {
+                    image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageLumaA8(b) => {
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
+                    }
+                    image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                    image::DynamicImage::ImageLuma16(b) => (
+                        craft_image_codecs::ChannelLayout::Gray,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageLumaA16(b) => (
+                        craft_image_codecs::ChannelLayout::GrayA,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageRgb16(b) => (
+                        craft_image_codecs::ChannelLayout::Rgb,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    image::DynamicImage::ImageRgba16(b) => (
+                        craft_image_codecs::ChannelLayout::Rgba,
+                        craft_image_codecs::SampleType::U16,
+                        b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                    ),
+                    other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+                };
+                let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+                craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                    .map(|__b| png.extend_from_slice(&__b))
+            }
+            .unwrap();
             let blob = ImageBlob::new("image/png", png);
             let key = blob.content_key();
             doc.images.insert(key.clone(), blob);
