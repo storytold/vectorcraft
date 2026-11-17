@@ -3,7 +3,9 @@
 
 use skrifa::raw::TableProvider;
 
-use crate::test_fonts::{HEIGHT_CAP, HEIGHT_FAMILY, HEIGHT_X, HEIGHTLESS_FAMILY, VARIABLE_FAMILY, height_font, variable_font};
+use crate::test_fonts::{
+    HEIGHT_CAP, HEIGHT_FAMILY, HEIGHT_X, HEIGHTLESS_FAMILY, NUMBERLESS_FAMILY, VARIABLE_FAMILY, height_font, numberless_font, variable_font,
+};
 use crate::*;
 
 /// A database of the bundled fonts and the two copies of Source Sans 3 Regular with and without
@@ -88,8 +90,14 @@ fn likeness_is_a_distance() {
     assert_eq!(sans.distance(&serif), serif.distance(&sans), "symmetric");
     assert!(sans.distance(&serif) > 0.0 && sans.distance(&mono) > 0.0);
     // A number a face does not give is left out, not counted as 0.
+    assert_eq!(sans.distance(&FontLikeness { x_height: 0, cap_height: 0, ..sans }), 0.0);
+    // Faces that share no number are further apart than any faces that share one, not alike.
     let unknown = FontLikeness::default();
-    assert_eq!(sans.distance(&unknown), 0.0);
+    assert_eq!(sans.distance(&unknown), f32::INFINITY);
+    assert_eq!(unknown.distance(&sans), f32::INFINITY, "symmetric");
+    assert_eq!(unknown.distance(&unknown), f32::INFINITY);
+    let weight_only = FontLikeness { weight: 400, ..unknown };
+    assert_eq!(sans.distance(&weight_only), 0.0, "the weight alone is compared");
     let lighter = FontLikeness { weight: 300, ..sans };
     assert!((sans.distance(&lighter) - 0.5).abs() < 1e-6, "100 weight units apart");
 }
@@ -116,4 +124,24 @@ fn families_are_ordered_by_likeness() {
     let without = db.similar_families("Source Sans 3", &families[..4]);
     assert_eq!(without[0], HEIGHTLESS_FAMILY);
     assert!(db.similar_families("Source Sans 3", &[]).is_empty());
+}
+
+/// A family that gives none of the numbers comes after every family that shares one with the
+/// family asked about, instead of first as though it looked the same.
+#[test]
+fn a_family_without_numbers_comes_after_the_measured_ones() {
+    let db = db();
+    assert_eq!(db.add_font(numberless_font().expect("the test font builds")), 1);
+    assert_eq!(db.family_traits(NUMBERLESS_FAMILY).likeness, FontLikeness::default());
+    let families = names(&[NUMBERLESS_FAMILY, "JetBrains Mono", "Source Serif 4", "Inter", HEIGHTLESS_FAMILY, "Source Sans 3"]);
+    let order = db.similar_families("Source Sans 3", &families);
+    assert_eq!(order[..2], names(&["Source Sans 3", HEIGHTLESS_FAMILY]), "{order:?}");
+    assert_eq!(order.last().map(String::as_str), Some(NUMBERLESS_FAMILY), "{order:?}");
+    // The measured families keep the order they have without it.
+    let measured: Vec<String> = order.iter().filter(|f| *f != NUMBERLESS_FAMILY).cloned().collect();
+    assert_eq!(measured, db.similar_families("Source Sans 3", &families[1..]));
+    // Asked about itself, it comes first even from the end of the list, and the families it shares
+    // no number with keep their order in the list.
+    let last = names(&["JetBrains Mono", "Source Serif 4", "Inter", HEIGHTLESS_FAMILY, "Source Sans 3", NUMBERLESS_FAMILY]);
+    assert_eq!(db.similar_families(NUMBERLESS_FAMILY, &last), families);
 }

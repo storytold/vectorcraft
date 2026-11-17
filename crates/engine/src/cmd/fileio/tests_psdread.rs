@@ -215,7 +215,24 @@ fn exported(s: &mut Session, p: Value) -> Vec<u8> {
 #[test]
 fn psd_exports_open_and_place_again() {
     let mut s = art();
-    let png = image::load_from_memory(&exported(&mut s, json!({"format": "png"}))).unwrap().to_rgba8();
+    let png = craft_image_codecs::decode(&exported(&mut s, json!({"format": "png"})))
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     for (options, what) in [(json!({}), "layered RGB"), (json!({"layers": false}), "flat RGB"), (json!({"colorModel": "gray"}), "grey")] {
         let f = exported(&mut s, merge(json!({"format": "psd"}), options));
         let back = decode(&f, 1 << 30, naive).unwrap();

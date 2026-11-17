@@ -48,6 +48,81 @@ fn setup_is_saved_with_the_document_as_one_undo_step() {
 }
 
 #[test]
+fn overprint_black_is_saved_with_the_setup_and_in_presets() {
+    let (mut s, _) = session();
+    assert_eq!(s.execute("print.setup", &json!({})).unwrap()["settings"]["output"]["overprintBlack"], false, "off by default");
+    let v = s.execute("print.setup", &json!({"settings": {"output": {"mode": "separations", "overprintBlack": true}}})).unwrap();
+    assert_eq!(v["settings"]["output"]["overprintBlack"], true);
+    let doc = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert!(back.print_setup.as_ref().is_some_and(|p| p["output"]["overprintBlack"] == true), "kept in the native file");
+    // Settings saved before the option load with it off; a value that is not true or false is refused.
+    let old: vectorcraft_pdf::PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations"}})).unwrap();
+    assert!(!old.output.overprint_black);
+    assert!(matches!(s.execute("print.setup", &json!({"settings": {"output": {"overprintBlack": "yes"}}})), Err(EngineError::BadParams { .. })));
+    // Print presets keep it and list it as a change from [Default].
+    let mut s = Session::new();
+    s.execute("print.presets.save", &json!({"name": "Seps", "settings": {"output": {"overprintBlack": true}}})).unwrap();
+    assert!(s.prefs.print_presets[0].settings.output.overprint_black);
+    let v = s.execute("print.presets.list", &json!({})).unwrap();
+    let changed: Vec<&str> = v["presets"][1]["changed"].as_array().unwrap().iter().map(|c| c["option"].as_str().unwrap()).collect();
+    assert_eq!(changed, ["output.overprintBlack"]);
+}
+
+#[test]
+fn the_scale_link_keeps_width_and_height_equal() {
+    let (mut s, _) = session();
+    let scale = |s: &mut Session, p: Value| s.execute("print.setup", &json!({ "settings": p })).unwrap()["settings"]["scale"].clone();
+    assert_eq!(scale(&mut s, json!({})), json!({"width": 100.0, "height": 100.0, "linked": true}), "on for a new job");
+    // Linked, one percentage sets the other, whichever it is.
+    assert_eq!(scale(&mut s, json!({"scaling": "custom", "scale": {"width": 40}})), json!({"width": 40.0, "height": 40.0, "linked": true}));
+    assert_eq!(scale(&mut s, json!({"scale": {"height": 250}})), json!({"width": 250.0, "height": 250.0, "linked": true}));
+    assert_eq!(scale(&mut s, json!({"scale": {"width": 60, "height": 60.0}})), json!({"width": 60.0, "height": 60.0, "linked": true}));
+    // Two different percentages with linked: true are refused and keep what was saved.
+    let apart = s.execute("print.setup", &json!({"settings": {"scale": {"width": 50, "height": 200, "linked": true}}}));
+    assert!(matches!(apart, Err(EngineError::BadParams { .. })), "{apart:?}");
+    assert!(s.execute("print.preview", &json!({"settings": {"scale": {"width": 50, "height": 200, "linked": true}}})).is_err());
+    // `linked: null` keeps the saved link, as null keeps any saved setting.
+    let kept = s.execute("print.setup", &json!({"settings": {"scale": {"width": 50, "height": 200, "linked": null}}}));
+    assert!(matches!(kept, Err(EngineError::BadParams { .. })), "{kept:?}");
+    assert_eq!(scale(&mut s, json!({}))["width"], 60.0);
+    // Without linked, two different percentages turn the link off and print as given.
+    assert_eq!(scale(&mut s, json!({"scale": {"width": 50, "height": 200}})), json!({"width": 50.0, "height": 200.0, "linked": false}));
+    assert_eq!(s.execute("print.preview", &json!({})).unwrap()["sheets"][0]["scale"], json!([50.0, 200.0]));
+    // Unlinked, each changes alone; turning the link on sets the height to the width.
+    assert_eq!(scale(&mut s, json!({"scale": {"height": 120}})), json!({"width": 50.0, "height": 120.0, "linked": false}));
+    assert_eq!(scale(&mut s, json!({"scale": {"linked": true}})), json!({"width": 50.0, "height": 50.0, "linked": true}));
+    assert_eq!(s.execute("print.preview", &json!({})).unwrap()["sheets"][0]["scale"], json!([50.0, 50.0]));
+    // Kept in the native file and in print presets.
+    let doc = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert_eq!(back.print_setup.as_ref().map(|p| p["scale"].clone()), Some(json!({"width": 50.0, "height": 50.0, "linked": true})));
+    s.execute("print.presets.save", &json!({"name": "Apart", "settings": {"scaling": "custom", "scale": {"width": 30, "height": 90}}})).unwrap();
+    let preset = s.prefs.print_presets.iter().find(|p| p.name == "Apart").map(|p| p.settings.scale.clone());
+    assert_eq!(preset.map(|p| (p.width, p.height, p.linked)), Some((30.0, 90.0, false)));
+    assert_eq!(scale(&mut s, json!({}))["linked"], true, "saving a preset leaves the document's settings");
+    let v = s.execute("print.setup", &json!({"preset": "Apart"})).unwrap();
+    assert_eq!(v["settings"]["scale"], json!({"width": 30.0, "height": 90.0, "linked": false}));
+}
+
+#[test]
+fn a_scale_saved_without_the_link_keeps_its_width_and_height() {
+    let (mut s, _) = session();
+    // Settings saved before the link had no `linked`: they print as they did, unlinked.
+    let mut old = serde_json::to_value(vectorcraft_pdf::PrintSettings::default()).unwrap();
+    old["scaling"] = json!("custom");
+    old["scale"] = json!({"width": 50, "height": 200});
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    doc.print_setup = Some(old);
+    s.doc_mut().unwrap().doc = std::sync::Arc::new(doc);
+    let pv = s.execute("print.preview", &json!({})).unwrap();
+    assert_eq!(pv["sheets"][0]["scale"], json!([50.0, 200.0]));
+    assert_eq!(pv["settings"]["scale"]["linked"], false);
+    // One percentage changes alone until the link is turned on.
+    assert_eq!(s.execute("print.preview", &json!({"settings": {"scale": {"width": 80}}})).unwrap()["sheets"][0]["scale"], json!([80.0, 200.0]));
+}
+
+#[test]
 fn print_writes_the_saved_setup_with_overrides() {
     let (mut s, _) = session();
     s.execute("print.setup", &json!({"settings": {"media": "a4", "scaling": "fit"}})).unwrap();
