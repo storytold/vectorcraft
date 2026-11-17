@@ -1972,7 +1972,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                         Cow::Borrowed(_) => view.texts.get(i).cloned().flatten(),
                         Cow::Owned(km) => dialog_shortcuts_with(km, &e.key, view.backtick.as_deref()),
                     };
-                    if !q.is_empty() && !row_matches(e, &q, sc.as_deref()) {
+                    let hold_text = if holds_on { hold_of(&holds, &e.key).map(|h| menus::pretty_shortcut(&h)) } else { None };
+                    if !q.is_empty() && !row_matches(e, &q, sc.as_deref()) && !hold_text.is_some_and(|h| h.to_lowercase().contains(&q)) {
                         continue;
                     }
                     let row = ui.horizontal(|ui| {
@@ -3781,6 +3782,25 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("__holdInfo".into(), json!(true));
         let texts = dialog_texts(&mut app);
         assert!(texts.iter().any(|t| t.starts_with("A quick press")) && texts.iter().any(|t| t == "Tap"), "{texts:?}");
+    }
+
+    /// While Hold Shortcuts is on, the search finds a row by its hold shortcut as the Hold column
+    /// shows it; while it is off, the hold shortcut finds nothing.
+    #[test]
+    fn the_search_finds_a_row_by_its_hold_shortcut() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Shift+;"})).unwrap();
+        let hold = menus::pretty_shortcut("Shift+;").to_lowercase();
+        let name = shown_name(&entry("paint.swap").unwrap());
+        assert!(!name.to_lowercase().contains(&hold), "{name}");
+        open(&mut app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("tab".into(), json!("menu"));
+        d.fields.insert("query".into(), json!(hold));
+        assert!(!dialog_texts(&mut app).contains(&name), "off, the hold shortcut finds nothing");
+        app.ui.dialog.as_mut().unwrap().fields.insert("holdShortcuts".into(), json!(true));
+        let texts = dialog_texts(&mut app);
+        assert!(texts.contains(&name), "{name} in {texts:?}");
     }
 
     /// A command that needs a value is listed in the editor once the user gives it a key, but the
