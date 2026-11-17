@@ -5377,6 +5377,40 @@ fn layers_drag_a_source_path_into_its_own_live_paint_group_keeps_the_paint() {
     assert_eq!(face_at(&n, Point::new(50.0, 50.0)).unwrap().appearance.fill_paint(), blue, "the only path's face keeps its fill");
 }
 
+/// A Live Paint group among another Live Paint group's paths gives it faces and edges: a path
+/// dragged into or out of the inner group's paths, or from the outer group's paths into the inner
+/// group's, makes the inner group's faces and edges again and then the outer group's.
+#[test]
+fn layers_drag_into_a_nested_live_paint_group_makes_the_outer_group_again() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let outer = live(&mut s);
+    let inner = live(&mut s);
+    let layer = s.doc().unwrap().doc.parent_of(outer).unwrap();
+    let first_source = |s: &Session, g: NodeId| sources(&node(s, g)).unwrap().children().unwrap()[0].id;
+    let into = |s: &mut Session, row: NodeId, g: NodeId| {
+        let target = first_source(s, g);
+        s.execute("layer.move", &json!({"ids": [row.0], "target": target.0, "place": "above"})).unwrap();
+    };
+    into(&mut s, inner, outer);
+    assert_eq!(s.doc().unwrap().doc.parent_of(inner), Some(sources(&node(&s, outer)).unwrap().id));
+    let plain = faces(&node(&s, outer)).len();
+    let a = line_to_right_face(&mut s, 30.0);
+    into(&mut s, a, inner);
+    assert_eq!(faces(&node(&s, inner)).len(), 5);
+    let cut = faces(&node(&s, outer)).len();
+    assert!(cut > plain, "a path joining the inner group cuts the outer group's faces: {cut} faces, {plain} before");
+    s.execute("layer.move", &json!({"ids": [a.0], "target": layer.0})).unwrap();
+    assert_eq!(faces(&node(&s, inner)).len(), 3);
+    assert_eq!(faces(&node(&s, outer)).len(), plain, "a path leaving the inner group leaves the outer group's faces");
+    into(&mut s, a, outer);
+    assert_eq!(faces(&node(&s, outer)).len(), cut);
+    into(&mut s, a, inner);
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(sources(&node(&s, inner)).unwrap().id));
+    assert_eq!(faces(&node(&s, inner)).len(), 5);
+    assert_eq!(faces(&node(&s, outer)).len(), cut, "the outer group is made after the inner one");
+}
+
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
 /// graphic style link, and return it as it then is.
 fn dress_live_group(s: &mut Session, g: NodeId) -> Node {

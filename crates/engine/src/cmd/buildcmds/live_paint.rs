@@ -331,12 +331,27 @@ fn spot_in(d: &Document, parent: Option<NodeId>) -> Spot {
     Spot::Outside
 }
 
+/// The Live Paint groups that hold Live Paint group `g` among their paths (in their sources group,
+/// at any depth), innermost first.
+fn enclosing_live_paints(d: &Document, g: NodeId) -> Vec<NodeId> {
+    let mut out = vec![];
+    let mut at = g;
+    while let Spot::Source(o) = spot_in(d, d.parent_of(at)) {
+        if out.contains(&o) {
+            break;
+        }
+        out.push(o);
+        at = o;
+    }
+    out
+}
+
 /// What moving rows in the Layers panel (`layer.move`, `node.move`) does to Live Paint groups.
 /// Rows that go into a Live Paint group from elsewhere are added to it as `livePaint.merge` adds
 /// paths. Rows that go into or leave a group's paths (its sources group) change those paths, and
 /// the group's faces and edges are made again from them, keeping the paint of the faces and edges
-/// that stay. Rows moved within one group's paths, or among a group's own children, change no
-/// faces.
+/// that stay, and so are those of every Live Paint group that holds a changed group among its
+/// paths. Rows moved within one group's paths, or among a group's own children, change no faces.
 pub(crate) struct LivePaintMove {
     /// The Live Paint group the rows go into, and for each row whether it joins the group's paths.
     join: Option<(NodeId, Vec<bool>)>,
@@ -411,13 +426,30 @@ impl LivePaintMove {
         // The group the rows join is made again by the merge below, from its paths as they are now
         // and with the paint of its faces and edges as they were before the move.
         let join_group = self.join.as_ref().map(|(g, _)| *g);
-        for g in self.rebuild.iter().filter(|g| Some(**g) != join_group) {
-            rebuild_paths(d, *g)?;
+        // A Live Paint group among another group's paths gives that group its faces and edges, so
+        // the groups holding a changed group among their paths are made again too, innermost first.
+        let mut groups: Vec<NodeId> = vec![];
+        for g in self.rebuild.iter().copied().chain(join_group) {
+            for x in std::iter::once(g).chain(enclosing_live_paints(d, g)) {
+                if !groups.contains(&x) {
+                    groups.push(x);
+                }
+            }
+        }
+        groups.sort_by_cached_key(|g| std::cmp::Reverse(d.ancestry(*g).map_or(0, |a| a.len())));
+        let joined: Vec<NodeId> = match &self.join {
+            Some((_, mask)) => moved.iter().zip(mask).filter(|(_, j)| **j).map(|(r, _)| *r).collect(),
+            None => vec![],
+        };
+        for g in groups {
+            if Some(g) == join_group {
+                let roots: Vec<NodeId> = std::iter::once(g).chain(joined.iter().copied()).collect();
+                merge_live(d, sel, &roots)?;
+            } else if d.node(g).is_some() {
+                rebuild_paths(d, g)?;
+            }
         }
         let Some((g, mask)) = self.join else { return Ok(moved.iter().copied().filter(|r| d.node(*r).is_some()).collect()) };
-        let joined = moved.iter().zip(&mask).filter(|(_, j)| **j).map(|(r, _)| *r);
-        let roots: Vec<NodeId> = std::iter::once(g).chain(joined).collect();
-        merge_live(d, sel, &roots)?;
         // `moved` holds each row once, so only the group can come twice. Faces and edges of the
         // group moved along with the joining rows were made again, so they are left out.
         let mut out = vec![];
