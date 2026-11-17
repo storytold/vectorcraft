@@ -395,6 +395,56 @@ fn expand_rasterize_then_transform_matches_canvas() {
     assert!(matches!(&n.kind, vectorcraft_doc::NodeKind::Group { children, .. } if children.is_empty()), "{:?}", n.kind);
 }
 
+/// With copies, the Transform effect after Rasterize places the one image on the original and on
+/// each copy: Expand Appearance and PDF export make a group of the image placed by each copy's
+/// map, the last copy lowest and the original on top, as the canvas draws it, all on the pixels
+/// Object › Rasterize makes of the art.
+#[test]
+fn expand_rasterize_then_copying_transform_places_the_image_on_each_copy() {
+    let mut o = session();
+    red_rectangle(&mut o);
+    let made = id(&o.execute("object.rasterize", &json!({"ppi": 72, "background": "white", "addAround": 2})).unwrap());
+    let od = &o.doc().unwrap().doc;
+    let (w, h, xf, png, _) = rasterized(od, od.node(made).unwrap());
+    let about =
+        |m: vectorcraft_geom::Affine| vectorcraft_geom::Affine::translate((70.5, 65.25)) * m * vectorcraft_geom::Affine::translate((-70.5, -65.25));
+    let turn = |deg: f64| about(vectorcraft_geom::Affine::rotate(-deg.to_radians()));
+    let cases = [
+        (json!({"moveH": 50, "copies": 2}), [vectorcraft_geom::Affine::translate((100.0, 0.0)), vectorcraft_geom::Affine::translate((50.0, 0.0))]),
+        (json!({"rotate": 30, "copies": 2}), [turn(60.0), turn(30.0)]),
+    ];
+    for (params, [lowest, middle]) in cases {
+        let mut s = session();
+        let r = red_rectangle(&mut s);
+        let raster = json!({"useDocumentResolution": false, "resolution": 72, "background": "white", "addAround": 2});
+        s.execute("effect.apply", &json!({"effect": "rasterize", "params": raster, "ids": [r.0]})).unwrap();
+        s.execute("effect.apply", &json!({"effect": "distort.transform", "params": params.clone(), "ids": [r.0]})).unwrap();
+        let check = |d: &Document, n: &vectorcraft_doc::Node, what: &str| {
+            let NodeKind::Group { children, clip: false } = &n.kind else { panic!("{what} {params}: a group, {:?}", n.kind_label()) };
+            assert_eq!(children.len(), 3, "{what} {params}");
+            let mut keys = std::collections::HashSet::new();
+            for (c, map) in children.iter().zip([lowest, middle, vectorcraft_geom::Affine::IDENTITY]) {
+                let (w2, h2, xf2, png2, _) = rasterized(d, c);
+                assert_eq!((w2, h2), (w, h), "{what} {params}");
+                assert!(png2 == png, "{what} {params}: the same pixels");
+                let want = map * xf;
+                assert!(xf2.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{what} {params}: {xf2:?} {want:?}");
+                if let NodeKind::Image(im) = &c.kind {
+                    keys.insert(im.key.clone());
+                }
+            }
+            assert_eq!(keys.len(), 1, "{what} {params}: one image for the three placements");
+            let mut ids = std::collections::HashSet::new();
+            n.walk(&mut |c| assert!(ids.insert(c.id), "{what} {params}: id {:?} twice", c.id));
+        };
+        let flat = crate::flatten_raster_effects(&s.doc().unwrap().doc).unwrap();
+        check(&flat, &flat.layers[0].children().unwrap()[0], "PDF export");
+        s.execute("effect.expandAppearance", &json!({"ids": [r.0]})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        check(d, d.node(r).unwrap(), "Expand Appearance");
+    }
+}
+
 #[test]
 fn the_clipping_mask_follows_the_art_its_geometry_effects_draw() {
     let clip = |s: &Session, n: NodeId| match &s.doc().unwrap().doc.node(n).unwrap().kind {
