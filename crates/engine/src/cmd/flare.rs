@@ -164,7 +164,12 @@ fn edited(old: &Value, p: &Value, xf: Affine) -> Result<Value> {
         if p.get(kx).is_none_or(Value::is_null) && p.get(ky).is_none_or(Value::is_null) {
             return Ok(None);
         }
-        Ok(Some(inv * Point::new(f64_req(p, kx, C)?, f64_req(p, ky, C)?)))
+        // A point that leaves the finite range where the flare was drawn is refused, not stored.
+        let q = inv * Point::new(f64_req(p, kx, C)?, f64_req(p, ky, C)?);
+        match [(kx, q.x), (ky, q.y)].into_iter().find(|(_, v)| !v.is_finite()) {
+            None => Ok(Some(q)),
+            Some((key, _)) => Err(bad(C, format!("{key} must be a finite coordinate"))),
+        }
     };
     let c = point("cx", "cy")?;
     let end = point("x2", "y2")?;

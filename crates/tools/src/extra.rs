@@ -90,13 +90,15 @@ pub struct FlareTool {
 }
 
 /// A drag of a selected flare's handle: the flare, whether it is the end handle (else the center),
-/// where the handle was, where it was pressed and whether the drag has begun its undo step.
+/// where the handle was, where it was pressed, whether Alt (Option on macOS) was held at the press
+/// and whether the drag has begun its undo step.
 #[derive(Clone, Copy, Debug)]
 struct HandleDrag {
     id: vectorcraft_doc::NodeId,
     end: bool,
     from: Point,
     at: Point,
+    alt: bool,
     began: bool,
 }
 
@@ -307,7 +309,14 @@ impl Tool for FlareTool {
                 }
                 PointerKind::Up => {
                     self.handle = None;
-                    if h.began { vec![Action::Preview("shape.editFlare".into(), handle_params(h, ev.pos)), Action::Commit] } else { vec![] }
+                    if h.began {
+                        vec![Action::Preview("shape.editFlare".into(), handle_params(h, ev.pos)), Action::Commit]
+                    } else if h.alt {
+                        // A click on a handle without a drag is a click with the tool.
+                        self.click_flare(cx, h.at)
+                    } else {
+                        vec![Action::Dialog("flare".into(), json!({ "x": h.at.x, "y": h.at.y }))]
+                    }
                 }
                 _ => vec![],
             };
@@ -322,7 +331,7 @@ impl Tool for FlareTool {
                     let (dc, de) = (ev.pos.distance(c), ev.pos.distance(e));
                     if dc.min(de) <= tol {
                         let end = de < dc;
-                        self.handle = Some(HandleDrag { id, end, from: if end { e } else { c }, at: ev.pos, began: false });
+                        self.handle = Some(HandleDrag { id, end, from: if end { e } else { c }, at: ev.pos, alt: ev.mods.alt, began: false });
                         return vec![];
                     }
                 }
@@ -1128,9 +1137,17 @@ mod tests {
         assert_eq!(a.last(), Some(&Action::Preview("shape.editFlare".into(), json!({ "ids": [gid.0], "cx": 150.0, "cy": 120.0 }))));
         assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
         assert!(!t.busy());
-        // A click on a handle without a drag changes nothing.
+        // A click on a handle without a drag is a click with the tool: it opens the dialog, and
+        // with Alt held it draws a flare there with the tool's options.
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 110.0, 120.0));
-        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 110.0, 120.0)).is_empty());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 110.0, 120.0));
+        assert_eq!(a, vec![Action::Dialog("flare".into(), json!({ "x": 110.0, "y": 120.0 }))]);
+        assert!(!t.busy());
+        let alt = Mods { alt: true, ..Default::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 310.0, 121.0).with_mods(alt));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 310.0, 121.0).with_mods(alt));
+        assert_eq!(a, vec![Action::Exec("shape.flare".into(), flare_params(&t.options(), Point::new(310.0, 121.0)))]);
+        assert!(!t.busy());
         // Away from the handles a drag draws a new flare.
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 240.0, 300.0));
