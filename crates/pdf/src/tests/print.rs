@@ -106,6 +106,28 @@ fn defaults_and_json() {
 }
 
 #[test]
+fn the_scale_link_is_on_for_new_settings_and_off_for_a_saved_scale_without_it() {
+    let s = PrintSettings::default();
+    assert!(s.scale.linked, "new settings keep W and H equal");
+    assert_eq!(serde_json::to_value(&s).unwrap()["scale"], json!({"width": 100.0, "height": 100.0, "linked": true}));
+    // Settings without a scale are new settings; a scale saved before the link reads as unlinked,
+    // so its width and height print as they did.
+    assert!(settings(json!({"copies": 2})).scale.linked);
+    let old = settings(json!({"scaling": "custom", "scale": {"width": 50, "height": 200}}));
+    assert_eq!((old.scale.width, old.scale.height, old.scale.linked), (50.0, 200.0, false));
+    assert!(old.check().is_ok());
+    // Linked, the two must be equal; the range still holds for both.
+    let apart = settings(json!({"scale": {"width": 50, "height": 200, "linked": true}}));
+    assert!(matches!(apart.check(), Err(PdfError::BadSetting(_))));
+    for bad in
+        [json!({"width": 0, "height": 0, "linked": true}), json!({"width": 1001, "height": 1001, "linked": true}), json!({"width": -5, "height": 50})]
+    {
+        assert!(matches!(settings(json!({ "scale": bad })).check(), Err(PdfError::BadSetting(_))), "{bad}");
+    }
+    assert!(settings(json!({"scale": {"width": 1000, "height": 1000, "linked": true}})).check().is_ok());
+}
+
+#[test]
 fn japanese_paper_sizes() {
     // The Japanese papers: JIS B4, B5 and B6 are the sizes Japanese printing uses (JIS X 6310),
     // a little larger than ISO's; the others are はがき, 往復はがき, 封筒 and 四六判.
@@ -613,6 +635,239 @@ fn cmyk_and_a_spot_separate_into_five_plates() {
     let p = pages(&job(&d, json!({"output": {"mode": "separations", "spotsToProcess": true}})).bytes);
     assert_eq!(p.len(), 4);
     assert_eq!(inks(&p[2]), [0.0, 40.0], "the gold's yellow");
+}
+
+/// A 200 × 100 pt CMYK document filled with cyan, with spot swatch `Ink` (100% K) and the objects
+/// `art` over the cyan.
+fn over_cyan(art: Vec<Node>) -> Document {
+    let mut d = doc(200.0, 100.0, &[(Rect::new(0.0, 0.0, 200.0, 100.0), Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)))]);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    d.swatches.push(Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), global: true, spot: true });
+    let layer = d.default_layer().unwrap();
+    for mut n in art {
+        n.id = d.alloc_id();
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    d
+}
+
+#[test]
+fn overprint_black_keeps_the_inks_under_solid_black_on_separations() {
+    let k = |v: f32| Paint::solid(Color::cmyk(0.0, 0.0, 0.0, v));
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 0.0, 0.0, 1.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let stops = vec![GradientStop::new(0.0, Color::cmyk(0.0, 0.0, 0.0, 1.0)), GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))];
+    let fade = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let square = |x: f64, fill: Paint, stroke: Paint| {
+        Node::path(vectorcraft_doc::NodeId(0), shapes::rectangle(Rect::new(x, 15.0, x + 20.0, 35.0)), Appearance::basic(fill, stroke, 4.0))
+    };
+    // (left edge, fill, whether the cyan below prints under it with the option on).
+    let cases = [
+        (10.0, k(1.0), true),
+        (40.0, Paint::solid(Color::gray(1.0)), true),
+        (70.0, Paint::solid(Color::cmyk(0.6, 0.4, 0.4, 1.0)), false),
+        (100.0, k(0.99), false),
+        (130.0, spot, false),
+        (160.0, fade, false),
+    ];
+    let mut art: Vec<Node> = cases.iter().map(|(x, p, _)| square(*x, p.clone(), Paint::None)).collect();
+    // A black stroke with no fill: its left side runs down x = 184.
+    art.push(square(184.0, Paint::None, k(1.0)));
+    let d = over_cyan(art);
+    let plates = |v: serde_json::Value| -> Vec<vectorcraft_testkit::raster::Image> {
+        let opts = PrintOptions { settings: settings(v), ..Default::default() };
+        plan(&d, &opts).unwrap().plates.iter().map(|p| render_region(p, Rect::new(0.0, 0.0, 200.0, 100.0), 1.0)).collect()
+    };
+    // Full ink at x on the plate (a rich black's 60% cyan is not).
+    let inked = |img: &vectorcraft_testkit::raster::Image, x: f64| img.over_white(x as u32, 25)[0] < 40;
+    let off = plates(json!({"output": {"mode": "separations"}}));
+    let on = plates(json!({"output": {"mode": "separations", "overprintBlack": true}}));
+    for (x, _, overprints) in &cases {
+        assert!(!inked(&off[0], x + 10.0), "off: the art at {x} knocks the cyan out");
+        assert_eq!(inked(&on[0], x + 10.0), *overprints, "on: the cyan under the art at {x}");
+    }
+    assert!(!inked(&off[0], 184.0) && inked(&on[0], 184.0), "a black stroke overprints too");
+    assert!(inked(&on[0], 194.0), "inside the unfilled square: cyan");
+    assert!(inked(&on[3], 20.0) && inked(&off[3], 20.0), "the black prints on the Black plate either way");
+    assert!(!inked(&on[3], 2.0), "no black is added where there is none");
+    // The K and gray squares put no cyan down, so the cyan plate draws them as nothing: a writer
+    // without blending modes (PostScript) keeps the cyan under them too.
+    let opts = PrintOptions {
+        settings: settings(json!({"output": {"mode": "separations", "overprintBlack": true}})),
+        postscript: true,
+        ..Default::default()
+    };
+    let p = plan(&d, &opts).unwrap();
+    let fills = |doc: &Document| {
+        let mut count = 0;
+        doc.walk(|n| count += usize::from(n.appearance.fill().is_some_and(|f| !f.paint.is_none())));
+        count
+    };
+    assert_eq!((fills(&d), fills(&p.plates[0]), fills(&p.plates[3])), (7, 5, 7), "the cyan plate, the Black plate");
+    // The document keeps its own settings; composite output ignores the option.
+    assert!(!d.layers.iter().any(|l| l.has_overprint()));
+    let marked = |v| printed_document(&d, &settings(v)).layers.iter().any(|l| l.has_overprint());
+    assert!(marked(json!({"output": {"mode": "separations", "overprintBlack": true}})));
+    assert!(!marked(json!({"output": {"overprintBlack": true}})), "composite");
+    assert!(!marked(json!({"output": {"mode": "separations"}})), "off by default");
+}
+
+#[test]
+fn overprint_black_keeps_the_cyan_under_near_and_freeform_blacks_on_postscript_plates() {
+    // 0.4% cyan beside 100% K counts as black, as do a freeform gradient of black points and a
+    // linear gradient of black stops, and the cyan plate draws them all as nothing.
+    let near = Paint::solid(Color::cmyk(0.004, 0.0, 0.0, 1.0));
+    let k = Color::cmyk(0.0, 0.0, 0.0, 1.0);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, k), GradientStop::new(1.0, k)]));
+    let points = vec![FreeformPoint::new(kurbo::Point::new(45.0, 20.0), k), FreeformPoint::new(kurbo::Point::new(55.0, 30.0), Color::gray(1.0))];
+    g.freeform = Some(Freeform { points, ..Default::default() });
+    // A linear gradient draws its black stops, not the cyan point it still holds.
+    let mut linear = g.clone();
+    linear.gradient.kind = GradientKind::Linear;
+    if let Some(f) = &mut linear.freeform {
+        f.points[1].color = Color::cmyk(1.0, 0.0, 0.0, 0.0);
+    }
+    let square = |x: f64, fill: Paint| {
+        Node::path(vectorcraft_doc::NodeId(0), shapes::rectangle(Rect::new(x, 15.0, x + 20.0, 35.0)), Appearance::basic(fill, Paint::None, 0.0))
+    };
+    let d = over_cyan(vec![square(10.0, near), square(40.0, Paint::Gradient(Box::new(g))), square(70.0, Paint::Gradient(Box::new(linear)))]);
+    let opts = PrintOptions {
+        settings: settings(json!({"output": {"mode": "separations", "overprintBlack": true}})),
+        postscript: true,
+        ..Default::default()
+    };
+    let p = plan(&d, &opts).unwrap();
+    let fills = |doc: &Document| {
+        let mut count = 0;
+        doc.walk(|n| count += usize::from(n.appearance.fill().is_some_and(|f| !f.paint.is_none())));
+        count
+    };
+    assert_eq!((fills(&p.plates[0]), fills(&p.plates[3])), (1, 4), "the cyan plate, the Black plate");
+}
+
+#[test]
+fn an_overprinting_fill_keeps_its_faint_ink_on_pdf_plates() {
+    // 0.4% cyan beside 100% K, set to overprint: a PDF plate draws it with Darken, a PostScript
+    // plate draws it as nothing (it has no blending modes).
+    let mut square = Node::path(
+        vectorcraft_doc::NodeId(0),
+        shapes::rectangle(Rect::new(10.0, 15.0, 30.0, 35.0)),
+        Appearance::basic(Paint::solid(Color::cmyk(0.004, 0.0, 0.0, 1.0)), Paint::None, 0.0),
+    );
+    if let Some(f) = square.appearance.fill_mut() {
+        f.overprint = true;
+    }
+    let d = over_cyan(vec![square]);
+    let fills = |postscript: bool| {
+        let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript, ..Default::default() };
+        let p = plan(&d, &opts).unwrap();
+        let mut count = 0;
+        p.plates[0].walk(|n| count += usize::from(n.appearance.fill().is_some_and(|f| !f.paint.is_none())));
+        count
+    };
+    assert_eq!((fills(false), fills(true)), (2, 1), "the cyan plate as PDF, as PostScript");
+}
+
+#[test]
+fn overprinting_type_leaves_the_inks_below_on_separations() {
+    let style = vectorcraft_doc::CharStyle { fill: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", style);
+    let mut d = over_cyan(vec![Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(text)))]);
+    let darkens = |d: &Document, v| String::from_utf8_lossy(&job(d, v).bytes).contains("/Darken");
+    let seps = json!({"output": {"mode": "separations"}});
+    assert!(!darkens(&d, seps.clone()), "black type knocks out");
+    assert!(darkens(&d, json!({"output": {"mode": "separations", "overprintBlack": true}})), "Overprint Black: the type overprints");
+    // A character fill set to overprint does so on the plates without the option too.
+    let layer = d.default_layer().unwrap();
+    let id = d.node(layer).and_then(|l| l.children()).and_then(|c| c.last()).map(|n| n.id).unwrap();
+    let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { panic!("type") };
+    t.runs[0].style.overprint_fill = true;
+    assert!(darkens(&d, seps), "an overprinting character fill");
+}
+
+#[test]
+fn a_type_objects_own_black_fill_overprints_on_separations() {
+    // No character fill: the type object's own fill paints the characters.
+    let style = vectorcraft_doc::CharStyle { fill: Paint::None, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", style);
+    let mut n = Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(text)));
+    n.appearance = Appearance::basic(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+    let d = over_cyan(vec![n]);
+    let darkens = |v| String::from_utf8_lossy(&job(&d, v).bytes).contains("/Darken");
+    assert!(!darkens(json!({"output": {"mode": "separations"}})), "it knocks out");
+    assert!(darkens(json!({"output": {"mode": "separations", "overprintBlack": true}})), "Overprint Black: it overprints");
+}
+
+#[test]
+fn overprint_black_follows_a_symbol_instances_own_fill_on_separations() {
+    use vectorcraft_doc::symbol_overrides::SymbolOverride;
+    let (k, magenta) = (Color::cmyk(0.0, 0.0, 0.0, 1.0), Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    let square = |x: f64, c: Color| {
+        let r = shapes::rectangle(Rect::new(x, 15.0, x + 20.0, 35.0));
+        Arc::new(Node::path(vectorcraft_doc::NodeId(0), r, Appearance::basic(Paint::solid(c), Paint::None, 0.0)))
+    };
+    let instance = |symbol: &str, fill: Color| {
+        let mut n = Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: symbol.into(), xf: Default::default() });
+        n.extras_mut().symbol_overrides = vec![SymbolOverride { path: vec![], fill: Some(Paint::solid(fill)), ..Default::default() }];
+        n
+    };
+    // An instance of "Outer", whose art is the magenta symbol's instance painted black, moved right.
+    let outer =
+        Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: "Outer".into(), xf: kurbo::Affine::translate((140.0, 0.0)) });
+    let mut d = over_cyan(vec![instance("Magenta", k), instance("Black", magenta), outer]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Magenta".into(), art: square(10.0, magenta) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Black".into(), art: square(40.0, k) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Outer".into(), art: Arc::new(instance("Magenta", k)) });
+    let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations", "overprintBlack": true}})), ..Default::default() };
+    let p = plan(&d, &opts).unwrap();
+    let cyan = render_region(&p.plates[0], Rect::new(0.0, 0.0, 200.0, 100.0), 1.0);
+    let inked = |x: u32| cyan.over_white(x, 25)[0] < 40;
+    assert!(inked(20), "a magenta symbol's instance painted black overprints the cyan");
+    assert!(!inked(50), "a black symbol's instance painted magenta knocks the cyan out");
+    assert!(inked(160), "the instance painted black inside another symbol's art overprints too");
+    assert!(!d.symbols.iter().any(|s| s.art.has_overprint()), "the document keeps its own settings");
+}
+
+#[test]
+fn overprint_black_follows_instance_paints_in_inline_graphics() {
+    use vectorcraft_doc::symbol_overrides::SymbolOverride;
+    // Type shows symbol "Holder" inline; its art is an instance of a black symbol painted magenta.
+    let k = Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let r = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let mut inst = Node::new(vectorcraft_doc::NodeId(0), NodeKind::SymbolInstance { symbol: "Black".into(), xf: Default::default() });
+    let magenta = Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    inst.extras_mut().symbol_overrides = vec![SymbolOverride { path: vec![], fill: Some(magenta), ..Default::default() }];
+    let mut text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", Default::default());
+    text.runs.push(vectorcraft_doc::TextRun::inline(vectorcraft_doc::InlineArt::new("Holder"), Default::default()));
+    let mut d = over_cyan(vec![Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(text)))]);
+    let black = Arc::new(Node::path(vectorcraft_doc::NodeId(0), r, Appearance::basic(k, Paint::None, 0.0)));
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Black".into(), art: black });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Holder".into(), art: Arc::new(inst) });
+    let printed = printed_document(&d, &settings(json!({"output": {"mode": "separations", "overprintBlack": true}})));
+    let holder = printed.symbols.iter().find(|s| s.name == "Holder").unwrap();
+    let mut instances = 0;
+    holder.art.walk(&mut |n: &Node| instances += usize::from(matches!(n.kind, NodeKind::SymbolInstance { .. })));
+    assert_eq!(instances, 0, "the instance is placed as the art it prints");
+    assert!(!holder.art.has_overprint(), "its magenta fill knocks out");
+    assert!(matches!(d.symbols[1].art.kind, NodeKind::SymbolInstance { .. }), "the document keeps its art");
+}
+
+#[test]
+fn overprinting_type_in_an_opacity_mask_does_not_darken_on_separations() {
+    // Mask art has no inks: an overprinting gray character in an inverted clipping mask keeps its
+    // luminance on every plate.
+    let style = vectorcraft_doc::CharStyle { fill: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.5)), overprint_fill: true, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", style);
+    let mut mask = vectorcraft_doc::OpacityMask::new(Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(text))), true);
+    mask.invert = true;
+    let square = Node::path(
+        vectorcraft_doc::NodeId(0),
+        shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 90.0)),
+        Appearance::basic(Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Paint::None, 0.0),
+    )
+    .with_mask(Some(Box::new(mask)));
+    let d = over_cyan(vec![square]);
+    let bytes = job(&d, json!({"output": {"mode": "separations"}})).bytes;
+    assert!(!String::from_utf8_lossy(&bytes).contains("/Darken"), "the mask's character is drawn as it is");
 }
 
 /// A 100 pt CMYK document with spot swatch `Gold` and a square filled with gradient `g`.

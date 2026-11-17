@@ -34,7 +34,7 @@
 	Clear Recent Files	Kosongkan berkas terbaru
 	Show in Folder	Tampilkan di folder
 	Close	Tutup
-@id	file.close	berkas.tutup
+@id	file.close	Tutup
 	Close All	Tutup semua
 	Save	Simpan
 	Save As…	Simpan sebagai…
@@ -513,7 +513,7 @@
 	Zig Zag…	Zig Zag…
 	Pathfinder	Pathfinder
 	Add	Tambah
-@id	pathfinder.add	pathfinder.tambah
+@id	pathfinder.add	Satukan
 	Intersect	Iris
 	Exclude	Kecualikan
 	Subtract	Kurangi
@@ -826,6 +826,7 @@
 	Auto Color	Warna otomatis
 	Automatic	Otomatis
 	Isolate Selected Group	Isolasi grup terseleksi
+	Isolate Selected Path	Isolasi jalur terseleksi
 	Exit Isolation Mode	Keluar dari mode isolasi
 	Make Clipping Mask	Buat masker kliping
 	Release Clipping Mask	Lepaskan masker kliping
@@ -1227,9 +1228,10 @@ lighting	Light	Cahaya
 	Name* @ 66.67% (RGB/Preview)	Nama* @ 66.67% (RGB/Pratinjau)
 	No Document	Tidak ada dokumen
 	Press 	Tekan 
-	Search commands and tools	Cari perintah dan alat
+	Search commands, tools, panels and effects	Cari perintah, alat, panel, dan efek
 	Style:	Gaya:
 	Switch workspace	Ganti ruang kerja
+	Search commands	Cari perintah
 	Show all open documents	Tampilkan semua dokumen terbuka
 	Use 	Gunakan 
 	 the object to select  |  	 objek untuk memilihnya  |  
@@ -1340,6 +1342,8 @@ lighting	Light	Cahaya
 	Lasso Tool	Alat lasso
 	Enclosing Lasso Tool	Alat laso pengeliling
 	Enclosing Lasso	Laso pengeliling
+	Polygonal Lasso Tool	Alat laso poligonal
+	Polygonal Lasso	Laso poligonal
 	Lasso	Lasso
 	Line Cut Tool	Alat potong garis
 	Line Graph Tool	Alat grafik garis
@@ -1427,6 +1431,10 @@ lighting	Light	Cahaya
 	Play Current Selection	Putar seleksi saat ini
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
+	Reset Actions	Atur ulang tindakan
+	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
+	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
+	Append	Tambahkan
 	Reflect Horizontal	Pencerminan horizontal
 	Rotate 90° CW	Putar 90° searah jarum jam
 	Set 1	Set 1
@@ -2627,7 +2635,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Sembunyikan penggaris video
 	Client-side (.html)	Sisi klien (.html)
 	Color Reduction:	Reduksi warna:
-	Lossless (lossy WebP isn't available yet)	Tanpa kehilangan (WebP lossy belum tersedia)
+	Lossless	Tanpa kehilangan
+	Lossy	Dengan kehilangan
 	Scans:	Pemindaian:
 	Server-side (.map)	Sisi server (.map)
 	{format} Options	Opsi {format}
@@ -2735,6 +2744,11 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Tampilkan roda warna halus
 	Show segmented color wheel	Tampilkan roda warna bersegmen
 	Show color bars	Tampilkan bilah warna
+	Show brightness and hue on wheel	Tampilkan kecerahan dan rona pada roda
+	Show saturation and hue on wheel	Tampilkan saturasi dan rona pada roda
+	Add Color Tool	Alat Tambah Warna
+	Remove Color Tool	Alat Hapus Warna
+	Remove Color	Hapus Warna
 	Find the selected colors in the artwork	Temukan warna yang dipilih di karya seni
 	Harmony Rules	Aturan harmoni
 	Keep this row's colors (exclude)	Pertahankan warna baris ini (kecualikan)
@@ -3377,6 +3391,10 @@ theme	Appearance	Tampilan
 	Font List	Daftar font
 	Show Similar Fonts	Tampilkan font serupa
 	Clear Similar Fonts	Hapus font serupa
+	Fonts used in this document	Font yang digunakan dalam dokumen ini
+	This document uses no available fonts	Dokumen ini tidak menggunakan font yang tersedia
+	Recently Added	Baru ditambahkan
+	Fonts added in the last 30 days	Font yang ditambahkan dalam 30 hari terakhir
 	Fonts in Document	Font dalam dokumen
 	Refresh Font List	Segarkan daftar font
 	Replace Font	Ganti font
@@ -3412,6 +3430,7 @@ theme	Appearance	Tampilan
 	Connect Data Points	Hubungkan titik data
 	Edge-to-Edge Lines	Garis dari tepi ke tepi
 	Draw Filled Lines	Gambar garis terisi
+	Line Width	Lebar garis
 	Tick Values	Nilai tanda skala
 	Override Calculated Values	Timpa nilai terhitung
 	Divisions	Pembagian
@@ -4131,7 +4150,11 @@ font-technology	Variable	Variabel
 	Saved {path}	Berhasil menyimpan {path}
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
-	Search commands and tools…	Cari perintah dan alat…
+	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
+	No commands match	Tidak ada perintah yang cocok
+	{pos} of {total}: {name}	{pos} dari {total}: {name}
+@plural	{n} result|{n} results	{n} hasil
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
 	No recent commands	Tidak ada perintah terbaru
 	Dashed Line	Garis putus-putus
@@ -6450,6 +6473,7 @@ anchor	Points:	Titik:
 	Open a document to check it for issues.	Buka dokumen untuk memeriksa masalahnya.
 	Empty Text	Teks kosong
 	Unpainted Objects	Objek tanpa warna
+	Empty Text Paths	Jalur teks kosong
 	Zero-Opacity Objects	Objek dengan opasitas nol
 	Duplicate Objects	Objek duplikat
 	Off-Artboard Art	Karya di luar artboard
@@ -6778,6 +6802,22 @@ breakText	Glyphs	Glif
 	Remove Gaps	Hapus celah
 @msg	that makes too many pieces (at most 100000): make the dashes longer	itu menghasilkan terlalu banyak potongan (paling banyak 100000): perpanjang garisnya
 @msg	select paths, or segments, to divide	pilih jalur atau segmen yang akan dibagi
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Garis Singgung Persekutuan…
+	Common Tangents	Garis Singgung Persekutuan
+	Tangents	Garis Singgung
+	Centerline	Garis Tengah
+	External	Luar
+	Internal	Dalam
+@msg	select two closed paths	pilih dua jalur tertutup
+@msg	a selected path is open	jalur yang dipilih terbuka
+@msg	a selected path is not convex	jalur yang dipilih tidak cembung
+@msg	a selected path has no area	jalur yang dipilih tidak memiliki luas
+@msg	a selected path has more than 10000 segments	jalur yang dipilih memiliki lebih dari 10000 segmen
+@msg	the two paths have the same outline	kedua jalur memiliki garis luar yang sama
+@msg	One path lies inside the other, so they have no common tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung persekutuan
+@msg	The paths overlap, so they have no internal tangents	Jalur-jalur saling tumpang tindih, sehingga tidak ada garis singgung dalam
+@msg	One path lies inside the other, so they have no internal tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung dalam
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
@@ -6820,6 +6860,11 @@ breakText	Glyphs	Glif
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskerta
+	Nepali	Nepali
+	Assamese	Assam
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} dan yang lebih baru (versi {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Ekspor Semua Dokumen Terbuka sebagai PDF
@@ -7084,4 +7129,24 @@ breakText	Glyphs	Glif
 	No objects are selected.	Tidak ada objek yang dipilih.
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
+	Check	Periksa
+	Check Fold Lines	Periksa garis lipat
+@msg	No cut lines are in the selection.	Tidak ada garis potong dalam seleksi.
+@msg	No cut lines are in the document.	Tidak ada garis potong dalam dokumen.
+@msg	The cut lines do not enclose an area.	Garis potong tidak melingkupi area apa pun.
+@msg	A cut line ends without meeting another cut line.	Sebuah garis potong berakhir tanpa bertemu garis potong lain.
+@msg	A gap between cut lines was closed.	Celah di antara garis potong telah ditutup.
+@msg	The fold lines are too complex to check.	Garis lipat terlalu rumit untuk diperiksa.
+@msg	A cut line and a crease lie on top of each other.	Sebuah garis potong dan sebuah garis lekuk bertumpuk.
+@msg	No cut lines are among the given objects.	Tidak ada garis potong di antara objek yang diberikan.
+@msg	Two fold lines lie on top of each other.	Dua garis lipat bertumpuk.
+@msg	A crease ends inside a panel.	Sebuah garis lekuk berakhir di dalam panel.
+@msg	A crease does not divide two panels.	Sebuah garis lekuk tidak membagi dua panel.
+@msg	A crease lies outside the cut outline, wholly or in part.	Sebuah garis lekuk berada seluruhnya atau sebagian di luar kontur potong.
+@msg	The pieces of a hinge are not on one straight line.	Bagian-bagian sebuah engsel tidak berada pada satu garis lurus.
+@msg	A gap between cut lines is too narrow to tell apart.	Celah di antara garis potong terlalu sempit untuk dibedakan.
+@msg	A cut-out area holds other fold lines or another blank.	Area yang dipotong berisi garis lipat lain atau bentangan lain.
+@msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
+@msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

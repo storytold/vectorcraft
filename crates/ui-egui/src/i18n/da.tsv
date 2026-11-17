@@ -380,6 +380,25 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en gruppes udfyldning eller streg tegner intet
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
+@msg	give one <filter> element	angiv ét <filter>-element
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementet skal have et id, filterets navn
+@msg	an SVG filter's id is at most {MAX_NAME} characters	et SVG-filters id er højst {MAX_NAME} tegn
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> er ikke et element i et SVG-filter
+@msg	an SVG filter has no event attributes such as {_1}	et SVG-filter har ingen hændelsesattributter som {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	et SVG-filters billeder er data:-URL'er i PNG, JPEG, GIF eller WebP
+@msg	the SVG filter isn't valid XML: {e}	SVG-filteret er ikke gyldig XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves for feTurbulence er højst {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} er højst {max}
+@msg	feConvolveMatrix's order	order for feConvolveMatrix
+@msg	feMorphology's radius	radius for feMorphology
+@msg	a blur's stdDeviation	stdDeviation for en sløring
+@msg	the SVG filter has no primitives	SVG-filteret har ingen filterprimitiver
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	et SVG-filter har højst {MAX_PRIMITIVES} filterprimitiver
+@msg	the SVG filter is too large once its attributes are written out	SVG-filteret er for stort, når dets attributter er skrevet ud
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	et SVG-filters billeder har i alt højst {MAX_IMAGE_PIXELS} pixels
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-filteret kan ikke tegnes: kontrollér dets filterprimitiver og deres input
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	et SVG-filters elementer er højst indlejret {MAX_DEPTH} niveauer dybt
+@msg	an SVG filter is at most {_1} KB	et SVG-filter er højst {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
@@ -725,6 +744,8 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	No bridge of this width fits across the selected art	Ingen bro med denne bredde passer hen over den markerede grafik
 @msg	Some islands could not be joined to the area around the art	Nogle øer kunne ikke forbindes med området omkring grafikken
 @msg	`width` must be from {lo} to {hi} pt	`width` skal være fra {lo} til {hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle` skal være fra -180 til 180 grader
+@msg	`roundness` must be from 1 to 100%	`roundness` skal være fra 1 til 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` skal være et heltal fra 1 til {MAX_BRIDGES_PER_ISLAND}
 
 	File	Filer
@@ -736,7 +757,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Clear Recent Files	Ryd seneste filer
 	Show in Folder	Vis i mappe
 	Close	Luk
-@id	file.close	file.close
+@id	file.close	Luk
 	Close All	Luk alle
 	Save	Gem
 	Save As…	Gem som…
@@ -1005,6 +1026,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Trap: mere end {_1} par objekter ligger tæt nok til overfyldning, eller for mange objekter deler et vandret område; anvend Trap på færre objekter ad gangen
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft læser højst {ASE_MAX_ENTRIES} farver og grupper fra en farveprøveudvekslingsfil, og dette bibliotek har {entries}
 @msg	WebP encoding failed: {e}	WebP-kodning mislykkedes: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-kodning mislykkedes: billedet er for stort til WebP med tab: sænk opløsningen, eller vælg Tabsfri
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Lugeramme og lugelinjer: ingen lugelinje passer uden for grafikken, og lugerammen er slået fra
 @msg	\\ at end of pattern	\\ i slutningen af mønsteret
 @msg	`alignOn` cannot be empty	`alignOn` må ikke være tom
@@ -3204,7 +3226,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Zig Zag…	Zigzag…
 	Pathfinder	Pathfinder
 	Add	Foren
-@id	pathfinder.add	pathfinder.add
+@id	pathfinder.add	Foren
 	Intersect	Skæring
 	Exclude	Udeluk
 	Subtract	Træk fra
@@ -3517,6 +3539,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Auto Color	Autofarve
 	Automatic	Automatisk
 	Isolate Selected Group	Isolér valgt gruppe
+	Isolate Selected Path	Isolér valgt kurve
 	Exit Isolation Mode	Afslut isoleringstilstand
 	Make Clipping Mask	Opret beskæringsmask
 	Release Clipping Mask	Frigør beskæringsmask
@@ -3918,9 +3941,10 @@ lighting	Light	Lys
 	Name* @ 66.67% (RGB/Preview)	Navn* @ 66.67% (RGB/forhåndsvisning)
 	No Document	Intet dokument
 	Press 	Tryk på 
-	Search commands and tools	Søg i kommandoer og værktøjer
+	Search commands, tools, panels and effects	Søg i kommandoer, værktøjer, paneler og effekter
 	Style:	Typografi:
 	Switch workspace	Skift arbejdsområde
+	Search commands	Søg i kommandoer
 	Show all open documents	Vis alle åbne dokumenter
 	Use 	Brug 
 	 the object to select  |  	 på objektet for at markere det  |  
@@ -4031,6 +4055,8 @@ lighting	Light	Lys
 	Lasso Tool	Lassoværktøj
 	Enclosing Lasso Tool	Omsluttende lassoværktøj
 	Enclosing Lasso	Omsluttende lasso
+	Polygonal Lasso Tool	Polygonlassoværktøj
+	Polygonal Lasso	Polygonlasso
 	Lasso	Lasso
 	Line Cut Tool	Linjeskæringsværktøj
 	Line Graph Tool	Linjediagramværktøj
@@ -4118,6 +4144,10 @@ lighting	Light	Lys
 	Play Current Selection	Afspil aktuel markering
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
+	Reset Actions	Nulstil handlinger
+	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
+	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
+	Append	Tilføj
 	Reflect Horizontal	Spejl vandret
 	Rotate 90° CW	Rotér 90° med uret
 	Set 1	Sæt 1
@@ -5367,7 +5397,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Skjul videolinealer
 	Client-side (.html)	Klientbaseret (.html)
 	Color Reduction:	Farvereduktion:
-	Lossless (lossy WebP isn't available yet)	Tabsfri (WebP med tab er ikke tilgængelig endnu)
+	Lossless	Tabsfri
+	Lossy	Med tab
 	Scans:	Scanninger:
 	Server-side (.map)	Serverbaseret (.map)
 	{format} Options	Indstillinger for {format}
@@ -5475,6 +5506,11 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Show brightness and hue on wheel	Vis lysstyrke og farvetone på hjulet
+	Show saturation and hue on wheel	Vis mætning og farvetone på hjulet
+	Add Color Tool	Værktøjet Tilføj farve
+	Remove Color Tool	Værktøjet Fjern farve
+	Remove Color	Fjern farve
 	Find the selected colors in the artwork	Find de valgte farver i grafikken
 	Harmony Rules	Harmoniregler
 	Keep this row's colors (exclude)	Behold farverne i denne række (ekskludér)
@@ -6117,6 +6153,10 @@ theme	Appearance	Udseende
 	Font List	Skrifttypeliste
 	Show Similar Fonts	Vis lignende skrifttyper
 	Clear Similar Fonts	Ryd lignende skrifttyper
+	Fonts used in this document	Skrifttyper brugt i dette dokument
+	This document uses no available fonts	Dette dokument bruger ingen tilgængelige skrifttyper
+	Recently Added	Nyligt tilføjet
+	Fonts added in the last 30 days	Skrifttyper tilføjet inden for de sidste 30 dage
 	Fonts in Document	Skrifttyper i dokumentet
 	Refresh Font List	Opdatér skrifttypeliste
 	Replace Font	Erstat skrifttype
@@ -6152,6 +6192,7 @@ theme	Appearance	Udseende
 	Connect Data Points	Forbind datapunkter
 	Edge-to-Edge Lines	Linjer fra kant til kant
 	Draw Filled Lines	Tegn udfyldte linjer
+	Line Width	Linjebredde
 	Tick Values	Afmærkningsværdier
 	Override Calculated Values	Tilsidesæt beregnede værdier
 	Divisions	Inddelinger
@@ -6871,7 +6912,11 @@ font-technology	Variable	Variable
 	Saved {path}	Gemte {path}
 	Saving	Gemmer
 	Saving {}	Gemmer {}
-	Search commands and tools…	Søg i kommandoer og værktøjer…
+	Search commands, tools, panels and effects…	Søg i kommandoer, værktøjer, paneler og effekter…
+	No commands match	Ingen kommandoer passer
+	{pos} of {total}: {name}	{pos} af {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultater
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Recent Commands	Seneste kommandoer
 	No recent commands	Ingen seneste kommandoer
 	Dashed Line	Stiplet linje
@@ -7383,6 +7428,9 @@ imageTrace	Outline	Kontur
 @msg	no active document	intet aktivt dokument
 @msg	no active perspective plane	intet aktivt perspektivplan
 @msg	no anchor points selected	ingen ankerpunkter er markeret
+@msg	`points` must be three [x, y] pairs of numbers	`points` skal være tre talpar [x, y]
+@msg	direct-select three anchor points, or give `points`	direkte markér tre ankerpunkter, eller angiv `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går gennem disse punkter: to er ens, eller alle tre ligger på én linje
 @msg	no app to open files here	ingen app til at åbne filer her
 @msg	no artboard	ingen tegneflade
 @msg	no artboard {i} (0-based; the document has {_1})	ingen tegneflade {i} (0-baseret; dokumentet har {_1})
@@ -9199,6 +9247,7 @@ anchor	Points:	Punkter:
 	Open a document to check it for issues.	Åbn et dokument for at kontrollere det for problemer.
 	Empty Text	Tom tekst
 	Unpainted Objects	Objekter uden farve
+	Empty Text Paths	Tomme tekststier
 	Zero-Opacity Objects	Objekter med 0 % opacitet
 	Duplicate Objects	Dublerede objekter
 	Off-Artboard Art	Grafik uden for kunstpladerne
@@ -9527,6 +9576,22 @@ breakText	Glyphs	Glyffer
 	Remove Gaps	Fjern mellemrum
 @msg	that makes too many pieces (at most 100000): make the dashes longer	det giver for mange stykker (højst 100000): gør stregerne længere
 @msg	select paths, or segments, to divide	vælg stier eller segmenter, der skal opdeles
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Fælles tangenter…
+	Common Tangents	Fælles tangenter
+	Tangents	Tangenter
+	Centerline	Midterlinje
+	External	Ydre
+	Internal	Indre
+@msg	select two closed paths	vælg to lukkede stier
+@msg	a selected path is open	en valgt sti er åben
+@msg	a selected path is not convex	en valgt sti er ikke konveks
+@msg	a selected path has no area	en valgt sti har intet areal
+@msg	a selected path has more than 10000 segments	en valgt sti har mere end 10000 segmenter
+@msg	the two paths have the same outline	de to stier har samme omrids
+@msg	One path lies inside the other, so they have no common tangents	Den ene sti ligger inden i den anden, så de har ingen fælles tangenter
+@msg	The paths overlap, so they have no internal tangents	Stierne overlapper, så de har ingen indre tangenter
+@msg	One path lies inside the other, so they have no internal tangents	Den ene sti ligger inden i den anden, så de har ingen indre tangenter
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Udvid streger til stier
 @msg	select paths with dashed strokes to expand	vælg stier med stiplet streg, der skal udvides
@@ -9569,6 +9634,11 @@ breakText	Glyphs	Glyffer
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepalesisk
+	Assamese	Assamesisk
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} og nyere (version {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Eksportér alle åbne dokumenter som PDF
@@ -9846,4 +9916,24 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Check	Kontrollér
+	Check Fold Lines	Kontrollér foldelinjer
+@msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.
+@msg	No cut lines are in the document.	Der er ingen skærelinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skærelinjerne omslutter ikke et område.
+@msg	A cut line ends without meeting another cut line.	En skærelinje slutter uden at møde en anden skærelinje.
+@msg	A gap between cut lines was closed.	Et mellemrum mellem skærelinjer blev lukket.
+@msg	The fold lines are too complex to check.	Foldelinjerne er for komplekse til at kontrollere.
+@msg	A cut line and a crease lie on top of each other.	En skærelinje og en rillelinje ligger oven på hinanden.
+@msg	No cut lines are among the given objects.	Der er ingen skærelinjer blandt de angivne objekter.
+@msg	Two fold lines lie on top of each other.	To foldelinjer ligger oven på hinanden.
+@msg	A crease ends inside a panel.	En rillelinje slutter inde i et panel.
+@msg	A crease does not divide two panels.	En rillelinje deler ikke to paneler.
+@msg	A crease lies outside the cut outline, wholly or in part.	En rillelinje ligger helt eller delvist uden for skærekonturen.
+@msg	The pieces of a hinge are not on one straight line.	Delene af et hængsel ligger ikke på én ret linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Et mellemrum mellem skærelinjer er for smalt til at skelne.
+@msg	A cut-out area holds other fold lines or another blank.	Et udskåret område indeholder andre foldelinjer eller et andet emne.
+@msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
+@msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

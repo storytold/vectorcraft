@@ -8,6 +8,12 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32
 
 /// [`icon_button`] drawn for a response the caller made (its own id or sense).
 pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, selected: bool) -> Response {
+    paint_icon_button_named(ui, resp, icon, tl!(tip), tl!(tip), selected)
+}
+
+/// [`paint_icon_button`] that screen readers call `name` and that shows the tool tip `tip` (none
+/// when empty), both as given.
+pub(crate) fn paint_icon_button_named(ui: &mut Ui, resp: Response, icon: &str, name: &str, tip: &str, selected: bool) -> Response {
     let t = Tokens::get(ui.ctx());
     let rect = resp.rect;
     let size = rect.width();
@@ -21,8 +27,8 @@ pub fn paint_icon_button(ui: &mut Ui, resp: Response, icon: &str, tip: &str, sel
     ui.painter().rect_filled(rect, CornerRadius::same(5), bg);
     let pad = (size * 0.2).round();
     icons::paint(ui, icon, rect.shrink(pad), if selected { t.text_strong } else { t.icon });
-    resp.widget_info(|| icon_button_info(ui.is_enabled(), selected, tl!(tip)));
-    if !tip.is_empty() { resp.on_hover_text(tl!(tip)) } else { resp }
+    resp.widget_info(|| icon_button_info(ui.is_enabled(), selected, name));
+    if !tip.is_empty() { resp.on_hover_text(tip) } else { resp }
 }
 
 /// Small flat text button (Quick Actions style).

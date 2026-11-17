@@ -284,6 +284,99 @@ fn css_writes_spread_gradient_swatches_with_their_stops_repeated() {
     }
 }
 
+/// The color and opacity a written CSS gradient value has at `p` (0..1 along its stops), by the
+/// CSS rule (https://www.w3.org/TR/css-images-3/#coloring-gradient-line): between two stops the
+/// color mixes evenly with premultiplied alpha, in sRGB for hex colors
+/// (https://www.w3.org/TR/css-color-4/#interpolation-space); before the first stop and after the
+/// last the end colors hold.
+fn css_gradient_at(value: &str, p: f64) -> ([f64; 3], f64) {
+    let list = value.split_once(", ").map_or("", |(_, rest)| rest).trim_end_matches(')');
+    let stops: Vec<([f64; 3], f64, f64)> = list
+        .split(", ")
+        .map(|stop| {
+            let (hex, at) = stop.split_once(' ').unwrap_or_else(|| panic!("stop {stop:?}"));
+            let byte = |i: usize| hex.get(1 + 2 * i..3 + 2 * i).map_or(255.0, |h| f64::from(u8::from_str_radix(h, 16).unwrap()));
+            let at: f64 = at.trim_end_matches('%').parse().unwrap();
+            ([byte(0), byte(1), byte(2)].map(|v| v / 255.0), byte(3) / 255.0, at / 100.0)
+        })
+        .collect();
+    let p = p.clamp(stops[0].2, stops[stops.len() - 1].2);
+    let i = stops.windows(2).position(|w| p <= w[1].2).unwrap_or(0);
+    let ((c0, a0, p0), (c1, a1, p1)) = (stops[i], stops[i + 1]);
+    let w = if p1 > p0 { (p - p0) / (p1 - p0) } else { 1.0 };
+    let a = a0 + (a1 - a0) * w;
+    let c = std::array::from_fn(|k| if a > 0.0 { (c0[k] * a0 + (c1[k] * a1 - c0[k] * a0) * w) / a } else { 0.0 });
+    (c, a)
+}
+
+/// A gradient swatch's CSS draws, by the CSS rule, the colors and opacity the swatch has: an
+/// off-center midpoint and the curve of a Perceptual or hue gradient are written as stops of their
+/// own, also on a reflected and a mirrored conic swatch.
+#[test]
+fn css_gradient_swatches_draw_their_midpoints_and_curves() {
+    let check = |label: &str, gp: GradientPaint, at: &dyn Fn(f64) -> f64| {
+        let lib = SwatchLibrary {
+            name: "x".into(),
+            swatches: vec![Swatch { name: "x".into(), paint: Paint::Gradient(Box::new(gp.clone())), global: false, spot: false }],
+            groups: vec![],
+        };
+        let text = written(&lib, PaletteFormat::Css);
+        let value = text.lines().find_map(|l| l.trim().strip_prefix("--x: ")).unwrap_or_else(|| panic!("{text}")).trim_end_matches(';');
+        for i in 0..64 {
+            let p = (f64::from(i) + 0.5) / 64.0;
+            let (css, css_alpha) = css_gradient_at(value, p);
+            let (color, opacity) = gp.gradient.sample(at(p) as f32);
+            let want = color.to_rgb();
+            let off = (0..3).map(|k| (css[k] - f64::from(want[k])).abs()).fold((css_alpha - f64::from(opacity)).abs(), f64::max);
+            assert!(off < 2.0 / 255.0, "{label} at {p}: {css:?} {css_alpha} vs {want:?} {opacity}: {value}");
+        }
+    };
+    let ramp = |method| Gradient {
+        method,
+        ..Gradient::new(
+            GradientKind::Linear,
+            vec![GradientStop { midpoint: 0.25, ..GradientStop::new(0.0, Color::rgb8(255, 0, 0)) }, GradientStop::new(1.0, Color::rgb8(0, 0, 255))],
+        )
+    };
+    for method in crate::GradientMethod::ALL {
+        check(&format!("{method:?}"), GradientPaint::new(ramp(method)), &|p| p);
+    }
+    // Opacity through an off-center midpoint, on one color so premultiplying does not change it.
+    let fade = Gradient::new(
+        GradientKind::Linear,
+        vec![
+            GradientStop { midpoint: 0.25, ..GradientStop::new(0.0, Color::BLACK) },
+            GradientStop { opacity: 0.0, ..GradientStop::new(1.0, Color::BLACK) },
+        ],
+    );
+    check("fade", GradientPaint::new(fade), &|p| p);
+    let reflected = Gradient { spread: crate::GradientSpread::Reflect, repeats: 2, ..ramp(crate::GradientMethod::Classic) };
+    let spread = reflected.spreader();
+    check("reflect", GradientPaint::new(reflected), &spread);
+    let mut conic = GradientPaint::new(Gradient { kind: GradientKind::Conic, ..ramp(crate::GradientMethod::HueClockwise) });
+    conic.geom = Some(crate::GradientGeom { start: kurbo::Point::ZERO, end: kurbo::Point::new(0.0, -10.0), aspect: -1.0, focal: None });
+    check("mirrored conic", conic, &|p| 1.0 - p);
+}
+
+/// A gradient swatch whose curve would need more than `MAX_SPREAD_STOPS` stops is written with its
+/// own stops.
+#[test]
+fn css_gradient_swatches_keep_their_stop_count_bounded() {
+    let n = 4000;
+    let stops = (0..n)
+        .map(|i| GradientStop::new(i as f32 / (n - 1) as f32, if i % 2 == 0 { Color::rgb8(255, 0, 0) } else { Color::rgb8(0, 255, 255) }))
+        .collect();
+    let g = Gradient { method: crate::GradientMethod::HueClockwise, ..Gradient::new(GradientKind::Linear, stops) };
+    assert!(g.expanded().nth(crate::gradient::MAX_SPREAD_STOPS).is_some(), "the curve needs more stops than allowed");
+    let lib = SwatchLibrary {
+        name: "x".into(),
+        swatches: vec![Swatch { name: "x".into(), paint: Paint::Gradient(Box::new(GradientPaint::new(g))), global: false, spot: false }],
+        groups: vec![],
+    };
+    let text = written(&lib, PaletteFormat::Css);
+    assert_eq!(text.matches('%').count(), n, "one stop for each of the gradient's own");
+}
+
 #[test]
 fn holds_counts_the_swatches_each_format_writes() {
     // `sample()` holds the spot color Ink, the linear gradient Fade, the pattern Tiles and two solid colors in a group.

@@ -384,7 +384,7 @@
 	Insert Whitespace Character	Umetni znak razmaka
 	Em Space	Široki razmak (em)
 	En Space	Polu-široki razmak (en)
-	Hair Space	Tanki razmak
+	Hair Space	Najtanji razmak
 	Sixth Space	Šestina razmaka
 	Thin Space	Tanki razmak
 	Nonbreaking Space	Neprelomivi razmak
@@ -880,6 +880,7 @@
 	Auto Color	Automatska boja
 	Automatic	Automatski
 	Isolate Selected Group	Izoliraj odabranu grupu
+	Isolate Selected Path	Izoliraj odabranu putanju
 	Isolate Selected Object	Izoliraj odabrani objekat
 	Exit Isolation Mode	Izađi iz načina izolacije
 	Make Clipping Mask	Napravi masku isijecanja
@@ -1300,9 +1301,10 @@ lighting	Light	Svjetlo
 	Name* @ 66.67% (RGB/Preview)	Naziv* @ 66,67% (RGB/pregled)
 	No Document	Nema dokumenta
 	Press 	Pritisnite 
-	Search commands and tools	Pretraži naredbe i alate
+	Search commands, tools, panels and effects	Pretraži naredbe, alate, panele i efekte
 	Style:	Stil:
 	Switch workspace	Promijeni radni prostor
+	Search commands	Pretraži naredbe
 	Show all open documents	Prikaži sve otvorene dokumente
 	Use 	Koristite 
 	 the object to select  |  	 objekat za odabir  |  
@@ -1413,6 +1415,8 @@ lighting	Light	Svjetlo
 	Lasso Tool	Alat laso
 	Enclosing Lasso Tool	Alat laso za obuhvatanje
 	Enclosing Lasso	Laso za obuhvatanje
+	Polygonal Lasso Tool	Alat poligonalni laso
+	Polygonal Lasso	Poligonalni laso
 	Lasso	Laso
 	Line Cut Tool	Alat za rez linijom
 	Line Graph Tool	Alat za linijski grafikon
@@ -1500,6 +1504,10 @@ lighting	Light	Svjetlo
 	Play Current Selection	Reprodukuj trenutni odabir
 	Save Actions…	Sačuvaj akcije…
 	Load Actions…	Učitaj akcije…
+	Reset Actions	Vrati akcije na početno
+	Replace the current actions with the default set?	Zamijeniti trenutne akcije zadanim skupom?
+	Append adds the default set after the current sets instead.	Dugme Dodaj umjesto toga dodaje zadani skup iza trenutnih skupova.
+	Append	Dodaj
 	Reflect Horizontal	Odrazi vodoravno
 	Rotate 90° CW	Rotiraj za 90° u smjeru kazaljke
 	Set 1	Skup 1
@@ -2818,7 +2826,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
-	Lossless (lossy WebP isn't available yet)	Bez gubitaka (WebP s gubicima još nije dostupan)
+	Lossless	Bez gubitaka
+	Lossy	S gubicima
 	Scans:	Skenovi:
 	Server-side (.map)	Na strani servera (.map)
 	{format} Options	Opcije za {format}
@@ -2832,6 +2841,7 @@ digits	Malayalam	Malajalam
 	Collate	Složi po kopijama
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitne boje se pretvaraju u njega; separacije se razdvajaju njime kad je CMYK profil.
 	Convert All Spot Colors to Process	Pretvori sve spot boje u procesne
+	Overprint Black	Pretisak crne
 	Default Printer	Zadani štampač
 	Document Ink Options	Opcije tinti dokumenta
 	Download:	Preuzimanje:
@@ -2925,6 +2935,11 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Prikaži glatki kotač boja
 	Show segmented color wheel	Prikaži segmentirani kotač boja
 	Show color bars	Prikaži trake boja
+	Show brightness and hue on wheel	Prikaži svjetlinu i nijansu na kotaču
+	Show saturation and hue on wheel	Prikaži zasićenje i nijansu na kotaču
+	Add Color Tool	Alat za dodavanje boje
+	Remove Color Tool	Alat za uklanjanje boje
+	Remove Color	Ukloni boju
 	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
@@ -3600,6 +3615,10 @@ theme	Appearance	Izgled
 	Font List	Lista fontova
 	Show Similar Fonts	Prikaži slične fontove
 	Clear Similar Fonts	Očisti slične fontove
+	Fonts used in this document	Fontovi korišteni u ovom dokumentu
+	This document uses no available fonts	Ovaj dokument ne koristi dostupne fontove
+	Recently Added	Nedavno dodani
+	Fonts added in the last 30 days	Fontovi dodani u posljednjih 30 dana
 	Fonts in Document	Fontovi u dokumentu
 	Refresh Font List	Osvježi listu fontova
 	Replace Font	Zamijeni font
@@ -3635,6 +3654,7 @@ theme	Appearance	Izgled
 	Connect Data Points	Poveži tačke podataka
 	Edge-to-Edge Lines	Linije od ivice do ivice
 	Draw Filled Lines	Crtaj ispunjene linije
+	Line Width	Širina linije
 	Tick Values	Vrijednosti crtica
 	Override Calculated Values	Zamijeni izračunate vrijednosti
 	Divisions	Podioci
@@ -4375,7 +4395,11 @@ font-technology	Variable	Varijabilni
 	Saved {path}	Sačuvano: {path}
 	Saving	Čuvanje
 	Saving {}	Čuvanje {}
-	Search commands and tools…	Pretraži naredbe i alate…
+	Search commands, tools, panels and effects…	Pretraži naredbe, alate, panele i efekte…
+	No commands match	Nijedna naredba se ne podudara
+	{pos} of {total}: {name}	{pos} od {total}: {name}
+@plural	{n} result|{n} results	{n} rezultat|{n} rezultata|{n} rezultata
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
 	Dashed Line	Isprekidana linija
@@ -6488,6 +6512,7 @@ anchor	Points:	Tačke:
 	Open a document to check it for issues.	Otvorite dokument da ga provjerite na probleme.
 	Empty Text	Prazan tekst
 	Unpainted Objects	Neobojeni objekti
+	Empty Text Paths	Prazne tekstualne putanje
 	Zero-Opacity Objects	Objekti s nultom neprozirnošću
 	Duplicate Objects	Duplirani objekti
 	Off-Artboard Art	Grafika izvan radne ploče
@@ -6815,6 +6840,22 @@ shape	Open	Otvoren
 	Remove Gaps	Ukloni razmake
 @msg	that makes too many pieces (at most 100000): make the dashes longer	to daje previše dijelova (najviše 100000): produžite crtice
 @msg	select paths, or segments, to divide	odaberite putanje ili segmente za dijeljenje
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Zajedničke tangente…
+	Common Tangents	Zajedničke tangente
+	Tangents	Tangente
+	Centerline	Središnja linija
+	External	Vanjske
+	Internal	Unutrašnje
+@msg	select two closed paths	odaberite dvije zatvorene putanje
+@msg	a selected path is open	odabrana putanja je otvorena
+@msg	a selected path is not convex	odabrana putanja nije konveksna
+@msg	a selected path has no area	odabrana putanja nema površinu
+@msg	a selected path has more than 10000 segments	odabrana putanja ima više od 10000 segmenata
+@msg	the two paths have the same outline	obje putanje imaju isti obris
+@msg	One path lies inside the other, so they have no common tangents	Jedna putanja leži unutar druge, pa nemaju zajedničkih tangenti
+@msg	The paths overlap, so they have no internal tangents	Putanje se preklapaju, pa nemaju unutrašnjih tangenti
+@msg	One path lies inside the other, so they have no internal tangents	Jedna putanja leži unutar druge, pa nemaju unutrašnjih tangenti
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Proširi crtice u putanje
 @msg	select paths with dashed strokes to expand	odaberite putanje s isprekidanim potezom za proširivanje
@@ -6857,6 +6898,11 @@ shape	Open	Otvoren
 	Malayalam	Malajalam
 	Odia	Odija
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepalski
+	Assamese	Asamski
+	Konkani	Konkani
+	Sindhi	Sindi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i novije (verzija {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Izvezi sve otvorene dokumente kao PDF
@@ -7122,4 +7168,24 @@ shape	Open	Otvoren
 	No objects are selected.	Nijedan objekat nije odabran.
 	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
 	Remove Fold Line Role	Ukloni vrstu linije
+	Check	Provjeri
+	Check Fold Lines	Provjeri linije savijanja
+@msg	No cut lines are in the selection.	U odabiru nema linija rezanja.
+@msg	No cut lines are in the document.	U dokumentu nema linija rezanja.
+@msg	The cut lines do not enclose an area.	Linije rezanja ne zatvaraju nijednu površinu.
+@msg	A cut line ends without meeting another cut line.	Linija rezanja završava a da ne susreće drugu liniju rezanja.
+@msg	A gap between cut lines was closed.	Razmak između linija rezanja je zatvoren.
+@msg	The fold lines are too complex to check.	Linije savijanja su previše složene za provjeru.
+@msg	A cut line and a crease lie on top of each other.	Linija rezanja i linija bigovanja leže jedna preko druge.
+@msg	No cut lines are among the given objects.	Među zadanim objektima nema linija rezanja.
+@msg	Two fold lines lie on top of each other.	Dvije linije savijanja leže jedna preko druge.
+@msg	A crease ends inside a panel.	Linija bigovanja završava unutar panela.
+@msg	A crease does not divide two panels.	Linija bigovanja ne razdvaja dva panela.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linija bigovanja leži potpuno ili djelimično izvan konture rezanja.
+@msg	The pieces of a hinge are not on one straight line.	Dijelovi jedne šarke ne leže na jednoj pravoj liniji.
+@msg	A gap between cut lines is too narrow to tell apart.	Razmak između linija rezanja je preuzak da bi se razlikovao.
+@msg	A cut-out area holds other fold lines or another blank.	Izrezana površina sadrži druge linije savijanja ili drugi kroj.
+@msg	A panel is not joined to the rest by a crease.	Panel nije povezan s ostatkom nijednom linijom bigovanja.
+@msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"

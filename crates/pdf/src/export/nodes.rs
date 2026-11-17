@@ -39,14 +39,15 @@ impl Exporter<'_> {
             cover(&mut ms, page, if m.clip { 0 } else { 255 }, 1.0);
         }
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
-        // and has no inks to overprint.
+        // and has no inks to overprint (its characters do not darken either).
         let knockout = std::mem::take(&mut self.knockout);
         let overprint = std::mem::take(&mut self.overprint);
+        let darken = std::mem::take(&mut self.darken_overprints);
         let image_left_out = self.image_left_out.replace(false);
         self.node(&mut ms, &m.art, page, true);
         let incomplete = self.image_left_out.unwrap_or(false);
         self.image_left_out = image_left_out.map(|outer| outer || incomplete);
-        (self.knockout, self.overprint) = (knockout, overprint);
+        (self.knockout, self.overprint, self.darken_overprints) = (knockout, overprint, darken);
         if incomplete {
             ms.pop();
             ms.finish();
@@ -608,6 +609,20 @@ impl Exporter<'_> {
             crate::forms::form(s, Mark::Overprint, |s| draw(self, s));
         } else {
             draw(self, s);
+        }
+    }
+
+    /// [`Self::overprinting`] for a character fill or stroke, which has no blend mode of its own:
+    /// with [`Self::darken_overprints`] an overprinting one is drawn with Darken (not a white one
+    /// with Discard White Overprint).
+    pub(super) fn char_overprinting(&mut self, s: &mut Surface, overprints: bool, paint: &Paint, draw: impl FnOnce(&mut Self, &mut Surface)) {
+        let white = vectorcraft_doc::overprint::is_white(paint) && self.doc.setup.discard_white_overprint;
+        if overprints && self.darken_overprints && !paint.is_none() && !white {
+            s.push_blend_mode(krilla::blend::BlendMode::Darken);
+            self.overprinting(s, overprints, paint, draw);
+            s.pop();
+        } else {
+            self.overprinting(s, overprints, paint, draw);
         }
     }
 
