@@ -6760,9 +6760,12 @@ also measured by its reshaped art when its symbol's art has geometry effects. A 
 Pathfinder effects, or with a fill or stroke of its own that has geometry effects or paints members with geometry
 effects, is measured by its evaluated art. A blend, envelope or repeat whose objects have geometry effects is
 measured by its evaluated art, with those objects measured after their effects. A 100 pt square without a stroke,
-with Offset Path 10, measures 120 pt, and type with Outline Object is measured by its glyph outlines. Raster effects such as shadows and glows are not
-measured. In one object, the art of at most 4,096 symbol instances is measured with its geometry effects, and the
-other instances are measured without them. `object.setBounds` with `width: 100` gives that type a glyph box 100 pt
+with Offset Path 10, measures 120 pt, and type with Outline Object is measured by its glyph outlines.
+Extrude & Bevel, Revolve, Inflate and Rotate are measured by their projected vector art, including effects on
+individual fills or strokes and geometry effects after projection. Groups and symbol instances include their
+members' projected art. Raster effects such as shadows and glows are not measured. In one object, the art of at
+most 4,096 symbol instances is measured with its geometry or 3D effects, and the other instances are measured
+without them. `object.setBounds` with `width: 100` gives that type a glyph box 100 pt
 wide.
 
 ```json
