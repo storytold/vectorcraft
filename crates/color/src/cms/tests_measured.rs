@@ -91,10 +91,10 @@ fn the_fit_predicts_patches_it_left_out() {
     }
 }
 
-/// More of any ink never makes a build lighter, also where the data has few patches (black above
-/// 60%, and builds over the ink limit).
+/// More of any ink makes a build lighter by less than 0.3 L*, also where the data has few patches
+/// (black above 60%, and builds over the ink limit).
 #[test]
-fn more_ink_never_lightens_a_build() {
+fn more_ink_lightens_a_build_by_less_than_0_3_l() {
     let steps: Vec<f32> = (0..=20).map(|i| i as f32 / 20.0).collect();
     let coarse = [0.0, 0.25, 0.5, 0.75, 1.0];
     for c in &measured::CONDITIONS {
