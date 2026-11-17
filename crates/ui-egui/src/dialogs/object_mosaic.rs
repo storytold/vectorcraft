@@ -13,7 +13,7 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeKind;
 
-use super::{DialogSpec, form, run_and_close};
+use super::{DialogSpec, form};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -386,7 +386,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 }
 
 /// OK: the new size worked out against the image's size as it is now, as a frame would show it.
-/// A Constrain Ratio (`lock`) that is not true or false is refused, and the dialog stays open.
+/// A Constrain Ratio (`lock`) that is not true or false is refused, and the dialog stays open. The
+/// dialog also stays open with its fields when the command refuses them, as [`form::commit_preview`]
+/// does.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if d.fields.get("lock").is_some_and(|v| !v.is_boolean() && !v.is_null()) {
         return Err("`lock` must be true or false".into());
@@ -394,7 +396,11 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut d = d.clone();
     read_image(image_size(app), &mut d);
     follow_ratio(&mut d);
-    run_and_close(app, COMMAND, params(&d))
+    let r = app.run(COMMAND, params(&d));
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
+    r
 }
 
 #[cfg(test)]
@@ -742,6 +748,24 @@ mod tests {
             assert!(e.contains(field), "{value}: {e}");
             assert_eq!(mosaic(&app), None, "{value}");
         }
+    }
+
+    /// When the command refuses the dialog's fields, OK leaves the dialog open with them, so they can
+    /// be corrected; OK then makes the mosaic and closes it.
+    #[test]
+    fn a_refused_field_keeps_the_dialog_open() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({"width": 80})).unwrap();
+        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "gray".into(), json!(1));
+        let e = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert!(e.contains("gray"), "{e}");
+        assert_eq!(mosaic(&app), None);
+        let d = app.ui.dialog.as_mut().expect("the dialog stays open");
+        assert_eq!((d.f64("width", 0.0), d.fields.get("gray")), (80.0, Some(&json!(1))));
+        crate::dialogs::set_field(d, "gray".into(), json!(true));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(mosaic(&app).map(|m| m.0), Some(80.0));
     }
 
     /// True or false set after a Resize Using Percentages value the command refuses replaces it: the
