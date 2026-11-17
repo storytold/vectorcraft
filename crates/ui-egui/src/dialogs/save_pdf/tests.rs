@@ -651,3 +651,25 @@ fn save_pdf_does_not_prompt_for_non_printing_layer_transparency() {
     assert!(app.ui.dialog.is_none());
     assert_eq!(written.borrow().len(), 1);
 }
+
+#[test]
+fn save_pdf_prompts_confirmation_for_transparent_pattern_tile_image() {
+    let (mut app, written, _) = app();
+    let img_bytes = {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 128])).write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        buf.into_inner()
+    };
+    let href = format!("data:image/png;base64,{}", vectorcraft_format::base64_encode(&img_bytes));
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100" viewBox="0 0 100 100"><defs><pattern id="p" patternUnits="userSpaceOnUse" width="10" height="10"><image width="10" height="10" xlink:href="{href}"/></pattern></defs><rect width="100" height="100" fill="url(#p)"/></svg>"##
+    );
+    app.run("document.open", json!({"name": "pat.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/pat.pdf", "compatibility": "1.3"})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, CONFIRM_FLATTEN);
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(written.borrow().len(), 1);
+}
