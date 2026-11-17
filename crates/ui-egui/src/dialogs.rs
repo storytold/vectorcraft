@@ -179,6 +179,9 @@ use crate::{VectorcraftApp, widgets};
 
 type DialogResult = Result<Value, String>;
 
+/// A dialog's Reset ([`DialogSpec::reset`]).
+type ResetFn = fn(&VectorcraftApp, &mut Dialog) -> Result<(), String>;
+
 /// The shared dialog frame's inner margin, and the least room it leaves at the window's edges.
 const MARGIN: i8 = 22;
 const EDGE_GAP: f32 = 8.0;
@@ -219,8 +222,8 @@ pub(crate) struct DialogSpec {
     pub alternate: Option<(&'static str, &'static str)>,
     /// Puts the fields back to their defaults. While Alt (Option on macOS) is held, the Cancel
     /// button of a dialog with an `ok` reads Reset; Reset (or `ui.dialogReset`) runs this and the
-    /// dialog stays open.
-    pub reset: Option<fn(&VectorcraftApp, &mut Dialog)>,
+    /// dialog stays open. An error leaves the dialog as it was.
+    pub reset: Option<ResetFn>,
     pub min_width: f32,
     pub max_width: Option<f32>,
     /// The body runs a live preview interaction that Cancel rolls back.
@@ -339,6 +342,7 @@ registry! {
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
     ReplaceFiles: [confirm::REPLACE_FILES] => confirm::REPLACE_FILES_SPEC,
     ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
+    ResetActions: [confirm::RESET_ACTIONS] => confirm::RESET_ACTIONS_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
@@ -472,6 +476,7 @@ registry! {
     RenameArtboards: [rename_artboards::KIND] => rename_artboards::SPEC,
     PathToolOptions: [crate::addons::pathtools::KIND] => crate::addons::pathtools::OPTIONS_SPEC,
     DivideDashes: [crate::addons::pathtools::dashes::KIND] => crate::addons::pathtools::dashes::SPEC,
+    TangentCircle: [crate::addons::pathtools::tangent_circle::KIND] => crate::addons::pathtools::tangent_circle::SPEC,
     SetCorners: [crate::addons::pathtools::set_corners::KIND] => crate::addons::pathtools::set_corners::SPEC,
     NearestSwatch: [crate::addons::color::nearest::KIND] => crate::addons::color::nearest::SPEC,
     SwatchLegend: [crate::addons::color::legend::KIND] => crate::addons::color::legend::SPEC,
@@ -592,6 +597,7 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -605,10 +611,17 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
     }
+    if d.kind == new_document::KIND || new_document::popup_open(d) {
+        new_document::note_set(d, &field);
+    }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
+    let graph = (d.kind == graph_data::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
         dxf_options::note_set(d, &field);
+    }
+    if let Some(field) = graph {
+        graph_data::note_set(d, &field);
     }
 }
 
@@ -645,11 +658,15 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
 /// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
-/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size.
+/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size. A value
+/// Composite Fonts' Show Sample can't take is refused.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
         transform_each::field_set(app, field, old);
         return Ok(());
+    }
+    if let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == composite_fonts::KIND) {
+        return composite_fonts::field_set(d, field);
     }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
     match field {
@@ -690,6 +707,12 @@ pub fn cancel(app: &mut VectorcraftApp) {
             script_run::notice_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
+        // Find Font's next open starts with an empty replacement search.
+        if d.kind == "findFont"
+            && let Some(ctx) = app.ui_ctx.clone()
+        {
+            crate::find_font::clear_search(&ctx);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.
@@ -708,12 +731,12 @@ pub(crate) fn can_reset(app: &VectorcraftApp) -> bool {
 }
 
 /// Reset (`ui.dialogReset`, or Cancel while Alt or Option is held): the open dialog's fields go
-/// back to their defaults and it stays open → the dialog; an error when no dialog is open or the
-/// open one has no Reset.
+/// back to their defaults and it stays open → the dialog; an error when no dialog is open, the
+/// open one has no Reset, or its Reset fails (the dialog is then left as it was).
 pub(crate) fn reset(app: &mut VectorcraftApp) -> DialogResult {
     let Some(mut d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     let Some(reset) = spec(&d.kind).reset else { return Err("the open dialog has no Reset".into()) };
-    reset(app, &mut d);
+    reset(app, &mut d)?;
     let out = serde_json::to_value(&d).unwrap_or_default();
     app.ui.dialog = Some(d);
     Ok(out)

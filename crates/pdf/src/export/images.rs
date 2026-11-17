@@ -1,4 +1,4 @@
-use super::exporter::{UNDECODED, UNWRITABLE_IMAGE, q, writable, xf};
+use super::exporter::{UNCONVERTED, UNDECODED, UNWRITABLE_IMAGE, q, writable, xf};
 use super::{Arc, BlendMode, Color, Exporter, Image, Node, NodeKind, Paint, Rect, Size, Surface, cmyk, krilla};
 use krilla::color::device_n::{Colorant, DeviceNSpace, Process};
 use krilla::image::{BitsPerComponent, CustomImage, ImageColorspace};
@@ -126,7 +126,9 @@ impl Exporter<'_> {
     /// settings say ([`crate::images::recode`], [`crate::images::recode_cmyk`] for CMYK images);
     /// cached by key (and size when images are resampled). With `interpolate` (and the export's
     /// own setting), viewers may smooth it. `None`, with [`UNDECODED`] among the warnings, for an
-    /// image that is missing, can't be decoded or is in [`Self::left_out`].
+    /// image that is missing, can't be decoded or is in [`Self::left_out`]; `None`, with
+    /// [`UNCONVERTED`], for one whose colors the Output settings convert but that can only be
+    /// written in its own ([`crate::images::Recoded::unconverted`]).
     fn load_image(&mut self, im: &vectorcraft_doc::ImageObject, size: (f64, f64), interpolate: bool) -> Option<Image> {
         let key = im.key.as_str();
         let c = self.compression;
@@ -141,7 +143,10 @@ impl Exporter<'_> {
         let doc = self.doc;
         let out = self.out.clone();
         let profiles = out.source_profiles();
-        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit });
+        let then = out.converts_tagged_pixels().then_some(&*out);
+        let grey = out.converts_grey_images();
+        let to_srgb = out.image_srgb_intent().map(|intent| crate::images::ToSrgb { intent, sixteen_bit: self.sixteen_bit, then, grey });
+        let mut unconverted = false;
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
             if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
@@ -153,6 +158,12 @@ impl Exporter<'_> {
             } else {
                 crate::images::recode(&blob.bytes, size, c, interpolate, out.pixels(), profiles, to_srgb)
             };
+            if r.unconverted {
+                // The source image would be written in its own colors: it is left out, with a
+                // warning that names the conversion when it could have been written.
+                unconverted = embed(blob, interpolate, self.sixteen_bit, profiles).is_some();
+                return None;
+            }
             let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
             // An image left out gets the warning below instead.
             for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
@@ -160,7 +171,9 @@ impl Exporter<'_> {
             }
             img
         });
-        if img.is_none() {
+        if unconverted {
+            self.warn(UNCONVERTED);
+        } else if img.is_none() {
             self.warn(UNDECODED);
         }
         self.images.insert(cache, img.clone());

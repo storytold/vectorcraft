@@ -10,8 +10,8 @@
 //! without a step of history.
 //!
 //! Fields: the options `graph.setType {}` returns under the command's names for them, with
-//! `legend`, `pieLegend`, `piePosition`, `pieSort`, `firstRowInFront`, `firstColumnInFront` and
-//! `filledLines` held for every type, and `type` or `valueAxis` null while the picked series
+//! `legend`, `pieLegend`, `piePosition`, `pieSort`, `firstRowInFront`, `firstColumnInFront`,
+//! `filledLines` and `lineWidth` held for every type, and `type` or `valueAxis` null while the picked series
 //! differ in it (OK then leaves each series as it is); `overrideValues` and `rightOverrideValues` (Override
 //! Calculated Values of the left or only value axis and of the right one: while one is on, OK
 //! sends `axisMin`, `axisMax` and `ticks`, or `rightAxisMin`, `rightAxisMax` and `rightTicks`); and
@@ -60,6 +60,8 @@ const WIDTHS: RangeInclusive<f64> = 1.0..=1000.0;
 /// The divisions it takes for a value axis, and the tick marks it takes per division.
 const DIVISIONS: RangeInclusive<f64> = 1.0..=100.0;
 const TICK_MARKS: RangeInclusive<f64> = 1.0..=20.0;
+/// The Line Width it takes for Draw Filled Lines, in points.
+const LINE_WIDTHS: RangeInclusive<f64> = vectorcraft_doc::MIN_FILLED_LINE_WIDTH..=vectorcraft_doc::MAX_FILLED_LINE_WIDTH;
 /// The characters it keeps of a prefix or suffix.
 const AFFIX_CHARS: usize = 64;
 /// The divisions it draws an overridden value axis in while the axis has no count of its own.
@@ -86,7 +88,7 @@ const PIE_SORTS: [(&str, &str); 3] = [("all", "All"), ("first", "First"), ("none
 
 /// The options OK always sends. `valueAxis` is left out while the picked series are on both axes,
 /// and the legend and the tick values follow the type and Override Calculated Values.
-const SENT: [&str; 24] = [
+const SENT: [&str; 25] = [
     "type",
     "valueAxis",
     "separateScales",
@@ -100,6 +102,7 @@ const SENT: [&str; 24] = [
     "connectPoints",
     "edgeToEdge",
     "filledLines",
+    "lineWidth",
     "tickLength",
     "tickMarks",
     "rightTickLength",
@@ -183,6 +186,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         ("firstRowInFront", json!(spec.first_row_in_front)),
         ("firstColumnInFront", json!(spec.first_column_in_front)),
         ("filledLines", json!(spec.filled_lines)),
+        ("lineWidth", json!(spec.filled_line_width())),
         ("legend", json!(spec.legend)),
         ("pieLegend", json!(pie_legend)),
         ("piePosition", json!(spec.pie_position.id())),
@@ -672,6 +676,11 @@ fn type_options(ui: &mut egui::Ui, d: &mut Dialog, kind: GraphKind) {
             check(ui, d, "filledLines", tl!("Draw Filled Lines"), connected);
             ui.end_row();
         });
+        // Line Width sets how wide Draw Filled Lines draws the lines.
+        let shown = number(d, "lineWidth").unwrap_or(vectorcraft_doc::DEFAULT_FILLED_LINE_WIDTH);
+        ui.add_enabled_ui(connected && d.bool("filledLines"), |ui| {
+            ranged(ui, d, "lineWidth", &colon(tl!("Line Width")), shown, (LINE_WIDTHS, " pt", 2));
+        });
     }
     if pie {
         choice(ui, d, "pieLegend", &colon(tl!("Legend")), &PIE_LEGENDS);
@@ -1060,6 +1069,32 @@ mod tests {
         assert!(dimmed(&h, "Add Legend Across Top"));
         pick_type(&mut h, "Area Graph");
         assert!(!field(&h, "Column Width:") && !checkbox(&h, "Mark Data Points") && !menu(&h, "Legend:") && h.query_by_label("Options").is_none());
+    }
+
+    /// Line Width next to Draw Filled Lines shows the graph's width, is available only while Draw
+    /// Filled Lines and Connect Data Points are on, and OK gives the graph the width typed.
+    #[test]
+    fn line_width_goes_with_draw_filled_lines() {
+        let mut app = app_with_graph("line");
+        open(&mut app).unwrap();
+        assert_eq!(number(app.ui.dialog.as_ref().unwrap(), "lineWidth"), Some(vectorcraft_doc::DEFAULT_FILLED_LINE_WIDTH));
+        let mut h = harness(app);
+        let dimmed = |h: &Harness| h.get_by_role_and_label(Role::TextInput, "Line Width:").accesskit_node().is_disabled();
+        assert!(dimmed(&h), "Draw Filled Lines is off");
+        h.get_by_role_and_label(Role::CheckBox, "Draw Filled Lines").click();
+        h.run_steps(3);
+        assert!(!dimmed(&h));
+        h.check_accessibility();
+        set(h.state_mut(), "connectPoints", json!(false));
+        h.run_steps(3);
+        assert!(dimmed(&h), "no lines to fill");
+        set(h.state_mut(), "connectPoints", json!(true));
+        set(h.state_mut(), "lineWidth", json!(6.5));
+        let app = h.state_mut();
+        let before = steps(app);
+        crate::dialogs::confirm(app).unwrap();
+        assert_eq!((query(app)["filledLines"].clone(), query(app)["lineWidth"].clone()), (json!(true), json!(6.5)));
+        assert_eq!(steps(app), before + 1, "one step of history");
     }
 
     /// The menu at the top lists a page per axis of the type picked, and a second value axis page

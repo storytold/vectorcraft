@@ -17,6 +17,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::sync::Arc;
 
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
@@ -197,8 +198,8 @@ fn solid(p: &Paint) -> Option<Option<Color>> {
 /// Can the text document hold type `t` of object `n` as it is: point type that isn't mirrored, or
 /// area type or type on a path that is only moved ([`shape`]); characters other than inline graphics
 /// and ruby; solid fills and strokes; no fills, strokes, effects or opacity mask of the object's
-/// own; some text.
-pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
+/// own; some text. Area type with wrap shapes only when `wrap_held` ([`wraps_held`]).
+pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject, wrap_held: bool) -> bool {
     let xf = t.xf.as_coeffs();
     let shape_ok = match &t.kind {
         TextKind::Point => xf.iter().all(|v| v.is_finite()) && t.xf.determinant() > 1e-12,
@@ -210,10 +211,9 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
         }
     };
     // Area type with wrap shapes: the text document doesn't hold them. The reader works them out
-    // again from the art above the type, which can wrap it differently (a live object written as
-    // its drawn pieces) or not at all.
+    // again from the art above the type, which wraps it the same only where `wraps_held` says so.
     shape_ok
-        && t.wrap.is_empty()
+        && (t.wrap.is_empty() || wrap_held)
         && t.ruby.is_empty()
         && !t.stacks_warichu()
         && t.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace()))
@@ -322,6 +322,112 @@ fn plain(n: &Node) -> bool {
     n.appearance.items.iter().all(|i| !i.visible() || (i.paint().is_none() && !i.effects().iter().any(|e| e.visible)))
         && !n.appearance.effects.iter().any(|e| e.visible)
         && n.extras().mask.is_none()
+}
+
+/// The area type of `doc` whose wrap shapes the reader of the editing data works out again as they
+/// are ([`vectorcraft_doc::text::resolve_wrap`], which the reader runs on what it reads): the
+/// shapes are the ones the wrap objects above it give it now, and each of those objects is written
+/// as itself and read back with the same outline and options ([`wrap_source_held`]), in layers
+/// and groups written as they are ([`plain_containers`]). `styled`: the objects written with an
+/// art style. Empty when the shapes of the document's area type would hold more anchors than the
+/// reader copies into them ([`crate::import::MAX_WRAP_WORK`]).
+pub(in crate::ai_editing) fn wraps_held(doc: &Document, styled: &HashMap<NodeId, Arc<Node>>) -> HashSet<NodeId> {
+    let mut held = HashSet::new();
+    if vectorcraft_doc::text::wrap_work(doc) > crate::import::MAX_WRAP_WORK {
+        return held;
+    }
+    let mut plain_in = HashSet::new();
+    for layer in &doc.layers {
+        plain_containers(layer, true, styled, &mut plain_in);
+    }
+    let mut checked: HashMap<NodeId, bool> = HashMap::new();
+    vectorcraft_doc::text::wrap_sources(doc, |n, sources, shapes| {
+        let NodeKind::Text(t) = &n.kind else { return };
+        if t.wrap.is_empty() || shapes != t.wrap || !plain_in.contains(&n.id) {
+            return;
+        }
+        let ok = sources.iter().all(|s| *checked.entry(s.id).or_insert_with(|| plain_in.contains(&s.id) && wrap_source_held(s, styled)));
+        if ok {
+            held.insert(n.id);
+        }
+    });
+    held
+}
+
+/// Adds to `out` the objects with text wrap options and the text objects in `n` (a top-level layer
+/// when `top`) that sit only in layers and groups written as they are: layers and sublayers that
+/// don't clip and have no effects, and groups that don't clip, have no fills, strokes, effects,
+/// art style, opacity mask or graph and aren't written with an art style (`styled`).
+fn plain_containers(n: &Node, top: bool, styled: &HashMap<NodeId, Arc<Node>>, out: &mut HashSet<NodeId>) {
+    let plain = match &n.kind {
+        NodeKind::Layer { clip, .. } => !clip && n.appearance.effects.is_empty(),
+        NodeKind::Group { clip, .. } => !top && !clip && n.appearance.items.is_empty() && own_plain(n, styled),
+        _ => false,
+    };
+    if !plain {
+        return;
+    }
+    for c in n.children().map(Vec::as_slice).unwrap_or_default() {
+        if c.extras().wrap.is_some() || matches!(c.kind, NodeKind::Text(_)) {
+            out.insert(c.id);
+        }
+        plain_containers(c, false, styled, out);
+    }
+}
+
+/// Has object `n` no effects, art style, opacity mask or graph, and isn't it a ruler guide or
+/// written with an art style (`styled`)?
+fn own_plain(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    !styled.contains_key(&n.id)
+        && n.appearance.effects.is_empty()
+        && n.appearance.items.iter().all(|i| i.effects().is_empty())
+        && n.extras().graphic_style.is_none()
+        && n.extras().mask.is_none()
+        && n.extras().graph.is_none()
+        && !n.is_ruler_guide()
+}
+
+/// Is wrap object `n` written as itself and read back with the same outline and text wrap options:
+/// an offset the writer and the reader keep as it is (-1000 to 1000 pt) and a plain object
+/// ([`plain_wrap_art`])?
+fn wrap_source_held(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    n.extras().wrap.is_some_and(|w| w.offset.is_finite() && w.offset.abs() <= 1000.0) && plain_wrap_art(n, styled)
+}
+
+/// Is `n` written as one object of its own kind that the reader reads back with the same outline
+/// ([`vectorcraft_doc::text::resolve_wrap`]): a path of one subpath, a compound path of visible
+/// paths with two subpaths or more in all, each painted with no paint, a solid fill, a plain line of a solid color or both, or a
+/// group that doesn't clip of such paths, compound paths and groups (hidden ones too) without text
+/// wrap options of their own; each without effects, art style, opacity mask or graph
+/// ([`own_plain`]). Each subpath has two anchors or more.
+fn plain_wrap_art(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    use vectorcraft_doc::AppearanceItem;
+    let solid = |p: &Paint| matches!(p, Paint::Solid { .. });
+    let painted = || match super::visible_items(n).as_slice() {
+        [] => true,
+        [AppearanceItem::Fill(f)] => solid(&f.paint),
+        [AppearanceItem::Stroke(s)] => solid(&s.paint) && vectorcraft_effects::stroke::is_plain(s),
+        [AppearanceItem::Fill(f), AppearanceItem::Stroke(s)] => solid(&f.paint) && solid(&s.paint) && vectorcraft_effects::stroke::is_plain(s),
+        _ => false,
+    };
+    let whole = |p: &PathData| p.subpaths.iter().all(|sp| sp.anchors.len() >= 2);
+    own_plain(n, styled)
+        && match &n.kind {
+            NodeKind::Path { path, clipping: false, guide: false, .. } => path.subpaths.len() == 1 && whole(path) && painted(),
+            // One subpath in all would be written, and read back, as a path.
+            NodeKind::Compound { children, .. } => {
+                let subpaths: usize = children.iter().filter_map(|c| c.path_data()).map(|p| p.subpaths.len()).sum();
+                let members = children.iter().all(|c| {
+                    c.visible
+                        && matches!(&c.kind, NodeKind::Path { path, clipping: false, guide: false, .. } if !path.subpaths.is_empty() && whole(path))
+                });
+                painted() && subpaths > 1 && members
+            }
+            NodeKind::Group { children, clip: false } => {
+                n.appearance.items.is_empty() && children.iter().all(|c| c.extras().wrap.is_none() && plain_wrap_art(c, styled))
+            }
+            _ => false,
+        }
 }
 
 /// Is the end bracket of type on an open path so near the path's end that the reader reads it as
@@ -1000,7 +1106,8 @@ impl TextDoc {
     /// `thread` (its frames in order, all area type the document holds, the first holding the
     /// story) the first time one of its frames is written. `None` when the thread can't be written
     /// as one story: `writable` says which frames are written where type can be text (every frame
-    /// of the thread must be).
+    /// of the thread must be), and `wraps_held` which frames with wrap shapes the reader wraps the
+    /// same ([`wraps_held`]; every frame with wrap shapes must be one).
     pub(in crate::ai_editing) fn thread(
         &mut self,
         doc: &Document,
@@ -1008,6 +1115,7 @@ impl TextDoc {
         id: NodeId,
         canvas: Affine,
         writable: &dyn Fn(NodeId) -> bool,
+        wraps_held: &HashSet<NodeId>,
     ) -> Option<(usize, usize)> {
         let first = *thread.first()?;
         if self.planned.insert(first) {
@@ -1026,7 +1134,7 @@ impl TextDoc {
                         && t.vertical == vertical
                         && writable(n.id)
                         // The text document doesn't hold wrap shapes (see `holds`).
-                        && t.wrap.is_empty()
+                        && (t.wrap.is_empty() || wraps_held.contains(&n.id))
                         && plain(n)
                         && t.ruby.is_empty()
                         && !t.stacks_warichu()

@@ -1704,6 +1704,14 @@ fn a_loaded_texture_is_its_gray_over_middle_gray() {
     assert!(texture("not base64!").is_none() && texture("aGVsbG8=").is_none(), "base64 of a PNG only");
 }
 
+/// A stored texture longer than the codec's default 2^18-pixel side still reads back.
+#[test]
+fn a_stored_texture_longer_than_the_codec_default_side_reads_back() {
+    let t = LoadedTexture::from_rgba(262_145, 1, &vec![128; 262_145 * 4]).and_then(|t| t.to_stored()).unwrap();
+    let loaded = texture(&t).unwrap();
+    assert_eq!(loaded.size(), (262_145, 1));
+}
+
 #[test]
 fn glass_bends_the_image_by_a_loaded_texture() {
     let (w, h) = (48, 40);

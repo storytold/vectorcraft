@@ -859,6 +859,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             });
         });
+        // A repeat mark starting a line is drawn as the character it repeats.
+        let repeat = shared_para(app, |p| p.kurikaeshi_moji_shori) == Some(true);
+        if menu_item(ui, tl!("Kurikaeshi Moji Shori"), has, repeat) {
+            toggle_kurikaeshi_moji_shori(app);
+        }
         // How a line keeps the kinsoku characters off its ends: the selected paragraphs' type is
         // checked, and none is when they differ.
         let kinsoku_type = shared_para(app, |p| p.kinsoku_type);
@@ -937,6 +942,14 @@ fn toggle_bunri_kinshi(app: &mut VectorcraftApp) {
     format(app, json!({"bunriKinshi": !on}));
 }
 
+/// Kurikaeshi Moji Shori (Paragraph panel menu): the menu item is checked when every paragraph the
+/// panel acts on ([`format`]) has it, and a click turns it off for all of them then, and on for all
+/// of them otherwise, in one undo step.
+fn toggle_kurikaeshi_moji_shori(app: &mut VectorcraftApp) {
+    let on = shared_para(app, |p| p.kurikaeshi_moji_shori) == Some(true);
+    format(app, json!({"kurikaeshiMojiShori": !on}));
+}
+
 /// Korean Line Break Anywhere (Paragraph panel menu): the menu item is checked when every paragraph
 /// the panel acts on ([`format`]) has it, and a click turns it off for all of them then, and on for
 /// all of them otherwise, in one undo step.
@@ -949,7 +962,7 @@ fn toggle_korean_line_break_anywhere(app: &mut VectorcraftApp) {
 /// indents or paragraph spacing, Hyphenate off with the default Hyphenation and Justification
 /// options, Auto direction, Bottom-to-Bottom Leading, the Line-end Punctuation Half Width Mojikumi
 /// Set, Regular burasagari, the Hard kinsoku set, Push Out Only, the Every-line Composer, Bunri-Kinshi,
-/// Roman Hanging Punctuation and Korean Line Break Anywhere off, no kashidas and no tab stops, as one undo
+/// Kurikaeshi Moji Shori, Roman Hanging Punctuation and Korean Line Break Anywhere off, no kashidas and no tab stops, as one undo
 /// step named Reset Panel (inside an undo group that is already open, as part of its step).
 fn reset_panel(app: &mut VectorcraftApp) {
     let h = HyphenationOptions::default();
@@ -971,7 +984,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "autoLeading": j.auto_leading, "singleWordJustification": "fullJustify",
             "direction": "auto", "leadingModel": "romanBaseline", "mojikumi": "lineEndHalf", "burasagari": "standard", "kinsoku": "hard",
             "kinsokuType": "pushOutOnly", "composer": "everyLine", "romanHangingPunctuation": false, "koreanLineBreakAnywhere": false,
-            "bunriKinshi": false
+            "bunriKinshi": false, "kurikaeshiMojiShori": false
         }),
     );
     para_cmd(app, "text.tabs.clear", json!({}));

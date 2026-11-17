@@ -11,7 +11,9 @@ mod rare;
 use cut_edge::{choosing_pixels, compact, settled, settled_wide, settles_wide};
 pub(crate) use cut_edge::{continuous_tone, settle_cut_edges};
 pub use denoise::denoise;
+#[cfg(test)]
 pub(crate) use denoise::denoise_keeping;
+pub(crate) use denoise::{Source, denoise_nearest};
 pub use palette::FULL_TONE_MAX;
 use palette::{Bin, HistKey, TracedAs, Used, color_palette, flat_count, flat_palette, kmeans_1d, labs, nearest_1d, nearest_lab, nearest_library};
 #[cfg(test)]
@@ -294,6 +296,11 @@ fn oklab(c: [f64; 3]) -> [f64; 3] {
         100.0 * (1.977_998_495_1 * l - 2.428_592_205 * m + 0.450_593_709_9 * s),
         100.0 * (0.025_904_037_1 * l + 0.782_771_766_2 * m - 0.808_675_766 * s),
     ]
+}
+
+/// [`oklab`] of each palette color.
+pub(crate) fn palette_labs(palette: &[[u8; 3]]) -> Vec<[f64; 3]> {
+    palette.iter().map(|c| oklab(c.map(f64::from))).collect()
 }
 
 /// [`oklab`] of an sRGB colour, for the tests.

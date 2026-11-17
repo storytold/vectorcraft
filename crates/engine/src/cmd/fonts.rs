@@ -54,6 +54,24 @@ pub fn specs() -> Vec<CommandSpec> {
             font_list
         ),
         cmd!(
+            query "text.similarFonts",
+            "Show Similar Fonts",
+            [],
+            None,
+            "{family (any of its names), limit?: whole number 1..100000 (default: all)} → {family: the family's own name, families: [names]}: the families `text.fontList` lists, ordered as a font menu's Show Similar Fonts orders them: the family itself first, then those that set the same script (Japanese, Thai or neither), then the others, each group nearest first by VectorCraft's own measure of the faces nearest an upright Regular (OS/2 PANOSE digits, weight and width classes, x-height, cap height and average character width, the italic angle, and the kind; a family that shares none of these numbers with it comes after those that share one); an error when the family isn't available or the font menus don't list it, or `limit` is not a whole number from 1 to 100000",
+            always,
+            similar_fonts
+        ),
+        cmd!(
+            query "text.glyphCategories",
+            "Glyph Categories",
+            [],
+            None,
+            "{family, style?} the OpenType categories of the font's glyphs, what the Glyphs panel's Show menu lists after Alternates for Current Selection: from the font's GSUB table, the glyphs that the single, alternate, multiple and ligature substitutions of each kind's features give, each glyph once by id, in this order: `ligatures` (liga, dlig, hlig), `swashes` (swsh, cswh), `stylisticAlternates` (salt), `ss01` to `ss20`, `smallCaps` (smcp, c2sc), `ornaments` (ornm), `fractions` (frac, afrc, numr, dnom) and `figures` (lnum, onum, pnum, tnum); a kind without glyphs is left out; contextual lookups are not followed → {family, style, categories: [{id, name?: a stylistic set's name in the font, glyphs: [glyph id]}]} (style omitted: the family's first style; an error when the family or style isn't available)",
+            always,
+            glyph_categories
+        ),
+        cmd!(
             "text.rescanFonts",
             "Refresh Font List",
             [],
@@ -1135,6 +1153,74 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
         }
         None => Ok(json!({ "families": *db.menu_family_list() })),
     }
+}
+
+/// The most families `text.similarFonts` takes as its `limit`.
+const MAX_SIMILAR: u64 = 100_000;
+
+fn similar_fonts(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.similarFonts";
+    let db = vectorcraft_text::FontDb::global();
+    let family = match p.get("family") {
+        Some(Value::String(f)) if !f.trim().is_empty() => f.as_str(),
+        Some(Value::String(_)) | None => return Err(bad(C, "`family` is required")),
+        Some(_) => return Err(bad(C, "`family` must be a string")),
+    };
+    let limit = match p.get("limit") {
+        None => None,
+        Some(v) => Some(
+            v.as_u64()
+                .filter(|n| (1..=MAX_SIMILAR).contains(n))
+                .ok_or_else(|| bad(C, format!("`limit` must be a whole number from 1 to {MAX_SIMILAR}")))?,
+        ),
+    };
+    // Any of the family's names, spelled as the font menus list it; a family they don't list is not available.
+    let menu = db.menu_family_list();
+    let listed = db.has_family(family).then(|| db.canonical(family, "").0).and_then(|c| menu.iter().find(|f| f.eq_ignore_ascii_case(&c)).cloned());
+    let Some(family) = listed else { return Err(bad(C, format!("font family `{family}` is not available"))) };
+    let mut families = db.similar_families(&family, &menu);
+    if let Some(n) = limit.and_then(|n| usize::try_from(n).ok()) {
+        families.truncate(n);
+    }
+    Ok(json!({ "family": family, "families": families }))
+}
+
+/// `text.glyphCategories`: the OpenType categories of a font's glyphs
+/// ([`vectorcraft_text::FontFace::glyph_categories`]).
+fn glyph_categories(_: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.glyphCategories";
+    let text = |key: &str| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.as_str())),
+        Some(_) => Err(bad(C, format!("`{key}` must be a string"))),
+    };
+    let family = text("family")?.ok_or_else(|| bad(C, "missing `family`"))?;
+    let db = vectorcraft_text::FontDb::global();
+    if !db.has_family(family) {
+        return Err(bad(C, format!("font family `{family}` is not available")));
+    }
+    let styles = db.styles(family);
+    let style = match text("style")? {
+        Some(style) => styles
+            .iter()
+            .find(|s| s.eq_ignore_ascii_case(style))
+            .cloned()
+            .ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?,
+        None => styles.first().cloned().unwrap_or_else(|| "Regular".into()),
+    };
+    let face = db.face(family, &style).ok_or_else(|| bad(C, format!("style `{style}` of `{family}` is not available")))?;
+    let categories: Vec<Value> = face
+        .glyph_categories()
+        .iter()
+        .map(|c| {
+            let mut v = json!({"id": c.kind.id(), "glyphs": c.glyphs});
+            if let Some(name) = &c.name {
+                v["name"] = json!(name);
+            }
+            v
+        })
+        .collect();
+    Ok(json!({"family": face.family, "style": face.style, "categories": categories}))
 }
 
 pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
