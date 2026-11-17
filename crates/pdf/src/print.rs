@@ -12,7 +12,8 @@
 //! - Marks and bleed as PDF export draws them ([`crate::MarkSettings`], [`crate::BleedSettings`]),
 //!   around the artboard on the paper, at the paper's scale.
 //! - Output: composite, or separations, one page per ink that prints ([`print_inks`]) in the
-//!   grey of its coverage (overprints honoured, spot colours as process if asked), emulsion down
+//!   gray of its coverage (overprints honored, every spot color or chosen ones as process if
+//!   asked), emulsion down
 //!   (mirrored), negative (inverted).
 //! - Colour management: the printer profile composite colours are converted to (and
 //!   separations separate with), the rendering intent, and whether CMYK colours keep their
@@ -43,7 +44,7 @@ use vectorcraft_doc::overprint::{OverprintBlack, clear_overprints, darken_overpr
 use vectorcraft_doc::{ColorMode, Document, Node, NodeKind};
 
 pub use layout::{MAX_COPIES_PER_SHEET, MAX_TILES, TileGrid};
-pub use plates::print_inks;
+pub use plates::{document_inks, print_inks};
 pub use settings::*;
 pub use tiling::{TilingPage, tiling};
 
@@ -132,6 +133,9 @@ pub struct PrintPreview {
     pub tiles: Vec<TileGrid>,
     /// The inks of a separation (empty for composite output).
     pub inks: Vec<PrintInk>,
+    /// Every ink of the document as a separation lists it, the spot inks printing as process
+    /// (which `inks` leaves out) included ([`document_inks`]); empty for composite output.
+    pub document_inks: Vec<PrintInk>,
     /// What the job leaves out of the document or prints differently.
     pub warnings: Vec<String>,
     /// Notes on the options: one the job doesn't apply or applies another way. They aren't
@@ -148,6 +152,8 @@ struct Job<'a> {
     tiles: Vec<TileGrid>,
     /// The inks of a separation (every one, printed or not).
     inks: Vec<PrintInk>,
+    /// Every ink of the document, the spot inks printing as process included.
+    document_inks: Vec<PrintInk>,
     /// The inks that print (indices into `inks`): each a plate.
     plates: Vec<usize>,
     /// One copy's pages: (layout, plate).
@@ -444,8 +450,9 @@ impl<'a> Job<'a> {
         let (mut warnings, mut setting_notes) = (vec![], vec![]);
         let (layouts, tiles) = layout::layout(&doc, set, &mut warnings, &mut setting_notes)?;
         let separations = set.output.mode == OutputMode::Separations;
-        let (inks, more) = if separations { print_inks(&doc, set) } else { Default::default() };
+        let (document_inks, more) = if separations { document_inks(&doc, set) } else { Default::default() };
         setting_notes.extend(more);
+        let inks: Vec<PrintInk> = document_inks.iter().filter(|i| !i.convert_to_process).cloned().collect();
         let plates: Vec<usize> = (0..inks.len()).filter(|i| inks[*i].print).collect();
         let printed: Vec<Option<usize>> = if separations { (0..plates.len()).map(Some).collect() } else { vec![None] };
         if printed.is_empty() {
@@ -474,7 +481,7 @@ impl<'a> Job<'a> {
         if !postscript && !set.graphics.auto_flatness {
             setting_notes.push("a fixed flatness is not written yet: the output device flattens curves".into());
         }
-        Ok(Self { doc, layouts, tiles, inks, plates, sheets, warnings, setting_notes })
+        Ok(Self { doc, layouts, tiles, inks, document_inks, plates, sheets, warnings, setting_notes })
     }
 
     /// The ink of plate `plate` (`None`: composite).
@@ -526,6 +533,7 @@ pub fn preview(doc: &Document, set: &PrintSettings) -> Result<PrintPreview, PdfE
         sheets,
         tiles: job.tiles,
         inks: job.inks,
+        document_inks: job.document_inks,
         warnings: job.warnings,
         setting_notes: job.setting_notes,
     })

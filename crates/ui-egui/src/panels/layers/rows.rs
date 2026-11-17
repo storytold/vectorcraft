@@ -446,9 +446,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             d.insert_temp(key("grabbed"), n.id);
         });
     }
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    }
+    // The cursor of a row drag is the panel's ([`super::drag_cursor`]): Alt can change it on any frame.
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
 }
 
