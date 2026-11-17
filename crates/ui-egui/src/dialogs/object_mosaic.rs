@@ -129,7 +129,7 @@ pub(super) fn note_set(d: &mut Dialog, field: &str) {
 fn derived(d: &Dialog) -> Option<(&'static str, f64)> {
     let key = follower(d)?;
     let (iw, ih) = image(d);
-    let pct = d.bool("percentages");
+    let pct = in_percentages(d);
     Some(if key == "height" {
         let w = d.f64("width", 0.0);
         (key, if pct { w } else { w * ih / iw })
@@ -161,18 +161,36 @@ fn switch_percentages(d: &mut Dialog, on: bool) {
         return;
     }
     d.fields.remove(form::REFUSED);
+    d.fields.remove(&kept("percentages"));
     d.fields.insert("width".into(), json!(w));
     d.fields.insert("height".into(), json!(h));
     d.fields.insert("percentages".into(), json!(on));
 }
 
-/// `ui.dialog.set` of `percentages`: true or false switches the new size as the checkbox does;
-/// another value is kept as it is, and the command refuses it on OK.
+/// Whether the new size fields hold percentages: Resize Using Percentages, or while that field holds
+/// a value that is not true or false, the mode it held before that value was set.
+fn in_percentages(d: &Dialog) -> bool {
+    match d.fields.get("percentages") {
+        Some(Value::Bool(on)) => *on,
+        Some(_) => d.bool(&kept("percentages")),
+        None => false,
+    }
+}
+
+/// `ui.dialog.set` of `percentages`: true or false switches the new size as the checkbox does, and
+/// replaces a value that is not true or false; null is false. Another value is kept as it is, and
+/// the command refuses it on OK.
 pub(super) fn set_percentages(d: &mut Dialog, value: &Value) {
-    match value.as_bool() {
-        Some(on) if on != d.bool("percentages") => switch_percentages(d, on),
-        Some(_) => {}
+    let mode = in_percentages(d);
+    // The command reads null as the field left out, which is off.
+    match if value.is_null() { Some(false) } else { value.as_bool() } {
+        Some(on) if on != mode => switch_percentages(d, on),
+        Some(on) => {
+            d.fields.remove(&kept("percentages"));
+            d.fields.insert("percentages".into(), json!(on));
+        }
         None => {
+            d.fields.insert(kept("percentages"), json!(mode));
             d.fields.insert("percentages".into(), value.clone());
         }
     }
@@ -261,7 +279,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     });
     ui.add_space(4.0);
     let follows = follower(d);
-    let pct = d.bool("percentages");
+    let pct = in_percentages(d);
     widgets::label_row(ui, tl!("New Size:"), LABEL_W, |ui| pair(ui, d, ["width", "height"], unit, (pct, 0.1), follows));
     follow_ratio(d);
     ui.add_space(4.0);
@@ -599,6 +617,31 @@ mod tests {
         let e = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(e.contains("width"), "{e}");
         assert_eq!(mosaic(&app), None);
+    }
+
+    /// True or false set after a Resize Using Percentages value the command refuses replaces it: the
+    /// same mode as before keeps the sizes, and the other mode shows them the other way. Null is
+    /// false, as the command reads it. OK then makes the mosaic.
+    #[test]
+    fn true_or_false_replaces_a_refused_percentages_value() {
+        let pct = json!({"percentages": true, "width": 50, "height": 50});
+        for (given, sets, size) in [
+            (json!({}), vec![json!("yes"), json!(false)], (100.0, 50.0)),
+            (pct.clone(), vec![json!("yes"), json!(false)], (50.0, 25.0)),
+            (pct.clone(), vec![Value::Null], (50.0, 25.0)),
+            (pct, vec![json!("yes"), Value::Null], (50.0, 25.0)),
+        ] {
+            let mut app = app_with_image();
+            open(&mut app, &given).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            for value in sets {
+                crate::dialogs::set_field(d, "percentages".into(), value);
+            }
+            assert_eq!(d.fields.get("percentages"), Some(&json!(false)), "{given}");
+            assert_eq!((d.f64("width", 0.0), d.f64("height", 0.0)), size, "{given}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert_eq!(mosaic(&app).map(|m| (m.0, m.1)), Some(size), "{given}");
+        }
     }
 
     /// With Constrain Ratio on, a refused height `ui.dialog.set` gave is refused on OK even when it
