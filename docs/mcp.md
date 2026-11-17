@@ -723,8 +723,9 @@ For SVG/SVGZ, `export`'s top-level `outlineText: true` writes text as paths; DXF
 PDF instead uses `options: {"advanced": {"outlineText": true}}`; its default is false (live text).
 
 With `mods.shift`, a marquee dragged with the Selection tool toggles the objects it reaches (the selected ones leave
-the selection, the others join it, the rest stays), and one dragged with Direct or Group Selection toggles the anchors
-inside it (a path left with none leaves the selection, one with all of them is selected whole). The Lasso adds anchors
+the selection, the others join it, the rest stays), one dragged with Group Selection toggles the objects it touches,
+whole, and one dragged with Direct Selection toggles the anchors inside it (a path left with none leaves the
+selection, one with all of them is selected whole). The Lasso adds anchors
 with `mods.shift` and takes them away with `mods.alt`. They run `select.toggle {ids}` and `select.anchorsMany {items,
 mode: "set"|"add"|"toggle"|"subtract"}`:
 
@@ -768,6 +769,17 @@ measured along those axes, the reference point `x`, `y` at the drag's corner or 
 Constrain Angle's negative. `shape.arc` takes `rotation` in degrees clockwise on the page, about `x1`, `y1` or about the
 reference point `x`, `y`; the arc's bounding box turns with it. Without `rotation`, or at 0° or a whole turn, the arc is
 upright, and a `rotation` that is not a number is an error that adds nothing.
+
+A Spiral tool drag sends `shape.spiral` with the spiral's outer end at the pointer: `radius` is the pointer's distance
+from the center `cx`, `cy` and `rotation` its direction in degrees clockwise on the page from the x axis, left out when
+it is 0, so dragging around the center turns the spiral. A pointer less than 0.01 pt from the center keeps the last
+direction (none before the first). Shift and General › Constrain Angle do not change a dragged spiral's direction. The
+Spiral dialog's spiral, placed by a click, takes a `rotation` of the Constrain Angle's negative when the angle is other
+than 0° or a whole turn, so its outer end starts along the turned x axis, and its bounding box turns with it.
+`shape.spiral` takes `rotation` in degrees clockwise about `cx`, `cy`; without it, or at 0 or a whole turn, the outer
+end is at `cx + radius`, `cy` as before, and a `rotation` that is not a number is an error that adds nothing. The
+bounding box turns only when `rotation` is the Constrain Angle's negative, as for `shape.polygon` and `shape.star`, so a
+drag that points along the turned x axis makes the same spiral, with the same turned box, as the dialog.
 
 `shape.arc` checks `reference`, `baseAlong` and `slope` in both of its forms. `reference` is a whole number from 0 to 8
 (`4.0` is 4) and is 0 when left out; `baseAlong` is `x` or `y` in either case and is `x` when left out; `slope` is
@@ -1660,7 +1672,8 @@ its noise). PDF exports write it the same way, except for a linear, radial, coni
 stops whose other stops are all paper white or written in CMYK or gray, that is not a dithered fill and whose curve
 does not have too many stops (a diamond as four such shadings). An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
 CMYK document unless the export converts colors to an RGB destination profile. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK
-or gray inks as a DeviceN shading.
+or gray inks as a DeviceN shading. A legacy `.ai` file gets the colors between a Perceptual gradient's stops as stops
+of their own, in process colors (at most 256, with a warning).
 `hue-clockwise` and `hue-counterclockwise` (VectorCraft's own methods) mix a linear, radial, conic or diamond
 gradient's colors around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next.
 With `hue-clockwise` the hue angle falls (red, magenta, blue, cyan, green, yellow, red), which is clockwise on the
@@ -2076,7 +2089,10 @@ commands fail and change nothing, and `appearance.removeItem` removes nothing. A
 `artboard.reorder`, `graphicStyle.move`, `appearance.moveItem`, `appearance.duplicateItem` and `effect.move`) puts
 the item last. A text `start` or `end` is past the end of the text. `object.slice.divide` refuses such a `rows` or
 `columns`, `recolor.reduce` keeps each color in its own row for such a `colors`, and `layer.setProps` refuses such a
-`color`. `object.setBounds` reads a `reference` past 8 as 8, as `object.transformEach` does.
+`color`. `object.setBounds` reads a whole-number `reference` past 8 as 8, as `object.transformEach` does.
+For `object.setBounds`, `reference` accepts whole numbers of 0 or more, including floating-point representations
+such as `0.0`. Negative and fractional values are errors. An omitted or null `reference` uses the center point, 4.
+These rules apply to both whole objects and directly selected anchors.
 An index or place given as a value that is not a whole number of 0 or more, such as `"3"`, `2.5`, `-1` or `true`, is
 refused with `` `anchor` must be a whole number ``, naming the key: `anchor` of `path.setHandle`, `path.moveAnchor` and
 `text.setPathHandle`, `segment` of `path.insertAnchor`, `to` of `artboard.reorder`, `library.moveGroup` and
@@ -5425,7 +5441,11 @@ and `layerRows`, the rows highlighted in the panel.
   runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are), `layer.pasteRemembersLayers`,
   `object.isolate {id?}` (a group, a layer or a single object, by default the first selected object; not type, not a
   hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
-  while a symbol is edited only the editing layer or art on it) / `object.exitIsolation`.
+  while a symbol is edited only the editing layer or art on it) / `object.exitIsolation`. Leaving an isolated Live
+  Paint group (`object.exitIsolation`, or `object.isolate` on a level outside it) adds the paths, compound paths and
+  groups of them drawn in it, shown and unlocked with everything in them, to the group as `livePaint.merge` does, in
+  one undo step; type, images and other objects stay in it as they are, and with nothing drawn no undo step is
+  recorded.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step; `ui.dialog.set` of `template` also sets `locked` and `dimImages`, as the
@@ -7582,6 +7602,12 @@ they can't be read, as with a PNG cut short by a download or a sync still runnin
 can't be read" and places nothing; `clipboard.importImage` fails the same way. A JPEG cut short is placed when its
 pixels still decode. Both keep the decoded pixels (except a CMYK JPEG's) in the image store the renderers share, so the first render
 that draws the image does not decode the file again.
+Opaque CMYK PSD/PSB merged images retain their 8-bit or 16-bit ink samples, CMYK ICC profile, resolution, and
+clipping path when placed, linked, relinked, updated, or embedded. `file.place.info`, `image.info`, and `links.info`
+report CMYK for these images. VectorCraft's native CMYK limit is 67,108,864 pixels. Composites with transparency,
+images beyond that limit, and native samples beyond the allocation allowance use the RGB import path, subject to
+its allocation limit. Importing individual layers with `layers: true` retains its existing behavior.
+
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
 with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
@@ -8832,9 +8858,21 @@ starts a new point type object at the position the advance gives, and an underli
 of the last character's advance. Type on more than one line is placed a line at a time: each line is aligned by its own advances and
 split as a single line is. An EMF that
 draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
+Each of these adds one warning, with a count: a file, or a metafile image inside it, cut short by one of the reader's
+limits; images and pattern brushes whose bitmap can't be read, which are left out; clips that can't be applied as the
+file sets them; and raster operations other than a plain copy, drawn as a plain copy or left out.
 `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard for `edit.paste`; the app
 pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
 (the Windows desktop service doesn't read metafiles yet).
+
+The type size comes from the font's height. A negative height is the em. A positive height is the character cell, and
+the em is the cell times the face's units per em divided by its OS/2 `usWinAscent` plus `usWinDescent`, with a
+variable font's `MVAR` changes at the face's instance (its ascent plus descent when it has no OS/2 table). When the face gives an average width (OS/2 `xAvgCharWidth`), a font's average
+character width, negative or positive, becomes Horizontal Scale: the face's average width at the type size is
+stretched or narrowed to the font's width. VectorCraft's own rules are that a negative width is read as its absolute
+value and that the width is ignored when the height is 0. For a font the system doesn't have, both values are measured
+in the face that replaces it. Characters that face has no glyph for are drawn from other faces at the same size and
+Horizontal Scale.
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/logo.emf"}}
@@ -9077,13 +9115,28 @@ default), `usdz`, `gltf` or `obj`; the panel shows a Format row for the 3D asset
 `assets.set3DFormat {assets, format}` sets it (an undo step only when the format changes). `assets.list` gives each
 asset's `format3D` (null for a picture asset).
 
-`assets.export3D {assets?, folder?, zip?}` writes each 3D asset (default: all of them) as a mesh file named after it:
+`assets.export3D {assets?, folder?, zip?, textureSize?}` writes each 3D asset (default: all of them) as a mesh file named after it:
 `.usda`, `.usdz`, `.gltf` (glTF 2.0, its buffer embedded) or `.obj` with its `.mtl` (whitespace and `#` in an OBJ's
 name become `_`). Every solid of the object (the
 fill's, each stroke's, a group's members') is its own mesh, with a two-sided material in the color it is painted
 (a gradient's stops averaged, a pattern gray). The mesh holds the solid's faces before they are projected onto the
 page, those turned away from the viewer included, at the object's 3D rotation, y up, about the point the object turns
 about: in points (USD's layer gives `metersPerUnit`), in meters in glTF. Files that would share a name get `-2`, `-3` and so on.
+Graphics mapped onto a plane or onto Extrude & Bevel's front or back cap (`threeD.mapGraphic`) are exported as a PNG
+texture of that face: the face's color with its graphics drawn over it, flat and unlit, on a mesh of the face's own
+triangles with texture coordinates and a material that shows the texture. A face that is not opaque keeps its opacity
+in the texture's alpha: as on the canvas, the graphics take the opacity of the face's fill or stroke, and the object's
+opacity applies to the face and its graphics together. glTF embeds the PNG as a data URI
+(`TEXCOORD_0`, `baseColorTexture`), USDZ stores it after the layer, USDA reads it through `primvars:st`, a
+`UsdPrimvarReader_float2` and a `UsdUVTexture` connected to the surface's `diffuseColor`, and OBJ gives `vt` coordinates
+and an MTL `map_Kd`; OBJ and USDA write the PNG beside them as `<name>-texture-1.png`, `-texture-2.png` and so on
+(whitespace, `#` and `@` become `_`). USD reads a face's opacity from the texture's alpha (`outputs:a`), and an OBJ
+whose face is not opaque also gets `<name>-texture-1-opacity.png`, the alpha as gray levels, for the MTL's `map_d`.
+Faces with the same color, graphics and bounds share one texture. `textureSize` (128 to
+4096, default 1024, VectorCraft's own values) is the number of pixels along the longer side of each texture; one export
+draws at most 67,108,864 texture pixels in all, and past that it is refused. Graphics on Revolve's side are not
+exported yet. The layouts follow glTF 2.0, UsdPreviewSurface (<https://openusd.org/release/spec_usdpreviewsurface.html>)
+and OBJ/MTL (<https://www.loc.gov/preservation/digital/formats/fdd/fdd000508.shtml>).
 With `zip`, the files go into one ZIP named after the document with `-3D` added (`Untitled-1-3D.zip`), or
 `3D Assets.zip` when the document's title gives no file name.
 An object whose face has a hole that crosses the face's outline or another hole is refused, by `assets.add3D` and
@@ -9769,6 +9822,20 @@ on again.
 
 ```json
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
+```
+
+## Insert Special, Whitespace and Break Characters
+
+`type.insert {char?, text?, code?, unicode?, ids?|id?}` inserts one character (`char` names it, `code` and `unicode` give
+its code) or the string `text`. While the Type tool edits text and neither `ids` nor `id` is given, it replaces the
+tool's selection, or inserts at its caret, and the caret goes after the insertion; otherwise it appends to the end of each
+selected text object. Each call is one undo step; an empty `text` at the Type tool's caret changes nothing and records no undo step.
+`char: "forcedLineBreak"` (Type › Insert Break Character › Forced Line Break) inserts U+2028, which starts a new line in
+the same paragraph, as Shift+Enter does; `char: "paragraphReturn"` inserts a line feed, which starts a new paragraph. A
+`text` that holds U+2028 inserts the same break.
+
+```json
+{"name":"run_command","arguments":{"command":"type.insert","params":{"char":"forcedLineBreak"}}}
 ```
 
 ## Smart Punctuation
@@ -12203,7 +12270,12 @@ away); its click on a gradient mesh's line picks the line's two
 ends, and a click inside a patch picks the four points around it. The picked points show filled. Dragging one of them
 moves them all as one undo step (`object.mesh.movePoints`), a click on one of several picked points picks it alone,
 and the arrow keys nudge them by the keyboard increment. The active tool lists them in its options
-(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). On gradient meshes a solid fill colour (`paint.setFill`, from the
+(`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). Switching to the Eyedropper keeps them picked, its
+options list them too, and the Mesh tool, Direct Selection or a Lasso chosen next picks them again. While a selected, editable mesh has
+points picked, an Eyedropper click or Shift-click on an image or other art samples the color under the pointer into
+those points alone as `paint.sampleColor {color, stroke: false, ids}` with the meshes that have points picked: one undo
+step, none when the color is unchanged. Other selected objects keep their paint. A click on one of those meshes, and
+Alt-click and Shift+Alt-click anywhere, are unchanged. On gradient meshes a solid fill colour (`paint.setFill`, from the
 Color panel, Swatches or the Eyedropper) recolours just the picked points, and when every target of
 `transparency.set` is a gradient mesh with points picked, its `opacity` fades those points instead of the objects
 (`transparency.info` then shows their opacity, `null` when it differs). Both are one undo step, and neither goes to the
@@ -12212,6 +12284,16 @@ gradient mesh with points picked, the Fill proxy, the Color panel, the Color Whe
 picked point's color, and `fillMixed` compares the picked points' colors with each other and with the fills of the other
 selected objects. The Transparency panel shows the picked points' opacity (blank when it differs), and the Control
 bar shows the first picked point's opacity.
+
+A solid color dragged from the Color or Swatches panel or a Fill proxy and dropped on a selected gradient mesh, while the
+Fill proxy is active, recolors the mesh point under the pointer (within 5 screen pixels), else the four points around the
+patch there, as `object.mesh.setPointColor {id, points, color, keepModel: true}`. With a gradient mesh selected and a
+solid fill color set, a plain Eyedropper click does the same with the fill color: on a point of any selected mesh, or
+inside a patch of the selected mesh the click hits. A gradient, a pattern, a fill of None, a stroke proxy or a mesh that
+is not selected keeps the earlier behavior (the whole object takes the paint, and the Eyedropper copies the appearance),
+and so does an unselected object on top of the mesh at that place.
+See [Edit mesh objects](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=312);
+the 5-pixel reach is VectorCraft's own.
 
 `object.mesh.movePoints {id, points: [index…], dx, dy}` (or `{items: [{id, points}…], dx, dy}` over several meshes)
 moves points by (dx, dy), their handles with them; `object.mesh.setPointColor` takes `points` or `items` the same
@@ -12520,8 +12602,9 @@ Commands:
 - `addon.pathtools.crossings {cut?, selfCrossings?, ids?}` adds anchors where the selected paths cross one another (and
   where each crosses itself, with `selfCrossings`), or with `cut` also cuts them there: a path of one subpath becomes a
   path per piece. Segments that meet at an anchor they share, or with only segments of no length between them, don't
-  cross there, and they cross where they meet again elsewhere. With `selfCrossings`, a curved segment that loops over
-  itself crosses itself. At most 10,000 segments at once.
+  cross there, and they cross where they meet again elsewhere. An open end of a path that lies within 0.001 pt of
+  another path crosses it there. With `selfCrossings`, a curved segment that loops over itself crosses itself. At most
+  10,000 segments at once.
 - `addon.pathtools.divideDashes {dash?, gap?, fit?, removeGaps?}` cuts the selected paths into separate open paths
   along the curve, each `dash` long (0.01 to 1,000,000 pt, 10 by default) with `gap` between them (0 to 1,000,000 pt,
   0 by default: the pieces touch), every piece keeping the path's appearance, as one undo step. The gap pieces are left
@@ -12603,7 +12686,7 @@ Commands:
   Every path that can be edited takes part, selected or not, compound path members included. Hidden and locked paths,
   guides and clipping paths are not trimmed and do not count as crossing, the members of a compound clipping path
   included; type, images and symbol instances take no part. In isolation mode only paths inside the isolated object
-  are trimmed, and paths outside it still count as crossing. A path that ends on another marks a place on the other. Paths that lie along each other do not cross there.
+  are trimmed, and paths outside it still count as crossing. A path that ends on another, or within 0.001 pt of it, marks a place on the other. Paths that lie along each other do not cross there.
   Crossings are found on the paths' own outlines, without strokes, brushes or effects. A closed path that loses a
   stretch becomes open. An open path that loses a middle stretch becomes two paths with its appearance, in its place in
   the stacking order. A path that nothing crosses is removed whole, a compound path that loses its last member is
