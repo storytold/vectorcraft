@@ -65,7 +65,9 @@ pub use expand::{
 #[cfg(test)]
 use mesh::grid_eval;
 pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
-pub use warp::{WARP_NET, WarpNet, WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, pieces, uses_net, warp_point, warp_version};
+pub use warp::{
+    WARP_NET, WarpNet, WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, map_smooth_within, pieces, uses_net, warp_point, warp_version,
+};
 
 #[cfg(test)]
 mod tests {
@@ -85,6 +87,30 @@ mod tests {
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert_eq!(blend_ramp(F64Deserializer::<Error>::new(bad)).unwrap(), 0.0);
             assert_eq!(blend_color_shift(F64Deserializer::<Error>::new(bad)).unwrap(), 0.0);
+        }
+    }
+
+    /// The smooth map takes each handle along the map's derivative, also far from the origin,
+    /// where a fixed sampling step would round away (#7069): the identity map keeps a curve's
+    /// handles there.
+    #[test]
+    fn map_smooth_within_keeps_handles_far_from_the_origin() {
+        for at in [0.0, 1e13] {
+            let o = Point::new(at, at);
+            let curve = PathData::single(vectorcraft_geom::SubPath::new(
+                vec![
+                    vectorcraft_geom::Anchor::with_handles(o, o, o + vectorcraft_geom::Vec2::new(0.2, 0.0)),
+                    vectorcraft_geom::Anchor::with_handles(
+                        o + vectorcraft_geom::Vec2::new(1.0, 0.5),
+                        o + vectorcraft_geom::Vec2::new(0.8, 0.5),
+                        o + vectorcraft_geom::Vec2::new(1.0, 0.5),
+                    ),
+                ],
+                false,
+            ));
+            let out = map_smooth_within(&curve, 10.0, usize::MAX, |p| p);
+            let (a, b) = (&curve.subpaths[0].anchors, &out.subpaths[0].anchors);
+            assert!(a[0].h_out.distance(b[0].h_out) < 0.01 && a[1].h_in.distance(b[1].h_in) < 0.01, "at {at}: {:?} {:?}", b[0].h_out, b[1].h_in);
         }
     }
 

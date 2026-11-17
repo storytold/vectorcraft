@@ -28,7 +28,7 @@ pub(crate) use build::PLANES;
 use build::{Camera, cuts, edge_distance, newell, section};
 pub(crate) use build::{Face3, Keep, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
-pub use face_map::{FaceMap, extrude_face_map, plane_face_map};
+pub use face_map::{FaceMap, MeshFace, extrude_face_map, extrude_mesh_face, plane_face_map, plane_mesh_face};
 #[cfg(test)]
 use inflate::GRID_WORK;
 pub(crate) use inflate::inflate_faces;

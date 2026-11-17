@@ -153,6 +153,20 @@ fn page_fonts(name: &str, bytes: &[u8], path: &str, pages: &PlacedPages) -> BTre
     fonts
 }
 
+/// The document whose links are copied beside the placed file `name` (`bytes`), which is copied
+/// as it is: a `.ai` file's editing data ([`super::place::document::editing_data`]), or the native
+/// document an EPS or PostScript file carries, which placing it reads. `None` for other files and
+/// for data that can't be read.
+fn editing_data(name: &str, bytes: &[u8]) -> Option<Document> {
+    if let Some(doc) = super::place::document::editing_data(name, bytes) {
+        return Some(doc);
+    }
+    if !super::place::document::is_postscript(bytes) {
+        return None;
+    }
+    vectorcraft_format::load(&vectorcraft_eps::native(bytes)?).ok()
+}
+
 /// Collect dependencies depth-first so nested VectorCraft files are rewritten before
 /// their parents: each parent can record the final hash of the rewritten child.
 /// Cycles, excessive nesting, and unreadable children are reported, not fatal.
@@ -200,7 +214,7 @@ impl<'a> Collector<'a> {
         self.warnings.push(message);
     }
 
-    /// Warns when a file that placed `.ai` file `source` links (`name`) was copied as `copy`: the
+    /// Warns when a file that placed `.ai` or EPS file `source` links (`name`) was copied as `copy`: the
     /// copy of `source` finds it only by its name, beside it.
     /// `path` is the link's path as the warning names it.
     fn renamed(&mut self, lines: &mut Vec<String>, source: &str, path: &str, name: &str, copy: &str) {
@@ -213,8 +227,8 @@ impl<'a> Collector<'a> {
         }
     }
 
-    /// Collects the files `doc` links. `by_name`: `doc` is a placed `.ai` file's editing data,
-    /// whose links are not rewritten, so its copy finds them by name beside it. `lookup`: the
+    /// Collects the files `doc` links. `by_name`: `doc` is a placed `.ai` or EPS file's editing
+    /// data, whose links are not rewritten, so its copy finds them by name beside it. `lookup`: the
     /// document whose links (with the same paths as `doc`'s) are looked for, and where from, when
     /// not `doc` from `source`.
     fn collect(
@@ -311,12 +325,13 @@ impl<'a> Collector<'a> {
                 if by_name {
                     self.renamed(&mut lines, source, &shown, &file.name, &destination_file);
                 }
-                // A placed PDF or .ai file is copied as it is, as an image is; the files a .ai file
-                // read from its editing data links are copied beside it.
+                // A placed PDF, .ai or EPS file is copied as it is, as an image is; the files a .ai
+                // file read from its editing data, or an EPS file read from the native document it
+                // carries, links are copied beside it.
                 let pages = placed.get(&file.path);
                 let placed_file = pages.is_some();
                 check_carried_scripts(&file.name, &bytes, found_path)?;
-                if placed_file && let Some(mut art) = super::place::document::editing_data(&file.name, &bytes) {
+                if placed_file && let Some(mut art) = editing_data(&file.name, &bytes) {
                     if depth >= vectorcraft_doc::placed_document::MAX_DEPTH {
                         self.warn(&mut lines, format!("{shown}: nesting limit reached; copied unchanged without collecting its own links"));
                     } else {

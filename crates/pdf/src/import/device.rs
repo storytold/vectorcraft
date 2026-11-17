@@ -1,6 +1,6 @@
 use super::entry::{INVISIBLE_TEXT_NOTE, MAX_NESTED, OUTLINED_TEXT_NOTE, UNSORTED, WHITE_KEY};
 use super::state::{
-    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, gray_png, line_width, mean_scale, resize_alpha, rgba_png, same_outline,
+    Builder, Decoded, Frame, FrameKind, GlyphRun, blend, fill_rule, gray_png, line_width, mean_scale, resize_alpha, rgb_png, rgba_png, same_outline,
     stroke_layer, stroke_outline,
 };
 use super::{
@@ -304,27 +304,39 @@ impl<'a> Device<'a> for Builder<'_> {
                     self.add_image(key, || None, xf);
                     return;
                 }
-                let mut decoded: Option<Decoded> = None;
+                // RGB samples, or RGBA when the image has an alpha channel or is drawn white.
+                let mut decoded: Option<(Decoded, bool)> = None;
                 r.with_rgba(
                     |img, alpha| {
                         let (w, h, sf) = (img.width(), img.height(), img.scale_factors());
-                        let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
-                        let rgba: Vec<u8> = match img {
-                            _ if white => a.into_iter().flat_map(|a| [255, 255, 255, a]).collect(),
-                            ImageData::Rgb(d) => d.data.as_chunks::<3>().0.iter().zip(a).flat_map(|(c, a)| [c[0], c[1], c[2], a]).collect(),
-                            ImageData::Luma(d) => d.data.iter().zip(a).flat_map(|(g, a)| [*g, *g, *g, a]).collect(),
+                        let px = match (img, alpha) {
+                            // An opaque image's RGB samples are encoded as they are, with no copy.
+                            (ImageData::Rgb(d), None) if !white => (d.data, false),
+                            // Gray samples are stored as RGB: as a gray PNG, the image would become a
+                            // grayscale image that a fill color colorizes.
+                            (ImageData::Luma(d), None) if !white => (d.data.iter().flat_map(|g| [*g; 3]).collect(), false),
+                            (img, alpha) => {
+                                let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
+                                let rgba: Vec<u8> = match img {
+                                    _ if white => a.into_iter().flat_map(|a| [255, 255, 255, a]).collect(),
+                                    ImageData::Rgb(d) => d.data.as_chunks::<3>().0.iter().zip(a).flat_map(|(c, a)| [c[0], c[1], c[2], a]).collect(),
+                                    ImageData::Luma(d) => d.data.iter().zip(a).flat_map(|(g, a)| [*g, *g, *g, a]).collect(),
+                                };
+                                (rgba, true)
+                            }
                         };
-                        decoded = Some((rgba, w, h, sf));
+                        decoded = Some(((px.0, w, h, sf), px.1));
                     },
                     None,
                 );
-                let Some((rgba, w, h, sf)) = decoded else {
+                let Some(((px, w, h, sf), alpha)) = decoded else {
                     self.warn("an image could not be decoded and was skipped");
                     return;
                 };
                 self.raster_scales.insert(key, sf);
                 let xf = transform * Affine::scale_non_uniform(sf.0 as f64, sf.1 as f64);
-                self.add_image(key, || rgba_png(rgba, w, h).map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
+                let png = move || if alpha { rgba_png(px, w, h) } else { rgb_png(px, w, h) };
+                self.add_image(key, || png().map(|png| (ImageBlob::new("image/png", png), w, h)), xf);
             }
             Image::Stencil(s) => {
                 let white = self.white_images;
