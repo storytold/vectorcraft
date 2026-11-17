@@ -4672,6 +4672,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	V Spacing:	Κατακόρυφη απόσταση:
 	V:	Κατακόρυφα:
 	Variable Width Profile	Προφίλ μεταβλητού πλάτους
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Το πινέλο του περιγράμματος διατηρεί το δικό του μέγεθος, οπότε ένα προφίλ πλάτους δεν το αλλάζει. Αφαιρέστε το πινέλο για να χρησιμοποιήσετε προφίλ.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Το πινέλο του περιγράμματος διατηρεί το δικό του μέγεθος, οπότε ένα προφίλ πλάτους δεν το αλλάζει. Αφαιρέστε το πινέλο για να χρησιμοποιήσετε προφίλ.
 	New Variable	Νέα μεταβλητή
 	Delete Variable	Διαγραφή μεταβλητής
 	Lock Variables	Κλείδωμα μεταβλητών

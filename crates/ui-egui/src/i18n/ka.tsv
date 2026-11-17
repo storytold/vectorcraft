@@ -4229,6 +4229,8 @@ digits	Malayalam	მალაიალამური
 	Tip extends past the end point	წვერი ბოლო წერტილს სცდება
 	Tip on the end point	წვერი ბოლო წერტილზე
 	Variable Width Profile	ცვლადი სიგანის პროფილი
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	კონტურის ფუნჯი საკუთარ ზომას ინარჩუნებს, ამიტომ სიგანის პროფილი მას არ ცვლის. პროფილის გამოსაყენებლად მოხსენით ფუნჯი.
 	Weight:	სისქე:
 	Art using a deleted global swatch keeps its colour.	წაშლილი გლობალური ფერის ნიმუშის მქონე ნახატი თავის ფერს ინარჩუნებს.
 	Color Group: {name}	ფერთა ჯგუფი: {name}

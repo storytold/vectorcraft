@@ -4061,6 +4061,8 @@ digits	Malayalam	马拉雅拉姆数字
 	V Spacing:	垂直间距：
 	V:	V：
 	Variable Width Profile	变量宽度配置文件
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	描边的画笔保持其自身大小，因此宽度配置文件不会改变它。移除画笔即可使用配置文件。
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	描边的画笔保持其自身大小，因此宽度配置文件不会改变它。移除画笔即可使用配置文件。
 	Variables	变量
 	New Variable	新建变量
 	Delete Variable	删除变量

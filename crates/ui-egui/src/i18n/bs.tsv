@@ -2237,6 +2237,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Vrh prelazi preko krajnje tačke
 	Tip on the end point	Vrh na krajnjoj tački
 	Variable Width Profile	Profil promjenjive širine
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Četkica poteza zadržava vlastitu veličinu, pa je profil širine ne mijenja. Uklonite četkicu da biste koristili profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Četkica poteza zadržava vlastitu veličinu, pa je profil širine ne mijenja. Uklonite četkicu da biste koristili profil.
 	Weight:	Debljina:
 	Art using a deleted global swatch keeps its colour.	Crtež koji koristi izbrisani globalni uzorak boje zadržava svoju boju.
 	Color Group: {name}	Grupa boja: {name}

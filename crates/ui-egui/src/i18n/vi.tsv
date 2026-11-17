@@ -4641,6 +4641,8 @@ mark-style	Japanese	Kiểu Nhật
 	Variable Options	Tùy chọn biến
 	Variable Options…	Tùy chọn biến số…
 	Variable Width Profile	Hồ sơ chiều rộng biến đổi
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Cọ của nét giữ kích thước riêng, nên hồ sơ chiều rộng không thay đổi nét. Gỡ cọ để dùng hồ sơ.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Cọ của nét giữ kích thước riêng, nên hồ sơ chiều rộng không thay đổi nét. Gỡ cọ để dùng hồ sơ.
 	Variables	Biến số
 	Variation:	Biến thể:
 	Vector Effects	Hiệu ứng vector

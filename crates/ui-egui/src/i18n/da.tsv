@@ -4801,6 +4801,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Spidsen rager ud over endepunktet
 	Tip on the end point	Spidsen på endepunktet
 	Variable Width Profile	Variabel breddeprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Stregens pensel beholder sin egen størrelse, så et breddeprofil ændrer den ikke. Fjern penslen for at bruge et profil.
 	Weight:	Vægt:
 	Art using a deleted global swatch keeps its colour.	Grafik, der bruger en slettet global farveprøve, bevarer sin farve.
 	Color Group: {name}	Farvegruppe: {name}

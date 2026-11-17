@@ -2310,6 +2310,8 @@ digits	Malayalam	Malajálamské
 	Tip extends past the end point	Hrot přesahuje koncový bod
 	Tip on the end point	Hrot na koncovém bodu
 	Variable Width Profile	Profil proměnné šířky
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Štětec tahu si zachovává vlastní velikost, takže ho profil šířky nemění. Chcete-li použít profil, odeberte štětec.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Štětec tahu si zachovává vlastní velikost, takže ho profil šířky nemění. Chcete-li použít profil, odeberte štětec.
 	Weight:	Tloušťka:
 	Art using a deleted global swatch keeps its colour.	Kresba, která používá odstraněnou globální položku vzorníku, si barvu ponechá.
 	Color Group: {name}	Skupina barev: {name}

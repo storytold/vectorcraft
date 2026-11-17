@@ -4107,6 +4107,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	V-avstånd:
 	V:	V:
 	Variable Width Profile	Profil för variabel bredd
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
 	Variables	Variabler
 	New Variable	Ny variabel
 	Delete Variable	Radera variabel

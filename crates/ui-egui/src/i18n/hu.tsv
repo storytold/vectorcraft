@@ -4940,6 +4940,8 @@ mark-style	Japanese	Japán
 	Variable Options	Változó beállításai
 	Variable Options…	Változó beállításai…
 	Variable Width Profile	Változó szélességprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	A körvonal ecsetje megtartja a saját méretét, ezért a szélességprofil nem változtatja meg. Profil használatához távolítsa el az ecsetet.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	A körvonal ecsetje megtartja a saját méretét, ezért a szélességprofil nem változtatja meg. Profil használatához távolítsa el az ecsetet.
 	Variables	Változók
 	Variation	Ingadozás
 	Variation:	Ingadozás:

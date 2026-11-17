@@ -3961,6 +3961,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	V Aralığı:
 	V:	V:
 	Variable Width Profile	Değişken Genişlik Profili
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturun fırçası kendi boyutunu korur, bu yüzden genişlik profili konturu değiştirmez. Profil kullanmak için fırçayı kaldırın.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturun fırçası kendi boyutunu korur, bu yüzden genişlik profili konturu değiştirmez. Profil kullanmak için fırçayı kaldırın.
 	Variables	Değişkenler
 	New Variable	Yeni Değişken
 	Delete Variable	Değişkeni Sil

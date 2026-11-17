@@ -4177,6 +4177,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	Espacement V :
 	V:	V :
 	Variable Width Profile	Profil de largeur variable
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	La forme du contour garde sa propre taille, donc un profil de largeur ne la modifie pas. Supprimez la forme pour utiliser un profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	La forme du contour garde sa propre taille, donc un profil de largeur ne la modifie pas. Supprimez la forme pour utiliser un profil.
 	Variables	Variables
 	New Variable	Nouvelle variable
 	Delete Variable	Supprimer la variable
