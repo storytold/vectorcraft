@@ -207,9 +207,11 @@ impl Importer {
             None => {
                 let base = self.name_of(&sym).to_string();
                 let names = &self.symbol_names;
-                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains(n));
-                self.symbol_names.insert(name.clone());
-                let reuse = Reuse::of(&self.doc, &art);
+                let name = unique_name(&base, &mut self.symbol_suffixes, |n| names.contains_key(n));
+                let doc = &self.doc;
+                let find = |n: &str| names.get(n).and_then(|&i| doc.symbols.get(i)).filter(|s| s.name == n);
+                let reuse = Reuse::of(doc, &find, &art);
+                self.symbol_names.insert(name.clone(), self.doc.symbols.len());
                 let made = SymbolMade { name: name.clone(), art: without_ids(&art), reuse };
                 self.doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.clone(), art: Arc::new(art) });
                 self.symbols.insert(sym, made);
@@ -862,7 +864,7 @@ mod tests {
             hidden: HashSet::new(),
             uses: HashMap::new(),
             symbols: HashMap::new(),
-            symbol_names: HashSet::new(),
+            symbol_names: HashMap::new(),
             symbol_suffixes: HashMap::new(),
             pattern_suffixes: HashMap::new(),
             blends: HashMap::new(),

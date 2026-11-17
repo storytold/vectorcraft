@@ -15,9 +15,21 @@ use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, 
 /// million, 4 bytes each).
 pub(crate) const MAX_DECODED: usize = 256 << 20;
 
+/// Whether this build reads the larger images of [`image_limits`]: a 64-bit build that isn't for
+/// the web.
+pub(crate) const LARGE_IMAGES: bool = cfg!(all(target_pointer_width = "64", not(target_family = "wasm")));
+
+/// The most bytes one image XObject may decode to and the most pixels it may have, for a build
+/// that reads `large` images: 4 GiB and 2^30 pixels (31404 × 31403 pixels are 2.76 GiB in RGB and
+/// 3.67 GiB in CMYK), otherwise 1 GiB and 2^28 pixels (an A0 sheet scanned at 300 ppi is 399 MiB
+/// in RGB and 532 MiB in CMYK). The shared reader takes the same two figures ([`crate::pages::open_options`]).
+pub(crate) const fn image_limits(large: bool) -> (u64, u64) {
+    if large { (1 << 32, 1 << 30) } else { (1 << 30, 1 << 28) }
+}
+
 /// The most an image XObject may decode to when its own size asks for more than
-/// [`MAX_DECODED`]: 1 GB (an A0 sheet scanned at 300 ppi is 418 MB in RGB, 557 MB in CMYK).
-const MAX_IMAGE_DECODED: usize = 1 << 30;
+/// [`MAX_DECODED`]: the bytes of [`image_limits`] for this build.
+const MAX_IMAGE_DECODED: usize = image_limits(LARGE_IMAGES).0 as usize;
 
 /// The longest row a predictor may have, in bytes.
 const MAX_ROW: usize = 1 << 24;
@@ -779,31 +791,42 @@ mod tests {
 
     /// A one-page PDF drawing one flat 8-bit DeviceRGB image of `w` × `h` pixels, Flate-compressed.
     fn one_image_pdf(w: usize, h: usize) -> Vec<u8> {
+        image_pdf(&format!("/Width {w} /Height {h} /ColorSpace /DeviceRGB"), &flat(&[200, 180, 150].repeat(w), h), None)
+    }
+
+    /// `row` repeated `h` times, Flate-compressed as it is written.
+    fn flat(row: &[u8], h: usize) -> Vec<u8> {
         let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
-        let row: Vec<u8> = [200, 180, 150].repeat(w);
         for _ in 0..h {
-            std::io::Write::write_all(&mut e, &row).unwrap();
+            std::io::Write::write_all(&mut e, row).unwrap();
         }
-        let image = e.finish().unwrap();
+        e.finish().unwrap()
+    }
+
+    /// A one-page PDF drawing one 8-bit image with the size and color space of `keys` and the
+    /// Flate-compressed samples `data`; with `smask`, a soft mask with those keys and data.
+    fn image_pdf(keys: &str, data: &[u8], smask: Option<(&str, &[u8])>) -> Vec<u8> {
+        let stream = |keys: &str, data: &[u8]| {
+            let dict =
+                format!("<< /Type /XObject /Subtype /Image {keys} /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n", data.len());
+            [dict.as_bytes(), data, b"\nendstream"].concat()
+        };
         let content = b"q 595 0 0 842 0 0 cm /Im0 Do Q";
         let mut out = b"%PDF-1.6\n".to_vec();
         let mut offsets = vec![];
-        let objects: Vec<Vec<u8>> = vec![
+        let mut objects: Vec<Vec<u8>> = vec![
             b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
             b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
             b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
             [format!("<< /Length {} >>\nstream\n", content.len()).as_bytes(), content, b"\nendstream"].concat(),
-            [
-                format!(
-                    "<< /Type /XObject /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n",
-                    image.len()
-                )
-                .as_bytes(),
-                &image,
-                b"\nendstream",
-            ]
-            .concat(),
         ];
+        match smask {
+            Some((mask_keys, mask_data)) => {
+                objects.push(stream(&format!("{keys} /SMask 6 0 R"), data));
+                objects.push(stream(mask_keys, mask_data));
+            }
+            None => objects.push(stream(keys, data)),
+        }
         for (i, o) in objects.iter().enumerate() {
             offsets.push(out.len());
             out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
@@ -826,6 +849,65 @@ mod tests {
         let info = crate::info(&pdf, None);
         assert!(info.is_ok(), "{:?}", info.err());
         assert_eq!(info.map(|i| i.pages.len()).unwrap(), 1);
+    }
+
+    #[test]
+    fn a_64_bit_desktop_build_reads_larger_images_and_others_keep_their_limits() {
+        assert_eq!(image_limits(false), (1 << 30, 1 << 28));
+        assert_eq!(image_limits(true), (1 << 32, 1 << 30));
+        let (bytes, pixels) = image_limits(LARGE_IMAGES);
+        assert_eq!(MAX_IMAGE_DECODED as u64, bytes);
+        let limits = crate::pages::open_options().decode_limits;
+        assert_eq!((limits.max_decoded_image(), limits.max_image_pixels()), (bytes, pixels));
+        // An image declaring more is held to this build's limit, which a refusal of it names.
+        let d = dict("<< /Subtype /Image /Width 70000 /Height 70000 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode >>");
+        assert_eq!(budget(&d), MAX_IMAGE_DECODED);
+        let most = if LARGE_IMAGES { "4 GB" } else { "1 GB" };
+        assert_eq!(crate::pages::decoded_size(MAX_IMAGE_DECODED), most);
+    }
+
+    /// The only image of `doc`, as stored: its width, height and channel layout.
+    fn stored_image(doc: &vectorcraft_doc::Document) -> (u32, u32, image::ExtendedColorType) {
+        use image::ImageDecoder as _;
+        let blobs: Vec<_> = doc.images.values().collect();
+        let [blob] = blobs[..] else { panic!("one image expected, found {}", blobs.len()) };
+        let decoder = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().unwrap().into_decoder().unwrap();
+        let (w, h) = decoder.dimensions();
+        (w, h, decoder.original_color_type())
+    }
+
+    #[test]
+    fn an_image_past_1_gb_and_2_to_the_28_pixels_opens_on_a_64_bit_desktop_build() {
+        if !LARGE_IMAGES {
+            return;
+        }
+        // 18919 × 18919 RGB pixels: 358 million pixels, 1.07 GB decoded (#4366).
+        let side = 18919;
+        let doc = crate::import(&one_image_pdf(side, side)).unwrap();
+        // Opaque: stored as RGB, without an alpha channel.
+        assert_eq!(stored_image(&doc), (side as u32, side as u32, image::ExtendedColorType::Rgb8));
+    }
+
+    #[test]
+    fn opaque_images_are_stored_without_an_alpha_channel_and_masked_ones_with_one() {
+        let rgb = image_pdf("/Width 4 /Height 2 /ColorSpace /DeviceRGB", &flat(&[200, 180, 150].repeat(4), 2), None);
+        assert_eq!(stored_image(&crate::import(&rgb).unwrap()), (4, 2, image::ExtendedColorType::Rgb8));
+        let gray = image_pdf("/Width 4 /Height 2 /ColorSpace /DeviceGray", &flat(&[120; 4], 2), None);
+        assert_eq!(stored_image(&crate::import(&gray).unwrap()), (4, 2, image::ExtendedColorType::Rgb8));
+        let mask = ("/Width 4 /Height 2 /ColorSpace /DeviceGray", &flat(&[0, 85, 170, 255], 2)[..]);
+        let masked = image_pdf("/Width 4 /Height 2 /ColorSpace /DeviceRGB", &flat(&[200, 180, 150].repeat(4), 2), Some(mask));
+        assert_eq!(stored_image(&crate::import(&masked).unwrap()), (4, 2, image::ExtendedColorType::Rgba8));
+    }
+
+    #[test]
+    fn an_image_of_more_pixels_than_the_limit_is_left_out_with_a_warning() {
+        let (_, pixels) = image_limits(LARGE_IMAGES);
+        // One more row than a square of the limit's pixels; its data isn't looked at.
+        let side = 1u64 << (pixels.ilog2() / 2);
+        let pdf = image_pdf(&format!("/Width {side} /Height {} /ColorSpace /DeviceGray", side + 1), &flat(&[0; 16], 1), None);
+        let report = crate::import_with_report(&pdf, &crate::ImportOptions::default()).unwrap();
+        assert!(report.document.images.is_empty());
+        assert!(report.warnings.iter().any(|w| w.contains("an image could not be decoded and was skipped")), "{:?}", report.warnings);
     }
 
     #[test]
