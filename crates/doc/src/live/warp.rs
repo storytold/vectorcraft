@@ -508,8 +508,8 @@ pub fn map_smooth_within(path: &PathData, max_piece: f64, max: usize, f: impl Fn
     map_pieces_within(path, max_piece, max, &f, |p, h| mapped_handle(&f, p, h))
 }
 
-/// Handle `h` of point `p` mapped through `f`: `f(p)` plus `f`'s derivative at `p` along `h - p`
-/// (a central difference), so the image curve leaves `f(p)` the way `f` takes the curve.
+/// The mapped handle uses `f`'s derivative at `p` toward `h`, computed with a second-order
+/// one-sided difference.
 fn mapped_handle(f: &impl Fn(Point) -> Point, p: Point, h: Point) -> Point {
     let v = h - p;
     let len = v.hypot();
@@ -517,13 +517,23 @@ fn mapped_handle(f: &impl Fn(Point) -> Point, p: Point, h: Point) -> Point {
     if len.is_nan() || len <= 0.0 || len.is_infinite() {
         return f(p);
     }
-    // A thousandth of the handle, or more where the coordinates are so large that so short a
-    // step would round away (#7069): the samples stay a billionth of the coordinates apart, and
-    // at most at the handle's own end.
+    // The step grows with the coordinates when a thousandth of the handle would round away.
+    // Both samples lie between the anchor and the handle.
     let size = p.x.abs().max(p.y.abs()).max(1.0);
     let step = (1e-3f64).max(size * 1e-9 / len).min(1.0);
-    let d = (f(p + v * step) - f(p - v * step)) / (2.0 * step);
-    f(p) + d
+    let at = f(p);
+    let midpoint = p + v * (step * 0.5);
+    let sample = p + v * step;
+    let far = f(sample) - at;
+    let near_offset = midpoint - p;
+    let far_offset = sample - p;
+    let uneven = (near_offset * 2.0 - far_offset).hypot() > far_offset.hypot() * 1e-6;
+    // The second-order formula requires evenly spaced samples.
+    if midpoint == p || midpoint == sample || uneven {
+        return at + far / step;
+    }
+    let near = f(midpoint) - at;
+    at + (near * 4.0 - far) / step
 }
 
 /// [`map_nonlinear_within`]'s pieces, with `handle(point, handle)` giving each mapped handle.
@@ -612,4 +622,20 @@ pub(super) fn resample(poly: &[Point], m: usize) -> Vec<Point> {
         out.push(poly[i].lerp(poly[i + 1], ((s - cum[i]) / seg).clamp(0.0, 1.0)));
     }
     out
+}
+
+#[cfg(test)]
+mod handle_tests {
+    use super::*;
+
+    #[test]
+    fn a_midpoint_rounded_to_an_endpoint_keeps_the_handle_direction() {
+        for x in [1e16, 1e16 + 2.0, -1e16] {
+            for offset in [-6.0, -2.0, 2.0, 6.0] {
+                let p = Point::new(x, 0.0);
+                let h = Point::new(x + offset, 0.0);
+                assert_eq!(mapped_handle(&|point| point, p, h), h);
+            }
+        }
+    }
 }

@@ -809,6 +809,9 @@ stroke instead of the whole object: `run_command effect.apply {"effect": "path.o
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
 `apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.
 
+`distort.twist` keeps anchors on its outer circle fixed. Their handles follow the tangent of the
+rotation inside that circle, including for positive and negative angles.
+
 On a path directly inside a graph series, `appearance.setItem`, `appearance.addFill`, `appearance.addStroke`,
 `appearance.removeItem`, `appearance.moveItem`, `appearance.duplicateItem`, `appearance.clear`,
 `appearance.reduceToBasic`, `appearance.showAllHidden`, `appearance.transfer`, `appearance.copyFrom`, `paint.default`,

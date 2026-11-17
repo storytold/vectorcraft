@@ -1709,6 +1709,28 @@ fn twist_joins_its_pieces_smoothly() {
 }
 
 #[test]
+fn twist_boundary_handles_follow_the_inward_tangent() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(40.0, 30.0), Point::new(60.0, 30.0)], false));
+    let bounds = Rect::new(40.0, 30.0, 60.0, 30.0);
+    for angle in [90.0_f64, 400.0, -720.0] {
+        let out = apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &line, bounds);
+        let anchors = &out.subpaths[0].anchors;
+        let start = anchors.first().unwrap();
+        let end = anchors.last().unwrap();
+        assert_eq!(start.p, Point::new(40.0, 30.0));
+        assert_eq!(end.p, Point::new(60.0, 30.0));
+        for (actual, expected) in [
+            (start.h_out - start.p, vectorcraft_geom::Vec2::new(1.0, -angle.to_radians())),
+            (end.h_in - end.p, vectorcraft_geom::Vec2::new(-1.0, angle.to_radians())),
+        ] {
+            assert!(actual.hypot() > 1e-9);
+            let error = (actual.x * expected.y - actual.y * expected.x).atan2(actual.dot(expected)).to_degrees().abs();
+            assert!(error < 0.05, "{angle} degrees: boundary tangent differs by {error} degrees");
+        }
+    }
+}
+
+#[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
     assert_eq!(out, square());

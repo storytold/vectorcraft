@@ -588,6 +588,8 @@ since 2026-10-01.
 
 ## Evidence: what ships today, by area
 
+- Twist keeps boundary handles tangent to the rotation inside its outer circle. Regressions cover 90, 400, and -720 degree twists, unchanged boundary anchors, and a sampling midpoint that rounds to an endpoint at large coordinates (`twist_boundary_handles_follow_the_inward_tangent` and `a_midpoint_rounded_to_an_endpoint_keeps_the_handle_direction`).
+
 - **Recolor picker follow-up (#8031/#4028):** native Lab numeric entry, document/loaded-library swatches in the Color Picker, and Assign-row Pick from Swatches / Limit to Library menus. #4090 provided the double-click picker and #5113 the Assign sliders. Regression tests `native_lab_entry_in_color_picker` and `row_context_menu_pick_from_swatches_and_limit_to_library` exercise the fields and menu callbacks rather than writing their result state. Area score and hours unchanged.
 
 - **Save refusal (#6146):** ordinary File > Save to its own location offers Save As after a terminal permission/read-only refusal, suggesting the original name and format, preserving options for the unchanged format and opening the chosen format’s Save options on a change. Cancel keeps the failed-save state. Busy pickers, recovery-copy errors, other failures, explicit destinations and Close/Quit keep the existing dialog. Engine, UI and MCP regression cases are in `cmd/fileio/tests_readonly.rs`, `io/tests_read_only_save.rs` and MCP `tests/fileio.rs`; focused UI regressions passed; engine regression execution and native panel acceptance pending. Scores and hours unchanged.
