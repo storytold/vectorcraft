@@ -8031,6 +8031,11 @@ breakText	Glyphs	Glyfy
 @msg	Some islands could not be joined to the area around the art	Některé ostrůvky nebylo možné připojit k oblasti kolem kresby
 @msg	`width` must be from {lo} to {hi} pt	`width` musí být od {lo} do {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle` musí být od -180 do 180 stupňů
+@msg	`roundness` must be from 0 to 100%	`roundness` musí být od 0 do 100 %
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` musí být od 0.01 do 100 pt
+@msg	style must be "pencil" or "brush"	style musí být "pencil" nebo "brush"
+@msg	extend end must be "start" or "end"	konec extend musí být "start" nebo "end"
+@msg	connect end must be "start" or "end"	konec connect musí být "start" nebo "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` musí být od 1 do 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` musí být celé číslo od 1 do {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Rámeček a linie pro vybírání…
@@ -8552,7 +8557,6 @@ breakText	Glyphs	Glyfy
 @msg	anchor `smooth` must be true or false	`smooth` kotevního bodu musí být true nebo false
 @msg	anchor `{key}` must be [x, y]	`{key}` kotevního bodu musí být [x, y]
 @msg	anchor `{key}` must be a number	`{key}` kotevního bodu musí být číslo
-@msg	angle and roundness must be finite	úhel a zaoblení musí být konečné
 @msg	angles must be a list as long as pins (degrees or null)	angles musí být seznam stejně dlouhý jako pins (stupně nebo null)
 @msg	appearance must be flat|center|edge	appearance musí být flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply je "fill" nebo "stroke", ne `{other}`
