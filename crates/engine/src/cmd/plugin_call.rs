@@ -67,6 +67,7 @@ const DENIED_PREFIXES: &[&str] = &[
     "artboard.copy",
     "artboard.cut",
     "text.rescanFonts",
+    "text.addFonts",
     "text.fontList",
     "text.spelling.",
     "colorTheme.",

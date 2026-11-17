@@ -22,6 +22,14 @@ pub(super) fn instanced(face: &FontFace, variations: Vec<Variation>, id: u32) ->
     Some(f)
 }
 
+/// `face` with no file, as a face added as bytes has: the same bytes, names, settings, weight and id.
+pub(super) fn without_file(face: &FontFace) -> Option<FontFace> {
+    let mut f = instanced(face, face.variations.clone(), face.id)?;
+    f.weight = face.weight;
+    f.path = None;
+    Some(f)
+}
+
 pub(super) fn make_face(bytes: FontBytes, index: u32, spec: FaceStyle, path: Option<std::path::PathBuf>) -> Option<FontFace> {
     let data: &[u8] = match &bytes {
         FontBytes::Static(b) => b,

@@ -134,6 +134,7 @@ pub fn refused_to_scripts(id: &str) -> bool {
     ];
     const IDS: &[&str] = &[
         "text.addFontFiles",
+        "text.addFonts",
         "text.findFontFiles",
         "text.rescanFonts",
         "links.findFiles",

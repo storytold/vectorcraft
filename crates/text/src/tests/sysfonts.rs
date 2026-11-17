@@ -322,6 +322,32 @@ fn installed_fonts_are_recently_added_by_their_files_creation_time() {
     assert_eq!(db.recently_added(now), RecentlyAdded::default(), "removed fonts leave the list");
 }
 
+/// A font added as bytes for the session that is loaded already from an installed file is the
+/// session's from then on: it stays, under its id, when the file is removed and the fonts are
+/// scanned again, as fonts added as bytes last until the app quits (`text.addFonts`).
+#[test]
+fn a_font_added_as_bytes_that_is_installed_too_stays_when_its_file_is_removed() {
+    let dir = font_dir("session");
+    let regular = dir.join("Sysfont-Regular.ttf");
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    let (face, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((face.family.as_str(), m), (FAMILY, FontMatch::Exact));
+    assert!(face.path().is_some(), "loaded from the installed file");
+    let glyph = face.glyph_for('A');
+    let outline = db.outline(&face, glyph);
+
+    assert!(db.add_font_files(vec![std::fs::read(&regular).unwrap()]).is_empty(), "loaded already: not added again");
+    assert!(db.face_by_id(face.id()).unwrap().path().is_none(), "the session's now");
+
+    std::fs::remove_file(&regular).unwrap();
+    assert_eq!(db.load_system_fonts(), 1, "Bold is still installed");
+    let (kept, m) = db.resolve(FAMILY, "Regular").unwrap();
+    assert_eq!((kept.family.as_str(), kept.style.as_str(), m), (FAMILY, "Regular", FontMatch::Exact));
+    assert_eq!(kept.id(), face.id());
+    assert!(std::ptr::eq(kept.file_data(), face.file_data()), "the bytes loaded from the file, not the session's copy");
+    assert!(Arc::ptr_eq(&db.outline(&kept, glyph), &outline), "its cached outlines stay");
+}
+
 #[test]
 fn a_background_scan_serves_the_first_lookup() {
     let dir = font_dir("background");

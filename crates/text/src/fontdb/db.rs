@@ -1,4 +1,4 @@
-use super::build::make_face;
+use super::build::{make_face, without_file};
 #[cfg(not(target_arch = "wasm32"))]
 use super::build::{style_italic, style_weight};
 #[cfg(not(target_arch = "wasm32"))]
@@ -276,6 +276,21 @@ impl FontDb {
         self.add_font_from(bytes, None)
     }
 
+    /// Add user fonts (the bytes of TTF, OTF, TTC or OTC files) as [`FontDb::add_font`] adds one,
+    /// all of them at once → the faces added, as (family, style), in the order the files hold them.
+    /// A face already loaded (the same family, style and version) is not added again; one loaded
+    /// from an installed file is the session's from then on, so it stays when that file is removed.
+    pub fn add_font_files(&self, files: Vec<Vec<u8>>) -> Vec<(String, String)> {
+        self.add_faces(files.into_iter().map(|bytes| (bytes, None)))
+    }
+
+    /// The faces the font file `data` holds, as (family, style): those [`FontDb::add_font`] adds
+    /// unless they are loaded already. None when `data` is no TrueType or OpenType font or
+    /// collection.
+    pub fn faces_in(data: &[u8]) -> Vec<(String, String)> {
+        enumerate_faces(data).into_iter().map(|(_, face)| (face.family, face.style)).collect()
+    }
+
     /// [`FontDb::add_font`] for the bytes of the file at `path` (when known).
     pub(super) fn add_font_from(&self, bytes: Vec<u8>, path: Option<&Path>) -> usize {
         self.add_fonts([(bytes, path.map(Path::to_path_buf))])
@@ -286,18 +301,29 @@ impl FontDb {
     /// loaded, whose nearest style it would take instead (Arial Bold Italic, the first of Arial's
     /// files, for upright Regular text). Returns the number of faces added.
     pub(super) fn add_fonts(&self, files: impl IntoIterator<Item = (Vec<u8>, Option<PathBuf>)>) -> usize {
+        self.add_faces(files).len()
+    }
+
+    /// [`FontDb::add_fonts`] → the faces added, as (family, style).
+    fn add_faces(&self, files: impl IntoIterator<Item = (Vec<u8>, Option<PathBuf>)>) -> Vec<(String, String)> {
         // Another version of a family and style is kept: a document may name it (the first one
         // loaded stays the one the family and style alone resolve to).
         let same = |f: &FontFace, family: &str, style: &str, version: &str| {
             f.family.eq_ignore_ascii_case(family) && f.style.eq_ignore_ascii_case(style) && f.version == version
         };
         let mut made: Vec<FontFace> = Vec::new();
+        let mut held = Vec::new();
         for (bytes, path) in files {
             let data = Arc::new(bytes);
             for (i, spec) in enumerate_faces(&data) {
                 let version = skrifa::FontRef::from_index(&data, i).ok().and_then(|f| name(&f, &[StringId::VERSION_STRING])).unwrap_or_default();
                 let present = |f: &FontFace| same(f, &spec.family, &spec.style, &version);
                 if self.read_faces().iter().any(|f| present(f)) || made.iter().any(present) {
+                    // The session's bytes (no file) for a face loaded from an installed file make
+                    // that face the session's (below).
+                    if path.is_none() {
+                        held.push((spec.family.clone(), spec.style.clone(), version.clone()));
+                    }
                     continue;
                 }
                 if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, spec, path.clone()) {
@@ -306,18 +332,28 @@ impl FontDb {
             }
         }
         let mut faces = self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = faces.len();
+        let mut added = Vec::new();
         for f in made {
             // Another thread may have added the same face meanwhile.
             if !faces.iter().any(|g| same(g, &f.family, &f.style, &f.version)) {
+                added.push((f.family.clone(), f.style.clone()));
                 faces.push(Arc::new(f));
             }
         }
-        let added = faces.len() - before;
+        // A face loaded from an installed file that the session gave bytes for is the session's
+        // now: the same face, with its bytes, id and cached outlines, but no file, so a rescan
+        // after the file is removed keeps it. The session's bytes are not used.
+        for (family, style, version) in &held {
+            if let Some(at) = faces.iter().position(|g| g.path.is_some() && same(g, family, style, version))
+                && let Some(g) = without_file(&faces[at])
+            {
+                faces[at] = Arc::new(g);
+            }
+        }
         drop(faces);
         #[cfg(test)]
         faces_published();
-        if added > 0 {
+        if !added.is_empty() {
             self.changed();
         }
         added
