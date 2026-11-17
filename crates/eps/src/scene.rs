@@ -1226,7 +1226,7 @@ impl<'a> Scene<'a> {
         }
         let space = &space;
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
-        let spans = if g.gradient.kind == GradientKind::Conic { None } else { self.inked_spans(space, &stops) };
+        let spans = if g.gradient.kind == GradientKind::Conic { None } else { self.inked_spans(space, &stops, smooth) };
         match g.gradient.kind {
             GradientKind::Conic => self.conic_steps(&geom, area, space, &stops, &g.gradient),
             GradientKind::Diamond => {
@@ -1299,18 +1299,19 @@ impl<'a> Scene<'a> {
 
     /// Where an overprinting gradient with `stops` in `space` puts ink on a plate
     /// ([`Self::keep_below`]): the spans of its levels outside every stretch between two stops of
-    /// paper white and outside the padding past an end whose stop is paper white, in order, an
-    /// end padding with ink unbounded. `None` when the gradient puts ink everywhere or does not
-    /// overprint on a plate; empty when it puts none down.
-    fn inked_spans(&self, space: &GradientSpace, stops: &[(f64, Vec<f32>)]) -> Option<Vec<(f64, f64)>> {
+    /// paper white and outside the padding past an end painted paper white, in order, an end
+    /// padding with ink unbounded. The padding takes the end stop's color when stepped and the
+    /// end stretch's color when `smooth` ([`Self::shading`]); the two differ when two stops share
+    /// the end's offset. `None` when the gradient puts ink everywhere or does not overprint on a
+    /// plate; empty when it puts none down.
+    fn inked_spans(&self, space: &GradientSpace, stops: &[(f64, Vec<f32>)], smooth: bool) -> Option<Vec<(f64, f64)>> {
         if !self.keep_below {
             return None;
         }
         let stretches: Vec<_> = stops.windows(2).filter(|w| w[1].0 > w[0].0).collect();
         let (first, last) = (stretches.first()?, stretches.last()?);
-        // The padding takes the end stop's color stepped and the end stretch's color smooth.
-        let before = stops.first().is_some_and(|s| space.paper(&s.1)) && space.paper(&first[0].1);
-        let after = stops.last().is_some_and(|s| space.paper(&s.1)) && space.paper(&last[1].1);
+        let (start, end) = if smooth { (&first[0].1, &last[1].1) } else { (&stops.first()?.1, &stops.last()?.1) };
+        let (before, after) = (space.paper(start), space.paper(end));
         let mut blank: Vec<(f64, f64)> = vec![];
         let mut add = |a: f64, b: f64| match blank.last_mut() {
             Some(l) if l.1 >= a => l.1 = l.1.max(b),

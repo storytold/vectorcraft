@@ -156,12 +156,14 @@ fn plate_of(d: &Document, ink: &str, level: Level) -> (Image, Image) {
 }
 
 /// Ink `ink`'s PostScript plate of `art` over a page of 100% `ink` (`under`), checked against the
-/// plate of `art` alone: where `art` puts none of the ink down, the ink under it prints, and
-/// where it puts ink down, its own amount prints. The pixels of the page where `art` alone puts
-/// no ink, those of them where the ink under it does not print, and the pixels where `art` puts
-/// ink down that do not print its amount.
-fn keeps_the_ink_below(art: &[Node], under: &Paint, ink: &str, level: Level) -> (usize, usize, usize) {
-    let (alone, _) = plate_of(&over(None, art), ink, level);
+/// plate of `art` alone (drawn from the print plan, or with `postscript` from its PostScript
+/// plate): where `art` puts none of the ink down, the ink under it prints, and where it puts ink
+/// down, its own amount prints. The pixels of the page where `art` alone puts no ink, those of
+/// them where the ink under it does not print, and the pixels where `art` puts ink down that do
+/// not print its amount.
+fn keeps_the_ink_below(art: &[Node], under: &Paint, ink: &str, level: Level, postscript: bool) -> (usize, usize, usize) {
+    let (plan, own) = plate_of(&over(None, art), ink, level);
+    let alone = if postscript { own } else { plan };
     let (_, printed) = plate_of(&over(Some(under.clone()), art), ink, level);
     // Pixels whose neighbors all have paper (or all have ink) on the plate of `art` alone: an
     // edge falls on either side of a pixel's center, and the edge of the inked part is lightest.
@@ -232,13 +234,48 @@ fn an_overprinting_gradient_keeps_the_ink_below_where_it_puts_none_on_a_postscri
     assert_keeps_the_ink_below(&cases);
 }
 
+#[test]
+fn an_overprinting_gradient_with_a_hard_stop_at_an_end_keeps_the_ink_below_on_a_postscript_plate() {
+    // Two stops at an end, one with cyan and one without: Level 2's bands pad with the end stop,
+    // Level 3's shading with the stretch next to it, so each level is checked against its own
+    // plate of the gradient alone.
+    let (inked, none) = (Color::cmyk(0.6, 0.3, 0.0, 0.0), Color::cmyk(0.0, 0.3, 0.0, 0.0));
+    let ends = [
+        ("none then cyan at 0", [(0.0, none), (0.0, inked), (1.0, inked)]),
+        ("cyan then none at 1", [(0.0, inked), (1.0, inked), (1.0, none)]),
+        ("cyan then none at 0", [(0.0, inked), (0.0, none), (1.0, none)]),
+        ("none then cyan at 1", [(0.0, none), (1.0, none), (1.0, inked)]),
+    ];
+    let c = Point::new(100.0, 50.0);
+    let around = GradientGeom { start: c, end: c + Vec2::new(50.0, -10.0), aspect: 0.7, focal: None };
+    let across = GradientGeom { start: Point::new(40.0, 40.0), end: Point::new(160.0, 60.0), aspect: 1.0, focal: None };
+    let pad = GradientSpread::Pad;
+    let cyan = Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0));
+    let shapes = [(GradientKind::Linear, across, "linear"), (GradientKind::Radial, around, "radial"), (GradientKind::Diamond, around, "diamond")];
+    let mut cases = vec![];
+    for (name, stops) in &ends {
+        for (kind, geom, shape) in shapes {
+            let fill = gradient(kind, stops, geom, pad);
+            cases.push((format!("{shape}, {name}"), overprinting(fill, Paint::None), cyan.clone(), "Cyan"));
+        }
+    }
+    let cases: Vec<_> = cases.iter().map(|(name, art, under, ink)| (name.as_str(), art.clone(), under.clone(), *ink)).collect();
+    assert_keeps_the_ink_below_of(&cases, true);
+}
+
 /// [`keeps_the_ink_below`] for each of `cases` (a name, the art, the paint under it and the ink
 /// of the plate) at Level 3 and Level 2, with every case that fails named.
 fn assert_keeps_the_ink_below(cases: &[(&str, Node, Paint, &str)]) {
+    assert_keeps_the_ink_below_of(cases, false);
+}
+
+/// [`assert_keeps_the_ink_below`], checked against the PostScript plate of each case's art alone
+/// with `postscript`.
+fn assert_keeps_the_ink_below_of(cases: &[(&str, Node, Paint, &str)], postscript: bool) {
     let mut failed = vec![];
     for (name, art, under, ink) in cases {
         for level in [Level::Three, Level::Two] {
-            let (paper, knocked_out, wrong) = keeps_the_ink_below(std::slice::from_ref(art), under, ink, level);
+            let (paper, knocked_out, wrong) = keeps_the_ink_below(std::slice::from_ref(art), under, ink, level, postscript);
             if knocked_out + wrong >= 100 {
                 failed.push(format!("{name} at level {level:?}: {knocked_out} of {paper} knocked out, {wrong} of the others differ"));
             }
