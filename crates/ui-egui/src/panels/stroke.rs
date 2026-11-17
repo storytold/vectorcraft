@@ -537,7 +537,7 @@ pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, shown: Option<
     let sense = if uniform { Sense::hover() } else { Sense::click() };
     let (r, resp) = ui.allocate_exact_size(vec2(PROFILE_DROPDOWN_WIDTH, 24.0), sense);
     ui.painter().rect_filled(r, 2, t.input);
-    let border = if resp.hovered() && !keeps_size { t.text } else { t.input_border };
+    let border = if resp.hovered() && !uniform { t.text } else { t.input_border };
     ui.painter().rect_stroke(r, 2, Stroke::new(1.0, border), StrokeKind::Inside);
     let body = Rect::from_min_max(r.min + vec2(6.0, 5.0), pos2(r.right() - 20.0, r.bottom() - 5.0));
     let (shape, icon) = if keeps_size { (t.text_disabled, t.text_disabled) } else { (t.text_strong, t.icon) };

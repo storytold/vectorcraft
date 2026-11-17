@@ -443,8 +443,9 @@ impl Session {
     ///
     /// The art of graph designs is left out, and so are images and symbol instances without an
     /// active row. The result is also `None` with nothing selected, with an object inside a symbol
-    /// instance selected, with type among the targets, and with a target that has no stroke row,
-    /// since `stroke.set` gives such a target a plain stroke.
+    /// instance selected, with type among the targets while no Appearance row is active for it,
+    /// and with a target that has no stroke row, since `stroke.set` gives such a target a plain
+    /// stroke.
     pub fn brushed_strokes_profiled(&self) -> Option<bool> {
         const C: &str = "stroke.set";
         let st = self.active()?;

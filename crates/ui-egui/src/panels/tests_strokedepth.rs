@@ -281,6 +281,14 @@ fn mixed_selection_dims_the_dropdown_only_when_every_stroke_has_a_brush() {
     assert_eq!(listed(&ctx, &mut app).len(), WidthProfile::PRESETS.len());
 }
 
+/// The dimmed dropdown's hover text is the Width tool's status message, word for word, so the two
+/// share their catalog rows.
+#[test]
+fn the_hover_text_is_the_width_tools_status_message() {
+    let literal = format!("tl!(\"{}\")", vectorcraft_tools::distort::KEEPS_SIZE);
+    assert!(include_str!("stroke.rs").contains(&literal), "panels/stroke.rs has no {literal}");
+}
+
 #[test]
 fn every_arrowhead_preview_draws_its_head() {
     use vectorcraft_doc::Arrowhead;

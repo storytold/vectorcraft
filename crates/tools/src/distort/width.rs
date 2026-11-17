@@ -21,10 +21,10 @@
 //! drag does: add a width point on a stroke, or move or widen the one under it.
 //!
 //! A stroke drawn with a brush is left alone, as a width profile does not change it: a press or a
-//! double-click on it, and Delete/Backspace with its width points selected, send no command and
-//! show why in the status bar ([`KEEPS_SIZE`]). A press or double-click on it deselects the
-//! width points, the cursor over it offers no edit, and its width points selected before it took
-//! the brush show no handles.
+//! double-click on it sends no command and shows why in the status bar ([`KEEPS_SIZE`]). Without
+//! Shift, the press or double-click deselects the width points, and the cursor over it offers no
+//! edit. Its width points selected before it took the brush show no handles, and Delete,
+//! Backspace and Escape do what they do with no width points selected.
 
 use std::cell::Cell;
 use std::sync::Arc;
@@ -469,11 +469,12 @@ impl Tool for WidthTool {
     }
     /// Delete/Backspace remove the selected width points and Escape deselects them; with none
     /// selected the keys do what they do with other tools (Clear deletes the selected objects, and
-    /// Escape leaves isolation mode, for one).
+    /// Escape leaves isolation mode, for one). Width points of a brushed stroke, which show no
+    /// handles, count as none selected.
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
         matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Escape)
             && self.drag.is_none()
-            && self.selected.as_ref().is_some_and(|(id, _)| !self.selected_indices(cx, *id).is_empty())
+            && self.selected.as_ref().is_some_and(|(id, _)| !self.selected_indices(cx, *id).is_empty() && !self.keeps_size(cx, *id))
     }
     /// A dropped press ends the drag, and the width points selected when the button went down are
     /// selected again.
@@ -497,7 +498,7 @@ impl Tool for WidthTool {
         }
         self.selected = None;
         if self.keeps_size(cx, id) {
-            return vec![Action::Status(KEEPS_SIZE.into())];
+            return vec![];
         }
         vec![Action::Exec("stroke.widthPoint.remove".into(), json!({"id": id.0, "indices": indices}))]
     }
@@ -694,7 +695,8 @@ mod tests {
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 201.0)), vec![Action::Status(KEEPS_SIZE.into())]);
     }
 
-    /// Width points selected before the stroke took a brush: Delete removes none and says why.
+    /// Width points selected before the stroke took a brush show no handles and count as none
+    /// selected: the tool leaves Delete and Escape to the app, and removes none.
     #[test]
     fn delete_leaves_the_width_points_of_a_brushed_stroke() {
         let (mut d, id) = doc_line();
@@ -710,7 +712,10 @@ mod tests {
         d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
         let c = ToolContext { revision: (0, 1), ..cx(&d, &s, &p) };
         assert!(t.overlays(&c).is_empty(), "no handles show on a stroke the tool no longer edits");
-        assert_eq!(t.key(&c, ToolKey::Delete, Mods::default()), vec![Action::Status(KEEPS_SIZE.into())]);
+        for key in [ToolKey::Delete, ToolKey::Backspace, ToolKey::Escape] {
+            assert!(!t.claims_key(&c, key), "{key:?} is the app's");
+        }
+        assert_eq!(t.key(&c, ToolKey::Delete, Mods::default()), vec![]);
         assert!(t.selected.is_none());
     }
 
