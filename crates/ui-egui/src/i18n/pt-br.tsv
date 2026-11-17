@@ -8101,6 +8101,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	Some islands could not be joined to the area around the art	Algumas ilhas não puderam ser unidas à área ao redor da arte
 @msg	`width` must be from {lo} to {hi} pt	`width` deve estar entre {lo} e {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle` deve estar entre -180 e 180 graus
+@msg	`roundness` must be from 0 to 100%	`roundness` deve estar entre 0 e 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` deve estar entre 0.01 e 100 pt
+@msg	style must be "pencil" or "brush"	style deve ser "pencil" ou "brush"
+@msg	extend end must be "start" or "end"	a extremidade de extend deve ser "start" ou "end"
+@msg	connect end must be "start" or "end"	a extremidade de connect deve ser "start" ou "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` deve estar entre 1 e 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve ser um número inteiro de 1 a {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caixa e Linhas de Descasque…
@@ -8614,7 +8619,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	anchor `smooth` must be true or false	`smooth` do ponto de ancoragem deve ser true ou false
 @msg	anchor `{key}` must be [x, y]	`{key}` do ponto de ancoragem deve ser [x, y]
 @msg	anchor `{key}` must be a number	`{key}` do ponto de ancoragem deve ser um número
-@msg	angle and roundness must be finite	angle e roundness devem ser finitos
 @msg	angles must be a list as long as pins (degrees or null)	angles deve ser uma lista do mesmo tamanho que pins (graus ou null)
 @msg	appearance must be flat|center|edge	appearance deve ser flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply é "fill" ou "stroke", não `{other}`
