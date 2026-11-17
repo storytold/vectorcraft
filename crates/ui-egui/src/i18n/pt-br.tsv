@@ -1214,6 +1214,10 @@ antiAlias	Sharp	Nítido
 	Font List	Lista de Fontes
 	Show Similar Fonts	Mostrar Fontes Semelhantes
 	Clear Similar Fonts	Limpar Fontes Semelhantes
+	Fonts used in this document	Fontes usadas neste documento
+	This document uses no available fonts	Este documento não usa nenhuma fonte disponível
+	Recently Added	Adicionadas recentemente
+	Fonts added in the last 30 days	Fontes adicionadas nos últimos 30 dias
 	Font Preview Size	Tamanho da Visualização da Fonte
 	Font Size	Tamanho da Fonte
 	Variable Font	Fonte Variável
@@ -1713,7 +1717,8 @@ antiAlias	Sharp	Nítido
 	Artboard Guides with Cmd/Ctrl + Ruler Drag	Guias de Prancheta com Cmd/Ctrl + Arrastar da Régua
 	Lock Slices	Bloquear Fatias
 	Lock Station Point	Bloquear Ponto de Estação
-	Lossless (lossy WebP isn't available yet)	Sem Perdas (WebP com perdas ainda não está disponível)
+	Lossless	Sem Perdas
+	Lossy	Com Perdas
 	Lossy:	Com Perdas:
 	Luminosity	Luminosidade
 	Magic Wand	Varinha Mágica
@@ -2757,6 +2762,7 @@ digits	Malayalam	Malaiala
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Recent Commands	Comandos recentes
 	No recent commands	Nenhum comando recente
+	Search commands	Pesquisar comandos
 	Secondary	Secundária
 	Section Symbol	Símbolo de Seção
 	Select	Selecionar
@@ -4221,6 +4227,9 @@ axis	Both	Ambos
 @msg	no active document	nenhum documento ativo
 @msg	no active perspective plane	nenhum plano de perspectiva ativo
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
+@msg	`points` must be three [x, y] pairs of numbers	`points` deve ter três pares de números [x, y]
+@msg	direct-select three anchor points, or give `points`	selecione diretamente três pontos de ancoragem ou informe `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta
 @msg	no artboard {i} (0-based; the document has {_1})	nenhuma prancheta {i} (base 0; o documento tem {_1})
@@ -7046,6 +7055,7 @@ anchor	Points:	Pontos:
 	Open a document to check it for issues.	Abra um documento para verificar se há problemas.
 	Empty Text	Texto Vazio
 	Unpainted Objects	Objetos sem Pintura
+	Empty Text Paths	Caminhos de Texto Vazios
 	Zero-Opacity Objects	Objetos com Opacidade Zero
 	Duplicate Objects	Objetos Duplicados
 	Off-Artboard Art	Arte Fora das Pranchetas
@@ -7362,6 +7372,7 @@ breakText	Glyphs	Glifos
 @msg	Too many Revolve faces for visibility evaluation	Faces de Revolver demais para avaliar a visibilidade
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	O VectorCraft lê no máximo {ASE_MAX_ENTRIES} cores e grupos de um arquivo de intercâmbio de amostras, e esta biblioteca tem {entries}
 @msg	WebP encoding failed: {e}	Falha na codificação WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Falha na codificação WebP: a imagem é grande demais para WebP com perdas: reduza a resolução ou escolha Sem Perdas
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` é smallThumb, mediumThumb, largeThumb, smallList ou largeList

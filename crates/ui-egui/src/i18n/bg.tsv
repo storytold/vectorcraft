@@ -1290,6 +1290,10 @@ font-technology	Variable	Променливи
 	Font List	Списък с шрифтове
 	Show Similar Fonts	Показване на подобни шрифтове
 	Clear Similar Fonts	Изчистване на подобните шрифтове
+	Fonts used in this document	Шрифтове, използвани в този документ
+	This document uses no available fonts	Този документ не използва налични шрифтове
+	Recently Added	Наскоро добавени
+	Fonts added in the last 30 days	Шрифтове, добавени през последните 30 дни
 	Font Preview Size	Размер за преглед на шрифта
 	Font Size	Размер на шрифта
 	Variable Font	Променлив шрифт
@@ -1952,7 +1956,8 @@ font-technology	Variable	Променливи
 	Lock Others	Заключване на другите
 	Lock Slices	Заключване на фрагментите
 	Lock Station Point	Заключване на базовата точка
-	Lossless (lossy WebP isn't available yet)	Без загуба (загубеният WebP все още не е наличен)
+	Lossless	Без загуба
+	Lossy	Със загуба
 	Lossy:	С загуба:
 	Low	Ниско
 	lowercase	малки букви
@@ -3196,6 +3201,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди
 	No recent commands	Няма последни команди
+	Search commands	Търсене на команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
 	Section Symbol	Символ за раздел
@@ -6444,6 +6450,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Отворете документ, за да го проверите за проблеми.
 	Empty Text	Празен текст
 	Unpainted Objects	Обекти без цвят
+	Empty Text Paths	Празни текстови пътища
 	Zero-Opacity Objects	Обекти с нулева непрозрачност
 	Duplicate Objects	Дублирани обекти
 	Off-Artboard Art	Графика извън работните области

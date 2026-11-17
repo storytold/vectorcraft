@@ -80,11 +80,16 @@ pub(super) fn send_to_current_layer(s: &mut Session, _: &Value) -> Result<Value>
     if st.doc.children(Some(layer)).is_some_and(|c| c.iter().rev().filter(art).map(|n| n.id).take(ids.len()).eq(ids.iter().rev().copied())) {
         return ok();
     }
-    s.edit("Send to Current Layer", |d, _| {
+    let placed: Vec<(NodeId, Option<NodeId>)> = ids.iter().map(|i| (*i, st.doc.parent_of(*i))).collect();
+    let left = crate::cmd::intertwine::groups_of(&st.doc, &ids);
+    s.edit("Send to Current Layer", |d, sel| {
         let moved = d.remove_many(&ids)?;
         let ch = d.children_mut(Some(layer))?;
         let at = Node::guide_run_start(ch);
         ch.splice(at..at, moved);
+        // Members sent out of an Intertwine group leave it as ordinary art.
+        crate::cmd::intertwine::settle_members(d, &placed, &left)?;
+        sel.prune(d);
         Ok(())
     })?;
     ok()

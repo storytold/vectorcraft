@@ -468,6 +468,23 @@ fn paint_brush(p: &mut Ink, o: Pos2) {
     }
 }
 
+/// The Knife and the Trim at Crossings Tool: a knife, the blade's point on the hotspot, the white
+/// blade with its straight back and curved edge, then the black handle running up-right.
+fn knife(p: &mut Ink, o: Pos2) {
+    let (d, n) = (vec2(1.0, -1.0).normalized(), vec2(1.0, 1.0).normalized());
+    let at = |u: f32, v: f32| o + u * d + v * n;
+    let blade = vec![at(0.0, 0.0), at(11.0, -2.5), at(11.0, 3.0), at(6.0, 2.8), at(2.5, 1.6)];
+    let handle = vec![at(11.0, -2.0), at(20.0, -1.8), at(21.0, 0.2), at(20.0, 2.2), at(11.0, 2.5)];
+    // Both halos first, so neither covers the other's outline.
+    for part in [&blade, &handle] {
+        p.add(Shape::closed_line(part.clone(), Stroke::new(3.0, HALO)));
+    }
+    for (part, fill) in [(blade, HALO), (handle, INK)] {
+        p.add(Shape::convex_polygon(part.clone(), fill, Stroke::NONE));
+        p.add(Shape::closed_line(part, Stroke::new(1.0, INK)));
+    }
+}
+
 /// Live Paint Selection: the solid arrow with a badge at its lower right saying what a click
 /// selects: a filled square over a face ([`Cursor::LivePaintSelectFace`]), a short line between two
 /// anchor marks over an edge ([`Cursor::LivePaintSelectEdge`]), an x where it selects nothing.
@@ -732,6 +749,7 @@ fn glyph(c: Cursor, p: Pos2) -> Option<Vec<Shape>> {
         Cursor::LivePaintBucket => paint_bucket(ink, p, false),
         Cursor::LivePaintBucketFace => paint_bucket(ink, p, true),
         Cursor::LivePaintBucketEdge => paint_brush(ink, p),
+        Cursor::Knife => knife(ink, p),
         Cursor::LivePaintSelectFace | Cursor::LivePaintSelectEdge | Cursor::LivePaintSelectOutside => live_paint_select(ink, p, c),
         Cursor::Hand => hand(ink, p, false),
         Cursor::HandGrab => hand(ink, p, true),
