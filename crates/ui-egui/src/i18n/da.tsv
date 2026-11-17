@@ -6874,6 +6874,7 @@ font-technology	Variable	Variable
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Recent Commands	Seneste kommandoer
 	No recent commands	Ingen seneste kommandoer
+	Type to search commands, tools, panels and effects	Skriv for at søge i kommandoer, værktøjer, paneler og effekter
 	Dashed Line	Stiplet linje
 	Panel menu	Panelmenu
 	Unembed…	Ophæv integrering…

@@ -655,6 +655,7 @@ type RankKey = (bool, bool, u8, u8, u32, u8, usize, u8, usize);
 /// or starts a word of its label, menu path, description ([`description`]) or id, shares an English
 /// stem form with a word of its label, menu path or description ("rounded corners" for Round
 /// Corners…) or means the same as a word of its label, menu path or description ("remove bg" for
+/// Remove Background…), where a word may also be text in one of its names or ids ("bg mov" for
 /// Remove Background…), or when the query is the initials of a label ("ea" for Export As…). A query
 /// word that is no word, stem form or word start of any result's label, menu path or id also
 /// matches the words of labels and menu paths it is a typo of ([`Index::typos`]).
@@ -684,9 +685,9 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
     let mut indexed: Vec<Vec<u8>> = Vec::with_capacity(tokens.len());
     let mut typos: Vec<Vec<usize>> = Vec::with_capacity(tokens.len());
     let mut meanings: Vec<Vec<usize>> = Vec::with_capacity(tokens.len());
-    // After a word that is nothing in any result and a typo of nothing, a result is found only by
-    // the substring rule or its initials, where a typo grade changes nothing, so the later words are
-    // not compared.
+    // After a word that is nothing in any result, a typo of nothing and text inside no result's names
+    // or ids, a result is found only by its initials, where a typo grade changes nothing, so the later
+    // words are not compared.
     let mut compare = true;
     for (k, t) in tokens.iter().enumerate() {
         // A repeated word is graded once.
@@ -703,7 +704,7 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
         // A word that matches only words of descriptions is still compared with the words of labels
         // and menu paths it may be a typo of.
         let near = if compare && grades.iter().all(|&g| g == NONE || g == DESCRIPTION_WORD) { index.typos(t) } else { vec![] };
-        if near.is_empty() && grades.iter().all(|&g| g == NONE) {
+        if near.is_empty() && grades.iter().all(|&g| g == NONE) && !entries.iter().any(|e| e.haystack.contains(t)) {
             compare = false;
         }
         index.mark_typos(&near, &mut grades);
@@ -740,11 +741,14 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
         };
         for (k, (grades, token)) in indexed.iter().zip(&tokens).enumerate() {
             let mut g = grades.get(i).copied().unwrap_or(NONE);
-            if g == NONE {
-                all_indexed = false;
-            }
             if g > SUBSTRING && e.haystack.contains(token) {
                 g = SUBSTRING;
+            }
+            // A word that is text inside a word of the result counts as matched, so it combines
+            // with words matched through a stem form, a word of the same meaning, a typo or the
+            // description.
+            if g == NONE {
+                all_indexed = false;
             }
             let g = if initials {
                 g.min(LABEL_PREFIX)
@@ -1267,6 +1271,21 @@ mod tests {
         // holds the query word itself.
         let c = synthetic(vec![entry("Zz Color", "tool:zz"), entry("Color", "panel:color"), entry("Zz Colour", "c.three")]);
         assert_eq!(ranked(&c, "colour"), ["c.three", "panel:color", "tool:zz"]);
+    }
+
+    /// A word that is text inside a word of the result combines with a word matched through a word
+    /// of the same meaning, a stem form, a typo or the description, and a word that is text inside
+    /// a word of no result finds nothing.
+    #[test]
+    fn a_word_inside_a_word_combines_with_the_other_matches() {
+        let c = described(vec![entry("Remove Background…", "a.one"), entry("Zz Group", "b.two")], &["{} make the images transparent", ""]);
+        assert_eq!(ranked(&c, "bg remove"), ["a.one"]);
+        assert_eq!(ranked(&c, "background mov"), ["a.one"]);
+        assert_eq!(ranked(&c, "bg mov"), ["a.one"], "a word of the same meaning");
+        assert_eq!(ranked(&c, "removing kgrou"), ["a.one"], "a stem form");
+        assert_eq!(ranked(&c, "transparent kgrou"), ["a.one"], "the description");
+        assert_eq!(ranked(&c, "emov backgruond"), ["a.one"], "a typo after a word inside a word");
+        assert!(ranked(&c, "bg qxq").is_empty());
     }
 
     /// A catalog row adds words in the UI language to a group, and a word that is not a single word
