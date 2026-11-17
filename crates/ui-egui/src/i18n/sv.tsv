@@ -3092,6 +3092,8 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hur nära på skärmen pekaren eller en dragen punkt måste komma teckningen för att de smarta stödlinjerna ska fästa mot den; avståndet är detsamma vid alla zoomnivåer.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fäster änden av ett linjesegment, eller en cirkel ritad från sin mitt, så att den rör en närliggande kurva.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fäster änden av ett linjesegment så att det möter ett närliggande rakt segment i rät vinkel.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Visar varje skivas nummer i en ruta i dess övre vänstra hörn på arbetsytan; när det är avstängt visas skivornas konturer fortfarande.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Färgen på konturerna för användar- och objektskivor och på deras nummerrutor; automatiska skivor använder en blekare nyans av den.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument

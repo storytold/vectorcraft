@@ -4509,6 +4509,8 @@ font-technology	Variable	Varijabilni
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Koliko blizu na ekranu pokazivač ili prevučena tačka mora doći do objekta da bi ga pametne vodilice uhvatile; udaljenost je ista pri svakom zumu.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hvata kraj segmenta linije ili krug nacrtan iz središta tako da dodiruje obližnju krivu.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hvata kraj segmenta linije tako da pod pravim uglom susreće obližnji ravni segment.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Prikazuje broj svakog isječka u okviru u njegovom gornjem lijevom uglu na platnu; kada je isključeno, obrisi isječaka i dalje se prikazuju.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Boja obrisa korisničkih i objektnih isječaka i okvira s njihovim brojevima; automatski isječci koriste blijeđu nijansu te boje.
 	Reset all preferences to their defaults?	Vratiti sve postavke na zadane vrijednosti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Zadane vrijednosti primjenjuju se kada kliknete U redu u Postavkama. Otkaži tamo zadržava vaše trenutne postavke.
 	Smaller ↔ Larger	Manje ↔ veće

@@ -4264,6 +4264,8 @@ font-technology	Variable	Variabel
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Seberapa dekat penunjuk atau titik yang diseret harus mendekati karya di layar agar panduan cerdas menjepret; jaraknya sama pada setiap zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Menjepretkan ujung segmen garis, atau lingkaran yang digambar dari pusatnya, agar menyentuh kurva di dekatnya.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Menjepretkan ujung segmen garis agar bertemu segmen lurus di dekatnya pada sudut siku-siku.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Menampilkan nomor setiap irisan dalam kotak di sudut kiri atasnya di kanvas; saat nonaktif, garis tepi irisan tetap ditampilkan.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Warna garis tepi irisan pengguna dan objek serta kotak nomornya; irisan otomatis memakai nuansa yang lebih redup dari warna ini.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar

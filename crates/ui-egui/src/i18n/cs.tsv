@@ -4613,6 +4613,8 @@ font-technology	Variable	Variabilní
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blízko na obrazovce musí ukazatel nebo tažený bod přijít ke kresbě, aby se chytrá vodítka přichytila; vzdálenost je stejná při každém zvětšení.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Přichytí konec úsečky nebo kružnici kreslenou od středu tak, aby se dotýkala blízké křivky.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Přichytí konec úsečky tak, aby se s blízkým rovným segmentem setkal v pravém úhlu.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zobrazí na plátně číslo každého řezu v rámečku v jeho levém horním rohu; když je vypnuto, obrysy řezů zůstanou zobrazené.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Barva obrysů uživatelských a objektových řezů a rámečků s jejich čísly; automatické řezy používají tlumenější odstín této barvy.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
