@@ -664,12 +664,35 @@ fn a_key_typed_before_a_wait_does_not_let_later_keys_reach_its_dialog() {
     app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
     let keys = Keyboard::new();
     let mut events = press(Key::D, "d", Modifiers::NONE);
-    events.push(egui::Event::Key { key: Key::Enter, physical_key: Some(Key::Enter), pressed: true, repeat: false, modifiers: Modifiers::NONE });
+    events.extend(press(Key::A, "a", Modifiers::NONE));
     events.extend(press(Key::X, "x", Modifiers::NONE));
     events.push(release(Key::X));
     let left = keys.frame_left(&mut app, 0.0, events);
     assert!(app.ui.dialog.is_some(), "D opened Preferences");
-    assert!(!left.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Enter, .. })), "{left:?}");
+    assert!(!left.iter().any(|e| matches!(e, egui::Event::Text(_) | egui::Event::Key { key: Key::A, pressed: true, .. })), "{left:?}");
+    assert_eq!(fill(&app), "#ff0000");
+}
+
+/// On the web build, where each press's text comes before it, a key typed before a wait that
+/// starts and ends in one frame, and that opens a dialog, keeps the frame's later keys from the
+/// dialog too.
+#[test]
+fn a_key_typed_before_a_wait_on_the_web_build_does_not_let_later_keys_reach_its_dialog() {
+    let mut app = app_with(true);
+    app.run("shortcuts.set", json!({"id": "edit.preferences", "shortcut": "D", "force": true})).unwrap();
+    app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "X"})).unwrap();
+    let keys = Keyboard::new();
+    let web = |key: Key, text: &str| {
+        [egui::Event::Text(text.into()), egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: Modifiers::NONE }]
+    };
+    let mut events = vec![];
+    for (key, text) in [(Key::D, "d"), (Key::A, "a"), (Key::X, "x")] {
+        events.extend(web(key, text));
+    }
+    events.push(release(Key::X));
+    let left = keys.frame_left(&mut app, 0.0, events);
+    assert!(app.ui.dialog.is_some(), "D opened Preferences");
+    assert!(!left.iter().any(|e| matches!(e, egui::Event::Text(_) | egui::Event::Key { pressed: true, .. })), "{left:?}");
     assert_eq!(fill(&app), "#ff0000");
 }
 
