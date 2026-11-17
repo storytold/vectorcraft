@@ -7406,6 +7406,81 @@ fn the_last_label_of_a_kind_edited_together_sets_what_it_keeps() {
     assert_eq!(kept(&s), "#ff0000");
 }
 
+/// A column graph, a 10 pt square with one red fill row, and the category labels Q1, Q2 and Q3: Q1 and Q3 have one red
+/// fill row, Q2 a hidden red fill row under a green one, and Q1's row is then painted blue, which the kind keeps.
+/// Returns the graph, the square and the three labels.
+fn labels_with_hidden_and_shown_rows(s: &mut Session) -> (NodeId, NodeId, [NodeId; 3]) {
+    use vectorcraft_doc::{AppearanceItem, FillLayer};
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(s, "column");
+    let square = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    let labels = ["Q1", "Q2", "Q3"].map(|t| text_id(s, id, "Axes", t));
+    let fill = |hex: &str, visible: bool| {
+        AppearanceItem::Fill(FillLayer { visible, ..FillLayer::new(Paint::solid(vectorcraft_color::Color::from_hex(hex).unwrap())) })
+    };
+    s.edit("Rows", |d, _| {
+        for (l, items) in [
+            (square, vec![fill("#ff0000", true)]),
+            (labels[0], vec![fill("#ff0000", true)]),
+            (labels[1], vec![fill("#ff0000", false), fill("#00ff00", true)]),
+            (labels[2], vec![fill("#ff0000", true)]),
+        ] {
+            d.node_mut(l).unwrap().appearance.items = items;
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("appearance.setItem", &json!({"ids": [labels[0].0], "index": 0, "color": "#0000ff"})).unwrap();
+    assert_eq!(kept_category_fill(s, id), Some("#0000ff".into()));
+    (id, square, labels)
+}
+
+/// The fill of the category label rows graph `id` keeps, as a hex color.
+fn kept_category_fill(s: &Session, id: NodeId) -> Option<String> {
+    spec(s, id).label_styles.categories_rows.and_then(|r| r.paint.fill).and_then(|p| p.color()).map(|c| c.to_hex())
+}
+
+/// Row edits on several labels at once, with a plain object among them, keep for the kind what the last label whose shown
+/// row the edit wrote shows, also when that row comes out as it was; a label whose hidden row the edit wrote is left out.
+/// One undo takes it back. Covers `appearance.setItem`, `appearance.duplicateItem` and `paint.setFill` with `item`.
+#[test]
+fn row_edits_on_several_labels_keep_the_last_written_shown_row() {
+    let edits = [
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("appearance.duplicateItem", json!({"index": 0})),
+        ("paint.setFill", json!({"item": 0, "color": "#ff0000"})),
+    ];
+    for (cmd, mut p) in edits {
+        let mut s = Session::new();
+        let (id, square, [_, q2, q3]) = labels_with_hidden_and_shown_rows(&mut s);
+        // Q3 shows red before and after the edit; Q2 shows green over the hidden row the edit writes.
+        p["ids"] = json!([q3.0, square.0, q2.0]);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#ff0000".into()), "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#0000ff".into()), "{cmd}: undo");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#ff0000".into()), "{cmd}: redo");
+        s.execute("edit.undo", &json!({})).unwrap();
+        // Only the hidden row of a label: the kind keeps blue.
+        let steps = s.doc().unwrap().history.undo.len();
+        p["ids"] = json!([square.0, q2.0]);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#0000ff".into()), "{cmd}: hidden row only");
+        while s.doc().unwrap().history.undo.len() > steps {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        // Q2's shown green row, written as it was: the kind keeps green.
+        p["ids"] = json!([q2.0]);
+        p[if cmd == "paint.setFill" { "item" } else { "index" }] = json!(1);
+        if cmd != "appearance.duplicateItem" {
+            p["color"] = json!("#00ff00");
+        }
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(kept_category_fill(&s, id), Some("#00ff00".into()), "{cmd}: the shown row written as it was");
+    }
+}
+
 /// A label's object opacity and blend mode set without a row (`transparency.set` without `item`) are kept for its kind.
 #[test]
 fn a_labels_object_opacity_and_blend_mode_are_kept_for_its_kind() {
