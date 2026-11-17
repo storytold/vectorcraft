@@ -1304,6 +1304,10 @@ font-technology	Variable	Değişken
 	Font List	Yazı Tipi Listesi
 	Show Similar Fonts	Benzer Yazı Tiplerini Göster
 	Clear Similar Fonts	Benzer Yazı Tiplerini Temizle
+	Fonts used in this document	Bu belgede kullanılan yazı tipleri
+	This document uses no available fonts	Bu belge kullanılabilir hiçbir yazı tipini kullanmıyor
+	Recently Added	Son eklenenler
+	Fonts added in the last 30 days	Son 30 günde eklenen yazı tipleri
 	Font Preview Size	Yazı Tipi Önizleme Boyutu
 	Font Size	Yazı Tipi Boyutu
 	Font:	Yazı tipi:
@@ -4707,6 +4711,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no active document	etkin belge yok
 @msg	no active perspective plane	aktif perspektif düzlemi yok
 @msg	no anchor points selected	bağlantı noktası seçilmedi
+@msg	`points` must be three [x, y] pairs of numbers	`points` üç [x, y] sayı çifti olmalıdır
+@msg	direct-select three anchor points, or give `points`	üç bağlantı noktasını doğrudan seçin veya `points` verin
+@msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
 @msg	no artboard {i} (0-based; the document has {_1})	çalışma yüzeyi yok {i} (0 tabanlı; belgede {_1} var)
@@ -9087,6 +9094,7 @@ anchor	Points:	Noktalar:
 	Open a document to check it for issues.	Sorunlar için denetlemek üzere bir belge açın.
 	Empty Text	Boş Metin
 	Unpainted Objects	Boyanmamış Nesneler
+	Empty Text Paths	Boş Metin Yolları
 	Zero-Opacity Objects	Sıfır Opaklıklı Nesneler
 	Duplicate Objects	Yinelenen Nesneler
 	Off-Artboard Art	Çalışma Yüzeyi Dışındaki Çizimler

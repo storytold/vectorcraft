@@ -517,3 +517,100 @@ fn rasterize_before_a_hidden_transform_keeps_its_image() {
     Arc::make_mut(&mut hidden.children_mut(Some(l)).unwrap()[0]).appearance.effects[1].visible = false;
     assert!(plain.pixels == draw(&hidden, 10.0, 400).pixels);
 }
+
+/// Red triangles ([`triangle`]), one for each list of effects in `each`, the first lowest, in a
+/// document whose raster effects resolution is 72 ppi.
+fn stacked(each: &[Vec<(&str, Value)>]) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    d.raster_effects_ppi = 72.0;
+    let l = d.layers[0].id;
+    for (i, fx) in each.iter().enumerate() {
+        let mut n = Node::path(d.alloc_id(), triangle(), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+        n.appearance.effects = fx.iter().map(|(id, params)| Effect { id: (*id).into(), params: params.clone(), visible: true }).collect();
+        d.insert(Some(l), i, n).unwrap();
+    }
+    d
+}
+
+/// Each copy a Transform effect after Rasterize makes carries the image made before it: the canvas
+/// draws the same pixels as one object moved once for each copy, the last copy lowest and the
+/// original on top, turned with each copy's map, the pixel grid and the white room around the art
+/// included. The image is made once for all of them, and the drawn bounds take in every copy.
+#[test]
+fn rasterize_then_copying_transform_places_the_image_on_each_copy() {
+    let raster = ("rasterize", hard(json!({"background": "white", "addAround": 1})));
+    let moved = |params: Value| vec![raster.clone(), ("distort.transform", params)];
+    let cases = [
+        (json!({"moveH": 30, "copies": 2}), [json!({"moveH": 60}), json!({"moveH": 30})]),
+        // Overlapping copies: the white room of the original covers the copies below it.
+        (json!({"rotate": 90, "copies": 2}), [json!({"rotate": 180}), json!({"rotate": 90})]),
+        (json!({"reflectX": true, "copies": 2}), [json!({}), json!({"reflectX": true})]),
+    ];
+    for (params, [lowest, middle]) in cases {
+        let copied = doc(triangle(), &moved(params.clone()), 72.0);
+        let want = stacked(&[moved(lowest), moved(middle), vec![raster.clone()]]);
+        let drawn = || crate::fx::RASTERIZED.with(std::cell::Cell::get);
+        let before = drawn();
+        let r = draw(&copied, 4.0, 400);
+        assert_eq!(drawn() - before, 1, "{params}: one image for the three placements");
+        let w = draw(&want, 4.0, 400);
+        let off = r.pixels.iter().zip(&w.pixels).filter(|(a, b)| a.abs_diff(**b) > 2).count();
+        assert_eq!(off, 0, "{params}");
+        assert!(r.pixels.chunks(4).any(|p| p[3] > 0), "{params}");
+        let n = copied.layers[0].children().unwrap()[0].clone();
+        let b = crate::drawn_bounds(&copied, &n).unwrap();
+        let want_b = want.layers[0].children().unwrap().iter().filter_map(|c| crate::drawn_bounds(&want, c)).reduce(|a, b| a.union(b)).unwrap();
+        assert!(
+            [b.x0 - want_b.x0, b.y0 - want_b.y0, b.x1 - want_b.x1, b.y1 - want_b.y1].iter().all(|d| d.abs() < 1e-6),
+            "{params}: {b:?} {want_b:?}"
+        );
+    }
+    // Three placements 30 pt apart, each the 20 pt art and 1 pt of white around it: 9..91 pt.
+    let copied = doc(triangle(), &moved(json!({"moveH": 30, "copies": 2})), 72.0);
+    let n = copied.layers[0].children().unwrap()[0].clone();
+    let b = crate::drawn_bounds(&copied, &n).unwrap();
+    assert!((b.x0 - 9.0).abs() < 1e-9 && (b.x1 - 91.0).abs() < 1e-9 && (b.y0 - 9.0).abs() < 1e-9 && (b.y1 - 31.0).abs() < 1e-9, "{b:?}");
+    // A renderer that keeps the placements' rasters draws the next frame without making the image.
+    let mut renderer = Renderer::new();
+    let opts = RenderOptions { background: None, artboards: false, ..Default::default() };
+    let rotated = doc(triangle(), &moved(json!({"rotate": 90, "copies": 2})), 72.0);
+    let first = renderer.render(&rotated, 400, 400, Affine::scale(4.0), &opts);
+    let drawn = || crate::fx::RASTERIZED.with(std::cell::Cell::get);
+    let before = drawn();
+    let again = renderer.render(&rotated, 400, 400, Affine::scale(4.0), &opts);
+    assert_eq!(drawn() - before, 0);
+    assert!(first.pixels == again.pixels);
+}
+
+/// A shadow listed between Rasterize and a Transform effect with copies paints around each
+/// placement of the image, as it does around one object moved once for each copy, and the image
+/// is still made once for all the placements.
+#[test]
+fn rasterize_then_shadow_then_copying_transform_makes_the_image_once() {
+    let raster = ("rasterize", hard(json!({"background": "white", "addAround": 1})));
+    let shadow = ("stylize.dropShadow", json!({"mode": "normal", "opacity": 100, "x": 2, "y": 2, "blur": 0, "color": "#0000ff"}));
+    let moved = |params: Value| vec![raster.clone(), shadow.clone(), ("distort.transform", params)];
+    let copied = doc(triangle(), &moved(json!({"moveH": 30, "copies": 2})), 72.0);
+    let want = stacked(&[moved(json!({"moveH": 60})), moved(json!({"moveH": 30})), vec![raster.clone(), shadow.clone()]]);
+    let drawn = || crate::fx::RASTERIZED.with(std::cell::Cell::get);
+    let before = drawn();
+    let r = draw(&copied, 4.0, 400);
+    assert_eq!(drawn() - before, 1, "one image for the three placements");
+    let w = draw(&want, 4.0, 400);
+    let off = r.pixels.iter().zip(&w.pixels).filter(|(a, b)| a.abs_diff(**b) > 2).count();
+    assert_eq!(off, 0);
+    assert!(r.pixels.chunks(4).any(|p| p[2] > 200 && p[0] < 50 && p[3] > 200), "the shadow is drawn");
+}
+
+/// Copies that a Transform effect after Rasterize scales to nothing leave nothing to draw or
+/// measure; the original, which the effect leaves where it is, is still drawn and measured.
+#[test]
+fn rasterize_then_copies_scaled_to_nothing_are_left_out() {
+    let raster = ("rasterize", hard(json!({"background": "white"})));
+    let d = doc(triangle(), &[raster.clone(), ("distort.transform", json!({"scaleH": 0, "copies": 3}))], 72.0);
+    let plain = doc(triangle(), &[raster], 72.0);
+    assert!(draw(&d, 10.0, 400).pixels == draw(&plain, 10.0, 400).pixels);
+    let bounds = |d: &Document| crate::drawn_bounds(d, &d.layers[0].children().unwrap()[0]);
+    assert_eq!(bounds(&d), bounds(&plain));
+    assert!(bounds(&d).is_some());
+}
