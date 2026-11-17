@@ -268,15 +268,26 @@ fn shown_label(lang: crate::i18n::Lang, label: &str) -> String {
     label.split(" › ").map(|s| crate::i18n::tr(lang, s)).collect::<Vec<_>>().join(" › ")
 }
 
-/// The label of the item of the menu bar that runs `e`, in `lang`. A built-in effect's item
-/// translates by its effect id first, as the Effect menu's does, and a live-effect plug-in's name
-/// does not translate.
+/// The label of the item of the menu bar that runs `e`, in `lang`, as the menu bar draws it
+/// ([`menus::display_label`]). A built-in effect's item translates by its effect id first, as the
+/// Effect menu's does. Any other item translates by the id of the command it runs first (File ›
+/// Close is Cerrar archivo in Spanish), and a name the menu shows as written ([`menus::shows_a_name`]:
+/// a filter or live-effect plug-in's) does not translate.
 fn item_label(lang: crate::i18n::Lang, e: &Entry) -> &'static str {
-    match e.id.strip_prefix("effect:") {
-        Some(effect) if vectorcraft_plugins::effect::plugin_id(effect).is_some() => e.menu_item,
-        Some(effect) => crate::i18n::tr_id(lang, effect, e.menu_item),
-        None => crate::i18n::tr(lang, e.menu_item),
+    if let Some(effect) = e.id.strip_prefix("effect:") {
+        return match vectorcraft_plugins::effect::plugin_id(effect) {
+            Some(_) => e.menu_item,
+            None => crate::i18n::tr_id(lang, effect, e.menu_item),
+        };
     }
+    // The command the menu item runs: `plugin.dialog` for a filter, `window.panel` for a panel and
+    // the engine command a UI command wraps.
+    let id = match e.id.as_str() {
+        id if id.starts_with("plugin:") => "plugin.dialog",
+        id if id.starts_with("panel:") => "window.panel",
+        id => WRAPPED.iter().find(|(_, ui)| *ui == id).map_or(id, |(engine, _)| engine),
+    };
+    if menus::shows_a_name(id, e.menu_item) { e.menu_item } else { crate::i18n::tr_id(lang, id, e.menu_item) }
 }
 
 /// One palette entry, with what it shows and what a query matches worked out once.
@@ -3457,7 +3468,7 @@ mod tests {
     }
 
     /// A built-in effect's item in the path translates by its effect id, as the Effect menu shows
-    /// it.
+    /// it, another item by its command id, and a plug-in's name stays as written.
     #[test]
     fn the_path_names_an_effect_item_as_the_effect_menu_does() {
         let mut window = Window::new();
@@ -3486,6 +3497,14 @@ mod tests {
         };
         assert_ne!(crate::i18n::tr(fr, "Add"), "Add");
         assert_eq!(item_label(fr, &plugin), "Add");
+        // So does a filter plug-in's name, as Object › Plug-ins shows it.
+        let filter = Entry { id: "plugin:test.ui.add".into(), home: Some("Object › Plug-ins".into()), ..plugin };
+        assert_eq!(item_label(fr, &filter), "Add");
+        // Another item translates by the id of the command it runs, as the menu bar draws it.
+        let es = Lang::from_code("es").unwrap();
+        let close = entries(&window.ctx, es).iter().find(|e| e.id == "file.close").map(|e| (e.menu_item, item_label(es, e)));
+        assert_ne!(crate::i18n::tr(es, "Close"), "Cerrar archivo");
+        assert_eq!(close, Some(("Close", "Cerrar archivo")));
     }
 
     /// A tool hidden in a group outlines its group's button and says how to open the group; once
