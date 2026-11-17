@@ -91,9 +91,9 @@ pub use ai::NameEncoding;
 pub(crate) use ai::objects_read;
 pub(crate) use ai::{
     BLEND_BUDGET, BLEND_PLUGIN, BRUSH_MANAGER, BrushesRead, DEFORM_PLUGIN, EnvelopeGridPoint, MAX_BLEND_KEYS, MAX_BLEND_OBJECTS,
-    MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, blend_reads,
-    brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, read_art_style, read_brush_object, read_style_list, style_moves_with,
-    symbol_art_member, turn_brush_art_over, warp_number,
+    MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_MESH_SIDE, MAX_SYMBOLS, blend_reads,
+    brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, mesh_reads, read_art_style, read_brush_object, read_style_list,
+    style_moves_with, symbol_art_member, turn_brush_art_over, warp_number,
 };
 #[cfg(test)]
 pub(crate) use ai::{ENVELOPE_DRAWN, ENVELOPE_TYPE_DRAWN};
