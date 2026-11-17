@@ -422,6 +422,54 @@ fn a_scale_set_through_the_dialog_keeps_the_percentage_it_changes() {
     assert_eq!(saved["scale"], json!({"width": 250.0, "height": 250.0, "linked": true}));
 }
 
+/// An accessibility action on the node `target_node`.
+fn request(action: egui::accesskit::Action, target_node: egui::accesskit::NodeId) -> egui::Event {
+    use egui::accesskit::{ActionRequest, TreeId};
+    egui::Event::AccessKitActionRequest(ActionRequest { action, target_node, target_tree: TreeId::ROOT, data: None })
+}
+
+/// Type `typed` into Scale W, which shows `shown` (the first field that does, before H), and Tab out.
+fn type_w(screen: &mut Screen, app: &mut VectorcraftApp, shown: &str, typed: &str) {
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    screen.run(app, vec![]);
+    let out = screen.run(app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let w = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.value().is_some_and(|v| v.starts_with(shown)));
+    screen.run(app, vec![request(egui::accesskit::Action::Focus, w.expect("the Scale W field").0)]);
+    screen.run(app, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text(typed.into())]);
+    screen.run(app, vec![key(egui::Key::Tab, egui::Modifiers::NONE)]);
+}
+
+#[test]
+fn a_scale_set_after_a_typed_percentage_follows_the_link() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    let mut screen = Screen::new();
+    set(&mut app, "scaling", json!("custom"));
+    dialog(&mut app).fields["scale"]["width"] = json!(40);
+    screen.run(&mut app, vec![]);
+    assert_eq!(scale(&mut app), (40.0, 40.0, true));
+    // W typed with the link on sets H as well.
+    type_w(&mut screen, &mut app, "40", "60");
+    assert_eq!(scale(&mut app), (60.0, 60.0, true));
+    // A new H set before the next frame: W follows it, and Done saves both.
+    dialog(&mut app).fields["scale"]["height"] = json!(50);
+    set(&mut app, "discard", json!(true));
+    super::confirm(&mut app).unwrap();
+    let saved = app.session.active().unwrap().doc.print_setup.clone().unwrap();
+    assert_eq!(saved["scale"], json!({"width": 50.0, "height": 50.0, "linked": true}));
+    // W typed with the link off changes W alone; turning the link on then sets H to W.
+    app.run("file.print", json!({})).unwrap();
+    let (link, _, _) = screen.link(&mut app);
+    screen.run(&mut app, vec![request(egui::accesskit::Action::Click, link)]);
+    assert_eq!(scale(&mut app), (50.0, 50.0, false));
+    type_w(&mut screen, &mut app, "50", "70");
+    assert_eq!(scale(&mut app), (70.0, 50.0, false));
+    screen.run(&mut app, vec![request(egui::accesskit::Action::Click, link)]);
+    screen.run(&mut app, vec![]);
+    assert_eq!(scale(&mut app), (70.0, 70.0, true));
+}
+
 #[test]
 fn the_dimmed_scale_link_ignores_the_keyboard() {
     use egui::accesskit::{Action, ActionRequest, TreeId};
@@ -439,4 +487,44 @@ fn the_dimmed_scale_link_ignores_the_keyboard() {
     screen.run(&mut app, vec![space]);
     screen.run(&mut app, vec![]);
     assert_eq!(scale(&mut app), (100.0, 100.0, true));
+}
+
+/// The node screen readers call `label` with role `role`, and whether it is dimmed.
+fn node(screen: &mut Screen, app: &mut VectorcraftApp, label: &str, role: egui::accesskit::Role) -> Option<(egui::accesskit::NodeId, bool)> {
+    screen.run(app, vec![]);
+    let out = screen.run(app, vec![]);
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == role).map(|(id, n)| (*id, n.is_disabled()))
+}
+
+#[test]
+fn a_spot_inks_icon_converts_it_to_process_and_back() {
+    use egui::accesskit::{Action, ActionRequest, Role, TreeId};
+    let (mut app, _) = app();
+    app.run("swatch.new", json!({"name": "Gold", "color": {"model": "cmyk", "c": 0, "m": 0.2, "y": 0.8, "k": 0.1}, "spot": true})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "__section", json!("Output"));
+    set(&mut app, "output", json!({"mode": "separations"}));
+    let mut screen = Screen::new();
+    let click = |target_node| {
+        egui::Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node, target_tree: TreeId::ROOT, data: None })
+    };
+    // Only the spot ink has the icon.
+    assert!(node(&mut screen, &mut app, "Convert Cyan to process", Role::Button).is_none());
+    let (convert, dimmed) = node(&mut screen, &mut app, "Convert Gold to process", Role::Button).expect("Gold's icon");
+    assert!(!dimmed);
+    assert_eq!(node(&mut screen, &mut app, "Gold", Role::CheckBox).map(|n| n.1), Some(false));
+    screen.run(&mut app, vec![click(convert)]);
+    assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": true}]));
+    // Converted, it has no plate: its Print box is dimmed, and the icon turns it back.
+    assert_eq!(node(&mut screen, &mut app, "Gold", Role::CheckBox).map(|n| n.1), Some(true));
+    let (keep, _) = node(&mut screen, &mut app, "Keep Gold as spot", Role::Button).expect("the process icon");
+    screen.run(&mut app, vec![click(keep)]);
+    assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
+    // Convert All Spot Colors to Process converts it and dims the icon, keeping its own choice.
+    dialog(&mut app).fields["output"]["spotsToProcess"] = json!(true);
+    let (keep, dimmed) = node(&mut screen, &mut app, "Keep Gold as spot", Role::Button).expect("the process icon");
+    assert!(dimmed);
+    screen.run(&mut app, vec![click(keep)]);
+    assert_eq!(dialog(&mut app).fields["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
 }
