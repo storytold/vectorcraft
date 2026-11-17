@@ -2143,6 +2143,7 @@ font-technology	Variable	Променливи
 	Scatter:	Разпръскване:
 	Rotation:	Завъртане:
 	Rotation relative to:	Завъртане спрямо:
+	Hue Jitter:	Вариация на оттенъка:
 	Brush Scale Options	Опции за мащабиране на четката
 	Scale Proportionately	Мащабиране пропорционално
 	Stretch to Fit Stroke Length	Разтягане за запълване дължината на щриха

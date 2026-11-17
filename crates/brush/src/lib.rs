@@ -298,6 +298,12 @@ pub struct Scatter {
     /// Rotation relative to the path direction (else to the page).
     pub rotation_relative_to_path: bool,
     pub colorization: Colorization,
+    /// Hue jitter in degrees, 0 to 180: each copy turns the hue of the solid colors it draws, after
+    /// the colorization, by its own amount between −`hue_jitter` and `hue_jitter`. The stroke's
+    /// path and the brush name fix the amounts, so a stroke draws the same colors every time.
+    /// 0 (brushes saved before there was hue jitter) leaves the colors as they are.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub hue_jitter: f64,
     /// How size, spacing, scatter and rotation vary between their two values: Fixed takes the
     /// first, Random any value between them, Pressure the first at the lightest pen pressure and
     /// the second at the heaviest, Tilt the first with the pen lying flat and the second upright,
@@ -318,6 +324,7 @@ impl Default for Scatter {
             rotation: (0.0, 0.0),
             rotation_relative_to_path: false,
             colorization: Colorization::None,
+            hue_jitter: 0.0,
             modes: None,
         }
     }
@@ -326,6 +333,8 @@ impl Default for Scatter {
 impl Scatter {
     /// The ranges of size (%), spacing (%), scatter (%) and rotation (°).
     pub const RANGES: [(f64, f64); 4] = [(1.0, 10000.0), (1.0, 10000.0), (-1000.0, 1000.0), (-180.0, 180.0)];
+    /// The range of [`Scatter::hue_jitter`] (°).
+    pub const HUE_JITTER_RANGE: (f64, f64) = (0.0, 180.0);
 
     /// Size, spacing, scatter and rotation, each as its (first, second) values.
     pub fn values(&self) -> [(f64, f64); 4] {
@@ -624,6 +633,10 @@ fn within_pair((a, b): (f64, f64), range: (f64, f64), fallback: f64) -> (f64, f6
     (within(a, range, fallback), within(b, range, fallback))
 }
 
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
 fn valid_tile_frame(frame: Rect) -> bool {
     [frame.x0, frame.y0, frame.x1, frame.y1].into_iter().all(f64::is_finite)
         && frame.width().is_finite()
@@ -714,6 +727,7 @@ impl Brush {
                 s.spacing = within_pair(s.spacing, spacing, d.spacing.0);
                 s.scatter = within_pair(s.scatter, scatter, 0.0);
                 s.rotation = within_pair(s.rotation, rotation, 0.0);
+                s.hue_jitter = within(s.hue_jitter, Scatter::HUE_JITTER_RANGE, 0.0);
                 s.colorization.sanitize();
             }
             BrushKind::Art(a) => {
@@ -855,6 +869,12 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
     let colorization = brush.kind.colorization();
     for n in &mut out {
         colorize(n, colorization, &stroke.paint);
+    }
+    // One piece per copy, in the order the copies run along the path.
+    if let BrushKind::Scatter(s) = &brush.kind
+        && s.hue_jitter > 0.0
+    {
+        colorize::jitter_hues(&mut out, s.hue_jitter, track::seed_of(bp, &brush.name));
     }
     leave_out_brushed(doc, &mut out, &mut Known::new());
     out

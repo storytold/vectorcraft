@@ -2444,6 +2444,7 @@ antiAlias	Sharp	날카롭게
 	Scatter:	흩뿌림:
 	Rotation:	회전:
 	Rotation relative to:	회전 기준:
+	Hue Jitter:	색조 변화:
 	Brush Scale Options	브러시 크기 조절 옵션
 	Scale Proportionately	비율에 맞게 크기 조절
 	Stretch to Fit Stroke Length	선 길이에 맞게 늘이기

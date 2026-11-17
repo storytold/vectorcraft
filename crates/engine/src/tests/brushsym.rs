@@ -1394,6 +1394,46 @@ fn brush_options_set_variation_modes() {
     assert_eq!(s.execute("brush.get", &json!({"name": "Dots"})).unwrap()["modes"], modes);
 }
 
+/// The fill colors of the copies brushed path `id` draws in `doc`, as `#rrggbb`.
+fn piece_fills(doc: &Document, id: NodeId) -> Vec<String> {
+    let pieces = vectorcraft_brush::node_pieces(doc, doc.node(id).unwrap()).expect("brushed");
+    pieces.iter().map(|n| n.appearance.fill_paint().color().unwrap().to_hex()).collect()
+}
+
+/// Scatter Brush Options' `hue_jitter`: shown by `brush.get`, set by `brush.options`, saved with the
+/// document, and the turned colors drawn the same after Open and written by SVG export.
+#[test]
+fn scatter_hue_jitter_saves_and_exports() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 200.0, 8.0, 8.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let name = s.execute("brush.new", &json!({"type": "scatter", "name": "Confetti", "ids": [r.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let id = line(&mut s);
+    select(&mut s, &[id]);
+    s.execute("brush.apply", &json!({ "name": name })).unwrap();
+    let plain = piece_fills(&s.doc().unwrap().doc, id);
+    assert!(plain.len() > 10 && plain.iter().all(|c| c == "#ff0000"), "{plain:?}");
+    assert_eq!(s.execute("brush.get", &json!({ "name": name })).unwrap()["hue_jitter"], json!(0.0), "brush.get shows the option at 0");
+    s.execute("brush.options", &json!({"name": name, "params": {"hue_jitter": 120}})).unwrap();
+    assert_eq!(s.execute("brush.get", &json!({ "name": name })).unwrap()["hue_jitter"], json!(120.0));
+    let doc = s.doc().unwrap().doc.clone();
+    let turned = piece_fills(&doc, id);
+    assert_eq!(turned.len(), plain.len());
+    let distinct: std::collections::HashSet<&String> = turned.iter().collect();
+    assert!(distinct.len() > 5, "{turned:?}");
+    // Saved and opened again, the stroke draws the same colors.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(piece_fills(&back, id), turned);
+    // SVG export writes each copy's turned color.
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    for c in &distinct {
+        assert!(svg.contains(&format!("fill=\"{c}\"")), "{c} missing from the SVG");
+    }
+    // Back to 0, the copies draw the art's own color.
+    s.execute("brush.options", &json!({"name": name, "params": {"hue_jitter": 0}})).unwrap();
+    assert_eq!(piece_fills(&s.doc().unwrap().doc, id), plain);
+}
+
 /// The bounds of the brush art `id`'s strokes draw.
 fn brushed_bounds(s: &Session, id: NodeId) -> Rect {
     let st = s.doc().unwrap();

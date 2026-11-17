@@ -2226,6 +2226,7 @@ font-technology	Variable	Variables
 	Scatter:	Dispersión:
 	Rotation:	Rotación:
 	Rotation relative to:	Rotación relativa a:
+	Hue Jitter:	Variación del tono:
 	Brush Scale Options	Opciones de escala del pincel
 	Scale Proportionately	Escalar proporcionalmente
 	Stretch to Fit Stroke Length	Estirar para ajustar a la longitud del trazo

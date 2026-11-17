@@ -5573,6 +5573,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 	Scatter:	Streuung:
 	Rotation:	Drehung:
 	Rotation relative to:	Drehung relativ zu:
+	Hue Jitter:	Farbtonvariation:
 	Side Tile	Seitenkachel
 	Outer Corner Tile	Äußere Eckkachel
 	Inner Corner Tile	Innere Eckkachel

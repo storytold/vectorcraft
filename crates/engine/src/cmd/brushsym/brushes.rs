@@ -31,7 +31,12 @@ pub(super) fn brush_list(s: &mut Session, _: &Value) -> Result<Value> {
 pub(super) fn brush_get(s: &mut Session, p: &Value) -> Result<Value> {
     let name = name_param(p, "brush.get")?;
     let b = brush::find(&s.doc()?.doc, name).ok_or_else(|| EngineError::Other(format!("no brush named `{name}`")))?;
-    Ok(serde_json::to_value(b).unwrap_or_default())
+    let mut v = serde_json::to_value(&b).unwrap_or_default();
+    // A scatter brush saves its hue jitter only when it is not 0; brush.get shows it either way.
+    if let (BrushKind::Scatter(sc), Some(o)) = (&b.kind, v.as_object_mut()) {
+        o.entry("hue_jitter").or_insert(json!(sc.hue_jitter));
+    }
+    Ok(v)
 }
 
 /// The art `brush.new` takes from `ids` or `id`, else from the selection ([`selection_art`]).

@@ -153,6 +153,7 @@ fn scatter_options_show_each_value_with_its_mode_and_ok_applies_them() {
         "Random",
         "Rotation relative to:",
         "Page",
+        "Hue Jitter:",
         "Colorization",
         "Method:",
         "Tints",
@@ -163,10 +164,11 @@ fn scatter_options_show_each_value_with_its_mode_and_ok_applies_them() {
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.f64("sizeMin", 0.0), d.f64("sizeMax", 0.0), d.str("sizeMode")), (60.0, 140.0, "random".into()));
     assert_eq!((d.str("rotationRelativeTo"), d.str("colorization")), ("page".into(), "tints".into()));
-    // Values are kept within their ranges (rotation here); Fixed takes the first value.
+    assert_eq!(d.f64("hueJitter", -1.0), 0.0);
+    // Values are kept within their ranges (rotation and hue jitter here); Fixed takes the first value.
     set(
         &mut app,
-        json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift"}),
+        json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400}),
     );
     assert!(shown(&mut app).contains("Hue Shift"));
     super::super::confirm(&mut app).unwrap();
@@ -177,12 +179,14 @@ fn scatter_options_show_each_value_with_its_mode_and_ok_applies_them() {
         (&json!([5000.0, 140.0]), &json!(-180.0), &json!(["fixed", "pressure", "random", "random"]))
     );
     assert_eq!((&def["rotation_relative_to_path"], &def["colorization"]["method"]), (&json!(true), &json!("hueShift")));
+    assert_eq!(def["hue_jitter"], json!(180.0));
     assert!(def["colorization"]["key"].is_object(), "the art's colour as the key: {def}");
     assert!(drawn_height(&app, id) > before, "the stroke redraws with the bigger confetti");
     // Opened again, it shows what was set.
     app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
     let d = app.ui.dialog.as_ref().unwrap();
     assert_eq!((d.str("sizeMode"), d.str("spacingMode"), d.str("colorization")), ("fixed".into(), "pressure".into(), "hueShift".into()));
+    assert_eq!(d.f64("hueJitter", 0.0), 180.0);
 }
 
 #[test]
