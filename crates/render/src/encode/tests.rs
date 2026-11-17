@@ -32,7 +32,25 @@ fn noise(w: u32, h: u32, opaque: bool) -> Vec<u8> {
 }
 
 fn decode(png: &[u8]) -> Vec<u8> {
-    image::load_from_memory_with_format(png, image::ImageFormat::Png).expect("decodes").to_rgba8().into_raw()
+    craft_image_codecs::decode_as(craft_image_codecs::Format::Png, png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .expect("decodes")
+        .to_rgba8()
+        .into_raw()
 }
 
 #[test]
@@ -73,7 +91,27 @@ fn png_refuses_a_buffer_of_the_wrong_size() {
 #[test]
 fn gray_and_bilevel_images_store_gray() {
     let header = |file: &[u8]| (file[24], file[25]);
-    let gray = |file: &[u8]| image::load_from_memory(file).unwrap().to_luma_alpha8().into_raw();
+    let gray = |file: &[u8]| {
+        craft_image_codecs::decode(file)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_luma_alpha8()
+            .into_raw()
+    };
     // 3 × 2, premultiplied: black, red, light grey; white, mid grey, almost black.
     let mut img = Rendered {
         width: 3,
@@ -116,7 +154,24 @@ fn circle_doc() -> Document {
 
 fn export(d: &Document, format: RasterFormat, o: &RasterExportOptions) -> image::RgbaImage {
     let bytes = Renderer::new().export_region(d, d.artboards[0].rect, format, o).unwrap();
-    image::load_from_memory(&bytes).unwrap().to_rgba8()
+    craft_image_codecs::decode(&bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 #[test]
@@ -175,7 +230,24 @@ fn translucent_edges_over_opaque_art_stay_opaque() {
         (&d, RasterExportOptions { ppi: 72.0 * 0.3515625, ..Default::default() }),
     ] {
         let png = Renderer::new().export_region(doc, doc.artboards[0].rect, RasterFormat::Png, &o).unwrap();
-        let img = image::load_from_memory(&png).unwrap().to_rgba8();
+        let img = craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         let below: Vec<_> = img.pixels().filter(|p| p[3] < 255).collect();
         assert!(below.is_empty(), "ppi {}: {} pixels below alpha 255, e.g. {:?}", o.ppi, below.len(), below.first());
         assert_eq!(png[25], 2, "IHDR colour type: RGB");

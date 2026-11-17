@@ -33,7 +33,7 @@
 //! - Double-clicking a name renames it; double-clicking elsewhere on a row opens its options.
 //! - A target circle targets its layer, group or object (`layer.target`); dragging it onto another
 //!   row's circle moves the appearance there (Alt copies it, `appearance.transfer`) and dropping it
-//!   on the trash clears it.
+//!   on the trash reduces it to basic appearance (`appearance.reduceToBasic`) without deleting it.
 //! - Search All and the Filter button at its right (`ui.layersFilter`, lit while a filter is on)
 //!   narrow the rows, and every row that holds others shows open while they do. A row stays when
 //!   its name holds the text typed, it is one of the object kinds ticked under By Object and it is

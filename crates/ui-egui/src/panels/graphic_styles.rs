@@ -1,10 +1,12 @@
 //! Graphic Styles panel: the document's styles as rendered thumbnails (Thumbnail View) or rows
-//! (Small and Large List View), shown on a square or on type. Clicking a style applies it to the
+//! (Small and Large List View), shown on a square or on type; a style with no fill and no stroke
+//! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
 //! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one;
-//! double-click opens Graphic Style Options. Dragging a style moves it in the list, or applies it
-//! to the art it is dropped on (`canvas::panel_drop`); art dragged off the canvas or the Appearance
-//! panel's thumbnail dropped on the panel becomes a new style. Holding the right button on a style
+//! double-click opens Graphic Style Options. Dragging a style moves it in the list, applies it
+//! to the art it is dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a
+//! copy of it and of the styles highlighted with it at the end of the list; art dragged off the
+//! canvas or the Appearance panel's thumbnail dropped on the panel becomes a new style. Holding the right button on a style
 //! shows it large, on the selected object when there is one. The Control bar's Style picker lists
 //! the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
@@ -15,10 +17,10 @@ use std::sync::Arc;
 
 use egui::{Color32, Rect, Response, Sense, Stroke, StrokeKind, TextureHandle, Ui, pos2, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::style_libs::STYLE_LIBRARIES;
 use vectorcraft_doc::text::{CharStyle, TextObject};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StyleLibrary};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, GraphicStyle, Node, NodeId, NodeKind, PatternDef, StrokeLayer, StyleLibrary};
 use vectorcraft_engine::cmd::stylelib;
 use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 use vectorcraft_geom::{Affine, Point, shapes};
@@ -78,6 +80,50 @@ thread_local! {
 /// Does `g` stroke with a brush?
 fn uses_brush(g: &GraphicStyle) -> bool {
     g.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some()))
+}
+
+/// Does `g` have no fill and no stroke? A fill or stroke row whose paint is None does not count; a
+/// hidden row or one with zero opacity does. The thumbnails of such a style show the preview shape
+/// with a black outline, a white fill and a red slash ([`backing`], [`slash`]).
+fn paints_nothing(g: &GraphicStyle) -> bool {
+    g.appearance.items.iter().all(|i| i.paint().is_none())
+}
+
+/// `g` with a white fill below its rows and a black stroke `width` wide above them, and every row
+/// above the contents, so the white fill also covers type's own character colors: the shape a
+/// style with no fill and no stroke is shown on, with the style's effects and transparency.
+fn backing(g: &GraphicStyle, width: f64) -> GraphicStyle {
+    let mut g = g.clone();
+    g.appearance.contents_index = None;
+    g.appearance.items.insert(0, AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::WHITE))));
+    g.appearance.items.push(AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), width)));
+    g
+}
+
+/// The red of the slash on the thumbnail of a style with no fill and no stroke.
+const SLASH: [f32; 3] = [230.0, 0.0, 0.0];
+
+/// Draw a red slash (`/`) across the middle of `img`, a third of its side long, over what is there.
+fn slash(img: &mut egui::ColorImage) {
+    let [w, h] = img.size;
+    let side = w.min(h) as f32;
+    let (cx, cy, half) = (w as f32 / 2.0, h as f32 / 2.0, side / 6.0);
+    let (a, b) = (pos2(cx - half, cy + half), pos2(cx + half, cy - half));
+    let radius = (side * 0.035).max(0.9);
+    let ab = b - a;
+    for y in 0..h {
+        for x in 0..w {
+            let p = pos2(x as f32 + 0.5, y as f32 + 0.5);
+            let t = ((p - a).dot(ab) / ab.length_sq()).clamp(0.0, 1.0);
+            let cover = (radius + 0.5 - (p - (a + ab * t)).length()).clamp(0.0, 1.0);
+            if cover > 0.0
+                && let Some(px) = img.pixels.get_mut(y * w + x)
+            {
+                let mix = |old: u8, new: f32| (old as f32 + (new - old as f32) * cover).round() as u8;
+                *px = Color32::from_rgb(mix(px.r(), SLASH[0]), mix(px.g(), SLASH[1]), mix(px.b(), SLASH[2]));
+            }
+        }
+    }
 }
 
 /// What a style's thumbnail paints with besides the style: the patterns and brushes of a document,
@@ -147,9 +193,20 @@ fn look_hashes(ctx: &egui::Context, app: &VectorcraftApp) -> Arc<Vec<u64>> {
 }
 
 /// Style `g` applied (as `graphicStyle.apply` applies it) to the preview shape, rendered `px`
-/// pixels square on white, with `paints`.
+/// pixels square on white, with `paints`. A style with no fill and no stroke ([`paints_nothing`])
+/// is shown on the shape outlined in black and filled with white, under a red slash.
 fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Preview, px: u32) -> Option<egui::ColorImage> {
     const SIDE: f64 = 100.0;
+    let empty = paints_nothing(g);
+    let backed;
+    let g = if empty {
+        // An outline 1.5 pixels wide on images up to 150 pixels across, and one hundredth of the
+        // image width on larger ones.
+        backed = backing(g, (1.5 * SIDE / px.max(1) as f64).max(1.0));
+        &backed
+    } else {
+        g
+    };
     let mut doc = Document::new(SIDE, SIDE);
     doc.patterns = paints.patterns.to_vec();
     if uses_brush(g)
@@ -172,7 +229,11 @@ fn render(app: &VectorcraftApp, paints: Paints, g: &GraphicStyle, preview: Previ
     let layer = doc.layers[0].id;
     doc.insert(Some(layer), 0, app.session.styled(&shape, g)).ok()?;
     let img = RENDERER.with(|r| r.borrow_mut().render_region(&doc, vectorcraft_geom::Rect::new(0.0, 0.0, SIDE, SIDE), px as f64 / SIDE, true));
-    Some(crate::canvas::color_image(&img))
+    let mut img = crate::canvas::color_image(&img);
+    if empty {
+        slash(&mut img);
+    }
+    Some(img)
 }
 
 /// The thumbnail of style `g` (`look`: its [`look_hash`]) at `size` points.
@@ -226,8 +287,10 @@ pub(super) fn outline(ui: &Ui, r: Rect, on: bool, hovered: bool) {
     ui.painter().rect_stroke(r, 0.0, Stroke::new(if on { 2.0 } else { 1.0 }, color), StrokeKind::Inside);
 }
 
-/// Style `g` on a copy of the first selected object, `px` pixels square on white. One texture,
-/// re-rendered only when the document, the style's look or the size changes.
+/// Style `g` on a copy of the first selected object, `px` pixels square on white; a style with no
+/// fill and no stroke shows the object outlined in black and filled with white, under a red slash,
+/// as [`render`] shows it. One texture, re-rendered only when the document, the style's look or the
+/// size changes.
 fn object_preview(app: &VectorcraftApp, ctx: &egui::Context, g: &GraphicStyle, look: u64, px: u32) -> Option<TextureHandle> {
     let st = app.session.active()?;
     let n = st.doc.node(*st.selection.objects.first()?)?;
@@ -238,12 +301,28 @@ fn object_preview(app: &VectorcraftApp, ctx: &egui::Context, g: &GraphicStyle, l
     {
         return Some(tex);
     }
-    let styled = app.session.styled(n, g);
-    let img = RENDERER.with(|r| r.borrow_mut().render_node_thumbnail(&st.doc, &styled, px, Some([255; 4])))?;
-    let color = crate::canvas::color_image(&img);
-    let tex = ctx.load_texture("gs-large-object", color, egui::TextureOptions::LINEAR);
+    let tex = ctx.load_texture("gs-large-object", render_object(app, &st.doc, n, g, px)?, egui::TextureOptions::LINEAR);
     ctx.data_mut(|d| d.insert_temp(slot, (key, tex.clone())));
     Some(tex)
+}
+
+/// Style `g` on a copy of `n` (an object of `doc`), rendered `px` pixels square on white: the image
+/// of [`object_preview`].
+fn render_object(app: &VectorcraftApp, doc: &Document, n: &Node, g: &GraphicStyle, px: u32) -> Option<egui::ColorImage> {
+    let empty = paints_nothing(g);
+    let styled = if empty {
+        // An outline about 1.5 pixels wide on the object scaled to the preview.
+        let side = n.geometric_bounds().map_or(1.0, |b| b.width().max(b.height()));
+        app.session.styled(n, &backing(g, (1.5 * side / px.max(1) as f64).max(1e-3)))
+    } else {
+        app.session.styled(n, g)
+    };
+    let img = RENDERER.with(|r| r.borrow_mut().render_node_thumbnail(doc, &styled, px, Some([255; 4])))?;
+    let mut img = crate::canvas::color_image(&img);
+    if empty {
+        slash(&mut img);
+    }
+    Some(img)
 }
 
 /// The large preview of style `i` next to the pointer while the right button is held on it: on
@@ -488,7 +567,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 None => tiles(app, ui, &shown, &sel, &mut ev),
             }
         });
-        let zone = ui.interact(out.inner_rect, ui.scope_id().with("gs-drop"), Sense::hover());
+        // The drop zone is the part of the list on screen: when the list shrinks to its rows,
+        // `inner_rect` reaches past it over the footer's buttons.
+        let zone = ui.interact(out.inner_rect.intersect(ui.min_rect()), ui.scope_id().with("gs-drop"), Sense::hover());
         zone_input(ui, &zone, &doc, &mut ev);
     });
     act(app, ui, &shown, ev, false);
@@ -506,9 +587,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("graphicStyle.breakLink", json!({})).ok();
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Graphic Style (Alt-click to name it)"), false, has_sel, 24.0).clicked() {
+        // A style dragged from the list can be dropped on it, also with no art selected: the
+        // button is enabled while one is held.
+        let new_enabled = has_sel || dragged_style(ui.ctx(), &doc).is_some();
+        let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Graphic Style (Alt-click to name it)"), false, new_enabled, 24.0);
+        if new.clicked() {
             new_style(app, alt_held(ui));
         }
+        drop_on_new(app, ui, &new, &sel);
         if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Graphic Style (Alt-click: without asking)"), false, !sel.is_empty(), 24.0)
             .clicked()
         {
@@ -551,6 +637,55 @@ fn new_style(app: &mut VectorcraftApp, ask: bool) {
         app.run("ui.graphicStyleOptions", json!({})).ok();
     } else {
         app.run("graphicStyle.new", json!({})).ok();
+    }
+}
+
+/// The style of `d` being dragged from the panel, if one is.
+fn dragged_style(ctx: &egui::Context, d: &Document) -> Option<String> {
+    match egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref() {
+        Some(PanelDrag::GraphicStyle(n)) if d.graphic_style(n).is_some() => Some(n.clone()),
+        _ => None,
+    }
+}
+
+/// The styles a style dragged from the panel carries: every highlighted style (`sel`) in panel
+/// order when the dragged style `name` is one of them, else that style alone.
+fn carried(d: &Document, sel: &[String], name: &str) -> Vec<String> {
+    if sel.iter().any(|s| s == name) {
+        d.graphic_styles.iter().filter(|g| sel.contains(&g.name)).map(|g| g.name.clone()).collect()
+    } else {
+        vec![name.to_string()]
+    }
+}
+
+/// A style dragged onto New Graphic Style (`button`): the button is outlined while the style is
+/// held over it, and on release the style, with the styles highlighted with it (`sel`), is
+/// duplicated ([`duplicate`]). Other drags are left to their own targets.
+fn drop_on_new(app: &mut VectorcraftApp, ui: &Ui, button: &Response, sel: &[String]) {
+    let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
+    let Some(name) = dragged_style(ui.ctx(), &doc) else { return };
+    if button.dnd_hover_payload::<PanelDrag>().is_none() {
+        return;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    if button.dnd_release_payload::<PanelDrag>().is_some() {
+        duplicate(app, ui.ctx(), &carried(&doc, sel, &name));
+    }
+}
+
+/// Duplicates `names` (`graphicStyle.duplicate`, each copy at the end of the list) in one undo
+/// step and highlights the copies. A failure is shown in the status bar and changes nothing.
+fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, names: &[String]) {
+    let made = if let [name] = names {
+        app.run("graphicStyle.duplicate", json!({ "name": name })).map(|r| vec![r])
+    } else {
+        let commands: Vec<Value> = names.iter().map(|n| json!({ "command": "graphicStyle.duplicate", "params": { "name": n } })).collect();
+        app.run("command.batch", json!({ "label": "Duplicate Graphic Style", "commands": commands }))
+            .map(|r| r["results"].as_array().cloned().unwrap_or_default())
+    };
+    match made {
+        Ok(made) => set_pstate(ctx, "gs-sel", made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect::<Vec<_>>()),
+        Err(e) => app.status(e),
     }
 }
 
@@ -954,6 +1089,104 @@ mod tests {
         assert_eq!(px(2, 2), Color32::WHITE);
     }
 
+    /// Is `c` the slash's red?
+    fn red(c: Color32) -> bool {
+        c.r() > 180 && c.g() < 70 && c.b() < 70
+    }
+
+    /// Is `c` near black?
+    fn dark(c: Color32) -> bool {
+        c.r() < 90 && c.g() < 90 && c.b() < 90
+    }
+
+    /// A style with no fill and no stroke shows its thumbnail on the preview square or on type,
+    /// outlined in black and filled with white, under a red slash; so does a style whose rows paint
+    /// None, and one with only effects, whose effects still show. The large preview on the selected
+    /// object shows the same.
+    #[test]
+    fn a_style_with_no_fill_and_no_stroke_shows_an_outlined_shape_and_a_red_slash() {
+        let app = app();
+        let d = app.session.active().unwrap().doc.clone();
+        let image = |app: &VectorcraftApp, g: &GraphicStyle, preview: Preview| render(app, Paints::of(&d), g, preview, 40).unwrap();
+        let px = |img: &egui::ColorImage, x: usize, y: usize| img.pixels[y * img.size[0] + x];
+        let empty = GraphicStyle::new("Empty", Appearance::default());
+        let nones = GraphicStyle::new("Nones", Appearance::basic(Paint::None, Paint::None, 1.0));
+        for g in [&empty, &nones] {
+            let img = image(&app, g, Preview::Square);
+            // The square spans 8.8 to 31.2 pixels: a black edge, white inside, red in the middle.
+            assert!(red(px(&img, 20, 20)), "{}: {:?}", g.name, px(&img, 20, 20));
+            assert!((7..=10).any(|x| dark(px(&img, x, 20))), "{}: the left edge is black", g.name);
+            assert_eq!(px(&img, 13, 13), Color32::WHITE, "{}", g.name);
+            assert_eq!(px(&img, 2, 2), Color32::WHITE, "{}", g.name);
+            assert!(!red(px(&img, 13, 13)) && !red(px(&img, 27, 27)));
+        }
+        // On type: the slash over the outlined characters.
+        let img = image(&app, &empty, Preview::Text);
+        assert!(red(px(&img, 20, 20)));
+        assert!(img.pixels.iter().any(|c| dark(*c)), "the characters are outlined in black");
+        // Effects still show: a drop shadow 10 points down and right of the square.
+        let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10, "y": 10, "blur": 0}), visible: true };
+        let effects = GraphicStyle::new("Shadow", Appearance { effects: vec![shadow], ..Appearance::default() });
+        let img = image(&app, &effects, Preview::Square);
+        assert!(red(px(&img, 20, 20)));
+        assert_ne!(px(&img, 33, 33), Color32::WHITE, "the shadow shows below the square");
+        // The large preview on the selected rectangle.
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        let img = render_object(&app, &st.doc, n, &empty, 60).unwrap();
+        assert!(red(px(&img, 30, 30)));
+        assert!(dark(px(&img, 1, 30)), "{:?}", px(&img, 1, 30));
+        assert_eq!(px(&img, 10, 10), Color32::WHITE);
+        // A style that paints keeps its own look there, without the slash.
+        let blue = GraphicStyle::new("Blue", Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 1.0));
+        let img = render_object(&app, &st.doc, n, &blue, 60).unwrap();
+        assert_eq!(px(&img, 30, 30), Color32::from_rgb(0, 0, 255));
+    }
+
+    /// The white fill of a style with no fill and no stroke paints above type's characters even
+    /// when the style puts its Characters row above some of its rows and Override Character Color
+    /// is off: the type preview looks the same as for the style without that row order.
+    #[test]
+    fn the_white_fill_of_a_style_with_no_paint_covers_the_characters_whatever_its_contents_row() {
+        let mut app = app();
+        app.session.prefs.override_char_color = false;
+        let d = app.session.active().unwrap().doc.clone();
+        let image = |g: &GraphicStyle| render(&app, Paints::of(&d), g, Preview::Text, 40).unwrap();
+        let plain = GraphicStyle::new("Nones", Appearance::basic(Paint::None, Paint::None, 1.0));
+        let mut above = plain.clone();
+        above.appearance.set_contents_at(1);
+        assert_eq!(above.appearance.contents_index, Some(1));
+        assert!(paints_nothing(&above));
+        assert!(image(&above).pixels == image(&plain).pixels, "the characters' own fill shows through the white fill");
+    }
+
+    /// A style with only a fill, or only a stroke, shows its own paint; a hidden fill or one with
+    /// zero opacity still counts as a fill, so its thumbnail shows no slash.
+    #[test]
+    fn a_fill_or_a_stroke_alone_or_a_hidden_fill_shows_no_slash() {
+        let app = app();
+        let d = app.session.active().unwrap().doc.clone();
+        let image = |g: &GraphicStyle| render(&app, Paints::of(&d), g, Preview::Square, 40).unwrap();
+        let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+        let fill = GraphicStyle::new("Fill", Appearance::basic(blue.clone(), Paint::None, 1.0));
+        let stroke = GraphicStyle::new("Stroke", Appearance::basic(Paint::None, Paint::solid(Color::rgb(0.0, 0.6, 0.0)), 4.0));
+        let mut hidden = GraphicStyle::new("Hidden", Appearance::basic(blue.clone(), Paint::None, 1.0));
+        if let Some(f) = hidden.appearance.fill_mut() {
+            f.visible = false;
+        }
+        let mut clear = GraphicStyle::new("Clear", Appearance::basic(blue, Paint::None, 1.0));
+        if let Some(f) = clear.appearance.fill_mut() {
+            f.opacity = 0.0;
+        }
+        for g in [&fill, &stroke, &hidden, &clear] {
+            assert!(!paints_nothing(g), "{}", g.name);
+            assert!(!image(g).pixels.iter().any(|c| red(*c)), "{} shows no slash", g.name);
+        }
+        assert_eq!(image(&fill).pixels[20 * 40 + 20], Color32::from_rgb(0, 0, 255));
+        assert_eq!(image(&hidden).pixels[20 * 40 + 20], Color32::WHITE);
+        assert!(image(&stroke).pixels.iter().any(|c| c.g() > 100 && c.r() < 60 && c.b() < 60), "the stroke shows");
+    }
+
     #[test]
     fn merge_asks_for_a_name_and_drops_move_styles_or_make_new_ones() {
         let mut app = app();
@@ -986,6 +1219,99 @@ mod tests {
         let d = app.session.active().unwrap().doc.clone();
         assert_eq!(d.graphic_styles.len(), n0.len() + 2);
         assert_eq!(d.node(rect).unwrap().extras().graphic_style, d.graphic_styles.last().map(|g| g.id));
+    }
+
+    /// A style dropped on New Graphic Style is duplicated at the end of the list, also with no art
+    /// selected; a highlighted style carries the other highlighted styles with it, in one undo step.
+    /// A style dropped on the Delete button is not moved in the list.
+    #[test]
+    fn a_style_dropped_on_new_graphic_style_is_duplicated_at_the_end() {
+        let mut app = app();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 600.0)));
+        // One frame of the panel with `events`: the center of the footer button labeled `label`
+        // and whether it is enabled.
+        let button = |app: &mut VectorcraftApp, events: Vec<egui::Event>, label: &str| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: screen, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility tree").nodes;
+            let (_, node) = nodes.iter().find(|(_, n)| n.label() == Some(label)).unwrap_or_else(|| panic!("{label}"));
+            let b = node.bounds().expect("visible button");
+            (pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32), !node.is_disabled())
+        };
+        let new_button = |app: &mut VectorcraftApp, events: Vec<egui::Event>| button(app, events, "New Graphic Style (Alt-click to name it)");
+        let release = |at: egui::Pos2| {
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            vec![egui::Event::PointerMoved(at), up]
+        };
+        let links = |app: &VectorcraftApp| {
+            app.session.active().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.extras().graphic_style).collect::<Vec<_>>()
+        };
+        let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+        for view in [View::SmallList, View::Thumbnail] {
+            app.ui.graphic_styles_view = view;
+            let n = names(&app);
+            let linked = links(&app);
+            // With no art selected the button is off until a style is held over it.
+            let (at, on) = new_button(&mut app, vec![]);
+            assert!(!on, "{view:?}: off with no art selected");
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[1].clone()));
+            let (_, on) = new_button(&mut app, vec![egui::Event::PointerMoved(at)]);
+            assert!(on, "{view:?}: on while a style is dragged");
+            assert_eq!(names(&app), n, "{view:?}: holding it there changes nothing");
+            // Released on it: a copy with the same look and a new id goes to the end, highlighted.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[1].clone()));
+            new_button(&mut app, release(at));
+            let copy = format!("{} copy", n[1]);
+            assert_eq!(names(&app)[..n.len()], n[..], "{view:?}");
+            assert_eq!(names(&app)[n.len()..], *std::slice::from_ref(&copy), "{view:?}");
+            let d = doc(&app);
+            let (src, made) = (d.graphic_style(&n[1]).unwrap(), d.graphic_style(&copy).unwrap());
+            assert_eq!(made.appearance, src.appearance);
+            assert_ne!(made.id, src.id);
+            assert_eq!(links(&app), linked, "{view:?}: no art is linked or unlinked");
+            assert_eq!(selected(&ctx, &d), std::slice::from_ref(&copy));
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(names(&app), n, "{view:?}: one undo step");
+        }
+
+        // Two highlighted styles, one of them dragged: both are copied in panel order, in one step.
+        app.ui.graphic_styles_view = View::SmallList;
+        let n = names(&app);
+        let (at, _) = new_button(&mut app, vec![]);
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[3].clone()));
+        new_button(&mut app, release(at));
+        let copies = [format!("{} copy", n[0]), format!("{} copy", n[3])];
+        assert_eq!(names(&app)[n.len()..], copies);
+        assert_eq!(selected(&ctx, &doc(&app)), copies);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(names(&app), n, "the group's copies go in one undo step");
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(names(&app)[n.len()..], copies);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // A style that is not highlighted is copied alone.
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[2].clone()));
+        new_button(&mut app, release(at));
+        assert_eq!(names(&app)[n.len()..], [format!("{} copy", n[2])]);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // Other drags dropped on the button make nothing.
+        let rect = doc(&app).layers[0].children().unwrap()[0].id;
+        for payload in [PanelDrag::Art(vec![rect]), PanelDrag::Appearance(rect), PanelDrag::GraphicStyle("No such style".into())] {
+            egui::DragAndDrop::set_payload(&ctx, payload);
+            new_button(&mut app, release(at));
+            assert_eq!(names(&app), n);
+        }
+        // A style dropped on the Delete button below the list is not moved in the list.
+        let (trash, _) = button(&mut app, vec![], "Delete Graphic Style (Alt-click: without asking)");
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[1].clone()));
+        button(&mut app, release(trash), "Delete Graphic Style (Alt-click: without asking)");
+        assert_eq!(names(&app), n);
     }
 
     #[test]

@@ -65,7 +65,29 @@ fn webp_is_lossless_and_says_so_when_lossy_is_asked_for() {
     let r = s.execute("document.export", &json!({"format": "webp", "lossless": false, "quality": 60, "background": "black"})).unwrap();
     assert_eq!(&b64(&r)[12..16], b"VP8L");
     assert!(r["warnings"][0].as_str().unwrap().contains("lossless"), "{r}");
-    assert_eq!(image::load_from_memory(&b64(&r)).unwrap().to_rgba8().get_pixel(29, 19).0, [0, 0, 0, 255]);
+    assert_eq!(
+        craft_image_codecs::decode(&b64(&r))
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(29, 19)
+            .0,
+        [0, 0, 0, 255]
+    );
 }
 
 #[test]
@@ -74,12 +96,51 @@ fn save_for_office_writes_a_png_at_the_resolution() {
     s.execute("file.new", &json!({"width": 612, "height": 792, "artboards": 2})).unwrap();
     let r = s.execute("document.exportForOffice", &json!({"ppi": 150})).unwrap();
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(1275), Some(1650)), "Letter at 150 ppi");
-    let img = image::load_from_memory(&b64(&r)).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&b64(&r))
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (1275, 1650));
     assert_eq!(img.get_pixel(0, 0).0, [255, 255, 255, 255], "on white");
     let r = s.execute("document.exportForOffice", &json!({"ppi": 72, "transparent": true, "artboard": 1})).unwrap();
     assert_eq!((r["width"].as_u64(), r["height"].as_u64()), (Some(612), Some(792)));
-    assert_eq!(image::load_from_memory(&b64(&r)).unwrap().to_rgba8().get_pixel(0, 0)[3], 0, "transparent");
+    assert_eq!(
+        craft_image_codecs::decode(&b64(&r))
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(0, 0)[3],
+        0,
+        "transparent"
+    );
     assert!(s.execute("document.exportForOffice", &json!({"artboard": 2})).is_err());
     assert!(s.execute("document.exportForOffice", &json!({"ppi": -3})).is_err());
     let spec = crate::cmd::find_command("document.exportForOffice").unwrap();

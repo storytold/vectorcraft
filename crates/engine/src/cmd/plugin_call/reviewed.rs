@@ -40,6 +40,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.image.colorMask",
     "addon.image.removeBackground",
     "addon.image.removeColorMask",
+    "addon.packaging.check",
     "addon.packaging.roles",
     "addon.packaging.setRole",
     "addon.packaging.setRoleSwatch",

@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_doc::color::Color;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::Affine;

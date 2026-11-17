@@ -551,15 +551,20 @@ impl<'a> Reader<'a> {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], a]);
             }
         }
-        let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba) else {
+        let Ok(img) = craft_image_codecs::Image::from_raw(
+            w as u32,
+            h as u32,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            rgba,
+        ) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let mut png = vec![];
-        if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+        let Ok(png) = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
+        };
         self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32), None)
     }
 
@@ -584,12 +589,13 @@ impl<'a> Reader<'a> {
                 gray.push(v);
             }
         }
-        let mut png = vec![];
-        let written = image::GrayImage::from_raw(w, h, gray).map(|img| img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png));
-        if !matches!(written, Some(Ok(()))) {
+        let written = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray)
+            .ok()
+            .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok());
+        let Some(png) = written else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
+        };
         self.add_raster(ImageBlob::new("image/png", png), alpha, m, (w, h), Some(paint))
     }
 
@@ -677,15 +683,16 @@ impl<'a> Reader<'a> {
         let blob = if cmyk {
             Inks::new(ow, oh, pixels).and_then(|i| ImageBlob::cmyk_tiff(&i))
         } else {
-            use image::ImageEncoder as _;
-            let colour = match (s.channels, inline && opacity.is_some()) {
-                (1, false) => image::ExtendedColorType::L8,
-                (1, true) => image::ExtendedColorType::La8,
-                (_, false) => image::ExtendedColorType::Rgb8,
-                (_, true) => image::ExtendedColorType::Rgba8,
+            let layout = match (s.channels, inline && opacity.is_some()) {
+                (1, false) => craft_image_codecs::ChannelLayout::Gray,
+                (1, true) => craft_image_codecs::ChannelLayout::GrayA,
+                (_, false) => craft_image_codecs::ChannelLayout::Rgb,
+                (_, true) => craft_image_codecs::ChannelLayout::Rgba,
             };
-            let mut png = vec![];
-            image::codecs::png::PngEncoder::new(&mut png).write_image(&pixels, ow, oh, colour).ok().map(|()| ImageBlob::new("image/png", png))
+            craft_image_codecs::Image::from_raw(ow, oh, layout, craft_image_codecs::SampleType::U8, pixels)
+                .ok()
+                .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok())
+                .map(|png| ImageBlob::new("image/png", png))
         };
         // One that can't be encoded is left to the page's art, as one past the hard limits.
         let Some(blob) = blob else {
@@ -773,8 +780,10 @@ impl<'a> Reader<'a> {
         if alpha.iter().all(|v| *v == 255) {
             return None;
         }
-        let mut png = Vec::new();
-        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let raw =
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, alpha.to_vec())
+                .ok()?;
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
@@ -1031,8 +1040,9 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
             rgba.extend_from_slice(&[straight(r), straight(g), straight(b), a]);
         }
     }
-    let mut png = vec![];
-    image::RgbaImage::from_raw(width, height, rgba)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    let raw =
+        craft_image_codecs::Image::from_raw(width, height, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
     Some((png, width, height))
 }
 

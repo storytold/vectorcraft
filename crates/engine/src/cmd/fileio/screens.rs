@@ -350,8 +350,8 @@ struct ScreenParams {
     /// Where files go: `none` (all in the folder), `rows` (the rows' sub-folders, as
     /// `subfolders`), `format` (a folder per extension), `item`, or `itemFormat`.
     folders: Option<String>,
-    /// Export PDFs As: `single` (the artboards a PDF row writes are the pages of one file) or
-    /// `multiple` (a file per artboard, the default).
+    /// Export PDFs As: `single` (the artboards a PDF row writes are the pages of one file; refused
+    /// with assets, layers or `selection: "each"`) or `multiple` (a file per artboard, the default).
     pdfs: Option<String>,
 }
 
@@ -399,11 +399,17 @@ impl ScreenParams {
         if p.is_object() { Self::deserialize(p).map_err(|e| bad(C, e.to_string())) } else { Ok(Self::default()) }
     }
 
-    /// An error when more than one of `assets`, `layers`, `selection` and `fullDocument` is given.
+    /// An error when more than one of `assets`, `layers`, `selection` and `fullDocument` is given,
+    /// and when `pdfs: "single"` is given with `assets`, `layers` or `selection: "each"`, whose
+    /// files each hold the art of one item.
     fn one_source(&self) -> Result<()> {
         let sources = [self.full_document, self.assets.is_some(), self.layers.is_some(), self.selection.is_some()].iter().filter(|b| **b).count();
         if sources > 1 {
             return Err(bad(C, "give one of assets, layers, selection or fullDocument"));
+        }
+        let per_piece = self.assets.is_some() || self.layers.is_some() || self.selection.as_deref() == Some("each");
+        if per_piece && self.pdfs.as_deref() == Some("single") {
+            return Err(bad(C, "pdfs `single` writes artboards as the pages of one PDF: assets, layers and selection `each` write a PDF each"));
         }
         Ok(())
     }

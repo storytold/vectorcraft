@@ -2676,7 +2676,27 @@ fn pixels(doc: &Document) -> (image::RgbaImage, kurbo::Affine) {
     let a = art(doc);
     let NodeKind::Image(im) = &a[0].kind else { panic!("{:?}", a[0].kind) };
     let blob = doc.images.get(&im.key).unwrap();
-    (image::load_from_memory(&blob.bytes).unwrap().to_rgba8(), im.xf)
+    (
+        craft_image_codecs::decode(&blob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8(),
+        im.xf,
+    )
 }
 
 /// A 1-bit image's row holds each pixel's channels in turn, one bit each, padded to whole bytes;
@@ -3073,7 +3093,24 @@ fn cmyk_images_keep_their_ink_amounts() {
     assert!(m.clip);
     let NodeKind::Image(mi) = &m.art.kind else { panic!("{:?}", m.art.kind) };
     assert_eq!((mi.width, mi.height, mi.xf), (3, 1, im.xf), "the mask covers the image");
-    let gray = image::load_from_memory(&doc.images[&mi.key].bytes).unwrap().to_luma8();
+    let gray = craft_image_codecs::decode(&doc.images[&mi.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma8();
     assert_eq!(gray.into_raw(), [255, 128, 0]);
     // An alpha channel that hides nothing adds no mask.
     let data = [&inks[..], &[255; 3]].concat();
@@ -11381,6 +11418,68 @@ fn a_graphs_type_and_settings_come_from_its_records() {
     assert!(art(&r.doc)[0].extras().graph.is_some());
 }
 
+/// A series of a line graph drawn with filled lines at `x`: a band filled with the series' color and
+/// outlined in a thin black line, and a marker filled alike with no outline.
+fn band_series(x: f64) -> String {
+    format!("0.5 0 0 0 k\n0 0 0 1 K\n0.25 w\n{}B\n1 w\n{}f\n", rect_path(x, 120.0, x + 40.0, 128.0), rect_path(x + 18.0, 122.0, x + 23.0, 127.0))
+}
+
+/// [`live_graph`] as a line graph with style record `style`, each series drawn by [`band_series`].
+fn band_graph(style: &str) -> String {
+    live_graph().replace(LIVE_STYLE, style).replace(&series_bar(110.0), &band_series(110.0)).replace(&series_bar(140.0), &band_series(140.0))
+}
+
+/// A line graph whose lines are drawn as shapes (`drawLinesAsShapes` 1 with `drawLines` 1) keeps
+/// Draw Filled Lines and its Line Width (`lineShapeWidth`, in points): 3 points is the graph's
+/// default. Its series keep their bands' fill, and the bands' thin black outline is not taken as the
+/// series' stroke. With `drawLines` 0 the flag is ignored, and the width is kept for later.
+#[test]
+fn a_line_graph_drawn_with_filled_lines_keeps_them_and_their_width() {
+    let live = |text: String| {
+        let r = read(stream7(&layer7("Graph", &text)).as_bytes()).unwrap();
+        assert!(r.warnings.is_empty(), "{text}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        let g = a[0].extras().graph.clone().unwrap_or_else(|| panic!("{text}: a live graph"));
+        (g, live_graphs(&r.doc).1)
+    };
+    let (g, tagged) = live(band_graph("%_7 0 0 14 1 1 1 0 8 44 Gy\n"));
+    assert_eq!((g.kind, g.filled_lines, g.line_width, tagged), (GraphKind::Line, true, Some(8.0), 2));
+    let fill = Some(Paint::solid(Color::cmyk(0.5, 0.0, 0.0, 0.0)));
+    assert!(g.series_paints.iter().all(|p| p.fill == fill && p.stroke.is_none() && p.stroke_width.is_none()), "{:?}", g.series_paints);
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 3 44 Gy\n")).0.line_width, None, "3 pt");
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 6 44 Gy\n")).0.line_width, Some(6.0), "6 pt");
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 100 44 Gy\n")).0.line_width, Some(100.0), "100 pt");
+    assert_eq!(live(band_graph("%_7 0 0 14 1 1 1 0 0.01 44 Gy\n")).0.line_width, Some(0.01), "0.01 pt");
+    // Without filled lines, the series are drawn as the graph's columns are.
+    let (g, _) = live(live_graph().replace(LIVE_STYLE, "%_7 0 0 14 1 0 1 0 8 44 Gy\n"));
+    assert_eq!((g.connect_points, g.filled_lines, g.line_width), (false, false, Some(8.0)), "points not connected");
+    let (g, _) = live(live_graph().replace(LIVE_STYLE, "%_7 0 0 14 1 1 0 0 0 44 Gy\n"));
+    assert_eq!((g.filled_lines, g.line_width), (false, None), "lines not filled, 0 pt");
+}
+
+/// A graph with filled lines whose Line Width the model doesn't hold (0, under 0.01 points, or out of
+/// the records' 0 to 100), or with a lines-as-shapes value other than 0 and 1, keeps its drawn art
+/// as plain objects, with one note.
+#[test]
+fn filled_lines_of_a_width_the_model_cant_hold_stay_plain_art() {
+    for style in [
+        "%_7 0 0 14 1 1 1 0 0 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 0.001 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 101 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 -2 44 Gy\n",
+        "%_7 0 0 14 1 1 1 0 1e999 44 Gy\n",
+        "%_7 0 0 14 1 1 0 0 101 44 Gy\n",
+        "%_7 0 0 14 1 1 2 0 8 44 Gy\n",
+    ] {
+        let r = read(stream7(&layer7("Graph", &band_graph(style))).as_bytes()).unwrap_or_else(|e| panic!("{style}: {e}"));
+        assert_eq!(r.warnings, [GRAPH_PLAIN], "{style}");
+        assert_eq!(live_graphs(&r.doc), (vec![], 0), "{style}");
+        let mut kept = false;
+        r.doc.walk(|n| kept |= n.children().is_some_and(|c| c.len() == 3));
+        assert!(kept, "{style}: the drawn art is kept");
+    }
+}
+
 /// A graph keeps its drawn art and stays plain, with one note, when a record has a shape or value
 /// appendix A doesn't give, sets what the model doesn't keep, or the table, the series tags or the
 /// art don't fit the graph.
@@ -11396,7 +11495,7 @@ fn graphs_the_model_cant_keep_stay_plain_art() {
         ("type 11", live_graph().replace("%_5 0 0 14", "%_11 0 0 14")),
         ("legends in wedges", live_graph().replace("%_5 0 0 14", "%_5 0 0 15")),
         ("the right axis", live_graph().replace("6 44 Gy", "6 45 Gy")),
-        ("lines as shapes", live_graph().replace("%_5 0 0 14 0 1 0", "%_5 0 0 14 0 1 1")),
+        ("lines as shapes 0 pt wide", live_graph().replace("%_5 0 0 14 0 1 0 0 6", "%_5 0 0 14 0 1 1 0 0")),
         ("both axes alike", live_graph().replace(LIVE_DIALOG, "%_10 2 0 1 90 80 0 Gd\n")),
         ("a subscription", live_graph().replace(LIVE_DIALOG, &format!("{LIVE_DIALOG}%_0 0 1 1 1 Gj\n"))),
         ("a customization", live_graph().replace("GC\n", "GC\n%_2 Gt\n%_(Bars) GD\n%_GT\n")),

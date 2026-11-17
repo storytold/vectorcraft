@@ -74,7 +74,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Path",
             [],
             None,
-            "{id, subpath?, segment, t: 0–1 (0.5)} or {id, subpath?, anchor}: closed paths open there, open paths become two; one of the two new end points is left selected → {ids}. A t outside 0–1 is refused with an error, and nothing changes",
+            "{id, subpath?, segment, t: 0–1 (0.5)} or {id, subpath?, anchor}: closed paths open there, open paths become two; one of the two new end points is left selected; the paths keep the source's fill and stroke settings except that every stroke's alignment becomes Center (in a path of several subpaths, the other subpaths' strokes too) → {ids}. A t outside 0–1 is refused with an error, and nothing changes",
             has_doc,
             split
         ),

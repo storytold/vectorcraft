@@ -34,7 +34,7 @@
 	Clear Recent Files	Kosongkan berkas terbaru
 	Show in Folder	Tampilkan di folder
 	Close	Tutup
-@id	file.close	berkas.tutup
+@id	file.close	Tutup
 	Close All	Tutup semua
 	Save	Simpan
 	Save As…	Simpan sebagai…
@@ -513,7 +513,7 @@
 	Zig Zag…	Zig Zag…
 	Pathfinder	Pathfinder
 	Add	Tambah
-@id	pathfinder.add	pathfinder.tambah
+@id	pathfinder.add	Satukan
 	Intersect	Iris
 	Exclude	Kecualikan
 	Subtract	Kurangi
@@ -826,6 +826,7 @@
 	Auto Color	Warna otomatis
 	Automatic	Otomatis
 	Isolate Selected Group	Isolasi grup terseleksi
+	Isolate Selected Path	Isolasi jalur terseleksi
 	Exit Isolation Mode	Keluar dari mode isolasi
 	Make Clipping Mask	Buat masker kliping
 	Release Clipping Mask	Lepaskan masker kliping
@@ -1227,7 +1228,7 @@ lighting	Light	Cahaya
 	Name* @ 66.67% (RGB/Preview)	Nama* @ 66.67% (RGB/Pratinjau)
 	No Document	Tidak ada dokumen
 	Press 	Tekan 
-	Search commands and tools	Cari perintah dan alat
+	Search commands, tools, panels and effects	Cari perintah, alat, panel, dan efek
 	Style:	Gaya:
 	Switch workspace	Ganti ruang kerja
 	Show all open documents	Tampilkan semua dokumen terbuka
@@ -1429,6 +1430,10 @@ lighting	Light	Cahaya
 	Play Current Selection	Putar seleksi saat ini
 	Save Actions…	Simpan tindakan…
 	Load Actions…	Muat tindakan…
+	Reset Actions	Atur ulang tindakan
+	Replace the current actions with the default set?	Ganti tindakan saat ini dengan set default?
+	Append adds the default set after the current sets instead.	Tambahkan justru menambahkan set default setelah set saat ini.
+	Append	Tambahkan
 	Reflect Horizontal	Pencerminan horizontal
 	Rotate 90° CW	Putar 90° searah jarum jam
 	Set 1	Set 1
@@ -2737,6 +2742,8 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Tampilkan roda warna halus
 	Show segmented color wheel	Tampilkan roda warna bersegmen
 	Show color bars	Tampilkan bilah warna
+	Show brightness and hue on wheel	Tampilkan kecerahan dan rona pada roda
+	Show saturation and hue on wheel	Tampilkan saturasi dan rona pada roda
 	Add Color Tool	Alat Tambah Warna
 	Remove Color Tool	Alat Hapus Warna
 	Remove Color	Hapus Warna
@@ -4137,7 +4144,11 @@ font-technology	Variable	Variabel
 	Saved {path}	Berhasil menyimpan {path}
 	Saving	Menyimpan
 	Saving {}	Menyimpan {}
-	Search commands and tools…	Cari perintah dan alat…
+	Search commands, tools, panels and effects…	Cari perintah, alat, panel, dan efek…
+	No commands match	Tidak ada perintah yang cocok
+	{pos} of {total}: {name}	{pos} dari {total}: {name}
+@plural	{n} result|{n} results	{n} hasil
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} dari {n} hasil. Terus ketik untuk mempersempitnya.
 	Recent Commands	Perintah terbaru
 	No recent commands	Tidak ada perintah terbaru
 	Dashed Line	Garis putus-putus
@@ -6835,6 +6846,11 @@ breakText	Glyphs	Glif
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskerta
+	Nepali	Nepali
+	Assamese	Assam
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} dan yang lebih baru (versi {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Ekspor Semua Dokumen Terbuka sebagai PDF
@@ -7099,4 +7115,24 @@ breakText	Glyphs	Glif
 	No objects are selected.	Tidak ada objek yang dipilih.
 	Open a document to mark its fold lines.	Buka dokumen untuk menandai garis lipatnya.
 	Remove Fold Line Role	Hapus jenis garis
+	Check	Periksa
+	Check Fold Lines	Periksa garis lipat
+@msg	No cut lines are in the selection.	Tidak ada garis potong dalam seleksi.
+@msg	No cut lines are in the document.	Tidak ada garis potong dalam dokumen.
+@msg	The cut lines do not enclose an area.	Garis potong tidak melingkupi area apa pun.
+@msg	A cut line ends without meeting another cut line.	Sebuah garis potong berakhir tanpa bertemu garis potong lain.
+@msg	A gap between cut lines was closed.	Celah di antara garis potong telah ditutup.
+@msg	The fold lines are too complex to check.	Garis lipat terlalu rumit untuk diperiksa.
+@msg	A cut line and a crease lie on top of each other.	Sebuah garis potong dan sebuah garis lekuk bertumpuk.
+@msg	No cut lines are among the given objects.	Tidak ada garis potong di antara objek yang diberikan.
+@msg	Two fold lines lie on top of each other.	Dua garis lipat bertumpuk.
+@msg	A crease ends inside a panel.	Sebuah garis lekuk berakhir di dalam panel.
+@msg	A crease does not divide two panels.	Sebuah garis lekuk tidak membagi dua panel.
+@msg	A crease lies outside the cut outline, wholly or in part.	Sebuah garis lekuk berada seluruhnya atau sebagian di luar kontur potong.
+@msg	The pieces of a hinge are not on one straight line.	Bagian-bagian sebuah engsel tidak berada pada satu garis lurus.
+@msg	A gap between cut lines is too narrow to tell apart.	Celah di antara garis potong terlalu sempit untuk dibedakan.
+@msg	A cut-out area holds other fold lines or another blank.	Area yang dipotong berisi garis lipat lain atau bentangan lain.
+@msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
+@msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

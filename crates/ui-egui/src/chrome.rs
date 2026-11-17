@@ -133,8 +133,8 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Search → command palette (its shortcut opens it too).
             if search {
                 let tip = match menus::shortcut_of("help.commandPalette") {
-                    Some(sc) => format!("{}  ({})", tl!("Search commands and tools"), menus::shown_shortcut(sc)),
-                    None => tl!("Search commands and tools").to_string(),
+                    Some(sc) => format!("{}  ({})", tl!("Search commands, tools, panels and effects"), menus::shown_shortcut(sc)),
+                    None => tl!("Search commands, tools, panels and effects").to_string(),
                 };
                 if widgets::icon_button(ui, "search", &tip, app.ui.palette_open, icon).clicked() {
                     app.ui.palette_open = !app.ui.palette_open;

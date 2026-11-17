@@ -1553,6 +1553,8 @@ file-filter	Templates	範本
 	Show smooth color wheel	顯示平滑色輪
 	Show segmented color wheel	顯示分段色輪
 	Show color bars	顯示顏色條
+	Show brightness and hue on wheel	在色輪上顯示亮度和色相
+	Show saturation and hue on wheel	在色輪上顯示飽和度和色相
 	Add Color Tool	新增顏色工具
 	Remove Color Tool	移除顏色工具
 	Remove Color	移除顏色
@@ -3822,6 +3824,10 @@ diagnostics	ui	介面
 	Play Current Selection	播放目前選取項目
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
+	Reset Actions	重設動作
+	Replace the current actions with the default set?	要用預設動作組取代目前的動作嗎？
+	Append adds the default set after the current sets instead.	「附加」會改為將預設動作組加到目前動作組之後。
+	Append	附加
 	Plug-in Info	增效模組資訊
 	Plug-ins	增效模組
 	Plug-in…	增效模組…
@@ -4452,8 +4458,12 @@ digits	Malayalam	馬來亞拉姆數字
 	Locked	已鎖定
 	Hidden	已隱藏
 	Filter Layers Panel Rows	篩選圖層面板列
-	Search commands and tools	搜尋指令與工具
-	Search commands and tools…	搜尋指令與工具…
+	Search commands, tools, panels and effects	搜尋指令、工具、面板與效果
+	Search commands, tools, panels and effects…	搜尋指令、工具、面板與效果…
+	No commands match	沒有符合的指令
+	{pos} of {total}: {name}	第 {pos} 個，共 {total} 個：{name}
+@plural	{n} result|{n} results	{n} 個結果
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
 	Search Commands…	搜尋指令…
@@ -4573,8 +4583,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Shear	傾斜
 	Shear Tool	傾斜工具
 	Shear…	傾斜…
-	Shell Lower…	下弧形…
-	Shell Upper…	上弧形…
+	Shell Lower…	下殼形…
+	Shell Upper…	上殼形…
 	Shift	Shift
 	Shift to Color…	位移至顏色…
 	Shifts the tints of global and spot colors; other colors stay.	位移整體色與特別色的色調；其他顏色維持不變。
@@ -5504,6 +5514,7 @@ imageTrace	Outline	輪廓
 	 to set spacing and orientation	可設定間距與方向
 	:	：
 	Isolate Selected Group	隔離選取的群組
+	Isolate Selected Path	隔離選取的路徑
 	Isolate Selected Object	隔離選取的物件
 	Release Clipping Mask	釋放剪裁遮色片
 	Make Compound Path	製作複合路徑
@@ -5922,6 +5933,24 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	群組填色或筆畫上的 3D 效果不會繪製任何內容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
+@msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，也就是濾鏡的名稱
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 濾鏡的 id 最多 {MAX_NAME} 個字元
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 濾鏡的元素
+@msg	an SVG filter has no event attributes such as {_1}	SVG 濾鏡不能有 {_1} 等事件屬性
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 濾鏡的影像必須是 PNG、JPEG、GIF 或 WebP 格式的 data: URL
+@msg	the SVG filter isn't valid XML: {e}	SVG 濾鏡不是有效的 XML：{e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence 的 numOctaves 最大為 {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}最大為 {max}
+@msg	feConvolveMatrix's order	feConvolveMatrix 的 order
+@msg	feMorphology's radius	feMorphology 的 radius
+@msg	a blur's stdDeviation	模糊的 stdDeviation
+@msg	the SVG filter has no primitives	SVG 濾鏡沒有基本元件
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 濾鏡最多有 {MAX_PRIMITIVES} 個基本元件
+@msg	the SVG filter is too large once its attributes are written out	寫出屬性後，SVG 濾鏡過大
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 濾鏡的影像總共最多 {MAX_IMAGE_PIXELS} 像素
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	無法繪製 SVG 濾鏡：請檢查其基本元件及其輸入
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 濾鏡的元素最多巢狀 {MAX_DEPTH} 層
+@msg	an SVG filter is at most {_1} KB	SVG 濾鏡最大為 {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
@@ -7164,6 +7193,11 @@ breakText	Glyphs	字符
 	Malayalam	馬來亞拉姆文
 	Odia	歐利亞文
 	Urdu	烏都文
+	Sanskrit	梵文
+	Nepali	尼泊爾文
+	Assamese	阿薩姆文
+	Konkani	貢根文
+	Sindhi	信德文
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 及更新版本 (版本 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	將所有開啟的文件匯出為 PDF
@@ -9390,4 +9424,24 @@ breakText	Glyphs	字符
 	No objects are selected.	未選取任何物件。
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
+	Check	檢查
+	Check Fold Lines	檢查摺線
+@msg	No cut lines are in the selection.	選取範圍中沒有切割線。
+@msg	No cut lines are in the document.	文件中沒有切割線。
+@msg	The cut lines do not enclose an area.	切割線未圍成任何區域。
+@msg	A cut line ends without meeting another cut line.	一條切割線未與其他切割線相接就結束了。
+@msg	A gap between cut lines was closed.	已封閉切割線之間的間隙。
+@msg	The fold lines are too complex to check.	摺線過於複雜，無法檢查。
+@msg	A cut line and a crease lie on top of each other.	一條切割線與一條壓痕線重疊。
+@msg	No cut lines are among the given objects.	指定的物件中沒有切割線。
+@msg	Two fold lines lie on top of each other.	兩條摺線重疊。
+@msg	A crease ends inside a panel.	一條壓痕線在面板內部結束。
+@msg	A crease does not divide two panels.	一條壓痕線沒有分隔兩個面板。
+@msg	A crease lies outside the cut outline, wholly or in part.	一條壓痕線全部或部分位於切割輪廓之外。
+@msg	The pieces of a hinge are not on one straight line.	鉸鏈的各段不在一條直線上。
+@msg	A gap between cut lines is too narrow to tell apart.	切割線之間的間隙太窄，無法區分。
+@msg	A cut-out area holds other fold lines or another blank.	一個鏤空區域包含其他摺線或另一個展開圖。
+@msg	A panel is not joined to the rest by a crease.	一個面板沒有透過任何壓痕線與其餘部分相連。
+@msg	A fold line is on a non-printing layer.	一條摺線位於不列印的圖層上。
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，鉸鏈：{hinges}，錯誤：{errors}，警告：{warnings}
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小

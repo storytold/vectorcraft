@@ -1372,3 +1372,185 @@ fn a_move_from_the_centre_point_snaps_and_shows_the_hollow_arrow() {
     assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["matrix"][4] == json!(10.0)), "{a:?}");
     assert_eq!(t.cursor(&c, Point::new(160.0, 150.0), Mods::default()), Cursor::Arrow);
 }
+
+/// A drag event to `(x, y)` with Backtick held or not.
+fn quote_drag(x: f64, y: f64, held: bool) -> PointerEvent {
+    PointerEvent { backquote: held, ..PointerEvent::new(PointerKind::Drag, x, y) }
+}
+
+/// The shapes the last preview in `a` draws, as their commands and params: the steps of a
+/// `command.batch`, or the one shape. The bool says whether it was a batch.
+fn previewed_shapes(a: &[Action]) -> (bool, Vec<(String, Value)>) {
+    match a.last() {
+        Some(Action::Preview(c, v)) if c == "command.batch" => {
+            assert!(v.get("commands").and_then(Value::as_array).is_some(), "{v}");
+            let steps = v["commands"].as_array().into_iter().flatten();
+            (true, steps.map(|s| (s["command"].as_str().unwrap_or_default().to_owned(), s["params"].clone())).collect())
+        }
+        Some(Action::Preview(c, v)) => (false, vec![(c.clone(), v.clone())]),
+        _ => panic!("no preview: {a:?}"),
+    }
+}
+
+/// The widths of the rectangles the last preview in `a` draws, and whether it was a batch.
+fn previewed_widths(a: &[Action]) -> (bool, Vec<f64>) {
+    let (batch, shapes) = previewed_shapes(a);
+    (batch, shapes.iter().map(|(_, p)| p["width"].as_f64().unwrap_or(f64::NAN)).collect())
+}
+
+/// Backtick held while a rectangle is dragged out leaves a copy every 8 screen points the pointer
+/// travels from where the key was first held or the last copy was left; the shape being drawn
+/// still follows the pointer. A key press without pointer travel leaves none, letting go stops
+/// the copies and keeps those left, and pressing it again starts measuring afresh. The release
+/// commits once.
+#[test]
+fn backtick_drag_leaves_copies_of_the_rectangle_being_drawn() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(50.0, 30.0, false))), (false, vec![40.0]));
+    // The key goes down with the pointer still: no copy.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(50.0, 30.0, true))), (false, vec![40.0]));
+    // 4 pt of travel is short of the spacing.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(54.0, 30.0, true))), (false, vec![44.0]));
+    // 10 pt: a copy, the same as the shape shown, so the batch draws it once.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(60.0, 30.0, true))), (true, vec![50.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(70.0, 30.0, true))), (true, vec![50.0, 60.0]));
+    // 5 pt past the last copy: none left, and the live shape follows.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(75.0, 30.0, true))), (true, vec![50.0, 60.0, 65.0]));
+    // Let go of the key: the copies stay and no more are left.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(90.0, 30.0, false))), (true, vec![50.0, 60.0, 80.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(120.0, 30.0, false))), (true, vec![50.0, 60.0, 110.0]));
+    // Pressed again: measured from where it went down.
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(125.0, 30.0, true))), (true, vec![50.0, 60.0, 115.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(135.0, 30.0, true))), (true, vec![50.0, 60.0, 125.0]));
+    assert_eq!(t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 135.0, 30.0) }), vec![Action::Commit]);
+    // The next drag starts with no copies.
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(50.0, 30.0, false))), (false, vec![40.0]));
+}
+
+/// Backtick already held at the press measures the first copy from the pressed spot: the first
+/// drag 10 pt away leaves one, and 5 pt more leaves none.
+#[test]
+fn backtick_held_at_the_press_measures_copies_from_there() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Down, 0.0, 0.0) });
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(10.0, 10.0, true))), (true, vec![10.0]));
+    assert_eq!(previewed_widths(&t.pointer(&c, &quote_drag(15.0, 10.0, true))), (true, vec![10.0, 15.0]));
+    assert_eq!(t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 15.0, 10.0) }), vec![Action::Commit]);
+}
+
+/// Every shape tool leaves copies of its own shape, drawn with the modifiers held when each copy
+/// was left: Shift's square stays square, and Alt's from the centre stays centred.
+#[test]
+fn backtick_drag_leaves_copies_with_every_shape_tool_and_its_modifiers() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    for (id, cmd) in [
+        ("rectangle", "shape.rectangle"),
+        ("roundedRectangle", "shape.rectangle"),
+        ("ellipse", "shape.ellipse"),
+        ("polygon", "shape.polygon"),
+        ("star", "shape.star"),
+        ("lineSegment", "shape.line"),
+    ] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&c, &quote_drag(140.0, 130.0, true));
+        t.pointer(&c, &quote_drag(160.0, 130.0, true));
+        let (batch, shapes) = previewed_shapes(&t.pointer(&c, &quote_drag(180.0, 140.0, true)));
+        assert!(batch, "{id}");
+        assert_eq!(shapes.len(), 2, "{id}: two copies, the second the shape shown: {shapes:?}");
+        assert!(shapes.iter().all(|(c, _)| c == cmd), "{id}: {shapes:?}");
+        assert_ne!(shapes[0].1, shapes[1].1, "{id}: each copy as the drag showed it then");
+    }
+    // Shift and Alt: each copy is the square drawn from the centre at that moment.
+    let shift_alt = Mods { shift: true, alt: true, ..Default::default() };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    t.pointer(&c, &quote_drag(130.0, 120.0, true).with_mods(shift_alt));
+    let (_, shapes) = previewed_shapes(&t.pointer(&c, &quote_drag(150.0, 120.0, true).with_mods(shift_alt)));
+    let (_, r) = &shapes[0];
+    assert_eq!(r["width"], r["height"], "square: {r}");
+    assert_eq!(r["x"].as_f64().unwrap_or_default() + r["width"].as_f64().unwrap_or_default() / 2.0, 100.0, "centred: {r}");
+}
+
+/// ↑ during a polygon drag with copies left changes only the shape being drawn; Escape cancels
+/// the copies with it, and the next drag starts without them.
+#[test]
+fn backtick_copies_keep_their_sides_and_escape_cancels_them() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("polygon");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    t.pointer(&c, &quote_drag(140.0, 100.0, true));
+    t.pointer(&c, &quote_drag(150.0, 100.0, true));
+    let (batch, shapes) = previewed_shapes(&t.key(&c, ToolKey::Up, Mods::default()));
+    assert!(batch);
+    let sides: Vec<_> = shapes.iter().map(|(_, p)| p["sides"].clone()).collect();
+    assert_eq!(sides, vec![json!(6), json!(7)], "the copy keeps its sides");
+    assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    let (batch, _) = previewed_shapes(&t.pointer(&c, &quote_drag(140.0, 100.0, false)));
+    assert!(!batch, "no copies after Escape");
+}
+
+/// No copy is left of a shape without a height or a length, and one drag leaves at most
+/// [`MAX_COPIES`] copies while the shape being drawn still follows the pointer.
+#[test]
+fn backtick_copies_skip_empty_shapes_and_stop_at_the_limit() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    // A rectangle with no height: nothing is left.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    for x in [30.0, 40.0, 50.0, 60.0] {
+        assert!(!previewed_shapes(&t.pointer(&c, &quote_drag(x, 10.0, true))).0, "{x}");
+    }
+    // A line back on its start: no copy there.
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    t.pointer(&c, &quote_drag(30.0, 10.0, true));
+    assert!(!previewed_shapes(&t.pointer(&c, &quote_drag(10.0, 10.0, true))).0);
+    // The limit.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+    t.pointer(&c, &quote_drag(10.0, 10.0, true));
+    let mut last = vec![];
+    for i in 1..=(MAX_COPIES as u32 + 20) {
+        let at = 10.0 + f64::from(i) * 10.0;
+        last = t.pointer(&c, &quote_drag(at, at, true));
+    }
+    let (batch, widths) = previewed_widths(&last);
+    assert!(batch);
+    assert_eq!(widths.len(), MAX_COPIES + 1, "the copies and the shape being drawn");
+    assert_eq!(widths.last(), Some(&(10.0 + f64::from(MAX_COPIES as u32 + 20) * 10.0)), "the shape follows the pointer");
+}
+
+/// The spacing is measured on screen: at 400% zoom, 2 pt of travel is 8 screen points.
+#[test]
+fn backtick_copy_spacing_is_measured_on_screen() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, zoom: 4.0, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    t.pointer(&c, &quote_drag(20.0, 20.0, true));
+    assert!(!previewed_shapes(&t.pointer(&c, &quote_drag(21.5, 20.0, true))).0, "6 screen points");
+    assert!(previewed_shapes(&t.pointer(&c, &quote_drag(22.0, 20.0, true))).0, "8 screen points");
+}

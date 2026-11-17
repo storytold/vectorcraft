@@ -365,6 +365,30 @@ pub fn height_outside_font() -> Option<Vec<u8>> {
     heights_font(HEIGHT_OUTSIDE_FAMILY, Some((HEIGHT_OUTSIDE_X, HEIGHT_OUTSIDE_CAP)), false)
 }
 
+/// The family of [`numberless_font`].
+pub const NUMBERLESS_FAMILY: &str = "Numberlesstest Sans";
+
+/// The bundled Source Sans 3 Regular as family [`NUMBERLESS_FAMILY`], without its OS/2 and `post`
+/// tables, so it gives none of the numbers Show Similar Fonts compares faces by. `None` when it
+/// can't be built.
+pub fn numberless_font() -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let full = format!("{NUMBERLESS_FAMILY} Regular");
+    let postscript = format!("{}-Regular", NUMBERLESS_FAMILY.replace(' ', ""));
+    let name = name_table(&[(1, NUMBERLESS_FAMILY), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if builder.contains(tag) || tag == Tag::new(b"OS/2") || tag == Tag::new(b"post") {
+            continue;
+        }
+        builder.add_raw(tag, font.table_data(r.tag())?.as_bytes().to_vec());
+    }
+    Some(builder.build())
+}
+
 /// The bundled Source Sans 3 Regular as `family`: with the x height and cap height `heights` in
 /// its OS/2 table, else a version 1 OS/2 table, which holds neither; with `base`, the `BASE`
 /// table of [`height_font`].
@@ -1475,6 +1499,52 @@ fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
         if tag != Tag::new(b"GPOS") && tag != Tag::new(b"kern") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`large_cmap_font`].
+pub const LARGE_CMAP_FAMILY: &str = "Largecmap Sans";
+
+/// The family of [`cmapless_font`].
+pub const CMAPLESS_FAMILY: &str = "Cmapless Sans";
+
+/// The bundled Source Sans 3 Regular with a `cmap` of `count` characters from U+20000 up, about as
+/// many as a large CJK font maps when `count` is 50,000. Each character maps to the font's next
+/// glyph in turn after `.notdef`, so most glyphs have several characters.
+pub fn large_cmap_font(count: u32) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let glyphs = u32::from(font.maxp().ok()?.num_glyphs()).checked_sub(1).filter(|n| *n > 0)?;
+    let mappings = (0..count).map(|i| Some((char::from_u32(0x2_0000_u32.checked_add(i)?)?, write_fonts::types::GlyphId::new(1 + i % glyphs))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    source_sans_with_cmap(LARGE_CMAP_FAMILY, "LargecmapSans-Regular", Some(&cmap))
+}
+
+/// The bundled Source Sans 3 Regular without a `cmap` table: it maps no character.
+pub fn cmapless_font() -> Option<Vec<u8>> {
+    source_sans_with_cmap(CMAPLESS_FAMILY, "CmaplessSans-Regular", None)
+}
+
+/// The bundled Source Sans 3 Regular named `family`, with `cmap` in place of its own (none when
+/// `cmap` is `None`), and its other tables kept.
+fn source_sans_with_cmap(family: &str, postscript: &str, cmap: Option<&write_fonts::tables::cmap::Cmap>) -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let full = format!("{family} Regular");
+    let name = name_table(&[(1, family), (2, "Regular"), (4, full.as_str()), (6, postscript)])?;
+    let mut builder = FontBuilder::new();
+    if let Some(cmap) = cmap {
+        builder.add_table(cmap).ok()?;
+    }
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"cmap") && !builder.contains(tag) {
             builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
         }
     }

@@ -293,7 +293,11 @@ colors: `smooth` (the smooth wheel, also when unset; each opening starts there),
 selects its row for the sliders and a drag moves the row without changing a color). `wheelTool` turns on a wheel tool
 on either wheel: `add` (the Add Color tool) adds a click as a new color, the hue and saturation clicked at the base
 color's brightness (the patch's color on the segmented wheel), in a new row with no current colors (`from: []`) and
-`added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked. A color bar's
+`added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked.
+`wheelAxes: "hueBrightness"` makes both wheels show hue and brightness: brightness runs from black at the center to
+full at the edge, the wheel is drawn at the base color's saturation, a marker drag sets hue and brightness, the slider
+under the wheel sets saturation, and Add Color adds the hue and brightness clicked at the base color's saturation.
+`hueSaturation`, unset (each opening) or any other value shows hue and saturation; switching changes no color. A color bar's
 right-click menu has Remove Color too. The base color can't be removed. A removed color's row is dropped, unless it
 has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
 group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of

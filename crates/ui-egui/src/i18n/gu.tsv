@@ -330,7 +330,7 @@
 	Attach Objects on Path	પાથ પર ઑબ્જેક્ટ જોડો
 	Attach to Active Plane	સક્રિય સમતલ પર જોડો
 	Attribute:	ગુણધર્મ:
-	Attributes	ગુણધર્મો
+	Attributes	એટ્રિબ્યુટ્સ
 	Author Title:	લેખકનું શીર્ષક:
 	Author:	લેખક:
 	Auto	ઑટો
@@ -1858,6 +1858,7 @@
 	Isolate Blending	બ્લેન્ડિંગ અલગ કરો
 	Isolate Group	ગ્રૂપ અલગ કરો
 	Isolate Selected Group	પસંદ કરેલું ગ્રૂપ અલગ કરો
+	Isolate Selected Path	પસંદ કરેલો પાથ અલગ કરો
 	Isolate Selected Object	પસંદ કરેલી ઑબ્જેક્ટ અલગ કરો
 	Isometric Bottom	આઇસોમેટ્રિક નીચે
 	Isometric Left	આઇસોમેટ્રિક ડાબે
@@ -2051,6 +2052,10 @@
 	Live curve fitting	લાઇવ કર્વ ફિટિંગ
 	Live preview	લાઇવ પૂર્વાવલોકન
 	Load Actions…	ઍક્શન લોડ કરો…
+	Reset Actions	ઍક્શન રીસેટ કરો
+	Replace the current actions with the default set?	વર્તમાન ઍક્શનને ડિફૉલ્ટ સેટથી બદલવા છે?
+	Append adds the default set after the current sets instead.	ઉમેરો તેના બદલે ડિફૉલ્ટ સેટને વર્તમાન સેટ પછી ઉમેરે છે.
+	Append	ઉમેરો
 	Load All Styles	બધી સ્ટાઇલ લોડ કરો
 	Load All Styles…	બધી સ્ટાઇલ લોડ કરો…
 	Load Character Styles	કેરેક્ટર સ્ટાઇલ લોડ કરો
@@ -3388,8 +3393,12 @@
 	Search Commands…	આદેશો શોધો…
 	Search Fonts Folder	ફોન્ટ ફોલ્ડર શોધો
 	Search Preferences	પસંદગીઓ શોધો
-	Search commands and tools	આદેશો અને ટૂલ્સ શોધો
-	Search commands and tools…	આદેશો અને ટૂલ્સ શોધો…
+	Search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધો
+	Search commands, tools, panels and effects…	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધો…
+	No commands match	કોઈ આદેશ મેળ ખાતો નથી
+	{pos} of {total}: {name}	{total} માંથી {pos}: {name}
+@plural	{n} result|{n} results	{n} પરિણામ|{n} પરિણામો
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
 	Search images	છબીઓ શોધો
@@ -3607,6 +3616,8 @@
 	Show all plates	બધી પ્લેટ બતાવો
 	Show axis	અક્ષ બતાવો
 	Show color bars	રંગ બાર બતાવો
+	Show brightness and hue on wheel	વ્હીલ પર તેજ અને હ્યૂ બતાવો
+	Show saturation and hue on wheel	વ્હીલ પર સંતૃપ્તિ અને હ્યૂ બતાવો
 	Add Color Tool	રંગ ઉમેરો સાધન
 	Remove Color Tool	રંગ દૂર કરો સાધન
 	Remove Color	રંગ દૂર કરો
@@ -4846,6 +4857,26 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	No objects are selected.	કોઈ ઑબ્જેક્ટ પસંદ કરેલ નથી.
 	Open a document to mark its fold lines.	તેની ફોલ્ડ લાઇન્સ ચિહ્નિત કરવા દસ્તાવેજ ખોલો.
 	Remove Fold Line Role	લાઇન પ્રકાર દૂર કરો
+	Check	ચેક કરો
+	Check Fold Lines	ફોલ્ડ લાઇન્સ ચેક કરો
+@msg	No cut lines are in the selection.	પસંદગીમાં કોઈ કટ લાઇન નથી.
+@msg	No cut lines are in the document.	ડૉક્યુમેન્ટમાં કોઈ કટ લાઇન નથી.
+@msg	The cut lines do not enclose an area.	કટ લાઇન્સ કોઈ વિસ્તાર ઘેરતી નથી.
+@msg	A cut line ends without meeting another cut line.	એક કટ લાઇન બીજી કટ લાઇનને મળ્યા વિના પૂરી થાય છે.
+@msg	A gap between cut lines was closed.	કટ લાઇન્સ વચ્ચેનો ગેપ બંધ કરવામાં આવ્યો.
+@msg	The fold lines are too complex to check.	ફોલ્ડ લાઇન્સ ચેક કરવા માટે ખૂબ જટિલ છે.
+@msg	A cut line and a crease lie on top of each other.	એક કટ લાઇન અને એક ક્રીઝ લાઇન એકબીજા પર છે.
+@msg	No cut lines are among the given objects.	આપેલા ઑબ્જેક્ટ્સમાં કોઈ કટ લાઇન નથી.
+@msg	Two fold lines lie on top of each other.	બે ફોલ્ડ લાઇન્સ એકબીજા પર છે.
+@msg	A crease ends inside a panel.	એક ક્રીઝ લાઇન પેનલની અંદર પૂરી થાય છે.
+@msg	A crease does not divide two panels.	એક ક્રીઝ લાઇન બે પેનલને અલગ કરતી નથી.
+@msg	A crease lies outside the cut outline, wholly or in part.	એક ક્રીઝ લાઇન પૂરેપૂરી અથવા આંશિક રીતે કટ આઉટલાઇનની બહાર છે.
+@msg	The pieces of a hinge are not on one straight line.	એક હિન્જના ભાગો એક સીધી લાઇન પર નથી.
+@msg	A gap between cut lines is too narrow to tell apart.	કટ લાઇન્સ વચ્ચેનો ગેપ ઓળખવા માટે ખૂબ સાંકડો છે.
+@msg	A cut-out area holds other fold lines or another blank.	એક કટ-આઉટ વિસ્તારમાં બીજી ફોલ્ડ લાઇન્સ અથવા બીજું બ્લેન્ક છે.
+@msg	A panel is not joined to the rest by a crease.	એક પેનલ કોઈ ક્રીઝ લાઇનથી બાકીના સાથે જોડાયેલી નથી.
+@msg	A fold line is on a non-printing layer.	એક ફોલ્ડ લાઇન નોન-પ્રિન્ટિંગ લેયર પર છે.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	પેનલ: {panels}, હિન્જ: {hinges}, ભૂલો: {errors}, ચેતવણીઓ: {warnings}
 	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર

@@ -9,6 +9,10 @@
 //! to Tangent on, a line pressed on one convex curved path and dragged near another lands on a
 //! common tangent of the two, both its ends moving to the touch points ([`TangentLine`]).
 //! Escape cancels the drag and puts back the options its keys and Ctrl/Cmd changed.
+//! Backtick (`` ` ``, the grave accent) held while dragging leaves a copy of the shape being drawn
+//! every [`COPY_SPACING`] screen points the pointer travels, up to [`MAX_COPIES`] in one drag; the
+//! release keeps the copies and the last shape as one undo step
+//! (<https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=469>).
 //!
 //! The selection keeps its bounding box and its Live Shape widgets on show with the Rectangle,
 //! Rounded Rectangle, Ellipse, Polygon and Star tools, so a shape just drawn can be adjusted at
@@ -37,6 +41,14 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 /// Corner Radius, which the tool's radius is (its `prefs.list` spec), so ↑ and a Tool Options
 /// value stop there too.
 pub const MAX_CORNER_RADIUS: f64 = 1296.0;
+
+/// How far (screen points) the pointer travels with Backtick held between two copies a shape drag
+/// leaves: VectorCraft's own spacing.
+pub const COPY_SPACING: f64 = 8.0;
+
+/// The most copies one shape drag with Backtick held leaves, besides the shape it ends with:
+/// VectorCraft's own limit.
+pub const MAX_COPIES: usize = 128;
 
 /// How far (screen points, along each axis) from a bounding-box handle's centre a shape tool's
 /// press scales the selection: half the drawn handle square, which is 6 points wide at the default
@@ -124,6 +136,12 @@ pub struct ShapeTool {
     /// The move of the selection snapped to a point, a guide or the grid at its last step: the
     /// arrow turns hollow, as the Selection tool's does.
     snapped: bool,
+    /// The copies the drag has left with Backtick held, oldest first: each shape's command and
+    /// params as the drag showed it when the copy was left.
+    copies: Vec<(String, Value)>,
+    /// While Backtick is held in a drag, the pointer position the next copy is measured from: where
+    /// the last copy was left, or where the drag first had the key down.
+    copy_from: Option<Point>,
 }
 
 /// The options that keys and Ctrl/Cmd change while a shape is dragged out.
@@ -177,7 +195,54 @@ impl ShapeTool {
             guides: vec![],
             measure: None,
             snapped: false,
+            copies: vec![],
+            copy_from: None,
         }
+    }
+
+    /// With Backtick `held` at pointer `raw`, leave a copy of the shape the drag shows (`cmd` and
+    /// `params`) once the pointer is [`COPY_SPACING`] screen points from the last copy, or from
+    /// where the key was first held. A shape with no width, height or length, one the same as the
+    /// last copy, and any past [`MAX_COPIES`] are not left. Without the key, the next copy is
+    /// measured from where it goes down again.
+    fn leave_copy(&mut self, cx: &ToolContext, raw: Point, held: bool, cmd: &str, params: &Value) {
+        if !held {
+            self.copy_from = None;
+            return;
+        }
+        let Some(from) = self.copy_from else {
+            self.copy_from = Some(raw);
+            return;
+        };
+        let (x, y) = screen_offset(cx, raw - from);
+        if x.hypot(y) < COPY_SPACING || self.copies.len() >= MAX_COPIES || !draws_something(cmd, params) {
+            return;
+        }
+        self.copy_from = Some(raw);
+        if self.copies.last().is_some_and(|(c, p)| c == cmd && p == params) {
+            return;
+        }
+        self.copies.push((cmd.to_owned(), params.clone()));
+    }
+
+    /// The preview of the shape `cmd` with `params`: with copies left, a `command.batch` that draws
+    /// them and then the shape, unless it has no size or is the same as the last copy.
+    fn preview(&self, cmd: String, params: Value) -> Action {
+        if self.copies.is_empty() {
+            return Action::Preview(cmd, params);
+        }
+        let step = |c: &str, p: &Value| json!({ "command": c, "params": p });
+        let mut commands: Vec<Value> = self.copies.iter().map(|(c, p)| step(c, p)).collect();
+        if draws_something(&cmd, &params) && self.copies.last().is_none_or(|(c, p)| *c != cmd || *p != params) {
+            commands.push(step(&cmd, &params));
+        }
+        Action::Preview("command.batch".into(), json!({ "label": self.label(), "commands": commands }))
+    }
+
+    /// Forget the copies of the drag that ended.
+    fn clear_copies(&mut self) {
+        self.copies.clear();
+        self.copy_from = None;
     }
 
     fn drag_options(&self) -> DragOptions {
@@ -500,6 +565,19 @@ impl ShapeTool {
     }
 }
 
+/// Does the shape command `cmd` with `params` draw something: a box with a width and a height, a
+/// polygon or star with a radius, a line with a length?
+fn draws_something(cmd: &str, params: &Value) -> bool {
+    let n = |k: &str| params.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    match cmd {
+        // The drag gives a polygon or star a radius of at least 0.01 pt, even on its centre.
+        "shape.polygon" => n("radius") > 0.01,
+        "shape.star" => n("radius1") > 0.01,
+        "shape.line" => (n("x2") - n("x1")).hypot(n("y2") - n("y1")) > 0.0,
+        _ => n("width").abs() > 0.0 && n("height").abs() > 0.0,
+    }
+}
+
 /// The box a drag from `start` to `p` draws (from its centre with Alt, square with Shift),
 /// measured along the page axes turned by Constrain Angle `base`: the box in those axes, and the
 /// axes (`None` for the page's own: 0° or a whole turn, where the box is on the page exactly).
@@ -597,6 +675,11 @@ impl Tool for ShapeTool {
                 self.began = false;
                 self.inner = None;
                 self.before_drag = None;
+                self.clear_copies();
+                // Backtick already held at the press: the copies are measured from there.
+                if ev.backquote {
+                    self.copy_from = Some(ev.pos);
+                }
                 vec![]
             }
             PointerKind::Drag => {
@@ -653,7 +736,8 @@ impl Tool for ShapeTool {
                 };
                 let (a, b) = tangent.unwrap_or((s, ev.pos));
                 let (c, v) = self.command_at(a, b, ev.mods, cx.constrain_angle);
-                out.push(Action::Preview(c, v));
+                self.leave_copy(cx, raw, ev.backquote, &c, &v);
+                out.push(self.preview(c, v));
                 out
             }
             PointerKind::Up => {
@@ -662,6 +746,7 @@ impl Tool for ShapeTool {
                 self.tangent_line.clear();
                 self.inner = None;
                 self.before_drag = None;
+                self.clear_copies();
                 if self.began {
                     self.began = false;
                     vec![Action::Commit]
@@ -724,11 +809,12 @@ impl Tool for ShapeTool {
         };
         if changed {
             let (c, v) = self.command_at(s, self.last, self.mods, cx.constrain_angle);
-            vec![Action::Preview(c, v)]
+            vec![self.preview(c, v)]
         } else if key == ToolKey::Escape {
             self.start = None;
             self.began = false;
             self.inner = None;
+            self.clear_copies();
             if let Some(o) = self.before_drag.take() {
                 self.restore_drag_options(o);
             }

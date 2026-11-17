@@ -456,7 +456,26 @@ fn control_render_matches_a_png_export_on_white() {
     std::fs::write(base.join("in/edges.svg"), svg).unwrap();
     let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/edges.svg"))}));
     assert_eq!(r["ok"], true, "{r}");
-    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let pixels = |v: &Value| {
+        craft_image_codecs::decode(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+    };
     let r = request(&mut app, &tx, "app.export", json!({"format": "png", "background": "white"}));
     let export = pixels(&r["result"]["dataBase64"]);
     let r = request(&mut app, &tx, "ui.render", json!({}));
@@ -485,7 +504,26 @@ fn control_render_draws_the_trace_view_with_trace_views() {
     app.run("select.all", json!({})).unwrap();
     app.run("imageTrace.make", json!({"params": {"ignoreWhite": true}})).unwrap();
     app.run("imageTrace.setView", json!({"view": "sourceImage"})).unwrap();
-    let pixels = |v: &Value| image::load_from_memory(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap()).unwrap().to_rgba8();
+    let pixels = |v: &Value| {
+        craft_image_codecs::decode(&vectorcraft_format::base64_decode(v.as_str().unwrap()).unwrap())
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+    };
     let view = pixels(&request(&mut app, &tx, "ui.render", json!({"traceViews": true}))["result"]["pngBase64"]);
     let result = pixels(&request(&mut app, &tx, "ui.render", json!({}))["result"]["pngBase64"]);
     let (beside, middle) = (view.get_pixel(10, 10).0, view.get_pixel(50, 50).0);

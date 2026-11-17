@@ -139,7 +139,8 @@ fn freeform_points_that_share_a_model_are_written_as_their_mix() {
                 _ => None,
             })
             .unwrap();
-        let px = image::load_from_memory(&back.document.images[&im.key].bytes).unwrap().to_rgba8();
+        let decoded = craft_image_codecs::decode(&back.document.images[&im.key].bytes).unwrap();
+        let px = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
         px.get_pixel(px.width() / 2, px.height() / 2).0
     };
     let near = |got: [u8; 4], want: [u8; 4]| got.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 6);
@@ -181,7 +182,8 @@ fn dashes_gradients_and_images_round_trip_through_emf() {
     assert_eq!(im.height, 2);
     let placed = im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, 4.0, 2.0));
     assert!(near(placed, Rect::new(100.0, 10.0, 120.0, 20.0), 0.05), "{placed:?}");
-    let px = image::load_from_memory(&back.document.images[&im.key].bytes).unwrap().to_rgba8();
+    let decoded = craft_image_codecs::decode(&back.document.images[&im.key].bytes).unwrap();
+    let px = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
     assert_eq!(px.get_pixel(0, 0).0, [0, 200, 0, 255]);
 }
 

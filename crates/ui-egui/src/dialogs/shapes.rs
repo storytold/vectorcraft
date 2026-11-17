@@ -398,6 +398,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         })
         .or_else(|| (d.kind == "ellipse").then(|| json!({"anchors": ellipse_anchors(d)})))
         .or_else(|| OPTION_TOOLS.contains(&d.kind.as_str()).then(|| tool_options(d)));
+    let corner_radius = if d.kind == "roundedRectangle" { Some(rounded_radius(app, d)?) } else { None };
     let (x, y) = (d.f64("x", 0.0), d.f64("y", 0.0));
     let (bx, by) = box_origin(d);
     let (id, params) = match d.kind.as_str() {
@@ -462,7 +463,13 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         }
         _ => (
             "shape.rectangle",
-            json!({"x": bx, "y": by, "width": d.f64("width", 100.0), "height": d.f64("height", 100.0), "radius": d.f64("radius", 0.0)}),
+            json!({
+                "x": bx,
+                "y": by,
+                "width": d.f64("width", 100.0),
+                "height": d.f64("height", 100.0),
+                "radius": corner_radius.unwrap_or_else(|| d.f64("radius", 0.0)),
+            }),
         ),
     };
     // On the active plane while the perspective grid shows, sized in plane units from the click;
@@ -484,7 +491,19 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(options) = options {
         app.run("tool.setOption", json!({"tool": d.kind, "values": options}))?;
     }
+    // The radius of the rounded rectangle drawn is General › Corner Radius from then on.
+    if let Some(r) = corner_radius.filter(|r| *r != app.session.prefs.corner_radius) {
+        app.run("prefs.set", json!({"key": "cornerRadius", "value": r}))?;
+    }
     Ok(result)
+}
+
+/// The Rounded Rectangle dialog's radius in points, checked as General › Corner Radius checks it
+/// (an error leaves the dialog open and draws nothing). Without the field, the preference.
+fn rounded_radius(app: &VectorcraftApp, d: &Dialog) -> Result<f64, String> {
+    let r = if d.fields.contains_key("radius") { d.f64("radius", f64::NAN) } else { app.session.prefs.corner_radius };
+    vectorcraft_engine::cmd::prefscmds::validate("cornerRadius", &json!(r))?;
+    Ok(r)
 }
 
 #[cfg(test)]
@@ -522,6 +541,48 @@ mod tests {
         let fields = |alt: bool| Dialog::new("rectangle", json!({"x": 100.0, "y": 50.0, "alt": alt, "width": "40 pt", "height": "20 pt"}));
         assert_eq!(box_origin(&fields(false)), (100.0, 50.0));
         assert_eq!(box_origin(&fields(true)), (80.0, 40.0));
+    }
+
+    /// The Rounded Rectangle click dialog opens on General › Corner Radius, and OK makes the radius
+    /// typed (in any unit) that preference: the next dialog and the tool's next drag use it.
+    #[test]
+    fn rounded_rectangle_click_dialog_opens_on_and_sets_the_corner_radius() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("tool.select", json!({"tool": "roundedRectangle"})).unwrap();
+        app.run("prefs.set", json!({"key": "cornerRadius", "value": 20})).unwrap();
+
+        super::super::open_tool_dialog(&mut app, "roundedRectangle", json!({"x": 40.0, "y": 60.0}));
+        let d = app.ui.dialog.as_mut().expect("Rounded Rectangle dialog");
+        assert_eq!((d.kind.as_str(), d.f64("radius", 0.0)), ("roundedRectangle", 20.0));
+        d.fields.insert("radius".into(), json!("0.5 in"));
+        super::super::confirm(&mut app).unwrap();
+
+        assert!(app.ui.dialog.is_none());
+        let n = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].clone();
+        assert_eq!(crate::panels::corner_radius(&app, &n), Some(36.0));
+        assert_eq!(app.session.prefs.corner_radius, 36.0);
+        assert_eq!(app.session.tool_options_of("roundedRectangle")["cornerRadius"], json!(36.0));
+        super::super::open_tool_dialog(&mut app, "roundedRectangle", json!({"x": 40.0, "y": 60.0}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().f64("radius", 0.0), 36.0);
+    }
+
+    /// A radius General › Corner Radius would refuse leaves the dialog open, draws nothing and
+    /// keeps the preference.
+    #[test]
+    fn rounded_rectangle_click_dialog_refuses_a_radius_out_of_range() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let before = app.session.prefs.corner_radius;
+        for bad in [json!(-1), json!(1297), json!("19 in"), json!("wide")] {
+            super::super::open_tool_dialog(&mut app, "roundedRectangle", json!({"x": 40.0, "y": 60.0}));
+            app.ui.dialog.as_mut().unwrap().fields.insert("radius".into(), bad.clone());
+            assert!(super::super::confirm(&mut app).is_err(), "{bad}");
+            assert!(app.ui.dialog.is_some(), "{bad}");
+            assert!(app.session.doc().unwrap().doc.layers[0].children().unwrap().is_empty(), "{bad}");
+            assert_eq!(app.session.prefs.corner_radius, before, "{bad}");
+            app.ui.dialog = None;
+        }
     }
 
     /// Turn the link on or off as its button or `ui.dialog.set` does, then apply it as the form

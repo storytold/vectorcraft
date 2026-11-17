@@ -164,19 +164,22 @@ mod tests {
 
     #[test]
     fn a_16_bit_png_at_8_bits_keeps_its_color_type_and_icc_profile() {
-        use image::{ImageDecoder, ImageEncoder};
+        use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, SampleType};
         let icc = vectorcraft_color::cms::icc_bytes(vectorcraft_color::cms::GRAY).unwrap().to_vec();
-        let gray = image::DynamicImage::ImageLuma16(image::ImageBuffer::from_fn(4, 2, |x, y| image::Luma([x as u16 * 20000 + y as u16])));
-        let mut png = vec![];
-        let mut encoder = image::codecs::png::PngEncoder::new(&mut png);
-        encoder.set_icc_profile(icc.clone()).unwrap();
-        gray.write_with_encoder(encoder).unwrap();
+        let u16_samples: Vec<u16> = (0..2).flat_map(|y| (0..4).map(move |x| x as u16 * 20000 + y as u16)).collect();
+        let raw_u16: Vec<u8> = u16_samples.iter().flat_map(|v| v.to_ne_bytes()).collect();
+        let mut src = CodecImage::from_raw(4, 2, ChannelLayout::Gray, SampleType::U16, raw_u16).unwrap();
+        src.icc = Some(icc.clone());
+        let png = craft_image_codecs::encode(&src, Format::Png, &EncodeOptions::default()).unwrap();
         assert!(png_16_bit(&png));
         let out = png_8_bit(&png).unwrap();
         assert!(!png_16_bit(&out));
-        let mut decoder = image::codecs::png::PngDecoder::new(std::io::Cursor::new(out.as_slice())).unwrap();
-        assert_eq!(decoder.icc_profile().unwrap(), Some(icc));
-        assert_eq!(decoder.color_type(), image::ColorType::L8);
-        assert_eq!(image::DynamicImage::from_decoder(decoder).unwrap().to_luma8(), gray.to_luma8());
+        let decoded = craft_image_codecs::decode_as_with(Format::Png, &out, &craft_image_codecs::DecodeOptions::default()).unwrap();
+        assert_eq!(decoded.icc, Some(icc));
+        assert_eq!(decoded.layout(), ChannelLayout::Gray);
+        assert_eq!(decoded.sample_type(), SampleType::U8);
+        // Rounded to the nearest 8-bit level, as the 8-bit copy is made.
+        let want: Vec<u8> = u16_samples.into_iter().map(|v| ((u32::from(v) * 255 + 32_767) / 65_535) as u8).collect();
+        assert_eq!(decoded.data(), want);
     }
 }

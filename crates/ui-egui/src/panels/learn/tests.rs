@@ -104,7 +104,7 @@ fn explore_tutorials_on_the_app_bar_shows_and_hides_the_learn_panel() {
     let ctx = context();
     assert!(!shown(&app));
     let nodes = frame(&mut app, &ctx, vec![], app_bar);
-    let search = center_where(&nodes, |label| label.starts_with("Search commands and tools"));
+    let search = center_where(&nodes, |label| label.starts_with("Search commands, tools, panels and effects"));
     let learn = center(&nodes, "Explore tutorials");
     let (search, learn) = (search.expect("the search icon shows"), learn.expect("the app bar has Explore tutorials"));
     assert!(learn.x < search.x && (learn.y - search.y).abs() < 1.0, "beside the search icon: {learn:?}, {search:?}");

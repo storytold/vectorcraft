@@ -621,7 +621,7 @@ digits	Malayalam	말라얄람어
 	Feather…	페더…
 	SVG Filters	SVG 필터
 	Apply SVG Filter…	SVG 필터 적용…
-	Warp	왜곡
+	Warp	뒤틀기
 	Arc…	호…
 	Arc Lower…	아래쪽 호…
 	Arc Upper…	위쪽 호…
@@ -768,7 +768,7 @@ digits	Malayalam	말라얄람어
 	Keep Tools Beside the Canvas	캔버스 옆에 도구 배치
 	Actions	액션
 	Asset Export	에셋 내보내기
-	Attributes	속성
+	Attributes	특성
 	Brushes	브러시
 	Color	색상
 	Color Guide	색상 가이드
@@ -943,6 +943,7 @@ digits	Malayalam	말라얄람어
 	Auto Color	자동 색상
 	Automatic	자동
 	Isolate Selected Group	선택한 그룹 격리
+	Isolate Selected Path	선택한 패스 격리
 	Isolate Selected Object	선택한 개체 격리
 	Exit Isolation Mode	격리 모드 종료
 	Make Clipping Mask	클리핑 마스크 만들기
@@ -1949,6 +1950,8 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Show brightness and hue on wheel	색상환에 밝기 및 색조 표시
+	Show saturation and hue on wheel	색상환에 채도 및 색조 표시
 	Add Color Tool	색상 추가 도구
 	Remove Color Tool	색상 제거 도구
 	Remove Color	색상 제거
@@ -2774,6 +2777,10 @@ diagnostics	ui	UI
 	Play Current Selection	현재 선택 항목 재생
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
+	Reset Actions	액션 재설정
+	Replace the current actions with the default set?	현재 액션을 기본 세트로 바꾸시겠습니까?
+	Append adds the default set after the current sets instead.	추가를 누르면 대신 기본 세트를 현재 세트 뒤에 추가합니다.
+	Append	추가
 	Plug-in Info	플러그인 정보
 	Plug-in…	플러그인…
 	Points	포인트
@@ -3193,8 +3200,12 @@ mark-style	Japanese	일본식
 	Filter Layers Panel Rows	레이어 패널 행 필터링
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom`은 변경된 설정을 나타냅니다. 프리셋을 다른 이름으로 저장하세요
 @msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
-	Search commands and tools	명령 및 도구 검색
-	Search commands and tools…	명령 및 도구 검색…
+	Search commands, tools, panels and effects	명령, 도구, 패널 및 효과 검색
+	Search commands, tools, panels and effects…	명령, 도구, 패널 및 효과 검색…
+	No commands match	일치하는 명령이 없습니다
+	{pos} of {total}: {name}	{total}개 중 {pos}번째: {name}
+@plural	{n} result|{n} results	결과 {n}개
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
 	Recent Commands	최근 명령
 	No recent commands	최근 명령 없음
 	Secondary	보조
@@ -5794,6 +5805,24 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
+@msg	an SVG filter has no event attributes such as {_1}	SVG 필터에는 {_1} 같은 이벤트 속성이 없습니다
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 필터의 이미지는 PNG, JPEG, GIF 또는 WebP data: URL입니다
+@msg	the SVG filter isn't valid XML: {e}	SVG 필터가 올바른 XML이 아닙니다: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence의 numOctaves는 최대 {MAX_OCTAVES}입니다
+@msg	{what} is at most {max}	{what}은(는) 최대 {max}입니다
+@msg	feConvolveMatrix's order	feConvolveMatrix의 order
+@msg	feMorphology's radius	feMorphology의 radius
+@msg	a blur's stdDeviation	흐림 효과의 stdDeviation
+@msg	the SVG filter has no primitives	SVG 필터에 프리미티브가 없습니다
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 필터의 프리미티브는 최대 {MAX_PRIMITIVES}개입니다
+@msg	the SVG filter is too large once its attributes are written out	속성을 모두 쓰면 SVG 필터가 너무 커집니다
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 필터의 이미지는 모두 합쳐 최대 {MAX_IMAGE_PIXELS}픽셀입니다
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG 필터를 그릴 수 없습니다: 프리미티브와 그 입력을 확인하세요
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 필터의 요소는 최대 {MAX_DEPTH}단계까지 중첩됩니다
+@msg	an SVG filter is at most {_1} KB	SVG 필터는 최대 {_1}KB입니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
@@ -7105,6 +7134,11 @@ breakText	Glyphs	글리프
 	Malayalam	말라얄람어
 	Odia	오리야어
 	Urdu	우르두어
+	Sanskrit	산스크리트어
+	Nepali	네팔어
+	Assamese	아삼어
+	Konkani	코카니어
+	Sindhi	신디어
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	열린 모든 문서를 PDF로 내보내기
@@ -9337,3 +9371,23 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Check	검사
+	Check Fold Lines	접는 선 검사
+@msg	No cut lines are in the selection.	선택 영역에 재단선이 없습니다.
+@msg	No cut lines are in the document.	문서에 재단선이 없습니다.
+@msg	The cut lines do not enclose an area.	재단선이 영역을 둘러싸지 않습니다.
+@msg	A cut line ends without meeting another cut line.	재단선이 다른 재단선과 만나지 않고 끝납니다.
+@msg	A gap between cut lines was closed.	재단선 사이의 틈을 닫았습니다.
+@msg	The fold lines are too complex to check.	접는 선이 너무 복잡해서 검사할 수 없습니다.
+@msg	A cut line and a crease lie on top of each other.	재단선과 오시선이 겹쳐 있습니다.
+@msg	No cut lines are among the given objects.	지정한 개체에 재단선이 없습니다.
+@msg	Two fold lines lie on top of each other.	접는 선 두 개가 겹쳐 있습니다.
+@msg	A crease ends inside a panel.	오시선이 패널 안에서 끝납니다.
+@msg	A crease does not divide two panels.	오시선이 두 패널을 나누지 않습니다.
+@msg	A crease lies outside the cut outline, wholly or in part.	오시선의 전체 또는 일부가 재단 윤곽선 밖에 있습니다.
+@msg	The pieces of a hinge are not on one straight line.	힌지의 조각들이 한 직선 위에 있지 않습니다.
+@msg	A gap between cut lines is too narrow to tell apart.	재단선 사이의 틈이 너무 좁아 구별할 수 없습니다.
+@msg	A cut-out area holds other fold lines or another blank.	잘라 낸 영역에 다른 접는 선이나 다른 전개도가 있습니다.
+@msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
+@msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}

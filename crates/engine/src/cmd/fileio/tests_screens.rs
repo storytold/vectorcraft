@@ -34,7 +34,25 @@ fn names(r: &Value) -> Vec<String> {
 }
 
 fn size(png: &[u8]) -> (u32, u32) {
-    image::load_from_memory(png).unwrap().to_rgba8().dimensions()
+    craft_image_codecs::decode(png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .dimensions()
 }
 
 #[test]
@@ -413,7 +431,28 @@ fn rich_black_reaches_the_files() {
     s.execute("paint.setFill", &json!({"color": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
     let p = json!({"formats": [{"format": "png"}]});
-    let px = |r: &Value| image::load_from_memory(&files(r)[0].1).unwrap().to_rgba8().get_pixel(10, 10).0;
+    let px = |r: &Value| {
+        craft_image_codecs::decode(&files(r)[0].1)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(10, 10)
+            .0
+    };
     let accurate = px(&export(&mut s, p.clone()));
     assert!(accurate[0] > 10, "accurate: dark grey, {accurate:?}");
     s.execute("prefs.set", &json!({"key": "blackOutput", "value": "rich"})).unwrap();
@@ -589,7 +628,28 @@ fn png_8_rows_write_indexed_colour() {
 #[test]
 fn a_second_file_with_a_taken_name_is_numbered() {
     let mut s = session(1);
-    let px = |png: &[u8]| image::load_from_memory(png).unwrap().to_rgba8().get_pixel(1, 1).0;
+    let px = |png: &[u8]| {
+        craft_image_codecs::decode(png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(1, 1)
+            .0
+    };
     let rows = json!([{"format": "png", "background": "black"}, {"format": "png", "background": "white"}, {"format": "png", "background": "black"}]);
     let r = export(&mut s, json!({ "formats": rows }));
     assert_eq!(names(&r), ["Artboard-1.png", "Artboard-1-2.png"]);
@@ -873,7 +933,28 @@ fn kept_settings_leave_out_a_folder_outside_the_read_root() {
 #[test]
 fn format_settings_apply_to_their_rows_and_rows_win() {
     let mut s = session(1);
-    let px = |png: &[u8]| image::load_from_memory(png).unwrap().to_rgba8().get_pixel(1, 1).0;
+    let px = |png: &[u8]| {
+        craft_image_codecs::decode(png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(1, 1)
+            .0
+    };
     let r = export(
         &mut s,
         json!({"settings": {"png": {"background": "black", "scale": 9, "artboard": 7}, "jpg": {"quality": 5}}, "formats": [{"format": "png"}, {"format": "png", "suffix": "-w", "background": "white"}, {"format": "jpg"}, {"format": "jpg", "quality": 100, "suffix": "-100"}]}),
@@ -1162,6 +1243,41 @@ fn single_file_pdfs_hold_every_chosen_artboard() {
     let r = export(&mut s, json!({"range": "1-2", "pdfs": "multiple", "formats": [{"format": "pdf"}]}));
     assert_eq!(names(&r), ["Artboard-1.pdf", "Artboard-2.pdf"]);
     assert!(s.execute("document.exportForScreens", &json!({"pdfs": "both", "formats": [{"format": "pdf"}]})).is_err());
+}
+
+/// Export PDFs As › Single file holds artboards: with assets, layers or a file per selected object,
+/// whose files each hold one item's art, it is refused (the Example line too) instead of writing
+/// the first item alone under the document's name; Multiple files writes a PDF of each item. The
+/// selection as one file is one PDF either way.
+#[test]
+fn single_file_pdfs_are_refused_for_assets_layers_and_each_object() {
+    let mut s = session(1);
+    s.execute("layer.new", &json!({"name": "Second"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 30, "y": 5, "width": 8, "height": 8})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let layers: Vec<u64> = doc.layers.iter().map(|l| l.id.0).collect();
+    let art: Vec<u64> = doc.layers.iter().filter_map(|l| l.children()).flatten().map(|c| c.id.0).collect();
+    assert_eq!((layers.len(), art.len()), (2, 2));
+    let a = s.execute("assets.add", &json!({"ids": [art[0]], "name": "Square"})).unwrap()["assets"][0].as_u64().unwrap();
+    let b = s.execute("assets.add", &json!({"ids": [art[1]], "name": "Dot"})).unwrap()["assets"][0].as_u64().unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let pdf = json!([{"format": "pdf"}]);
+    for source in [json!({"assets": [a, b]}), json!({"layers": layers}), json!({"selection": "each"})] {
+        let mut p = source.clone();
+        p["formats"] = pdf.clone();
+        p["pdfs"] = json!("multiple");
+        let r = export(&mut s, p.clone());
+        assert_eq!(names(&r).len(), 2, "a PDF each: {:?} ({source})", names(&r));
+        for (name, bytes) in files(&r) {
+            assert_eq!(vectorcraft_pdf::import(&bytes).unwrap().artboards.len(), 1, "{name}");
+        }
+        p["pdfs"] = json!("single");
+        let e = s.execute("document.exportForScreens", &p).unwrap_err().to_string();
+        assert!(e.contains("pdfs `single`"), "{e} ({source})");
+        assert!(super::screens::first_file(&s, &p).is_err(), "{source}");
+    }
+    let r = export(&mut s, json!({"selection": "one", "pdfs": "single", "formats": pdf}));
+    assert_eq!(names(&r), ["Selection.pdf"]);
 }
 
 /// The warnings of reply `r` that name an option the file doesn't read.

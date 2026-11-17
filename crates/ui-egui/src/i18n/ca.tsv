@@ -2044,6 +2044,8 @@ digits	Malayalam	Malaiàlam
 	Show smooth color wheel	Mostra la roda de color contínua
 	Show segmented color wheel	Mostra la roda de color segmentada
 	Show color bars	Mostra les barres de color
+	Show brightness and hue on wheel	Mostra la lluentor i el to a la roda
+	Show saturation and hue on wheel	Mostra la saturació i el to a la roda
 	Add Color Tool	Eina Afegeix color
 	Remove Color Tool	Eina Elimina color
 	Remove Color	Elimina el color
@@ -2265,6 +2267,7 @@ digits	Malayalam	Malaiàlam
 	Isolate Blending	Aïlla la fusió
 	Isolate Group	Aïlla el grup
 	Isolate Selected Group	Aïlla el grup seleccionat
+	Isolate Selected Path	Aïlla el traçat seleccionat
 	Isolate Selected Object	Aïlla l’objecte seleccionat
 	Isometric Bottom	Isomètrica inferior
 	Isometric Left	Isomètrica esquerra
@@ -3329,6 +3332,10 @@ digits	Malayalam	Malaiàlam
 	Play Current Selection	Reprodueix la selecció actual
 	Save Actions…	Desa les accions…
 	Load Actions…	Carrega accions…
+	Reset Actions	Restableix les accions
+	Replace the current actions with the default set?	Voleu reemplaçar les accions actuals pel conjunt predeterminat?
+	Append adds the default set after the current sets instead.	Amb Afegeix, el conjunt predeterminat s’afegeix després dels conjunts actuals.
+	Append	Afegeix
 	Play:	Reprodueix:
 	Plug-in Info	Informació del complement
 	Plug-ins	Complements
@@ -3976,42 +3983,42 @@ digits	Malayalam	Malaiàlam
 	Saved	Desat
 	Saved recovery data for {title}	S’han desat les dades de recuperació de {title}
 	Saved Selection 1	Selecció desada 1
-	Saved Selection 10	Selecció desada 2
-	Saved Selection 11	Selecció desada 3
-	Saved Selection 12	Selecció desada 4
-	Saved Selection 13	Selecció desada 5
-	Saved Selection 14	Selecció desada 6
-	Saved Selection 15	Selecció desada 7
-	Saved Selection 16	Selecció desada 8
-	Saved Selection 17	Selecció desada 9
-	Saved Selection 18	Selecció desada 10
-	Saved Selection 19	Selecció desada 11
-	Saved Selection 2	Selecció desada 12
-	Saved Selection 20	Selecció desada 13
-	Saved Selection 21	Selecció desada 14
-	Saved Selection 22	Selecció desada 15
-	Saved Selection 23	Selecció desada 16
-	Saved Selection 24	Selecció desada 17
-	Saved Selection 25	Selecció desada 18
-	Saved Selection 3	Selecció desada 19
-	Saved Selection 4	Selecció desada 20
-	Saved Selection 5	Selecció desada 21
-	Saved Selection 6	Selecció desada 22
-	Saved Selection 7	Selecció desada 23
-	Saved Selection 8	Selecció desada 24
-	Saved Selection 9	Selecció desada 25
+	Saved Selection 10	Selecció desada 10
+	Saved Selection 11	Selecció desada 11
+	Saved Selection 12	Selecció desada 12
+	Saved Selection 13	Selecció desada 13
+	Saved Selection 14	Selecció desada 14
+	Saved Selection 15	Selecció desada 15
+	Saved Selection 16	Selecció desada 16
+	Saved Selection 17	Selecció desada 17
+	Saved Selection 18	Selecció desada 18
+	Saved Selection 19	Selecció desada 19
+	Saved Selection 2	Selecció desada 2
+	Saved Selection 20	Selecció desada 20
+	Saved Selection 21	Selecció desada 21
+	Saved Selection 22	Selecció desada 22
+	Saved Selection 23	Selecció desada 23
+	Saved Selection 24	Selecció desada 24
+	Saved Selection 25	Selecció desada 25
+	Saved Selection 3	Selecció desada 3
+	Saved Selection 4	Selecció desada 4
+	Saved Selection 5	Selecció desada 5
+	Saved Selection 6	Selecció desada 6
+	Saved Selection 7	Selecció desada 7
+	Saved Selection 8	Selecció desada 8
+	Saved Selection 9	Selecció desada 9
 	Saved Selections	Seleccions desades
 	Saved to User Defined: {}	Desat a Definit per l’usuari: {}
 	Saved View 1	Vista desada 1
-	Saved View 10	Vista desada 2
-	Saved View 11	Vista desada 3
-	Saved View 12	Vista desada 4
-	Saved View 13	Vista desada 5
-	Saved View 14	Vista desada 6
-	Saved View 15	Vista desada 7
-	Saved View 16	Vista desada 8
-	Saved View 17	Vista desada 9
-	Saved View 18	Vista desada 10
+	Saved View 10	Vista desada 10
+	Saved View 11	Vista desada 11
+	Saved View 12	Vista desada 12
+	Saved View 13	Vista desada 13
+	Saved View 14	Vista desada 14
+	Saved View 15	Vista desada 15
+	Saved View 16	Vista desada 16
+	Saved View 17	Vista desada 17
+	Saved View 18	Vista desada 18
 	Saved View 19	Vista desada 19
 	Saved View 2	Vista desada 2
 	Saved View 20	Vista desada 20
@@ -4110,8 +4117,12 @@ digits	Malayalam	Malaiàlam
 	Scrub Numeric Fields by Dragging	Canvia els camps numèrics arrossegant
 	Search	Cerca
 	Search All	Cerca a tot
-	Search commands and tools	Cerca ordres i eines
-	Search commands and tools…	Cerca ordres i eines…
+	Search commands, tools, panels and effects	Cerca ordres, eines, panells i efectes
+	Search commands, tools, panels and effects…	Cerca ordres, eines, panells i efectes…
+	No commands match	Cap ordre coincideix
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultats
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
 	No recent commands	No hi ha ordres recents
 	Search Commands…	Cerca ordres…
@@ -5024,7 +5035,7 @@ digits	Malayalam	Malaiàlam
 	Triangle	Triangle
 	Triangle (open)	Triangle (obert)
 	Triangle to Bar	Triangle a barra
-	Trim	Retalla
+	Trim	Poda
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Retalla la geometria coberta en expandir l’aparença. La previsualització en directe manté tota la superfície. Les pintures transparents i les superfícies que superen els límits de visibilitat conserven totes les cares.
 	Trim mark weight:	Gruix de les marques de retall:
 	Trim marks	Marques de retall
@@ -6429,6 +6440,25 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecte 3D al farciment o al traç d’un grup no dibuixa res
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
+@msg	give one <filter> element	indica un element <filter>
+@msg	the <filter> element needs an id, the filter's name	l’element <filter> necessita un id, el nom del filtre
+@msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG té com a màxim {MAX_NAME} caràcters
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> no és un element d’un filtre SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtre SVG no té atributs d’esdeveniment com ara {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	les imatges d’un filtre SVG són URL data: en PNG, JPEG, GIF o WebP
+@msg	the SVG filter isn't valid XML: {e}	el filtre SVG no és un XML vàlid: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence és com a màxim {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} és com a màxim {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation d’un desenfocament
+@msg	the SVG filter has no primitives	el filtre SVG no té primitives
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtre SVG té com a màxim {MAX_PRIMITIVES} primitives
+@msg	the SVG filter is too large once its attributes are written out	el filtre SVG és massa gran un cop escrits els seus atributs
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	les imatges d’un filtre SVG tenen com a màxim {MAX_IMAGE_PIXELS} píxels en total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	no es pot dibuixar el filtre SVG: comprova’n les primitives i les seves entrades
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	els elements d’un filtre SVG s’imbriquen com a màxim {MAX_DEPTH} nivells
+@msg	an SVG filter is at most {_1} KB	un filtre SVG ocupa com a màxim {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` ha de ser un objecte que només contingui `mode`, amb el valor shaded o wireframe
 @msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
@@ -7523,6 +7553,11 @@ breakText	Glyphs	Glifs
 	Malayalam	Malaiàlam
 	Odia	Oriya
 	Urdu	Urdú
+	Sanskrit	Sànscrit
+	Nepali	Nepalès
+	Assamese	Assamès
+	Konkani	Concani
+	Sindhi	Sindi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i posteriors (versió {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exporta tots els documents oberts com a PDF
@@ -7945,4 +7980,24 @@ breakText	Glyphs	Glifs
 	No objects are selected.	No hi ha cap objecte seleccionat.
 	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
 	Remove Fold Line Role	Elimina el tipus de línia
+	Check	Comprova
+	Check Fold Lines	Comprova les línies de plegat
+@msg	No cut lines are in the selection.	No hi ha cap línia de tall a la selecció.
+@msg	No cut lines are in the document.	No hi ha cap línia de tall al document.
+@msg	The cut lines do not enclose an area.	Les línies de tall no tanquen cap àrea.
+@msg	A cut line ends without meeting another cut line.	Una línia de tall acaba sense trobar cap altra línia de tall.
+@msg	A gap between cut lines was closed.	S’ha tancat un buit entre línies de tall.
+@msg	The fold lines are too complex to check.	Les línies de plegat són massa complexes per comprovar-les.
+@msg	A cut line and a crease lie on top of each other.	Una línia de tall i una d’hendit estan superposades.
+@msg	No cut lines are among the given objects.	No hi ha cap línia de tall entre els objectes indicats.
+@msg	Two fold lines lie on top of each other.	Dues línies de plegat estan superposades.
+@msg	A crease ends inside a panel.	Una línia d’hendit acaba dins d’un panell.
+@msg	A crease does not divide two panels.	Una línia d’hendit no separa dos panells.
+@msg	A crease lies outside the cut outline, wholly or in part.	Una línia d’hendit és fora del contorn de tall, del tot o en part.
+@msg	The pieces of a hinge are not on one straight line.	Els trams d’una frontissa no són en una sola línia recta.
+@msg	A gap between cut lines is too narrow to tell apart.	Un buit entre línies de tall és massa estret per distingir-lo.
+@msg	A cut-out area holds other fold lines or another blank.	Una àrea retallada conté altres línies de plegat o un altre troquelat.
+@msg	A panel is not joined to the rest by a crease.	Un panell no està unit a la resta per cap línia d’hendit.
+@msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

@@ -1588,6 +1588,8 @@ file-filter	Templates	Modelli
 	Show smooth color wheel	Mostra ruota dei colori continua
 	Show segmented color wheel	Mostra ruota dei colori segmentata
 	Show color bars	Mostra barre di colore
+	Show brightness and hue on wheel	Mostra luminosità e tonalità sulla ruota
+	Show saturation and hue on wheel	Mostra saturazione e tonalità sulla ruota
 	Add Color Tool	Strumento Aggiungi colore
 	Remove Color Tool	Strumento Rimuovi colore
 	Remove Color	Rimuovi colore
@@ -2698,6 +2700,10 @@ diagnostics	ui	interfaccia
 	Play Current Selection	Esegui selezione corrente
 	Save Actions…	Salva azioni…
 	Load Actions…	Carica azioni…
+	Reset Actions	Ripristina azioni
+	Replace the current actions with the default set?	Sostituire le azioni correnti con il set predefinito?
+	Append adds the default set after the current sets instead.	Aggiungi aggiunge invece il set predefinito dopo i set correnti.
+	Append	Aggiungi
 	Plug-in Info	Informazioni plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Plug-in…
@@ -3327,8 +3333,12 @@ digits	Malayalam	Malayalam
 	Filter Layers Panel Rows	Filtra righe del pannello Livelli
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` indica impostazioni modificate: salva il preset con un altro nome
 @msg	`{key}` must be an array of these names: {_1}	`{key}` deve essere un array di questi nomi: {_1}
-	Search commands and tools	Cerca comandi e strumenti
-	Search commands and tools…	Cerca comandi e strumenti…
+	Search commands, tools, panels and effects	Cerca comandi, strumenti, pannelli ed effetti
+	Search commands, tools, panels and effects…	Cerca comandi, strumenti, pannelli ed effetti…
+	No commands match	Nessun comando corrisponde
+	{pos} of {total}: {name}	{pos} di {total}: {name}
+@plural	{n} result|{n} results	{n} risultato|{n} risultati
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} di {n} risultato. Continua a digitare per restringerli.|{shown} di {n} risultati. Continua a digitare per restringerli.
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
 	Search Commands…	Cerca comandi…
@@ -4358,6 +4368,7 @@ imageTrace	Outline	Contorno
 	 to set spacing and orientation	 per impostare spaziatura e orientamento
 	:	:
 	Isolate Selected Group	Isola gruppo selezionato
+	Isolate Selected Path	Isola tracciato selezionato
 	Isolate Selected Object	Isola oggetto selezionato
 	Release Clipping Mask	Rilascia maschera di ritaglio
 	Make Compound Path	Crea tracciato composto
@@ -5832,6 +5843,24 @@ lighting	Light	Luce
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effetto 3D sul riempimento o sulla traccia di un gruppo non disegna nulla da esportare
 @msg	The 3D object is too complex to export	L'oggetto 3D è troppo complesso per essere esportato
+@msg	the <filter> element needs an id, the filter's name	l'elemento <filter> richiede un id, il nome del filtro
+@msg	an SVG filter's id is at most {MAX_NAME} characters	l'id di un filtro SVG ha al massimo {MAX_NAME} caratteri
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> non è un elemento di un filtro SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtro SVG non ha attributi di evento come {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	le immagini di un filtro SVG sono URL data: PNG, JPEG, GIF o WebP
+@msg	the SVG filter isn't valid XML: {e}	il filtro SVG non è XML valido: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves di feTurbulence è al massimo {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} è al massimo {max}
+@msg	feConvolveMatrix's order	order di feConvolveMatrix
+@msg	feMorphology's radius	radius di feMorphology
+@msg	a blur's stdDeviation	stdDeviation di una sfocatura
+@msg	the SVG filter has no primitives	il filtro SVG non ha primitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtro SVG ha al massimo {MAX_PRIMITIVES} primitive
+@msg	the SVG filter is too large once its attributes are written out	il filtro SVG è troppo grande una volta scritti i suoi attributi
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	le immagini di un filtro SVG hanno al massimo {MAX_IMAGE_PIXELS} pixel in tutto
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	impossibile disegnare il filtro SVG: controlla le sue primitive e i relativi input
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	gli elementi di un filtro SVG si annidano al massimo per {MAX_DEPTH} livelli
+@msg	an SVG filter is at most {_1} KB	un filtro SVG occupa al massimo {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'oggetto non ha alcun effetto 3D (Estrusione e smusso, Rivoluzione, Gonfia o Ruota)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve essere un oggetto che contiene solo `mode`, con valore shaded o wireframe
 @msg	its 3D effect builds no solid	il suo effetto 3D non costruisce alcun solido
@@ -7141,6 +7170,11 @@ breakText	Glyphs	Glifi
 	Malayalam	Malayalam
 	Odia	Odia
 	Urdu	Urdu
+	Sanskrit	Sanscrito
+	Nepali	Nepalese
+	Assamese	Assamese
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} e successive (versione {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Esporta tutti i documenti aperti come PDF
@@ -9374,3 +9408,23 @@ breakText	Glyphs	Glifi
 	No objects are selected.	Nessun oggetto selezionato.
 	Open a document to mark its fold lines.	Apri un documento per segnarne le linee di piega.
 	Remove Fold Line Role	Rimuovi tipo di linea
+	Check	Verifica
+	Check Fold Lines	Verifica linee di piega
+@msg	No cut lines are in the selection.	Nella selezione non ci sono linee di taglio.
+@msg	No cut lines are in the document.	Nel documento non ci sono linee di taglio.
+@msg	The cut lines do not enclose an area.	Le linee di taglio non racchiudono alcuna area.
+@msg	A cut line ends without meeting another cut line.	Una linea di taglio termina senza incontrare un’altra linea di taglio.
+@msg	A gap between cut lines was closed.	È stato chiuso uno spazio tra linee di taglio.
+@msg	The fold lines are too complex to check.	Le linee di piega sono troppo complesse da verificare.
+@msg	A cut line and a crease lie on top of each other.	Una linea di taglio e una di cordonatura sono sovrapposte.
+@msg	No cut lines are among the given objects.	Tra gli oggetti indicati non ci sono linee di taglio.
+@msg	Two fold lines lie on top of each other.	Due linee di piega sono sovrapposte.
+@msg	A crease ends inside a panel.	Una linea di cordonatura termina all’interno di un pannello.
+@msg	A crease does not divide two panels.	Una linea di cordonatura non divide due pannelli.
+@msg	A crease lies outside the cut outline, wholly or in part.	Una linea di cordonatura si trova del tutto o in parte fuori dal contorno di taglio.
+@msg	The pieces of a hinge are not on one straight line.	I tratti di una cerniera non sono su un’unica linea retta.
+@msg	A gap between cut lines is too narrow to tell apart.	Uno spazio tra linee di taglio è troppo stretto per essere distinto.
+@msg	A cut-out area holds other fold lines or another blank.	Un’area ritagliata contiene altre linee di piega o un altro fustellato.
+@msg	A panel is not joined to the rest by a crease.	Un pannello non è unito al resto da alcuna linea di cordonatura.
+@msg	A fold line is on a non-printing layer.	Una linea di piega si trova su un livello non stampabile.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Pannelli: {panels}, cerniere: {hinges}, errori: {errors}, avvisi: {warnings}

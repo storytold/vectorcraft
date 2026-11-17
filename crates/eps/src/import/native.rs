@@ -168,11 +168,15 @@ mod tests {
         }
         let rect = vector.artboards[0].rect;
         let source = vectorcraft_render::Renderer::new().render_region(&vector, rect, 1.6, true);
-        let mut png = Vec::new();
-        image::RgbaImage::from_raw(source.width, source.height, source.to_straight())
-            .unwrap()
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .unwrap();
+        let raw = craft_image_codecs::Image::from_raw(
+            source.width,
+            source.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            source.to_straight(),
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         let mut page = Document::new(1000.0, 500.0);
@@ -236,11 +240,15 @@ mod tests {
         vector.insert(Some(layer), usize::MAX, n).unwrap();
         let rect = vector.artboards[0].rect;
         let source = vectorcraft_render::Renderer::new().render_region(&vector, rect, 1.0, true);
-        let mut png = Vec::new();
-        image::RgbaImage::from_raw(source.width, source.height, source.to_straight())
-            .unwrap()
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .unwrap();
+        let raw = craft_image_codecs::Image::from_raw(
+            source.width,
+            source.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            source.to_straight(),
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         let mut page = Document::new(width, height);

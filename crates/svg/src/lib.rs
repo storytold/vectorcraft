@@ -101,6 +101,7 @@
 //! rotation and style names).
 #![forbid(unsafe_code)]
 
+use craft_svg::tree::usvg;
 mod css;
 mod entities;
 mod export;

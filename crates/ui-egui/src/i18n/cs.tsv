@@ -893,6 +893,7 @@
 	Auto Color	Automatická barva
 	Automatic	Automaticky
 	Isolate Selected Group	Izolovat vybranou skupinu
+	Isolate Selected Path	Izolovat vybranou cestu
 	Isolate Selected Object	Izolovat vybraný objekt
 	Exit Isolation Mode	Ukončit izolovaný režim
 	Make Clipping Mask	Vytvořit ořezovou masku
@@ -1324,7 +1325,7 @@ lighting	Light	Světlo
 	Name* @ 66.67% (RGB/Preview)	Název* @ 66,67 % (RGB/náhled)
 	No Document	Žádný dokument
 	Press 	Klávesou 
-	Search commands and tools	Hledat příkazy a nástroje
+	Search commands, tools, panels and effects	Hledat příkazy, nástroje, panely a efekty
 	Style:	Styl:
 	Switch workspace	Přepnout pracovní prostor
 	Show all open documents	Zobrazit všechny otevřené dokumenty
@@ -1530,6 +1531,10 @@ lighting	Light	Světlo
 	Play Current Selection	Přehrát aktuální výběr
 	Save Actions…	Uložit akce…
 	Load Actions…	Načíst akce…
+	Reset Actions	Obnovit akce
+	Replace the current actions with the default set?	Nahradit aktuální akce výchozí sadou?
+	Append adds the default set after the current sets instead.	Tlačítko Připojit místo toho přidá výchozí sadu za aktuální sady.
+	Append	Připojit
 	Reflect Horizontal	Zrcadlit vodorovně
 	Rotate 90° CW	Otočit o 90° po směru hodin
 	Set 1	Sada 1
@@ -3012,6 +3017,8 @@ digits	Malayalam	Malajálamské
 	Show smooth color wheel	Zobrazit plynulé barevné kolo
 	Show segmented color wheel	Zobrazit segmentované barevné kolo
 	Show color bars	Zobrazit barevné pruhy
+	Show brightness and hue on wheel	Zobrazit jas a odstín na kole
+	Show saturation and hue on wheel	Zobrazit sytost a odstín na kole
 	Add Color Tool	Nástroj Přidat barvu
 	Remove Color Tool	Nástroj Odstranit barvu
 	Remove Color	Odstranit barvu
@@ -4486,7 +4493,11 @@ font-technology	Variable	Variabilní
 	Saved {path}	Uloženo: {path}
 	Saving	Ukládání
 	Saving {}	Ukládání {}
-	Search commands and tools…	Hledat příkazy a nástroje…
+	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
+	No commands match	Žádný příkaz neodpovídá
+	{pos} of {total}: {name}	{pos} z {total}: {name}
+@plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
 	No recent commands	Žádné nedávné příkazy
 	Dashed Line	Čárkovaná čára
@@ -6217,6 +6228,24 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
+@msg	the <filter> element needs an id, the filter's name	prvek <filter> potřebuje id, název filtru
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id filtru SVG má nejvýše {MAX_NAME} znaků
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> není prvkem filtru SVG
+@msg	an SVG filter has no event attributes such as {_1}	filtr SVG nemá atributy událostí, jako je {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	obrázky filtru SVG jsou adresy data: ve formátu PNG, JPEG, GIF nebo WebP
+@msg	the SVG filter isn't valid XML: {e}	filtr SVG není platné XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves prvku feTurbulence je nejvýše {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} je nejvýše {max}
+@msg	feConvolveMatrix's order	order prvku feConvolveMatrix
+@msg	feMorphology's radius	radius prvku feMorphology
+@msg	a blur's stdDeviation	stdDeviation rozostření
+@msg	the SVG filter has no primitives	filtr SVG nemá žádná primitiva
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	filtr SVG má nejvýše {MAX_PRIMITIVES} primitiv
+@msg	the SVG filter is too large once its attributes are written out	filtr SVG je po vypsání jeho atributů příliš velký
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	obrázky filtru SVG mají celkem nejvýše {MAX_IMAGE_PIXELS} pixelů
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	filtr SVG nelze vykreslit: zkontrolujte jeho primitiva a jejich vstupy
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	prvky filtru SVG jsou vnořeny nejvýše {MAX_DEPTH} úrovní hluboko
+@msg	an SVG filter is at most {_1} KB	filtr SVG má nejvýše {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musí být objekt obsahující pouze `mode` s hodnotou shaded nebo wireframe
 @msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
@@ -7514,6 +7543,11 @@ breakText	Glyphs	Glyfy
 	Malayalam	Malajálamština
 	Odia	Urijština
 	Urdu	Urdština
+	Sanskrit	Sanskrt
+	Nepali	Nepálština
+	Assamese	Ásámština
+	Konkani	Konkánština
+	Sindhi	Sindhština
 	VectorCraft {release} and later (version {n})	VectorCraft {release} a novější (verze {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportovat všechny otevřené dokumenty jako PDF
@@ -9742,3 +9776,23 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Check	Zkontrolovat
+	Check Fold Lines	Zkontrolovat linie skladu
+@msg	No cut lines are in the selection.	Ve výběru nejsou žádné linie řezu.
+@msg	No cut lines are in the document.	V dokumentu nejsou žádné linie řezu.
+@msg	The cut lines do not enclose an area.	Linie řezu neohraničují žádnou plochu.
+@msg	A cut line ends without meeting another cut line.	Linie řezu končí, aniž by se setkala s jinou linií řezu.
+@msg	A gap between cut lines was closed.	Mezera mezi liniemi řezu byla uzavřena.
+@msg	The fold lines are too complex to check.	Linie skladu jsou příliš složité na kontrolu.
+@msg	A cut line and a crease lie on top of each other.	Linie řezu a linie bigu leží přes sebe.
+@msg	No cut lines are among the given objects.	Mezi zadanými objekty nejsou žádné linie řezu.
+@msg	Two fold lines lie on top of each other.	Dvě linie skladu leží přes sebe.
+@msg	A crease ends inside a panel.	Linie bigu končí uvnitř panelu.
+@msg	A crease does not divide two panels.	Linie bigu nerozděluje dva panely.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linie bigu leží zcela nebo zčásti mimo obrys řezu.
+@msg	The pieces of a hinge are not on one straight line.	Části jednoho pantu neleží na jedné přímce.
+@msg	A gap between cut lines is too narrow to tell apart.	Mezera mezi liniemi řezu je příliš úzká na rozlišení.
+@msg	A cut-out area holds other fold lines or another blank.	Vyříznutá oblast obsahuje další linie skladu nebo jiný přířez.
+@msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
+@msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}

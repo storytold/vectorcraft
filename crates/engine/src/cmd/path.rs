@@ -149,7 +149,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cut Path at Selected Anchor Points",
             [],
             None,
-            "{} cut the paths at their direct-selected anchors (one undo step): a closed path opens there, an open one becomes one path per piece; one of each cut's two coincident anchors stays selected → {ids}",
+            "{} cut the paths at their direct-selected anchors (one undo step): a closed path opens there, an open one becomes one path per piece; one of each cut's two coincident anchors stays selected; the paths keep the source's fill and stroke settings except that every stroke's alignment becomes Center (in a path of several subpaths, the other subpaths' strokes too) → {ids}",
             has_anchors,
             cut_at_anchors
         ),
@@ -1858,6 +1858,8 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         let (mut all, mut picked) = (vec![], vec![]);
         let mut cut = Beside::replacing(d, &cuts.iter().map(|(id, ..)| *id).collect::<Vec<_>>());
         for (id, subs, starts) in cuts {
+            // The paths a cut makes keep the source's appearance with every stroke centered.
+            super::draw2::center_strokes(d, id);
             // A path of one subpath becomes one path per piece (the first keeps the id); the
             // pieces of a compound shape stay subpaths of it.
             if d.node(id).and_then(|n| n.path_data()).is_some_and(|pd| pd.subpaths.len() == 1) {

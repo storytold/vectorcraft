@@ -840,6 +840,7 @@
 	Auto Color	Kolor automatyczny
 	Automatic	Automatycznie
 	Isolate Selected Group	Izoluj zaznaczoną grupę
+	Isolate Selected Path	Izoluj zaznaczoną ścieżkę
 	Isolate Selected Object	Izoluj zaznaczony obiekt
 	Exit Isolation Mode	Wyjdź z trybu izolacji
 	Make Clipping Mask	Utwórz maskę przycinającą
@@ -1254,7 +1255,7 @@ lighting	Light	Światło
 	Name* @ 66.67% (RGB/Preview)	Nazwa* @ 66,67% (RGB/Podgląd)
 	No Document	Brak dokumentu
 	Press 	Naciśnij 
-	Search commands and tools	Szukaj poleceń i narzędzi
+	Search commands, tools, panels and effects	Szukaj poleceń, narzędzi, paneli i efektów
 	Style:	Styl:
 	Switch workspace	Przełącz obszar roboczy
 	Show all open documents	Pokaż wszystkie otwarte dokumenty
@@ -1443,6 +1444,10 @@ lighting	Light	Światło
 	Play Current Selection	Odtwórz bieżące zaznaczenie
 	Save Actions…	Zapisz operacje…
 	Load Actions…	Wczytaj operacje…
+	Reset Actions	Resetuj operacje
+	Replace the current actions with the default set?	Zastąpić bieżące operacje zestawem domyślnym?
+	Append adds the default set after the current sets instead.	Dołącz dodaje zamiast tego zestaw domyślny po bieżących zestawach.
+	Append	Dołącz
 	Reflect Horizontal	Odbij w poziomie
 	Rotate 90° CW	Obróć o 90° w prawo
 	Set 1	Zestaw 1
@@ -2922,6 +2927,8 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Pokaż płynne koło kolorów
 	Show segmented color wheel	Pokaż segmentowe koło kolorów
 	Show color bars	Pokaż paski kolorów
+	Show brightness and hue on wheel	Pokaż jasność i barwę na kole
+	Show saturation and hue on wheel	Pokaż nasycenie i barwę na kole
 	Add Color Tool	Narzędzie Dodaj kolor
 	Remove Color Tool	Narzędzie Usuń kolor
 	Remove Color	Usuń kolor
@@ -4327,7 +4334,11 @@ font-technology	Variable	Zmienne
 	Saved {path}	Zapisano {path}
 	Saving	Zapisywanie
 	Saving {}	Zapisywanie {}
-	Search commands and tools…	Szukaj poleceń i narzędzi…
+	Search commands, tools, panels and effects…	Szukaj poleceń, narzędzi, paneli i efektów…
+	No commands match	Żadne polecenie nie pasuje
+	{pos} of {total}: {name}	{pos} z {total}: {name}
+@plural	{n} result|{n} results	{n} wynik|{n} wyniki|{n} wyników
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
 	No recent commands	Brak ostatnich poleceń
 	Dashed Line	Linia przerywana
@@ -6047,6 +6058,24 @@ mark-style	Japanese	Japońskie
 @msg	a 3D effect on a group's fill or stroke draws nothing	efekt 3D na wypełnieniu lub obrysie grupy niczego nie rysuje
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	efekt 3D na wypełnieniu lub obrysie grupy nie rysuje niczego do eksportu
 @msg	The 3D object is too complex to export	Obiekt 3D jest zbyt złożony, aby go wyeksportować
+@msg	the <filter> element needs an id, the filter's name	element <filter> wymaga id, czyli nazwy filtra
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id filtra SVG ma najwyżej {MAX_NAME} znaków
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> nie jest elementem filtra SVG
+@msg	an SVG filter has no event attributes such as {_1}	filtr SVG nie ma atrybutów zdarzeń, takich jak {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	obrazy filtra SVG to adresy data: PNG, JPEG, GIF lub WebP
+@msg	the SVG filter isn't valid XML: {e}	filtr SVG nie jest poprawnym XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves elementu feTurbulence wynosi najwyżej {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} wynosi najwyżej {max}
+@msg	feConvolveMatrix's order	order elementu feConvolveMatrix
+@msg	feMorphology's radius	radius elementu feMorphology
+@msg	a blur's stdDeviation	stdDeviation rozmycia
+@msg	the SVG filter has no primitives	filtr SVG nie ma prymitywów
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	filtr SVG ma najwyżej {MAX_PRIMITIVES} prymitywów
+@msg	the SVG filter is too large once its attributes are written out	filtr SVG jest zbyt duży po zapisaniu jego atrybutów
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	obrazy filtra SVG mają łącznie najwyżej {MAX_IMAGE_PIXELS} pikseli
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	nie można narysować filtra SVG: sprawdź jego prymitywy i ich wejścia
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	elementy filtra SVG zagnieżdżają się najwyżej na {MAX_DEPTH} poziomów
+@msg	an SVG filter is at most {_1} KB	filtr SVG ma najwyżej {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	obiekt nie ma efektu 3D (Wyciągnięcie i fazowanie, Obrót, Nadmuchanie ani Obróć)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` musi być obiektem zawierającym tylko `mode` o wartości shaded lub wireframe
 @msg	its 3D effect builds no solid	jego efekt 3D nie tworzy żadnej bryły
@@ -7370,6 +7399,11 @@ breakText	Glyphs	Glify
 	Malayalam	Malajalam
 	Odia	Orija
 	Urdu	Urdu
+	Sanskrit	Sanskryt
+	Nepali	Nepalski
+	Assamese	Asamski
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i nowsze (wersja {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Eksportuj wszystkie otwarte dokumenty jako PDF
@@ -9595,3 +9629,23 @@ breakText	Glyphs	Glify
 	No objects are selected.	Nie zaznaczono żadnych obiektów.
 	Open a document to mark its fold lines.	Otwórz dokument, aby oznaczyć jego linie zgięcia.
 	Remove Fold Line Role	Usuń rodzaj linii
+	Check	Sprawdź
+	Check Fold Lines	Sprawdź linie zgięcia
+@msg	No cut lines are in the selection.	W zaznaczeniu nie ma linii cięcia.
+@msg	No cut lines are in the document.	W dokumencie nie ma linii cięcia.
+@msg	The cut lines do not enclose an area.	Linie cięcia nie obejmują żadnego obszaru.
+@msg	A cut line ends without meeting another cut line.	Linia cięcia kończy się, nie stykając się z inną linią cięcia.
+@msg	A gap between cut lines was closed.	Zamknięto przerwę między liniami cięcia.
+@msg	The fold lines are too complex to check.	Linie zgięcia są zbyt złożone, aby je sprawdzić.
+@msg	A cut line and a crease lie on top of each other.	Linia cięcia i linia bigowania leżą na sobie.
+@msg	No cut lines are among the given objects.	Wśród podanych obiektów nie ma linii cięcia.
+@msg	Two fold lines lie on top of each other.	Dwie linie zgięcia leżą na sobie.
+@msg	A crease ends inside a panel.	Linia bigowania kończy się wewnątrz panelu.
+@msg	A crease does not divide two panels.	Linia bigowania nie rozdziela dwóch paneli.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linia bigowania leży całkowicie lub częściowo poza konturem cięcia.
+@msg	The pieces of a hinge are not on one straight line.	Części zawiasu nie leżą na jednej linii prostej.
+@msg	A gap between cut lines is too narrow to tell apart.	Przerwa między liniami cięcia jest zbyt wąska, aby ją rozróżnić.
+@msg	A cut-out area holds other fold lines or another blank.	Wycięty obszar zawiera inne linie zgięcia lub inny wykrój.
+@msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
+@msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}

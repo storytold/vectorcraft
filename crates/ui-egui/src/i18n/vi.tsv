@@ -294,7 +294,7 @@ font-technology	Variable	Biến thiên
 	Assign Profile…	Gán hồ sơ màu…
 	Assign:	Gán:
 	Attach to Active Plane	Gắn vào mặt phẳng đang hoạt động
-	Attributes	Thuộc tính
+	Attributes	Đặc tính
 	Author Title:	Chức danh tác giả:
 	Author:	Tác giả:
 	Auto	Tự động
@@ -421,7 +421,7 @@ font-technology	Variable	Biến thiên
 	Built-in presets are read-only: New… starts an editable copy.	Thiết lập sẵn tích hợp ở chế độ chỉ đọc: Mới… tạo một bản sao có thể chỉnh sửa.
 	Built-in presets don't change: New makes a copy you can edit.	Thiết lập sẵn tích hợp không thay đổi: Mới tạo bản sao để chỉnh sửa.
 	Built-in presets don't change: New… starts an editable copy.	Thiết lập sẵn tích hợp không thay đổi: Mới… tạo một bản sao có thể chỉnh sửa.
-	Bulge…	Phình…
+	Bulge…	Lồi…
 	Bullet	Dấu đầu dòng
 	Bullets	Dấu đầu dòng
 	Bullets and Numbering	Dấu đầu dòng và đánh số
@@ -1819,6 +1819,8 @@ file-filter	Templates	Mẫu
 	Show smooth color wheel	Hiện bánh xe màu liền mạch
 	Show segmented color wheel	Hiện bánh xe màu phân đoạn
 	Show color bars	Hiện các thanh màu
+	Show brightness and hue on wheel	Hiện độ sáng và sắc độ trên bánh xe
+	Show saturation and hue on wheel	Hiện độ bão hòa và sắc độ trên bánh xe
 	Add Color Tool	Công cụ Thêm màu
 	Remove Color Tool	Công cụ Xóa màu
 	Remove Color	Xóa màu
@@ -2154,6 +2156,7 @@ digits	Hindi	Hindi
 	Isolate Blending	Tách biệt hòa trộn
 	Isolate Group	Tách biệt nhóm
 	Isolate Selected Group	Tách biệt nhóm đã chọn
+	Isolate Selected Path	Tách biệt đường dẫn đã chọn
 	Isolate Selected Object	Tách biệt đối tượng đã chọn
 	Isometric Bottom	Đẳng góc dưới
 	Isometric Left	Đẳng góc trái
@@ -3006,6 +3009,10 @@ diagnostics	ui	giao diện
 	Play Current Selection	Phát vùng chọn hiện tại
 	Save Actions…	Lưu hành động…
 	Load Actions…	Tải hành động…
+	Reset Actions	Đặt lại hành động
+	Replace the current actions with the default set?	Thay thế các hành động hiện tại bằng bộ mặc định?
+	Append adds the default set after the current sets instead.	Nối thêm sẽ thêm bộ mặc định vào sau các bộ hiện tại.
+	Append	Nối thêm
 	Plug-in Info	Thông tin plug-in
 	Plug-ins	Plug-in
 	Plug-in…	Phần bổ trợ…
@@ -3661,8 +3668,12 @@ mark-style	Japanese	Kiểu Nhật
 	Filter Layers Panel Rows	Lọc hàng bảng Lớp
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` biểu thị các cài đặt đã thay đổi: hãy lưu thiết lập sẵn với tên khác
 @msg	`{key}` must be an array of these names: {_1}	`{key}` phải là một mảng gồm các tên sau: {_1}
-	Search commands and tools	Tìm kiếm lệnh và công cụ
-	Search commands and tools…	Tìm kiếm lệnh và công cụ…
+	Search commands, tools, panels and effects	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng
+	Search commands, tools, panels and effects…	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng…
+	No commands match	Không có lệnh nào khớp
+	{pos} of {total}: {name}	{pos} trên {total}: {name}
+@plural	{n} result|{n} results	{n} kết quả
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
 	Search Commands…	Tìm kiếm lệnh…
@@ -4399,7 +4410,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reverse Traps	Đảo chiều chồng màu
 	Precision	Độ chính xác
 	Remove Redundant Points	Xóa điểm thừa
-	Trim	Cắt xén
+	Trim	Cắt tỉa
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Cắt bỏ hình học bị che khi Mở rộng diện mạo. Xem trước trực tiếp giữ toàn bộ bề mặt. Sơn trong suốt và bề mặt vượt quá giới hạn hiển thị giữ nguyên tất cả các mặt.
 	Trim mark weight:	Độ dày dấu cắt:
 	Trim marks	Dấu cắt
@@ -5624,6 +5635,25 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
+@msg	give one <filter> element	hãy chỉ định một phần tử <filter>
+@msg	the <filter> element needs an id, the filter's name	phần tử <filter> cần có id, là tên của bộ lọc
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id của bộ lọc SVG có tối đa {MAX_NAME} ký tự
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> không phải là phần tử của bộ lọc SVG
+@msg	an SVG filter has no event attributes such as {_1}	bộ lọc SVG không có thuộc tính sự kiện như {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	hình ảnh của bộ lọc SVG là URL data: dạng PNG, JPEG, GIF hoặc WebP
+@msg	the SVG filter isn't valid XML: {e}	bộ lọc SVG không phải là XML hợp lệ: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves của feTurbulence tối đa là {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} tối đa là {max}
+@msg	feConvolveMatrix's order	order của feConvolveMatrix
+@msg	feMorphology's radius	radius của feMorphology
+@msg	a blur's stdDeviation	stdDeviation của hiệu ứng làm mờ
+@msg	the SVG filter has no primitives	bộ lọc SVG không có thành phần cơ sở nào
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	bộ lọc SVG có tối đa {MAX_PRIMITIVES} thành phần cơ sở
+@msg	the SVG filter is too large once its attributes are written out	bộ lọc SVG quá lớn sau khi ghi ra các thuộc tính của nó
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	hình ảnh của bộ lọc SVG có tổng cộng tối đa {MAX_IMAGE_PIXELS} điểm ảnh
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	không thể vẽ bộ lọc SVG: hãy kiểm tra các thành phần cơ sở và đầu vào của chúng
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	các phần tử của bộ lọc SVG lồng nhau tối đa {MAX_DEPTH} cấp
+@msg	an SVG filter is at most {_1} KB	bộ lọc SVG có kích thước tối đa {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` phải là một đối tượng chỉ chứa `mode`, với giá trị shaded hoặc wireframe
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
@@ -7153,6 +7183,11 @@ breakText	Glyphs	Glyph
 	Malayalam	Tiếng Malayalam
 	Odia	Tiếng Odia
 	Urdu	Tiếng Urdu
+	Sanskrit	Tiếng Phạn
+	Nepali	Tiếng Nepal
+	Assamese	Tiếng Assam
+	Konkani	Tiếng Konkani
+	Sindhi	Tiếng Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} trở lên (phiên bản {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Xuất tất cả tài liệu đang mở dưới dạng PDF
@@ -7459,6 +7494,26 @@ breakText	Glyphs	Glyph
 	No objects are selected.	Không có đối tượng nào được chọn.
 	Open a document to mark its fold lines.	Mở tài liệu để đánh dấu các đường gấp của nó.
 	Remove Fold Line Role	Bỏ loại đường
+	Check	Kiểm tra
+	Check Fold Lines	Kiểm tra đường gấp
+@msg	No cut lines are in the selection.	Vùng chọn không có đường cắt nào.
+@msg	No cut lines are in the document.	Tài liệu không có đường cắt nào.
+@msg	The cut lines do not enclose an area.	Các đường cắt không bao quanh vùng nào.
+@msg	A cut line ends without meeting another cut line.	Một đường cắt kết thúc mà không gặp đường cắt khác.
+@msg	A gap between cut lines was closed.	Đã đóng một khe hở giữa các đường cắt.
+@msg	The fold lines are too complex to check.	Các đường gấp quá phức tạp để kiểm tra.
+@msg	A cut line and a crease lie on top of each other.	Một đường cắt và một đường cấn nằm chồng lên nhau.
+@msg	No cut lines are among the given objects.	Các đối tượng đã chỉ định không có đường cắt nào.
+@msg	Two fold lines lie on top of each other.	Hai đường gấp nằm chồng lên nhau.
+@msg	A crease ends inside a panel.	Một đường cấn kết thúc bên trong một mặt.
+@msg	A crease does not divide two panels.	Một đường cấn không chia tách hai mặt.
+@msg	A crease lies outside the cut outline, wholly or in part.	Một đường cấn nằm hoàn toàn hoặc một phần ngoài đường viền cắt.
+@msg	The pieces of a hinge are not on one straight line.	Các đoạn của một bản lề không nằm trên một đường thẳng.
+@msg	A gap between cut lines is too narrow to tell apart.	Khe hở giữa các đường cắt quá hẹp để phân biệt.
+@msg	A cut-out area holds other fold lines or another blank.	Một vùng bị cắt bỏ chứa các đường gấp khác hoặc một khuôn trải khác.
+@msg	A panel is not joined to the rest by a crease.	Một mặt không được nối với phần còn lại bằng đường cấn nào.
+@msg	A fold line is on a non-printing layer.	Một đường gấp nằm trên lớp không in.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Mặt: {panels}, bản lề: {hinges}, lỗi: {errors}, cảnh báo: {warnings}
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Hiệu ứng 3D yêu cầu tọa độ hữu hạn trong phạm vi 100 triệu điểm

@@ -327,7 +327,7 @@ mod tests {
             let has = |s: &str| texts.iter().any(|t| t == s);
             assert_eq!(has("Discord"), width > 1000.0, "{width}: {texts:?}");
             // Search is an icon only (as in PhotoCraft): its label lives in the tooltip.
-            assert!(!has("Search commands and tools"), "{width}: {texts:?}");
+            assert!(!has("Search commands, tools, panels and effects"), "{width}: {texts:?}");
         }
     }
 
