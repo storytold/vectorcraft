@@ -14,8 +14,9 @@ use vectorcraft_doc::{LockedArtboards, Node, NodeId, NodeKind};
 use vectorcraft_geom::Point;
 
 use super::super::links::{Status, statuses};
+use super::super::panelcmds::listed_artboards;
 use super::super::select::{is_selectable, on_artboard, selectable};
-use super::super::{CommandSpec, bad, checked_ids_param, cmd, has_doc, point_indices, switch_or, text_param};
+use super::super::{CommandSpec, bad, checked_ids_param, cmd, has_doc, switch_or, text_param};
 use crate::{DocState, Result, Session};
 
 /// How Select by Artboards relates an object to the chosen artboards (`relation`).
@@ -33,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select by Artboards",
             ["Object", "Plug-ins", "Selection Tools"],
             None,
-            "{artboards: [index…] (0-based, at least one), relation?: \"overlap\" (default: on at least one of them, as select.allOnArtboard takes it: the bounds overlap the artboard or the centre is on it) | \"inside\" (the bounds lie wholly within one of them, edges included) | \"outside\" (on none of them)} select those objects among the ones Select All takes (in isolation mode, the isolated container's); hidden and locked objects, objects on hidden, locked or template layers and art held by a locked artboard are left out. Bounds are geometric, a symbol instance's measured by its art → {count}",
+            "{artboards: [index…] (0-based whole numbers, at least one), relation?: \"overlap\" (default: on at least one of them, as select.allOnArtboard takes it: the bounds overlap the artboard or the centre is on it) | \"inside\" (the bounds lie wholly within one of them, edges included) | \"outside\" (on none of them)} select those objects among the ones Select All takes (in isolation mode, the isolated container's); hidden and locked objects, objects on hidden, locked or template layers and art held by a locked artboard are left out. Bounds are geometric, a symbol instance's measured by its art → {count}",
             has_doc,
             by_artboards
         ),
@@ -58,13 +59,12 @@ fn by_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`relation` must be overlap, inside or outside"));
     }
     let listed = p.get("artboards").ok_or_else(|| bad(C, "missing `artboards`"))?;
-    let indices = point_indices(listed).ok_or_else(|| bad(C, "`artboards` must be a list of artboard indices"))?;
-    if indices.is_empty() {
+    if listed.as_array().is_some_and(Vec::is_empty) {
         return Err(bad(C, "choose at least one artboard"));
     }
     let st = s.doc()?;
-    let rects =
-        indices.iter().map(|i| st.doc.artboards.get(*i).map(|a| a.rect)).collect::<Option<Vec<_>>>().ok_or_else(|| bad(C, "no such artboard"))?;
+    let rects: Vec<_> =
+        listed_artboards(&st.doc, listed, "artboards", C)?.into_iter().filter_map(|i| st.doc.artboards.get(i)).map(|a| a.rect).collect();
     let symbols = st.doc.symbol_boxes();
     let ids: Vec<NodeId> = selectable(&st.doc, st.isolation)
         .into_iter()

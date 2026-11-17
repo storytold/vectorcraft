@@ -435,9 +435,10 @@ impl Paint {
     }
     /// Apply `f` to the colours of this paint that can link to a swatch (a solid colour, each
     /// gradient stop) with their link and tint; `f` returns true when it changed them. A colour
-    /// left without a link gets tint 1. A freeform gradient's points, which it draws from, go
-    /// through `f` too, as unlinked colours (a link `f` gives them is dropped). Returns whether
-    /// anything changed.
+    /// left without a link gets tint 1, and a stop left without one also loses its process plates
+    /// ([`GradientStop::plates`], which print with a linked spot tint). A freeform gradient's
+    /// points, which it draws from, go through `f` too, as unlinked colours (a link `f` gives them
+    /// is dropped). Returns whether anything changed.
     pub fn map_links(&mut self, f: &mut dyn FnMut(&mut Color, &mut Option<String>, &mut f32) -> bool) -> bool {
         let mut one = |c: &mut Color, link: &mut Option<String>, tint: &mut f32| {
             let changed = f(c, link, tint);
@@ -449,7 +450,11 @@ impl Paint {
         match self {
             Paint::Solid { color, swatch, tint } => one(color, swatch, tint),
             Paint::Gradient(g) => {
-                let stops = g.gradient.stops.iter_mut().fold(false, |ch, s| one(&mut s.color, &mut s.swatch, &mut s.tint) | ch);
+                let stops = g.gradient.stops.iter_mut().fold(false, |ch, s| {
+                    let changed = one(&mut s.color, &mut s.swatch, &mut s.tint);
+                    let unplated = s.swatch.is_none() && s.plates.take().is_some();
+                    changed | unplated | ch
+                });
                 let points =
                     g.freeform.iter_mut().flat_map(|ff| ff.points.iter_mut()).fold(false, |ch, p| one(&mut p.color, &mut None, &mut 1.0) | ch);
                 stops | points
@@ -591,6 +596,34 @@ mod tests {
         });
         let Paint::Gradient(g) = g else { panic!("a gradient") };
         assert!(g.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Ink") && s.tint == 0.5));
+    }
+
+    #[test]
+    fn mapping_links_drops_the_process_plates_of_unlinked_stops() {
+        let mut gradient = Gradient::default();
+        let ink = Color::cmyk(0.0, 0.4, 0.0, 0.0);
+        gradient.stops[0].swatch = Some("Ink".into());
+        (gradient.stops[0].color, gradient.stops[0].tint, gradient.stops[0].plates) = (ink, 0.4, Some([0.3, 0.0, 0.0, 0.0]));
+        let mut g = Paint::Gradient(Box::new(GradientPaint::new(gradient)));
+        // Unlinking the stop takes its plates with its tint and keeps the colour it shows.
+        assert!(g.map_links(&mut |_, l, _| l.take().is_some()));
+        let Paint::Gradient(gp) = &g else { panic!("a gradient") };
+        let st = &gp.gradient.stops[0];
+        assert_eq!((st.color, st.swatch.as_deref(), st.tint, st.plates), (ink, None, 1.0, None));
+        // A linked stop keeps its plates.
+        let mut linked = Gradient::default();
+        (linked.stops[0].swatch, linked.stops[0].plates) = (Some("Ink".into()), Some([0.3, 0.0, 0.0, 0.0]));
+        let mut l = Paint::Gradient(Box::new(GradientPaint::new(linked)));
+        assert!(!l.map_links(&mut |_, _, _| false));
+        let Paint::Gradient(lp) = &l else { panic!("a gradient") };
+        assert_eq!(lp.gradient.stops[0].plates, Some([0.3, 0.0, 0.0, 0.0]));
+        // An unlinked stop that still has plates loses them, and that counts as a change.
+        let mut stale = Gradient::default();
+        stale.stops[1].plates = Some([0.0, 0.0, 0.2, 0.0]);
+        let mut p = Paint::Gradient(Box::new(GradientPaint::new(stale)));
+        assert!(p.map_links(&mut |_, _, _| false));
+        let Paint::Gradient(pp) = &p else { panic!("a gradient") };
+        assert!(pp.gradient.stops.iter().all(|s| s.plates.is_none()));
     }
 
     #[test]

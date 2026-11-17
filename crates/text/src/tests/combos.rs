@@ -378,8 +378,8 @@ fn x_width() -> f64 {
 fn composer_x_mixed_sizes_in_a_stepped_frame() {
     // A frame as wide as the first line down to 40 pt and half as wide below. A 36 pt word makes
     // the line it is on reach below the step, where the frame is narrow: the every-line composer
-    // breaks the paragraph with each line's measure where its height sets it, not as the
-    // single-line composer does, and every line keeps within its room.
+    // breaks the paragraph with each line's measure where its height sets it, and every line keeps
+    // within its room.
     let w = x_width();
     let set = |x: CharStyle, composer: Composer| {
         let mut t = stepped(w, w * 0.5, 40.0, 300.0);
@@ -394,8 +394,10 @@ fn composer_x_mixed_sizes_in_a_stepped_frame() {
     // The 36 pt line reaches below the step and is set at the narrow measure.
     let tall = &l.lines[1];
     assert!(tall.ascent > 30.0 && tall.baseline + tall.descent > 40.0 && tall.avail.1 < w * 0.5 + 0.01, "{:?}", l.lines);
+    // The single-line composer measures each line across its height too, and breaks this
+    // paragraph the same way.
     let (greedy, _) = set(sans(36.0), Composer::SingleLine);
-    assert_ne!(every, greedy);
+    assert_eq!(every, greedy);
     // Uniform sizes keep the breaks they had.
     let (uniform, _) = set(sans(12.0), Composer::EveryLine);
     assert_eq!(uniform, ["Destroy all creatures with toughness X or", "less. Then draw a card for each creature", "destroyed this way."]);
@@ -435,8 +437,40 @@ fn composer_x_mixed_sizes_around_text_wrap() {
         across && !text[g.byte..].starts_with(char::is_whitespace) && g.origin.x < object.x1 && g.origin.x + g.advance > object.x0
     });
     assert_eq!(hits.count(), 0, "{:?}", l.lines);
+    // The single-line composer measures each line across its height too, and breaks this
+    // paragraph the same way.
     let (greedy, _, _) = set(Composer::SingleLine);
-    assert_ne!(every, greedy);
+    assert_eq!(every, greedy);
+}
+
+#[test]
+fn composer_x_taller_line_in_a_further_span() {
+    // A wrap object down the middle of the frame splits every line in two. The 36 pt word falls in
+    // the span right of it on the second baseline, after a 12 pt line left of it: the line that
+    // holds it is set as far below the line above it as its own leading sets it, and its ascent
+    // stays clear of that line, with either composer.
+    let w = x_width();
+    let object = Rect::new(w, -10.0, w + 40.0, 310.0);
+    for composer in [Composer::SingleLine, Composer::EveryLine] {
+        let mut runs = vec![run(&format!("{RAG} Then draw a card for each creature destroyed this way. "), sans(12.0))];
+        runs.extend(with_x(sans(36.0)));
+        let mut t = area(runs, Rect::new(0.0, 0.0, 2.0 * w + 40.0, 300.0));
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&object.to_path(0.1)), wrap: Default::default() }];
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        assert!(!l.overflow, "{composer:?}: {:?}", l.lines);
+        let tall: Vec<_> = l.lines.iter().filter(|line| line.ascent > 30.0).collect();
+        assert_eq!(tall.len(), 1, "{composer:?}: {:?}", l.lines);
+        for line in tall {
+            for above in l.lines.iter().filter(|a| a.baseline < line.baseline - 0.01) {
+                let beside = above.avail.0 < line.avail.1 && line.avail.0 < above.avail.1;
+                assert!(
+                    !beside || line.baseline - line.ascent >= above.baseline + above.descent - 0.01,
+                    "{composer:?}: {line:?} reaches into {above:?}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -464,12 +498,41 @@ fn composer_x_mixed_sizes_in_a_frame_that_widens() {
 }
 
 #[test]
+fn single_line_composer_measures_a_line_across_its_tallest_glyph() {
+    // A frame wide enough for "Destroy all creatures X" down to 20 pt and as wide as "Destroy all"
+    // below, and a rectangle as wide with an object (6 pt wrap offset) beside that part. The first
+    // line starts with 12 pt words and takes in a 36 pt word, which sets it lower and reaches below
+    // 20 pt: the single-line composer measures its room across that height, every line that
+    // reaches the narrow part is set in it, and the first line keeps the 12 pt words that fit
+    // above it.
+    let w = natural_width("Destroy all creatures X", 12.0) + 30.0;
+    let narrow = natural_width("Destroy all", 12.0) + 2.0;
+    let runs = vec![run("Destroy all creatures ", sans(12.0)), run("X", sans(36.0)), run(" or less. Then draw a card.", sans(12.0))];
+    let object = Rect::new(narrow + 6.0, 26.0, w + 10.0, 300.0);
+    let mut beside = area(runs.clone(), Rect::new(0.0, 0.0, w, 300.0));
+    beside.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&object.to_path(0.1)), wrap: Default::default() }];
+    let mut shaped = stepped(w, narrow, 20.0, 300.0);
+    shaped.runs = runs;
+    for (name, mut t) in [("stepped frame", shaped), ("text wrap", beside)] {
+        t.para.composer = Composer::SingleLine;
+        let l = layout(db(), &t);
+        assert!(past_their_room(&t, &l).is_empty() && !l.overflow, "{name}: {:?}", l.lines);
+        let low = l.lines.iter().filter(|li| li.baseline + li.descent > 20.01);
+        assert!(low.clone().all(|li| li.avail.1 <= narrow + 0.01), "{name}: {:?}", l.lines);
+        // The 36 pt word is set, on a line in the narrow part.
+        assert!(low.clone().any(|li| li.ascent > 30.0), "{name}: {:?}", l.lines);
+        assert_eq!(line_texts(&t, &l)[0], "Destroy all creatures", "{name}: {:?}", l.lines);
+        assert!(l.lines[0].baseline < 20.0 && l.lines[0].avail.1 > w - 0.01, "{name}: {:?}", l.lines);
+    }
+}
+
+#[test]
 fn composer_x_mixed_sizes_overflow_a_shaped_frame() {
     // A stepped frame too short for the paragraph: the every-line composer still breaks the lines
     // that fit as one paragraph, with the lines past the frame's end measured as wide as the last
     // line the frame holds. Here that is the narrow part, so the lines that fit break as in a frame
-    // tall enough for the whole paragraph, and not as the single-line composer breaks them. They
-    // are set in order, each once and within its room, and the frame overflows.
+    // tall enough for the whole paragraph. They are set in order, each once and within its room,
+    // and the frame overflows.
     let w = x_width();
     let set = |bottom: f64, composer: Composer| {
         let mut t = stepped(w, w * 0.5, 40.0, bottom);
@@ -487,8 +550,10 @@ fn composer_x_mixed_sizes_overflow_a_shaped_frame() {
     assert_eq!(every, ["Destroy all creatures with toughness", "X or less. Then", "draw a card for each"]);
     let (whole, ..) = set(300.0, Composer::EveryLine);
     assert_eq!(every, whole[..every.len()]);
+    // The single-line composer measures each line across its height too, and breaks the lines
+    // that fit the same way.
     let (greedy, ..) = set(75.0, Composer::SingleLine);
-    assert_ne!(every, greedy);
+    assert_eq!(every, greedy);
     // A frame with no room for a line sets none.
     for composer in [Composer::EveryLine, Composer::SingleLine] {
         let mut t = stepped(w, w * 0.5, 4.0, 8.0);
@@ -529,8 +594,10 @@ fn composer_x_mixed_sizes_overflow_around_text_wrap() {
     assert_eq!(hits.count(), 0, "{:?}", l.lines);
     // The lines that fit break as in `composer_x_mixed_sizes_around_text_wrap`'s taller frame.
     assert_eq!(every, ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature"]);
+    // The single-line composer measures each line across its height too, and breaks the lines
+    // that fit the same way.
     let (greedy, ..) = set(Composer::SingleLine);
-    assert_ne!(every, greedy);
+    assert_eq!(every, greedy);
 }
 
 #[test]

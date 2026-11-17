@@ -547,7 +547,7 @@ fn simplify(sp: &mut SubPath, tol: f64, region: Rect) {
             None => out[0].h_in = h_in,
         }
     }
-    sp.anchors = out;
+    sp.anchors = out.into();
 }
 
 /// Apply a liquify stroke (its dabs, at the brush's intensity) to `path`. `salt` decorrelates

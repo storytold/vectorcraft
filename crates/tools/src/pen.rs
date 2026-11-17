@@ -449,7 +449,7 @@ impl Tool for PenTool {
                 }
                 vec![Action::Commit]
             }
-            PointerKind::DoubleClick => vec![],
+            PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _m: Mods) -> Vec<Action> {

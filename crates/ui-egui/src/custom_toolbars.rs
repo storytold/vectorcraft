@@ -1377,7 +1377,7 @@ pub(crate) fn add_menu_id(name: &str) -> egui::Id {
 /// bottom bars, as other long menus do ([`widgets::menu_scroll`]).
 fn add_menu(button: &egui::Response, t: &Tokens, bar: &CustomToolbar, actions: &mut Vec<Action>) {
     egui::Popup::menu(button).id(add_menu_id(&bar.name)).show(|ui| {
-        ui.set_min_width(200.0);
+        widgets::menu_min_width(ui, 200.0);
         widgets::menu_scroll(ui, |ui| {
             let held: Vec<&'static str> = bar.slots.iter().flatten().filter_map(|id| tool_info(id).map(|t| t.id)).collect();
             let heading = |ui: &mut egui::Ui, text: &str| ui.label(egui::RichText::new(text).size(12.0).color(t.text_strong));

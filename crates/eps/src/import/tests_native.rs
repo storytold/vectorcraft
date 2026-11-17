@@ -44,12 +44,12 @@ fn native_large_canvas(size: f64, scale: f64, layers: &str) -> String {
 }
 
 /// A layer as the format writes it.
-fn layer(name: &str, visible: bool, body: &str) -> String {
+pub(super) fn layer(name: &str, visible: bool, body: &str) -> String {
     format!("%AI5_BeginLayer\n{} 1 1 1 0 0 1 0 79 128 255 0 50 0 Lb\n({name}) Ln\n{body}\nLB\n%AI5_EndLayer--\n", u8::from(visible))
 }
 
 /// A yellow square of 4 points at (`x`, `y`) in the format's operators.
-fn square(x: u32, y: u32) -> String {
+pub(super) fn square(x: u32, y: u32) -> String {
     format!("0 0 1 0 k\n{x} {y} m\n{} {y} L\n{} {} L\n{x} {} L\nf", x + 4, x + 4, y + 4, y + 4)
 }
 
@@ -620,7 +620,41 @@ fn top_level_placed_file_replacement_keeps_page_image_data() {
     let mut page = pdf_part(10.0, 86.0);
     let pixels = image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 255, 255, 255]));
     let mut png = Vec::new();
-    pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = pixels.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
     let expected = blob.bytes.clone();
@@ -1289,7 +1323,24 @@ fn an_ai_file_with_an_image_past_2_25_pixels_keeps_its_layers() {
     let png = &d.images[&im.key].bytes;
     // Bit depth 1, colour type 0 (gray).
     assert_eq!(png.get(24..26), Some([1, 0].as_slice()));
-    let gray = image::load_from_memory(png).unwrap().to_luma8();
+    let gray = craft_image_codecs::decode(png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma8();
     assert_eq!((gray.get_pixel(0, 0)[0], gray.get_pixel(1, 0)[0], gray.get_pixel(5999, 5999)[0]), (0, 255, 255));
     assert!(warnings.iter().all(|w| !w.contains("image")), "{warnings:?}");
 }
@@ -1317,7 +1368,24 @@ fn an_ai_image_past_the_target_size_is_reduced_and_keeps_the_layers() {
         (full.x0 - 50.0).abs() < 1e-9 && (full.x1 - 67.0).abs() < 1e-9 && (full.y0 - 86.0).abs() < 1e-9 && (full.y1 - 99.0).abs() < 1e-9,
         "{full:?}"
     );
-    let gray = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_luma8();
+    let gray = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_luma8();
     // Steps of 4: blocks of rows 0–11 are half white rows, the last block row 12 alone; blocks of
     // columns 0–3 and 8–11 have 3 white columns of 4, and the last block column 16 alone.
     let rows: Vec<Vec<u8>> = (0..4).map(|y| (0..5).map(|x| gray.get_pixel(x, y)[0]).collect()).collect();
@@ -1809,6 +1877,44 @@ fn an_eps_without_layers_keeps_its_symbols() {
     assert_eq!(symbol_names(&r.document), ["Bar", "Masked", "Dot"], "{:?}", r.warnings);
 }
 
+/// The box of the art of `d`'s first symbol (Bar, 12 × 2 about the origin in the editing data).
+fn bar_bounds(d: &Document) -> Option<vectorcraft_geom::Rect> {
+    d.symbols.first().and_then(|s| s.art.geometric_bounds())
+}
+
+/// A symbol library without layers whose editing data is drawn larger than its units comes in with
+/// its symbols' art as large as a document read from its layers has it: an EPS of a Large Canvas
+/// copy at its declared scale, and a `.ai` whose artboard is its PDF part's page at that scale or
+/// in the units of its `UserUnit`. One whose artboard is the page in points keeps its art's size.
+#[test]
+fn a_symbol_library_in_larger_units_comes_in_at_the_pages_size() {
+    let board = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let library = |setup: &str| symbol_library().replace("%%BeginSetup\n", &format!("%%BeginSetup\n{setup}"));
+    let ten = Some(vectorcraft_geom::Rect::new(-60.0, -10.0, 60.0, 10.0));
+    let r = import(&eps(&page_square(50, 50), &library("%AI24_LargeCanvasScale: 10\n"))).unwrap();
+    assert_eq!(bar_bounds(&r.document), ten, "{:?}", r.warnings);
+    let large = format!("%AI24_LargeCanvasScale: 10\n{board}");
+    let (d, warnings, read) = crate::layered_ai(&private(&library(&large)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(bar_bounds(&d), ten, "{warnings:?}");
+    let (d, warnings, _) = crate::layered_ai(&private(&library(board)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 10.0);
+    assert_eq!(bar_bounds(&d), ten, "{warnings:?}");
+    let points = board.replace("0 100 /Real", "0 1000 /Real").replace("100 0 /Real", "1000 0 /Real");
+    let (d, warnings, _) = crate::layered_ai(&private(&library(&points)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 10.0);
+    assert_eq!(bar_bounds(&d), Some(vectorcraft_geom::Rect::new(-6.0, -1.0, 6.0, 1.0)), "{warnings:?}");
+    // A library VectorCraft wrote (its `%%Creator`) has its symbols at their own size, whatever its
+    // scale.
+    let own =
+        |setup: &str| library(setup).replacen("%!PS-Adobe-3.0 \n", &format!("%!PS-Adobe-3.0 \n%%Creator: {}\n", crate::ai_editing::CREATOR_TEXT), 1);
+    let own_size = Some(vectorcraft_geom::Rect::new(-6.0, -1.0, 6.0, 1.0));
+    let r = import(&eps(&page_square(50, 50), &own("%AI24_LargeCanvasScale: 10\n"))).unwrap();
+    assert_eq!(bar_bounds(&r.document), own_size, "{:?}", r.warnings);
+    let (d, warnings, _) = crate::layered_ai(&private(&own(&large)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 1.0);
+    assert_eq!(bar_bounds(&d), own_size, "{warnings:?}");
+}
+
 /// A `.ai` that comes in as its PDF part, and an EPS that comes in as its page, because their
 /// layers can't be used (their editing data is for another page) get the symbols defined before
 /// their layers.
@@ -2157,6 +2263,34 @@ fn an_ai_file_gets_its_layers_and_the_art_outside_its_artboard() {
     let above = d.layers[1].children().unwrap()[0].visual_bounds().unwrap();
     assert!(above.y1 <= 0.0 + 1e-6, "the art above the artboard is kept, outside it: {above:?}");
     assert!(!d.layers[2].visible);
+}
+
+/// A `.ai` of versions 10 to 13, whose symbol instances are placed by a `TransformMatrix` on the
+/// canvas, opens from its layers: the art outside its artboard, an instance among it, comes in,
+/// rather than the PDF part alone, which has none of it.
+#[test]
+fn an_older_ai_files_symbols_keep_its_layers_and_the_art_outside_its_artboard() {
+    // The template box's center is (50.5, 50.5): art space's origin is at canvas (8141, 8242). The
+    // instance puts Box at (150, 50) in art space, right of the artboard (x 0 to 100).
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n1 0 0 1 8291 8192 /TransformMatrix\n;\n9 () XW";
+    let layers = format!(
+        "{}{}{}",
+        stroked_box_symbol(),
+        layer("Jig", true, &square(10, 10)),
+        layer("Parts", true, &format!("{}\n{instance}", square(30, 110)))
+    );
+    let art = native(&layers).replacen("%AI5_NumLayers", "%AI3_TemplateBox: 50.5 50.5 50.5 50.5\n%AI5_NumLayers", 1);
+    let (d, warnings, read) = crate::layered_ai(&private(&art), pdf_part(10.0, 86.0), vec![], false, false, 1.0);
+    assert!(read, "{warnings:?}");
+    assert_eq!(names(&d), ["Jig", "Parts"], "{warnings:?}");
+    let parts = d.layers[1].children().unwrap();
+    let above = parts[0].visual_bounds().unwrap();
+    assert!(above.y1 <= 1e-6, "the square above the artboard is kept, outside it: {above:?}");
+    let NodeKind::SymbolInstance { symbol, .. } = &parts[1].kind else { panic!("an instance: {:?} {warnings:?}", parts[1].kind) };
+    assert_eq!(symbol, "Box");
+    let b = parts[1].visual_bounds_with(&d.symbol_boxes()).unwrap();
+    let near = [b.x0 - 149.0, b.y0 - 49.5, b.x1 - 151.0, b.y1 - 50.5].iter().all(|v| v.abs() < 0.3);
+    assert!(near, "the instance right of the artboard: {b:?}");
 }
 
 /// A `.ai` whose PDF part was read in points from a page of 10 points a unit (its `UserUnit`), and
@@ -2769,6 +2903,94 @@ fn a_large_canvas_eps_keeps_its_graphic_styles_at_the_pages_size() {
     assert_eq!((object.appearance.stroke_width(), object.extras().graphic_style), (2.0, Some(1)), "{object:#?}");
 }
 
+/// The definition of the symbol Box: a rectangle 2 × 1 about the origin, stroked 0.4 wide.
+fn stroked_box_symbol() -> String {
+    let art = "0 0 0 1 K\n0.4 w\n-1 -0.5 m\n-1 0.5 L\n1 0.5 L\n1 -0.5 L\n-1 -0.5 L\nS\n";
+    format!("%AI5_Begin_NonPrinting\n{}%AI5_End_NonPrinting--\n", symbol_def("Box", art, 5))
+}
+
+/// The art of `d`'s symbol Box ([`stroked_box_symbol`]) is ten times as large, its stroke 4 wide,
+/// and its instance on `d`'s second layer, placed in the file at twice its size about (`x`, `y`),
+/// keeps that scale and draws a box of 40 × 20 about `center`.
+fn box_symbol_at_ten_times(d: &Document, center: (f64, f64), notes: &[String]) {
+    let art = &d.symbols.iter().find(|s| s.name == "Box").unwrap_or_else(|| panic!("{notes:?}")).art;
+    let b = art.geometric_bounds().unwrap();
+    let close = |r: vectorcraft_geom::Rect, e: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(e).all(|(a, b)| (a - b).abs() < 1e-6);
+    assert!(close(b, [-10.0, -5.0, 10.0, 5.0]), "the art at the page's size: {b:?} {notes:?}");
+    let mut widths = vec![];
+    art.walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            widths.push(n.appearance.stroke_width());
+        }
+    });
+    assert_eq!(widths, [4.0], "{notes:?}");
+    let instance = d.layers[1].children().unwrap().first().unwrap_or_else(|| panic!("{:#?} {notes:?}", d.layers));
+    let NodeKind::SymbolInstance { xf, .. } = &instance.kind else { panic!("an instance: {:?}", instance.kind) };
+    let [a, b0, c, d0, ..] = xf.as_coeffs();
+    assert!((a.hypot(b0) - 2.0).abs() < 1e-9 && (c.hypot(d0) - 2.0).abs() < 1e-9, "the instance's own scale: {xf:?}");
+    let (x, y) = center;
+    assert!(close(xf.transform_rect_bbox(b), [x - 20.0, y - 10.0, x + 20.0, y + 10.0]), "{:?}", xf.transform_rect_bbox(b));
+}
+
+/// The symbols of a Large Canvas editing copy come in at the page's size, as its art does: their
+/// art and its strokes ten times as large, and each instance with the scale the file gives it,
+/// drawn where and as large as before.
+#[test]
+fn a_large_canvas_eps_keeps_its_symbols_at_the_pages_size() {
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n2 0 0 -2 5 5 /RTransformMatrix\n;\n9 () XW";
+    let square = "0 0 1 0 k\n5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\nf";
+    let art = native_large_canvas(10.0, 10.0, &format!("{}{}{}", stroked_box_symbol(), layer("Art", true, square), layer("Box", false, instance)));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Box"], "{:?}", r.warnings);
+    box_symbol_at_ten_times(&r.document, (50.0, 50.0), &r.warnings);
+}
+
+/// A large canvas `.ai` 100 units square at a scale of 10, with the symbol Box
+/// ([`stroked_box_symbol`]) and an instance of it at twice its size about (50, 50), its header
+/// carrying `creator` when given, read with its PDF part, on a page whose PDF part can't be read,
+/// and without a page.
+fn large_canvas_ai_box_reads(creator: Option<&str>) -> Vec<(&'static str, Document, Vec<String>)> {
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n2 0 0 -2 50 50 /RTransformMatrix\n;\n9 () XW";
+    let layers = format!("{}{}{}", stroked_box_symbol(), layer("Art", true, &square(10, 10)), layer("Box", false, instance));
+    let mut art = native_large_canvas(100.0, 10.0, &layers);
+    if let Some(creator) = creator {
+        art = art.replacen("%!PS-Adobe-3.0 \n", &format!("%!PS-Adobe-3.0 \n%%Creator: {creator}\n"), 1);
+    }
+    let data = private(&art);
+    let (d, notes, read) = crate::layered_ai(&data, in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    let on_page = crate::ai_alone_on_page(&data, (1000.0, 1000.0), 10.0, Default::default()).unwrap();
+    let no_page = crate::ai_alone(&data).unwrap();
+    vec![("PDF part", d, notes), ("on a page", on_page.0, on_page.1), ("no page", no_page.0, no_page.1)]
+}
+
+/// A `.ai` whose editing data is read at its declared large canvas scale has its symbols scaled
+/// with the art, as an EPS has, however the file opens.
+#[test]
+fn a_large_canvas_ai_keeps_its_symbols_at_the_pages_size() {
+    for (how, d, notes) in large_canvas_ai_box_reads(None) {
+        let notes: Vec<String> = notes.into_iter().chain([how.to_string()]).collect();
+        box_symbol_at_ten_times(&d, (500.0, 500.0), &notes);
+    }
+}
+
+/// A large canvas `.ai` that VectorCraft wrote (its `%%Creator`) has its symbols defined at their
+/// own size, as its `.ai` save writes them: their art keeps that size, and the instance, scaled with
+/// the layers, draws the same box, however the file opens.
+#[test]
+fn a_large_canvas_ai_vectorcraft_wrote_keeps_its_symbols_at_their_own_size() {
+    for (how, d, notes) in large_canvas_ai_box_reads(Some(crate::ai_editing::CREATOR_TEXT)) {
+        let art = &d.symbols.iter().find(|s| s.name == "Box").unwrap_or_else(|| panic!("{how}: {notes:?}")).art;
+        let b = art.geometric_bounds().unwrap();
+        assert_eq!(b, vectorcraft_geom::Rect::new(-1.0, -0.5, 1.0, 0.5), "{how}: {notes:?}");
+        let instance = d.layers[1].children().unwrap().first().unwrap_or_else(|| panic!("{how}: {:#?} {notes:?}", d.layers));
+        let NodeKind::SymbolInstance { xf, .. } = &instance.kind else { panic!("{how}: an instance: {:?}", instance.kind) };
+        let drawn = xf.transform_rect_bbox(b);
+        let close = [drawn.x0 - 480.0, drawn.y0 - 490.0, drawn.x1 - 520.0, drawn.y1 - 510.0].iter().all(|v| v.abs() < 1e-6);
+        assert!(close, "{how}: {drawn:?}");
+    }
+}
+
 #[test]
 fn type_with_a_listed_art_style_is_linked_to_its_graphic_style() {
     let doc = text_document(&[("Bang\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
@@ -3021,9 +3243,9 @@ fn custom_colours_open_paths_and_planar_group_marks_are_read() {
 /// A text document of `stories` (each as the text, its alignment code, its anchor and the frame's
 /// translation, and the start of its first line from the anchor), one font and a 14 point default.
 /// A story: its text, alignment code, anchor, frame translation and first line's start.
-type Story<'a> = (&'a str, u8, (f64, f64), (f64, f64), f64);
+pub(super) type Story<'a> = (&'a str, u8, (f64, f64), (f64, f64), f64);
 
-fn text_document(stories: &[Story<'_>]) -> String {
+pub(super) fn text_document(stories: &[Story<'_>]) -> String {
     let story = |(text, align, anchor, _t, start): &Story<'_>| {
         let n = text.chars().count();
         format!(
@@ -3043,9 +3265,32 @@ fn text_document(stories: &[Story<'_>]) -> String {
     )
 }
 
+/// [`text_document`] with its keys written by name, as files saved for version 11 write them: a
+/// typed node's kind under `/StreamTag`, the strikes' kinds by their long names.
+fn named_text_document(stories: &[Story<'_>]) -> String {
+    let story = |(text, align, anchor, _t, start): &Story<'_>| {
+        let n = text.chars().count();
+        format!(
+            "<< /Model << /Text ({text}) /ParagraphRun << /RunArray [ << /RunData << /ParagraphSheet << /Name () /Features << /Justification {align} >> /Parent 0 >> >> /Length {n} >> ] >> \
+             /StyleRun << /RunArray [ << /RunData << /StyleSheet << /Name () /Parent 0 /Features << /Font 0 /FontSize 14.0 /FillColor << /StreamTag /CAITextPaint /Color << /Type 2 /Values [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /Length {n} >> ] >> >> \
+             /View << /Frames [ << /Resource 0 >> ] /Strikes [ << /StreamTag /PathSelectGroupCharacter /Children [ << /StreamTag /FrameStrike /Transform << /Origin [ {} {} ] >> \
+             /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /LineStrike /Children [ \
+             << /StreamTag /Segment /Transform << /Origin [ {start} 0.0 ] >> /Mapping << /CharacterCount {n} >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>",
+            anchor.0, anchor.1
+        )
+    };
+    let frame = |(_, _, _, t, _): &Story<'_>| format!("<< /Resource << /Point [ 0 0 ] /Data << /FrameMatrix [ 1 0 0 1 {} {} ] >> >> >>", t.0, t.1);
+    format!(
+        "/DocumentResources << /FontSet << /Resources [ << /Resource << /StreamTag /CoolTypeFont /Identifier << /Name (Helvetica) >> >> >> ] >> \
+         /TextFrameSet << /Resources [ {} ] >> >>\n/DocumentObjects << /TextObjects [ {} ] /OriginalNormalStyleFeatures << /FontSize 12.0 >> >>\n",
+        stories.iter().map(frame).collect::<Vec<_>>().join(" "),
+        stories.iter().map(story).collect::<Vec<_>>().join(" ")
+    )
+}
+
 /// The editing copy of a 100 × 100 file with `layers` and the text `document`; its template box is
 /// centred at (50, 50).
-fn native_with_text(layers: &str, document: &str) -> String {
+pub(super) fn native_with_text(layers: &str, document: &str) -> String {
     let lines: Vec<String> = ascii85(document.as_bytes()).as_bytes().chunks(60).map(|c| format!("%{}", String::from_utf8_lossy(c))).collect();
     format!(
         "%!PS-Adobe-3.0 \n%%BoundingBox: 0 0 100 100\n%%HiResBoundingBox: 0 0 100 100\n%AI3_Cropmarks: 0 0 100 100\n%AI3_TemplateBox: 50 50 50 50\n\
@@ -3054,8 +3299,18 @@ fn native_with_text(layers: &str, document: &str) -> String {
     )
 }
 
+/// [`text_document`] of `stories`, padded so that [`native_with_text`] doesn't split the end of its
+/// data, `~>`, across two lines.
+pub(super) fn unsplit_text_document(stories: &[Story<'_>]) -> String {
+    let mut doc = text_document(stories);
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    doc
+}
+
 /// A text object of story `story`, as the layers hold it.
-fn text_object(story: u32) -> String {
+pub(super) fn text_object(story: u32) -> String {
     format!("/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n{story} /StoryIndex ,\n2 /TextAntialiasing ,\n;\n")
 }
 
@@ -3193,6 +3448,8 @@ fn type_from_the_text_document_takes_the_version_its_font_record_keeps() {
     // A record whose name differs from the copies' in punctuation alone still picks its version.
     assert_eq!(version("/0 (Vertest-Ink-Regular) /5 (1.1)"), "1.1");
     assert_eq!(version("/0 (Vertest-Ink-Regular)"), "1.0");
+    // Files saved for versions older than the key write it by name among the numbered ones.
+    assert_eq!(version("/0 (VertestInk-Regular) /VersionString (1.1)"), "1.1");
 }
 
 /// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
@@ -3600,6 +3857,81 @@ fn shown_type_keeps_the_pages_and_type_off_the_page_comes_from_the_text_document
     assert!(all.contains(&"Hi there".to_string()) && all.contains(&"Away".to_string()), "{all:?}");
     assert_eq!(texts.len(), 2, "the page's type is in the layer as it is, not in a group");
     assert!(!r.warnings.iter().any(|w| w.contains("order the page paints")), "{:?}", r.warnings);
+}
+
+#[test]
+fn a_text_document_with_named_keys_gives_type_off_the_page_too() {
+    // Files saved for version 11 write the text document's keys by name. Story 1 is off the page:
+    // only the text document has it, and story 0 stays in its own text object.
+    let stories = [("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Away\r", 0, (8300.0, 8180.0), (0.0, 0.0), 0.0)];
+    let art = native_with_text(&layer("Art", true, &(text_object(0) + &text_object(1))), &named_text_document(&stories));
+    let page = "0 0 0 1 setcmykcolor /Helvetica findfont 14 scalefont setfont 58.5 61.5 moveto (Hi there) show";
+    let r = import(&eps(page, &art)).unwrap();
+    let texts = text_of(&r.document.layers[0]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there", "Away"], "{:?}", r.warnings);
+    let x = |t: &vectorcraft_doc::TextObject| t.xf.as_coeffs()[4];
+    assert!((x(texts[0]) - 58.5).abs() < 1e-6 && (x(texts[1]) - 158.5).abs() < 1e-6, "{:?} {:?}", texts[0].xf, texts[1].xf);
+}
+
+#[test]
+fn a_text_document_with_named_keys_reads_as_the_same_one_with_numbers() {
+    // Type on a hidden layer comes only from the text document: its styles, paints, frames and
+    // layout read the same whichever way its keys are written.
+    let stories = [("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Mid\r", 2, (8191.5, 8191.5), (0.0, 0.0), -10.0)];
+    let spare = |doc: &str| {
+        let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &(text_object(0) + &text_object(1)))), doc);
+        let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+        let texts: Vec<vectorcraft_doc::TextObject> = text_of(&r.document.layers[1]).into_iter().cloned().collect();
+        (texts, r.warnings)
+    };
+    let (numbered, _) = spare(&text_document(&stories));
+    let (named, warnings) = spare(&named_text_document(&stories));
+    assert_eq!(numbered.len(), 2);
+    assert_eq!(named, numbered, "{warnings:?}");
+    assert_eq!(named[1].para.justify, vectorcraft_doc::Justify::Center);
+    let magenta = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    assert_eq!(named[0].runs[0].style.fill, magenta);
+}
+
+#[test]
+fn a_text_document_with_named_keys_takes_a_runs_style_by_its_number() {
+    // Files saved for version 11 name a run's paragraph and character styles by their numbers in the
+    // document's style sets, and give point type a curve of four equal points. Styles 1 center the
+    // paragraph and paint the type magenta; paragraph style 2 sets its direction right to left.
+    let magenta = "<< /StreamTag /CAITextPaint /Color << /Type 2 /Values [ 1.0 0.0 1.0 0.0 0.0 ] >> >>";
+    let story = |text: &str, para: u8, chars: u8, x: f64| {
+        let n = text.chars().count();
+        format!(
+            "<< /Model << /Text ({text}) /ParagraphRun << /RunArray [ << /RunData << /ParagraphSheet {para} >> /Length {n} >> ] >> \
+             /StyleRun << /RunArray [ << /RunData << /StyleSheet {chars} >> /Length {n} >> ] >> >> \
+             /View << /Frames [ << /Resource 0 >> ] /Strikes [ << /StreamTag /PathSelectGroupCharacter /Children [ << /StreamTag /FrameStrike \
+             /Transform << /Origin [ {x} 8180.0 ] >> /Children [ << /StreamTag /RowColStrike /Children [ << /StreamTag /RowColStrike /Children [ \
+             << /StreamTag /LineStrike /Children [ << /StreamTag /Segment /Transform << /Origin [ 0.0 0.0 ] >> >> ] >> ] >> ] >> ] >> ] >> ] >> >>"
+        )
+    };
+    let doc = format!(
+        "/DocumentResources << /FontSet << /Resources [ << /Resource << /StreamTag /CoolTypeFont /Identifier << /Name (Helvetica) >> >> >> ] >> \
+         /StyleSheetSet << /Resources [ << /Resource << /Name (Normal) /Features << /Font 0 /FontSize 14.0 >> >> >> \
+         << /Resource << /Name (Magenta) /Parent 0 /Features << /FillColor {magenta} >> >> >> ] >> \
+         /ParagraphSheetSet << /Resources [ << /Resource << /Name (Normal) /Features << /Justification 0 >> >> >> \
+         << /Resource << /Name (Centered) /Parent 0 /Features << /Justification 2 >> >> >> \
+         << /Resource << /Name (Leftward) /Parent 0 /Features << /ParagraphDirection 1 >> >> >> ] >> \
+         /TextFrameSet << /Resources [ << /Resource << /Bezier << /Points [ 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 8191.5 ] >> \
+         /Data << /Type 0 /FrameMatrix [ 1 0 0 1 0 0 ] >> >> >> ] >> >>\n\
+         /DocumentObjects << /TextObjects [ {} {} ] /OriginalNormalStyleFeatures << /FontSize 12.0 >> >>\n",
+        story("Mid\r", 1, 1, 8200.0),
+        story("Back\r", 2, 0, 8300.0)
+    );
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &(text_object(0) + &text_object(1)))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Mid", "Back"], "{:?}", r.warnings);
+    assert_eq!(texts[0].para.justify, vectorcraft_doc::Justify::Center);
+    let magenta = vectorcraft_color::Paint::solid(vectorcraft_color::Color::cmyk(0.0, 1.0, 0.0, 0.0));
+    assert_eq!(texts[0].runs[0].style.fill, magenta);
+    assert_eq!(texts[1].para.direction, Some(vectorcraft_doc::ParaDirection::RightToLeft));
+    assert_eq!(texts[1].para.justify, vectorcraft_doc::Justify::Right);
+    assert_ne!(texts[1].runs[0].style.fill, magenta);
 }
 
 #[test]
@@ -4537,6 +4869,9 @@ fn an_eps_page_of_its_art_stays_its_page_through_the_layers() {
     assert_eq!(boards.len(), 1);
     assert!((boards[0].width() - 4.0).abs() < 1e-6 && (boards[0].height() - 4.0).abs() < 1e-6, "{boards:?}");
     assert!(boards[0].inflate(1e-6, 1e-6).contains_rect(art), "{boards:?} round {art:?}");
+    // Its private data is an EPS's editing copy, whatever the file is named.
+    let named_ai = crate::import::import_ai(&file, true, false, crate::NameEncoding::default()).unwrap();
+    assert_eq!(named_ai.document.artboards.iter().map(|a| a.rect).collect::<Vec<_>>(), boards, "{:?}", named_ai.warnings);
 }
 
 #[test]
@@ -5731,6 +6066,94 @@ fn an_envelope_of_type_waits_on_the_page_of_layers_that_would_open_alone() {
     let (envelopes, loose) = envelopes_and_type(&d);
     assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{notes:?}");
     assert_eq!(loose, [("Note".to_string(), true)], "{notes:?}");
+}
+
+/// What `f` returns, with how many times it read a text document and scanned the text objects'
+/// frames of an editing copy on this thread; with `afresh`, each check and build reads them anew,
+/// keeping nothing for the next.
+fn text_reads<T>(afresh: bool, f: impl FnOnce() -> T) -> (T, u64, u64) {
+    crate::import::ate::TEXTS_READS.set(0);
+    crate::import::ai::TEXT_FRAME_SCANS.set(0);
+    crate::import::native::READ_AFRESH.set(afresh);
+    let out = f();
+    crate::import::native::READ_AFRESH.set(false);
+    (out, crate::import::ate::TEXTS_READS.get(), crate::import::ai::TEXT_FRAME_SCANS.get())
+}
+
+/// A `.ai` that opens without its PDF part reads its text document and scans its text objects'
+/// frames once, for the check that its text document makes all of its type and for the build, and
+/// comes in as it does when each reads them anew.
+#[test]
+fn layers_that_open_alone_read_their_text_once() {
+    let doc = unsplit_text_document(&[("Hi there\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0), ("Mid\r", 2, (8191.5, 8191.5), (0.0, 0.0), -10.0)]);
+    let art = layer("Art", true, &format!("{}\n{}{}", square(10, 10), text_object(0), text_object(1)));
+    let file = private(&native_with_text(&art, &doc));
+    let open = || crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, crate::NameEncoding::default()).ok();
+    let (opened, texts, frames) = text_reads(false, open);
+    let Some((d, notes)) = opened else { panic!("didn't open without the page") };
+    assert_eq!((texts, frames), (1, 1), "{notes:?}");
+    assert_eq!(text_of(&d.layers[0]).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["Hi there", "Mid"], "{notes:?}");
+    let (afresh, texts, frames) = text_reads(true, open);
+    assert_eq!((texts, frames), (2, 2));
+    assert_eq!(afresh, Some((d, notes)));
+}
+
+/// Layers whose text document can't be read wait on the PDF part, which then doesn't read the text
+/// document or scan the frames again, and come in as they do when each check and build reads them
+/// anew.
+#[test]
+fn layers_whose_text_document_cannot_be_read_read_it_once_with_the_page() {
+    let art = layer("Art", true, &format!("{}\n{}", square(10, 10), text_object(0)));
+    let file = private(&native_with_text(&art, "not a text document"));
+    let names = crate::NameEncoding::default();
+    let open = || {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, pdf_part(10.0, 86.0), vec![], false, false, 1.0, names)
+    };
+    let (opened, texts, frames) = text_reads(false, open);
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, open);
+    assert_eq!((texts, frames), (2, 2), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+}
+
+/// An envelope of type that waits on the PDF part reads the text document and scans the frames
+/// once, for the check before the PDF part is imported, the build with it, and the build without it
+/// that follows when the envelope doesn't open live, and the file comes in as it does when each of
+/// them reads them anew.
+#[test]
+fn an_envelope_of_type_waiting_on_the_page_reads_the_text_once() {
+    let Some(family) = installed_family() else { return };
+    let stories = [("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0), ("Note\r", 0, (8170.0, 8220.0), (0.0, 0.0), 0.0)];
+    let mut doc = text_document(&stories).replace("(Helvetica)", &format!("({family})"));
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    let (drawn, _) = drawn_envelope(&arc_envelope(&made_envelope_type(&doc), 30.0));
+    let art = format!("u\n{}U\n{}", text_object(1), type_envelope(&arc_keys(0.3), &drawn));
+    let file = private(&native_with_text(&layer("Art", true, &art), &doc));
+    let names = crate::NameEncoding::default();
+    let open = |page: Document| {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
+    };
+    // A PDF part the layers don't draw as: they open alone, after a build with the page and one without.
+    let (opened, texts, frames) = text_reads(false, || open(pdf_part(80.0, 80.0)));
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, || open(pdf_part(80.0, 80.0)));
+    assert_eq!((texts, frames), (4, 4), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+    let (envelopes, _) = envelopes_and_type(&opened.0);
+    assert!(opened.2 && envelopes.is_empty(), "{envelopes:?} {:?}", opened.1);
+    // A PDF part that draws as those layers, with the drawn art: the envelope opens live.
+    let page = opened.0;
+    let (opened, texts, frames) = text_reads(false, || open(page.clone()));
+    assert_eq!((texts, frames), (1, 1), "{:?}", opened.1);
+    let (afresh, texts, frames) = text_reads(true, || open(page));
+    assert_eq!((texts, frames), (2, 2), "{:?}", afresh.1);
+    assert_eq!(opened, afresh);
+    let (envelopes, _) = envelopes_and_type(&opened.0);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", opened.1);
 }
 
 /// The hidden type outside envelopes in the layers of `d`: each text object's name.

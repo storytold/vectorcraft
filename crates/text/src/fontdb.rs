@@ -17,6 +17,7 @@ use crate::GlyphImage;
 use crate::colr::ColourContent;
 use vectorcraft_doc::color::Color;
 
+mod added;
 mod alternates;
 mod build;
 mod cache;
@@ -33,6 +34,9 @@ mod stylistic_sets;
 mod traits;
 mod wanted;
 
+#[cfg(test)]
+pub(crate) use added::recently_added_of;
+pub use added::{RECENTLY_ADDED_WITHIN, RecentlyAdded};
 pub use alternates::GlyphAlternate;
 pub(crate) use alternates::listed;
 pub use build::style_weight;
@@ -54,7 +58,7 @@ pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
 pub(crate) use glyph_pen::FlipPen;
-pub use gsub::{GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
+pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]
@@ -70,7 +74,7 @@ pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontMatch, FontTraits};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
@@ -119,6 +123,9 @@ pub struct FontDb {
     /// type naming one as its family is set in its parts' fonts. A thread's guards can lend others
     /// in their place ([`FontDb::lend_composite_fonts`]).
     composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
+    /// The lookups of the custom character sets of the composite fonts held or lent, each built
+    /// when first used.
+    custom_classes: Mutex<composite::CustomClasses>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.

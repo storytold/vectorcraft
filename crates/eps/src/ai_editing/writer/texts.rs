@@ -17,19 +17,21 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::sync::Arc;
 
 use kurbo::{ParamCurveArclen, PathSeg};
 use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::text::MAX_AKI;
 use vectorcraft_doc::{
-    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, LineCap, LineJoin, Mojikumi, Node, NodeId, NodeKind, ParaDirection,
-    ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
+    AreaOptions, Burasagari, CharStyle, Document, FirstBaseline, Justify, Kinsoku, KinsokuShoriType, LineCap, LineJoin, Mojikumi, Node, NodeId,
+    NodeKind, ParaDirection, ParaStyle, PathAlign, PathEffect, TextKind, TextObject, VerticalAlign,
 };
 use vectorcraft_geom::{Affine, PathData, Point};
 
 use crate::ps;
 
 /// What the text document holds of type, and what it leaves out.
-pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, paragraph alignment, indents, space before and after, hyphenation on or off and right-to-left direction (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
+pub(in crate::ai_editing) const TYPE_ATTRIBUTES: &str = "attributes of type other than its font, size, leading, tracking, baseline shift, horizontal and vertical scale, solid fill, solid stroke and its weight, cap, join and miter limit, capitals, small capitals at the document's size, Tate-chu-yoko, Standard Vertical Roman Alignment, Insert Aki, paragraph alignment, indents, space before and after, hyphenation on or off, right-to-left direction, Kinsoku set, Kinsoku Shori Type, Burasagari and Bunri-Kinshi (for example underline, kerning, OpenType features, swatch links of its colors, character and paragraph styles, tabs, lists, optical margin alignment, area type's inset spacing, vertical alignment and flow, a minimum first baseline with the Ascent first baseline, and type on a path's effect, alignment and spacing and an end bracket at the very end of an open path) are left out of the editing data for other apps";
 
 /// The version of the text document's form (`/98 << /0 n >>`), as the newest files users sent have it.
 const STREAM_VERSION: u32 = 14;
@@ -160,6 +162,10 @@ fn dict(pairs: Vec<(u32, V)>) -> V {
     V::Dict(pairs)
 }
 
+/// The document's Kinsoku sets, in order, each by its name: a paragraph's key 27 is its set's index
+/// here (0 Hard, 1 Soft), as the reader's `kinsoku_sets` reads them.
+const KINSOKU_SETS: [&str; 2] = ["PhotoshopKinsokuHard", "PhotoshopKinsokuSoft"];
+
 /// A resource set: its resources, each `<< /0 resource >>`, and its display list.
 fn set(resources: Vec<V>, display: bool) -> V {
     let mut d = vec![(0, V::List(resources.into_iter().map(|r| dict(vec![(0, r)])).collect()))];
@@ -192,8 +198,8 @@ fn solid(p: &Paint) -> Option<Option<Color>> {
 /// Can the text document hold type `t` of object `n` as it is: point type that isn't mirrored, or
 /// area type or type on a path that is only moved ([`shape`]); characters other than inline graphics
 /// and ruby; solid fills and strokes; no fills, strokes, effects or opacity mask of the object's
-/// own; some text.
-pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
+/// own; some text. Area type with wrap shapes only when `wrap_held` ([`wraps_held`]).
+pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject, wrap_held: bool) -> bool {
     let xf = t.xf.as_coeffs();
     let shape_ok = match &t.kind {
         TextKind::Point => xf.iter().all(|v| v.is_finite()) && t.xf.determinant() > 1e-12,
@@ -204,9 +210,10 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
             shape(t).as_ref().and_then(segments).is_some_and(|s| !(open && closed(&s)))
         }
     };
-    // Area type that flows around wrap objects: the data doesn't hold their wrap settings.
+    // Area type with wrap shapes: the text document doesn't hold them. The reader works them out
+    // again from the art above the type, which wraps it the same only where `wraps_held` says so.
     shape_ok
-        && t.wrap.is_empty()
+        && (t.wrap.is_empty() || wrap_held)
         && t.ruby.is_empty()
         && !t.stacks_warichu()
         && t.runs.iter().any(|r| r.text.chars().any(|c| !c.is_whitespace()))
@@ -317,11 +324,123 @@ fn plain(n: &Node) -> bool {
         && n.extras().mask.is_none()
 }
 
+/// The area type of `doc` whose wrap shapes the reader of the editing data works out again as they
+/// are ([`vectorcraft_doc::text::resolve_wrap`], which the reader runs on what it reads): the
+/// shapes are the ones the wrap objects above it give it now, and each of those objects is written
+/// as itself and read back with the same outline and options ([`wrap_source_held`]), in layers
+/// and groups written as they are ([`plain_containers`]). `styled`: the objects written with an
+/// art style. Empty when the shapes of the document's area type would hold more anchors than the
+/// reader copies into them ([`crate::import::MAX_WRAP_WORK`]).
+pub(in crate::ai_editing) fn wraps_held(doc: &Document, styled: &HashMap<NodeId, Arc<Node>>) -> HashSet<NodeId> {
+    let mut held = HashSet::new();
+    if vectorcraft_doc::text::wrap_work(doc) > crate::import::MAX_WRAP_WORK {
+        return held;
+    }
+    let mut plain_in = HashSet::new();
+    for layer in &doc.layers {
+        plain_containers(layer, true, styled, &mut plain_in);
+    }
+    let mut checked: HashMap<NodeId, bool> = HashMap::new();
+    vectorcraft_doc::text::wrap_sources(doc, |n, sources, shapes| {
+        let NodeKind::Text(t) = &n.kind else { return };
+        if t.wrap.is_empty() || shapes != t.wrap || !plain_in.contains(&n.id) {
+            return;
+        }
+        let ok = sources.iter().all(|s| *checked.entry(s.id).or_insert_with(|| plain_in.contains(&s.id) && wrap_source_held(s, styled)));
+        if ok {
+            held.insert(n.id);
+        }
+    });
+    held
+}
+
+/// Adds to `out` the objects with text wrap options and the text objects in `n` (a top-level layer
+/// when `top`) that sit only in layers and groups written as they are: layers and sublayers that
+/// don't clip and have no effects, and groups that don't clip, have no fills, strokes, effects,
+/// art style, opacity mask or graph and aren't written with an art style (`styled`).
+fn plain_containers(n: &Node, top: bool, styled: &HashMap<NodeId, Arc<Node>>, out: &mut HashSet<NodeId>) {
+    let plain = match &n.kind {
+        NodeKind::Layer { clip, .. } => !clip && n.appearance.effects.is_empty(),
+        NodeKind::Group { clip, .. } => !top && !clip && n.appearance.items.is_empty() && own_plain(n, styled),
+        _ => false,
+    };
+    if !plain {
+        return;
+    }
+    for c in n.children().map(Vec::as_slice).unwrap_or_default() {
+        if c.extras().wrap.is_some() || matches!(c.kind, NodeKind::Text(_)) {
+            out.insert(c.id);
+        }
+        plain_containers(c, false, styled, out);
+    }
+}
+
+/// Has object `n` no effects, art style, opacity mask or graph, and isn't it a ruler guide or
+/// written with an art style (`styled`)?
+fn own_plain(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    !styled.contains_key(&n.id)
+        && n.appearance.effects.is_empty()
+        && n.appearance.items.iter().all(|i| i.effects().is_empty())
+        && n.extras().graphic_style.is_none()
+        && n.extras().mask.is_none()
+        && n.extras().graph.is_none()
+        && !n.is_ruler_guide()
+}
+
+/// Is wrap object `n` written as itself and read back with the same outline and text wrap options:
+/// an offset the writer and the reader keep as it is (-1000 to 1000 pt) and a plain object
+/// ([`plain_wrap_art`])?
+fn wrap_source_held(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    n.extras().wrap.is_some_and(|w| w.offset.is_finite() && w.offset.abs() <= 1000.0) && plain_wrap_art(n, styled)
+}
+
+/// Is `n` written as one object of its own kind that the reader reads back with the same outline
+/// ([`vectorcraft_doc::text::resolve_wrap`]): a path of one subpath, a compound path of visible
+/// paths with two subpaths or more in all, each painted with no paint, a solid fill, a plain line of a solid color or both, or a
+/// group that doesn't clip of such paths, compound paths and groups (hidden ones too) without text
+/// wrap options of their own; each without effects, art style, opacity mask or graph
+/// ([`own_plain`]). Each subpath has two anchors or more.
+fn plain_wrap_art(n: &Node, styled: &HashMap<NodeId, Arc<Node>>) -> bool {
+    use vectorcraft_doc::AppearanceItem;
+    let solid = |p: &Paint| matches!(p, Paint::Solid { .. });
+    let painted = || match super::visible_items(n).as_slice() {
+        [] => true,
+        [AppearanceItem::Fill(f)] => solid(&f.paint),
+        [AppearanceItem::Stroke(s)] => solid(&s.paint) && vectorcraft_effects::stroke::is_plain(s),
+        [AppearanceItem::Fill(f), AppearanceItem::Stroke(s)] => solid(&f.paint) && solid(&s.paint) && vectorcraft_effects::stroke::is_plain(s),
+        _ => false,
+    };
+    let whole = |p: &PathData| p.subpaths.iter().all(|sp| sp.anchors.len() >= 2);
+    own_plain(n, styled)
+        && match &n.kind {
+            NodeKind::Path { path, clipping: false, guide: false, .. } => path.subpaths.len() == 1 && whole(path) && painted(),
+            // One subpath in all would be written, and read back, as a path.
+            NodeKind::Compound { children, .. } => {
+                let subpaths: usize = children.iter().filter_map(|c| c.path_data()).map(|p| p.subpaths.len()).sum();
+                let members = children.iter().all(|c| {
+                    c.visible
+                        && matches!(&c.kind, NodeKind::Path { path, clipping: false, guide: false, .. } if !path.subpaths.is_empty() && whole(path))
+                });
+                painted() && subpaths > 1 && members
+            }
+            NodeKind::Group { children, clip: false } => {
+                n.appearance.items.is_empty() && children.iter().all(|c| c.extras().wrap.is_none() && plain_wrap_art(c, styled))
+            }
+            _ => false,
+        }
+}
+
 /// Is the end bracket of type on an open path so near the path's end that the reader reads it as
 /// no bracket (`Story::node`: within 0.02 of a segment)?
 fn end_read_as_none(t: &TextObject) -> bool {
     let (Some((_, end)), Some(segs)) = (t.kind.path_span(), shape(t).as_ref().and_then(segments)) else { return false };
     !closed(&segs) && end < 1.0 - 1e-9 && place_on(&segs, end) >= segs.len() as f64 - 0.02
+}
+
+/// Insert Aki Left or Right `v` as the text document holds it: 0 to [`MAX_AKI`] in 1/1000 em, and 0
+/// for a value that is not a number.
+fn held_aki(v: f64) -> f64 {
+    if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) }
 }
 
 /// Has type `t` attributes the text document leaves out ([`TYPE_ATTRIBUTES`])?
@@ -358,6 +477,8 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             tate_chu_yoko: s.tate_chu_yoko,
             // Key 35 holds one of the two: a Tate-chu-yoko run is read back without the other.
             standard_vertical_roman: s.standard_vertical_roman && !s.tate_chu_yoko,
+            aki_left: held_aki(s.aki_left),
+            aki_right: held_aki(s.aki_right),
             ..CharStyle::default()
         }
     };
@@ -390,7 +511,6 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
         }
         let hangul =
             text.chars().any(|c| matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7FF}' | '\u{FFA0}'..='\u{FFDC}'));
-        let pairs = text.chars().zip(text.chars().skip(1)).any(|(a, b)| vectorcraft_text::inseparable(a, b));
         let held = ParaStyle {
             justify: p.justify,
             left_indent: p.left_indent,
@@ -400,16 +520,16 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
             space_after: p.space_after,
             hyphenate: p.hyphenate,
             direction: p.direction.filter(|d| *d == ParaDirection::RightToLeft),
-            // The composition of Japanese punctuation new type gets (Line-end Punctuation Half
-            // Width, Standard burasagari) isn't reported: it changes no other script's lines.
+            // The Mojikumi set new type gets (Line-end Punctuation Half Width) isn't reported: it
+            // changes no other script's lines.
             mojikumi: if p.mojikumi == Mojikumi::LineEndHalf { p.mojikumi } else { ParaStyle::default().mojikumi },
-            burasagari: if p.burasagari == Burasagari::Standard { p.burasagari } else { ParaStyle::default().burasagari },
+            kinsoku: p.kinsoku,
+            kinsoku_type: p.kinsoku_type,
+            burasagari: p.burasagari,
+            bunri_kinshi: p.bunri_kinshi,
             // The text document has no Korean Line Break Anywhere: it reads back off, which
             // changes only the lines of a paragraph with Hangul in it.
             korean_line_break_anywhere: p.korean_line_break_anywhere && !hangul,
-            // Nor Bunri-Kinshi: it reads back off, which changes only the lines of a paragraph
-            // with an inseparable pair in it.
-            bunri_kinshi: p.bunri_kinshi && !pairs,
             ..ParaStyle::default()
         };
         *p != held
@@ -429,7 +549,13 @@ pub(in crate::ai_editing) fn loses(t: &TextObject) -> bool {
                 // The text document holds the Ascent first baseline by leaving it out, without a minimum.
                 || (t.area.first_baseline == FirstBaseline::Ascent && t.area.first_baseline_min != 0.0)))
         || (matches!(t.kind, TextKind::OnPath { .. })
-            && (t.path_effect != PathEffect::default() || t.path_align != PathAlign::default() || t.path_spacing != 0.0 || end_read_as_none(t)))
+            && (t.path_effect != PathEffect::default()
+                || t.path_align != PathAlign::default()
+                || t.path_spacing != 0.0
+                || end_read_as_none(t)
+                // The writer writes type that starts before its open path starting at the
+                // path's start.
+                || t.kind.starts_before_path()))
 }
 
 /// Key 35 of a run in style `st`, as the reader's `Texts::style` reads it: 3 for Tate-chu-yoko, 1
@@ -604,6 +730,15 @@ fn place_on(segments: &[[f64; 8]], f: f64) -> f64 {
     segments.len() as f64
 }
 
+/// Where the text document ended at some point ([`TextDoc::written`]).
+#[derive(Clone, Copy)]
+pub(in crate::ai_editing) struct TextMark {
+    at: (usize, usize, usize, usize, usize),
+    values: usize,
+    lost: bool,
+    planned: usize,
+}
+
 /// The text document being written.
 #[derive(Default)]
 pub(in crate::ai_editing) struct TextDoc {
@@ -675,6 +810,14 @@ impl TextDoc {
         };
         d.push((12, V::Int(caps)));
         d.push((35, V::Int(baseline_direction(st))));
+        // Insert Aki Left and Right in 1/1000 em, as the reader reads keys 49 and 50. No key is no
+        // space added: neither the stories' character attributes nor `[Normal Character Style]` set one.
+        for (key, v) in [(49, st.aki_left), (50, st.aki_right)] {
+            let v = held_aki(v);
+            if v > 0.0 {
+                d.push((key, real(v)));
+            }
+        }
         let fill = solid(&st.fill).flatten();
         // A stroke of no width keeps its paint.
         let stroke = solid(&st.stroke).flatten();
@@ -722,6 +865,32 @@ impl TextDoc {
             (4, len(p.space_before)),
             (5, len(p.space_after)),
             (9, V::Bool(p.hyphenate)),
+            (23, V::Bool(p.bunri_kinshi)),
+            (
+                24,
+                V::Int(match p.burasagari {
+                    Burasagari::None => 0,
+                    Burasagari::Standard => 1,
+                    Burasagari::Forced => 2,
+                }),
+            ),
+            (
+                25,
+                V::Int(match p.kinsoku_type {
+                    KinsokuShoriType::PushInFirst => 0,
+                    KinsokuShoriType::PushOutFirst => 1,
+                    KinsokuShoriType::PushOutOnly => 2,
+                }),
+            ),
+            // The Kinsoku set: `/nil` for None, else its index in the document's sets ([`KINSOKU_SETS`]).
+            (
+                27,
+                match p.kinsoku {
+                    Kinsoku::None => V::Name("nil"),
+                    Kinsoku::Hard => V::Int(0),
+                    Kinsoku::Soft => V::Int(1),
+                },
+            ),
         ];
         if rtl {
             d.push((33, V::Int(1)));
@@ -937,7 +1106,8 @@ impl TextDoc {
     /// `thread` (its frames in order, all area type the document holds, the first holding the
     /// story) the first time one of its frames is written. `None` when the thread can't be written
     /// as one story: `writable` says which frames are written where type can be text (every frame
-    /// of the thread must be).
+    /// of the thread must be), and `wraps_held` which frames with wrap shapes the reader wraps the
+    /// same ([`wraps_held`]; every frame with wrap shapes must be one).
     pub(in crate::ai_editing) fn thread(
         &mut self,
         doc: &Document,
@@ -945,6 +1115,7 @@ impl TextDoc {
         id: NodeId,
         canvas: Affine,
         writable: &dyn Fn(NodeId) -> bool,
+        wraps_held: &HashSet<NodeId>,
     ) -> Option<(usize, usize)> {
         let first = *thread.first()?;
         if self.planned.insert(first) {
@@ -962,7 +1133,8 @@ impl TextDoc {
                     matches!(t.kind, TextKind::Area { .. })
                         && t.vertical == vertical
                         && writable(n.id)
-                        && t.wrap.is_empty()
+                        // The text document doesn't hold wrap shapes (see `holds`).
+                        && (t.wrap.is_empty() || wraps_held.contains(&n.id))
                         && plain(n)
                         && t.ruby.is_empty()
                         && !t.stacks_warichu()
@@ -995,6 +1167,24 @@ impl TextDoc {
             }
         }
         self.threaded.get(&id).copied()
+    }
+
+    /// Where the text document written so far ends, for [`Self::take_back`].
+    pub(in crate::ai_editing) fn written(&self) -> TextMark {
+        TextMark { at: self.mark(), values: self.doc_values, lost: self.lost, planned: self.planned.len() }
+    }
+
+    /// Take the frames, stories and fonts added since `m` out again, with what they counted. Where
+    /// a thread was planned since, its frames name its story, so nothing is taken out.
+    pub(in crate::ai_editing) fn take_back(&mut self, m: TextMark) {
+        if self.planned.len() != m.planned {
+            return;
+        }
+        let (frames, stories, bytes, text, fonts) = m.at;
+        self.frames.truncate(frames);
+        self.stories.truncate(stories);
+        self.fonts.truncate(fonts);
+        (self.doc_bytes, self.text_bytes, self.doc_values, self.lost) = (bytes, text, m.values, m.lost);
     }
 
     /// Whether a thread written since the last call has attributes the text document leaves out.
@@ -1057,7 +1247,7 @@ impl TextDoc {
             (1, set(fonts, true)),
             (2, empty()),
             (3, empty()),
-            (4, empty()),
+            (4, set(KINSOKU_SETS.iter().map(|name| dict(vec![(0, V::Str((*name).into()))])).collect(), false)),
             (5, set(vec![normal_char], true)),
             (6, set(vec![normal_para], true)),
             (8, set(self.frames.iter().map(clone_v).collect(), false)),

@@ -1978,6 +1978,26 @@ fn highlight_alternate_glyphs_preference_is_off_by_default() {
     assert!(!s.prefs.highlight_alternate_glyphs);
 }
 
+/// Preferences › Type › Show Character Alternates: on by default, listed in the Type category,
+/// saved with the other preferences, and a value that is not true or false is refused.
+#[test]
+fn show_character_alternates_preference_is_on_by_default_and_saved() {
+    let mut s = Session::new();
+    assert!(s.prefs.show_character_alternates, "on by default");
+    let spec = crate::cmd::prefscmds::PREF_SPECS.iter().find(|p| p.key == "showCharacterAlternates").expect("listed");
+    assert_eq!((spec.category, spec.label), ("Type", "Show Character Alternates"));
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showCharacterAlternates"})).unwrap(), json!(true));
+    set_pref(&mut s, "showCharacterAlternates", json!(false));
+    assert!(!s.prefs.show_character_alternates);
+    assert!(s.execute("prefs.set", &json!({"key": "showCharacterAlternates", "value": "yes"})).is_err(), "not a boolean");
+    assert!(!s.prefs.show_character_alternates, "a refused value changes nothing");
+    let saved: Prefs = serde_json::from_value(serde_json::to_value(&s.prefs).unwrap()).unwrap();
+    assert!(!saved.show_character_alternates);
+    // Preferences saved before the key existed read it as on.
+    let old: Prefs = serde_json::from_value(json!({"highlightAlternateGlyphs": true})).unwrap();
+    assert!(old.show_character_alternates);
+}
+
 /// Preferences › Type › Highlight Substituted Fonts: on by default, listed in the Type category,
 /// and saved with the other preferences.
 /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/edit-text-without-replacing-missing-fonts.html>

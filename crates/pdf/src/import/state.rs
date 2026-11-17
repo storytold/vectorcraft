@@ -1,7 +1,7 @@
 use super::cid::{CidText, FontInfo};
 use super::{
     Affine, Arc, BezPath, BlendMode, Colors, Dash, Families, FillRule, FontNames, FunctionBudget, HashMap, HashSet, ImageBlob, LineCap, LineFacts,
-    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine,
+    LineJoin, LumaData, MaskSpec, Node, NodeId, Paint, PathEl, PatternDef, Rect, Scan, StrokeLayer, StrokeProps, TextAs, TextLine, TypeStroke,
 };
 
 /// Decoded RGBA pixels, width, height and hayro's scale factors.
@@ -277,6 +277,13 @@ pub(super) fn stroke_layer(paint: Paint, opacity: f32, p: &StrokeProps, scale: f
     st
 }
 
+/// The stroke `p` draws type with in `paint` at `scale`: width, cap, join and miter limit as
+/// [`stroke_layer`] takes them (#7741).
+pub(super) fn type_stroke(paint: Paint, p: &StrokeProps, scale: f64) -> TypeStroke {
+    let st = stroke_layer(paint, 1.0, p, scale);
+    TypeStroke { paint: st.paint, width: st.width, cap: st.cap, join: st.join, miter_limit: st.miter_limit }
+}
+
 /// The most entries of a dash array kept (an even count keeps it a pattern of dashes and gaps).
 const MAX_DASH_ENTRIES: usize = 64;
 /// Most dash periods [`stroke_outline`] cuts a stroke into.
@@ -329,17 +336,13 @@ pub(super) fn bounds(nodes: &[Arc<Node>]) -> Option<Rect> {
 }
 
 pub(super) fn rgba_png(rgba: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::RgbaImage::from_raw(w, h, rgba)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn gray_png(gray: Vec<u8>, w: u32, h: u32) -> Option<Vec<u8>> {
-    let img = image::GrayImage::from_raw(w, h, gray)?;
-    let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-    Some(out)
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray).ok()?;
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
 }
 
 pub(super) fn resize_alpha(a: &LumaData, w: u32, h: u32) -> Vec<u8> {

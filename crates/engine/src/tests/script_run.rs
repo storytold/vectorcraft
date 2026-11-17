@@ -290,6 +290,11 @@ fn a_failed_run_puts_back_the_choices_its_commands_made() {
     run(&mut s, source).unwrap();
     assert_eq!(s.global_edit_options, before, "the failed command's choice went back");
 
+    let source = "vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10}); \
+        if (vc.run('select.similar', {by: 'opacity'}).by !== 'opacity') throw new Error('not run'); throw new Error('x');";
+    assert!(matches!(run(&mut s, source), Err(e) if !format!("{e:?}").contains("not run")));
+    assert_eq!(s.select_similar, "all", "the Select Similar Objects attribute went back");
+
     assert!(!s.caps_lock);
     assert!(run(&mut s, "vc.run('view.capsLock', {on: true}); throw new Error('x');").is_err());
     assert!(!s.caps_lock, "the Caps Lock state went back");

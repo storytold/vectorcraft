@@ -5,28 +5,30 @@
 //! Contents (`AIDeformEditModeKey`), a warp's style, bend, distortions and orientation
 //! (`DeformStyle`, `DeformValue`, `DeformHoriz`, `DeformVert`, `Rotate`), with Distort Appearance
 //! the size of the box the contents map from (`AIDeformArtWidthKey`, `AIDeformArtHeightKey`), the
-//! contents in an `X=` … `X+` block (while they are edited, the grid) as `AIDeformArtKey`, and the
+//! contents in an `X=` … `X+` block (in a symbol's art, in the canvas's space with y down; while
+//! they are edited, the grid) as `AIDeformArtKey`, and the
 //! kind (`AIDeformStyle`: 1 a warp, 2 a mesh, 3 a top object); then the distorted art on plain
 //! lines, and the plugin's `XP` after it. A top object's outline is the edge of the grid written
-//! for it, one grid edge to each segment of its sides. An envelope the reader would open in another
-//! shape is written as its distorted art.
+//! for it, one grid edge to each segment of its sides, a side with fewer segments than the side
+//! across from it split into more. An envelope the reader would open in another shape is written as
+//! its distorted art.
 
 use std::fmt::Write;
 use std::sync::Arc;
 
-use kurbo::{Point, Vec2};
+use kurbo::{CubicBez, ParamCurve, Point, Vec2};
 use vectorcraft_doc::live::{
     Coons, EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, MeshPoint, PreserveShape, WARP_NET, envelope_content_boxes,
     envelope_grid, envelope_stroke_margin, warp_grid,
 };
-use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_geom::{Affine, PathData};
 
 use super::{MAX_NEST, Writer, Xy, hide};
 use crate::import::{DEFORM_PLUGIN, EnvelopeGridPoint as GridPoint, envelope_outline, envelope_upright, warp_number};
 use crate::ps;
 
-pub(in crate::ai_editing) const ENVELOPES: &str = "envelopes of type, envelopes without contents, envelopes in opacity masks, pattern tiles, art cut to a clipping object or other envelopes' contents, envelopes on the layers of a large canvas or in a turned or mirrored frame, warps drawn without their style's net, meshes and top objects that the data would open in another shape, envelopes with a Fidelity that isn't a whole number, envelopes that map from a box other than their contents' bounds with or without strokes or keep bounds margins with Distort Appearance off, envelopes after the first 256, and envelopes nested more than 8 deep are written as their art in the editing data for other apps";
+pub(in crate::ai_editing) const ENVELOPES: &str = "envelopes whose type is threaded, has text wrap options or is written as its outlines, envelopes without contents, envelopes in opacity masks, pattern tiles, art cut to a clipping object or other envelopes' contents, envelopes in a turned or mirrored frame, warps drawn without their style's net, meshes and top objects that the data would open in another shape, envelopes with a Fidelity that isn't a whole number, envelopes that map from a box other than their contents' bounds with or without strokes or keep bounds margins with Distort Appearance off, envelopes after the first 256 envelopes and images with a Warp, and envelopes nested more than 8 deep are written as their art in the editing data for other apps";
 
 /// The most rows or columns of an envelope's grid written (Make with Mesh's own limit, and the
 /// reader's).
@@ -57,6 +59,15 @@ fn holds_type(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Text(_)) || n.children().is_some_and(|c| c.iter().any(|k| holds_type(k)))
 }
 
+/// Is all the type in `n`, and in anything in it, type the reader can make an envelope's contents
+/// of: none of it is a frame of threaded type or has text wrap options.
+fn type_reads_back(n: &Node, doc: &Document) -> bool {
+    match &n.kind {
+        NodeKind::Text(_) => n.extras().wrap.is_none() && !doc.text_threads.iter().any(|th| th.contains(&n.id)),
+        _ => n.children().is_none_or(|c| c.iter().all(|k| type_reads_back(k, doc))),
+    }
+}
+
 /// The record of envelope `n` (its parts given), or `None` where the reader would open it in
 /// another shape than it has, or not as an envelope.
 fn record(
@@ -72,7 +83,7 @@ fn record(
     // Distort Appearance on.
     let whole = (0.0..=100.0).contains(&fidelity) && fidelity.fract() == 0.0;
     let margin_kept = !options.distort_appearance && options.bounds_margin != [0.0; 4];
-    if content.is_empty() || frame != Affine::IDENTITY || !whole || margin_kept || content.iter().any(|c| holds_type(c)) {
+    if content.is_empty() || frame != Affine::IDENTITY || !whole || margin_kept {
         return None;
     }
     let mut keys = String::new();
@@ -173,11 +184,44 @@ fn reads_as_written(rows: usize, cols: usize, pts: &[GridPoint]) -> bool {
     envelope_upright(&mesh).is_some_and(|(r, c, read)| (r as usize, c as usize) == (rows, cols) && read == pts)
 }
 
+/// `pieces`, one side of a top object, split into `n` pieces: each piece is split into equal spans
+/// of its curve parameter, the extra pieces going one at a time to the piece with the longest
+/// control polygon for each of its spans. `None` where `n` is fewer pieces than it has, more than
+/// [`MAX_GRID`], or a split leaves a piece of no length.
+fn split_to(pieces: &[CubicBez], n: usize) -> Option<Vec<CubicBez>> {
+    if n < pieces.len() || n > MAX_GRID {
+        return None;
+    }
+    if n == pieces.len() {
+        return Some(pieces.to_vec());
+    }
+    let polygon = |c: &CubicBez| c.p0.distance(c.p1) + c.p1.distance(c.p2) + c.p2.distance(c.p3);
+    let lengths: Vec<f64> = pieces.iter().map(polygon).collect();
+    let mut parts = vec![1usize; pieces.len()];
+    for _ in pieces.len()..n {
+        let most = (0..pieces.len()).max_by(|a, b| (lengths[*a] / parts[*a] as f64).total_cmp(&(lengths[*b] / parts[*b] as f64)))?;
+        parts[most] += 1;
+    }
+    let mut out = Vec::with_capacity(n);
+    for (c, p) in pieces.iter().zip(parts) {
+        for j in 0..p {
+            let piece = c.subsegment(j as f64 / p as f64..(j + 1) as f64 / p as f64);
+            if [piece.p1, piece.p2, piece.p3].iter().all(|q| q.distance(piece.p0) <= 1e-9) {
+                return None;
+            }
+            out.push(piece);
+        }
+    }
+    Some(out)
+}
+
 /// The grid a top object with outline `path` and corners `corners` is written with: its edge runs
-/// through the outline's anchors clockwise from the top left corner, one grid edge to a segment, so
-/// the top and bottom sides need as many segments as each other, as do the left and right sides;
-/// the points inside blend the sides. `None` where that grid's edge, read back as the top object's
-/// outline, doesn't give the same patch ([`Coons::from_top_object`]) at every place checked.
+/// through the outline's anchors clockwise from the top left corner, one grid edge to a segment,
+/// the points inside blending the sides. The top and bottom sides need as many grid edges as each
+/// other, as do the left and right sides, so where one side of a pair has fewer segments than the
+/// other, its segments are split ([`split_to`]) without changing its shape. `None` where that
+/// grid's edge, read back as the top object's outline, doesn't give the same patch
+/// ([`Coons::from_top_object`]) at every place checked.
 fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize, usize, Vec<GridPoint>)> {
     let coons = Coons::from_top_object(path, corners)?;
     // The outline, as the patch takes it: the largest subpath.
@@ -214,10 +258,35 @@ fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize,
         }
     };
     let gap = |k: usize| (at[(k + 1) % 4] + count - at[k]) % count;
-    let (cols, rows) = (gap(0), gap(1));
-    if gap(2) != cols || gap(3) != rows || cols > MAX_GRID || rows > MAX_GRID {
+    if (0..4).any(|k| gap(k) > MAX_GRID) {
         return None;
     }
+    // Each side's segments from its corner on, a straight one as a cubic with its handles a third of
+    // the way along, which the patch spreads evenly along, as it does a straight segment.
+    let side = |k: usize| -> Vec<CubicBez> {
+        (0..gap(k))
+            .map(|j| {
+                let i = (at[k] + j) % count;
+                let seg = sp.segment(i);
+                if sp.segment_is_line(i) {
+                    CubicBez::new(seg.p0, seg.p0.lerp(seg.p3, 1.0 / 3.0), seg.p0.lerp(seg.p3, 2.0 / 3.0), seg.p3)
+                } else {
+                    seg
+                }
+            })
+            .collect()
+    };
+    let mut sides = [side(0), side(1), side(2), side(3)];
+    // Opposite sides take as many segments as each other: the one with fewer has some split.
+    for k in 0..2 {
+        let n = sides[k].len().max(sides[k + 2].len());
+        for s in [k, k + 2] {
+            sides[s] = split_to(&sides[s], n)?;
+        }
+    }
+    let (cols, rows) = (sides[0].len(), sides[1].len());
+    let edge: Vec<CubicBez> = sides.concat();
+    let total = edge.len();
     let width = cols + 1;
     let mut pts: Vec<GridPoint> = vec![(Point::ZERO, [Vec2::ZERO; 4]); (rows + 1) * width];
     // Where the `k`th anchor from the top left corner goes, and the slots of the handles of the
@@ -233,20 +302,15 @@ fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize,
             (rows - (k - 2 * cols - rows), 0, H_UP, H_DOWN)
         }
     };
-    for k in 0..count {
-        let i = (at[0] + k) % count;
-        let seg = sp.segment(i);
-        // A straight segment's patch spreads evenly along it, as a cubic's with its handles a third
-        // of the way does.
-        let (p1, p2) = if sp.segment_is_line(i) { (seg.p0.lerp(seg.p3, 1.0 / 3.0), seg.p0.lerp(seg.p3, 2.0 / 3.0)) } else { (seg.p1, seg.p2) };
+    for (k, seg) in edge.iter().enumerate() {
         let (r, c, out, into) = place(k);
-        let (nr, nc, _, _) = place((k + 1) % count);
+        let (nr, nc, _, _) = place((k + 1) % total);
         if let Some(q) = pts.get_mut(r * width + c) {
             q.0 = seg.p0;
-            q.1[out] = p1 - seg.p0;
+            q.1[out] = seg.p1 - seg.p0;
         }
         if let Some(q) = pts.get_mut(nr * width + nc) {
-            q.1[into] = p2 - seg.p3;
+            q.1[into] = seg.p2 - seg.p3;
         }
     }
     // The points inside, blended from the sides.
@@ -274,25 +338,45 @@ fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize,
     let read = Coons::from_top_object(&outline, Some(corners))?;
     let [tl, tr, br, bl] = coons.corners();
     let reach = tl.distance(br).max(tr.distance(bl)).max(1.0) * TOP_OBJECT_TOLERANCE;
-    const STEPS: usize = 8;
-    let at = |i: usize| i as f64 / STEPS as f64;
-    let same = (0..=STEPS).all(|j| (0..=STEPS).all(|i| coons.eval(at(i), at(j)).distance(read.eval(at(i), at(j))) <= reach));
+    // Each side of both patches runs straight between the places the sides have points
+    // ([`Coons::places`]), so two matching sides lie furthest apart at one of those places. A point
+    // inside a patch blends its four sides and corners, so where every side lies within a third of
+    // `reach` of the other patch's, the patches lie within `reach` of each other everywhere.
+    let merge = |a: Vec<f64>, b: Vec<f64>| {
+        let mut v = [a, b].concat();
+        v.sort_by(f64::total_cmp);
+        v.dedup();
+        v
+    };
+    let ([cu, cv], [ru, rv]) = (coons.places(), read.places());
+    let (us, vs) = (merge(cu, ru), merge(cv, rv));
+    let near = |u: f64, v: f64| coons.eval(u, v).distance(read.eval(u, v)) <= reach / 3.0;
+    let same = us.iter().all(|&u| near(u, 0.0) && near(u, 1.0)) && vs.iter().all(|&v| near(0.0, v) && near(1.0, v));
     same.then_some((rows, cols, pts))
 }
 
 impl Writer<'_> {
     /// Envelope `n`, of transparency `xy`, as a live envelope (see the module's form), outside opacity
-    /// masks' art, pattern tiles, art cut to a clipping object and the layers of a large canvas. False,
-    /// writing nothing, where it is written as its art instead: where the reader would open it in
-    /// another shape, or some of it is left out for the object limit ([`Self::take_objects`]).
+    /// masks' art, pattern tiles and art cut to a clipping object. On a large canvas it is written at
+    /// the document's reduced size, its saved box size included, which the reader reads at the
+    /// declared scale. Type in its contents is written as type, which the reader makes the
+    /// envelope's contents again.
+    /// False, writing nothing, where it is written as its art instead: where the reader would open it
+    /// in another shape, or with its type as drawn art (threaded type, type with text wrap options,
+    /// type written as its outlines), or some of it is left out for the object limit
+    /// ([`Self::take_objects`]).
     pub(super) fn envelope(&mut self, n: &Node, xy: Xy) -> bool {
         let NodeKind::Envelope { content, kind, fidelity, editing, options, frame } = &n.kind else { return false };
-        if self.hidden > 0 || self.clip.is_some() || self.nest >= MAX_NEST || !self.symbols_live || self.envelopes_left == 0 {
+        if self.hidden > 0 || self.clip.is_some() || self.nest >= MAX_NEST || self.checks_left == 0 {
+            return false;
+        }
+        if content.iter().any(|c| holds_type(c)) && !content.iter().all(|c| type_reads_back(c, self.doc)) {
             return false;
         }
         let Some(record) = record(n, content, kind, *fidelity, *editing, options, **frame) else { return false };
         let start = self.body.len();
         let (state, gs, charges, bound) = (self.state, self.gs, self.charges(), self.bound.len());
+        let (outlined, texts, warnings) = (self.outlined, self.texts.written(), self.warnings.len());
         self.nest += 1;
         self.hidden += 1;
         // The group before the dictionary: the grid, or the contents while they are edited.
@@ -300,7 +384,7 @@ impl Writer<'_> {
         let opened = self.open_group("u");
         if opened {
             if *editing {
-                self.contents(content);
+                self.contents(content, false);
             } else {
                 self.grid(record.grid.as_ref());
             }
@@ -318,50 +402,70 @@ impl Writer<'_> {
         if *editing {
             self.grid(record.grid.as_ref());
         } else if self.open_group("u") {
-            self.contents(content);
+            // In a symbol's art, the contents in the dictionary are in the canvas's space, y down.
+            let to_art = self.to_art;
+            if self.in_symbol {
+                self.to_art = Affine::translate(self.canvas_origin) * to_art;
+            }
+            self.contents(content, true);
+            self.to_art = to_art;
             self.end_group("U", Xy::PLAIN);
         }
         let block = std::mem::replace(&mut self.body, outer);
         hide(&block, &mut self.body);
         (self.state, self.gs, self.block_end) = (at_block, None, usize::MAX);
         let _ = writeln!(self.body, "%_X+\n%_ (AIDeformArtKey) ,\n%_{} /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW", record.style);
+        // Type in the contents written as its outlines would open as drawn art, not as type.
+        let outlines = self.outlined != outlined;
         self.hidden -= 1;
         self.nest -= 1;
         // The distorted art, which takes the envelope's lock, visibility, transparency, name and
-        // opacity mask.
+        // opacity mask. The reader opens the envelope live, wrapping type by its bounds, so its text
+        // wrap options stay in the art's dictionary.
         self.state(n.locked, !n.visible);
-        self.drawn_art(n, xy, None);
-        if !opened || self.left_out_since(charges) {
+        self.drawn_art(n, xy, None, false);
+        if !opened || outlines || self.left_out_since(charges) {
             let lines = self.body.split_off(start);
             self.give_back(charges, &lines);
             self.bound.truncate(bound);
+            // The stories of the type in the lines taken out go with them.
+            self.texts.take_back(texts);
+            // The warnings of art written as its art again are that art's.
+            if !self.left_out_since(charges) {
+                self.warnings.truncate(warnings);
+            }
             (self.state, self.gs, self.block_end) = (state, gs, usize::MAX);
             return false;
         }
         self.deform = true;
-        self.envelopes_left -= 1;
+        self.checks_left -= 1;
         true
     }
 
-    /// An envelope's contents.
-    fn contents(&mut self, content: &[Arc<Node>]) {
+    /// An envelope's contents, where type may be written as type ([`Self::text`]): `copied` when
+    /// they are in its dictionary, where the reader reads a copy of each text object.
+    fn contents(&mut self, content: &[Arc<Node>], copied: bool) {
+        let level = self.contents_level.replace((self.hidden, self.nest, copied));
         for c in content {
             self.node(c);
         }
+        self.contents_level = level;
     }
 
     /// An envelope's grid, when it has one, as a gray gradient mesh (`/Mesh X!` … `/End X!`): its
     /// size (`[cols rows] /Size`), then each patch's place (`[col row] /P`), its four corners
     /// (`/N`: gray, opacity, the point, the handle towards the next corner and a weight, the handle
-    /// towards the previous one and a weight, in art space), from its top left one down, across and
-    /// up, and `/E`. One object.
+    /// towards the previous one and a weight, in art space; in a symbol's art, in the space a
+    /// gradient mesh's corners are written in there), from its top left one down, across and up,
+    /// and `/E`. One object.
     fn grid(&mut self, grid: Option<&(usize, usize, Vec<GridPoint>)>) {
         let Some((rows, cols, pts)) = grid else { return };
         if !self.take_objects(1) {
             return;
         }
         let (rows, cols, width) = (*rows, *cols, cols + 1);
-        let to_art = self.to_art;
+        // In a symbol's art, corners are written in the space a gradient mesh's are written in there.
+        let to_art = if self.in_symbol { self.instance_space } else { self.to_art };
         let s = &mut self.body;
         let _ = writeln!(s, "/Mesh X!\n2 /Version X#\n/Cartesian /Type X#\n[{cols} {rows}] /Size X#\n/Data X#\n/DeviceGray /CS X#");
         let num = |s: &mut String, v: f64| {

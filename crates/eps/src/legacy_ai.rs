@@ -43,13 +43,17 @@
 //!   PostScript names in `%%DocumentFonts` and `%%IncludeFont` (§3.1) and re-encoded to
 //!   Windows-1252 (`TE`, then `%AI3_BeginEncoding: _name name`, `TZ`, §3.3), the 8-bit encoding
 //!   strings are in.
+//! - Graphs (§17): a graph whose records VectorCraft's reader reads back as the same graph
+//!   (`crate::ai_graph`) as `%_Gs`, its functional records, its group with each series' group
+//!   followed by `%_2 column 0 0 Go`, and `%_GS`.
 //!
 //! The format has one artboard, no transparency, sublayers, object names, hidden objects (only
 //! layers hide), live effects, symbols or appearances with several fills and strokes. Callers write
 //! one file per artboard and expand appearances first; what is left is written as the format can
 //! hold it, each loss a warning: transparent objects are written opaque, sublayers become groups,
-//! live objects and symbols their art, strokes a plain line can't draw their outlines, pattern
-//! fills their tiles clipped to the shape, freeform gradients their average colour, elliptical
+//! live objects and symbols their art, other graphs their art, strokes a plain line can't draw
+//! their outlines, pattern fills their tiles clipped to the shape, freeform gradients their average
+//! colour, elliptical
 //! radial gradients circular (the gradient matrix is relative to a canvas the specification
 //! doesn't size), transparent image pixels over white. Hidden objects go to a hidden layer of
 //! their own above their layer, are left out or show, as [`HiddenObjects`] says (in a hidden
@@ -101,7 +105,7 @@ const HEX_LINE: usize = 60;
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
 pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, optical kerning, small caps, superscript and subscript, Insert Aki, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
 pub const DYNAMIC_TEXT: &str = "Dynamic Text is written as the sizes the type is drawn at (legacy .ai files don't have it)";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
@@ -173,13 +177,8 @@ pub struct LegacyAiOutput {
 pub fn writes_image_mask(doc: &Document, n: &Node) -> bool {
     let NodeKind::Image(im) = &n.kind else { return false };
     // The size from the file's header, before any pixels are decoded.
-    let fits = |bytes: &[u8]| {
-        image::ImageReader::new(std::io::Cursor::new(bytes))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS)
-    };
+    let fits =
+        |bytes: &[u8]| vectorcraft_doc::header_size(bytes).is_some_and(|(w, h)| w > 0 && h > 0 && u64::from(w) * u64::from(h) <= MAX_IMAGE_PIXELS);
     matches!(n.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
         && !n.extras().mask.as_ref().is_some_and(|m| !m.disabled)
         && doc

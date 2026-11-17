@@ -35,7 +35,41 @@ impl Drop for Folder {
 pub(crate) fn png(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
     let mut out = vec![];
     let [r, g, b] = rgb;
-    image::RgbaImage::from_pixel(w, h, image::Rgba([r, g, b, 255])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(w, h, image::Rgba([r, g, b, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -200,7 +234,41 @@ fn linked_dib_and_pns_files_place_update_and_relink() {
     let bmp = |w: u32, h: u32, rgb: [u8; 3]| {
         let mut out = vec![];
         let [r, g, b] = rgb;
-        image::RgbImage::from_pixel(w, h, image::Rgb([r, g, b])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Bmp).unwrap();
+        {
+            let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(w, h, image::Rgb([r, g, b]))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Bmp, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| out.extend_from_slice(&__b))
+        }
+        .unwrap();
         out
     };
     let dir = Folder::new("dib");
@@ -768,6 +836,223 @@ fn nested_objects_that_repeat_ids_open_with_ids_of_their_own() {
     assert!(image(&s, layer_image).link.is_some(), "the image in the layers stays linked");
 }
 
+/// The files of the linked images that the stored brushes of [`brush_links`] are made of: a scatter
+/// brush's, an art brush's and a pattern brush's side tile.
+const BRUSHED: [(&str, &str, &str); 3] = [("scatter.png", "scatter", "Specks"), ("art.png", "art", "Band"), ("side.png", "pattern", "Frame")];
+
+/// A document whose stored brushes are made of [`BRUSHED`]'s linked images in `dir`. The art
+/// brush's image is still in the layers too, so its brush art repeats that object's id; the other
+/// two images were cleared from the layers.
+fn brush_links(dir: &Folder) -> (Session, NodeId) {
+    for (i, (name, ..)) in (0u8..).zip(BRUSHED) {
+        write(&dir.file(name), &png(20, 10, [30 + 60 * i, 120, 90]));
+    }
+    let mut s = session();
+    let mut kept = NodeId(0);
+    for (name, kind, brush) in BRUSHED {
+        let id = place(&mut s, &dir.file(name));
+        s.execute("brush.new", &json!({"type": kind, "name": brush, "ids": [id.0]})).unwrap();
+        if kind == "art" {
+            kept = id;
+        } else {
+            s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+        }
+    }
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    (s, kept)
+}
+
+/// The image in the art of stored brush `name`, as the document stores it.
+fn brush_image(s: &Session, name: &str) -> ImageObject {
+    let b = vectorcraft_brush::find(&s.doc().unwrap().doc, name).unwrap_or_else(|| panic!("no brush {name}"));
+    let mut found = None;
+    b.art()[0].walk(&mut |n| {
+        if let (None, NodeKind::Image(im)) = (&found, &n.kind) {
+            found = Some((**im).clone());
+        }
+    });
+    found.unwrap_or_else(|| panic!("no image in brush {name}"))
+}
+
+/// The id of the image in the art of stored brush `name`, as the document stores it.
+fn brush_image_id(s: &Session, name: &str) -> u64 {
+    let b = vectorcraft_brush::find(&s.doc().unwrap().doc, name).unwrap();
+    let mut found = None;
+    b.art()[0].walk(&mut |n| {
+        if found.is_none() && matches!(n.kind, NodeKind::Image(_)) {
+            found = Some(n.id.0);
+        }
+    });
+    found.unwrap()
+}
+
+/// Images in the art of stored brushes are listed after the others, one row per image in each brush tile,
+/// each with an id no other object has (the layer tree keeps its own), the brush named as what holds it; Check
+/// Links and the missing filter count them, and the ids stay the same from one list to the next.
+#[test]
+fn links_in_stored_brush_art_are_listed_and_checked_with_ids() {
+    let dir = Folder::new("brush-ids");
+    let (mut s, kept) = brush_links(&dir);
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let rows = list["links"].as_array().unwrap();
+    let owners: Vec<(&str, &Value)> = rows.iter().map(|r| (r["name"].as_str().unwrap(), &r["owner"])).collect();
+    let library = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let index = |name: &str| library.iter().position(|b| b.name == name).unwrap();
+    assert_eq!(
+        owners,
+        [
+            ("art.png", &Value::Null),
+            ("scatter.png", &json!({"kind": "brush", "name": "Specks", "index": index("Specks")})),
+            ("art.png", &json!({"kind": "brush", "name": "Band", "index": index("Band")})),
+            ("side.png", &json!({"kind": "brush", "name": "Frame", "index": index("Frame"), "tile": "side"})),
+        ],
+        "{list}"
+    );
+    assert_eq!(rows[0]["id"], json!(kept.0), "the layer tree keeps its ids: {list}");
+    let ids: std::collections::BTreeSet<u64> = rows.iter().map(|r| r["id"].as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 4, "{list}");
+    assert!(!ids.contains(&0), "{list}");
+    assert!(rows.iter().all(|r| r["status"] == "ok" && r["linked"] == true), "{list}");
+    assert_eq!(s.execute("links.list", &json!({})).unwrap(), list, "the same ids each time");
+    let other = super::rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    s.execute("edit.clear", &json!({"ids": [other.0]})).unwrap();
+    assert_eq!(s.execute("links.list", &json!({})).unwrap(), list, "the same ids after other objects are made");
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(check["links"].as_array().unwrap().len(), 3, "{check}");
+    std::fs::remove_file(dir.file("side.png")).unwrap();
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(check["missing"].as_u64(), Some(1), "{check}");
+    let missing = s.execute("links.list", &json!({"show": "missing"})).unwrap();
+    assert_eq!(missing["links"][0]["id"], rows[3]["id"], "{missing}");
+}
+
+/// Every links command takes the id of an image in a stored brush's art and acts on that brush's art,
+/// never on the image in the layers whose id the art repeated: Link Info, Go To (which clears the
+/// selection and names the brush), Placement Options, Relink, Update and Embed. The ids each change
+/// gives the art are kept in the library, so the next list names the same rows.
+#[test]
+fn links_commands_act_on_images_in_stored_brush_art_by_id() {
+    let dir = Folder::new("brush-act");
+    let (mut s, kept) = brush_links(&dir);
+    let band = row_id_owned(&mut s, "art.png", "brush");
+    assert_ne!(band, kept.0);
+    let info = s.execute("links.info", &json!({"id": band})).unwrap();
+    assert_eq!((info["fileName"].as_str(), info["status"].as_str(), info["id"].as_u64()), (Some("art.png"), Some("ok"), Some(band)), "{info}");
+    s.execute("select.set", &json!({"ids": [kept.0]})).unwrap();
+    let go = s.execute("links.goTo", &json!({"id": band})).unwrap();
+    assert_eq!(
+        (go["onCanvas"].clone(), go["owner"]["kind"].clone(), go["owner"]["name"].clone()),
+        (json!(false), json!("brush"), json!("Band")),
+        "{go}"
+    );
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing on the canvas is selected");
+    s.execute("links.placementOptions", &json!({"ids": [band], "preserve": "fit"})).unwrap();
+    assert_eq!(s.execute("links.placementOptions", &json!({"ids": [band]})).unwrap()["placement"]["preserve"], "fit");
+    assert_eq!(brush_image(&s, "Band").placement.preserve, vectorcraft_doc::links::Preserve::Fit);
+    assert_eq!(brush_image_id(&s, "Band"), band, "the brush keeps the id it is listed by");
+    assert_ne!(image(&s, kept).placement.preserve, vectorcraft_doc::links::Preserve::Fit, "the image in the layers is left as it was");
+    // Relink: the brush's image shows the new file; the image in the layers keeps its file.
+    let other = dir.file("other.png");
+    write(&other, &png(40, 20, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [band], "path": other})).unwrap();
+    assert_eq!(r["relinked"], json!([band]), "{r}");
+    assert_eq!(brush_image(&s, "Band").link.unwrap().path, other);
+    assert_eq!(image(&s, kept).link.unwrap().path, dir.file("art.png"));
+    assert_eq!(row_id_owned(&mut s, "other.png", "brush"), band, "{}", s.execute("links.list", &json!({})).unwrap());
+    // Update: a changed file is read again for the scatter brush's image.
+    let dots = row_id_owned(&mut s, "scatter.png", "brush");
+    let changed = png(30, 30, RED);
+    write(&dir.file("scatter.png"), &changed);
+    let r = s.execute("links.update", &json!({"ids": [dots]})).unwrap();
+    assert_eq!(r["updated"], json!([dots]), "{r}");
+    assert_eq!(brush_image(&s, "Specks").link.unwrap().size, Some(changed.len() as u64));
+    // Embed: the pattern brush's side tile keeps its pixels and no longer links.
+    let frame = row_id_owned(&mut s, "side.png", "brush");
+    let r = s.execute("links.embed", &json!({"ids": [frame]})).unwrap();
+    assert_eq!(r["embedded"], json!([frame]), "{r}");
+    assert!(brush_image(&s, "Frame").link.is_none());
+    let embedded = s.execute("links.list", &json!({"show": "embedded"})).unwrap();
+    assert_eq!(embedded["links"][0]["id"], json!(frame), "{embedded}");
+    // Relink All Instances takes the image in the layers and the brush's image of the same file.
+    let r = s.execute("links.relink", &json!({"ids": [kept.0], "path": dir.file("scatter.png"), "scope": "all"})).unwrap();
+    assert_eq!(r["relinked"], json!([kept.0]), "{r}");
+    let r = s.execute("links.relink", &json!({"ids": [dots], "path": other, "scope": "all"})).unwrap();
+    let mut relinked: Vec<u64> = r["relinked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    relinked.sort();
+    let mut both = vec![kept.0, dots];
+    both.sort();
+    assert_eq!(relinked, both, "{r}");
+    assert_eq!(image(&s, kept).link.unwrap().path, other);
+    // One undo step puts the brushes back as they were.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_image(&s, "Specks").link.unwrap().path, dir.file("scatter.png"));
+}
+
+/// The id of the `links.list` row of file `name` whose owner is of `kind`.
+fn row_id_owned(s: &mut Session, name: &str, kind: &str) -> u64 {
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == name && r["owner"]["kind"] == kind);
+    row.unwrap_or_else(|| panic!("{name} in {kind}: {list}"))["id"].as_u64().unwrap()
+}
+
+/// A document saved with links in its stored brushes opens with them reported by the ids the list
+/// gives them, and a library entry that does not read as a brush is kept as it was.
+#[test]
+fn links_in_stored_brush_art_open_by_id_and_unreadable_entries_stay() {
+    let dir = Folder::new("brush-open");
+    let (mut s, _) = brush_links(&dir);
+    let odd = json!({"name": "Odd", "type": "unknown", "art": {"id": 3}});
+    s.edit("Odd brush", |d, _| {
+        if let Some(list) = d.unknown.get_mut(vectorcraft_brush::DOC_KEY).and_then(Value::as_array_mut) {
+            list.push(odd.clone());
+        }
+        Ok(())
+    })
+    .unwrap();
+    let path = dir.file("poster.vectorcraft");
+    save(&mut s, &path);
+    std::fs::remove_file(dir.file("scatter.png")).unwrap();
+    let r = open(&mut s, &path);
+    let dots = row_id_owned(&mut s, "scatter.png", "brush");
+    assert_eq!(r["missingLinks"][0]["ids"], json!([dots]), "{r}");
+    assert_eq!(brush_image_id(&s, "Specks"), dots, "the library keeps the ids opening gave");
+    let band = row_id_owned(&mut s, "art.png", "brush");
+    s.execute("links.embed", &json!({"ids": [band]})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let stored = doc.unknown[vectorcraft_brush::DOC_KEY].as_array().unwrap();
+    assert_eq!(stored.last(), Some(&odd), "the unreadable entry is left as it was");
+    assert!(doc.mounted_art.is_empty());
+}
+
+/// The Color Mask of an image in a stored brush's art is made again for the new pixels when Update
+/// reads the image's changed file.
+#[test]
+fn updating_an_image_in_stored_brush_art_makes_its_color_mask_again() {
+    let dir = Folder::new("brush-mask");
+    let path = dir.file("logo.png");
+    write(&path, &png(12, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &path);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let hide_white = json!({"background": "colors", "colors": "#ffffff", "contiguous": false, "tolerance": 0, "softness": 0});
+    s.execute("addon.image.colorMask", &hide_white).unwrap();
+    s.execute("brush.new", &json!({"type": "scatter", "name": "Masked", "ids": [id.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    write(&path, &png(14, 10, BLUE));
+    let row = row_id_owned(&mut s, "logo.png", "brush");
+    let r = s.execute("links.update", &json!({"ids": [row]})).unwrap();
+    assert_eq!(r["updated"], json!([row]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let brush = vectorcraft_brush::find(doc, "Masked").unwrap();
+    let mut masks = vec![];
+    brush.art()[0].walk(&mut |n| {
+        if let (NodeKind::Image(im), Some(m)) = (&n.kind, Document::color_mask_of(n)) {
+            masks.push((m.made_for(im), doc.images.contains_key(&m.key)));
+        }
+    });
+    assert_eq!(masks, [(true, true)], "the mask is made for the new pixels");
+}
+
 /// An image that Placement Options clip, alone in a group the user made, goes into a new clip group
 /// inside that group when its file grows, in the layers and in a symbol's art; the user's group
 /// stays a plain group.
@@ -1083,7 +1368,41 @@ pub(crate) fn cut_png(w: u32, h: u32) -> Vec<u8> {
         image::Rgb([v as u8, (v >> 8) as u8, (v >> 16) as u8])
     });
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out.truncate(out.len() / 2);
     out
 }
@@ -1197,12 +1516,27 @@ fn low_res_proxy_eps_export_uses_full_resolution_from_the_linked_file() {
     let (full, warnings) = cmd::links::full_linked_images(&s.doc().unwrap().doc, Default::default());
     assert!(warnings.is_empty(), "{warnings:?}");
     assert!(!full.images[&key].is_proxy());
-    let dim =
-        image::ImageReader::new(std::io::Cursor::new(full.images[&key].bytes.as_ref())).with_guessed_format().unwrap().into_dimensions().unwrap();
+    let dim = craft_image_codecs::decode(full.images[&key].bytes.as_ref()).unwrap().dimensions();
     assert_eq!(dim, (600, 300));
     let png_out = s.execute("document.export", &json!({"format": "png"})).unwrap();
     let bytes = vectorcraft_format::base64_decode(png_out["dataBase64"].as_str().unwrap()).unwrap();
-    let rendered = image::load_from_memory(&bytes).unwrap();
+    let rendered = craft_image_codecs::decode(&bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert!(rendered.width() >= 400 && rendered.height() >= 300);
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED), "canvas still shows the preview");
 }
@@ -1272,7 +1606,41 @@ fn a_file_read_for_opening_has_its_links_read_and_its_type_laid_out() {
     let dir = Folder::new("read-for-open");
     let tif = dir.file("art/photo.tif");
     let mut tiff = vec![];
-    image::RgbImage::from_pixel(600, 300, image::Rgb(RED)).write_to(&mut std::io::Cursor::new(&mut tiff), image::ImageFormat::Tiff).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(600, 300, image::Rgb(RED))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Tiff, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| tiff.extend_from_slice(&__b))
+    }
+    .unwrap();
     write(&tif, &tiff);
     let (gone, changed) = (dir.file("gone.png"), dir.file("changed.png"));
     write(&gone, &png(300, 100, BLUE));
@@ -1573,4 +1941,576 @@ fn a_recovered_copy_of_an_imported_file_keeps_its_links_folder() {
     save(&mut s, &native);
     let mut saved: Value = serde_json::from_slice(&std::fs::read(&native).unwrap()).unwrap();
     assert_eq!(saved_image(&mut saved)["link"]["relative"].as_str(), Some("src/photo.png"));
+}
+
+/// Image `id` of the active document without pixels in the document, as a linked file that could
+/// not be read leaves it.
+fn without_pixels(s: &mut Session, id: NodeId) {
+    let key = image(s, id).key;
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).images.remove(&key);
+}
+
+/// The text of `document.serialize`'s reply `r` (an SVG, or the SVGZ it holds).
+fn svg_text(r: &Value) -> String {
+    match r["text"].as_str() {
+        Some(text) => text.to_string(),
+        None => {
+            let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+            vectorcraft_svg::text_of(&bytes).unwrap().into_owned()
+        }
+    }
+}
+
+/// A caller confined to read roots: every SVG and SVGZ output that would name a linked image's file
+/// outside them (Images: Link, Preserve Editing Capabilities, or Embed for an image without pixels
+/// in the document) is refused before a file or folder is written, with an error that names no
+/// file or folder, and the document keeps the link. Embed with the pixels names no file.
+#[test]
+fn confined_svg_output_refuses_a_linked_image_file_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-away");
+    let home = Folder::new("svg-image-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("assets.add", &json!({"ids": [a.0]})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "photo.png".to_string()];
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{cmd} {p} names {h}: {e}");
+        }
+    };
+    let out = home.file("out");
+    // Every SVG output, with the options `o` given flat.
+    let every = |s: &mut Session, o: &Value| {
+        for format in ["svg", "svgz"] {
+            let file = |name: &str| home.file(&format!("{name}.{format}"));
+            let with = |p: Value| {
+                let mut p = p;
+                if let (Some(m), Some(o)) = (p.as_object_mut(), o.as_object()) {
+                    m.extend(o.clone());
+                }
+                p
+            };
+            refused(s, "document.serialize", with(json!({"format": format})));
+            refused(s, "document.export", with(json!({"format": format})));
+            refused(s, "document.export", with(json!({"format": format, "path": file("export")})));
+            refused(s, "document.export", with(json!({"format": format, "selectedOnly": true})));
+            refused(s, "document.exportSelection", with(json!({"format": format, "path": file("selection")})));
+            refused(s, "document.save", with(json!({"path": file("save")})));
+            refused(s, "file.saveAs", with(json!({"format": format, "path": file("save-as")})));
+            refused(s, "file.saveCopy", with(json!({"format": format, "path": file("copy")})));
+            let row = with(json!({"format": format}));
+            refused(s, "document.exportForScreens", json!({"folder": out, "formats": [{"format": "png"}, row]}));
+            refused(s, "document.exportForScreens", json!({"zip": true, "formats": [row]}));
+            refused(s, "assets.export", json!({"folder": out, "formats": [row]}));
+        }
+    };
+    every(&mut s, &json!({"images": "link"}));
+    every(&mut s, &json!({"preserveEditing": true}));
+    refused(&mut s, "document.serialize", json!({"format": "svg", "svg": {"images": "link"}}));
+    // Embedded pixels name no file.
+    for format in ["svg", "svgz"] {
+        let r = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": format}))).unwrap();
+        let text = svg_text(&r);
+        assert!(text.contains("data:image/png;base64,") && !text.contains(&hidden[0]), "{format}: {text}");
+    }
+    // Without its pixels, an embedded image names its file.
+    without_pixels(&mut s, a);
+    let r = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    assert!(svg_text(&r).contains(&format!("xlink:href=\"{photo}\"")), "{r}");
+    every(&mut s, &json!({}));
+    let written: Vec<_> = std::fs::read_dir(&home.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert!(written.is_empty(), "{written:?}");
+    assert_eq!(image(&s, a).link.map(|l| l.path), Some(photo));
+}
+
+/// A confined caller's SVG leaves out hidden layers and objects, unless hidden layers are kept (as
+/// a save keeps them by default), and template layers always: a linked image file outside the read
+/// roots in art the file leaves out does not refuse it, and in art the file writes does.
+#[test]
+fn confined_svg_output_checks_only_the_linked_images_it_writes() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-unwritten-away");
+    let home = Folder::new("svg-image-unwritten-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    // A visible rectangle, and the linked image in a layer of its own.
+    let setup = || {
+        let mut s = session();
+        s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+        let layer = NodeId(s.execute("layer.new", &json!({"top": true})).unwrap()["id"].as_u64().unwrap());
+        s.execute("layer.setCurrent", &json!({"id": layer.0})).unwrap();
+        let a = place(&mut s, &photo);
+        assert!(s.doc().unwrap().doc.node(layer).unwrap().children().unwrap().iter().any(|c| c.id == a), "the image is in the new layer");
+        (s, layer, a)
+    };
+    let written = |s: &mut Session, cmd: &str, p: Value| {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &p)).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        if cmd == "document.serialize" {
+            let text = svg_text(&r);
+            assert!(!text.contains(&photo) && !text.contains("photo.png"), "{cmd} {p}: {text}");
+        }
+    };
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute(cmd, &p)).expect_err(cmd).to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{cmd} {p}: {e}");
+    };
+    // Exports leave hidden art out; hidden layers kept, and a save, write it.
+    let hidden_art = |s: &mut Session, name: &str| {
+        for format in ["svg", "svgz"] {
+            written(s, "document.serialize", json!({"format": format, "images": "link"}));
+            written(s, "document.export", json!({"format": format, "images": "link", "path": home.file(&format!("{name}.{format}"))}));
+            written(s, "document.export", json!({"format": format, "images": "link", "svg": {"hiddenLayers": false}}));
+            refused(s, "document.serialize", json!({"format": format, "images": "link", "hiddenLayers": true}));
+            refused(s, "document.export", json!({"format": format, "svg": {"images": "link", "hiddenLayers": true}}));
+            refused(s, "document.save", json!({"path": home.file(&format!("{name}-save.{format}")), "images": "link"}));
+            refused(s, "file.saveCopy", json!({"format": format, "path": home.file(&format!("{name}-copy.{format}")), "images": "link"}));
+        }
+        // A save told to leave hidden layers out leaves the image out too.
+        let copy = home.file(&format!("{name}-copy.svg"));
+        written(s, "file.saveCopy", json!({"format": "svg", "path": copy, "images": "link", "hiddenLayers": false}));
+    };
+    let (mut s, layer, _) = setup();
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "visible": false})).unwrap();
+    hidden_art(&mut s, "hidden-layer");
+    let (mut s, _, a) = setup();
+    s.execute("object.hide", &json!({"ids": [a.0]})).unwrap();
+    hidden_art(&mut s, "hidden-object");
+    // A template layer is never written, not even with hidden layers kept.
+    let (mut s, layer, _) = setup();
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "template": true})).unwrap();
+    for format in ["svg", "svgz"] {
+        written(&mut s, "document.serialize", json!({"format": format, "images": "link"}));
+        written(&mut s, "document.serialize", json!({"format": format, "images": "link", "hiddenLayers": true}));
+        written(&mut s, "file.saveCopy", json!({"format": format, "path": home.file(&format!("template-copy.{format}")), "images": "link"}));
+    }
+    // Back to an ordinary layer, the image is written and refuses the file.
+    s.execute("layer.setProps", &json!({"ids": [layer.0], "template": false})).unwrap();
+    refused(&mut s, "document.serialize", json!({"format": "svg", "images": "link"}));
+    // The layer of symbol editing mode is never written: editing a symbol no art uses leaves its
+    // image out of the file.
+    let (mut s, _, a) = setup();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Away"})).unwrap()["id"].clone();
+    s.execute("edit.clear", &json!({"ids": [instance]})).unwrap();
+    s.execute("symbol.edit", &json!({"name": "Away"})).unwrap();
+    assert!(s.doc().unwrap().doc.symbol_edit.is_some(), "in symbol editing mode");
+    for format in ["svg", "svgz"] {
+        written(&mut s, "document.serialize", json!({"format": format, "images": "link", "hiddenLayers": true}));
+        written(&mut s, "file.saveCopy", json!({"format": format, "path": home.file(&format!("symbol-edit-copy.{format}")), "images": "link"}));
+    }
+    s.execute("symbol.exitEditing", &json!({})).unwrap();
+    s.execute("symbol.place", &json!({"name": "Away"})).unwrap();
+    refused(&mut s, "document.serialize", json!({"format": "svg", "images": "link"}));
+}
+
+/// A confined caller's SVG of a grayscale linked image outside the read roots that a solid fill
+/// colorizes: the file gets the colorized pixels, or leaves the image out without pixels, and names
+/// no file with Link or Embed. With Preserve Editing Capabilities the document the SVG carries
+/// keeps the link, and the SVG is refused.
+#[test]
+fn confined_svg_output_writes_a_colorized_gray_image_without_its_file() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-colorized-away");
+    let home = Folder::new("svg-image-colorized-home");
+    let photo = away.file("gray.png");
+    let mut bytes = vec![];
+    image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap().write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    write(&photo, &bytes);
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#ff0000"})).unwrap();
+    let colorized = s.doc().unwrap().doc.node(a).unwrap().extras().colorize.clone();
+    assert!(matches!(colorized.as_deref(), Some(vectorcraft_color::Paint::Solid { .. })), "{colorized:?}");
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let written = |s: &mut Session, cmd: &str, p: Value| {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &p)).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        if cmd == "document.serialize" {
+            let text = svg_text(&r);
+            assert!(!text.contains(&away.0.to_string_lossy().into_owned()) && !text.contains("href=\"gray.png"), "{cmd} {p}: {text}");
+        }
+    };
+    let refused = |s: &mut Session, p: Value| {
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &p)).expect_err("preserveEditing").to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{p}: {e}");
+    };
+    let every = |s: &mut Session, name: &str| {
+        for format in ["svg", "svgz"] {
+            for images in ["link", "embed"] {
+                written(s, "document.serialize", json!({"format": format, "images": images}));
+                written(s, "document.export", json!({"format": format, "images": images, "path": home.file(&format!("{name}-{images}.{format}"))}));
+                let copy = home.file(&format!("{name}-{images}-copy.{format}"));
+                written(s, "file.saveCopy", json!({"format": format, "images": images, "path": copy}));
+            }
+            refused(s, json!({"format": format, "preserveEditing": true}));
+        }
+    };
+    let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap());
+    assert!(text.contains("data:image/png;base64,"), "{text}");
+    every(&mut s, "pixels");
+    without_pixels(&mut s, a);
+    every(&mut s, "missing");
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let svg = confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(!svg.contains(&photo), "{svg}");
+    assert_eq!(image(&s, a).link.map(|l| l.path), Some(photo));
+}
+
+/// A confined caller's SVG names each linked image file it may read, as stored: a file inside the
+/// read roots, a path relative to the document's folder that leads inside them, and a URL. The
+/// selected objects alone are exported when the image outside them is not selected, and a caller
+/// without roots gets a file outside them named too.
+#[test]
+fn svg_output_names_linked_image_files_a_caller_may_read() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-image-kept-away");
+    let home = Folder::new("svg-image-kept-home");
+    let inside = home.file("photo.png");
+    let (nested, web) = (home.file("lib/photo.png"), home.file("web.png"));
+    for f in [&inside, &nested, &web] {
+        write(f, &png(60, 30, RED));
+    }
+    let url = "https://example.com/images/photo.png";
+    let mut s = session();
+    place(&mut s, &inside);
+    place(&mut s, &nested);
+    place(&mut s, &web);
+    save(&mut s, &home.file("doc.vectorcraft"));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.update_links_where(|l| l.path == nested, |l| l.path = "lib/photo.png".into());
+    doc.update_links_where(|l| l.path == web, |l| l.path = url.into());
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let link = json!({"format": "svg", "images": "link"});
+    for format in ["svg", "svgz"] {
+        let p = json!({"format": format, "images": "link"});
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+        for file in [inside.as_str(), "lib/photo.png", url] {
+            assert!(text.contains(&format!("xlink:href=\"{file}\"")), "{format} {file}: {text}");
+        }
+    }
+    // An image outside them in a symbol no art uses is not written.
+    let unused = away.file("unused.png");
+    write(&unused, &png(60, 30, BLUE));
+    let u = place(&mut s, &unused);
+    s.execute("select.set", &json!({"ids": [u.0]})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Away"})).unwrap()["id"].clone();
+    s.execute("edit.clear", &json!({"ids": [instance]})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.symbols.len(), 1);
+    for format in ["svg", "svgz"] {
+        let p = json!({"format": format, "images": "link"});
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+        assert!(!text.contains(&unused), "{format}: {text}");
+    }
+    let outside = away.file("photo.png");
+    write(&outside, &png(60, 30, BLUE));
+    place(&mut s, &outside);
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    s.execute("select.set", &json!({"ids": [r["id"].clone()]})).unwrap();
+    let p = json!({"format": "svg", "images": "link"});
+    let r = confine(roots.as_ref(), || s.execute("document.exportSelection", &p)).unwrap();
+    assert!(!r.to_string().contains(&outside), "{r}");
+    let p = json!({"format": "svg", "images": "link", "selectedOnly": true});
+    for cmd in ["document.serialize", "document.export"] {
+        let r = confine(roots.as_ref(), || s.execute(cmd, &p)).unwrap();
+        assert!(!r.to_string().contains(&outside), "{cmd}: {r}");
+    }
+    // The file of an artboard the image is not over.
+    s.execute("artboard.new", &json!({"x": 1000, "y": 0, "width": 400, "height": 400})).unwrap();
+    let p = json!({"format": "svg", "images": "link", "range": "2"});
+    let r = confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap();
+    assert!(!r.to_string().contains(&outside), "{r}");
+    let p = json!({"folder": home.file("screens"), "formats": [{"format": "svg", "images": "link"}], "range": "2"});
+    confine(roots.as_ref(), || s.execute("document.exportForScreens", &p)).unwrap();
+    // Without roots, a file outside them is named as stored.
+    let text = svg_text(&s.execute("document.serialize", &link).unwrap());
+    assert!(text.contains(&format!("xlink:href=\"{outside}\"")), "{text}");
+}
+
+/// The clipboard's SVG for a confined caller: embedded pixels name no file; an image whose pixels
+/// the clipboard doesn't hold makes `clipboard.exportSvg` refuse with an error that names no file
+/// or folder, and the system clipboard gets no SVG. A caller without roots gets the file named.
+#[test]
+fn confined_clipboard_svg_refuses_a_linked_image_file_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("clip-image-away");
+    let home = Folder::new("clip-image-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let r = confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap();
+    let svg = r["svg"].as_str().unwrap();
+    assert!(svg.contains("data:image/png;base64,") && !svg.contains(&photo), "{svg}");
+
+    without_pixels(&mut s, a);
+    s.execute("edit.copy", &json!({})).unwrap();
+    let e = confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap_err().to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
+    assert!(!e.contains(&away.0.to_string_lossy().into_owned()) && !e.contains("photo.png"), "{e}");
+    assert!(confine(roots.as_ref(), || s.clipboard_svg()).is_none());
+    let svg = s.execute("clipboard.exportSvg", &json!({})).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(svg.contains(&format!("xlink:href=\"{photo}\"")), "{svg}");
+}
+
+/// `clipboard.flavours` and the session's flavors leave out the SVG, and its markup as text, that
+/// `clipboard.exportSvg` withholds from a confined caller; the PNG is still listed. The SVG is listed
+/// while its image's pixels are held, and for a caller with no read roots.
+#[test]
+fn confined_clipboard_flavours_leave_out_a_withheld_svg() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("clip-flavours-away");
+    let home = Folder::new("clip-flavours-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let (text, svg, png) = ("text/plain", "image/svg+xml", "image/png");
+    let listed = |s: &mut Session| confine(roots.as_ref(), || s.execute("clipboard.flavours", &json!({}))).unwrap()["flavours"].clone();
+    assert_eq!(listed(&mut s), json!([text, svg, png]));
+
+    without_pixels(&mut s, a);
+    s.execute("edit.copy", &json!({})).unwrap();
+    assert_eq!(listed(&mut s), json!([png]));
+    let made = confine(roots.as_ref(), || s.clipboard_flavours());
+    assert!(made.iter().all(|f| f.mime != svg && f.mime != text), "{:?}", made.iter().map(|f| f.mime).collect::<Vec<_>>());
+    assert_eq!(confine(roots.as_ref(), || s.clipboard_flavour_types()), [png]);
+    assert_eq!(s.execute("clipboard.flavours", &json!({})).unwrap()["flavours"], json!([text, svg, png]));
+}
+
+/// A confined caller's SVG with Preserve Editing Capabilities is refused while the stored brush
+/// library holds an entry that does not read as a brush, or is not a list: the native document
+/// carries it as it is, and its links cannot be checked. Without Preserve Editing the SVG is written.
+#[test]
+fn confined_preserve_editing_svg_refuses_a_brush_library_entry_it_cannot_read() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let home = Folder::new("svg-brush-entry-home");
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let preserve = json!({"format": "svg", "preserveEditing": true});
+    confine(roots.as_ref(), || s.execute("document.serialize", &preserve)).unwrap();
+    for stored in [json!(["not a brush"]), json!({"link": "/away/photo.png"})] {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.unknown.insert(vectorcraft_brush::DOC_KEY.into(), stored.clone());
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &preserve)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{stored}: {e}");
+        confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
+    }
+}
+
+/// A confined caller's SVG and SVGZ with Preserve Editing Capabilities carry a native document
+/// without the Export for Screens folder when it is outside the read roots, with the other export
+/// settings and the art; the open document keeps the folder. A folder inside the roots, and any
+/// folder without roots, stays in the attachment.
+#[test]
+fn confined_preserve_editing_svg_leaves_out_an_export_folder_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-export-folder-away");
+    let home = Folder::new("svg-export-folder-home");
+    let outside = away.0.to_string_lossy().into_owned();
+    let inside = home.file("screens");
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    let rect: vectorcraft_doc::NodeId = serde_json::from_value(r["id"].clone()).unwrap();
+    let set_folder = |s: &mut Session, folder: &str| {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.export_settings = serde_json::from_value(json!({"folder": folder, "prefix": "web-"})).unwrap();
+    };
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    // The native document an SVG's text carries.
+    let attached = |text: &str| {
+        let data = vectorcraft_svg::editing_data(text).expect("editing data");
+        vectorcraft_format::load(&vectorcraft_format::base64_decode(&data).unwrap()).unwrap()
+    };
+    let check = |d: &Document, folder: Option<&str>, what: &str| {
+        assert_eq!(d.export_settings.get("folder").and_then(Value::as_str), folder, "{what}");
+        assert_eq!(d.export_settings.get("prefix").and_then(Value::as_str), Some("web-"), "{what}");
+        assert!(d.node(rect).is_some(), "{what}: no art");
+    };
+    // Every way an SVG is asked for with Preserve Editing, its text and its native document.
+    let every = |s: &mut Session, confined: bool, folder: Option<&str>| {
+        let run = |s: &mut Session, cmd: &str, p: Value| {
+            let r = if confined { confine(roots.as_ref(), || s.execute(cmd, &p)) } else { s.execute(cmd, &p) };
+            r.unwrap()
+        };
+        for format in ["svg", "svgz"] {
+            let r = run(s, "document.serialize", json!({"format": format, "preserveEditing": true}));
+            check(&attached(&svg_text(&r)), folder, &format!("{format} serialize"));
+            let r = run(s, "document.serialize", json!({"format": format, "svg": {"preserveEditing": true}}));
+            check(&attached(&svg_text(&r)), folder, &format!("{format} options object"));
+            let path = home.file(&format!("export.{format}"));
+            run(s, "document.export", json!({"format": format, "path": path, "preserveEditing": true}));
+            let bytes = std::fs::read(&path).unwrap();
+            check(&attached(&vectorcraft_svg::text_of(&bytes).unwrap()), folder, &format!("{format} export"));
+        }
+    };
+    set_folder(&mut s, &outside);
+    every(&mut s, true, None);
+    assert_eq!(s.doc().unwrap().doc.export_settings.get("folder").and_then(Value::as_str), Some(outside.as_str()));
+    every(&mut s, false, Some(&outside));
+    // Without Preserve Editing the SVG carries no native document.
+    let r = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap();
+    assert!(vectorcraft_svg::editing_data(&svg_text(&r)).is_none(), "{r}");
+    set_folder(&mut s, &inside);
+    every(&mut s, true, Some(&inside));
+}
+
+/// A confined caller's SVG of a placed document whose art links an image: the file draws that art
+/// and names the image's file, so a file outside the read roots refuses it and one inside them is
+/// written. Any output that names no file is written.
+#[test]
+fn confined_svg_output_checks_the_images_of_placed_documents() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-placed-away");
+    let home = Folder::new("svg-placed-home");
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for (photo, outside) in [(away.file("photo.png"), true), (home.file("photo.png"), false)] {
+        write(&photo, &png(60, 30, RED));
+        let src = home.file("src.vectorcraft");
+        let mut inner = session();
+        place(&mut inner, &photo);
+        save(&mut inner, &src);
+        let mut s = session();
+        place(&mut s, &src);
+        let link = json!({"format": "svg", "images": "link"});
+        assert!(svg_text(&s.execute("document.serialize", &link).unwrap()).contains(&photo), "the file names the placed art's image");
+        for format in ["svg", "svgz"] {
+            for images in ["link", "embed"] {
+                let p = json!({"format": format, "images": images});
+                // Embed writes the pixels the placed file holds.
+                let names = svg_text(&s.execute("document.serialize", &p).unwrap()).contains(&photo);
+                assert_eq!(names, images == "link", "{p}");
+                match confine(roots.as_ref(), || s.execute("document.serialize", &p)) {
+                    Ok(r) => assert!(!outside || !svg_text(&r).contains(&photo), "{p}: {}", svg_text(&r)),
+                    Err(e) => {
+                        assert!(outside && names, "{p}: {e}");
+                        assert!(e.to_string().contains("a linked image file is outside the read roots"), "{p}: {e}");
+                    }
+                }
+            }
+        }
+        if outside {
+            let e = confine(roots.as_ref(), || s.execute("document.serialize", &link)).unwrap_err().to_string();
+            assert!(e.contains("a linked image file is outside the read roots") && !e.contains("photo.png"), "{e}");
+        }
+    }
+}
+
+/// A confined caller's SVG of a symbol holding a visible rectangle and a hidden linked image outside
+/// the read roots: the file leaves the hidden image out of the symbol and is written, unless hidden
+/// layers are kept, which writes the image and refuses the file.
+#[test]
+fn confined_svg_output_leaves_hidden_symbol_art_unchecked() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-symbol-hidden-away");
+    let home = Folder::new("svg-symbol-hidden-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap()["id"].clone();
+    let a = place(&mut s, &photo);
+    s.execute("object.hide", &json!({"ids": [a.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r, a.0]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mixed"})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["svg", "svgz"] {
+        let p = json!({"format": format, "images": "link"});
+        assert!(!svg_text(&s.execute("document.serialize", &p).unwrap()).contains(&photo), "{p}");
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+        assert!(!text.contains(&photo), "{p}: {text}");
+        let kept = json!({"format": format, "images": "link", "hiddenLayers": true});
+        assert!(svg_text(&s.execute("document.serialize", &kept).unwrap()).contains(&photo), "{kept}");
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &kept)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{kept}: {e}");
+    }
+}
+
+/// A confined caller's SVG Tiny 1.2 of an object whose opacity mask is a linked image outside the
+/// read roots: the Tiny file leaves the mask out and is written; SVG 1.1 writes the mask and is
+/// refused.
+#[test]
+fn confined_svg_tiny_output_leaves_opacity_mask_images_unchecked() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-tiny-mask-away");
+    let home = Folder::new("svg-tiny-mask-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap()["id"].clone();
+    let a = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [r, a.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    for format in ["svg", "svgz"] {
+        let tiny = json!({"format": format, "images": "link", "profile": "tiny12"});
+        assert!(!svg_text(&s.execute("document.serialize", &tiny).unwrap()).contains(&photo), "{tiny}");
+        let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &tiny)).unwrap());
+        assert!(!text.contains(&photo), "{tiny}: {text}");
+        let full = json!({"format": format, "images": "link"});
+        assert!(svg_text(&s.execute("document.serialize", &full).unwrap()).contains(&photo), "{full}");
+        let e = confine(roots.as_ref(), || s.execute("document.serialize", &full)).unwrap_err().to_string();
+        assert!(e.contains("a linked image file is outside the read roots"), "{full}: {e}");
+    }
+}
+
+/// A confined caller's SVG of a linked image outside the read roots, without pixels in the
+/// document, under Radial Blur: the file and the clipboard draw the rendered image in its place,
+/// name no file, and are written.
+#[test]
+fn confined_svg_output_checks_the_images_drawn_for_pixel_effects() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let away = Folder::new("svg-flat-away");
+    let home = Folder::new("svg-flat-home");
+    let photo = away.file("photo.png");
+    write(&photo, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &photo);
+    s.execute("effect.apply", &json!({"effect": "blur.radial", "ids": [a.0], "params": {"amount": 30, "quality": "draft"}})).unwrap();
+    without_pixels(&mut s, a);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    let roots = AutomationRoots::new(&[home.0.as_path()], &[home.0.as_path()]).unwrap();
+    let clip =
+        |s: &mut Session| confine(roots.as_ref(), || s.execute("clipboard.exportSvg", &json!({}))).unwrap()["svg"].as_str().unwrap().to_string();
+    assert!(!clip(&mut s).contains(&photo));
+    assert!(confine(roots.as_ref(), || s.clipboard_svg()).is_some_and(|svg| !svg.contains(&photo)));
+    for format in ["svg", "svgz"] {
+        for images in ["link", "embed"] {
+            let p = json!({"format": format, "images": images});
+            let text = svg_text(&confine(roots.as_ref(), || s.execute("document.serialize", &p)).unwrap());
+            assert!(!text.contains(&photo), "{p}: {text}");
+        }
+    }
+    // Without the effect, the image names its file.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("effect.remove", &json!({"index": 0})).unwrap();
+    assert!(s.doc().unwrap().doc.node(a).unwrap().appearance.effects.is_empty());
+    let e = confine(roots.as_ref(), || s.execute("document.serialize", &json!({"format": "svg"}))).unwrap_err().to_string();
+    assert!(e.contains("a linked image file is outside the read roots"), "{e}");
 }

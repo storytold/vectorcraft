@@ -289,6 +289,7 @@ impl Session {
             variables_highlight: st.variables_highlight.clone(),
             isolation: st.isolation,
             perspective_again: None,
+            plane_placed: false,
             copies: None,
             move_box: std::sync::OnceLock::new(),
         });
@@ -319,6 +320,7 @@ impl Session {
             it.preview_paint = None;
             it.color_mode_paints = None;
             it.deferred_color_mode = None;
+            it.plane_placed = false;
             if selection_changed {
                 st.selection.clone_from(&it.selection);
             }
@@ -378,6 +380,7 @@ impl Session {
             after.clone_from(&paint);
         }
         let perspective_again = it.perspective_again.take();
+        let plane_placed = it.plane_placed;
         let copy = preview.0 == "object.transform" && preview.1.get("copy").and_then(Value::as_bool).unwrap_or(false);
         // Alt pressed or released during a move drag turns it into a copy or back: name it for
         // what it did in the end.
@@ -395,6 +398,12 @@ impl Session {
             preview.1.get("dy").and_then(Value::as_f64).unwrap_or(0.0),
         );
         st.keep_interaction(it);
+        // The drag drew an object on, or attached one to, the plane Automatic Plane Positioning
+        // held: the plane is back in its place now, as view state (undoing the drag holds it again).
+        if plane_placed && changed && vectorcraft_tools::distort::perspective::PerspectiveGrid::positioning(&st.doc) {
+            vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(Arc::make_mut(&mut st.doc));
+            st.revision += 1;
+        }
         if preview.0 == "object.transform" && changed {
             let m = cmd::matrix_param(&preview.1, "matrix");
             if let Some(m) = m {

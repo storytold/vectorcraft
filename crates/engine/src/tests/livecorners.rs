@@ -126,6 +126,30 @@ fn bad_sides_radii_and_keys_are_errors() {
     assert_eq!(corners(&s, id).0, [0.0; 4]);
 }
 
+/// Saved steps play as they did before `sides` and `radius` were checked: a negative radius
+/// removes the rounding, a whole side count outside 3 to 1000 is brought into that range, and a
+/// fractional or negative side count is ignored.
+#[test]
+fn saved_steps_with_out_of_range_sides_or_radius_still_play() {
+    let (mut s, id) = session();
+    let poly = NodeId(s.execute("shape.polygon", &json!({"cx": 200, "cy": 200, "radius": 80, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    let replay = |s: &mut Session, p: Value| s.replay("object.setLiveShape", &p).unwrap_or_else(|e| panic!("{p}: {e}"));
+    run(&mut s, json!({"id": id.0, "radius": 6}));
+    replay(&mut s, json!({"id": id.0, "radius": -4}));
+    assert_eq!(corners(&s, id).0, [0.0; 4]);
+    let sides = |s: &Session| match node_path(s, poly).1 {
+        Some(LiveShape::Polygon { sides, .. }) => sides,
+        other => panic!("{other:?}"),
+    };
+    for (n, want) in [(json!(2), 3), (json!(1001), 1000), (json!(2.5), 1000), (json!(-1), 1000), (json!(5.0), 5)] {
+        replay(&mut s, json!({"ids": [poly.0], "sides": n}));
+        assert_eq!(sides(&s), want, "{n}");
+    }
+    // A direct call still refuses them.
+    assert!(s.execute("object.setLiveShape", &json!({"id": id.0, "radius": -4})).is_err());
+    assert!(s.execute("object.setLiveShape", &json!({"ids": [poly.0], "sides": 2})).is_err());
+}
+
 #[test]
 fn direct_selected_corners_round_alone_and_stay_selected() {
     let (mut s, id) = session();

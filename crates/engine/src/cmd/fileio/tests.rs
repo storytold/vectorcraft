@@ -186,6 +186,76 @@ fn planar_tiffs_read_as_their_chunky_versions() {
     }
 }
 
+/// A 16-bit CMYK TIFF with alpha places with its alpha rounded from 16 bits, planar as chunky.
+#[test]
+fn a_16_bit_cmyk_tiff_with_alpha_places_at_16_bits() {
+    let none = vec![0u16; 6];
+    let cyan = vec![129u16, 0, 300, 0, 128, 65535];
+    let alpha = vec![65535u16, 129, 386, 0, 256, 65535];
+    for extra in [1u16, 2] {
+        let channels = [cyan.clone(), none.clone(), none.clone(), none.clone(), alpha.clone()];
+        let chunky = kept(&format!("extra samples {extra}, chunky"), &hand_tiff(5, 16, &[extra], false, &channels));
+        let planar = kept(&format!("extra samples {extra}, planar"), &hand_tiff(5, 16, &[extra], true, &channels));
+        assert_eq!(planar, chunky, "extra samples {extra}: planar reads as chunky");
+        let alphas: Vec<u8> = chunky.1.iter().skip(3).step_by(4).copied().collect();
+        assert_eq!(alphas, [255, 1, 2, 0, 1, 255], "extra samples {extra}: the alpha, rounded from 16 bits");
+    }
+}
+
+/// An opaque 16-bit CMYK TIFF's inks are rounded to the nearest 8-bit level, chunky and planar, and
+/// the stored image keeps its 16-bit samples.
+#[test]
+fn an_opaque_16_bit_cmyk_tiffs_inks_are_rounded_to_8_bits() {
+    let c = vec![0u16, 200, 0x80FF, 0x8100, 65535, 32896];
+    let m = vec![511u16, 65535, 0, 128, 129, 0];
+    let none = vec![0u16; 6];
+    let channels = [c, m, none.clone(), none];
+    let want: Vec<u8> = [[0, 2, 0, 0], [1, 255, 0, 0], [128, 0, 0, 0], [128, 0, 0, 0], [255, 1, 0, 0], [128, 0, 0, 0]].concat();
+    let chunky_bytes = hand_tiff(5, 16, &[], false, &channels);
+    let chunky = raster_image(&chunky_bytes).unwrap();
+    assert_eq!(chunky.blob.cmyk().map(|i| i.data), Some(want.clone()), "chunky: the inks");
+    assert_eq!(*chunky.blob.bytes, chunky_bytes, "chunky: the file is stored as it is");
+    let planar = raster_image(&hand_tiff(5, 16, &[], true, &channels)).unwrap();
+    assert_eq!(planar.blob.cmyk().map(|i| i.data), Some(want), "planar: the inks");
+    let stored = image::load_from_memory(&planar.blob.bytes).unwrap();
+    assert_eq!(stored.color(), image::ColorType::Rgb16, "planar: the stored image keeps 16-bit samples");
+}
+
+/// A CMYK or grayscale TIFF whose alpha follows another extra sample opens and places with that
+/// alpha, at 8 and 16 bits, chunky and planar; a CMYK one is not kept as inks. A CMYK one with two
+/// more samples than its ExtraSamples values count does too.
+#[test]
+fn a_tiff_with_alpha_after_another_extra_sample_places_with_its_alpha() {
+    let none = vec![0u16; 6];
+    let full = vec![255u16; 6];
+    let other = vec![9u16, 8, 7, 6, 5, 4];
+    let alpha = vec![255u16, 128, 0, 255, 64, 1];
+    let inks = [full.clone(), none.clone(), none.clone(), none.clone()];
+    let cases = [
+        ("CMYK", 5, vec![full.clone(), none.clone(), none.clone(), none.clone(), other.clone(), alpha.clone()]),
+        ("CMYK, two more samples", 5, [&inks[..], &[other.clone(), alpha.clone(), other.clone(), full.clone()]].concat()),
+        ("gray", 1, vec![full.clone(), other.clone(), alpha.clone()]),
+    ];
+    for (what, photometric, channels) in cases {
+        for bits in [8, 16] {
+            let wide: Vec<Vec<u16>> = channels.iter().map(|ch| ch.iter().map(|v| if bits == 16 { v * 257 } else { *v }).collect()).collect();
+            for planar in [false, true] {
+                let what = format!("{what}, {bits} bits, planar {planar}");
+                let file = hand_tiff(photometric, bits, &[0, 2], planar, &wide);
+                let (inks, rgba) = kept(&what, &file);
+                assert_eq!(inks, None, "{what}: shown as RGB with its alpha");
+                let alphas: Vec<u8> = rgba.iter().skip(3).step_by(4).copied().collect();
+                assert_eq!(alphas, [255, 128, 0, 255, 64, 1], "{what}: the alpha is the second extra sample");
+                let mut s = session(100.0, 100.0, 1);
+                s.execute("file.place", &json!({"name": "a.tif", "dataBase64": vectorcraft_format::base64_encode(&file)})).unwrap();
+                let blob = &s.doc().unwrap().doc.images[&image_of(&s).key];
+                let placed = image::load_from_memory(&blob.bytes).unwrap().to_rgba8().into_raw();
+                assert_eq!(placed, rgba, "{what}: Place reads it as Open does");
+            }
+        }
+    }
+}
+
 /// A planar TIFF whose header claims more strips than the decoder can count (here 2^31 + 1 rows
 /// a strip each, times 5 planes) is refused as too large to draw, without a panic.
 #[test]

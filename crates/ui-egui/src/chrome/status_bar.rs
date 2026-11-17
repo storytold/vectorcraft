@@ -73,19 +73,37 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.status(e);
                 }
                 ui.separator();
-                let tool = vectorcraft_tools::tool_info(app.session.tool_id())
-                    .map(|t| {
-                        // The catalog keys carry the full label ("Selection Tool"); only English drops the suffix.
-                        let shown = tl!(t.label);
-                        if crate::i18n::current() == crate::i18n::Lang::EN { shown.trim_end_matches(" Tool") } else { shown }
-                    })
-                    .unwrap_or("");
-                // The tool name leaves the status message its least width and ends in an ellipsis first.
+                let (info, next) = info_text(app);
+                if let Some(secs) = next {
+                    ui.ctx().request_repaint_after(std::time::Duration::from_secs(secs));
+                }
+                // The info field leaves the status message its least width and ends in an ellipsis first.
+                // An empty readout shows a dash, so the field can still be clicked.
                 let room = (ui.available_width() - MESSAGE_MIN - ui.spacing().item_spacing.x).max(0.0);
-                ui.scope(|ui| {
-                    ui.set_max_width(room);
-                    clipped_label(ui, egui::RichText::new(tool).size(11.5).color(t.text_dim));
+                let shown = if info.is_empty() { "–" } else { info.as_str() };
+                let field = ui
+                    .scope(|ui| {
+                        ui.set_max_width(room);
+                        clipped_label(ui, egui::RichText::new(shown).size(11.5).color(t.text_dim))
+                    })
+                    .inner
+                    .interact(Sense::click());
+                let mut pick = None;
+                egui::Popup::menu(&field).show(|ui| {
+                    ui.menu_button(tl!("Show"), |ui| {
+                        for show in StatusBarShow::ALL {
+                            if widgets::menu_item_name(ui, show.label(), true, app.ui.status_bar_show == show) {
+                                pick = Some(show);
+                                ui.close();
+                            }
+                        }
+                    });
                 });
+                if let Some(show) = pick
+                    && let Err(e) = app.run("view.statusBarShow", json!({ "show": show.param() }))
+                {
+                    app.status(e);
+                }
                 status_readouts(app, ui, &t);
             });
         });
@@ -94,6 +112,152 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The least width the status message keeps when the window is narrow.
 const MESSAGE_MIN: f32 = 180.0;
+
+/// What the status bar's info field shows, chosen from the Show menu that a click on the field
+/// opens (`view.statusBarShow`). Kept with the UI state ([`crate::UiState::status_bar_show`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StatusBarShow {
+    /// The name of the artboard the navigator shows.
+    ArtboardName,
+    /// The name of the tool in use.
+    #[default]
+    CurrentTool,
+    /// The date and time.
+    DateTime,
+    /// How many steps the active document can undo and redo.
+    Undos,
+    /// The profile the active document's colors use.
+    ColorProfile,
+}
+
+impl StatusBarShow {
+    /// Every choice, in the Show menu's order.
+    pub const ALL: [StatusBarShow; 5] =
+        [StatusBarShow::ArtboardName, StatusBarShow::CurrentTool, StatusBarShow::DateTime, StatusBarShow::Undos, StatusBarShow::ColorProfile];
+
+    /// The `show` param of `view.statusBarShow`.
+    pub fn param(self) -> &'static str {
+        match self {
+            StatusBarShow::ArtboardName => "artboardName",
+            StatusBarShow::CurrentTool => "currentTool",
+            StatusBarShow::DateTime => "dateTime",
+            StatusBarShow::Undos => "undos",
+            StatusBarShow::ColorProfile => "colorProfile",
+        }
+    }
+
+    /// The choice whose param is `param`.
+    pub fn from_param(param: &str) -> Option<StatusBarShow> {
+        StatusBarShow::ALL.into_iter().find(|s| s.param() == param)
+    }
+
+    /// The Show menu's label, in the interface language.
+    pub fn label(self) -> &'static str {
+        match self {
+            StatusBarShow::ArtboardName => tl!("Artboard Name"),
+            StatusBarShow::CurrentTool => tl!("Current Tool"),
+            StatusBarShow::DateTime => tl!("Date and Time"),
+            StatusBarShow::Undos => tl!("Number of Undos"),
+            StatusBarShow::ColorProfile => tl!("Document Color Profile"),
+        }
+    }
+}
+
+/// Serde reader for the saved choice ([`crate::UiState::status_bar_show`]): a value this version
+/// does not know reads as Current Tool.
+pub fn deserialize_status_bar_show<'de, D: serde::Deserializer<'de>>(d: D) -> Result<StatusBarShow, D::Error> {
+    let v = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
+    Ok(v.as_str().and_then(StatusBarShow::from_param).unwrap_or_default())
+}
+
+/// `view.statusBarShow {show}`: the info field shows that readout from now on → the choice.
+pub fn set_status_bar_show(app: &mut VectorcraftApp, p: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let key = "show";
+    let Some(show) = p.get(key).and_then(serde_json::Value::as_str).and_then(StatusBarShow::from_param) else {
+        let all: Vec<&str> = StatusBarShow::ALL.iter().map(|s| s.param()).collect();
+        return Err(format!("`{key}` must be one of {}", all.join(", ")));
+    };
+    app.ui.status_bar_show = show;
+    Ok(json!(show.param()))
+}
+
+/// The info field's text for the choice in the Show menu, and for Date and Time the seconds until
+/// the minute it shows ends (when the bar draws again).
+pub(super) fn info_text(app: &VectorcraftApp) -> (String, Option<u64>) {
+    let st = app.session.active();
+    match app.ui.status_bar_show {
+        StatusBarShow::CurrentTool => {
+            let tool = vectorcraft_tools::tool_info(app.session.tool_id())
+                .map(|t| {
+                    // The catalog keys carry the full label ("Selection Tool"); only English drops the suffix.
+                    let shown = tl!(t.label);
+                    if crate::i18n::current() == crate::i18n::Lang::EN { shown.trim_end_matches(" Tool") } else { shown }
+                })
+                .unwrap_or("");
+            (tool.to_string(), None)
+        }
+        StatusBarShow::ArtboardName => {
+            let name = st.and_then(|d| {
+                let n = d.doc.artboards.len();
+                d.doc.artboards.get(crate::panels::artboards::selected(app, n)).map(|a| a.name.clone())
+            });
+            (name.unwrap_or_default(), None)
+        }
+        StatusBarShow::DateTime => {
+            let (text, next) = date_time_now();
+            (text, Some(next))
+        }
+        StatusBarShow::Undos => {
+            let text = st.map(|d| format!("{}: {}  {}: {}", tl!("Undos"), d.history.undo.len(), tl!("Redos"), d.history.redo.len()));
+            (text.unwrap_or_default(), None)
+        }
+        StatusBarShow::ColorProfile => (st.map(|d| color_profile_name(&d.doc)).unwrap_or_default(), None),
+    }
+}
+
+/// The profile `doc`'s colors use for its color mode, as the context it draws through has it
+/// ([`vectorcraft_engine::cmd::colormgmt::doc_cms`]): the one assigned (Edit › Assign Profile), else
+/// the working space of that mode (Edit › Color Settings), also when the assigned one is not
+/// available.
+pub(super) fn color_profile_name(doc: &vectorcraft_doc::Document) -> String {
+    let cms = vectorcraft_engine::cmd::colormgmt::doc_cms(doc);
+    let settings = cms.settings();
+    let name = match doc.color_mode {
+        vectorcraft_doc::ColorMode::Rgb => &settings.rgb,
+        vectorcraft_doc::ColorMode::Cmyk => &settings.cmyk,
+    };
+    vectorcraft_color::cms::canonical_name(name).to_string()
+}
+
+/// `[year, month, day, hour, minute, second]` as the info field shows it: `2026-11-15 14:03`.
+pub(super) fn date_time_label([y, mo, d, h, mi, _]: [i64; 6]) -> String {
+    format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}")
+}
+
+/// The local date and time ([`date_time_label`]) and the seconds until the minute ends.
+#[cfg(not(target_arch = "wasm32"))]
+fn date_time_now() -> (String, u64) {
+    use chrono::{Datelike, Timelike};
+    let now = chrono::Local::now();
+    let parts = [
+        i64::from(now.year()),
+        i64::from(now.month()),
+        i64::from(now.day()),
+        i64::from(now.hour()),
+        i64::from(now.minute()),
+        i64::from(now.second()),
+    ];
+    (date_time_label(parts), 60 - u64::from(now.second().min(59)))
+}
+
+/// The web build reads no time zone, so it shows the date and time in UTC.
+#[cfg(target_arch = "wasm32")]
+fn date_time_now() -> (String, u64) {
+    let secs = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let parts = vectorcraft_doc::metadata::civil(i64::try_from(secs).unwrap_or(i64::MAX));
+    (format!("{} UTC", date_time_label(parts)), 60 - u64::try_from(parts[5].clamp(0, 59)).unwrap_or(0))
+}
 
 /// A label that ends in an ellipsis when it is wider than the room left in `ui`. Only a cut label
 /// shows its full text in a tooltip; screen readers always receive the full text.

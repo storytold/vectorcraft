@@ -326,7 +326,7 @@ impl Tool for ParametricShapeTool {
             self.hover(cx, ev.pos);
         }
         match ev.kind {
-            PointerKind::Move => vec![],
+            PointerKind::Move | PointerKind::TripleClick => vec![],
             PointerKind::Down => {
                 let tol = cx.point_tol();
                 let grip = selected(cx).and_then(|(id, s)| {
