@@ -9782,6 +9782,7 @@ shape	Open	Открытый
 @msg	Too many Revolve faces for visibility evaluation	Слишком много граней вращения для расчёта видимости
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читает из файла обмена образцами не более {ASE_MAX_ENTRIES} цветов и групп, а в этой библиотеке их {entries}
 @msg	WebP encoding failed: {e}	Ошибка кодирования WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Ошибка кодирования WebP: изображение слишком велико для WebP с потерями: уменьшите разрешение или выберите «Без потерь»
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` принимает значения smallThumb, mediumThumb, largeThumb, smallList или largeList

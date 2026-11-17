@@ -9721,6 +9721,7 @@ breakText	Glyphs	Glyphs
 @msg	Too many Revolve faces for visibility evaluation	Te veel vlakken van Draaien om de zichtbaarheid te bepalen
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft leest maximaal {ASE_MAX_ENTRIES} kleuren en groepen uit een uitwisselingsbestand voor stalen, en deze bibliotheek heeft er {entries}
 @msg	WebP encoding failed: {e}	WebP-codering mislukt: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-codering mislukt: de afbeelding is te groot voor WebP met verlies: verlaag de resolutie of kies Verliesvrij
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` moet een geheel getal zijn

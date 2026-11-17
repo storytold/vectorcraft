@@ -5282,6 +5282,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa derinliği {_1}: piksel başına 16, 24 veya 32 bit olmalıdır
 @msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	WebP encoding failed: {e}	WebP kodlaması başarısız oldu: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP kodlaması başarısız oldu: görüntü kayıplı WebP için çok büyük: çözünürlüğü düşürün veya Kayıpsız seçeneğini seçin
 @msg	the pixel buffer doesn't match the image size	piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	too many layers for PSD (at most 32767)	PSD için çok fazla katman (en fazla 32767)
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} piksel GIF için çok büyük (kenar başına en fazla 65535 piksel): çözünürlüğü düşürün

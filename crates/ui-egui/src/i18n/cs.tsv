@@ -7799,6 +7799,7 @@ breakText	Glyphs	Glyfy
 @msg	Too many Revolve faces for visibility evaluation	Rotační těleso má příliš mnoho stěn pro výpočet viditelnosti
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft čte ze souboru pro výměnu vzorníku nejvýše {ASE_MAX_ENTRIES} barev a skupin a tato knihovna jich má {entries}
 @msg	WebP encoding failed: {e}	kódování WebP selhalo: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	kódování WebP selhalo: obrázek je pro ztrátový WebP příliš velký: snižte rozlišení nebo zvolte Bezeztrátový
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` je smallThumb, mediumThumb, largeThumb, smallList nebo largeList

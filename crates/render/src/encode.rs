@@ -203,7 +203,35 @@ pub(crate) fn webp(img: &Rendered, lossy_quality: Option<u8>) -> Result<Vec<u8>,
         webp_quality: lossy_quality.unwrap_or(100).min(100),
         ..craft_image_codecs::EncodeOptions::default()
     };
-    craft_image_codecs::encode(&src, craft_image_codecs::Format::WebP, &opts).map_err(|e| format!("WebP encoding failed: {e}"))
+    let file = craft_image_codecs::encode(&src, craft_image_codecs::Format::WebP, &opts).map_err(|e| format!("WebP encoding failed: {e}"))?;
+    if lossy_quality.is_some() && vp8_partition_at_limit(&file) {
+        return Err("WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless".into());
+    }
+    Ok(file)
+}
+
+/// The largest first-partition size a VP8 key frame's 19-bit size field holds (RFC 6386 §9.1).
+const VP8_FIRST_PARTITION_LIMIT: u32 = (1 << 19) - 1;
+
+/// Does the `VP8 ` chunk of RIFF WebP `file` give its first partition the size limit? The encoder
+/// writes the limit for a larger partition too, and a decoder then reads the token partition from
+/// the wrong offset, so a frame at the limit is not written.
+fn vp8_partition_at_limit(file: &[u8]) -> bool {
+    let mut at = 12usize;
+    while let Some(head) = file.get(at..).and_then(|rest| rest.get(..8)) {
+        let len = u32::from_le_bytes([head[4], head[5], head[6], head[7]]);
+        if &head[..4] == b"VP8 " {
+            return file.get(at + 8..).and_then(|rest| rest.get(..3)).is_some_and(|tag| {
+                let tag = u32::from(tag[0]) | (u32::from(tag[1]) << 8) | (u32::from(tag[2]) << 16);
+                tag >> 5 >= VP8_FIRST_PARTITION_LIMIT
+            });
+        }
+        let Some(next) = usize::try_from(u64::from(len) + u64::from(len % 2) + 8).ok().and_then(|n| at.checked_add(n)) else {
+            break;
+        };
+        at = next;
+    }
+    false
 }
 
 /// Bounds of the art an export draws: visible objects off template layers (guides left out),

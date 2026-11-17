@@ -7947,6 +7947,7 @@ breakText	Glyphs	Merkit
 @msg	Too many Revolve faces for visibility evaluation	Pyöräytä-tehosteessa on liian monta tahkoa näkyvyyden arviointiin
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lukee värimallien vaihtotiedostosta enintään {ASE_MAX_ENTRIES} väriä ja ryhmää, ja tässä kirjastossa niitä on {entries}
 @msg	WebP encoding failed: {e}	WebP-koodaus epäonnistui: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-koodaus epäonnistui: kuva on liian suuri häviölliseen WebP-muotoon: pienennä tarkkuutta tai valitse Häviötön
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` on oltava kokonaisluku

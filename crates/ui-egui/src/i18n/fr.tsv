@@ -9675,6 +9675,7 @@ breakText	Glyphs	Glyphes
 @msg	Too many Revolve faces for visibility evaluation	Trop de faces de révolution pour évaluer la visibilité
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lit au plus {ASE_MAX_ENTRIES} couleurs et groupes d’un fichier d’échange de nuances, et cette bibliothèque en contient {entries}
 @msg	WebP encoding failed: {e}	Échec de l’encodage WebP : {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Échec de l’encodage WebP : l’image est trop grande pour le WebP avec perte : réduisez la résolution ou choisissez Sans perte
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}` : {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` vaut smallThumb, mediumThumb, largeThumb, smallList ou largeList

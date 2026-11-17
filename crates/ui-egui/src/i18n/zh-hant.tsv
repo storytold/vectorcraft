@@ -7517,6 +7517,7 @@ breakText	Glyphs	字符
 @msg	Too many Revolve faces for visibility evaluation	迴轉的面過多，無法計算可見性
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 從色票交換檔案最多讀取 {ASE_MAX_ENTRIES} 個顏色和群組，而此資料庫有 {entries} 個
 @msg	WebP encoding failed: {e}	WebP 編碼失敗：{e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 編碼失敗：影像太大，無法產生有失真 WebP：請降低解析度或選擇無失真
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必須是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList
