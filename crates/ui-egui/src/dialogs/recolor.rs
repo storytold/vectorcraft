@@ -946,6 +946,14 @@ impl History {
     }
 
     fn can(&self, d: &Dialog, back: bool) -> bool {
+        // Before the first frame or command, fields set since the dialog opened are a step back,
+        // except rows that the art's reduction is about to replace.
+        if self.base.is_none()
+            && let Some(opened) = &self.opened
+        {
+            let reduces = d.bool("__art") && d.fields.get("__reduced") != Some(&reduce_params(d));
+            return back && STEP_FIELDS.iter().filter(|k| !(reduces && **k == "rows")).any(|k| d.fields.get(*k) != opened.get(*k));
+        }
         if back { !self.undo.is_empty() || self.pending(d) } else { !self.redo.is_empty() && !self.pending(d) }
     }
 
