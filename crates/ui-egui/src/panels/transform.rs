@@ -11,6 +11,7 @@ use vectorcraft_geom::shapes::CornerKind;
 use vectorcraft_geom::{Point, Rect, Vec2};
 
 use super::{corner_radius_row, first_selected, pstate, set_pstate};
+use crate::caches::PixelAligned;
 use crate::dialogs::corners::kind_label as corner_kind;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
@@ -368,27 +369,51 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// The selected objects' Align to Pixel Grid: on or off when they agree, `None` when they differ,
 /// with whether every one can be aligned (a path that is not a guide and not inside a compound path,
-/// or a compound path) and their ids. `None` with nothing selected.
-fn pixel_aligned_state(app: &VectorcraftApp) -> Option<(Option<bool>, bool, Vec<u64>)> {
+/// or a compound path). `None` with nothing selected.
+fn pixel_aligned_state(app: &VectorcraftApp) -> Option<PixelAligned> {
     let st = app.session.active()?;
     let nodes: Vec<&Node> = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).collect();
     let first = nodes.first()?.extras().pixel_aligned;
     let value = nodes.iter().all(|n| n.extras().pixel_aligned == first).then_some(first);
     let in_compound = |n: &Node| st.doc.parent_of(n.id).and_then(|p| st.doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
     let alignable = nodes.iter().all(|n| matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }) && !in_compound(n));
-    Some((value, alignable, nodes.iter().map(|n| n.id.0).collect()))
+    Some((value, alignable))
+}
+
+/// [`pixel_aligned_state`], measured once per (document uid, revision)
+/// ([`crate::caches::CanvasCache::pixel_aligned`]): the panel reads it every frame, and Select All
+/// can select hundreds of thousands of paths.
+fn pixel_aligned_shown(app: &mut VectorcraftApp) -> Option<PixelAligned> {
+    let st = app.session.active()?;
+    let key = (st.uid, st.revision);
+    if let Some((k, state)) = app.canvas.pixel_aligned
+        && k == key
+    {
+        return state;
+    }
+    let state = pixel_aligned_state(app);
+    app.canvas.pixel_aligned = Some((key, state));
+    state
 }
 
 /// The Align to Pixel Grid checkbox (`object.setPixelAligned`): a dash when the selected objects
 /// differ, and unavailable unless every selected object can be aligned. A click turns it on for
 /// them all, or off when it is on for them all.
 fn pixel_grid_check(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let (value, alignable, ids) = pixel_aligned_state(app).unwrap_or((Some(false), false, vec![]));
-    if widgets::check3(ui, tl!("Align to Pixel Grid"), value, alignable)
-        && let Err(e) = app.run("object.setPixelAligned", json!({"ids": ids, "on": value != Some(true)}))
-    {
+    let (value, alignable) = pixel_aligned_shown(app).unwrap_or((Some(false), false));
+    if !widgets::check3(ui, tl!("Align to Pixel Grid"), value, alignable) {
+        return;
+    }
+    let ids = pixel_aligned_ids(app);
+    if let Err(e) = app.run("object.setPixelAligned", json!({"ids": ids, "on": value != Some(true)})) {
         app.status(e);
     }
+}
+
+/// The ids of the selected objects that are in the document, for `object.setPixelAligned`: read
+/// when the Align to Pixel Grid checkbox is clicked.
+fn pixel_aligned_ids(app: &VectorcraftApp) -> Vec<u64> {
+    app.session.active().map(|st| st.selection.objects.iter().filter(|id| st.doc.node(**id).is_some()).map(|id| id.0).collect()).unwrap_or_default()
 }
 
 /// A live rectangle's, polygon's or ellipse's properties (Transform and Properties panels, and the

@@ -2165,3 +2165,34 @@ fn the_graph_section_needs_one_graph_selected() {
     app.run("select.set", json!({"ids": [groups[0], series_groups(&app, b)[0]]})).unwrap();
     assert_eq!(graph::shown(&app), None, "series of two graphs");
 }
+
+/// With the Type tool, the Character section's font style shows the style of the first selected
+/// character (or of the character before the caret), not the text object's first run; with the
+/// Selection tool, the first run's (#8189).
+#[test]
+fn character_section_shows_the_type_tool_selections_style() {
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    // Regular 0..8, Bold 8..13, Condensed 13..22.
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Regular Bold Condensed", "font": TWO_AXIS_FAMILY})).unwrap()["id"].clone();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 8, "end": 13, "style": "Bold"})).unwrap();
+    app.run("text.setRangeStyle", json!({"id": id, "start": 13, "end": 22, "style": "Condensed"})).unwrap();
+    let ctx = egui::Context::default();
+    let shown = |app: &mut VectorcraftApp| {
+        let texts = panel_frame(app, &ctx, vec![], type_sections);
+        texts.into_iter().map(|(t, _)| t).filter(|t| ["Regular", "Bold", "Condensed"].contains(&t.as_str())).collect::<Vec<_>>()
+    };
+    for (start, end, want) in [(8, 12, "Bold"), (13, 22, "Condensed"), (0, 7, "Regular"), (15, 15, "Condensed"), (13, 13, "Bold")] {
+        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
+        assert_eq!(crate::panels::character::text_editing(&app).map(|(_, a, b)| (a, b)), Some((start, end)));
+        assert_eq!(shown(&mut app), [want], "{start}..{end}");
+    }
+    app.session.select_tool("selection", Default::default()).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    assert_eq!(crate::panels::character::text_editing(&app), None);
+    assert_eq!(shown(&mut app), ["Regular"], "the Selection tool shows the first run's style");
+}

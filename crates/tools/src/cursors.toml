@@ -722,8 +722,12 @@ hotspot = "The tip."
 [[cursor]]
 id = "Knife"
 group = "Drawing and editing tools"
-shown_when = ["The Knife tool: a freehand drag cuts objects along the line."]
+shown_when = [
+    "The Knife tool: a freehand drag cuts objects along the line.",
+    "The Trim at Crossings Tool: a click removes the stretch of path under the pointer between its crossings, a drag removes every stretch its rectangle touches, and an Alt-drag removes every stretch its freehand line crosses.",
+]
 hotspot = "The blade's point."
+look = "A knife pointing down-left: a white blade with a straight back and a curved edge, and a black handle."
 
 [[cursor]]
 id = "Scissors"
