@@ -116,7 +116,8 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "game-trails",
             "energy-beams",
             "dry-media",
-            "tech-circuit"
+            "tech-circuit",
+            "arrows"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
@@ -144,6 +145,12 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
     assert_eq!((libs[8]["name"].as_str(), libs[8]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    let arrows = run(&mut s, "brush.library", json!({"library": "Arrows"}));
+    assert_eq!(
+        arrows["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
+        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art")]
+    );
+    assert_eq!((libs[10]["name"].as_str(), libs[10]["count"].as_u64()), (Some("Arrows"), Some(4)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
@@ -160,6 +167,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
+        ("arrows", "art"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
