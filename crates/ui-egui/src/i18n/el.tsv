@@ -8100,3 +8100,8 @@ breakText	Glyphs	Γλύφοι
 @msg	A fold line is on a non-printing layer.	Μια γραμμή δίπλωσης βρίσκεται σε επίπεδο που δεν εκτυπώνεται.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Πάνελ: {panels}, μεντεσέδες: {hinges}, σφάλματα: {errors}, προειδοποιήσεις: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Ornamental	Διακοσμητικά μοτίβα
+	Scrollwork	Σπείρα
+	Filigree Arrow	Φιλιγκράν βέλος
+	Petal Sweep	Καμπύλη πετάλων
+	Twin Curl	Διπλή σπείρα

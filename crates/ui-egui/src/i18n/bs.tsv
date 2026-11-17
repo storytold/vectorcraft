@@ -7291,3 +7291,8 @@ shape	Open	Otvoren
 @msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Ornamental	Ornamentalno
+	Scrollwork	Ukrasni zavoj
+	Filigree Arrow	Filigranska strelica
+	Petal Sweep	Potez latica
+	Twin Curl	Dvostruki zavoj

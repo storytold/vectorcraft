@@ -9905,3 +9905,8 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Ornamental	Díszítőmotívumok
+	Scrollwork	Kacskaringó
+	Filigree Arrow	Filigrán nyíl
+	Petal Sweep	Sziromív
+	Twin Curl	Kettős kacskaringó
