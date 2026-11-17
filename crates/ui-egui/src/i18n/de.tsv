@@ -180,6 +180,8 @@ antiAlias	Sharp	Scharf
 	Crisp	Klar
 	Strong	Stark
 	Anti-aliasing:	Glättung:
+	Art Optimized	Für Grafik optimiert
+	Type Optimized	Für Text optimiert
 	Any Kind	Beliebige Art
 	Font Technology	Schrifttechnologie
 font-technology	Variable	Variabel
@@ -670,6 +672,9 @@ font-technology	Variable	Variabel
 	Create from Selection	Aus Auswahl erstellen
 	Create From:	Erstellen aus:
 	Create Gradient Mesh…	Verlaufsgitter erstellen…
+	Flat	Flach
+	To Center	Zur Mitte
+	To Edge	Zum Rand
 	Create Graph	Diagramm erstellen
 	Create New Layer	Neue Ebene erstellen
 	Create New Sublayer	Neue Unterebene erstellen

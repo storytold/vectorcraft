@@ -205,6 +205,8 @@ antiAlias	Sharp	Nitido
 	Crisp	Definito
 	Strong	Forte
 	Anti-aliasing:	Anti-aliasing:
+	Art Optimized	Ottimizzato per la grafica
+	Type Optimized	Ottimizzato per il testo
 	Any Kind	Qualsiasi tipo
 	Font Technology	Tecnologia font
 font-technology	Variable	Variabili
@@ -692,6 +694,9 @@ font-technology	Variable	Variabili
 	Create from Selection	Crea dalla selezione
 	Create From:	Crea da:
 	Create Gradient Mesh…	Crea trama sfumatura…
+	Flat	Piatto
+	To Center	Verso il centro
+	To Edge	Verso il bordo
 	Create Graph	Crea grafico
 	Create New Layer	Crea nuovo livello
 	Create New Sublayer	Crea nuovo sottolivello

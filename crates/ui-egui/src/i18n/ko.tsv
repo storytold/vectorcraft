@@ -261,6 +261,9 @@ digits	Malayalam	말라얄람어
 	Mask	마스크
 	Rasterize…	래스터화…
 	Create Gradient Mesh…	그레이디언트 메시 만들기…
+	Flat	평면
+	To Center	가운데로
+	To Edge	가장자리로
 	Create Object Mosaic…	개체 모자이크 만들기…
 	Vector Halftone…	벡터 하프톤…
 	Create Trim Marks	트림 마크 만들기
@@ -1110,6 +1113,8 @@ antiAlias	Sharp	날카롭게
 	Crisp	또렷하게
 	Strong	강하게
 	Anti-aliasing:	안티 앨리어싱:
+	Art Optimized	아트에 최적화
+	Type Optimized	문자에 최적화
 	Appearance Item	모양새 항목
 	Appearance Panel	모양새 패널
 	Appearance of Black	검정 표시 방식

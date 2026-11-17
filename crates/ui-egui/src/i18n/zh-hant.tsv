@@ -163,6 +163,8 @@ antiAlias	Sharp	銳利
 	Crisp	清晰
 	Strong	強
 	Anti-aliasing:	消除鋸齒：
+	Art Optimized	圖稿最佳化
+	Type Optimized	文字最佳化
 	Any Kind	所有類型
 	Font Technology	字體技術
 font-technology	Variable	可變
@@ -654,6 +656,9 @@ font-technology	Variable	可變
 	Create from Selection	從選取範圍建立
 	Create From:	建立來源：
 	Create Gradient Mesh…	建立漸層網格…
+	Flat	平面
+	To Center	向中心
+	To Edge	向邊緣
 	Create Graph	建立圖表
 	Create New Layer	建立新圖層
 	Create New Sublayer	建立新子圖層
