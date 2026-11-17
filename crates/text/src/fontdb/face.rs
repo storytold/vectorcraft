@@ -132,12 +132,6 @@ pub(super) type InstanceKey = (u32, Vec<([u8; 4], u32)>);
 /// How many instanced faces [`Instances::live`] holds at most.
 pub(crate) const MAX_LIVE_INSTANCES: usize = 256;
 
-#[derive(Clone)]
-pub(super) enum FontBytes {
-    Static(&'static [u8]),
-    Owned(Arc<Vec<u8>>),
-}
-
 /// One loaded font face.
 pub struct FontFace {
     /// Every name the face answers to (normalized), in every language its name table has.
@@ -158,8 +152,7 @@ pub struct FontFace {
     /// usWeightClass-style weight (400 = regular).
     pub weight: f32,
     pub italic: bool,
-    pub(super) bytes: FontBytes,
-    pub(super) index: u32,
+    pub(super) data: craft_font_catalog::FaceData,
     /// The file the face was read from (cataloged system fonts); `None` for the bundled fonts and
     /// fonts added as bytes.
     pub(super) path: Option<std::path::PathBuf>,
@@ -246,16 +239,13 @@ impl std::fmt::Debug for FontFace {
 
 impl FontFace {
     pub(crate) fn data(&self) -> &[u8] {
-        match &self.bytes {
-            FontBytes::Static(b) => b,
-            FontBytes::Owned(v) => v.as_slice(),
-        }
+        self.data.bytes()
     }
     pub(crate) fn skrifa(&self) -> Option<skrifa::FontRef<'_>> {
-        skrifa::FontRef::from_index(self.data(), self.index).ok()
+        self.data.skrifa()
     }
     pub(crate) fn hb(&self) -> Option<harfrust::FontRef<'_>> {
-        harfrust::FontRef::from_index(self.data(), self.index).ok()
+        self.data.harfrust()
     }
     /// The shaping plan for a buffer of `direction`, `script` and `language` shaped with
     /// `features` by `shaper` (made from this face at [`Self::instance`]): the plan made earlier for
@@ -283,7 +273,7 @@ impl FontFace {
     }
     /// The face's index in its font file (collections hold several).
     pub(crate) fn index(&self) -> u32 {
-        self.index
+        self.data.index()
     }
     /// Where in a variable font's design space the face's outlines and metrics are taken (the
     /// default location for a static face).
@@ -676,7 +666,7 @@ impl FontFace {
     }
     /// The face's index in its font file ([`Self::file_data`]; collections hold several).
     pub fn face_index(&self) -> u32 {
-        self.index
+        self.data.index()
     }
     /// The face's PostScript name, as PostScript files name fonts (`SourceSans3-Bold`): name ID 6;
     /// for a named instance of a variable font (whose name ID 6 is the default instance's), its
