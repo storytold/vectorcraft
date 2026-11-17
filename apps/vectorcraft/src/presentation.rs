@@ -53,7 +53,9 @@ fn flag_value(flag: &str, arg: &str, args: &mut impl Iterator<Item = String>) ->
 }
 
 impl Overrides {
-    /// Whether a flag or a variable set the present mode or the frame latency.
+    /// Whether a flag or a variable set the present mode or the frame latency. Only the
+    /// single-instance check reads it, and macOS has none (`main.rs`), so it isn't built there.
+    #[cfg(any(not(target_os = "macos"), test))]
     pub fn is_set(&self) -> bool {
         *self != Self::default()
     }
