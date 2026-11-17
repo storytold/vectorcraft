@@ -904,6 +904,31 @@ fn locate_object_highlights_its_row() {
     assert!(s.execute("layer.locate", &json!({})).is_err());
 }
 
+/// Locate Layer (`layersOnly`, sent while Show Layers Only is on) highlights the innermost layer
+/// or sublayer holding the object, through any groups; a layer locates itself.
+#[test]
+fn locate_layer_highlights_the_layer_holding_the_object() {
+    let mut s = session();
+    let (layer, sub, _, g, b, c) = tree(&mut s);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let r = run(&mut s, "layer.locate", json!({"layersOnly": true}));
+    assert_eq!(r, json!({"id": sub.0, "objectId": b.0, "ancestry": [layer.0, sub.0]}), "the group's sublayer");
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub]);
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0, "layersOnly": true}))["id"], layer.0, "art directly in a layer");
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![layer]);
+    let r = run(&mut s, "layer.locate", json!({"id": sub.0, "layersOnly": true}));
+    assert_eq!((r["id"].clone(), r["objectId"].clone()), (json!(sub.0), json!(sub.0)), "a sublayer locates itself");
+    // Off, the object's own row is highlighted, as before.
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": g.0, "layersOnly": false})), json!({"id": g.0, "ancestry": [layer.0, sub.0, g.0]}));
+    // Bad input changes nothing.
+    for p in [json!({"id": b.0, "layersOnly": "yes"}), json!({"id": 999_999, "layersOnly": true})] {
+        assert!(s.execute("layer.locate", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g], "{p}");
+    }
+    run(&mut s, "select.none", json!({}));
+    assert!(s.execute("layer.locate", &json!({"layersOnly": true})).is_err(), "nothing selected");
+}
+
 #[test]
 fn the_clipping_mask_button_acts_on_the_highlighted_group() {
     let mut s = session();

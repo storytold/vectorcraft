@@ -2133,6 +2133,50 @@ fn the_panel_menu_lists_every_operation() {
     }
 }
 
+/// With Show Layers Only on, Locate Object becomes Locate Layer in the panel menu and a row's
+/// menu, and the bottom bar's Locate button highlights the sublayer holding the selected art,
+/// opening the layer around it. Off, the button highlights the art's own row.
+#[test]
+fn with_show_layers_only_locate_object_becomes_locate_layer() {
+    let (mut app, [layer, sub, _, b, _, _]) = nested();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let shown = |app: &mut VectorcraftApp, events: Vec<egui::Event>, f: fn(&mut VectorcraftApp, &mut egui::Ui)| {
+        super::super::tests_appearance::frame_events(&ctx, app, events, f).into_iter().map(|(t, _)| t.trim().to_string()).collect::<Vec<_>>()
+    };
+    let has = |texts: &[String], s: &str| texts.iter().any(|t| t == s);
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let off = shown(&mut app, vec![], menu);
+    assert!(has(&off, "Locate Object") && !has(&off, "Locate Layer"), "{off:?}");
+    let locate = |app: &mut VectorcraftApp| {
+        let at = bar_buttons(app, &ctx)[4];
+        click_with(app, &ctx, at, egui::Modifiers::NONE);
+    };
+    locate(&mut app);
+    assert_eq!(rows_of(&app), vec![b], "off: the art's own row");
+
+    app.ui.layers_panel.layers_only = true;
+    let on = shown(&mut app, vec![], menu);
+    assert!(has(&on, "Locate Layer") && !has(&on, "Locate Object"), "{on:?}");
+    app.session.active_mut().unwrap().layers_open.set(layer, false);
+    shown(&mut app, vec![], show);
+    locate(&mut app);
+    assert_eq!(rows_of(&app), vec![sub], "on: the sublayer holding the art");
+    shown(&mut app, vec![], show);
+    assert!(app.session.active().unwrap().layers_open.contains(layer), "the layer around the sublayer opens");
+    assert!(has(&shown(&mut app, vec![], show), "Sub"), "the sublayer's row shows");
+
+    // A row's menu says Locate Layer too.
+    let c = frame(&mut app, &ctx, vec![], false).0;
+    let at = egui::pos2(150.0, c[0].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let row_menu = shown(&mut app, vec![], show);
+    assert!(has(&row_menu, "Locate Layer") && !has(&row_menu, "Locate Object"), "{row_menu:?}");
+}
+
 /// ≡ › Save Selection lists the saved selections: choosing one recalls it, Update Selection
 /// makes it hold the selected objects, and Save Selection… opens the name dialog.
 #[test]

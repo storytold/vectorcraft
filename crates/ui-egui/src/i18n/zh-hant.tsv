@@ -3184,6 +3184,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Load SVG into Clipboard	將 SVG 載入剪貼簿
 	Load Text into Clipboard	將文字載入剪貼簿
 	Local Libraries	本機資料庫
+	Locate Layer	尋找圖層
 	Locate Object	尋找物件
 	Locate Selected Objects	尋找選取的物件
 	Location	位置

@@ -1939,6 +1939,7 @@ file-filter	Templates	模板
 	Load SVG into Clipboard	将 SVG 载入剪贴板
 	Load Text into Clipboard	将文本载入剪贴板
 	Local Libraries	本地库
+	Locate Layer	查找图层
 	Locate Object	查找对象
 	Locate Selected Objects	查找所选对象
 	Location	位置
