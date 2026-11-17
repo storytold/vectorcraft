@@ -111,6 +111,8 @@ fn lengths_of(id: &str) -> Lengths {
         "sketch.tornEdges" => always(&["smoothness"]),
         "sketch.waterPaper" => always(&["fiberLength"]),
         TRAP => always(&["thickness", "precision"]),
+        // The Pathfinder Options' refit tolerance.
+        id if crate::takes_pathfinder_options(id) => always(&["precision"]),
         RASTERIZE => always(&["addAround"]),
         // The points one unit of the filter measures.
         crate::SVG_FILTER => always(&["scale"]),
