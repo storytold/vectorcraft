@@ -6341,6 +6341,10 @@ records the `basis` used, so a recorded action replays in the same frame; a save
 journal entry recorded before it) plays along the page's axes, as it did when it was recorded. `object.transformAgain` repeats the transform's page matrix, also after Reset Bounding Box. The Scale
 and Reflect dialogs, the Transform and Properties panels' flips, the Scale tool and the Reflect tool's default axis
 and Shift steps follow the box the same way; a Reflect axis drawn with the tool is the line drawn on the page.
+With the Reflect tool, a click (a `pointer_gesture` `down` and `up`) sets the first point of an axis, and a second
+click reflects the selection across the line through both points as one `object.transform` and one undo step. With
+Alt held when the second click is released, the transform has `copy: true` and reflects a copy. A second click within 3 px of the
+first point does nothing.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.scale","params":{"sx":200,"sy":100}}}
