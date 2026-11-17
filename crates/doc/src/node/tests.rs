@@ -805,3 +805,31 @@ fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
     assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
     assert_eq!(calls, 0);
 }
+
+/// `try_walk` visits in `walk`'s order and visits nothing after the node that breaks it: not its
+/// children, its later siblings or its ancestors' later siblings.
+#[test]
+fn try_walk_ends_at_the_break() {
+    use std::ops::ControlFlow;
+    let leaf = |id| Arc::new(Node::group(NodeId(id), vec![]));
+    let inner = Node::group(NodeId(2), vec![leaf(3), leaf(4), leaf(5)]);
+    let root = Node::group(NodeId(1), vec![Arc::new(inner), leaf(6), leaf(7)]);
+    let mut all = vec![];
+    root.walk(&mut |n| all.push(n.id));
+    let mut seen = vec![];
+    assert_eq!(
+        root.try_walk(&mut |n| {
+            seen.push(n.id);
+            ControlFlow::<()>::Continue(())
+        }),
+        ControlFlow::Continue(())
+    );
+    assert_eq!(seen, all, "without a break it visits what walk visits, in the same order");
+    seen.clear();
+    let flow = root.try_walk(&mut |n| {
+        seen.push(n.id);
+        if n.id == NodeId(3) { ControlFlow::Break(n.id) } else { ControlFlow::Continue(()) }
+    });
+    assert_eq!(flow, ControlFlow::Break(NodeId(3)));
+    assert_eq!(seen, [NodeId(1), NodeId(2), NodeId(3)]);
+}
