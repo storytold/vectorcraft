@@ -225,6 +225,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::variables::ID, "Variables", "chart-column"),
     (crate::panels::script_console::ID, "Script Console", "message-circle"),
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
+    (crate::panels::discover::ID, "VectorCraft Help…", "search"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
@@ -421,6 +422,8 @@ pub struct UiState {
     /// The Learn panel's tab, skill and tutorial, kept while the app runs.
     #[serde(skip)]
     pub learn: crate::panels::learn::View,
+    #[serde(skip)]
+    pub discover: crate::panels::discover::View,
     /// The tool whose place a Learn tutorial step's link shows (`learn.locateTool`), while its mark
     /// is on screen. Not saved.
     #[serde(skip)]
@@ -1154,6 +1157,7 @@ impl Default for UiState {
             color_settings_scroll: false,
             find_font_in: String::new(),
             learn: Default::default(),
+            discover: Default::default(),
             learn_locate: None,
             learn_practice: Default::default(),
             learn_progress: Default::default(),

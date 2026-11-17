@@ -2,6 +2,117 @@ use super::*;
 use crate::theme;
 
 #[test]
+fn help_f1_opens_discover_without_a_document() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let (_, help) = menu_tree().into_iter().find(|(title, _)| *title == "Help").unwrap();
+    assert!(help.iter().any(|item| matches!(item, Item::Cmd("VectorCraft Help…", "help.discover", _))));
+    assert_eq!(shortcut_of("help.discover"), Some("F1"));
+    assert!(enabled(&app, "help.discover"));
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::F1)], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+    })
+    .textures_delta
+    .clear();
+    assert!(crate::panel_docking::showing(&app.ui, "discover"));
+    assert!(app.session.active().is_none());
+    app.run("help.discover", json!({})).unwrap();
+    assert!(crate::panel_docking::showing(&app.ui, "discover"));
+
+    let tools = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    let tool = tools["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle").unwrap();
+    let active_tool = app.session.tool_id();
+    let picked = app.run("help.discover.choose", json!({"index": tool})).unwrap();
+    assert_eq!(picked["result"]["id"], "rectangle");
+    assert!(app.ui.learn_locate.is_some());
+    assert_eq!(app.session.tool_id(), active_tool);
+    for _ in 0..2 {
+        ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::discover::show(&mut app, ui)).textures_delta.clear();
+    }
+    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        crate::panels::discover::show(&mut app, ui);
+    })
+    .textures_delta
+    .clear();
+    assert!(!crate::panel_docking::showing(&app.ui, "discover"));
+    app.run("help.discover", json!({})).unwrap();
+    app.run("help.discover.back", json!({})).unwrap();
+    assert_eq!(app.ui.discover.query, "rectangle");
+    assert!(app.ui.discover.selected.is_none());
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, "tool:rectangle", "Shift+9");
+    crate::shortcut_editor::sync(&app.ui);
+    let tools = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    assert!(tools["results"].as_array().unwrap().iter().any(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle" && hit["shortcut"] == "Shift+9"));
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+
+    let commands = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
+    let command = commands["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
+    app.run("help.discover.choose", json!({"index": command})).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert!(app.session.active().is_none());
+
+    let tutorial = crate::panels::learn::catalog::SKILLS[0].tutorials.first().unwrap();
+    let found = app.run("help.discover.search", json!({"query": tutorial.title})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tutorial" && hit["id"] == tutorial.id).unwrap();
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    assert!(app.session.active().is_none());
+    let text = crate::tests_labels::painted_text(&mut app, crate::panels::discover::show);
+    assert!(text.contains(tutorial.title), "{text}");
+    app.ui.discover.focus = true;
+    ctx.run_ui(egui::RawInput::default(), |ui| crate::panels::discover::show(&mut app, ui)).textures_delta.clear();
+    ctx.run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        crate::panels::discover::show(&mut app, ui);
+    })
+    .textures_delta
+    .clear();
+    assert!(!crate::panel_docking::showing(&app.ui, "discover"));
+
+    app.run("file.new", json!({})).unwrap();
+    app.run("help.discover", json!({})).unwrap();
+    app.select_tool(vectorcraft_tools::addons::polygonal_lasso::ID);
+    let view = app.view_info();
+    for (x, y) in [(40.0, 40.0), (80.0, 40.0)] {
+        let down = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Down, x, y);
+        let up = vectorcraft_tools::PointerEvent::new(vectorcraft_tools::PointerKind::Up, x, y);
+        app.session.pointer(&down, view).unwrap();
+        app.session.pointer(&up, view).unwrap();
+    }
+    assert!(app.session.tool_ends_on_escape(view));
+    let canvas_ctx = egui::Context::default();
+    canvas_ctx
+        .run_ui(egui::RawInput { events: vec![key(egui::Key::Escape)], ..Default::default() }, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+        })
+        .textures_delta
+        .clear();
+    assert!(!app.session.tool_ends_on_escape(view));
+    assert!(crate::panel_docking::showing(&app.ui, "discover"));
+}
+
+#[test]
+fn discover_rejects_invalid_search_and_selection_parameters() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    let before = app.ui.discover.query.clone();
+    for params in
+        [json!({}), json!({"query": null}), json!({"query": false}), json!({"query": "rectangle", "unknown": 1}), json!({"query": "a".repeat(1025)})]
+    {
+        assert!(app.run("help.discover.search", params).is_err());
+        assert_eq!(app.ui.discover.query, before);
+    }
+    for index in [json!(-1), json!(1.5), json!(1000000), json!("0"), Value::Null] {
+        assert!(app.run("help.discover.choose", json!({"index": index})).is_err());
+    }
+    app.run("help.discover.search", json!({"query": "   "})).unwrap();
+    assert!(app.ui.discover.results.is_empty());
+    assert!(app.run("help.discover.choose", json!({"index": 0})).is_err());
+}
+
+#[test]
 fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     assert!(app.ui.help_bar);

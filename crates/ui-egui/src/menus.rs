@@ -37,9 +37,6 @@ fn cp(label: &'static str, id: &'static str, p: Value) -> Item {
 fn todo(label: &'static str) -> Item {
     Item::Todo(label, "")
 }
-fn todos(label: &'static str, sc: &'static str) -> Item {
-    Item::Todo(label, sc)
-}
 fn sub(label: &'static str, items: Vec<Item>) -> Item {
     Item::Sub(label, items)
 }

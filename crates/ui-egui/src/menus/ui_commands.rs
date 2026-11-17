@@ -874,6 +874,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     (
+        "help.discover",
+        "VectorCraft Help…",
+        "F1",
+        "{query?: string (at most 1024 characters, VectorCraft's limit)} show the Help panel without toggling it closed; a supplied query searches tools, menu commands, and built-in tutorials; omission keeps the current search. Returns {query, results: [{kind: tool|command|tutorial, id, label, path, shortcut}], selected: index|null}",
+    ),
+    (
+        "help.discover.search",
+        "Search",
+        "",
+        "{query: string (at most 1024 characters, VectorCraft's limit)} search tools, menu commands, and built-in tutorials and show the Help panel; empty or whitespace-only text clears the results. Returns the help.discover result",
+    ),
+    (
+        "help.discover.choose",
+        "Select",
+        "",
+        "{index: zero-based result index} show a tool's location, a tutorial's steps in Help, or a command's menu path and shortcut without running it; an invalid index is an error. Returns {result: chosen result, location: tool location, tutorial id, or command path}",
+    ),
+    ("help.discover.back", "Back", "", "{} return from a Help result to its search results without changing the query"),
+    (
         "help.safeMode",
         "Safe Mode…",
         "",
