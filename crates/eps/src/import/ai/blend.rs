@@ -205,8 +205,9 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
     // The drawn steps as the check compares them, once.
     let drawn: Vec<Drawn> = drawn.iter().map(|d| drawn_as(d)).collect::<Option<_>>()?;
     // The orientations that lay the steps out as drawn (the check compares the steps' centers, which
-    // turning the steps along the spine leaves in place): the record's when it is one of them and
-    // also lays them out at their drawn sizes and turned as drawn, else the closest.
+    // turning the steps along the spine leaves in place). Of those that also lay them out at their
+    // drawn sizes and turned as drawn, the record's, else the closest; when none does, the closest
+    // of them all.
     let fits: Vec<(f64, BlendSpec, Vec<Node>)> = [BlendOrientation::AlignToPage, BlendOrientation::AlignToPath]
         .into_iter()
         .filter_map(|orientation| {
@@ -216,8 +217,12 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
             Some((off, spec, laid))
         })
         .collect();
-    let named = fits.iter().find(|(_, s, laid)| Some(s.orientation) == record.orientation && how_far(laid, &drawn, true).is_some());
-    named
+    let as_drawn: Vec<&(f64, BlendSpec, Vec<Node>)> = fits.iter().filter(|(_, _, laid)| how_far(laid, &drawn, true).is_some()).collect();
+    as_drawn
+        .iter()
+        .copied()
+        .find(|(_, s, _)| Some(s.orientation) == record.orientation)
+        .or_else(|| as_drawn.iter().copied().min_by(|a, b| a.0.total_cmp(&b.0)))
         .or_else(|| fits.iter().min_by(|a, b| a.0.total_cmp(&b.0)))
         .map(|(_, spec, _)| NodeKind::Blend { children: keys, spec: Box::new(spec.clone()) })
 }
@@ -873,17 +878,20 @@ mod tests {
             let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
             assert_eq!(spec.orientation, BlendOrientation::AlignToPage, "{named:?}");
         }
-        // Drawn turned, blue on the left: a record naming Align to Path keeps it.
+        // Drawn turned, blue on the left: the blend is Align to Path, whichever orientation the
+        // record names.
         let turned = |id: u64, x: f64| {
             let children = vec![square(id * 10, x, Color::rgb(0.0, 0.0, 1.0)), square(id * 10 + 1, x + 10.0, Color::rgb(1.0, 0.0, 0.0))];
             Arc::new(Node::new(NodeId(id), NodeKind::Group { children, clip: false }))
         };
         let steps = (0..5u32).map(|i| turned(30 + u64::from(i), 100.0 - f64::from(i) * 25.0)).collect();
         let drawn = Node::new(NodeId(5), NodeKind::Group { children: steps, clip: false });
-        let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: Some(BlendOrientation::AlignToPath) };
-        let mut budget = 100;
-        let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
-        assert_eq!(spec.orientation, BlendOrientation::AlignToPath);
+        for named in [BlendOrientation::AlignToPath, BlendOrientation::AlignToPage] {
+            let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: Some(named) };
+            let mut budget = 100;
+            let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
+            assert_eq!(spec.orientation, BlendOrientation::AlignToPath, "{named:?}");
+        }
     }
 
     /// Rectangles 20 pt wide and 10 pt high on a vertical spine, with their steps drawn upright: Align
