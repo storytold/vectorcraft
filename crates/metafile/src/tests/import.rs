@@ -527,9 +527,79 @@ fn a_file_with_more_objects_than_are_read_says_so() {
     let many = hand_emf(5000, 3000, &vec![rect.clone(); 200_010]);
     let back = import(&many).unwrap();
     assert_eq!(paths(&back.document).len(), 200_000);
-    assert!(back.warnings.iter().any(|w| w.contains("reached the most objects")), "{:?}", back.warnings);
+    assert!(back.warnings.iter().any(|w| w.contains("reached a limit")), "{:?}", back.warnings);
+    // Exactly as many as the reader keeps: nothing was left unread.
+    let full = import(&hand_emf(5000, 3000, &vec![rect.clone(); 200_000])).unwrap();
+    assert_eq!(paths(&full.document).len(), 200_000);
+    assert!(full.warnings.is_empty(), "{:?}", full.warnings);
     let few = import(&hand_emf(5000, 3000, &vec![rect; 3])).unwrap();
     assert!(few.warnings.is_empty(), "{:?}", few.warnings);
+}
+
+#[test]
+fn a_file_cut_short_by_another_limit_says_so() {
+    // SAVEDC past the 1,024 levels the reader keeps stops the parse: the rectangle after them is
+    // not read.
+    let mut records = vec![(43, le(&[0, 0, 100, 100]))];
+    records.extend(vec![(33, vec![]); 1100]);
+    records.push((43, le(&[200, 200, 300, 300])));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(paths(&back.document).len(), 1);
+    assert_eq!(
+        back.warnings,
+        vec!["the file or a picture inside it reached a limit on what one file may hold: what came after the limit was not read".to_string()]
+    );
+}
+
+#[test]
+fn images_the_reader_does_not_read_are_counted() {
+    let records = vec![(81, png_stretch_dibits(&png_claiming(1 << 13, 1 << 13))); 2];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(back.warnings, vec!["2 images that couldn't be read were left out".to_string()]);
+    let back = import(&hand_emf(5000, 3000, &records[..1])).unwrap();
+    assert_eq!(back.warnings, vec!["1 image that couldn't be read was left out".to_string()]);
+}
+
+#[test]
+fn clips_that_are_not_applied_are_counted() {
+    // BEGINPATH, a rectangle, ENDPATH, SELECTCLIPPATH with RGN_XOR (3), then a rectangle drawn after it.
+    let records = vec![(59, vec![]), (43, le(&[100, 100, 2000, 2000])), (60, vec![]), (67, le(&[3])), (43, le(&[500, 500, 600, 600]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(paths(&back.document).len(), 1);
+    assert_eq!(
+        back.warnings,
+        vec!["1 clip couldn't be applied as the file sets it: what is drawn after it may show more or less than the file does".to_string()]
+    );
+    // RGN_AND (1) is applied.
+    let mut records = records;
+    records[3] = (67, le(&[1]));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
+}
+
+/// An EMR_BITBLT of the 100 × 100 box at the origin with `rop` and no source bitmap.
+fn bitblt(rop: u32) -> Vec<u8> {
+    // Bounds; destination; the operation; the source origin, transform (identity) and background
+    // color; usage, then no BITMAPINFO and no bits.
+    let mut body = vec![0; 16];
+    body.extend(le(&[0, 0, 100, 100, rop as i32, 0, 0]));
+    body.extend(le_f32(&[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+    body.extend(le(&[0, 0, 0, 0, 0, 0]));
+    body
+}
+
+#[test]
+fn raster_operations_that_are_not_played_are_counted() {
+    // DSTINVERT and PATINVERT take no source bitmap and are left out.
+    let records = vec![(76, bitblt(0x0055_0009)), (76, bitblt(0x005A_0049))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(
+        back.warnings,
+        vec!["2 raster operations other than a plain copy (masks, inversions) were drawn as a plain copy or left out".to_string()]
+    );
+    // WHITENESS is played.
+    let back = import(&hand_emf(5000, 3000, &[(76, bitblt(0x00FF_0062))])).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
 }
 
 /// An EMR_STRETCHDIBITS copying `png` (a BI_PNG bitmap) to a 10 × 10 box.
