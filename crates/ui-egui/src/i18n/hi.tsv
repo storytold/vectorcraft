@@ -1289,6 +1289,8 @@ antiAlias	Sharp	शार्प
 	Delete Artboard	आर्टबोर्ड हटाएँ
 	Delete Artboards	आर्टबोर्ड्स हटाएँ
 	Delete Brush	ब्रश हटाएँ
+	Delete Color	रंग हटाएँ
+	Restore Generated Table	जनरेट की गई तालिका पुनर्स्थापित करें
 	Delete Character Style	कैरेक्टर स्टाइल हटाएँ
 	Delete Data Set	डेटा सेट हटाएँ
 	Delete Data Sets	डेटा सेट्स हटाएँ
@@ -6859,6 +6861,7 @@ antiAlias	Sharp	शार्प
 @msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile: "{profile}" नाम की कोई RGB या CMYK प्रोफ़ाइल नहीं है
 @msg	colorMode must be rgb or cmyk, not `{m}`	colorMode को rgb या cmyk होना चाहिए, `{m}` नहीं
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel को {own} (डॉक्यूमेंट का मोड), grayscale या bitmap होना चाहिए
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: रंग तालिका में कम से कम एक रंग रहना चाहिए
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" जैसा रंग नहीं है
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: अधिकतम {MAX_TABLE} रंग
 @msg	colour groups can't go into colour groups	रंग समूह रंग समूहों में नहीं जा सकते हैं

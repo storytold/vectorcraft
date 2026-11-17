@@ -769,6 +769,8 @@ font-technology	Variable	Değişken
 	Delete Artboard	Çalışma Yüzeyini Sil
 	Delete Artboards	Çalışma Yüzeylerini Sil
 	Delete Brush	Fırçayı Sil
+	Delete Color	Rengi Sil
+	Restore Generated Table	Oluşturulan Tabloyu Geri Yükle
 	Delete Character Style	Karakter Stilini Sil
 	Delete Empty Artboards	Boş Çalışma Yüzeylerini Sil
 	Delete Freeform Point	Serbest Biçim Noktasını Sil
@@ -4661,6 +4663,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	choose a folder to export to	dışa aktarılacak bir klasör seçin
 @msg	choose a location for the package	paket için bir yer seçin
 @msg	clipboard is empty	pano boş
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: renk tablosunda en az bir renk kalmalı
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`, "#ff8800" gibi bir renk değil
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: en fazla {MAX_TABLE} renginde
 @msg	command `{0}` is not available right now: {1}	`{0}` komutu şu anda kullanılamıyor: {1}

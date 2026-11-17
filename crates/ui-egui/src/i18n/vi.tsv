@@ -915,6 +915,8 @@ font-technology	Variable	Biến thiên
 	Delete Artboard	Xóa bảng vẽ
 	Delete Artboards	Xóa các bảng vẽ
 	Delete Brush	Xóa cọ
+	Delete Color	Xóa màu
+	Restore Generated Table	Khôi phục bảng đã tạo
 	Delete Character Style	Xóa kiểu ký tự
 	Delete Data Set	Xóa tập dữ liệu
 	Delete Design	Xóa thiết kế
@@ -5007,6 +5009,7 @@ theme	Appearance	Giao diện
 @msg	choose the font files to add	hãy chọn các tệp phông chữ để thêm
 @msg	clipboard is empty	khay nhớ tạm trống
 @msg	closing needs three anchors	đóng đường dẫn cần ba điểm neo
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: phải giữ lại ít nhất một màu trong bảng màu
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` không phải là màu như "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: tối đa {MAX_TABLE} màu
 @msg	column must be true or a number from 1	column phải là true hoặc số từ 1

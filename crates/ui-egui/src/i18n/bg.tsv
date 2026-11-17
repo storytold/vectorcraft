@@ -768,6 +768,8 @@ font-technology	Variable	Променливи
 	Delete Artboard	Изтриване на работна област
 	Delete Artboards	Изтриване на работни области
 	Delete Brush	Изтриване на четка
+	Delete Color	Изтриване на цвят
+	Restore Generated Table	Възстановяване на генерираната таблица
 	Delete Character Style	Изтриване на стил за знаци
 	Delete Empty Artboards	Изтриване на празни работни области
 	Delete Freeform Point	Изтриване на свободна точка
@@ -4583,6 +4585,7 @@ axis	Both	И двете
 @msg	choose a folder to export to	изберете папка за експортиране
 @msg	choose a location for the package	изберете местоположение за пакета
 @msg	clipboard is empty	клипбордът е празен
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: поне един цвят трябва да остане в цветовата таблица
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
