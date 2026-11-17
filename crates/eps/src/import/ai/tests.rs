@@ -10397,11 +10397,11 @@ fn a_brushs_art_places_a_version_7_patterns_tiles_with_its_operands() {
     };
     let plain = placed("0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]");
     // The operands and the move they make from the plain placement (a b c d e f): those of
-    // `a_pattern_fill_applies_its_offset_scale_rotation_reflection_and_shear` with y down, as the
-    // art's space has it.
+    // `a_pattern_fill_applies_its_offset_scale_rotation_reflection_and_shear` in the file's own
+    // space (y up), since a Scatter brush's art is turned over with its tiles.
     let cases = [
-        ("10 15 1 1 0 0 0 0 0 [1 0 0 1 0 0]", [1.0, 0.0, 0.0, 1.0, 10.0, -15.0]),
-        ("-5 7 2 .5 -45 0 0 -15 45 [1 0 0 1 0 0]", [1.793151, 0.353553, -1.035276, 0.353553, -5.0, -7.0]),
+        ("10 15 1 1 0 0 0 0 0 [1 0 0 1 0 0]", [1.0, 0.0, 0.0, 1.0, 10.0, 15.0]),
+        ("-5 7 2 .5 -45 0 0 -15 45 [1 0 0 1 0 0]", [1.793151, -0.353553, 1.035276, 0.353553, -5.0, 7.0]),
     ];
     for (ops, want) in cases {
         let got = (placed(ops) * plain.inverse()).as_coeffs();
@@ -11298,6 +11298,42 @@ fn a_scatter_brushs_copies_are_its_art_turned_over() {
     assert_eq!(up.len(), 3, "{up:#?}");
     assert!(filled(&up, -2.0, 40.0) && !filled(&up, 2.0, 40.0), "the wide block is left of the line");
     assert!(filled(&up, 2.0, 55.0) && !filled(&up, 2.0, 25.0), "the narrow block is right of it, at the copy's bottom");
+}
+
+/// A pattern fill in a Scatter or Art brush's art is turned over with the art: the tiles keep their
+/// place on the art. The section fills a 40 by 8 rectangle with an 8-point tile placed with the
+/// identity, so the tile's top left is at the rectangle's top left in the section (y up).
+#[test]
+fn a_pattern_fill_in_brush_art_turns_over_with_the_art() {
+    let still = "2 /Tiled art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0";
+    let ribbon = "2 / Tiled art/ / / / / 0 0/ 5 0 0 0 /  1 1 1 0 1 0 0 0 1 1 0 0 0 0 1";
+    let section = format!(
+        "%AI8_BeginBrushPattern\n(Tiled art)\n0 A\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n%AI8_EndBrushPattern\n",
+        rect_path(0.0, 0.0, 40.0, 8.0)
+    );
+    let def = format!("{DOTS}{section}{}{}", plugin_object(SCATTER, "Spray", still), plugin_object(ART_BRUSH, "Ribbon", ribbon));
+    let r = read_ok(&format!("{def}{}", layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
+    let lib = vectorcraft_brush::library(&r.doc);
+    for name in ["Spray", "Ribbon"] {
+        let b = lib.iter().find(|b| b.name == name).unwrap_or_else(|| panic!("{name}: {lib:?}"));
+        let art = match &b.kind {
+            vectorcraft_brush::BrushKind::Scatter(s) => &s.art,
+            vectorcraft_brush::BrushKind::Art(a) => &a.art,
+            k => panic!("{name}: {k:?}"),
+        };
+        let mut found = None;
+        art.walk(&mut |n| {
+            if let (Some(_), Paint::Pattern { xf, .. }) = (n.path_data(), fill(n)) {
+                found = Some((n.geometric_bounds(), xf));
+            }
+        });
+        let Some((Some(bounds), xf)) = found else { panic!("{name}: {art:#?}") };
+        // The art is turned over (y up again): the tile's top left (0, 0) and its dot (4, 4), in
+        // the tile's space with y down, are at the rectangle's top left and 4 below it.
+        assert_eq!(bounds, Rect::new(0.0, 0.0, 40.0, 8.0), "{name}");
+        assert!((xf * Point::ZERO - Point::new(0.0, bounds.y1)).hypot() < 1e-9, "{name}: {xf:?}");
+        assert!((xf * Point::new(4.0, 4.0) - Point::new(4.0, bounds.y1 - 4.0)).hypot() < 1e-9, "{name}: {xf:?}");
+    }
 }
 
 use read::{GRAPH_PLAIN, GRAPH_UNENDED};

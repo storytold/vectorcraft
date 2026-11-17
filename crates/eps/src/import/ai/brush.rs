@@ -63,7 +63,7 @@ use std::sync::Arc;
 use kurbo::Affine;
 use vectorcraft_brush::{ArtBrush, ArtScale, Bristle, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
+use vectorcraft_doc::{AppearanceItem, Node, NodeKind, Scaling};
 
 use super::lex::{Lexer, Tok};
 use super::obj::Names;
@@ -475,10 +475,11 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
     Ok(BrushDraft { name: name.to_string(), kind })
 }
 
-/// Turn `art` over (y for -y) with the art of all its opacity masks, those that don't move with
-/// their objects too: the art changes the space it is in, and no object moves over its mask.
+/// Turn `art` over (y for -y) with its pattern fills' tiles and the art of all its opacity masks,
+/// those that don't move with their objects too: the art changes the space it is in, and no object
+/// moves over its tiles or its mask.
 pub(crate) fn turn_over(art: &mut Node) {
-    art.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+    art.transform(Affine::scale_non_uniform(1.0, -1.0), Scaling { patterns: true, ..Scaling::default() });
     turn_unlinked_masks(art);
 }
 
