@@ -4474,6 +4474,7 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
+	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
 	Section Symbol	章節符號

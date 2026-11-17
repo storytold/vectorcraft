@@ -4480,6 +4480,7 @@ antiAlias	Sharp	शार्प
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
+	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
