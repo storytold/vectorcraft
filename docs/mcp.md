@@ -1072,7 +1072,9 @@ given and the swatch already has keeps its model, as does a stop color that `pai
 gradient already has; a stop that names a swatch takes the swatch's color as it is, and `swatch.new` or `swatch.edit`
 with `mode` converts a color into that mode only. RGB documents keep colors as given. Harmonies, Edit
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
-`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
+`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. An entry of `swatch.new {colors}` or
+`swatch.newGroup {colors}` may be `{swatch, tint}`: a tint of a global or spot color below 100% becomes a tint swatch
+("Name 40%") linked to it, as the Color Guide panel saves the tints of a spot color base. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
 Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
 (shades, cool or muted on the left, tints, warm or vivid on the right). With `limitTo` (a swatch library id or name,
 or `"document"` for the document's swatches) every colour snaps to the library's nearest colour (ΔE 2000), as the
@@ -1260,6 +1262,10 @@ exporter plug-in's parameters. Other formats are written at once. OK writes the 
 OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). Any
 option skips the options dialog, but without `path` the save panel still picks the file. To write without a
 dialog, pass `path`. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
+In the Save PDF dialog, `ui.dialogReset {}` (Cancel while Alt, or Option on macOS, is held) puts every option back to
+the chosen preset's settings, clears the passwords, and leaves the dialog open with its preset, path, artboard range and
+section; `answer_dialog {action: "cancel"}` still closes it without saving. If the chosen saved preset was deleted
+while the dialog is open, `ui.dialogReset` returns an error naming it and leaves every field, passwords included, as it is.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -1273,6 +1279,12 @@ snapped to pixels) and, for PNG, `interlaced`. `width` or `height` sets the size
 pixels per point, and the file stores the resolution that results, as with `ppi`. `width` wins over `height`, and
 either one wins over `ppi` and `scale`. A value that is not a positive number is refused. Export for Screens rows keep
 their own size (`scale: "512w"`).
+
+WebP is lossless by default (`lossless: true`). `{"format": "webp", "lossless": false, "quality": 60}` writes a lossy
+WebP file: `quality` runs from 0 to 100 (default 90, VectorCraft's own value), and a higher value keeps more detail in
+a larger file. A lossy file keeps the alpha exactly when some pixels are not opaque. A WebP `quality` above 100, or one
+that is not a whole number, is refused; a lossless file ignores `quality`. Export for Screens takes both in a WebP row
+or in `settings.webp`.
 
 `shape.ellipse` (and `draw_shape` with `shape: "ellipse"`) takes `anchors`, the number of smooth anchors (default 4).
 Without it, or at 4, it draws a live ellipse. Any other count from 2 to 1000 draws a closed plain path with that many
@@ -3246,7 +3258,7 @@ own layout rules.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
+Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
 the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
@@ -3606,7 +3618,10 @@ already walks Image Trace. Short agent entry points:
   a straight Pencil line too, or with Alt held at the release. The stroke's end then joins the other end when it is
   within four times the Fidelity of it (at least 6 pt and at most 400 pt), and a straight segment closes the path from
   farther away. Without `closed`, the stroke closes the path when it ends within that four-times-Fidelity distance. The
-  Blob Brush's `path.blob` Fidelity stays in points, 0.01 to 100 pt.
+  Blob Brush's `path.blob` Fidelity stays in points, 0.01 to 100 pt, and is
+  not used when left out or null. `path.blob` rejects a `fidelity` outside 0.01 to 100 pt, an `angle` outside -180° to
+  180° and a `roundness` outside 0% to 100% with an error such as `` `angle` must be from -180 to 180 degrees ``; the
+  document does not change and no undo step is recorded. These ranges are VectorCraft's own values.
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|image|graph}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`
   (`variable.bind` and `variable.makeTextDynamic` refuse type that already has another text variable and name it),
@@ -6045,6 +6060,11 @@ These commands refuse a string, a number or another value that is not true or fa
 in `path.curvatureEdit`; `perpendicular` in `path.reshapeSegment`; and `keepSelected`, `mergeOnlySelection` and
 `merge` in `path.blob`. A null is read as a key left out.
 
+`path.freehand` (and `brush.freehand`, which runs it) refuses a `style` other than "pencil" or "brush" with
+`style must be "pencil" or "brush"`, and an `end` of `extend` other than "start" or "end" with
+`extend end must be "start" or "end"`; the document does not change and no undo step is recorded. Left out or null,
+`style` is "pencil" and the `end` of `extend` is "end".
+
 A `pointer_gesture` with `mods: {cmd: true}` held at the press, with any tool but the selection tools (Command on
 macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`), or Direct Selection with the Pen,
 Curvature and anchor tools until one is chosen; the release gives the tool back as it was, so the Pen goes on drawing
@@ -7548,7 +7568,7 @@ nothing. Opening a document reads a DCS file and its plates again even with the 
 keeps the saved preview of other linked EPS files. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
 mixed into CMYK (each ink amount times the ink's CMYK values, plates combined as `1 − (1 − a)(1 − b)`); Separations
 Preview and `file.print` separations show each plate on its own ink, and a spot plate prints as the document's swatch
-of its ink (else its CMYK values) with `spotsToProcess`. Separations Preview shows a reduced image's plates as the
+of its ink (else its CMYK values) with `spotsToProcess` or that ink's own `convertToProcess`. Separations Preview shows a reduced image's plates as the
 mean of the plate pixels each shown pixel covers. A file may name 64 plates, a plate file may be 1 GB, and the plates together may hold 512 MB of
 ink amounts; a plate that can't be read is an error naming the plate, and nothing is placed. The plates go on the first
 plate's pixel grid, grown to hold every plate where it prints; a plate of another size or position is resampled onto
@@ -8634,7 +8654,9 @@ picked as the printer, File → Print saves the PDF instead (see Printing). Head
 `{pages, path | dataBase64, bytes, warnings}`; `print.preview {settings?}`
 answers what it would print without writing it: `{pages (copies included), sheets: [{artboard, tile?, ink?, width,
 height, orientation, scale}] (one copy, in order), tiles: [{artboard, columns, rows, printed, tiles}] (document
-space), inks: [{name, spot, print, frequency, angle}], warnings, settings}`. `print.setup {settings?}` saves the
+space), inks: [{name, spot, print, frequency, angle}] (the plates), documentInks: [{name, spot, print, frequency,
+angle, convertToProcess?}] (every ink of the document, the spot inks printing as process included), warnings,
+settings}`. `print.setup {settings?}` saves the
 settings with the document (one undo step, kept in the native file as `print_setup`); both other commands start from
 the saved settings, or from a print preset's with `preset` (see Print presets), with `settings` over them (`null` keeps
 a value). `list_commands` with filter `print.setup`
@@ -8664,17 +8686,29 @@ documents every field:
 - `marks` and `bleed` as `document.exportPdf` takes them (the bleed is the document's unless `useDocument: false`),
   drawn around the artboard at the paper's scale; the page information adds the tile and the ink with its screen.
 - `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, overprintBlack,
-  inks: [{name, print, frequency, angle}]}`: separations print one page per ink in the gray of its coverage (images
-  too; overprinting fills, strokes and characters don't knock out), Registration on every plate; emulsion down mirrors
-  the page and a negative inverts it.
+  inks: [{name, print, frequency, angle, convertToProcess}]}`: separations print one page per ink in the gray of its
+  coverage (images too; overprinting fills, strokes and characters don't knock out), Registration on every plate;
+  emulsion down mirrors the page and a negative inverts it.
+- `output.inks[].convertToProcess` (default false) prints one spot ink as process inks: it gets no plate of its own,
+  and its color prints on the Cyan, Magenta, Yellow and Black plates, while other spot inks keep their plates. The
+  Print dialog's Document Ink Options list shows an icon before each spot ink's name, and a click on it switches that
+  ink between spot and process output, as
+  [the help page](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes for single
+  spot colors. The rest is VectorCraft's own rule. `spotsToProcess` converts every spot ink whatever each one's
+  own setting says, and the dialog then dims the icons; turning it off again applies each ink's own setting. A
+  converted ink's `print`, `frequency` and `angle` are kept for when it prints as a spot ink again, and its Print
+  checkbox and fields are dimmed: `print: false` does not leave its color out of the process plates. Process inks and
+  Registration have no icon, and `convertToProcess` on a process ink is ignored with a setting note.
 - `output.overprintBlack` (default false) makes black ink overprint in separations, as the Output step of
   [Print color separations](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes:
   black art leaves the inks under it on the other plates. Which paints count as black is VectorCraft's own rule: a
   fill, stroke or character paint of solid 100% process K or 100% gray, or a gradient whose every stop is (every
   color point of a freeform gradient), each to within half a percent (99.5% K counts, and so does 0.4% cyan beside
-  it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration still
-  knock out. A symbol instance's art is judged with the paints the instance prints it in, its own fill and stroke
-  changes and its fill's stain included. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
+  it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration are not
+  marked, and paints already set to overprint keep that setting. A symbol instance's art is judged with the paints the
+  instance prints it in, its own fill and stroke changes and its fill's stain included. An instance that print leaves
+  unplaced, because placing its art would take the printed art past 16,000,000 objects or draw it deeper than 128
+  levels, is judged by its symbol's own art instead. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
   output ignores the option, and the Print dialog's Overprint Black checkbox is disabled unless Mode is Separations.
 - `graphics: {autoFlatness, flatness, fonts}` and `color: {intent, preserveNumbers}` (the intent colours separate
   with; without preserveNumbers CMYK colours are separated again).
@@ -8962,6 +8996,25 @@ file size), `seconds` to download at `kbps` (default 56.6), the size, and for pa
 (`colors: [{color, source, transparent, locked, webShifted, webSafe}]`). The colour table's lists name colours by
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
 previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
+
+Optimize to File Size (the dialog's button under Preset) is `webExport.optimizeToFileSize {desiredK, startWith?,
+use?, slice?, …settings}`. It searches for settings whose files fit in `desiredK` K (1 K is 1024 bytes; above 0, at
+most 1048576) and returns them without writing a file or changing the remembered settings: `{targetBytes, achieved,
+bytes, format, settings, trials, images, warnings}`. `startWith: current` (the default) keeps the format and takes the
+highest JPEG quality (1 to the current quality) or the most GIF/PNG-8 colors (2 to the current count) that fit,
+measured by encoding. A lower value can give a larger file, so the search measures up to 6 values spread over the
+range, from the top down, and then narrows the step above the first one that fits. When no value measured fits, GIF
+tries lossy 100 with the most colors that fit. PNG-24 has no
+setting to lower. `startWith: auto` takes GIF for art with transparent pixels or at most 256 colors and JPEG
+otherwise. With `transparency: false` it counts the colors the pixels have once blended over the matte, as the file
+is written. For opaque art it tries the other format when the first one cannot reach the size. `use: allSlices` (the
+default) measures the image, or the image slices' files together; `eachSlice` measures the largest slice file;
+`currentSlice` measures `slice` (a number from `slice.list`), else the selected image slice, else the first. The
+slices share one setting, so every `use` changes the setting of all of them. The search encodes at most 32 trial
+settings. When none fits, `achieved` is false and `settings` are the smallest trial. A `desiredK` that is missing,
+not a number, 0 or less or above 1048576 is an error, as are an unknown `startWith` or `use` and a `slice` that is
+not a slice number or comes with another `use`. In the dialog, the desired size starts at the size of what Total of All
+Slices measures with the current settings, rounded up to 0.001 K.
 
 Presets: `webExport.presets.list` (built-in ones, then saved ones), `webExport.presets.save {name, newName?, …settings}`,
 `webExport.presets.delete {name}`; any name works as `preset` in the other commands (its settings, then the keys
@@ -9348,7 +9401,7 @@ layers are refused.
   destination or output intent is refused. Transparency is flattened before writing.
 - **pdfX3** (PDF/X-3:2002, written as PDF 1.3): colours are tagged with ICC profiles; transparency is flattened.
 - **pdfX4** (PDF/X-4:2010, PDF 1.6 at most): transparency and layers are kept, colours are tagged, and the XMP metadata
-  names the standard.
+  names the standard and has an `xmp:MetadataDate` equal to its `xmp:ModifyDate`.
 
 Flattening uses `flattenerPreset` (default High Resolution, see PDF 1.3 above) on a copy (the document is untouched; a
 warning says so), and images with see-through pixels count as transparency. The written file is checked against
@@ -11455,7 +11508,9 @@ it while the drag sizes the halo: the halo's radius keeps the ratio to the point
 went down, through `growth` within 0 to 300 %. Letting the key go sizes the center with the drag again, and the flare
 keeps the new `growth`. While the rings' end point is placed, Up and Down Arrow add and remove rings (0 to 50; with
 Rings off they do nothing), and each press of backquote (the ~ key; a pointer event's `backquote` turning true) sends a
-new `ringSeed`, which moves the rings along the path and keeps their count and sizes. Each new flare starts from the
+new `ringSeed`, which moves the rings along the path and keeps their count and sizes. In VectorCraft, small seed
+values, including 0, distribute the first ring along the path; the same seed and parameters reproduce the same
+positions. Each new flare starts from the
 options' counts and growth, without a `ringSeed`. The Artboard tool's are the active artboard's Artboard Options
 (dialog `artboardOptions`; the Artboard tool's active artboard while it is in use, else the window's; its `x` and `y`
 are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the

@@ -111,7 +111,7 @@ When the interface thread stays in one part of a frame for 3 s (VectorCraft's ow
 
 ## macOS: the menu bar
 
-On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search icon and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
+On macOS the menus live in the system menu bar, not in the window's app bar (which keeps the brand mark, Home, the search field and the workspace switcher next to the traffic lights, centred on the bar by `apps/vectorcraft/src/mac_window.rs`). `--in-window-menus` or `VECTORCRAFT_IN_WINDOW_MENUS=1` keeps them in the window, as on Windows, Linux and the web; so does a menu bar AppKit refuses to build (logged). `ui.inspect` says which with `nativeMenuBar`.
 
 - **One menu model.** `crates/ui-egui/src/native_menu.rs` (platform-free, tested on every platform) builds the menu bar from the in-window menus (`menus::menu_tree`, each item through `menus::entry`, which the in-window menus draw too) and lays it out the Mac way: the VectorCraft menu holds About, Settings ▸ (one item per Preferences page, General… ⌘K), Language ▸, Appearance ▸ (UI brightness), Services, Hide VectorCraft ⌃⌘H (⌘H stays View › Hide Edges), Hide Others ⌥⌘H, Show All and Quit ⌘Q (the app's own `app.quit`, so unsaved documents are asked about); those leave Edit and Help. The in-window bar itself never shows the VectorCraft menu (it starts at File, as in Illustrator, on every platform): Language and Appearance have no in-window menu and are synthesized in `mac_layout`, and Quit is File › Exit in the window, relabelled to Quit in the App menu. Window starts with Minimize ⌃⌘M and Zoom and ends with Bring All to Front, and Help is the system's Help menu (its search field). A system key a command (or a user's shortcut) already has stays the command's, and the log says so.
 - **The native side** is `apps/vectorcraft/src/mac_menu.rs`: muda (`=0.21.1`, default features off, macOS only, no `unsafe`) builds the `NSMenu`s. Labels, enabled and checked are updated in place when anything they show may have changed (a command ran, the document, its history or selection changed, a click or a key press); a change of structure (a recent file, the language, a shortcut) rebuilds the menus. While an interaction is open (for example a move, scale or shape drag, a dialog's preview or the font menu's preview), the app updates them for the document's changes only when the interaction begins and when it ends.
@@ -297,7 +297,11 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   control channel, MCP and tests read them) and are translated only where the status bar draws them
   (`i18n::msg`). `@msg` catalog rows hold a whole message or a template such as
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
-  placeholders are translated in turn (the reason after `: {e}` is often a message too). A value that starts with
+  placeholders are translated in turn (the reason after `: {e}` is often a message too). A template needs text
+  between any two placeholders, since the catalog cannot tell where `{a}{b}` splits: make the message with the
+  side-by-side values joined into one (`unknown parameter `{key}``, where `key` is `marks.ofset`). The catalog
+  leaves out a row whose template has two placeholders in a row or no text; `i18n::tests` fails on such a row
+  and on such a message, and the untranslated report counts it as missing. A value that starts with
   `{` is translated only when it has an exact row, so a JSON object stays as it is; a value that starts with `[` is
   also matched against a template that starts with `[` and an index of digits, such as an effect's refusal
   ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
