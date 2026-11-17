@@ -6823,7 +6823,8 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `interpolateControlPoints` (General › Interpolate Control Points When Moving Anchors, off by default): the default of
   the `interpolate` param of `path.moveAnchors` (a Direct Selection drag), `object.nudge` (the arrow keys),
   `object.move`, `object.transform` and `object.transformAgain`. It applies when they move direct-selected anchors
-  without turning or scaling them; `object.setBounds` and `guide.move` follow the preference when they move anchors.
+  without turning or scaling them. `object.setBounds` (only `x` or `y` changed) and `guide.move` (with art selected
+  too) take the same param and follow the preference when they move direct-selected anchors.
   On, both handles of each segment with one moved end are re-mapped by the turn, uniform scale and move that take the
   segment's old ends to its new ends, so a segment between two corner anchors keeps its shape relative to its ends. A
   segment with both ends moved, or with its ends at the same place before or after the move, moves as it does with the

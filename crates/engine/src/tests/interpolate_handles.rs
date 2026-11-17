@@ -217,6 +217,63 @@ fn move_and_transform_of_anchors_re_map_the_handles_in_one_undo_step() {
 }
 
 #[test]
+fn set_bounds_and_guide_move_of_anchors_follow_the_preference_and_the_param() {
+    for (pref, param, re_mapped) in [(false, None, false), (true, None, true), (true, Some(false), false), (false, Some(true), true)] {
+        for cmd in ["object.setBounds", "guide.move"] {
+            let mut s = session();
+            interpolate(&mut s, pref);
+            let id = curve(&mut s);
+            select(&mut s, id, json!([[0, 0]]));
+            let mut params = if cmd == "object.setBounds" {
+                json!({"x": 120, "y": 108})
+            } else {
+                let g = s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap()["index"].as_u64().unwrap();
+                s.execute("guide.select", &json!({"indexes": [g], "toggle": true})).unwrap();
+                json!({"dx": 20, "dy": 8})
+            };
+            if let Some(on) = param {
+                params["interpolate"] = json!(on);
+            }
+            let (before, original) = (history(&s).0, path_of(&s, id));
+            s.execute(cmd, &params).unwrap();
+            assert_eq!(history(&s).0, before + 1, "{cmd}: one undo step");
+            let (a, b) = (anchor(&s, id, 0), anchor(&s, id, 1));
+            assert_eq!(a.p, Point::new(120.0, 108.0), "{cmd}");
+            if re_mapped {
+                close(a.h_out, Point::new(165.0, 106.0));
+                close(b.h_in, Point::new(255.0, 102.0));
+            } else {
+                assert_eq!((a.h_out, b.h_in), (Point::new(170.0, 108.0), Point::new(250.0, 100.0)), "{cmd}, pref {pref}, param {param:?}");
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(path_of(&s, id), original, "{cmd}: undone");
+        }
+    }
+    let mut s = session();
+    let id = curve(&mut s);
+    // Both anchors, so that a new width scales them and does not only move them.
+    select(&mut s, id, json!([[0, 0], [0, 1]]));
+    s.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    let original = path_of(&s, id);
+    for (cmd, params) in [
+        ("object.setBounds", json!({"x": 120, "interpolate": "yes"})),
+        ("object.setBounds", json!({"width": 50, "interpolate": 1})),
+        ("guide.move", json!({"dx": 1, "interpolate": "yes"})),
+    ] {
+        let e = s.execute(cmd, &params).unwrap_err().to_string();
+        assert!(e.contains("`interpolate` must be true or false"), "{cmd}: {e}");
+    }
+    assert_eq!(path_of(&s, id), original);
+    // With only guides selected, guide.move rejects the value too and leaves the guide.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let e = s.execute("guide.move", &json!({"dx": 1, "interpolate": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("`interpolate` must be true or false"), "guide.move: {e}");
+    assert_eq!(s.doc().unwrap().doc.ruler_guides()[0].pos, 50.0);
+}
+
+#[test]
 fn the_interpolate_param_overrides_the_preference_and_rejects_other_values() {
     for (pref, param, re_mapped) in [(true, false, false), (false, true, true)] {
         let mut s = session();
