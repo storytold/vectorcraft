@@ -5503,6 +5503,8 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Ricarica la pagina per continuare (le modifiche non ancora salvate potrebbero andare perse).
 @msg	tool (a tool id) is required	tool (un id di strumento) è obbligatorio
 @msg	{tool} isn't in a toolbar group of several tools	{tool} non fa parte di un gruppo di più strumenti nella barra degli strumenti
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	la Modalità presentazione nasconde le barre degli strumenti: cambia la modalità schermo per mostrarle
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ha nascosto le barre degli strumenti: premi Tab per mostrarle
 @msg	onto must name a panel floating in another group	onto deve indicare un pannello mobile in un altro gruppo
 @msg	below and above must name a panel floating in another group	below e above devono indicare un pannello mobile in un altro gruppo
 @msg	give only one of onto, below and above	indica solo uno tra onto, below e above

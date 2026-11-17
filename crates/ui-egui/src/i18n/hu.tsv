@@ -6247,6 +6247,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	az eszköz nincs többeszközös eszköztár-csoportban: {tool}
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	a Bemutató mód elrejti az eszköztárakat: a megjelenítésükhöz váltson képernyőmódot
+@msg	Tab has hidden the toolbars: press Tab to show them	a Tab elrejtette az eszköztárakat: a megjelenítésükhöz nyomja meg a Tab billentyűt
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	a tömörített fájl kicsomagolva nagyobb lenne, mint amennyit a VectorCraft beolvas ({_1} MB dokumentum, képenként {_2} MB)
 @msg	the document is too large to save compressed ({0}): save it with Use Compression off	a dokumentum túl nagy a tömörített mentéshez ({0}): mentsd a Tömörítés használata beállítás kikapcsolásával
 @msg	the file stopped being read (please report this bug)	a fájl beolvasása megszakadt (kérjük, jelentsd ezt a hibát)

@@ -7250,6 +7250,8 @@ font-technology	Variable	ცვლადი
 @msg	Reload the page to go on (changes not saved yet may be lost).	გასაგრძელებლად გადატვირთეთ გვერდი (ჯერ შეუნახავი ცვლილებები შეიძლება დაიკარგოს).
 @msg	tool (a tool id) is required	tool (ხელსაწყოს id) აუცილებელია
 @msg	{tool} isn't in a toolbar group of several tools	{tool} რამდენიმე ხელსაწყოს მქონე ხელსაწყოთა ჯგუფში არ არის
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	პრეზენტაციის რეჟიმი მალავს ხელსაწყოთა ზოლებს: მათ საჩვენებლად შეცვალეთ ეკრანის რეჟიმი
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab-მა დამალა ხელსაწყოთა ზოლები: მათ საჩვენებლად დააჭირეთ Tab-ს
 @msg	onto must name a panel floating in another group	onto უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	below and above must name a panel floating in another group	below და above უნდა ასახელებდეს სხვა ჯგუფში მცურავ პანელს
 @msg	give only one of onto, below and above	მიუთითეთ მხოლოდ ერთი: onto, below ან above

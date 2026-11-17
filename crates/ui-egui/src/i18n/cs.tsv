@@ -5767,6 +5767,8 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Pokračujte obnovením stránky (dosud neuložené změny se mohou ztratit).
 @msg	tool (a tool id) is required	tool (ID nástroje) je povinný
 @msg	{tool} isn't in a toolbar group of several tools	{tool} není ve skupině panelu nástrojů s více nástroji
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Režim prezentace skrývá panely nástrojů: zobrazíte je změnou režimu obrazovky
+@msg	Tab has hidden the toolbars: press Tab to show them	Klávesa Tab skryla panely nástrojů: zobrazíte je stisknutím klávesy Tab
 @msg	onto must name a panel floating in another group	onto musí určovat panel plovoucí v jiné skupině
 @msg	below and above must name a panel floating in another group	below a above musí určovat panel plovoucí v jiné skupině
 @msg	give only one of onto, below and above	zadejte jen jedno z onto, below a above

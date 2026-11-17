@@ -282,14 +282,24 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Err(e) = app.run("help.discover.back", json!({})) {
             app.status(e);
         }
-    } else if let Some(index) = chosen
-        && let Err(e) = app.run("help.discover.choose", json!({"index": index}))
-    {
-        app.status(e);
+    } else if let Some(index) = chosen {
+        match app.run("help.discover.choose", json!({"index": index})) {
+            Ok(picked) => status_reason(app, &picked["location"]),
+            Err(e) => app.status(e),
+        }
     }
-    if let Some(tool) = locate
-        && let Err(e) = app.run("learn.locateTool", json!({"tool": tool}))
-    {
-        app.status(e);
+    if let Some(tool) = locate {
+        match app.run("learn.locateTool", json!({"tool": tool})) {
+            Ok(located) => status_reason(app, &located),
+            Err(e) => app.status(e),
+        }
+    }
+}
+
+/// A `learn.locateTool` reply that could not mark its tool (`location: "unavailable"`) shows its
+/// `reason` in the status bar.
+fn status_reason(app: &mut VectorcraftApp, located: &Value) {
+    if let Some(reason) = located.get("reason").and_then(Value::as_str) {
+        app.status(reason);
     }
 }

@@ -5422,6 +5422,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	Reload the page to go on (changes not saved yet may be lost).	Ανανεώστε τη σελίδα για να συνεχίσετε (οι μη αποθηκευμένες αλλαγές ενδέχεται να χαθούν).
 @msg	tool (a tool id) is required	απαιτείται tool (αναγνωριστικό εργαλείου)
 @msg	{tool} isn't in a toolbar group of several tools	το {tool} δεν ανήκει σε ομάδα πολλών εργαλείων της γραμμής εργαλείων
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	η Λειτουργία παρουσίασης κρύβει τις γραμμές εργαλείων: αλλάξτε τη λειτουργία οθόνης για να εμφανιστούν
+@msg	Tab has hidden the toolbars: press Tab to show them	το Tab έκρυψε τις γραμμές εργαλείων: πατήστε Tab για να εμφανιστούν
 @msg	onto must name a panel floating in another group	το onto πρέπει να ορίζει πίνακα που αιωρείται σε άλλη ομάδα
 @msg	below and above must name a panel floating in another group	τα below και above πρέπει να ορίζουν πίνακα που αιωρείται σε άλλη ομάδα
 @msg	give only one of onto, below and above	δώστε μόνο ένα από τα onto, below και above

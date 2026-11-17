@@ -5569,7 +5569,8 @@ const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Oth
 /// a plug-in returned), and the script interpreter's methods that throw an error at a script:
 /// `.type_error(msg)`, `.throw(kind, msg)` and the XPath evaluator's `.error(msg)`, with the reasons
 /// it gives for a property it cannot define or assign (`.reject_bool(throw, key, why)` and
-/// `.reject(throw, key, why)`). A helper that starts with `.` is a method of any receiver; any other
+/// `.reject(throw, key, why)`), and the interface's `unavailable(tool, reason)` (a tool's place that
+/// no toolbar can show, which Help puts in the status bar). A helper that starts with `.` is a method of any receiver; any other
 /// is a function, not a type's own function of the same name (`Grays::param(C, p)`).
 const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("engine", "bad(", 1),
@@ -5592,6 +5593,7 @@ const ERROR_HELPERS: &[(&str, &str, usize)] = &[
     ("js", ".error(", 0),
     ("js", ".reject_bool(", 2),
     ("js", ".reject(", 2),
+    ("ui-egui", "unavailable(", 1),
 ];
 
 /// Error variants whose first argument is a name, not a message: a command id

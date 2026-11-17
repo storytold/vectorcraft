@@ -6184,6 +6184,8 @@ antiAlias	Sharp	शार्प
 @msg	{std} files embed their fonts, and the file would have one that isn't	{std} फ़ाइलें अपने फ़ॉन्ट एम्बेड करती हैं, और इस फ़ाइल में एक ऐसा फ़ॉन्ट होता जो एम्बेड नहीं है
 @msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	यह डॉक्यूमेंट {target} से पढ़ा गया था और पढ़ते समय कुछ चीज़ें छूट गईं ({what}): उसी फ़ाइल पर लिखने से वे स्थायी रूप से खो जाएँगी। दूसरी फ़ाइल लिखें या फिर भी बदलने के लिए acknowledgeLoss: true दें
 @msg	{tool} isn't in a toolbar group of several tools	{tool} कई टूल्स के टूलबार समूह में नहीं है
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	प्रस्तुति मोड टूलबार्स छिपाता है: उन्हें दिखाने के लिए स्क्रीन मोड बदलें
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ने टूलबार्स छिपा दिए हैं: उन्हें दिखाने के लिए Tab दबाएँ
 @msg	{ty} brushes need selected art (or params.{k})	{ty} ब्रश के लिए सिलेक्टेड आर्टवर्क (या params.{k}) चाहिए
 @msg	{v} is not an asset id	{v} एक परिसंपत्ति आईडी नहीं है
 @msg	{what} can't be intertwined	{what} अंतर नहीं किया जा सकता है

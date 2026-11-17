@@ -5363,6 +5363,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Läs in sidan igen för att fortsätta (ändringar som inte sparats än kan gå förlorade).
 @msg	tool (a tool id) is required	tool (ett verktygs-id) krävs
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ingår inte i en verktygsgrupp med flera verktyg
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Presentationsläge döljer verktygsfälten: byt skärmläge för att visa dem
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab har dolt verktygsfälten: tryck på Tab för att visa dem
 @msg	onto must name a panel floating in another group	onto måste ange en panel som flyter i en annan grupp
 @msg	below and above must name a panel floating in another group	below och above måste ange en panel som flyter i en annan grupp
 @msg	give only one of onto, below and above	ange bara en av onto, below och above

@@ -5770,6 +5770,8 @@ imageTrace	Outline	Contour
 @msg	Reload the page to go on (changes not saved yet may be lost).	Laad de pagina opnieuw om door te gaan (nog niet opgeslagen wijzigingen kunnen verloren gaan).
 @msg	tool (a tool id) is required	tool (een gereedschaps-id) is vereist
 @msg	{tool} isn't in a toolbar group of several tools	{tool} zit niet in een werkbalkgroep met meerdere gereedschappen
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Presentatiemodus verbergt de werkbalken: wijzig de schermmodus om ze te tonen
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab heeft de werkbalken verborgen: druk op Tab om ze te tonen
 @msg	onto must name a panel floating in another group	onto moet een zwevend paneel in een andere groep benoemen
 @msg	below and above must name a panel floating in another group	below en above moeten een zwevend paneel in een andere groep benoemen
 @msg	give only one of onto, below and above	geef slechts één van onto, below en above

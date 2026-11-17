@@ -4774,6 +4774,8 @@ axis	Both	Ambos
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarregue a página para continuar (alterações ainda não salvas podem ser perdidas).
 @msg	tool (a tool id) is required	tool (um id de ferramenta) é obrigatório
 @msg	{tool} isn't in a toolbar group of several tools	{tool} não está em um grupo de barra de ferramentas com várias ferramentas
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	o Modo de Apresentação oculta as barras de ferramentas: altere o modo de tela para mostrá-las
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ocultou as barras de ferramentas: pressione Tab para mostrá-las
 @msg	onto must name a panel floating in another group	onto deve nomear um painel flutuante em outro grupo
 @msg	below and above must name a panel floating in another group	below e above devem nomear um painel flutuante em outro grupo
 @msg	give only one of onto, below and above	informe apenas um entre onto, below e above

@@ -6035,6 +6035,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} không nằm trong nhóm thanh công cụ có nhiều công cụ
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Chế độ trình bày ẩn các thanh công cụ: hãy đổi chế độ màn hình để hiện chúng
+@msg	Tab has hidden the toolbars: press Tab to show them	phím Tab đã ẩn các thanh công cụ: nhấn Tab để hiện chúng
 	Load EPS into Clipboard	Tải EPS vào bảng tạm
 @msg	an image of {w} × {h} pixels is too large to draw	ảnh {w} × {h} điểm ảnh quá lớn nên không thể vẽ
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: không phải ảnh PNG, JPEG, WebP, TIFF hay BMP

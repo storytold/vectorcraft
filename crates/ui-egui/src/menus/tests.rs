@@ -93,6 +93,65 @@ fn help_f1_opens_discover_without_a_document() {
     assert!(crate::panel_docking::showing(&app.ui, "discover"));
 }
 
+/// With the toolbars hidden by Tab, choosing a tool in Help, or a tool's link in a tutorial Help
+/// shows, marks nothing and the status bar says why.
+#[test]
+fn discover_says_why_a_tool_cannot_be_marked() {
+    fn texts(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
+        let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| crate::panels::discover::show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts);
+        }
+        texts
+    }
+    fn click(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str) {
+        texts(ctx, app, vec![]);
+        let drawn = texts(ctx, app, vec![]);
+        let pos = drawn.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("`{label}` not drawn: {drawn:?}")).1.center();
+        let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
+            texts(ctx, app, vec![e]);
+        }
+    }
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("window.dock", json!({})).unwrap();
+    assert!(app.ui.tab_hid.is_some() && !app.ui.toolbar);
+    let reason = app.run("learn.locateTool", json!({"tool": "rectangle"})).unwrap()["reason"].as_str().unwrap().to_string();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+
+    let found = app.run("help.discover.search", json!({"query": "rectangle"})).unwrap();
+    let hit = found["results"].as_array().unwrap().iter().find(|hit| hit["kind"] == "tool" && hit["id"] == "rectangle").unwrap().clone();
+    app.status("");
+    click(&ctx, &mut app, hit["label"].as_str().unwrap());
+    assert_eq!(app.ui.discover.selected.map(|i| app.ui.discover.results[i].id.as_str()), Some("rectangle"));
+    assert!(app.ui.learn_locate.is_none());
+    assert_eq!(app.ui.status, reason);
+
+    let (tutorial, tool) = crate::panels::learn::catalog::SKILLS
+        .iter()
+        .flat_map(|skill| skill.tutorials.iter())
+        .find_map(|t| t.steps.iter().find_map(|s| s.tool).map(|tool| (t, tool)))
+        .unwrap();
+    let found = app.run("help.discover.search", json!({"query": tutorial.title})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["kind"] == "tutorial" && hit["id"] == tutorial.id).unwrap();
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    app.status("");
+    click(&ctx, &mut app, vectorcraft_tools::tool_info(tool).unwrap().label);
+    assert!(app.ui.learn_locate.is_none());
+    assert_eq!(app.ui.status, reason);
+}
+
 #[test]
 fn discover_rejects_invalid_search_and_selection_parameters() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());

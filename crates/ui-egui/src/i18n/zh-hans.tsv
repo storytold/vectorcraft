@@ -5286,6 +5286,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多个工具的工具栏组中
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	演示模式会隐藏工具栏：请更改屏幕模式以显示工具栏
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab 已隐藏工具栏：请按 Tab 以显示工具栏
 @msg	no such document	没有此文档
 @msg	{_1}: not saved, so not closed	{_1}：未保存，因此未关闭
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` 是内置工作区；请选择其他名称

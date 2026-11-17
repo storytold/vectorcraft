@@ -5370,6 +5370,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Laden Sie die Seite neu, um fortzufahren (noch nicht gespeicherte Änderungen können verloren gehen).
 @msg	tool (a tool id) is required	tool (eine Werkzeug-ID) ist erforderlich
 @msg	{tool} isn't in a toolbar group of several tools	{tool} gehört zu keiner Werkzeuggruppe mit mehreren Werkzeugen
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	der Präsentationsmodus blendet die Werkzeugleisten aus: Ändern Sie den Bildschirmmodus, um sie anzuzeigen
+@msg	Tab has hidden the toolbars: press Tab to show them	die Tabulatortaste hat die Werkzeugleisten ausgeblendet: Drücken Sie die Tabulatortaste, um sie anzuzeigen
 @msg	onto must name a panel floating in another group	onto muss ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
 @msg	below and above must name a panel floating in another group	below und above müssen ein Bedienfeld nennen, das in einer anderen Gruppe schwebt
 @msg	give only one of onto, below and above	nur eines von onto, below und above angeben

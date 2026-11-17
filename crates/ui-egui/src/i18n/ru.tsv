@@ -5499,6 +5499,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Перезагрузите страницу, чтобы продолжить (ещё не сохранённые изменения могут быть потеряны).
 @msg	tool (a tool id) is required	требуется tool (идентификатор инструмента)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входит в группу панели инструментов из нескольких инструментов
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Режим презентации скрывает панели инструментов: чтобы показать их, смените режим экрана
+@msg	Tab has hidden the toolbars: press Tab to show them	клавиша Tab скрыла панели инструментов: чтобы показать их, нажмите Tab
 @msg	onto must name a panel floating in another group	onto должен называть панель, плавающую в другой группе
 @msg	below and above must name a panel floating in another group	below и above должны называть панель, плавающую в другой группе
 @msg	give only one of onto, below and above	укажите только один из onto, below и above

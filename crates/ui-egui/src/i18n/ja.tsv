@@ -5610,6 +5610,8 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	the {tool} tool has no options	{tool} ツールにはオプションがありません
 @msg	unknown tool `{tool}`	`{tool}` は不明なツールです
 @msg	{tool} isn't in a toolbar group of several tools	{tool} は複数のツールからなるツールグループに含まれていません
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	プレゼンテーションモードではツールバーが表示されません: 表示するにはスクリーンモードを変更してください
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab でツールバーが非表示になっています: 表示するには Tab キーを押してください
 @msg	no such document	指定されたドキュメントが見つかりません
 @msg	{_1}: not saved, so not closed	{_1}: 保存されていないため、閉じませんでした
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` は組み込みのワークスペースなので、別の名前を指定してください
