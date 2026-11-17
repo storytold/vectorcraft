@@ -197,12 +197,9 @@ fn embedded_fonts_off_sets_type_in_the_fallback_font_with_the_warning() {
     assert_eq!(st.font_family, "Source Serif 9", "the text still names the file's font");
 }
 
-/// Two different glyphs of the embedded font that map to one character (a normal and an alternate
-/// `a`, here the glyphs of `a` and `b` both named `a` by the ToUnicode map) can't both go into the
-/// font kept with the document, which has one glyph per character: the line with the second one is
-/// kept as outlines, so each glyph draws as the file draws it (outlines are plain paths, which a save keeps).
-#[test]
-fn two_glyphs_for_one_character_both_survive_import_and_save() {
+/// A page with the glyph of `a`, then of `b`, then of `a` again, each on its own line and each
+/// named `a` by the ToUnicode map: two different glyphs of the embedded font for one character.
+fn two_glyphs_pdf() -> Vec<u8> {
     let face = FontDb::global().face("Source Serif 4", "Regular").unwrap();
     let mut pdf = krilla::Document::new();
     let mut page = pdf.start_page_with(PageSettings::from_wh(400.0, 200.0).unwrap());
@@ -218,9 +215,65 @@ fn two_glyphs_for_one_character_both_survive_import_and_save() {
     draw(160.0, 'a');
     s.finish();
     page.finish();
-    let r = import(&pdf.finish().unwrap());
-    let text: Vec<String> = texts(&r.document).iter().map(|t| t.plain_text()).collect();
+    pdf.finish().unwrap()
+}
+
+/// The ink box of the glyph on each of the page's three lines (set at 40, 100 and 160 pt from the
+/// top) as `d` draws it: type laid out by `db` and outline paths, which an import may merge into
+/// one path for the page, so their subpaths are told apart by the line they lie on.
+fn glyph_ink(db: &FontDb, d: &Document) -> Vec<Rect> {
+    let mut lines: [Option<Rect>; 3] = [None; 3];
+    let mut add = |path: &kurbo::BezPath| {
+        let mut start = 0;
+        let els = path.elements();
+        for end in (1..=els.len()).filter(|&e| e == els.len() || matches!(els[e], kurbo::PathEl::MoveTo(_))) {
+            let ink = kurbo::BezPath::from_vec(els[start..end].to_vec()).bounding_box();
+            let line = usize::from(ink.center().y > 70.0) + usize::from(ink.center().y > 130.0);
+            lines[line] = Some(lines[line].map_or(ink, |l| l.union(ink)));
+            start = end;
+        }
+    };
+    for t in texts(d) {
+        for g in vectorcraft_text::layout(db, &t).glyphs {
+            add(&(t.xf * g.outline.clone()));
+        }
+    }
+    d.walk(|n| {
+        if let vectorcraft_doc::NodeKind::Path { path, .. } = &n.kind {
+            add(&path.to_bezpath());
+        }
+    });
+    lines.into_iter().flatten().collect()
+}
+
+/// Two different glyphs of the embedded font that map to one character (a normal and an alternate
+/// `a`, here the glyphs of `a` and `b` both named `a` by the ToUnicode map) can't both go into the
+/// font kept with the document, which has one glyph per character: the line with the other glyph is
+/// kept as outlines. Saved in the native format and opened again, each glyph is still the one the
+/// file draws, where it draws it: the outlines of the same page imported as outlines are the reference.
+#[test]
+fn two_glyphs_for_one_character_both_survive_import_and_save() {
+    let db = FontDb::global();
+    let bytes = two_glyphs_pdf();
+    let reference = glyph_ink(db, &import_with_report(&bytes, &ImportOptions { text_as: TextAs::Outlines, ..Default::default() }).unwrap().document);
+    assert_eq!(reference.len(), 3, "the file draws three glyphs: {reference:?}");
+    assert!((reference[0].height() - reference[1].height()).abs() > 2.0, "the file's two glyphs differ in shape: {reference:?}");
+    assert!((reference[0].height() - reference[2].height()).abs() < 0.01, "and the first and third are the same glyph: {reference:?}");
+
+    let imported = import(&bytes).document;
+    let text: Vec<String> = texts(&imported).iter().map(|t| t.plain_text()).collect();
     assert!(text.iter().any(|t| t == "a"), "the glyphs the font keeps stay live type: {text:?}");
     assert!(text.len() < 3, "the line with the other glyph is not live type: {text:?}");
-    assert!(!outlines(&r.document).elements().is_empty(), "the other glyph is kept as its outline");
+
+    let close = |got: &[Rect], what: &str| {
+        assert_eq!(got.len(), reference.len(), "{what}: {got:?}");
+        for (got, want) in got.iter().zip(&reference) {
+            let off = (got.x0 - want.x0).abs().max((got.x1 - want.x1).abs()).max((got.y0 - want.y0).abs()).max((got.y1 - want.y1).abs());
+            assert!(off < 0.25, "{what}: {got:?} is {off} pt from the file's {want:?}");
+        }
+    };
+    close(&glyph_ink(db, &imported), "imported");
+    let mut reopened = vectorcraft_format::load(&vectorcraft_format::save_file(&imported)).unwrap();
+    db.bind_document_file_fonts(&mut reopened);
+    close(&glyph_ink(db, &reopened), "saved and reopened");
 }
