@@ -61,6 +61,32 @@ fn file_ends_with_exit() {
     assert!(matches!(last, Item::Cmd("Exit", "app.quit", _)), "{last:?}");
 }
 
+/// Help starts with Search Commands…, the command search's own command, showing its shortcut,
+/// then a separator; the menus list it once.
+#[test]
+fn help_starts_with_search_commands() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let tree = menu_tree();
+    let (_, help) = tree.iter().find(|(t, _)| *t == "Help").unwrap();
+    assert!(matches!(help[0], Item::Cmd("Search Commands…", "help.commandPalette", _)), "{:?}", help[0]);
+    assert!(matches!(help[1], Item::Sep), "{:?}", help[1]);
+    let Some(Entry::Item(row)) = entry(&app, &help[0]) else { panic!("Search Commands… is not shown") };
+    assert!(row.enabled);
+    assert_eq!(row.shortcut, shortcut_of("help.commandPalette"));
+    assert!(row.shortcut.is_some(), "the search's shortcut shows next to the item");
+    fn count(items: &[Item]) -> usize {
+        items
+            .iter()
+            .map(|it| match it {
+                Item::Cmd(_, "help.commandPalette", _) => 1,
+                Item::Sub(_, children) => count(children),
+                _ => 0,
+            })
+            .sum()
+    }
+    assert_eq!(tree.iter().map(|(_, items)| count(items)).sum::<usize>(), 1);
+}
+
 /// No application menu in the window (as in Illustrator): the bar starts at File.
 #[test]
 fn the_bar_starts_at_file() {

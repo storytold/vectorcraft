@@ -28,9 +28,11 @@ craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
 craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "431f704478962677ec47e512754464d372901830", features = ["tree"] }
+craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
 craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
+craft-plotter = { git = "https://github.com/storytold/craft-libs", rev = "a7fb55eaf9a15c21e8ce0b13cf605dc54fd15f57" }
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # WMF, EMF and EMF+ reader (craft-libs#778).
 craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
