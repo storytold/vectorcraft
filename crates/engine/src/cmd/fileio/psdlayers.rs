@@ -24,14 +24,20 @@
 //! Light, Pin Light, Hard Mix, Subtract, Divide, Darker Color, Lighter Color) is merged with the
 //! layers below it in its group. A Dissolve layer's partly transparent pixels are merged as opaque
 //! or transparent, opaque at the share of its pixels their transparency gives, in a fixed pattern
-//! that differs from layer to layer. When a merge's canvases would need more memory than allowed,
-//! the layer comes in alone: in the Normal mode, or unclipped.
-//! Hidden layers are left out unless `hidden` asks for them. A hidden layer that would need a merge
-//! (one in a mode VectorCraft lacks, one that layers are clipped to, one clipped to another, or
-//! one below a merged layer) is always left out, with the layers clipped to it. Adjustment layers,
-//! fill layers that store no pixels and whose fill isn't read or whose shape is a vector mask,
-//! layer effects that are switched on, knockouts and vector masks aren't applied; the warnings
-//! count them and the hidden layers left out.
+//! that differs from layer to layer. A layer or group in a group whose Knockout setting is 1 (read
+//! as a shallow knockout) is merged with the layers below it in its group too, as the import option
+//! describes: where it has pixels, they are cleared to transparency and it is drawn there at its fill
+//! opacity, and its opacity fades that back toward them. In a pass-through group this is done only
+//! when it and the visible layers below it are in the Normal mode. When a merge's canvases would need more
+//! memory than allowed, the layer comes in alone: in the Normal mode, unclipped, or without its
+//! knockout. Hidden layers are left out unless `hidden` asks for them. A hidden layer that would need
+//! a merge (one in a mode VectorCraft lacks, one with a knockout in a group, one that layers are
+//! clipped to, one clipped to another, or one below a merged layer) is always left out, with the
+//! layers clipped to it. Adjustment layers, fill layers that store no pixels and whose fill isn't read
+//! or whose shape is a vector mask, layer effects that are switched on, vector masks, and the
+//! knockouts of top-level layers, of clipped layers, of layers that others are clipped to and of
+//! layers in a pass-through group with a layer in another mode, and other Knockout values, aren't
+//! applied; the warnings count them and the hidden layers left out.
 //!
 //! The file is untrusted: every count, length and size is checked before anything is allocated,
 //! groups nest at most [`MAX_DEPTH`] deep (layers deeper than a document may nest merge into the
@@ -227,7 +233,9 @@ struct Record<'a> {
     content: Content,
     effects: bool,
     vector_mask: bool,
-    knockout: bool,
+    /// The Knockout setting's byte (`knko`): 0 none, 1 a shallow knockout. Any other value isn't
+    /// applied.
+    knockout: u8,
 }
 
 /// The layer records of `info` (the layer count, the records, then their channels' data).
@@ -285,7 +293,7 @@ fn record<'a>(r: &mut Reader<'a>, psb: bool) -> Result<(Record<'a>, Vec<(i16, us
         content: Content::Pixels,
         effects: false,
         vector_mask: false,
-        knockout: false,
+        knockout: 0,
     };
     rec.read_extra(extra, psb)?;
     Ok((rec, lengths))
@@ -345,8 +353,7 @@ impl Record<'_> {
                 b"lfx2" | b"lmfx" => effects = Some(effects == Some(true) || effects_on(data)),
                 b"lrFX" => old_effects = true,
                 b"vmsk" | b"vsms" => self.vector_mask = true,
-                // Shallow or deep knockout.
-                b"knko" => self.knockout = data.first().is_some_and(|&k| k != 0),
+                b"knko" => self.knockout = data.first().copied().unwrap_or(0),
                 k if ADJUSTMENTS.contains(&k) => self.content = Content::Adjustment,
                 _ => {}
             }
@@ -646,6 +653,27 @@ enum Body<'i> {
     Merged(Canvas),
 }
 
+/// Where a layer list is.
+#[derive(Clone, Copy, PartialEq)]
+enum Level {
+    /// The file's top level.
+    Top,
+    /// An isolated group, or a group drawn on its own.
+    Group,
+    /// A pass-through group whose layers blend with what is below it.
+    Pass,
+}
+
+/// What a knockout's merge with the layers below it gives.
+enum Knocked {
+    /// The merged canvas.
+    Merged(Canvas),
+    /// Nothing below it draws, or it draws nothing: it comes in as a layer of its own.
+    Nothing,
+    /// The canvases would need more memory than allowed.
+    TooLarge,
+}
+
 /// A unit's body drawn alone.
 enum Drawn {
     /// It draws nothing.
@@ -663,6 +691,7 @@ struct Notes {
     fills: usize,
     effects: usize,
     vector_masks: usize,
+    /// Layers whose knockout wasn't applied.
     knockouts: usize,
     /// Hidden layers left out, and layers clipped to them.
     hidden: usize,
@@ -678,6 +707,8 @@ struct Notes {
 #[derive(Clone, Copy)]
 struct Counts {
     skipped: usize,
+    /// The knockouts counted as not applied.
+    unknocked: usize,
     merged: usize,
     unmerged: usize,
     unclipped: usize,
@@ -745,8 +776,8 @@ impl Notes {
         out
     }
 
-    fn counts(&self, skipped: usize) -> Counts {
-        Counts { skipped, merged: self.merged.len(), unmerged: self.unmerged, unclipped: self.unclipped, clipped_out: self.clipped_out }
+    fn counts(&self, skipped: usize, unknocked: usize) -> Counts {
+        Counts { skipped, unknocked, merged: self.merged.len(), unmerged: self.unmerged, unclipped: self.unclipped, clipped_out: self.clipped_out }
     }
 }
 
@@ -771,6 +802,10 @@ struct Builder<'a, F> {
     skipped: Vec<bool>,
     /// Those records, in the order they were counted.
     skip_log: Vec<usize>,
+    /// The records counted as knockouts not applied.
+    unknocked: Vec<bool>,
+    /// Those records, in the order they were counted.
+    unknock_log: Vec<usize>,
     /// Bytes of layer and mask pixels decoded, and of canvases the merges made, so far.
     spent: Cell<u64>,
 }
@@ -920,6 +955,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                     Some(b) => {
                         // Counted even when it draws nothing (an adjustment layer).
                         self.note(i)?;
+                        // A clipped layer's knockout isn't applied.
+                        if self.record(i)?.knockout != 0 {
+                            self.unknock(i);
+                        }
                         if !unclipped && self.clip(&mut out, b, &body, i, &name, blend, opacity)? {
                             continue;
                         }
@@ -1048,9 +1087,9 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             Some(n) => *n = true,
             None => {}
         }
-        let (content, empty, effects, vector_mask, knockout) = {
+        let (content, empty, effects, vector_mask) = {
             let rec = self.record(i)?;
-            (rec.content, rec.stores_nothing(), rec.effects, rec.vector_mask, rec.knockout)
+            (rec.content, rec.stores_nothing(), rec.effects, rec.vector_mask)
         };
         match content {
             Content::Type => self.notes.types += 1,
@@ -1062,8 +1101,37 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         }
         self.notes.effects += usize::from(effects);
         self.notes.vector_masks += usize::from(vector_mask);
-        self.notes.knockouts += usize::from(knockout);
         Ok(())
+    }
+
+    /// Count record `i` as a layer whose knockout isn't applied (once).
+    fn unknock(&mut self, i: usize) {
+        if let Some(s) = self.unknocked.get_mut(i)
+            && !*s
+        {
+            *s = true;
+            self.notes.knockouts += 1;
+            self.unknock_log.push(i);
+        }
+    }
+
+    /// Does unit `u`, at `level` above the units `below` it, take a shallow knockout this import
+    /// applies? Only a layer or group in a group, neither clipped nor a base of clipped layers, does;
+    /// in a pass-through group, only when it and the visible units below it are in the Normal mode, so
+    /// that none of them blends with what is below the group. Any other knockout is counted as not
+    /// applied.
+    fn knocks(&mut self, u: &Unit<'_>, below: &[Unit<'_>], level: Level) -> Result<bool, String> {
+        let rec = self.record(u.record)?;
+        if rec.knockout == 0 {
+            return Ok(false);
+        }
+        let normal = |u: &Unit<'_>| u.blend == Blend::Mode(BlendMode::Normal);
+        let blends_out = level == Level::Pass && !(normal(u) && below.iter().filter(|b| b.visible).all(normal));
+        let applies = rec.knockout == 1 && level != Level::Top && !blends_out && !rec.clipped && !matches!(u.body, Body::Merged(_));
+        if !applies {
+            self.unknock(u.record);
+        }
+        Ok(applies)
     }
 
     /// Count record `i` as a hidden layer left out (once).
@@ -1077,10 +1145,36 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         }
     }
 
-    /// `items`' units with the layers in blend modes VectorCraft lacks merged with those below.
-    fn merged<'i>(&mut self, items: &'i [Item], keep_hidden: bool) -> Result<Vec<Unit<'i>>, String> {
+    /// `items`' units, at `level`, with the layers in blend modes VectorCraft lacks, and in a group
+    /// the layers with a shallow knockout, merged with those below.
+    fn merged<'i>(&mut self, items: &'i [Item], keep_hidden: bool, level: Level) -> Result<Vec<Unit<'i>>, String> {
         let mut out: Vec<Unit<'i>> = vec![];
         for mut u in self.units(items, keep_hidden)? {
+            if self.knocks(&u, &out, level)? {
+                // A hidden layer that would need the merge is left out.
+                if !u.visible {
+                    self.skip(u.record);
+                    continue;
+                }
+                let saved = self.notes.counts(self.skip_log.len(), self.unknock_log.len());
+                match self.knock(&out, &u)? {
+                    Knocked::Merged(canvas) => {
+                        self.take_merge(&mut out, &u, canvas);
+                        if let Blend::Other(other) = u.blend
+                            && !self.notes.merged.contains(&other.label())
+                        {
+                            self.notes.merged.push(other.label());
+                        }
+                        continue;
+                    }
+                    // Nothing below it, or nothing of its own, to knock out: it comes in as a layer.
+                    Knocked::Nothing => {}
+                    Knocked::TooLarge => {
+                        self.restore(saved);
+                        self.unknock(u.record);
+                    }
+                }
+            }
             let Blend::Other(other) = u.blend else {
                 out.push(u);
                 continue;
@@ -1091,7 +1185,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 continue;
             }
             // A merge that can't be made counts nothing its groups would have counted.
-            let saved = self.notes.counts(self.skip_log.len());
+            let saved = self.notes.counts(self.skip_log.len(), self.unknock_log.len());
             let made = match out.as_mut_slice() {
                 // Onto the previous merge alone: composited onto its canvas, in place.
                 [prev] if prev.is_merge() => {
@@ -1113,34 +1207,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 }
                 _ => match self.merge(&out, &u)? {
                     Some(canvas) => {
-                        let mut name = String::new();
-                        for (k, b) in out.iter_mut().filter(|b| b.visible).enumerate() {
-                            if k == 0 {
-                                name = std::mem::take(&mut b.name);
-                            } else {
-                                name.push_str(" + ");
-                                name.push_str(&b.name);
-                            }
-                        }
-                        if out.iter().any(|b| b.visible) {
-                            name.push_str(" + ");
-                        }
-                        name.push_str(&u.name);
-                        // Hidden layers below are left out with the rest.
-                        for b in out.iter().filter(|b| !b.visible).map(|b| b.record).collect::<Vec<_>>() {
-                            self.skip(b);
-                        }
-                        out.clear();
-                        out.push(Unit {
-                            name,
-                            visible: true,
-                            opacity: 1.0,
-                            blend: Blend::Mode(BlendMode::Normal),
-                            mask_of: None,
-                            record: u.record,
-                            body: Body::Merged(canvas),
-                            clip: None,
-                        });
+                        self.take_merge(&mut out, &u, canvas);
                         true
                     }
                     None => false,
@@ -1168,6 +1235,12 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 self.notes.hidden = self.notes.hidden.saturating_sub(1);
             }
         }
+        for i in self.unknock_log.split_off(c.unknocked) {
+            if let Some(s) = self.unknocked.get_mut(i) {
+                *s = false;
+                self.notes.knockouts = self.notes.knockouts.saturating_sub(1);
+            }
+        }
         self.notes.merged.truncate(c.merged);
         self.notes.unmerged = c.unmerged;
         self.notes.unclipped = c.unclipped;
@@ -1184,6 +1257,82 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             }
         }
         Ok(Some(acc.unwrap_or_default()))
+    }
+
+    /// `out` replaced by one layer: `canvas`, the merge of its visible units with `top`, named after
+    /// them, bottom first. Its hidden units are left out.
+    fn take_merge<'i>(&mut self, out: &mut Vec<Unit<'i>>, top: &Unit<'_>, canvas: Canvas) {
+        let mut name = String::new();
+        for (k, b) in out.iter_mut().filter(|b| b.visible).enumerate() {
+            if k == 0 {
+                name = std::mem::take(&mut b.name);
+            } else {
+                name.push_str(" + ");
+                name.push_str(&b.name);
+            }
+        }
+        if out.iter().any(|b| b.visible) {
+            name.push_str(" + ");
+        }
+        name.push_str(&top.name);
+        // Hidden layers below are left out with the rest.
+        for b in out.iter().filter(|b| !b.visible).map(|b| b.record).collect::<Vec<_>>() {
+            self.skip(b);
+        }
+        out.clear();
+        out.push(Unit {
+            name,
+            visible: true,
+            opacity: 1.0,
+            blend: Blend::Mode(BlendMode::Normal),
+            mask_of: None,
+            record: top.record,
+            body: Body::Merged(canvas),
+            clip: None,
+        });
+    }
+
+    /// The visible units `below` with `top`, a layer with a shallow knockout, knocking them out: where
+    /// `top` has pixels, what is below it in its group is cleared to transparency (the group's own
+    /// backdrop) and `top` is drawn there at its fill opacity; its opacity then fades all of that
+    /// back toward the units below as they were. Its layer mask shapes the cut.
+    fn knock(&mut self, below: &[Unit<'_>], top: &Unit<'_>) -> Result<Knocked, String> {
+        if !below.iter().any(|u| u.visible) {
+            return Ok(Knocked::Nothing);
+        }
+        let (fill, opacity) = {
+            let rec = self.record(top.record)?;
+            (rec.fill, rec.opacity)
+        };
+        let k = match self.draw_body(&top.body, top.mask_of)? {
+            Drawn::Nothing => return Ok(Knocked::Nothing),
+            Drawn::TooLarge => return Ok(Knocked::TooLarge),
+            Drawn::Canvas(c) if c.px.iter().all(|p| p[3] <= 0.0) => return Ok(Knocked::Nothing),
+            Drawn::Canvas(c) => c,
+        };
+        // The layer's canvas is held while the units below are drawn.
+        let bytes = 16 * k.px.len() as u64;
+        self.held = self.held.saturating_add(bytes);
+        let mut acc: Option<Canvas> = None;
+        let mut drawn = Ok(true);
+        for u in below.iter().filter(|u| u.visible) {
+            drawn = self.composite(&mut acc, u);
+            if !matches!(drawn, Ok(true)) {
+                break;
+            }
+        }
+        self.held = self.held.saturating_sub(bytes);
+        if !drawn? {
+            return Ok(Knocked::TooLarge);
+        }
+        // Nothing below draws.
+        if acc.is_none() {
+            return Ok(Knocked::Nothing);
+        }
+        if !knock_onto(&mut acc, &k, top.blend, fill, opacity, top.record, self.room(), &|n| self.spend(n))? {
+            return Ok(Knocked::TooLarge);
+        }
+        Ok(acc.map_or(Knocked::Nothing, Knocked::Merged))
     }
 
     /// The bytes a merge step may still take: the memory allowed, less the copies of what is below
@@ -1203,7 +1352,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 _ => None,
             };
             if u.opacity >= 1.0 && mask.is_none() {
-                return self.lay(acc, items);
+                return self.lay(acc, items, Level::Pass);
             }
             let bytes = acc.as_ref().map_or(0, |c| 16 * c.px.len() as u64);
             if bytes > self.room() {
@@ -1212,7 +1361,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             self.spend(bytes)?;
             let below = acc.clone();
             self.held = self.held.saturating_add(bytes);
-            let laid = self.lay(acc, items);
+            let laid = self.lay(acc, items, Level::Pass);
             self.held = self.held.saturating_sub(bytes);
             if !laid? {
                 return Ok(false);
@@ -1230,10 +1379,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         blend_onto(acc, &c, u.blend, u.opacity, u.record, self.room(), &|n| self.spend(n))
     }
 
-    /// `items`' layers composited onto `acc` one by one; `false` when a canvas would need more
-    /// memory than allowed.
-    fn lay(&mut self, acc: &mut Option<Canvas>, items: &[Item]) -> Result<bool, String> {
-        for c in self.merged(items, false)? {
+    /// `items`' layers, the layers of a group at `level`, composited onto `acc` one by one; `false`
+    /// when a canvas would need more memory than allowed.
+    fn lay(&mut self, acc: &mut Option<Canvas>, items: &[Item], level: Level) -> Result<bool, String> {
+        for c in self.merged(items, false, level)? {
             if !self.composite(acc, &c)? {
                 return Ok(false);
             }
@@ -1273,7 +1422,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             },
             Body::Group(items) => {
                 let mut acc: Option<Canvas> = None;
-                if !self.lay(&mut acc, items)? {
+                if !self.lay(&mut acc, items, Level::Group)? {
                     return Ok(Drawn::TooLarge);
                 }
                 let Some(acc) = acc else { return Ok(Drawn::Nothing) };
@@ -1306,10 +1455,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         Ok(n)
     }
 
-    /// Layers of the document for `items`, bottom first.
-    fn list(&mut self, items: &[Item]) -> Result<Vec<Arc<Node>>, String> {
+    /// Layers of the document for `items`, the layers at `level`, bottom first.
+    fn list(&mut self, items: &[Item], level: Level) -> Result<Vec<Arc<Node>>, String> {
         let mut out = vec![];
-        for u in self.merged(items, self.hidden)? {
+        for u in self.merged(items, self.hidden, level)? {
             if let Some(n) = self.node(u)? {
                 out.push(Arc::new(n));
             }
@@ -1329,7 +1478,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 Some((left, top, img)) => vec![Arc::new(self.image_node(&u.name, left, top, img)?)],
                 None => return Ok(None),
             },
-            Body::Group(items) => self.list(items)?,
+            Body::Group(items) => self.list(items, if u.blend == Blend::Pass { Level::Pass } else { Level::Group })?,
         };
         let mut layer = self.layer(&u.name);
         layer.visible = u.visible;
@@ -1443,6 +1592,61 @@ fn blend_onto(
     max_alloc: u64,
     spend: &dyn Fn(u64) -> Result<(), String>,
 ) -> Result<bool, String> {
+    if !cover(acc, src, max_alloc, spend)? {
+        return Ok(false);
+    }
+    let Some(out) = acc.as_mut() else { return Ok(false) };
+    // Only the source's rows and columns change.
+    let (sw, x0, y0) = (src.width.max(1), (src.left - out.left) as usize, (src.top - out.top) as usize);
+    for (k, s) in src.px.iter().enumerate() {
+        let Some(p) = out.px.get_mut((y0 + k / sw) * out.width + x0 + k % sw) else { continue };
+        let a = coverage(blend, s[3] * opacity, src.left + (k % sw) as i64, src.top + (k / sw) as i64, record);
+        *p = over(blend, *p, [s[0], s[1], s[2], a]);
+    }
+    Ok(true)
+}
+
+/// `knock` (of record `record`, in `blend`, with its `fill` and `opacity`), a layer with a shallow
+/// knockout, knocking out `acc`, on a canvas covering both, as [`blend_onto`] makes it. Where
+/// `knock` has pixels, its transparency is the share of `acc` cleared and replaced by its color at
+/// `fill`; `opacity` then fades that back toward `acc`. `false`, with `acc` as it was, when the
+/// canvases would take more than `max_alloc` bytes.
+#[allow(clippy::too_many_arguments)]
+fn knock_onto(
+    acc: &mut Option<Canvas>,
+    knock: &Canvas,
+    blend: Blend,
+    fill: f32,
+    opacity: f32,
+    record: usize,
+    max_alloc: u64,
+    spend: &dyn Fn(u64) -> Result<(), String>,
+) -> Result<bool, String> {
+    if !cover(acc, knock, max_alloc, spend)? {
+        return Ok(false);
+    }
+    let Some(out) = acc.as_mut() else { return Ok(false) };
+    let (fill, opacity) = (fill.clamp(0.0, 1.0), opacity.clamp(0.0, 1.0));
+    let (kw, x0, y0) = (knock.width.max(1), (knock.left - out.left) as usize, (knock.top - out.top) as usize);
+    for (k, s) in knock.px.iter().enumerate() {
+        let Some(p) = out.px.get_mut((y0 + k / kw) * out.width + x0 + k % kw) else { continue };
+        let t = opacity * coverage(blend, s[3].clamp(0.0, 1.0), knock.left + (k % kw) as i64, knock.top + (k / kw) as i64, record);
+        let below = p[3].clamp(0.0, 1.0);
+        let alpha = (1.0 - t) * below + t * fill;
+        if alpha <= 0.0 {
+            *p = [0.0; 4];
+            continue;
+        }
+        let mix = |i: usize| ((1.0 - t) * below * p[i] + t * fill * s[i]) / alpha;
+        *p = [mix(0), mix(1), mix(2), alpha];
+    }
+    Ok(true)
+}
+
+/// `acc` grown, when it doesn't already, to a canvas covering itself and `src` (a new one counted
+/// with `spend`). `false`, with `acc` as it was, when the canvases held, `acc` and `src` and a
+/// larger canvas when one is needed, would take more than `max_alloc` bytes.
+fn cover(acc: &mut Option<Canvas>, src: &Canvas, max_alloc: u64, spend: &dyn Fn(u64) -> Result<(), String>) -> Result<bool, String> {
     let (mut left, mut top, mut right, mut bottom) = (src.left, src.top, src.left + src.width as i64, src.top + src.height as i64);
     if let Some(a) = acc.as_ref() {
         left = left.min(a.left);
@@ -1474,14 +1678,6 @@ fn blend_onto(
             }
         }
         *acc = Some(out);
-    }
-    let Some(out) = acc.as_mut() else { return Ok(false) };
-    // Only the source's rows and columns change.
-    let (sw, x0, y0) = (src.width.max(1), (src.left - left) as usize, (src.top - top) as usize);
-    for (k, s) in src.px.iter().enumerate() {
-        let Some(p) = out.px.get_mut((y0 + k / sw) * width + x0 + k % sw) else { continue };
-        let a = coverage(blend, s[3] * opacity, src.left + (k % sw) as i64, src.top + (k / sw) as i64, record);
-        *p = over(blend, *p, [s[0], s[1], s[2], a]);
     }
     Ok(true)
 }
@@ -1523,9 +1719,11 @@ pub(super) fn import(
         noted: vec![false; records.len()],
         skipped: vec![false; records.len()],
         skip_log: vec![],
+        unknocked: vec![false; records.len()],
+        unknock_log: vec![],
         spent: Cell::new(0),
     };
-    let layers = b.list(&items)?;
+    let layers = b.list(&items, Level::Top)?;
     let Builder { mut doc, notes, .. } = b;
     if !layers.is_empty() {
         doc.layers = layers;

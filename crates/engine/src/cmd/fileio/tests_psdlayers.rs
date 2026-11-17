@@ -646,6 +646,134 @@ fn dissolve_layers_merge_as_opaque_or_transparent_pixels() {
     assert!((32..=96).contains(&red), "{red} of 256 pixels show the lower layer: {r}");
 }
 
+/// A layer with a Knockout value of `knko` and a fill opacity of `fill`.
+fn knockout(l: L, knko: u8, fill: u8) -> L {
+    let mut l = l;
+    l.blocks.push((*b"knko", vec![knko, 0, 0, 0]));
+    l.blocks.push((*b"iOpa", vec![fill]));
+    l
+}
+
+/// A green layer under a group of `group_blend` holding a red layer and `cut` above it.
+fn knockout_stack(group_blend: &'static [u8; 4], cut: L) -> Vec<L> {
+    vec![
+        layer("Outside", [0, 0, 4, 4], [0, 255, 0, 255]),
+        group_end(),
+        layer("Lower", [0, 0, 4, 4], [255, 0, 0, 255]),
+        cut,
+        group("Group", group_blend),
+    ]
+}
+
+/// The names of the document's layers, and of the layers in its second one.
+fn knockout_names(s: &Session) -> (Vec<String>, Vec<String>) {
+    let d = &s.doc().unwrap().doc;
+    let names = |ls: &[std::sync::Arc<Node>]| ls.iter().map(|l| name(l).to_string()).collect::<Vec<_>>();
+    (names(&d.layers), d.layers.get(1).and_then(|g| g.children()).map_or(vec![], |c| names(c)))
+}
+
+/// A layer with a shallow knockout in a group merges with the layers below it in the group: its
+/// shape clears them to transparency, it draws there at its fill opacity, and its opacity fades
+/// that. What is outside the group stays a layer of its own and shows through.
+#[test]
+fn knockout_layers_merge_with_the_layers_below_them_in_their_group() {
+    let cut = |fill: u8, opacity: u8| knockout(L { opacity, ..layer("Cut", [0, 0, 2, 2], [0, 0, 255, 255]) }, 1, fill);
+    for (fill, opacity, at_cut) in [(0, 255, [0, 0, 0, 0]), (128, 255, [0, 0, 255, 128]), (0, 128, [255, 0, 0, 127]), (255, 255, [0, 0, 255, 255])] {
+        for group_blend in [b"norm", b"pass"] {
+            let (s, r) = open(&file(4, 4, &knockout_stack(group_blend, cut(fill, opacity)), 8, false, false), json!({}));
+            assert_eq!(r["warnings"], json!([]), "{r}");
+            let (top, inner) = knockout_names(&s);
+            assert_eq!((top, inner), (vec!["Outside".to_string(), "Group".into()], vec!["Lower + Cut".to_string()]), "{fill} {opacity}");
+            let d = &s.doc().unwrap().doc;
+            assert_eq!(d.layers[1].isolate, group_blend == b"norm");
+            let ((x, y), px) = image_of(&s, &d.layers[1].children().unwrap()[0]);
+            assert_eq!(((x, y), px.dimensions()), ((0.0, 0.0), (4, 4)));
+            assert_eq!((px.get_pixel(1, 1).0, px.get_pixel(3, 3).0), (at_cut, [255, 0, 0, 255]), "{fill} {opacity}");
+        }
+    }
+    // A layer mask shapes the cut: where it hides the layer, nothing below is cleared.
+    let mut masked = cut(0, 255);
+    masked.mask = Some(([0, 0, 1, 1], 255, 0, vec![0]));
+    let (s, r) = open(&file(4, 4, &knockout_stack(b"norm", masked), 8, false, false), json!({}));
+    let px = image_of(&s, &s.doc().unwrap().doc.layers[1].children().unwrap()[0]).1;
+    assert_eq!((px.get_pixel(0, 0).0, px.get_pixel(1, 1).0), ([255, 0, 0, 255], [0, 0, 0, 0]), "{r}");
+    // Without a knockout (0), the layers stay apart.
+    let (s, r) =
+        open(&file(4, 4, &knockout_stack(b"norm", knockout(layer("Cut", [0, 0, 2, 2], [0, 0, 255, 255]), 0, 0)), 8, false, false), json!({}));
+    assert_eq!((knockout_names(&s).1, &r["warnings"]), (vec!["Lower".to_string(), "Cut".into()], &json!([])), "{r}");
+}
+
+/// The knockouts this import doesn't apply come in as layers, counted in a warning: at the top level,
+/// on a clipped layer, and with a Knockout value other than 1. Hidden ones that would need the merge
+/// are left out; one that draws nothing, or nothing below it, merges nothing.
+#[test]
+fn knockouts_that_arent_applied_are_said() {
+    const UNAPPLIED: &str = "the knockout of 1 layer wasn't applied";
+    let cut = |l: L, knko: u8| knockout(l, knko, 0);
+    let blue = || layer("Cut", [0, 0, 2, 2], [0, 0, 255, 255]);
+    // At the top level.
+    let layers = [layer("Lower", [0, 0, 4, 4], [255, 0, 0, 255]), cut(blue(), 1)];
+    let (s, r) = open(&file(4, 4, &layers, 8, false, false), json!({}));
+    assert_eq!((knockout_names(&s).0, &r["warnings"]), (vec!["Lower".to_string(), "Cut".into()], &json!([UNAPPLIED])), "{r}");
+    // Another Knockout value, and a clipped layer, in a group.
+    let (s, r) = open(&file(4, 4, &knockout_stack(b"norm", cut(blue(), 2)), 8, false, false), json!({}));
+    assert_eq!((knockout_names(&s).1, &r["warnings"]), (vec!["Lower".to_string(), "Cut".into()], &json!([UNAPPLIED])), "{r}");
+    let (s, r) = open(&file(4, 4, &knockout_stack(b"norm", cut(L { clipped: true, ..blue() }, 1)), 8, false, false), json!({}));
+    assert_eq!((knockout_names(&s).1, &r["warnings"]), (vec!["Lower + Cut".to_string()], &json!([UNAPPLIED])), "{r}");
+    // In a pass-through group, a layer below it, or the knockout itself, in another mode blends with
+    // what is outside the group: the layers stay apart, and the lower one still multiplies the green
+    // outside. In an isolated group they merge.
+    let mut multiply = knockout_stack(b"pass", cut(blue(), 1));
+    multiply[2].blend = b"mul ";
+    let (s, r) = open(&file(4, 4, &multiply, 8, false, false), json!({}));
+    assert_eq!((knockout_names(&s).1, &r["warnings"]), (vec!["Lower".to_string(), "Cut".into()], &json!([UNAPPLIED])), "{r}");
+    assert_eq!(s.doc().unwrap().doc.layers[1].children().unwrap()[0].blend, BlendMode::Multiply);
+    let (s, r) = open(&file(4, 4, &knockout_stack(b"pass", cut(L { blend: b"mul ", ..blue() }, 1)), 8, false, false), json!({}));
+    assert_eq!((knockout_names(&s).1, &r["warnings"]), (vec!["Lower".to_string(), "Cut".into()], &json!([UNAPPLIED])), "{r}");
+    multiply[4] = group("Group", b"norm");
+    let (s, r) = open(&file(4, 4, &multiply, 8, false, false), json!({}));
+    assert_eq!((knockout_names(&s).1, &r["warnings"]), (vec!["Lower + Cut".to_string()], &json!([])), "{r}");
+    // A hidden knockout would need the merge: left out, hidden layers asked for or not.
+    for hidden in [false, true] {
+        let (s, r) =
+            open(&file(4, 4, &knockout_stack(b"norm", cut(L { hidden: true, ..blue() }, 1)), 8, false, false), json!({"hiddenLayers": hidden}));
+        assert_eq!((knockout_names(&s).1, &r["warnings"]), (vec!["Lower".to_string()], &json!([HIDDEN_1])), "{hidden}: {r}");
+    }
+    // One that stores no pixels or only transparent ones cuts nothing, and merges nothing.
+    for (l, inner) in [(L { bare: true, ..blue() }, vec!["Lower"]), (layer("Cut", [0, 0, 2, 2], [0, 0, 255, 0]), vec!["Lower", "Cut"])] {
+        let (s, r) = open(&file(4, 4, &knockout_stack(b"norm", cut(l, 1)), 8, false, false), json!({}));
+        assert_eq!((knockout_names(&s).1, &r["warnings"]), (inner.iter().map(|n| n.to_string()).collect(), &json!([])), "{r}");
+    }
+    // Nothing below it in its group: it comes in as a layer.
+    let layers = [group_end(), cut(blue(), 1), group("Group", b"norm"), layer("Over", [0, 0, 1, 1], [9, 9, 9, 255])];
+    let (s, r) = open(&file(4, 4, &layers, 8, false, false), json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.layers[0].children().unwrap().iter().map(|c| name(c)).collect::<Vec<_>>(), ["Cut"], "{r}");
+    assert_eq!(r["warnings"], json!([]), "{r}");
+}
+
+/// A knockout's merge whose canvases would need more memory than allowed leaves the layers apart,
+/// with a warning.
+#[test]
+fn a_knockout_merge_past_the_memory_allowed_leaves_the_layers_apart() {
+    let cms = |c: [f32; 4]| [c[0], c[1], c[2]];
+    let layers = [
+        group_end(),
+        layer("Lower", [0, 0, 2, 2], [255, 0, 0, 255]),
+        knockout(layer("Cut", [2, 2, 4, 4], [0, 0, 255, 255]), 1, 0),
+        group("Group", b"norm"),
+    ];
+    let f = file(4, 4, &layers, 8, false, false);
+    // Each 2 × 2 layer fits 128 bytes (16 a pixel), but not the canvas of the layer below with the
+    // knockout's canvas held beside it.
+    let (doc, warnings) = psdlayers::import(&f, false, 128, cms).unwrap().unwrap();
+    assert_eq!(doc.layers[0].children().unwrap().iter().map(|c| name(c)).collect::<Vec<_>>(), ["Lower", "Cut"]);
+    assert_eq!(warnings, ["the knockout of 1 layer wasn't applied"]);
+    let (doc, warnings) = psdlayers::import(&f, false, 1 << 20, cms).unwrap().unwrap();
+    assert_eq!(doc.layers[0].children().unwrap().iter().map(|c| name(c)).collect::<Vec<_>>(), ["Lower + Cut"]);
+    assert!(warnings.is_empty(), "{warnings:?}");
+}
+
 #[test]
 fn what_doesnt_come_in_is_said() {
     let mut text = layer("Words", [0, 0, 2, 2], [0, 0, 0, 255]);
