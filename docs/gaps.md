@@ -391,8 +391,10 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   along it, bounded by each cluster's extent so a run of tiny level segments keeps its length); regression tests
   in `crates/pathops/src/planar.rs`. Estimate unchanged.
 - **Done (2026-11-03):** SVG export writes `width` and `height` in the unit SVG Options › Units (`units`) names: `px`
-  (bare numbers, as before), `pt`, `mm`, `cm` or `in`, with the `viewBox` in points, so laser and plotter software reads
-  the physical size (#4462); an unknown unit is an error. Estimate unchanged.
+  (bare numbers, as before; CSS pixels are 96 per inch, so they do not keep the physical size), `pt`, `mm`, `cm` or `in`, with
+  the `viewBox` in points, so laser and plotter software reads the physical size (#4462); to export physical dimensions turn
+  Responsive off and choose `pt`, `mm`, `cm` or `in` (Responsive omits `width` and `height`); an unknown unit is an error.
+  Estimate unchanged.
 - **Missing:** SVG units reverting to points (#864). Shape Builder regions (#937, closed), PDF text placement
   (#722, above), the bezier drag preview (#834, #3065, #3729) and deleting an interior anchor of an open path (above)
   are done.
@@ -905,7 +907,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-03 | minor | SVG Options has a Units choice (Pixels, Points, Millimeters, Centimeters, Inches) for the `width` and `height` an export writes, so laser and plotter software read the physical size (#4462; the `units` option, Pixels still bare numbers as before); scores and estimates unchanged |
+| 2026-11-03 | minor | SVG Options has a Units choice (Pixels, Points, Millimeters, Centimeters, Inches) for the `width` and `height` an export writes, so laser and plotter software read the physical size (#4462; the `units` option, Pixels still bare numbers as before; to export physical dimensions turn Responsive off and choose Points, Millimeters, Centimeters or Inches, since Responsive omits `width` and `height`); scores and estimates unchanged |
 | 2026-11-16 | minor | Recolor Artwork follow-up (#8031, remaining #4028): native Lab input, picker swatch libraries and Assign-row menus; UI interaction regression coverage; scores and estimates unchanged. |
 | 2026-11-14 | minor | Type: Middle Eastern & South Asian and Standard composers per paragraph (#4935): Paragraph panel menu, paragraph styles, `text.setFormat {composer}` and the native file; the Standard composers set Indic, Arabic and Hebrew type glyph by glyph. `.ai`, EPS and PDF files carry no composer. Scores and estimates unchanged. |
 | 2026-11-14 | minor | Tech Circuit adds three original procedural brushes (Circuit Trace, Bus Lines, Terminal Nodes); ten built-in brush libraries. G5 remaining estimate 3–13 h (estimated); parity scores and headline totals unchanged. |
