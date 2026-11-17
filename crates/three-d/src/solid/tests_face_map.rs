@@ -1,7 +1,7 @@
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect};
 
 use super::super::{Extrude, Facet, PlanarFace, View, extrude, plane};
-use super::{FaceMap, NEAREST, extrude_face_map, plane_face_map};
+use super::{FaceMap, MeshFace, NEAREST, extrude_face_map, extrude_mesh_face, plane_face_map, plane_mesh_face};
 
 fn square() -> (PathData, Rect) {
     let mut b = BezPath::new();
@@ -141,6 +141,70 @@ fn a_page_point_nearer_the_eye_than_the_page_map_allows_has_no_art_point() {
     assert_eq!(map.to_page(p), None);
     let q = Point::new(map.origin.x + u / w, map.origin.y + v / w);
     assert_eq!(map.to_art(q), None, "the inverse map takes {q:?} back to an art point the page map has no point for");
+}
+
+/// The art point of every corner of each triangle of `mesh` that `face` takes, and how many
+/// triangles it takes.
+fn mesh_art(mesh: &crate::Mesh, face: &MeshFace) -> (Vec<Point>, usize) {
+    let (mut points, mut taken) = (vec![], 0);
+    for t in &mesh.triangles {
+        let corners: Option<Vec<Point>> = t.iter().map(|&i| face.art_point(mesh.positions[i as usize], mesh.normals[i as usize])).collect();
+        if let Some(c) = corners {
+            points.extend(c);
+            taken += 1;
+        }
+    }
+    (points, taken)
+}
+
+#[test]
+fn a_caps_mesh_corners_go_back_to_the_art_they_were_made_from() {
+    let (path, bounds) = square();
+    let bevel = crate::Bevel { width: 4.0, height: 4.0, ..Default::default() };
+    let options = Extrude { twist: 30.0, taper: 0.5, bevel: Some(bevel), ..Extrude::default() };
+    let view = turned(40.0);
+    let mesh = crate::extrude_mesh(&path, FillRule::NonZero, bounds, options, view).unwrap();
+    // The bevel's width sets the walls, and the back cap, out from the front's outline.
+    let outset = bounds.inflate(4.0, 4.0);
+    for (face, cap) in [(PlanarFace::Front, bounds), (PlanarFace::Back, outset)] {
+        let mesh_face = extrude_mesh_face(bounds, options, view, face).unwrap();
+        let (points, taken) = mesh_art(&mesh, &mesh_face);
+        // A square cap is two triangles, and none of the bevel's or the walls' triangles are
+        // taken. The art points undo the back's twist and taper.
+        assert_eq!(taken, 2, "{face:?}");
+        for p in points {
+            let near = corners(cap).iter().map(|c| c.distance(p)).fold(f64::INFINITY, f64::min);
+            assert!(near < 1e-6, "{face:?}: {p:?} is {near} from the cap's corners");
+        }
+    }
+    // A hollow solid has no caps, and a plane's mesh has only the front, facing either way.
+    assert_eq!(extrude_mesh_face(bounds, Extrude { cap: false, ..options }, view, PlanarFace::Front), None);
+    let plane = crate::plane_mesh(&path, FillRule::NonZero, bounds, view).unwrap();
+    let (points, taken) = mesh_art(&plane, &plane_mesh_face(bounds, view).unwrap());
+    assert_eq!(taken, plane.triangles.len());
+    assert!(points.iter().all(|p| corners(bounds).iter().any(|c| c.distance(*p) < 1e-6)), "{points:?}");
+    assert_eq!(extrude_mesh_face(bounds, Extrude { depth: 0.0, ..options }, view, PlanarFace::Back), None);
+}
+
+#[test]
+fn a_cap_far_from_the_page_origin_takes_none_of_a_step_bevels_treads() {
+    let (path, bounds) = square();
+    let far = vectorcraft_geom::kurbo::Affine::translate((1e7, 1e7));
+    let path = PathData::from_bezpath(&(far * path.to_bezpath()));
+    let bounds = far.transform_rect_bbox(bounds);
+    let bevel = crate::Bevel { width: 4.0, height: 4.0, shape: crate::BevelShape::Step, ..Default::default() };
+    let options = Extrude { bevel: Some(bevel), ..Extrude::default() };
+    let view = turned(0.0);
+    let mesh = crate::extrude_mesh(&path, FillRule::NonZero, bounds, options, view).unwrap();
+    let mesh_face = extrude_mesh_face(bounds, options, view, PlanarFace::Front).unwrap();
+    let (points, taken) = mesh_art(&mesh, &mesh_face);
+    // The treads face the same way as the cap, a few points behind it: only the cap's two
+    // triangles are taken, wherever the art lies on the page.
+    assert_eq!(taken, 2);
+    for p in points {
+        let near = corners(bounds).iter().map(|c| c.distance(p)).fold(f64::INFINITY, f64::min);
+        assert!(near < 1e-6, "{p:?} is {near} from the cap's corners");
+    }
 }
 
 #[test]
