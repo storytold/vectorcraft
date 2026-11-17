@@ -852,7 +852,8 @@ pub(super) fn option_label(option: &str) -> String {
 }
 
 /// `document.pdfSettings` for the dialog with the document's warnings (an export in memory),
-/// cached until a field, the document or the saved presets change.
+/// cached until a field, the document, the saved PDF or flattener presets, the loaded color
+/// profiles or the available fonts change.
 fn summary_of(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Result<Value, String> {
     let (key, stamp) = summary_key(app, p);
     if let Some((s, v)) = ctx.data(|m| m.get_temp::<(egui::Id, Result<Value, String>)>(key))
@@ -865,12 +866,17 @@ fn summary_of(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Resul
     v
 }
 
-/// Where [`summary_of`] keeps the Summary, and the stamp of the params `p`, the active document
-/// and its revision, and the saved presets (which `preset` can name) it was computed for.
+/// Where [`summary_of`] keeps the Summary, and the stamp of what it was computed for: the params
+/// `p`, the active document and its revision, the saved PDF presets (which `preset` can name), the
+/// saved flattener presets (which `flattenerPreset` can name), the loaded color profiles (which
+/// `output.destination` and `output.outputIntent` can name) and the available fonts (which decide
+/// what is embedded or outlined).
 fn summary_key(app: &VectorcraftApp, p: &Value) -> (egui::Id, egui::Id) {
     let document = app.session.active().map(|s| (s.uid, s.revision));
-    let presets = serde_json::to_string(&app.session.prefs.pdf_presets).unwrap_or_default();
-    (egui::Id::unique("save-pdf-summary"), egui::Id::unique((p.to_string(), document, presets)))
+    let prefs = &app.session.prefs;
+    let presets = serde_json::to_string(&(&prefs.pdf_presets, &prefs.flattener_presets)).unwrap_or_default();
+    let shared = (vectorcraft_color::cms::profiles_generation(), vectorcraft_text::FontDb::global().generation());
+    (egui::Id::unique("save-pdf-summary"), egui::Id::unique((p.to_string(), document, presets, shared)))
 }
 
 /// `document.pdfSettings` for the dialog's `document.exportPdf` params `p`, with the document's
@@ -968,8 +974,8 @@ pub(crate) fn summary_open(app: &VectorcraftApp) -> bool {
 
 /// `ui.pdfSummary.save {path}`: write the open Save PDF dialog's (or preset editor's) Summary as
 /// text to `path` (the web downloads it under the path's file name). The Summary the section last
-/// drew for the same fields, document and saved presets is used as it is; the settings are
-/// computed only when there is none. The dialog stays open and the document is not changed →
+/// drew for the same fields, document, saved PDF and flattener presets, loaded color profiles
+/// and available fonts is used as it is; the settings are computed only when there is none. The dialog stays open and the document is not changed →
 /// `{path, bytes}`. A missing, empty or non-string `path` is an error that writes nothing.
 pub(crate) fn save_summary(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let key = "path";

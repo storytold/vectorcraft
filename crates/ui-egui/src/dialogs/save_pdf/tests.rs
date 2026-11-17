@@ -238,6 +238,49 @@ fn save_summary_compares_against_a_replaced_preset() {
     assert!(text.starts_with("Options\nEvery option matches the preset.\n"), "compared against the replaced preset: {text}");
 }
 
+/// The Summary is computed again when the saved flattener preset the dialog names is deleted while
+/// the dialog stays open: the settings are then refused, and nothing is written.
+#[test]
+fn save_summary_sees_a_deleted_flattener_preset() {
+    let (mut app, written, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine Flat", "preset": "Low Resolution"})).unwrap();
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "flattenerPreset", json!("Mine Flat"));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    app.run("flattener.presets.delete", json!({"name": "Mine Flat"})).unwrap();
+    let e = app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap_err();
+    assert!(e.contains("Mine Flat"), "the deleted preset is refused: {e}");
+    assert_eq!(written.borrow().len(), 1, "nothing written for the deleted preset");
+}
+
+/// The Summary is computed again when a loaded profile the dialog converts to is removed while the
+/// dialog stays open: the settings are then refused, and nothing is written.
+#[test]
+fn save_summary_sees_a_removed_profile() {
+    use vectorcraft_color::cms;
+    let name = "Summary Stamp CMYK";
+    // The built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    let mut bytes = cms::icc_bytes(cms::DEVICE_CMYK).unwrap().to_vec();
+    let (from, to) = (utf16(cms::DEVICE_CMYK), utf16(&format!("{name:<width$}", width = cms::DEVICE_CMYK.len())));
+    let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+    bytes[at..at + to.len()].copy_from_slice(&to);
+    let path = vectorcraft_testkit::temp_dir("save-summary-profile").join("stamp.icc");
+    std::fs::write(&path, bytes).unwrap();
+    let (mut app, written, _) = app();
+    assert_eq!(app.run("color.loadProfile", json!({"path": path.to_str().unwrap()})).unwrap()["name"], name);
+    app.run("file.export.pdf", json!({})).unwrap();
+    set_field(&mut app, "output.conversion", json!("destination"));
+    set_field(&mut app, "output.destination", json!(name));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    app.run("color.removeProfile", json!({"name": name})).unwrap();
+    let e = app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap_err();
+    assert!(e.contains(name), "the removed profile is refused: {e}");
+    assert_eq!(written.borrow().len(), 1, "nothing written for the removed profile");
+}
+
 /// With the desktop's file writer: a file already at the path is replaced whole, a folder's path
 /// is an error that leaves the folder as it was, and under automation write roots a path outside
 /// them is refused without writing.

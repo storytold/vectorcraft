@@ -1345,7 +1345,8 @@ The Summary section's Save Summary… button writes what the section shows to a 
 mark, LF line endings), and its save panel suggests `<document> PDF Summary.txt` in the document's folder; the web
 downloads the file under that name. `ui.pdfSummary.save {path}` writes the same text for the open Save PDF dialog or
 PDF preset editor to `path` and returns `{path, bytes}`. It uses the Summary the section last drew for the same fields,
-document and saved presets, and computes the settings only when there is none. No such dialog open, a `path` that is missing, empty
+document, saved PDF and flattener presets, loaded color profiles and available fonts, and computes the settings only
+when there is none. No such dialog open, a `path` that is missing, empty
 or not a string, a path outside the automation write roots and settings that
 `document.pdfSettings` refuses are errors that write nothing. The dialog stays open and the document does not change.
 `thumbnails: true` embeds each page drawn small (106 px on its long side, without the layers the page leaves out) as
