@@ -2076,7 +2076,10 @@ commands fail and change nothing, and `appearance.removeItem` removes nothing. A
 `artboard.reorder`, `graphicStyle.move`, `appearance.moveItem`, `appearance.duplicateItem` and `effect.move`) puts
 the item last. A text `start` or `end` is past the end of the text. `object.slice.divide` refuses such a `rows` or
 `columns`, `recolor.reduce` keeps each color in its own row for such a `colors`, and `layer.setProps` refuses such a
-`color`. `object.setBounds` reads a `reference` past 8 as 8, as `object.transformEach` does.
+`color`. `object.setBounds` reads a whole-number `reference` past 8 as 8, as `object.transformEach` does.
+For `object.setBounds`, `reference` accepts whole numbers of 0 or more, including floating-point representations
+such as `0.0`. Negative and fractional values are errors. An omitted or null `reference` uses the center point, 4.
+These rules apply to both whole objects and directly selected anchors.
 An index or place given as a value that is not a whole number of 0 or more, such as `"3"`, `2.5`, `-1` or `true`, is
 refused with `` `anchor` must be a whole number ``, naming the key: `anchor` of `path.setHandle`, `path.moveAnchor` and
 `text.setPathHandle`, `segment` of `path.insertAnchor`, `to` of `artboard.reorder`, `library.moveGroup` and

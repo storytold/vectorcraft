@@ -588,6 +588,8 @@ since 2026-10-01.
 
 ## Evidence: what ships today, by area
 
+- `object.setBounds` uses the same reference point for whole-number integer and floating-point values, including `0` and `0.0`. It rejects negative and fractional indices without changing geometry, selection, or undo history. An omitted or null reference uses the center, and whole-number references above 8 use point 8. Object and direct-anchor selections follow these rules (`tests::bboxrotate::set_bounds_whole_number_references_match_integer_references`, `set_bounds_rejects_invalid_references_without_changes`).
+
 - **Recolor picker follow-up (#8031/#4028):** native Lab numeric entry, document/loaded-library swatches in the Color Picker, and Assign-row Pick from Swatches / Limit to Library menus. #4090 provided the double-click picker and #5113 the Assign sliders. Regression tests `native_lab_entry_in_color_picker` and `row_context_menu_pick_from_swatches_and_limit_to_library` exercise the fields and menu callbacks rather than writing their result state. Area score and hours unchanged.
 
 - **Save refusal (#6146):** ordinary File > Save to its own location offers Save As after a terminal permission/read-only refusal, suggesting the original name and format, preserving options for the unchanged format and opening the chosen format’s Save options on a change. Cancel keeps the failed-save state. Busy pickers, recovery-copy errors, other failures, explicit destinations and Close/Quit keep the existing dialog. Engine, UI and MCP regression cases are in `cmd/fileio/tests_readonly.rs`, `io/tests_read_only_save.rs` and MCP `tests/fileio.rs`; focused UI regressions passed; engine regression execution and native panel acceptance pending. Scores and hours unchanged.
