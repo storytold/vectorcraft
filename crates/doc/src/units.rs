@@ -139,6 +139,27 @@ impl Unit {
     pub fn format(self, pt: f64) -> String {
         format!("{} {}", self.number(pt), self.suffix())
     }
+    /// Format a square-point area in this unit squared the way Document Info › Objects shows
+    /// its Area row (e.g. `5000 pt²`, `12.5 cm²`). A non-finite or negative area reads as zero:
+    /// areas are unsigned winding sums, so only a hostile or overflowed value ends up here.
+    pub fn format_square(self, pt_area: f64) -> String {
+        // `points` is a positive constant for every unit; the checks keep `inf`, `NaN` and
+        // negatives from printing.
+        let v = if pt_area.is_finite() && pt_area > 0.0 && self.points().is_finite() && self.points() > 0.0 {
+            pt_area / (self.points() * self.points())
+        } else if pt_area.is_finite() && pt_area > 0.0 {
+            pt_area
+        } else {
+            0.0
+        };
+        // [`Unit::number`]'s decimals, applied to the converted value: three for the small
+        // units, four for the large ones; trailing zeros are trimmed (`1 in²` is `1`).
+        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 3 } else { 4 };
+        let s = format!("{:.*}", decimals, v);
+        let s = s.trim_end_matches('0').trim_end_matches('.');
+        let s = if s == "-0" { "0" } else { s };
+        format!("{s} {}²", self.suffix())
+    }
     /// [`Unit::format`] without the suffix (`12.5`), for narrow fields.
     pub fn number(self, pt: f64) -> String {
         // Three decimals for the small units (`595.276 pt`), four for the large ones (`8.2677 in`,
@@ -341,5 +362,27 @@ impl ColorMode {
             ColorMode::Rgb => vectorcraft_color::cms::Model::Rgb,
             ColorMode::Cmyk => vectorcraft_color::cms::Model::Cmyk,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [`Unit::format_square`] gives an area in the unit squared (a 72 × 72 pt square is one
+    /// square inch), and hostile input reads as zero rather than `inf`, `NaN` or a negative.
+    #[test]
+    fn square_units_format_area() {
+        assert_eq!(Unit::Points.format_square(5000.0), "5000 pt²");
+        assert_eq!(Unit::Pixels.format_square(5000.0), "5000 px²");
+        assert_eq!(Unit::Inches.format_square(72.0 * 72.0), "1 in²");
+        assert_eq!(Unit::Millimeters.format_square(5000.0), "622.2608 mm²");
+        assert_eq!(Unit::Centimeters.format_square(5000.0), "6.2226 cm²");
+        assert_eq!(Unit::Meters.format_square(5000.0), "0.0006 m²");
+        assert_eq!(Unit::Feet.format_square(864.0 * 864.0), "1 ft²");
+        assert_eq!(Unit::Millimeters.format_square(0.0), "0 mm²");
+        assert_eq!(Unit::Millimeters.format_square(f64::INFINITY), "0 mm²");
+        assert_eq!(Unit::Millimeters.format_square(f64::NAN), "0 mm²");
+        assert_eq!(Unit::Millimeters.format_square(-4.0), "0 mm²");
     }
 }
