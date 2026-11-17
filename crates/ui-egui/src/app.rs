@@ -90,6 +90,7 @@ impl VectorcraftApp {
                 selection_bounds: None,
                 content_bounds: None,
                 pixel_aligned: None,
+                symbol_instances: None,
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 cursors: Default::default(),
