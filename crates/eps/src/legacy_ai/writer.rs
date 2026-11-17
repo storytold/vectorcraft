@@ -11,6 +11,18 @@ use super::{
 };
 use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, SPREAD, SPREAD_CAPPED};
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`Writer::coverage`] has worked out an image's coverage on this thread.
+    pub(super) static COVERAGE_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`Numbered::take`] numbers names on this thread by searching the names given so
+    /// far, one number at a time, for each number it tries.
+    pub(super) static SCANNED_NAMES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// An image's coverage ([`ImageBlob::coverage`]): its width, its height and one byte a pixel.
+type Coverage = (u32, u32, Arc<Vec<u8>>);
+
 pub(super) struct Writer<'a> {
     doc: &'a Document,
     /// The document → art space.
@@ -50,10 +62,17 @@ pub(super) struct Writer<'a> {
     /// The image decoded last (`None` when it can't be): the pieces of a warped image, which follow
     /// one another, decode it once.
     last_image: Option<(ImageBlob, Option<Arc<image::DynamicImage>>)>,
+    /// The coverage of [`Self::last_image`] once a colorized piece of it asked for it (`Some(None)`
+    /// when it can't be worked out), so the pieces of a colorized warped image work it out once.
+    last_coverage: Option<Option<Coverage>>,
     /// The images written whole so far, by the address of their data (which each entry keeps).
     whole_images: std::collections::HashMap<usize, Arc<Vec<u8>>>,
     /// Writing a graph's art with its records: a graph inside it is written as its art.
     in_graph: bool,
+    /// The names of [`Self::gradients`].
+    gradient_names: Numbered,
+    /// The names spot colors are written with ([`Self::spot`]).
+    spot_written: Numbered,
 }
 
 impl<'a> Writer<'a> {
@@ -79,8 +98,11 @@ impl<'a> Writer<'a> {
             kumi: false,
             clips: vec![],
             last_image: None,
+            last_coverage: None,
             whole_images: std::collections::HashMap::new(),
             in_graph: false,
+            gradient_names: Numbered::default(),
+            spot_written: Numbered::default(),
         }
     }
 
@@ -142,12 +164,7 @@ impl<'a> Writer<'a> {
             Some((_, w)) => w.clone(),
             None => {
                 let base = self.latin_name(name, TITLE_AND_COLOR_NAMES);
-                let mut written = base.clone();
-                let mut i = 1;
-                while self.spot_names.iter().any(|(_, w)| *w == written) {
-                    i += 1;
-                    written = format!("{base} {i}");
-                }
+                let written = self.spot_written.take(base);
                 self.spot_names.push((name.to_string(), written.clone()));
                 written
             }
@@ -810,14 +827,8 @@ impl<'a> Writer<'a> {
         if let Some((name, _)) = self.gradients.iter().find(|(_, d)| d == g) {
             return name.clone();
         }
-        let taken = |n: &str, defs: &[(String, Gradient)]| defs.iter().any(|(m, _)| m == n);
         let base = self.latin_name(swatch.filter(|s| !s.is_empty()).unwrap_or("Gradient"), TITLE_AND_COLOR_NAMES);
-        let mut name = base.clone();
-        let mut i = 1;
-        while taken(&name, &self.gradients) {
-            i += 1;
-            name = format!("{base} {i}");
-        }
+        let name = self.gradient_names.take(base);
         self.gradients.push((name.clone(), g.clone()));
         name
     }
@@ -1104,7 +1115,7 @@ impl<'a> Writer<'a> {
         let fit = Affine::scale_non_uniform(f64::from(width.max(1)) / f64::from(w), f64::from(height.max(1)) / f64::from(h));
         let coverage = match colorize {
             Some(paint) => {
-                let Some((_, _, coverage)) = ImageBlob::coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
+                let Some((_, _, coverage)) = self.coverage(blob).filter(|(cw, ch, _)| (*cw, *ch) == (w, h)) else {
                     self.warn(UNDECODED);
                     return;
                 };
@@ -1170,37 +1181,110 @@ impl<'a> Writer<'a> {
         {
             return img.clone();
         }
-        let img = image::load_from_memory(&blob.bytes).ok().map(Arc::new);
+        let too_large = |w: u32, h: u32| w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS;
+        let img = if vectorcraft_doc::header_size(&blob.bytes).is_some_and(|(w, h)| too_large(w, h)) {
+            None
+        } else {
+            vectorcraft_doc::decode::decode_within(&blob.bytes, MAX_IMAGE_PIXELS.saturating_mul(8))
+                .ok()
+                .flatten()
+                .map(|(img, _)| img)
+                .filter(|img| !too_large(img.width(), img.height()))
+        }
+        .map(Arc::new);
         self.last_image = Some((blob.clone(), img.clone()));
+        self.last_coverage = None;
         img
+    }
+
+    /// The coverage of `blob` ([`ImageBlob::coverage`]), worked out once for images that follow one
+    /// another with the same data, as [`Self::decoded`] decodes them.
+    fn coverage(&mut self, blob: &ImageBlob) -> Option<Coverage> {
+        let last = self.last_image.as_ref().is_some_and(|(last, _)| Arc::ptr_eq(&last.bytes, &blob.bytes) && last.mime == blob.mime);
+        if last && let Some(coverage) = &self.last_coverage {
+            return coverage.clone();
+        }
+        #[cfg(test)]
+        COVERAGE_RUNS.with(|n| n.set(n.get() + 1));
+        let coverage = ImageBlob::coverage(blob).map(|(w, h, c)| (w, h, Arc::new(c)));
+        if last {
+            self.last_coverage = Some(coverage.clone());
+        }
+        coverage
+    }
+
+    /// Appends `samples` to `s` as upper-case hex digits on comment lines: each line starts with `%`,
+    /// holds [`HEX_LINE`] digits (the last line may hold fewer) and ends with a newline. An empty
+    /// `samples` appends no line.
+    pub(super) fn push_hex(s: &mut String, samples: &[u8]) {
+        const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+        const PER_LINE: usize = HEX_LINE / 2;
+        const _: () = assert!(HEX_LINE > 0 && HEX_LINE.is_multiple_of(2));
+        let lines = samples.len().div_ceil(PER_LINE);
+        s.reserve(samples.len().saturating_mul(2).saturating_add(lines.saturating_mul(2)));
+        for line in samples.chunks(PER_LINE) {
+            s.push('%');
+            for &c in line {
+                s.push(char::from(DIGITS[usize::from(c >> 4)]));
+                s.push(char::from(DIGITS[usize::from(c & 0x0F)]));
+            }
+            s.push('\n');
+        }
     }
 
     /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`
     /// and the numbers `operands` with `XI`, `samples` in hex on comment lines of [`HEX_LINE`]
     /// digits, `%AI5_EndRaster`, then `F`.
     fn raster(&mut self, m: Affine, operands: &str, samples: &[u8]) {
-        let mut hex = String::with_capacity(samples.len() * 2 + samples.len() / HEX_LINE * 2 + 2);
-        hex.push('%');
-        let mut on_line = 0;
-        for c in samples {
-            let _ = write!(hex, "{c:02X}");
-            on_line += 2;
-            if on_line >= HEX_LINE {
-                hex.push_str("\n%");
-                on_line = 0;
-            }
-        }
-        if hex.ends_with('%') {
-            hex.pop();
-        } else {
-            hex.push('\n');
-        }
         let [a, b, c, d, e, f] = m.as_coeffs();
         let s = &mut self.body;
         s.push_str("%AI5_File:\n%AI5_BeginRaster\n[ ");
         ps::push_nums(s, &[a, b, c, d, e, f]);
         let _ = writeln!(s, "] {operands} XI");
-        s.push_str(&hex);
+        Self::push_hex(s, samples);
         s.push_str("%AI5_EndRaster\nF\n");
+    }
+}
+
+/// Names kept apart: a name already given is numbered, as the first free `name 2`, `name 3`…
+#[derive(Default)]
+pub(super) struct Numbered {
+    taken: std::collections::HashSet<String>,
+    /// The number to try first for each name already given, after the numbers it was given.
+    next: std::collections::HashMap<String, usize>,
+    /// The names given, in order, for [`SCANNED_NAMES`].
+    #[cfg(test)]
+    given: Vec<String>,
+}
+
+impl Numbered {
+    /// `base`, or the first free `base 2`, `base 3`… when `base` is taken; it is then taken.
+    pub(super) fn take(&mut self, base: String) -> String {
+        #[cfg(test)]
+        if SCANNED_NAMES.with(std::cell::Cell::get) {
+            let mut name = base.clone();
+            let mut i = 1;
+            while self.given.contains(&name) {
+                i += 1;
+                name = format!("{base} {i}");
+            }
+            self.given.push(name.clone());
+            return name;
+        }
+        let name = if self.taken.contains(&base) {
+            // Names are never given back, so every number below `from` is still taken. Of the
+            // numbers `from..=tries`, at least one is free.
+            let from = self.next.get(&base).copied().unwrap_or(2);
+            let tries = from.saturating_add(self.taken.len());
+            let i = (from..tries).find(|i| !self.taken.contains(&format!("{base} {i}"))).unwrap_or(tries);
+            self.next.insert(base.clone(), i.saturating_add(1));
+            format!("{base} {i}")
+        } else {
+            base
+        };
+        self.taken.insert(name.clone());
+        #[cfg(test)]
+        self.given.push(name.clone());
+        name
     }
 }

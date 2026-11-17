@@ -1,8 +1,9 @@
 //! Window › Arrange › Tile: every open document in a pane of its own, edge to edge in the document
 //! area. The current document's pane is the canvas ([`super::show`]). Each other pane draws its
 //! document from a render of its own, with its artboards, guides and selected objects, and a press
-//! in it makes its document the current one. Each view Window › New Window opened has a pane of
-//! its own ([`crate::doc_windows`]).
+//! in it makes its document the current one. A Selection drag released in it drops the dragged
+//! artwork into its document ([`crate::document_drag::drop_on_pane`]). Each view Window › New
+//! Window opened has a pane of its own ([`crate::doc_windows`]).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use super::outline::{c32, node_outline, stroke_path, too_many_anchors};
 use super::view::fit_zoom;
 use super::{
     Affine, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, backdrop, cache_key,
-    dim_on_canvas, frame_options, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2, rulers,
+    dim_on_canvas, frame_options, frame_ppp, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2, rulers,
     shows_artboards, textured_quad, vec2, view_rects,
 };
 use crate::doc_windows::Win;
@@ -243,11 +244,17 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let areas: Vec<(Win, egui::Rect)> = cells.iter().map(|(w, cell)| (*w, view_rects(app, *cell, ppp).1)).collect();
     let unfitted = refit_resized(app, &areas);
     let mut activate = None;
+    let (mut cursor, mut dropped) = (None, None);
     // The other panes first, so that what the canvas draws past its pane (the Contextual Task Bar)
     // stays over them.
-    for (w, cell) in cells.iter().copied().filter(|(w, _)| Some(*w) != active) {
+    for ((w, cell), (_, area)) in cells.iter().copied().zip(areas.iter().copied()).filter(|((w, _), _)| Some(*w) != active) {
         if pane(app, ui, w, cell) {
             activate = Some(w);
+        }
+        match artwork_over(app, ui, w, area) {
+            Some(Over::Held(c)) => cursor = Some(c),
+            Some(Over::Released(at, carried)) => dropped = Some((w, at, carried)),
+            None => {}
         }
         ui.painter().rect_stroke(cell, 0.0, Stroke::new(1.0, t.border), StrokeKind::Inside);
     }
@@ -256,6 +263,10 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         super::show(app, &mut canvas);
         ui.painter().rect_stroke(cell, 0.0, Stroke::new(1.5, t.accent), StrokeKind::Inside);
     }
+    // After the canvas, which sets the cursor of the drag it holds.
+    if let Some(c) = cursor {
+        ui.ctx().set_cursor_icon(c);
+    }
     // Note the fits this frame made, for `refit_resized`.
     for ((w, area), was_unfitted) in areas.iter().zip(unfitted) {
         if let (true, Some(v), Some(s)) = (was_unfitted, crate::doc_windows::view(app, *w).filter(|v| v.fitted).copied(), slot(app, *w)) {
@@ -263,10 +274,84 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         }
     }
     app.canvas.panes.last = cells;
-    if let Some(w) = activate {
+    if let Some((w, at, carried)) = dropped {
+        crate::document_drag::drop_on_pane(app, ui.ctx(), w, at, carried);
+    } else if let Some(w) = activate {
         crate::doc_windows::show_window(app, w);
     }
     true
+}
+
+/// A Selection drag's artwork over another window's tiled pane.
+enum Over {
+    /// Held there: the cursor that shows whether a release moves or copies it.
+    Held(egui::CursorIcon),
+    /// Released there, at a document point in the pane's own view.
+    Released(Point, crate::document_drag::Carried),
+}
+
+/// A Selection drag's artwork over `area`, the part of window `w`'s pane inside its rulers and
+/// scroll bars, where no panel or floating window is over the pointer. A release there takes the
+/// artwork before the canvas sees the release ([`crate::document_drag::take_for_pane`]).
+fn artwork_over(app: &mut VectorcraftApp, ui: &Ui, w: Win, area: egui::Rect) -> Option<Over> {
+    let (uid, _) = slot(app, w)?;
+    let p = ui.input(crate::document_drag::released_at)?;
+    if !area.contains(p) || ui.ctx().layer_id_at(p).is_some_and(|l| l != ui.layer_id()) {
+        return None;
+    }
+    let cursor = crate::document_drag::pane_cursor(app, ui.ctx(), uid)?;
+    if !ui.input(|i| i.pointer.primary_released()) {
+        return Some(Over::Held(cursor));
+    }
+    let v = crate::doc_windows::view(app, w).copied()?;
+    let at = Xf::at(area, &v, ui.ctx().zoom_factor()).to_doc(p);
+    Some(Over::Released(at, crate::document_drag::take_for_pane(app, ui.ctx())?))
+}
+
+/// Note window `w`'s pane, drawn in `cell` of `ui` outside Tile (a floating window inside the main
+/// window, or the main window while the current window floats), as a place a Selection drag's
+/// artwork can be released in ([`release_on_noted`]): the part inside its rulers and scroll bars.
+pub(crate) fn note_drop(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) {
+    let Some(s) = slot(app, w) else { return };
+    let area = view_rects(app, cell, ui.ctx().pixels_per_point()).1;
+    app.canvas.windows.drops.push((s, area, ui.layer_id()));
+}
+
+/// The noted pane ([`note_drop`]) at `p`, where no panel or other window is over it: its window
+/// and its art area.
+fn noted_at(app: &VectorcraftApp, ctx: &egui::Context, p: egui::Pos2) -> Option<(Win, egui::Rect)> {
+    let top = ctx.layer_id_at(p);
+    let (s, area, _) = app.canvas.windows.drops.iter().rev().find(|(_, area, layer)| area.contains(p) && top.is_none_or(|l| l == *layer))?;
+    let w = crate::doc_windows::windows(app).into_iter().find(|w| slot(app, *w) == Some(*s))?;
+    Some((w, *area))
+}
+
+/// A Selection drag's artwork released over a pane the last frame noted ([`note_drop`]) drops into
+/// its document ([`crate::document_drag::drop_on_pane`]), at the document point where the button
+/// went up, in that pane's own view. Runs at the start of a frame, before any canvas sees the release.
+pub(crate) fn release_on_noted(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.canvas.windows.drops.is_empty() || !ctx.input(|i| i.pointer.primary_released()) {
+        return;
+    }
+    let Some(p) = ctx.input(crate::document_drag::released_at) else { return };
+    let Some((w, area)) = noted_at(app, ctx, p) else { return };
+    let Some(v) = crate::doc_windows::view(app, w).copied() else { return };
+    let at = Xf::at(area, &v, ctx.zoom_factor()).to_doc(p);
+    if let Some(carried) = crate::document_drag::take_for_pane(app, ctx) {
+        crate::document_drag::drop_on_pane(app, ctx, w, at, carried);
+    }
+}
+
+/// While a Selection drag's artwork is held over a pane this frame noted ([`note_drop`]), the cursor
+/// shows whether a release there moves or copies it ([`crate::document_drag::pane_cursor`]).
+pub(crate) fn noted_cursor(app: &VectorcraftApp, ctx: &egui::Context) {
+    let Some(p) = ctx.input(|i| i.pointer.interact_pos()) else { return };
+    if let Some((w, _)) = noted_at(app, ctx, p)
+        && let Some((uid, _)) = slot(app, w)
+        && let Some(c) = crate::document_drag::pane_cursor(app, ctx, uid)
+    {
+        ctx.set_cursor_icon(c);
+    }
 }
 
 /// Window `w`'s [`Slot`].
@@ -339,10 +424,13 @@ fn draw_pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) -> boo
     if let Some(look) = grid_look.filter(|_| grids_in_back) {
         grid(&painter, &xf, st.doc.grid.spacing, st.doc.grid.subdivisions, look);
     }
+    // View › Pixel Preview, as the canvas draws it.
+    let max_side = ui.ctx().input(|i| i.max_texture_side);
+    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf, max_side)).flatten();
+    // The pane's frame fits the largest texture side the display supports, as the canvas's does.
+    let ppp = frame_ppp(rect.size(), ppp, max_side);
     let size = |l: f32| ((l * ppp).round().max(1.0) as u32).min(u32::from(u16::MAX));
     let (pw, ph) = (size(rect.width()), size(rect.height()));
-    // View › Pixel Preview, as the canvas draws it.
-    let pixel = (app.ui.view.pixel_preview && xf.zoom * ppp as f64 > 1.0).then(|| pixel_region(&xf)).flatten();
     let smooth_images = pixel.is_none() || app.session.prefs.anti_aliased_bitmaps;
     let plugins = plugin_key(&mut app.canvas.plugin_keys, &app.session, st);
     let placed = placed_key(&mut app.canvas.placed_keys, &app.session, st);

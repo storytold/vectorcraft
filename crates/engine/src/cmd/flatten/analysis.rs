@@ -56,7 +56,7 @@ pub(crate) fn outlined_text(n: &Node) -> Option<Node> {
 }
 
 /// `to` (art made from `from`) with `from`'s name, transparency, opacity mask and effects.
-fn carry(from: &Node, mut to: Node) -> Node {
+pub(crate) fn carry(from: &Node, mut to: Node) -> Node {
     to.name = from.name.clone();
     to.opacity = from.opacity;
     to.blend = from.blend;
@@ -70,9 +70,7 @@ fn carry(from: &Node, mut to: Node) -> Node {
 /// The keys of `doc`'s images that have see-through pixels (an alpha channel that isn't opaque
 /// everywhere).
 pub(crate) fn see_through_images(doc: &Document) -> BTreeSet<String> {
-    let see_through = |b: &ImageBlob| {
-        b.mime != "image/jpeg" && image::load_from_memory(&b.bytes).is_ok_and(|i| i.color().has_alpha() && i.to_rgba8().pixels().any(|p| p[3] < 255))
-    };
+    let see_through = |b: &ImageBlob| b.mime != "image/jpeg" && b.has_transparency();
     doc.images.iter().filter(|(_, b)| see_through(b)).map(|(k, _)| k.clone()).collect()
 }
 
@@ -185,9 +183,12 @@ impl Sets {
 /// horizontal extent, would otherwise compare every pair). An open box inside a later box of
 /// its group, ending no further right, is closed early, and a box inside an open box of its group,
 /// ending no further right, isn't opened: whatever overlaps it overlaps that box. An open box that
-/// a later box of its group overlaps, starting lower and ending no further right or lower, keeps
-/// only its part above the later box's top, so boxes staggered right and down each meet only the
-/// one before. Fails only when cancelled ([`vectorcraft_doc::cancel`]).
+/// a later box of its group overlaps and ends no further right than keeps only the part the later
+/// box doesn't cover: its part above the later box's top when the later box starts lower and ends
+/// no higher than it, and its part below the later box's bottom when the later box starts no lower
+/// and ends higher than it. The open box's top then moves down in the tree, so boxes staggered right
+/// and down, or right and up, each meet only the one before. Fails only when cancelled
+/// ([`vectorcraft_doc::cancel`]).
 pub(super) fn overlapping(bounds: &[Option<Rect>]) -> Result<Vec<Vec<usize>>, Cancelled> {
     Ok(sweep(bounds, None)?.groups())
 }
@@ -206,27 +207,25 @@ fn sweep(bounds: &[Option<Rect>], see_through: Option<&[bool]>) -> Result<Sets, 
     };
     let boxes: Vec<(usize, Rect)> = bounds.iter().enumerate().filter_map(|(i, b)| b.filter(finite).map(|b| (i, b))).collect();
     let n = boxes.len();
-    // Each box's place in the tree: by top (then index).
-    let mut by_top: Vec<usize> = (0..n).collect();
-    by_top.sort_by(|&a, &b| boxes[a].1.y0.total_cmp(&boxes[b].1.y0).then(a.cmp(&b)));
-    let tops: Vec<f64> = by_top.iter().map(|&k| boxes[k].1.y0).collect();
-    let mut leaf = vec![0usize; n];
-    for (pos, &k) in by_top.iter().enumerate() {
-        leaf[k] = pos;
-    }
-    // The lowest bottom of the open boxes below each node (−∞: none open), in the tree of the
-    // boxes without transparency (every box without `see_through`) and the see-through boxes'.
-    let size = n.next_power_of_two().max(1);
-    let mut low = [vec![f64::NEG_INFINITY; 2 * size], if see_through.is_some() { vec![f64::NEG_INFINITY; 2 * size] } else { vec![] }];
-    let tree = |k: usize| usize::from(see_through.is_some_and(|s| s[boxes[k].0]));
-    let set = |low: &mut [f64], pos: usize, v: f64| {
-        let mut i = pos + size;
-        low[i] = v;
-        while i > 1 {
-            i /= 2;
-            low[i] = low[2 * i].max(low[2 * i + 1]);
-        }
+    // The places an open box's top can be at in the tree: a box's top, or just below a box's
+    // bottom, where a later box cuts it short (`-0.0` as `0.0`).
+    let mut places: Vec<f64> = boxes.iter().flat_map(|(_, b)| [b.y0 + 0.0, b.y1.next_up() + 0.0]).collect();
+    places.sort_by(f64::total_cmp);
+    places.dedup_by(|a, b| a.total_cmp(b).is_eq());
+    let place = |y: f64| {
+        let y = y + 0.0;
+        let p = places.partition_point(|t| t.total_cmp(&y).is_lt());
+        places.get(p).is_some_and(|t| t.total_cmp(&y).is_eq()).then_some(p)
     };
+    // Each box's part still open, from its top to its bottom, and the place of its top while it
+    // is open.
+    let mut top: Vec<f64> = boxes.iter().map(|(_, b)| b.y0).collect();
+    let mut bottom: Vec<f64> = boxes.iter().map(|(_, b)| b.y1).collect();
+    let mut open: Vec<Option<usize>> = vec![None; n];
+    // The tree of the open boxes without transparency (every box without `see_through`) and the
+    // see-through boxes'.
+    let mut trees = [Open::new(places.len()), Open::new(if see_through.is_some() { places.len() } else { 0 })];
+    let tree = |k: usize| usize::from(see_through.is_some_and(|s| s[boxes[k].0]));
     let mut by_left: Vec<usize> = (0..n).collect();
     by_left.sort_by(|&a, &b| boxes[a].1.x0.total_cmp(&boxes[b].1.x0));
     let mut by_right: Vec<usize> = (0..n).collect();
@@ -241,7 +240,9 @@ fn sweep(bounds: &[Option<Rect>], see_through: Option<&[bool]>) -> Result<Sets, 
         while let Some(&c) = by_right.get(closing)
             && boxes[c].1.x1 < b.x0
         {
-            set(&mut low[tree(c)], leaf[c], f64::NEG_INFINITY);
+            if let Some(p) = open[c].take() {
+                trees[tree(c)].take(p, c, &bottom);
+            }
             closing += 1;
         }
         // The open boxes it joins with their top at most this bottom and their bottom at least
@@ -253,21 +254,32 @@ fn sweep(bounds: &[Option<Rect>], see_through: Option<&[bool]>) -> Result<Sets, 
             Some(_) if shadows => &[0, 1],
             Some(_) => &[1],
         };
-        let below = tops.partition_point(|t| *t <= b.y1);
+        let below = places.partition_point(|t| *t <= b.y1);
         met.clear();
         for &t in looks {
+            let tr = &trees[t];
             stack.clear();
-            stack.push((1, 0, size));
+            stack.push((1, 0, tr.size));
             while let Some((node, lo, hi)) = stack.pop() {
                 work += 1;
                 if work.is_multiple_of(4096) {
                     vectorcraft_doc::cancel::check()?;
                 }
-                if lo >= below || low[t][node] < b.y0 {
+                if lo >= below || tr.low[node] < b.y0 {
                     continue;
                 }
                 if hi - lo == 1 {
-                    met.push(by_top[lo]);
+                    // The boxes with their top here, lowest bottom first.
+                    for &(_, o) in tr.at[lo].iter().rev() {
+                        if bottom[o] < b.y0 {
+                            break;
+                        }
+                        work += 1;
+                        if work.is_multiple_of(4096) {
+                            vectorcraft_doc::cancel::check()?;
+                        }
+                        met.push(o);
+                    }
                     continue;
                 }
                 let mid = (lo + hi) / 2;
@@ -286,28 +298,89 @@ fn sweep(bounds: &[Option<Rect>], see_through: Option<&[bool]>) -> Result<Sets, 
             let ob = boxes[o].1;
             see_through.is_none_or(|s| s[boxes[o].0]) && b.x1 <= ob.x1 && ob.y0 <= b.y0 && b.y1 <= ob.y1
         });
-        // Whatever overlaps a box inside this one overlaps this one, and joins it when this one is
-        // see-through. Likewise, whatever later overlaps the part of an open box at or below this
-        // one's top, when that box ends no further right or lower than this one, overlaps this
-        // one: the open box then keeps only the part above this one's top.
-        let cut = b.y0.next_down();
+        // Whatever overlaps the open part of a box inside this one overlaps this one, and joins it
+        // when this one is see-through. Likewise, whatever later overlaps the part of an open box
+        // this one covers, when that box ends no further right than this one, overlaps this one:
+        // the open box then keeps only the part above this one's top, when this one reaches its
+        // bottom, or only the part below this one's bottom, when this one reaches its top.
         for &o in &met {
             sets.join(boxes[k].0, boxes[o].0);
-            let ob = boxes[o].1;
-            if !shadows || Some(o) == holder || b.x1 < ob.x1 || b.y1 < ob.y1 {
+            let Some(p) = open[o] else { continue };
+            if !shadows || Some(o) == holder || b.x1 < boxes[o].1.x1 {
                 continue;
             }
-            if b.y0 <= ob.y0 {
-                set(&mut low[tree(o)], leaf[o], f64::NEG_INFINITY);
-            } else if holder.is_none() && cut < low[tree(o)][leaf[o] + size] {
-                set(&mut low[tree(o)], leaf[o], cut);
+            let (t, u) = (top[o], bottom[o]);
+            let tr = &mut trees[tree(o)];
+            if b.y0 <= t && u <= b.y1 {
+                tr.take(p, o, &bottom);
+                open[o] = None;
+                continue;
+            }
+            if holder.is_some() || (b.y1 < u && t < b.y0) {
+                continue;
+            }
+            let (t, u) = if u <= b.y1 { (t, b.y0.next_down()) } else { (b.y1.next_up(), u) };
+            // Every top it can get has a place; one without stays as it is.
+            let Some(q) = place(t) else { continue };
+            tr.take(p, o, &bottom);
+            (top[o], bottom[o]) = (t, u);
+            open[o] = (t <= u).then_some(q);
+            if t <= u {
+                tr.put(q, o, &bottom);
             }
         }
-        if holder.is_none() {
-            set(&mut low[tree(k)], leaf[k], b.y1);
+        if holder.is_none()
+            && let Some(p) = place(b.y0)
+        {
+            open[k] = Some(p);
+            trees[tree(k)].put(p, k, &bottom);
         }
     }
     Ok(sets)
+}
+
+/// The open boxes of [`sweep`] by the place of their tops, in a tree that knows the lowest bottom
+/// below each of its branches.
+struct Open {
+    size: usize,
+    /// The lowest bottom of the open boxes below each node (−∞: none open).
+    low: Vec<f64>,
+    /// The open boxes at each place, by bottom ([`order`]) and then index.
+    at: Vec<BTreeSet<(i64, usize)>>,
+}
+
+impl Open {
+    fn new(places: usize) -> Self {
+        let size = places.next_power_of_two().max(1);
+        Self { size, low: vec![f64::NEG_INFINITY; 2 * size], at: vec![BTreeSet::new(); places] }
+    }
+
+    /// Opens box `k` at place `p`, with its bottom `bottom[k]`.
+    fn put(&mut self, p: usize, k: usize, bottom: &[f64]) {
+        self.at[p].insert((order(bottom[k]), k));
+        self.fix(p, bottom);
+    }
+
+    /// Closes box `k` at place `p`, while its bottom is still `bottom[k]`.
+    fn take(&mut self, p: usize, k: usize, bottom: &[f64]) {
+        self.at[p].remove(&(order(bottom[k]), k));
+        self.fix(p, bottom);
+    }
+
+    fn fix(&mut self, p: usize, bottom: &[f64]) {
+        let mut i = p + self.size;
+        self.low[i] = self.at[p].last().map_or(f64::NEG_INFINITY, |&(_, k)| bottom[k]);
+        while i > 1 {
+            i /= 2;
+            self.low[i] = self.low[2 * i].max(self.low[2 * i + 1]);
+        }
+    }
+}
+
+/// `v` as an integer in the same order as [`f64::total_cmp`].
+fn order(v: f64) -> i64 {
+    let b = v.to_bits() as i64;
+    b ^ (((b >> 63) as u64) >> 1) as i64
 }
 
 /// Boxes in blocks of nearby ones, each block with the box around it, to find the boxes a box
@@ -773,6 +846,136 @@ mod tests {
         let mut sets = sweep(&bounds, Some(&vec![true; n])).unwrap();
         assert_eq!(sets.meets, n - 1);
         assert_eq!(sets.groups(), vec![(0..n).collect::<Vec<_>>()]);
+    }
+
+    /// `n` boxes of one size, each a little right of and above the one before, all overlapping and
+    /// none inside another.
+    fn staggered_up(n: usize) -> Vec<Option<Rect>> {
+        let w = 2.0 * n as f64;
+        (0..n).map(|i| Some(Rect::new(i as f64, -(i as f64), w + i as f64, w - i as f64))).collect()
+    }
+
+    /// Each box of a stagger right and up meets only the box before it, which keeps only its part
+    /// below the new box's bottom, not every box still open; so does each box of a stagger left and
+    /// down, which the sweep meets right and up.
+    #[test]
+    fn boxes_staggered_up_meet_only_the_box_before() {
+        let n = 512;
+        let bounds = staggered_up(n);
+        let all = vec![(0..n).collect::<Vec<_>>()];
+        let mut sets = sweep(&bounds, None).unwrap();
+        assert_eq!(sets.meets, n - 1);
+        assert_eq!(sets.groups(), every_pair(&bounds));
+        assert_eq!(sets.groups(), all);
+        let mut sets = sweep(&bounds, Some(&vec![true; n])).unwrap();
+        assert_eq!(sets.meets, n - 1);
+        assert_eq!(sets.groups(), all);
+        let mut reversed = bounds.clone();
+        reversed.reverse();
+        let mut sets = sweep(&reversed, None).unwrap();
+        assert_eq!(sets.meets, n - 1);
+        assert_eq!(sets.groups(), all);
+        let mut sets = sweep(&reversed, Some(&vec![true; n])).unwrap();
+        assert_eq!(sets.meets, n - 1);
+        assert_eq!(sets.groups(), all);
+    }
+
+    /// An open box cut short from above keeps the part a later box would meet without meeting the
+    /// box that cut it: a part below that box, a part further right, or any part when that box is
+    /// opaque or held; a box cut from above and from below keeps its middle.
+    #[test]
+    fn a_box_is_cut_short_from_above_only_where_the_later_box_covers_it() {
+        let k = Rect::new(5.0, -5.0, 15.0, 10.0);
+        let cases = [
+            // Below `k`: the last box overlaps only the bottom of the first.
+            ("below", vec![Some(Rect::new(0.0, 0.0, 10.0, 20.0)), Some(k), Some(Rect::new(8.0, 15.0, 9.0, 25.0))], vec![true, true, false]),
+            // Further right than `k`: `k` cuts nothing and the last box overlaps the first.
+            ("right", vec![Some(Rect::new(0.0, 0.0, 20.0, 20.0)), Some(k), Some(Rect::new(17.0, 2.0, 25.0, 4.0))], vec![true, true, false]),
+            // Just below `k`'s bottom, and touching it.
+            (
+                "edge",
+                vec![Some(Rect::new(0.0, 0.0, 10.0, 20.0)), Some(k), Some(Rect::new(8.0, 10.0, 9.0, 12.0)), Some(Rect::new(8.0, 10.5, 9.0, 12.0))],
+                vec![false, true, false, false],
+            ),
+            // An opaque `k` doesn't join the opaque last box, which joins the see-through first one.
+            ("opaque", vec![Some(Rect::new(0.0, 0.0, 10.0, 10.0)), Some(k), Some(Rect::new(6.0, -10.0, 7.0, 2.0))], vec![true, false, false]),
+            // A see-through `k` held by a see-through box around it isn't opened and cuts nothing short.
+            (
+                "held",
+                vec![
+                    Some(Rect::new(0.0, -6.0, 30.0, 28.0)),
+                    Some(Rect::new(1.0, 0.0, 10.0, 20.0)),
+                    Some(k),
+                    Some(Rect::new(6.0, 11.0, 7.0, 13.0)),
+                    Some(Rect::new(6.0, 4.0, 7.0, 6.0)),
+                ],
+                vec![true, false, true, false, false],
+            ),
+            // Cut from above, then from below: a later box inside what is left joins the first.
+            (
+                "middle",
+                vec![
+                    Some(Rect::new(0.0, 0.0, 10.0, 30.0)),
+                    Some(Rect::new(2.0, -5.0, 12.0, 10.0)),
+                    Some(Rect::new(3.0, 20.0, 13.0, 40.0)),
+                    Some(Rect::new(5.0, 15.0, 6.0, 16.0)),
+                    Some(Rect::new(5.0, 9.0, 6.0, 10.0)),
+                    Some(Rect::new(5.0, 20.0, 6.0, 20.0)),
+                ],
+                vec![false, true, true, false, false, false],
+            ),
+            // Signed zeros, a point and a box that isn't finite.
+            (
+                "zeros",
+                vec![
+                    Some(Rect::new(-0.0, -0.0, 4.0, 8.0)),
+                    Some(Rect::new(0.0, -2.0, 6.0, -0.0)),
+                    Some(Rect::new(1.0, 0.0, 1.0, 0.0)),
+                    Some(Rect::new(2.0, f64::NEG_INFINITY, 3.0, 1.0)),
+                    Some(Rect::new(3.0, f64::MAX, 3.0, f64::MAX)),
+                    Some(Rect::new(3.5, 0.0, 3.5, 0.0)),
+                ],
+                vec![false, true, false, true, true, false],
+            ),
+        ];
+        for (what, bounds, see) in cases {
+            assert_eq!(overlapping(&bounds).unwrap(), every_pair(&bounds), "{what}");
+            let mut sets = sweep(&bounds, Some(&see)).unwrap();
+            assert_eq!(sets.groups(), every_pair_joining(&bounds, |i, j| see[i] || see[j]), "{what}, with transparency");
+            let mut sets = sweep(&bounds, Some(&vec![true; bounds.len()])).unwrap();
+            assert_eq!(sets.groups(), every_pair(&bounds), "{what}, all see-through");
+        }
+    }
+
+    /// Boxes stepping right and alternately up and down, so that open boxes are cut short from
+    /// above and from below, of mixed sizes, some see-through, group as comparing every pair groups
+    /// them.
+    #[test]
+    fn boxes_stepping_up_and_down_group_as_comparing_every_pair() {
+        let mut seed = 0x6a09_e667_f3bc_c908u64;
+        let mut next = |m: f64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 1000) as f64 / 1000.0 * m
+        };
+        for round in 0..40 {
+            let n = 10 + round * 3;
+            let mut y = 0.0;
+            let bounds: Vec<Option<Rect>> = (0..n)
+                .map(|i| {
+                    let up = if (i / (1 + round % 3)) % 2 == 0 { -1.0 } else { 1.0 };
+                    y += up * (next(4.0).floor() + 1.0);
+                    let x = i as f64 + next(2.0).floor();
+                    let (w, h) = (next(12.0).floor() + 4.0, next(16.0).floor() + 2.0);
+                    Some(Rect::new(x, y, x + w, y + h))
+                })
+                .collect();
+            assert_eq!(overlapping(&bounds).unwrap(), every_pair(&bounds), "round {round}");
+            let see: Vec<bool> = (0..n).map(|_| next(1.0) < if round % 2 == 0 { 0.5 } else { 0.9 }).collect();
+            let mut sets = sweep(&bounds, Some(&see)).unwrap();
+            assert_eq!(sets.groups(), every_pair_joining(&bounds, |i, j| see[i] || see[j]), "round {round}, with transparency");
+        }
     }
 
     /// An open box keeps the part a later box would meet without meeting the box that cut it short:

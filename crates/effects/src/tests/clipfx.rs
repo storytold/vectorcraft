@@ -386,9 +386,111 @@ fn a_fills_geometry_effect_shapes_the_clip_before_the_effects_around_it() {
     let baked = bake_document(&d).unwrap();
     let exported = baked.layers.iter().find_map(|l| first_clip(l)).map(|c| clip_outline(&c).unwrap().0.bounding_box()).unwrap();
     assert!(close(exported), "exported: {exported:?}");
-    // A clipping path that paints its fill keeps it, a path with the fill's effect live.
+    // A clipping path that paints its fill clips alike and paints the fill it clips by.
     let painted = first_clip(&crate::evaluate_container(None, &scaled(clip_with(Paint::solid(Color::BLACK)))).unwrap()).unwrap();
-    assert!(painted.clip_paint().fill.is_some(), "{painted:?}");
+    assert!(close(clip_outline(&painted).unwrap().0.bounding_box()), "painted: {painted:?}");
+    let fill = painted.clip_paint().fill.unwrap();
+    assert!(close(fill.geometric_bounds().unwrap()), "painted fill: {fill:?}");
+}
+
+#[test]
+fn a_painted_clipping_paths_fill_and_stroke_effects_apply_before_the_effects_around_it() {
+    // A clipping path with a black fill grown by Offset Path 10 and a 2 pt blue stroke moved 30 pt
+    // right by a Transform, in a group that its Transform scales to 50 %: the fill paints the grown
+    // square at half size, 60 pt across, and the stroke the square at half size, 15 pt right of
+    // it, on the canvas and in an export alike.
+    let mut clip = clipping_path(3, vec![]);
+    clip.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 2.0).into();
+    for item in &mut clip.appearance.items {
+        match item {
+            vectorcraft_doc::AppearanceItem::Fill(f) => f.effects.push(fx("path.offsetPath", json!({"offset": 10}))),
+            vectorcraft_doc::AppearanceItem::Stroke(s) => s.effects.push(fx("distort.transform", json!({"moveH": 30}))),
+        }
+    }
+    let mut outer = Node::group(NodeId(1), vec![Arc::new(clip_group(2, clip.clone()))]);
+    outer.appearance.effects.push(fx("distort.transform", json!({"scaleH": 50, "scaleV": 50})));
+    fn first_clip(n: &Node) -> Option<Arc<Node>> {
+        match &n.kind {
+            NodeKind::Group { children, clip: true } => children.first().cloned(),
+            _ => n.children()?.iter().find_map(|c| first_clip(c)),
+        }
+    }
+    let check = |what: &str, c: &Node| {
+        let paint = c.clip_paint();
+        let fill = paint.fill.as_ref().and_then(Node::geometric_bounds).unwrap();
+        assert!((fill.width() - 60.0).abs() < 0.5 && (fill.height() - 60.0).abs() < 0.5, "{what} fill: {fill:?}");
+        let stroke = paint.stroke.as_ref().and_then(Node::geometric_bounds).unwrap();
+        assert!((stroke.width() - 50.0).abs() < 0.5 && (stroke.x0 - fill.x0 - 20.0).abs() < 0.5, "{what} stroke: {stroke:?} fill: {fill:?}");
+    };
+    let evaluated = crate::evaluate_container(None, &outer).unwrap();
+    let canvas = first_clip(&evaluated).unwrap();
+    check("canvas", &canvas);
+    // The clip group's box takes in the stroke's width, as for a path that paints its stroke.
+    let stroke = canvas.clip_paint().stroke.as_ref().and_then(Node::geometric_bounds).unwrap();
+    let visual = evaluated.children().and_then(|ch| ch.first()).and_then(|g| g.visual_bounds()).unwrap();
+    assert!(visual.x1 > stroke.x1 + 0.25, "{visual:?} {stroke:?}");
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, outer).unwrap();
+    check("exported", &baked_clip(&d));
+    // Without effects around it, the export paints the fill and the stroke as the canvas does.
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, clip_group(2, clip.clone())).unwrap();
+    let paint = baked_clip(&d).clip_paint();
+    let fill = paint.fill.as_ref().and_then(Node::geometric_bounds);
+    let stroke = paint.stroke.as_ref().and_then(Node::geometric_bounds);
+    assert_eq!(fill.map(|f| f.width()), Some(120.0), "{paint:?}");
+    assert_eq!(stroke.map(|s| s.x0), Some(80.0), "{paint:?}");
+    // A piece that an effect around it splits into several paths (a compound path), or puts in a
+    // group with its copies, still paints.
+    let NodeKind::Group { children, .. } = &canvas.kind else { panic!("not the pieces: {canvas:?}") };
+    let mut split = canvas.as_ref().clone();
+    let mut compound = children[0].as_ref().clone();
+    compound.kind = NodeKind::Compound { children: vec![children[0].clone(), children[0].clone()], rule: vectorcraft_geom::FillRule::NonZero };
+    let copies = Node::group(NodeId(9), vec![children[1].clone(), children[1].clone()]);
+    if let Some(ch) = split.children_mut() {
+        ch[0] = Arc::new(compound);
+        ch[1] = Arc::new(copies);
+    }
+    let paint = split.clip_paint();
+    assert!(paint.fill.is_some() && paint.stroke.is_some(), "{split:?}");
+    let stroke = paint.stroke.unwrap();
+    assert_eq!(stroke.children().map(|ch| ch.len()), Some(1), "only the stroke's group: {stroke:?}");
+}
+
+#[test]
+fn a_painted_clipping_paths_stroke_keeps_the_width_its_transform_scales_it_to() {
+    // A compound clipping path with a 2 pt stroke whose Transform scales strokes to 200 % without
+    // transforming the object: the export paints the stroke at 4 pt.
+    let square = Node::path(NodeId(4), shapes::rectangle(Rect::new(50.0, 50.0, 150.0, 150.0)), Appearance::default());
+    let mut clip = Node::new(NodeId(3), NodeKind::Compound { children: vec![Arc::new(square)], rule: vectorcraft_geom::FillRule::NonZero });
+    clip.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 2.0).into();
+    let scale = json!({"scaleH": 200, "scaleV": 200, "objects": false, "strokes": true});
+    for item in &mut clip.appearance.items {
+        if let vectorcraft_doc::AppearanceItem::Stroke(s) = item {
+            s.effects.push(fx("distort.transform", scale.clone()));
+        }
+    }
+    fn widths(n: &Node, out: &mut Vec<f64>) {
+        for item in &n.appearance.items {
+            if let vectorcraft_doc::AppearanceItem::Stroke(s) = item {
+                out.push(s.width);
+            }
+        }
+        n.children().into_iter().flatten().for_each(|c| widths(c, out));
+    }
+    let mut d = Document::new(400.0, 400.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, clip_group(2, clip)).unwrap();
+    let baked = baked_clip(&d);
+    let stroke = baked.clip_paint().stroke.unwrap();
+    let mut found = vec![];
+    widths(&stroke, &mut found);
+    assert!(!found.is_empty() && found.iter().all(|w| (w - 4.0).abs() < 1e-6), "{found:?} {stroke:?}");
+    // The stroke is still drawn where the path lies, as the Transform does not move the object.
+    let bounds = stroke.geometric_bounds().unwrap();
+    assert!((bounds.x0 - 50.0).abs() < 0.5 && (bounds.width() - 100.0).abs() < 0.5, "{bounds:?}");
 }
 
 #[test]

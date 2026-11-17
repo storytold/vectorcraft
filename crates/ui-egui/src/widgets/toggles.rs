@@ -1,5 +1,11 @@
 use super::{Color32, CornerRadius, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, pos2, vec2};
 
+/// The width a [`check`] or [`radio`] row takes with `label`, translated: the box and the text
+/// after it, as [`choice_row`] allocates them.
+pub(crate) fn choice_width(ui: &Ui, label: &str) -> f32 {
+    18.0 + ui.painter().layout_no_wrap(tl!(label).to_string(), egui::FontId::proportional(12.5), Color32::PLACEHOLDER).size().x
+}
+
 /// The row of a checkbox or radio button: allocates a 13 pt box plus `text` (already translated),
 /// draws the text and returns the box, the response and the box's border colour.
 fn choice_row(ui: &mut Ui, text: &str, enabled: bool) -> (Rect, Response, Color32) {

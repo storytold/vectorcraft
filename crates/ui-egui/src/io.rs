@@ -190,20 +190,23 @@ mod tests {
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 
-    /// An export whose encoder notes an option it didn't apply (lossy WebP) before what the file
-    /// loses (type in a font that isn't installed): the status bar names what the file loses, and
-    /// the hover lists it first.
+    /// An export whose encoder notes what an option left out (the fill hatches that
+    /// `includeHatches: false` leaves out of a DXF drawing) and what the file loses (a see-through
+    /// rectangle that DXF 2000 writes opaque): the status bar names what the file loses, and the
+    /// hover lists the option's note last.
     #[test]
     fn an_export_names_what_the_file_loses_before_a_note_on_the_options() {
         let (mut app, _) = app();
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-        app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
-        let r = export(&mut app, Some("webp"), Some("/out/d.webp".into()), &json!({"lossless": false})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        app.run("object.setProps", json!({"opacity": 50})).unwrap();
+        let r = export(&mut app, Some("dxf"), Some("/out/d.dxf".into()), &json!({"version": "2000", "includeHatches": false})).unwrap();
         let notes = notes_of(&r);
-        assert_eq!(notes.len(), 2, "{r}");
-        assert!(notes[0].contains("Nonexistent Sans Probe"), "{r}");
-        assert!(notes[1].starts_with("lossy WebP"), "{r}");
-        assert_eq!(app.ui.status, exported_with_notes("/out/d.webp", 2, &notes[0]));
+        let Some((option, losses)) = notes.split_last() else { panic!("no notes: {r}") };
+        assert!(option.starts_with("fill hatches are left out"), "{r}");
+        assert!(losses.iter().any(|n| n.starts_with("transparency needs DXF 2004")), "{r}");
+        assert!(!losses.iter().any(|n| n.starts_with("fill hatches")), "{r}");
+        assert_eq!(app.ui.status, exported_with_notes("/out/d.dxf", notes.len(), &notes[0]));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
     }
 

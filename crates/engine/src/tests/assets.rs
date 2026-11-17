@@ -140,7 +140,24 @@ fn an_asset_exports_its_art_alone() {
     run(&mut s, "assets.add", json!({"ids": [red]}));
     let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": "2x"}]})));
     assert_eq!(out[0].0, "Asset-1@2x.png");
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 40));
     assert!(img.pixels().all(|p| p.0 == [255, 0, 0, 255]), "only the red square");
     // Vector formats crop to it too.
@@ -163,7 +180,24 @@ fn an_assets_crop_takes_in_its_drop_shadow() {
     // The shadow's reach (10 pt) on every side.
     assert_eq!(assets(&mut s)[0]["bounds"], json!([40.0, 40.0, 40.0, 40.0]));
     let out = files(&run(&mut s, "assets.export", json!({"formats": [{"format": "png", "scale": "1x"}]})));
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 40));
     // The shadow's right half, x 70 to 80.
     assert!(img.get_pixel(35, 20)[3] > 0, "the shadow is in the image");
@@ -417,7 +451,29 @@ fn export_for_screens_writes_chosen_assets_and_keeps_its_rules() {
     let out = files(&r);
     assert_eq!(out.len(), 1);
     assert_eq!(out[0].0, "Asset-2@60w.png");
-    assert_eq!(image::load_from_memory(&out[0].1).unwrap().to_rgba8().dimensions(), (60, 40), "the width of the asset, not the artboard");
+    assert_eq!(
+        craft_image_codecs::decode(&out[0].1)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .dimensions(),
+        (60, 40),
+        "the width of the asset, not the artboard"
+    );
     // The choice of art isn't remembered; the formats are.
     let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
     assert!(settings.get("assets").is_none() && settings["formats"][0]["scale"] == "60w");
@@ -466,7 +522,24 @@ fn assets_export_leaves_no_seam_between_abutting_shapes() {
         }),
     ));
     assert_eq!(out[0].0, "Asset-1.png");
-    let img = image::load_from_memory(&out[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&out[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (40, 20));
     // Column 20 is the shared edge in crop space; green must stay red (no white bleed).
     let palest_g = (2..18).map(|y| img.get_pixel(20, y).0[1].max(img.get_pixel(19, y).0[1])).max().unwrap();

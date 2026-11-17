@@ -12,7 +12,10 @@
 //! `artboardLayout`, `bleed`, `backgroundContents`, `colorMode`, `rasterEffectsPpi`,
 //! `previewMode`, `alignNewObjectsToPixelGrid`, `profile`), plus `category` (the tab), `advanced` (Advanced Options open), `bleedLinked` and
 //! `presetName` (Save Preset's name). Setting `preset` fills the fields from that preset; changing
-//! any of them afterwards makes the settings custom.
+//! any of them afterwards makes the settings custom. The dialog opens in Preferences › Units ›
+//! General, also on a Recent entry made in other units (one in pixels, or a saved preset in the
+//! units it was saved in, keeps its units); units chosen
+//! in the Units menu or set with `ui.dialog.set` stay when another tab or preset is chosen.
 
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
@@ -57,6 +60,9 @@ const SAVING: &str = "__saving";
 /// Preset Details has drawn the saving top: set from the mode's second frame, so the first one fills
 /// in the default name and focuses it.
 const SAVING_SHOWN: &str = "__savingShown";
+/// The units were chosen in the Units menu (or set with `ui.dialog.set`): presets chosen after that
+/// keep the chosen units.
+const UNITS_CHOSEN: &str = "__unitsChosen";
 /// The units New Document offers (all ten).
 const UNITS: [Unit; 10] = [
     Unit::Pixels,
@@ -82,17 +88,49 @@ const HEADER: f32 = 100.0;
 const MORE_WIDTH: f32 = 310.0;
 
 /// Open New Document on the most recent settings (or Letter), named after the next untitled
-/// document.
+/// document, in Preferences › Units › General.
 pub fn open(app: &mut VectorcraftApp) {
     let category = if app.session.prefs.recent_new_docs.is_empty() { "Print" } else { "Recent" };
-    let first = newdoc::category(&app.session, category).and_then(|v| v.into_iter().next()).unwrap_or_default();
     let mut d = Dialog::new(KIND, json!({ "category": category, "name": app.session.peek_untitled(), "advanced": false }));
-    apply(&mut d, &first);
+    if !apply_first(app, &mut d, category) {
+        apply(&mut d, &DocSettings { units: app.session.default_units(), ..DocSettings::default() });
+    }
     app.ui.dialog = Some(d);
 }
 
-/// Fill the fields from a preset.
+/// Fill the fields from the first preset of `category`, as opening the dialog and choosing a tab
+/// do; false when the category has none. The most recent entry keeps its size and takes
+/// Preferences › Units › General, as the built-in presets do, unless it is in pixels or it is a
+/// saved preset in the units it was saved in. Its card stays the chosen one and shows those units;
+/// choosing another card brings back that card's own units.
+fn apply_first(app: &VectorcraftApp, d: &mut Dialog, category: &str) -> bool {
+    let Some(first) = newdoc::category(&app.session, category).and_then(|v| v.into_iter().next()) else { return false };
+    // `file.new` reads a named preset in its own units, and names the entry Custom in others.
+    let as_saved = newdoc::find(&app.session, &first.name).is_some_and(|p| p.units == first.units);
+    if !category.eq_ignore_ascii_case("Recent") || first.units == Unit::Pixels || as_saved {
+        apply(d, &first);
+        return true;
+    }
+    let own = first.units;
+    apply(d, &DocSettings { units: app.session.default_units(), ..first });
+    // The card is still the entry it was: its own units say which entry it is.
+    if let Some(Value::Object(a)) = d.fields.get_mut(APPLIED) {
+        a.insert("units".into(), json!(own.label()));
+    }
+    true
+}
+
+/// `field` of New Document `d` is about to be set by `ui.dialog.set`: setting the units is a choice
+/// that presets chosen after it keep.
+pub(super) fn note_set(d: &mut Dialog, field: &str) {
+    if field == "units" {
+        d.fields.insert(UNITS_CHOSEN.into(), json!(true));
+    }
+}
+
+/// Fill the fields from a preset, keeping the units when they were chosen in the Units menu.
 fn apply(d: &mut Dialog, s: &DocSettings) {
+    let chosen = if d.bool(UNITS_CHOSEN) { d.fields.get("units").cloned() } else { None };
     let Value::Object(mut v) = s.to_json() else { return };
     for k in ["size", "orientation"] {
         v.remove(k);
@@ -105,6 +143,9 @@ fn apply(d: &mut Dialog, s: &DocSettings) {
         d.fields.insert(k.clone(), val.clone());
     }
     d.fields.insert(APPLIED.into(), Value::Object(v));
+    if let Some(u) = chosen {
+        d.fields.insert("units".into(), u);
+    }
 }
 
 /// Keep the fields and the chosen preset in step: a new `preset` (also from `ui.dialog.set`) fills
@@ -305,8 +346,8 @@ fn presets(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if let Some(i) = widgets::tab_bar(ui, &names, cat) {
         d.fields.insert("category".into(), json!(names[i]));
         // A tab opens on its first preset, so the details match its cards.
-        if let Some(first) = names.get(i).and_then(|c| newdoc::category(&app.session, c)).and_then(|v| v.into_iter().next()) {
-            apply(d, &first);
+        if let Some(c) = names.get(i) {
+            apply_first(app, d, c);
         }
     }
     let list = names.get(cat).and_then(|c| newdoc::category(&app.session, c)).unwrap_or_default();
@@ -705,6 +746,7 @@ fn units_dropdown(ui: &mut egui::Ui, d: &mut Dialog, width: f32) {
     let labels = UNITS.map(Unit::label);
     if let Some(u) = widgets::dropdown(ui, "newdoc-units", unit(d).label(), &labels, width).and_then(|i| UNITS.get(i)) {
         d.fields.insert("units".into(), json!(u.label()));
+        d.fields.insert(UNITS_CHOSEN.into(), json!(true));
     }
 }
 
@@ -1567,6 +1609,103 @@ mod tests {
         h.run_steps(3);
         assert!(h.state().ui.dialog.is_none());
         assert!(h.state().session.active().unwrap().doc.setup.align_new_objects_to_pixel_grid);
+    }
+
+    /// Create, then the new document's units.
+    fn create(h: &mut Harness) -> vectorcraft_doc::Unit {
+        h.get_by_label("Create").click();
+        h.run_steps(3);
+        assert!(h.state().ui.dialog.is_none(), "{:?}", h.state().ui.status);
+        h.state().session.active().unwrap().doc.units
+    }
+
+    /// With Preferences › Units › General in millimeters, New Document opens on the most recent
+    /// entry in millimeters even though that entry was made in points, and New Without Dialog makes
+    /// the same document. An entry in pixels stays in pixels, as the screen presets do.
+    #[test]
+    fn the_dialog_opens_in_the_general_units_over_a_recent_entry() {
+        use vectorcraft_doc::Unit::{Millimeters as Mm, Pixels as Px};
+        let mut h = big();
+        h.state_mut().run("file.new", json!({"units": "Points"})).unwrap();
+        h.state_mut().run("prefs.set", json!({"key": "unitsGeneral", "value": "Millimeters", "documentUnits": false})).unwrap();
+        assert_eq!(h.state().session.prefs.recent_new_docs[0].units, vectorcraft_doc::Unit::Points);
+        h.state_mut().run("file.newDialog", json!({})).unwrap();
+        h.run_steps(3);
+        assert_eq!((field(h.state(), "category"), field(h.state(), "units")), (json!("Recent"), json!("Millimeters")));
+        assert_eq!(create(&mut h), Mm, "the dialog's Create");
+        h.state_mut().run("file.new", json!({"units": "Points"})).unwrap();
+        h.state_mut().run("file.newWithoutDialog", json!({})).unwrap();
+        assert_eq!(h.state().session.active().unwrap().doc.units, Mm, "New Without Dialog");
+        h.state_mut().run("file.new", json!({"preset": "Web 1920×1080"})).unwrap();
+        h.state_mut().run("file.newDialog", json!({})).unwrap();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "units"), json!("Pixels"));
+        assert_eq!(create(&mut h), Px);
+    }
+
+    /// A Recent entry that is a saved preset in the units it was saved in opens in those units, so
+    /// Create keeps the preset's name in Recent; the General unit is millimeters.
+    #[test]
+    fn a_recent_saved_preset_keeps_its_units_and_name() {
+        let mut h = big();
+        h.state_mut().run("file.newPresets.save", json!({"name": "Zine", "width": "5.5 in", "height": "8.5 in", "units": "Inches"})).unwrap();
+        h.state_mut().run("file.new", json!({"preset": "Zine"})).unwrap();
+        h.state_mut().run("prefs.set", json!({"key": "unitsGeneral", "value": "Millimeters", "documentUnits": false})).unwrap();
+        h.state_mut().run("file.newDialog", json!({})).unwrap();
+        h.run_steps(3);
+        assert_eq!((field(h.state(), "preset"), field(h.state(), "units")), (json!("Zine"), json!("Inches")));
+        assert_eq!(create(&mut h), vectorcraft_doc::Unit::Inches);
+        let recent = &h.state().session.prefs.recent_new_docs;
+        assert_eq!((recent.len(), recent[0].name.as_str()), (1, "Zine"), "{recent:?}");
+    }
+
+    /// Units set with `ui.dialog.set` while More Settings or Manage Profiles is open stay chosen
+    /// when a preset is chosen after them.
+    #[test]
+    fn units_set_over_a_popup_stay_chosen() {
+        for popup in [super::MORE, super::PROFILES] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.newDialog", json!({})).unwrap();
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.kind = popup.into();
+            crate::dialogs::set_field(d, "units".into(), json!("Millimeters"));
+            crate::dialogs::set_field(d, "preset".into(), json!("A4"));
+            d.kind = super::KIND.into();
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+            assert_eq!((field(&app, "preset"), field(&app, "units")), (json!("A4"), json!("Millimeters")), "{popup}");
+        }
+    }
+
+    /// Millimeters chosen in the Units menu stay chosen when another tab or preset is chosen after
+    /// them, and reach the new document.
+    #[test]
+    fn units_chosen_in_the_menu_survive_tabs_and_presets() {
+        use vectorcraft_doc::Unit::Millimeters as Mm;
+        let mut h = big();
+        assert_eq!((field(h.state(), "category"), field(h.state(), "units")), (json!("Print"), json!("Points")));
+        h.get_by_role_and_label(Role::ComboBox, "Units").click();
+        h.run_steps(3);
+        h.get_by_label("Millimeters").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "units"), json!("Millimeters"));
+        // A Recent entry made in inches, which the Recent tab opens on.
+        h.state_mut().run("file.new", json!({"width": "8.5 in", "height": "11 in", "units": "Inches"})).unwrap();
+        for tab in ["Web", "Recent", "Print"] {
+            h.get_by_role_and_label(Role::Button, tab).click();
+            h.run_steps(3);
+            assert_eq!((field(h.state(), "category"), field(h.state(), "units")), (json!(tab), json!("Millimeters")), "the {tab} tab");
+        }
+        // A preset chosen by name, as `ui.dialog.set` chooses it.
+        crate::dialogs::set_field(h.state_mut().ui.dialog.as_mut().unwrap(), "preset".into(), json!("A4"));
+        h.run_steps(3);
+        assert_eq!(
+            (field(h.state(), "width"), field(h.state(), "units")),
+            (json!(vectorcraft_doc::Unit::Millimeters.to_pt(210.0)), json!("Millimeters"))
+        );
+        assert_eq!(create(&mut h), Mm);
     }
 
     /// A long translation of Align New Objects to Pixel Grid wraps inside the Preset Details column.

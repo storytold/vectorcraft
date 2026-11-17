@@ -365,6 +365,30 @@ pub fn height_outside_font() -> Option<Vec<u8>> {
     heights_font(HEIGHT_OUTSIDE_FAMILY, Some((HEIGHT_OUTSIDE_X, HEIGHT_OUTSIDE_CAP)), false)
 }
 
+/// The family of [`numberless_font`].
+pub const NUMBERLESS_FAMILY: &str = "Numberlesstest Sans";
+
+/// The bundled Source Sans 3 Regular as family [`NUMBERLESS_FAMILY`], without its OS/2 and `post`
+/// tables, so it gives none of the numbers Show Similar Fonts compares faces by. `None` when it
+/// can't be built.
+pub fn numberless_font() -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let full = format!("{NUMBERLESS_FAMILY} Regular");
+    let postscript = format!("{}-Regular", NUMBERLESS_FAMILY.replace(' ', ""));
+    let name = name_table(&[(1, NUMBERLESS_FAMILY), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if builder.contains(tag) || tag == Tag::new(b"OS/2") || tag == Tag::new(b"post") {
+            continue;
+        }
+        builder.add_raw(tag, font.table_data(r.tag())?.as_bytes().to_vec());
+    }
+    Some(builder.build())
+}
+
 /// The bundled Source Sans 3 Regular as `family`: with the x height and cap height `heights` in
 /// its OS/2 table, else a version 1 OS/2 table, which holds neither; with `base`, the `BASE`
 /// table of [`height_font`].
@@ -484,6 +508,73 @@ pub fn full_width_font() -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`repeat_mark_font`].
+pub const REPEAT_MARK_FAMILY: &str = "Repeattest Sans";
+
+/// The Japanese characters [`repeat_mark_font`] maps, each to the glyph of the Latin capital beside
+/// it: an ideograph, the repeat marks, kana with and without their voicing marks, and the combining
+/// voicing mark (U+3099), so that a repeat mark followed by it is shaped in this font and not in a
+/// fallback font that also has both characters (craft-fonts' Japanese faces).
+pub const REPEAT_MARK_CHARS: [(char, char); 12] = [
+    ('時', 'A'),
+    ('々', 'B'),
+    ('す', 'C'),
+    ('ず', 'D'),
+    ('ゝ', 'E'),
+    ('ゞ', 'F'),
+    ('サ', 'G'),
+    ('ザ', 'H'),
+    ('ヽ', 'I'),
+    ('ヾ', 'J'),
+    ('あ', 'K'),
+    ('\u{3099}', 'L'),
+];
+
+/// A test-only cmap over bundled Source Sans 3: each of [`REPEAT_MARK_CHARS`] uses the glyph of its
+/// Latin capital, so the glyph drawn for a repeat mark tells which character was drawn; the space
+/// keeps its own glyph.
+pub fn repeat_mark_font() -> Option<Vec<u8>> {
+    repeat_font(REPEAT_MARK_FAMILY, &REPEAT_MARK_CHARS)
+}
+
+/// The family of [`rare_repeat_mark_font`].
+pub const RARE_REPEAT_MARK_FAMILY: &str = "Raretest Sans";
+
+/// [`repeat_mark_font`] for tests that add it to the shared [`crate::FontDb::global`]: it maps
+/// only 龘 (to the glyph of A) and 々 (to the glyph of B), characters no other text in those tests
+/// uses, so other tests' Japanese text does not fall back to it.
+pub fn rare_repeat_mark_font() -> Option<Vec<u8>> {
+    repeat_font(RARE_REPEAT_MARK_FAMILY, &[('龘', 'A'), ('々', 'B')])
+}
+
+/// A font named `family` over bundled Source Sans 3 whose cmap maps each of `chars` to the glyph of
+/// the Latin capital beside it, and the space to its own glyph.
+fn repeat_font(family: &str, chars: &[(char, char)]) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mut mappings: Vec<(char, write_fonts::types::GlyphId)> = Vec::new();
+    for &(c, latin) in chars.iter().chain(&[(' ', ' ')]) {
+        mappings.push((c, write_fonts::types::GlyphId::new(charmap.map(latin)?.to_u32())));
+    }
+    let cmap = Cmap::from_mappings(mappings).ok()?;
+    let full = format!("{family} Regular");
+    let postscript = format!("{}-Regular", family.replace(' ', ""));
+    let name = name_table(&[(1, family), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"GSUB") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`half_form_font`].
 pub const HALF_FORM_FAMILY: &str = "Halftest Sans";
 
@@ -534,7 +625,8 @@ pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
 pub const CONJUNCT_FAMILY: &str = "Conjuncttest Sans";
 
 /// A test-only cmap over bundled Source Sans 3: Devanagari Ka uses K, the halant uses a period and
-/// the vowel sign I (drawn before its syllable) uses i. The `GSUB` table's `dev2` script has an
+/// the vowel sign I (drawn before its syllable) uses i; Gujarati Ka, virama and vowel sign I use the
+/// same glyphs. The `GSUB` table's `dev2` and `gjr2` scripts have an
 /// `aalt` single substitution of K by k and a `salt` one of K by i, which list k and the vowel
 /// sign's glyph as alternates of Ka, and a `half` ligature of K and the period into k (Ka's half
 /// form). Family [`CONJUNCT_FAMILY`]. `None` when it can't be built.
@@ -549,7 +641,7 @@ pub fn conjunct_font() -> Option<Vec<u8>> {
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
     let font = skrifa::FontRef::new(BASE).ok()?;
     let charmap = font.charmap();
-    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('\u{093F}', 'i')];
+    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('\u{093F}', 'i'), ('ક', 'K'), ('\u{0ACD}', '.'), ('\u{0ABF}', 'i')];
     let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
     let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
     let family = CONJUNCT_FAMILY;
@@ -574,7 +666,8 @@ pub fn conjunct_font() -> Option<Vec<u8>> {
         SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![half])),
         SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt.into()])),
     ]);
-    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), Script::new(Some(LangSys::new(vec![0, 1, 2])), vec![]))]);
+    let langsys = || Script::new(Some(LangSys::new(vec![0, 1, 2])), vec![]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), langsys()), ScriptRecord::new(Tag::new(b"gjr2"), langsys())]);
     builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
@@ -889,6 +982,66 @@ pub fn capped_candidates_font() -> Option<Vec<u8>> {
     let records =
         vec![FeatureRecord::new(Tag::new(b"aalt"), Feature::new(None, vec![0])), FeatureRecord::new(Tag::new(b"salt"), Feature::new(None, vec![1]))];
     let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
+    builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`categories_font`].
+pub const CATEGORIES_FAMILY: &str = "Categorytest Sans";
+
+/// The bundled Source Sans 3 Regular, its `cmap` kept, with a `GSUB` table of a `liga` ligature of
+/// f and i into L, an `onum` alternate substitution of 1 by 7 and 8, an `smcp` single substitution
+/// of a by B (a second subtable's substitution of a by C is shadowed by it), an `ss02` single substitution of g by G named "Round Dots" (name id 256), and a
+/// `cswh` feature without lookups. Family [`CATEGORIES_FAMILY`]. `None` when it can't be built.
+pub fn categories_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::gsub::{
+        AlternateSet, AlternateSubstFormat1, Gsub, Ligature, LigatureSet, LigatureSubstFormat1, SingleSubst, SingleSubstFormat2, SubstitutionLookup,
+        SubstitutionLookupList,
+    };
+    use write_fonts::tables::layout::{
+        CoverageFormat1, Feature, FeatureList, FeatureParams, FeatureRecord, LangSys, Lookup, Script, ScriptList, ScriptRecord, StylisticSetParams,
+    };
+    use write_fonts::types::GlyphId16;
+
+    let font = skrifa::FontRef::new(SOURCE_SANS).ok()?;
+    let charmap = font.charmap();
+    let name = name_table(&[
+        (1, CATEGORIES_FAMILY),
+        (2, "Regular"),
+        (4, "Categorytest Sans Regular"),
+        (6, "CategorytestSans-Regular"),
+        (256, "Round Dots"),
+    ])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    let gid = |c| Some(GlyphId16::new(u16::try_from(charmap.map(c)?.to_u32()).ok()?));
+    let cover = |c| Some(CoverageFormat1::new(vec![gid(c)?]));
+    let single = |from, to| Some(SingleSubst::from(SingleSubstFormat2::new(cover(from)?.into(), vec![gid(to)?])));
+    let liga = LigatureSubstFormat1::new(cover('f')?.into(), vec![LigatureSet::new(vec![Ligature::new(gid('L')?, vec![gid('i')?])])]);
+    let onum = AlternateSubstFormat1::new(cover('1')?.into(), vec![AlternateSet::new(vec![gid('7')?, gid('8')?])]);
+    let lookups = SubstitutionLookupList::new(vec![
+        SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![liga])),
+        SubstitutionLookup::Alternate(Lookup::new(Default::default(), vec![onum])),
+        // The second subtable's substitution of a is never made: the first one covers a.
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![single('a', 'B')?, single('a', 'C')?])),
+        SubstitutionLookup::Single(Lookup::new(Default::default(), vec![single('g', 'G')?])),
+    ]);
+    let named = Some(FeatureParams::StylisticSet(StylisticSetParams::new(NameId::new(256))));
+    // Features sorted by tag, as OpenType requires.
+    let records = vec![
+        FeatureRecord::new(Tag::new(b"cswh"), Feature::new(None, vec![])),
+        FeatureRecord::new(Tag::new(b"liga"), Feature::new(None, vec![0])),
+        FeatureRecord::new(Tag::new(b"onum"), Feature::new(None, vec![1])),
+        FeatureRecord::new(Tag::new(b"smcp"), Feature::new(None, vec![2])),
+        FeatureRecord::new(Tag::new(b"ss02"), Feature::new(named, vec![3])),
+    ];
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"DFLT"), Script::new(Some(LangSys::new(vec![0, 1, 2, 3, 4])), vec![]))]);
     builder.add_table(&Gsub::new(scripts, FeatureList::new(records), lookups)).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
@@ -1346,6 +1499,52 @@ fn remapped_source_sans(family: &str, postscript: &str, mapping: &[(char, char)]
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
         if tag != Tag::new(b"GPOS") && tag != Tag::new(b"kern") && !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`large_cmap_font`].
+pub const LARGE_CMAP_FAMILY: &str = "Largecmap Sans";
+
+/// The family of [`cmapless_font`].
+pub const CMAPLESS_FAMILY: &str = "Cmapless Sans";
+
+/// The bundled Source Sans 3 Regular with a `cmap` of `count` characters from U+20000 up, about as
+/// many as a large CJK font maps when `count` is 50,000. Each character maps to the font's next
+/// glyph in turn after `.notdef`, so most glyphs have several characters.
+pub fn large_cmap_font(count: u32) -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let glyphs = u32::from(font.maxp().ok()?.num_glyphs()).checked_sub(1).filter(|n| *n > 0)?;
+    let mappings = (0..count).map(|i| Some((char::from_u32(0x2_0000_u32.checked_add(i)?)?, write_fonts::types::GlyphId::new(1 + i % glyphs))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    source_sans_with_cmap(LARGE_CMAP_FAMILY, "LargecmapSans-Regular", Some(&cmap))
+}
+
+/// The bundled Source Sans 3 Regular without a `cmap` table: it maps no character.
+pub fn cmapless_font() -> Option<Vec<u8>> {
+    source_sans_with_cmap(CMAPLESS_FAMILY, "CmaplessSans-Regular", None)
+}
+
+/// The bundled Source Sans 3 Regular named `family`, with `cmap` in place of its own (none when
+/// `cmap` is `None`), and its other tables kept.
+fn source_sans_with_cmap(family: &str, postscript: &str, cmap: Option<&write_fonts::tables::cmap::Cmap>) -> Option<Vec<u8>> {
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let full = format!("{family} Regular");
+    let name = name_table(&[(1, family), (2, "Regular"), (4, full.as_str()), (6, postscript)])?;
+    let mut builder = FontBuilder::new();
+    if let Some(cmap) = cmap {
+        builder.add_table(cmap).ok()?;
+    }
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if tag != Tag::new(b"cmap") && !builder.contains(tag) {
             builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
         }
     }

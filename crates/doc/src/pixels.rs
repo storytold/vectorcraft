@@ -20,15 +20,41 @@ pub type PixelPick<'a> = (Option<[f64; 4]>, usize, &'a dyn Fn(f64, f64) -> bool)
 /// the header first: the decoder's limit is on the file's samples, and a gray image is a quarter
 /// of what it becomes here (#1717).
 fn rgba_within(bytes: &[u8], max: u64) -> Option<image::RgbaImage> {
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
-    if u64::from(w) * u64::from(h) > max / 4 {
+    Some(crate::decode::decode_within(bytes, max).ok()??.0.into_rgba8())
+}
+
+/// An image file's stored size in pixels, read from its header by craft-image-codecs without
+/// decoding any pixels: PNG's IHDR, a JPEG's frame, a TIFF's first full-resolution page, a
+/// still or animated WebP's canvas, BMP's header ([`craft_image_codecs::probe_allocation_size`],
+/// with no size limit), and a GIF's logical screen and the other formats' headers
+/// ([`craft_image_codecs::probe_size`]). Not turned by an EXIF orientation. `None` when no header
+/// gives a size.
+pub fn header_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if craft_image_codecs::detect(bytes) == Some(craft_image_codecs::Format::Gif) {
+        // A GIF frame may be larger than the logical screen the image crate gave as its size.
+        return craft_image_codecs::probe_size(bytes).ok();
+    }
+    craft_image_codecs::probe_allocation_size(bytes)
+        .ok()
+        .or_else(|| craft_image_codecs::probe_size(bytes).ok())
+        // A BMP whose pixel data does not match its header (a truncated file, or a header that
+        // declares more pixels than the file holds) is refused by the image crate decoder the
+        // probes use. The BITMAPINFOHEADER still names the size, which Place, Paste and Open
+        // need so they can say the image is too large to draw instead of that its size can't
+        // be read.
+        .or_else(|| bmp_header_size(bytes))
+}
+
+/// Width and height from a BMP file's BITMAPINFOHEADER, without opening it as a decoder would.
+/// Height may be negative (top-down storage); the stored magnitude is the size.
+fn bmp_header_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.get(..2) != Some(b"BM") {
         return None;
     }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(max);
-    reader.limits(limits);
-    Some(reader.decode().ok()?.into_rgba8())
+    let dim = |at: usize| -> Option<i32> { Some(i32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?)) };
+    let width = u32::try_from(dim(18)?).ok().filter(|&n| n > 0)?;
+    let height = dim(22)?.unsigned_abs();
+    (height > 0).then_some((width, height))
 }
 
 impl ImageBlob {
@@ -385,30 +411,43 @@ mod tests {
         assert!(ImageBlob::png(b"not a png".to_vec()).sample_pixels(&[(None, 100, &any)]).is_none());
     }
 
-    /// A GIF whose `w` × `h` screen holds one opaque red pixel at the top left. The file holds no
-    /// other pixels, and the decoder makes them transparent.
-    fn gif_with_one_red_pixel(w: u16, h: u16) -> Vec<u8> {
-        let mut gif = b"GIF89a".to_vec();
-        gif.extend_from_slice(&w.to_le_bytes());
-        gif.extend_from_slice(&h.to_le_bytes());
-        // Flags for a global color table of two colors, the background and aspect bytes, then the
-        // table: red and black.
-        gif.extend_from_slice(&[0x80, 0, 0, 255, 0, 0, 0, 0, 0]);
-        // A 1 × 1 image at (0, 0), its LZW data (clear, color 0, end), and the end of the file.
-        gif.extend_from_slice(&[0x2C, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 2, 0x44, 0x01, 0, 0x3B]);
-        gif
+    /// An RGBA PNG of `w` × `h` pixels with one opaque red pixel at the top left, the rest
+    /// transparent. Written row by row so the 11,586² allowance image is not held decoded
+    /// while it is encoded.
+    fn png_with_one_red_pixel(w: u32, h: u32) -> Vec<u8> {
+        use std::io::Write;
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+        let mut row = vec![0u8; 1 + w as usize * 4];
+        row[1..5].copy_from_slice(&[255, 0, 0, 255]);
+        z.write_all(&row).unwrap();
+        row[1..5].fill(0);
+        for _ in 1..h {
+            z.write_all(&row).unwrap();
+        }
+        let idat = [&b"IDAT"[..], &z.finish().unwrap()].concat();
+        let ihdr = [&b"IHDR"[..], &w.to_be_bytes(), &h.to_be_bytes(), &[8, 6, 0, 0, 0]].concat();
+        let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+        for chunk in [&ihdr[..], &idat[..], b"IEND"] {
+            out.extend((chunk.len() as u32 - 4).to_be_bytes());
+            out.extend(chunk);
+            let mut crc = flate2::Crc::new();
+            crc.update(chunk);
+            out.extend(crc.sum().to_be_bytes());
+        }
+        out
     }
 
     /// The pixels are decoded within the allowance, not within the decoder's own 512 MB: an RGBA
-    /// image of 11,586 × 11,586 pixels (536,941,584 bytes) is recolored and sampled.
+    /// image of 11,586 × 11,586 pixels (536,941,584 bytes) is recolored and sampled. A PNG, not a
+    /// sparse GIF: craft-image-codecs refuses a GIF whose unbacked logical screen is past 256 MiB.
     #[test]
     fn pixels_past_the_decoders_own_limit_are_decoded_within_the_allowance() {
         let (w, h) = (11_586, 11_586);
         let rgba = u64::from(w) * u64::from(h) * 4;
         assert!(rgba > 512 << 20);
-        let gif = gif_with_one_red_pixel(w, h);
-        assert!(rgba_within(&gif, rgba - 1).is_none(), "past the allowance");
-        let b = ImageBlob::new("image/gif", gif);
+        let png = png_with_one_red_pixel(w, h);
+        assert!(rgba_within(&png, rgba - 1).is_none(), "past the allowance");
+        let b = ImageBlob::png(png);
         assert!(b.map_rgb(|[r, g, bl]| [bl, g, r]).is_some(), "red becomes blue");
         assert_eq!(b.sample(0.5, 0.5, 1), Some([255, 0, 0, 255]));
         assert_eq!(b.sample(f64::from(w) - 0.5, f64::from(h) - 0.5, 1), None, "transparent");
@@ -555,5 +594,69 @@ mod tests {
         let la8 = png_of(image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(4, 1, vec![0, 255, 255, 255, 51, 255, 0, 128]).unwrap()));
         assert_eq!(la8.coverage(), Some((4, 1, vec![255, 0, 204, 128])));
         assert_eq!(ImageBlob::png(vec![1, 2, 3]).coverage(), None);
+    }
+
+    /// Embedded-image pixels through craft-image-codecs (#778) are those the image crate decoded:
+    /// the same layout and samples for PNG, GIF, WebP, TIFF and BMP at each depth the image
+    /// crate writes, and JPEG samples within two steps.
+    #[test]
+    fn decoded_pixels_are_those_the_image_crate_read() {
+        use image::{DynamicImage as D, ImageFormat as F};
+        let rgba =
+            image::RgbaImage::from_fn(9, 5, |x, y| image::Rgba([(x * 29) as u8, (y * 47) as u8, ((x + 2 * y) * 9) as u8, 255 - (x * y * 6) as u8]));
+        let deep = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(9, 5, |x, y| {
+            image::Rgba([(x * 7_001) as u16, (y * 12_007) as u16, 5, 65_535 - (x * y) as u16])
+        });
+        let images = [
+            D::ImageRgba8(rgba.clone()),
+            D::ImageRgb8(D::ImageRgba8(rgba.clone()).to_rgb8()),
+            D::ImageLuma8(D::ImageRgba8(rgba.clone()).to_luma8()),
+            D::ImageLumaA8(D::ImageRgba8(rgba).to_luma_alpha8()),
+            D::ImageRgba16(deep.clone()),
+            D::ImageLuma16(D::ImageRgba16(deep).to_luma16()),
+        ];
+        let mut checked = 0;
+        for img in &images {
+            for f in [F::Png, F::Gif, F::WebP, F::Tiff, F::Bmp, F::Jpeg] {
+                let mut bytes = Vec::new();
+                if img.write_to(&mut Cursor::new(&mut bytes), f).is_err() {
+                    continue;
+                }
+                let what = format!("{f:?} {:?}", img.color());
+                let want = image::load_from_memory_with_format(&bytes, f).unwrap();
+                let (got, _) = crate::decode::decode_within(&bytes, MAX_RASTER_ALLOC)
+                    .unwrap_or_else(|e| panic!("{what}: {e}"))
+                    .unwrap_or_else(|| panic!("{what}: past the allowance"));
+                let tolerance = if f == F::Jpeg { 2 * 257 } else { 0 };
+                if f != F::Jpeg {
+                    assert_eq!(got.color(), want.color(), "{what}");
+                }
+                let worst = got.to_rgba16().as_raw().iter().zip(want.to_rgba16().as_raw()).map(|(a, b)| a.abs_diff(*b)).max();
+                assert!(worst.is_some_and(|w| w <= tolerance), "{what}: {worst:?}");
+                // Link previews and the checked-image path read the same pixels.
+                let handed = ImageBlob::new(format!("image/{f:?}").to_ascii_lowercase(), bytes.clone())
+                    .checked_with_pixels(false)
+                    .unwrap_or_else(|| panic!("{what}: checked"))
+                    .1
+                    .unwrap_or_else(|| panic!("{what}: checked past the allowance"));
+                assert_eq!(handed.color(), got.color(), "{what} checked");
+                assert_eq!(handed.as_bytes(), got.as_bytes(), "{what} checked");
+                checked += 1;
+            }
+        }
+        assert!(checked >= 20, "{checked}");
+    }
+
+    /// A BMP header that declares 30,000 × 30,000 pixels, with only one pixel of data, still
+    /// reports that size: Paste and Place can then say the image is too large to draw.
+    #[test]
+    fn a_truncated_bmp_header_still_gives_its_declared_size() {
+        let mut bmp = vec![];
+        image::RgbImage::from_pixel(1, 1, image::Rgb([200, 40, 40])).write_to(&mut Cursor::new(&mut bmp), image::ImageFormat::Bmp).unwrap();
+        bmp[18..22].copy_from_slice(&30_000i32.to_le_bytes());
+        bmp[22..26].copy_from_slice(&30_000i32.to_le_bytes());
+        assert_eq!(header_size(&bmp), Some((30_000, 30_000)));
+        let (w, h, _) = crate::decode::decoded_layout(&bmp, craft_image_codecs::Format::Bmp).expect("layout from the header");
+        assert_eq!((w, h), (30_000, 30_000));
     }
 }
