@@ -391,3 +391,21 @@ fn for_a_printer_a_landscape_page_is_written_upright() {
     assert_eq!(size(&spooled), [(612.0, 792.0)]);
     assert_eq!(v["pages"], 1);
 }
+
+#[test]
+fn a_spot_ink_converted_to_process_is_saved_and_listed_without_a_plate() {
+    let (mut s, _) = session();
+    s.execute("swatch.new", &json!({"name": "Gold", "color": {"model": "cmyk", "c": 0, "m": 0.2, "y": 0.8, "k": 0.1}, "spot": true})).unwrap();
+    let ink = json!({"name": "Gold", "convertToProcess": true});
+    let v = s.execute("print.setup", &json!({"settings": {"output": {"mode": "separations", "inks": [ink]}}})).unwrap();
+    assert_eq!(v["settings"]["output"]["inks"], json!([{"name": "Gold", "print": true, "convertToProcess": true}]));
+    let doc = &s.doc().unwrap().doc;
+    let back = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    assert_eq!(back.print_setup.as_ref().map(|p| p["output"]["inks"][0]["convertToProcess"].clone()), Some(json!(true)), "kept in the file");
+    let pv = s.execute("print.preview", &json!({})).unwrap();
+    let names = |list: &Value| list.as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    assert_eq!(names(&pv["inks"]), ["Cyan", "Magenta", "Yellow", "Black"], "no Gold plate");
+    assert_eq!(names(&pv["documentInks"]), ["Cyan", "Magenta", "Yellow", "Black", "Gold"]);
+    assert_eq!(pv["documentInks"][4]["convertToProcess"], json!(true));
+    assert_eq!(pv["documentInks"][0].get("convertToProcess"), None, "written only when on");
+}
