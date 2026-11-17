@@ -4168,6 +4168,38 @@ font-technology	Variable	Variabel
 	Preferences	Preferensi
 	Previous	Sebelumnya
 	Restore every preference to its default (applied on OK)	Kembalikan semua preferensi ke defaultnya (diterapkan saat OK)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Menampilkan bilah perintah untuk seleksi atau alat di kanvas; bilah ini disembunyikan saat Anda menyeret dan dalam mode presentasi.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Seberapa jauh tombol panah memindahkan seleksi; dengan Shift, tombol itu memindahkannya sepuluh kali lebih jauh.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Sudut sumbu tempat tombol panah memindahkan dan tempat Shift menahan penggambaran dan pemindahan.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Radius sudut yang dipakai alat Persegi panjang bulat untuk menggambar; mengubah radius saat menggambar juga mengubah nilai ini.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Seberapa jauh Tempel menggeser salinan ke kanan dan ke bawah saat tidak ada posisi yang diberikan, seperti dari skrip; Tempel di aplikasi menaruhnya di tengah tampilan.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Mencegah alat Pena menghapus titik jangkar yang Anda klik pada jalur terpilih, atau menambahkan titik di tempat Anda mengklik segmennya.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Alat gambar menampilkan penunjuk silang sebagai pengganti ikonnya; Caps Lock melakukan hal yang sama selama aktif.
+	Shows a tip when the pointer rests on a button or field that has one.	Menampilkan tip saat penunjuk berhenti di atas tombol atau bidang yang memilikinya.
+	Shows a warning before a script you choose runs.	Menampilkan peringatan sebelum skrip yang Anda pilih dijalankan.
+	Smooths the edges of artwork on the canvas.	Menghaluskan tepi karya seni di kanvas.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Seleksi › Sama › Warna isian, Warna stroke, dan Isian & stroke hanya mencocokkan tint yang sama dari swatch global atau spot, bukan sembarang tint-nya.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Menampilkan layar Home saat tidak ada dokumen yang terbuka; saat nonaktif, jendela tetap kosong sampai Anda mengklik Home.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mengukur objek beserta stroke dan efek yang mengubah bentuknya untuk ukuran, posisi, dan perataan; bayangan, cahaya, dan kekaburan tidak diukur.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Pada zum 100%, satu inci dokumen memakai 96 titik layar, bukan 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Mengklik ganda grup, jalur, atau gambar dengan alat Seleksi membukanya dalam mode isolasi.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Isian dan stroke pola ikut bertransformasi dengan karya seni, kecuali transformasi atau menu panel Transformasi memilih lain.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Radius sudut dinamis ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Ketebalan stroke, garis putus, dan jarak efek ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.
+	The mouse wheel zooms the canvas instead of scrolling it.	Roda mouse melakukan zum pada kanvas, bukan menggulirnya.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
+	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
+	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Buat tanda potong menggambar tanda bergaya Jepang, bukan Romawi.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Karya seni baru hanya mengambil isian dan stroke seleksi; saat nonaktif, karya seni baru mengambil seluruh tampilan objek terpilih.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Mengubah lebar atau tinggi di panel Transformasi, panel Properti, atau bilah Kontrol mengubah yang lain secara proporsional.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Properti persegi panjang dinamis menampilkan satu bidang Radius sudut untuk keempat sudut; saat nonaktif, setiap sudut punya bidangnya sendiri.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Apa yang ditransformasi oleh pengeditan di panel Transformasi: objek, ubin polanya, atau keduanya; Default mengikuti Transformasi ubin pola.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Saat satu instans simbol dipilih, panel Transformasi memakai titik registrasi simbol sebagai titik referensi.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Menggelapkan kanvas di luar artboard selama alat Artboard aktif.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Saat Redupkan wilayah di luar artboard aktif, area di luar artboard tetap gelap selama Anda menyeret dengan alat Artboard.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Satuan untuk dokumen baru dari ukuran bawaan selain ukuran piksel dan untuk file yang dibuka tanpa satuan tercatat; jika Anda memilihnya di sini lalu mengklik OK, satuan dokumen aktif juga menjadi satuan ini.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Ketebalan stroke, putus-putus, dan jarak ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Ukuran teks, leading, dan pergeseran garis dasar ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.

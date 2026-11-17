@@ -4176,6 +4176,38 @@ antiAlias	Sharp	शार्प
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	कैनवास पर सिलेक्शन या टूल के लिए कमांड बार दिखाता है; ड्रैग करते समय और प्रस्तुति मोड में यह छिप जाता है।
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	एरो कुंजी सिलेक्शन को कितनी दूर खिसकाती है; Shift के साथ यह दस गुना दूर खिसकाती है।
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	उन अक्षों का कोण जिनके साथ एरो कुंजियाँ खिसकाती हैं और जिन पर Shift ड्रॉइंग और खिसकाने को रोकता है।
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	वह कोने की त्रिज्या जिससे गोल आयत टूल ड्रॉ करता है; ड्रॉ करते समय त्रिज्या बदलने से यह मान भी बदल जाता है।
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	जब कोई स्थिति नहीं दी जाती, जैसे स्क्रिप्ट से, तब पेस्ट कॉपी को दाईं ओर और नीचे कितना खिसकाता है; ऐप में पेस्ट करने पर कॉपी व्यू के बीच में रखी जाती है।
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	पेन टूल को चुने गए पाथ पर क्लिक किए गए एंकर पॉइंट को हटाने से, या उसके सेगमेंट पर क्लिक की गई जगह नया पॉइंट जोड़ने से रोकता है।
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	ड्रॉइंग टूल अपने आइकन की जगह क्रॉसहेयर पॉइंटर दिखाते हैं; Caps Lock चालू रहने पर भी यही होता है।
+	Shows a tip when the pointer rests on a button or field that has one.	जब पॉइंटर टिप वाले किसी बटन या फ़ील्ड पर रुकता है, तब टिप दिखाता है।
+	Shows a warning before a script you choose runs.	आपकी चुनी गई स्क्रिप्ट चलने से पहले चेतावनी दिखाता है।
+	Smooths the edges of artwork on the canvas.	कैनवास पर आर्टवर्क के किनारों को चिकना करता है।
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	सिलेक्ट › समान › फ़िल रंग, स्ट्रोक रंग और फ़िल व स्ट्रोक केवल ग्लोबल या स्पॉट स्वॉच के उसी टिंट से मेल खाते हैं, उसके किसी भी टिंट से नहीं।
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	कोई डॉक्यूमेंट खुला न होने पर होम स्क्रीन दिखाता है; बंद होने पर विंडो तब तक खाली रहती है जब तक आप होम पर क्लिक नहीं करते।
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	साइज़, स्थिति और संरेखण के लिए ऑब्जेक्ट को उनके स्ट्रोक और आकार बदलने वाले इफ़ेक्ट के साथ मापता है; छाया, ग्लो और ब्लर नहीं मापे जाते।
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% ज़ूम पर डॉक्यूमेंट का एक इंच 72 की जगह 96 स्क्रीन पॉइंट लेता है।
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	सिलेक्शन टूल से किसी ग्रुप, पाथ या इमेज पर डबल-क्लिक करने से वह आइसोलेशन मोड में खुलता है।
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	पैटर्न वाले फ़िल और स्ट्रोक आर्टवर्क के साथ रूपांतरित होते हैं, जब तक कोई रूपांतरण या रूपांतरण पैनल का मेनू कुछ और न चुने।
+	Live corner radii scale with the art, unless the scale chooses otherwise.	लाइव कोनों की त्रिज्याएँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	स्ट्रोक की मोटाई, डैश और इफ़ेक्ट की दूरियाँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
+	The mouse wheel zooms the canvas instead of scrolling it.	माउस व्हील कैनवास को स्क्रॉल करने की जगह ज़ूम करता है।
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl दबाकर माउस व्हील घुमाने से कैनवास बगल की ओर स्क्रॉल होता है।
+	Dragging sideways on a numeric field's label changes the field's value.	किसी संख्या वाले फ़ील्ड के लेबल पर बगल की ओर ड्रैग करने से फ़ील्ड का मान बदलता है।
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
+	Shows the bounding box while you move the selection or draw a shape.	सिलेक्शन खिसकाते या आकार ड्रॉ करते समय बाउंडिंग बॉक्स दिखाता है।
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ट्रिम मार्क्स बनाएं रोमन की जगह जापानी शैली के निशान ड्रॉ करता है।
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	नया आर्टवर्क सिलेक्शन का केवल फ़िल और स्ट्रोक लेता है; बंद होने पर वह चुने गए ऑब्जेक्ट का पूरा रूप लेता है।
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	रूपांतरण पैनल, प्रॉपर्टीज़ पैनल या नियंत्रण बार में चौड़ाई या ऊँचाई बदलने से दूसरी भी अनुपात में बदलती है।
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	लाइव आयत की प्रॉपर्टीज़ चारों कोनों के लिए कोने की त्रिज्या का एक ही फ़ील्ड दिखाती हैं; बंद होने पर हर कोने का अपना फ़ील्ड होता है।
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	रूपांतरण पैनल में किए गए बदलाव क्या रूपांतरित करते हैं: ऑब्जेक्ट, उसकी पैटर्न टाइलें या दोनों; डिफ़ॉल्ट ट्रांसफॉर्म पैटर्न टाइलें का पालन करता है।
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	एक सिंबल इंस्टेंस चुना होने पर रूपांतरण पैनल सिंबल के रजिस्ट्रेशन पॉइंट को संदर्भ पॉइंट के रूप में इस्तेमाल करता है।
+	Darkens the canvas outside the artboards while the Artboard tool is active.	आर्टबोर्ड टूल सक्रिय रहने पर आर्टबोर्ड के बाहर का कैनवास गहरा करता है।
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	आर्टबोर्ड के बाहर का क्षेत्र धुंधला करें चालू होने पर आर्टबोर्ड टूल से ड्रैग करते समय आर्टबोर्ड के बाहर का क्षेत्र गहरा बना रहता है।
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	पिक्सेल को छोड़कर बिल्ट-इन साइज़ वाले नए डॉक्यूमेंट और कोई इकाई दर्ज न करने वाली खोली गई फ़ाइलों की इकाई; इसे यहाँ चुनकर ठीक है पर क्लिक करने से यह सक्रिय डॉक्यूमेंट की इकाई भी बन जाती है।
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	स्ट्रोक की मोटाई, डैश और गैप इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	टाइप साइज़, लीडिंग और बेसलाइन शिफ़्ट इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।

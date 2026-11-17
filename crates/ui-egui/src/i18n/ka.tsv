@@ -6236,6 +6236,38 @@ font-technology	Variable	ცვლადი
 	Preferences	პარამეტრები
 	Previous	წინა
 	Restore every preference to its default (applied on OK)	ყველა პარამეტრის ნაგულისხმევ მნიშვნელობაზე დაბრუნება (გამოიყენება OK-ზე დაჭერისას)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	ტილოზე აჩვენებს ბრძანებების ზოლს მონიშნულისთვის ან ხელსაწყოსთვის; გადათრევისას და პრეზენტაციის რეჟიმში იმალება.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	რამდენად შორს გადაადგილებს ისრის კლავიში მონიშნულს; Shift-ით ათჯერ უფრო შორს გადაადგილებს.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	იმ ღერძების კუთხე, რომელთა გასწვრივაც ისრის კლავიშები გადაადგილებენ და რომლებზეც Shift ზღუდავს ხატვას და გადაადგილებას.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	კუთხის რადიუსი, რომლითაც მომრგვალებული მართკუთხედის ხელსაწყო ხატავს; ხატვისას რადიუსის შეცვლა ამ მნიშვნელობასაც ცვლის.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	რამდენად გადაწევს ჩასმა ასლს მარჯვნივ და ქვემოთ, როცა პოზიცია მითითებული არ არის, მაგალითად სკრიპტიდან; აპში ჩასმა ასლს ხედის ცენტრში სვამს.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	კალმის ხელსაწყოს უკრძალავს მონიშნულ კონტურზე დაწკაპუნებული საყრდენი წერტილის წაშლას ან ახლის დამატებას იქ, სადაც მის სეგმენტზე დააწკაპუნებთ.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	სახატავი ხელსაწყოები ხატულის ნაცვლად ჯვრისებრ მაჩვენებელს აჩვენებენ; Caps Lock იგივეს აკეთებს, სანამ ჩართულია.
+	Shows a tip when the pointer rests on a button or field that has one.	აჩვენებს მინიშნებას, როცა მაჩვენებელი ჩერდება ღილაკზე ან ველზე, რომელსაც ის აქვს.
+	Shows a warning before a script you choose runs.	აჩვენებს გაფრთხილებას თქვენ მიერ არჩეული სკრიპტის გაშვებამდე.
+	Smooths the edges of artwork on the canvas.	ტილოზე ნახატის კიდეებს აგლუვებს.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	მონიშვნა › იგივე › შევსების ფერი, კონტურის ფერი და შევსება და კონტური პოულობს მხოლოდ გლობალური ან სპოტ ნიმუშის იმავე ტონს და არა მის ნებისმიერ ტონს.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	აჩვენებს საწყის ეკრანს, როცა არცერთი დოკუმენტი არ არის გახსნილი; გამორთვისას ფანჯარა ცარიელი რჩება, სანამ საწყის ეკრანზე არ დააწკაპუნებთ.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	ზომის, პოზიციისა და სწორების დროს ობიექტებს ზომავს კონტურებითა და ფორმის შემცვლელი ეფექტებით; ჩრდილები, ნათება და გაბუნდოვნება არ იზომება.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100%-იან მასშტაბზე დოკუმენტის ერთი დიუმი 72-ის ნაცვლად 96 ეკრანის პუნქტს იკავებს.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	მონიშვნის ხელსაწყოთი ჯგუფზე, კონტურზე ან გამოსახულებაზე ორჯერ დაწკაპუნება მას იზოლაციის რეჟიმში ხსნის.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	პატერნის შევსებები და კონტურები ნახატთან ერთად გარდაიქმნება, თუ გარდაქმნა ან გარდაქმნის პანელის მენიუ სხვას არ აირჩევს.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	დინამიკური კუთხეების რადიუსები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	კონტურის სისქე, შტრიხები და ეფექტების მანძილები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
+	The mouse wheel zooms the canvas instead of scrolling it.	მაუსის ბორბალი ტილოს გადახვევის ნაცვლად მასშტაბს ცვლის.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
+	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ხელსაწყოს მალსახმობი კლავიშის დაჭერით ხელსაწყო არჩეულია მის აშვებამდე, შემდეგ კი ისევ წინა ხელსაწყო აირჩევა.
+	Shows the bounding box while you move the selection or draw a shape.	აჩვენებს შემომსაზღვრელ ჩარჩოს, სანამ მონიშნულს გადაადგილებთ ან ფიგურას ხატავთ.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ჭრის ნიშნების შექმნა რომაულის ნაცვლად იაპონური სტილის ნიშნებს ხატავს.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	ახალი ნახატი მონიშნულიდან მხოლოდ შევსებასა და კონტურს იღებს; გამორთვისას იღებს მონიშნული ობიექტის მთელ იერსახეს.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	სიგანის ან სიმაღლის შეცვლა გარდაქმნის პანელში, თვისებების პანელში ან მართვის ზოლში მეორესაც პროპორციულად ცვლის.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	დინამიკური მართკუთხედის თვისებები ოთხივე კუთხისთვის კუთხის რადიუსის ერთ ველს აჩვენებს; გამორთვისას თითოეულ კუთხეს თავისი ველი აქვს.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	რას გარდაქმნის ცვლილებები გარდაქმნის პანელში: ობიექტს, მისი პატერნის ფილებს ან ორივეს; ნაგულისხმევი მისდევს პატერნის ფილების გარდაქმნას.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	როცა სიმბოლოს ერთი ეგზემპლარია მონიშნული, გარდაქმნის პანელი სიმბოლოს რეგისტრაციის წერტილს საყრდენ წერტილად იყენებს.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	სანამ სამუშაო დაფის ხელსაწყო აქტიურია, სამუშაო დაფების გარეთ ტილოს აბნელებს.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	როცა სამუშაო დაფის გარეთ არის დაბნელება ჩართულია, სამუშაო დაფის ხელსაწყოთი გადათრევისას სამუშაო დაფების გარეთ არე ბნელი რჩება.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ერთეული ახალი დოკუმენტებისთვის (ჩაშენებული ზომებით, პიქსელურის გარდა) და იმ გახსნილი ფაილებისთვის, რომლებშიც ერთეული არ წერია; OK-ზე დაწკაპებისას აქტიური დოკუმენტიც ამ ერთეულს მიიღებს.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	კონტურის სისქე, ტირეები და შუალედები ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ტექსტის ზომა, სტრიქონთა დაშორება და საბაზისო ხაზის წანაცვლება ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
