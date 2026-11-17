@@ -600,7 +600,7 @@ pub(crate) fn shape_runs(
         // Split into segments by font coverage (and case, for Small Caps).
         let mut seg = Segment { range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
-        let mut script = Script::Common;
+        let mut boundary = craft_font_catalog::SegmentBoundary::new(primary.id(), level_at(a));
         // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
         for (i, cluster) in text[a..b].grapheme_indices(true) {
             let i = a + i;
@@ -620,19 +620,15 @@ pub(crate) fn shape_runs(
             };
             let small = small_caps && c.is_lowercase();
             let next_script = shaping_script(c);
-            let strong_script = !matches!(next_script, Script::Common | Script::Inherited);
-            let script_change = strong_script && script != Script::Common && script != next_script;
+            let strong_script = (!matches!(next_script, Script::Common | Script::Inherited)).then_some(next_script);
             // Combining marks, zero width joiners and non-joiners, and variation selectors stay
             // with the character before them.
-            if (face.id() != seg.face.id() || small != seg.small || level != seg.level || script_change) && !is_mark(c) {
+            if boundary.advance(face.id(), level, small, strong_script, is_mark(c)) {
                 if i > seg.range.start {
                     seg.range.end = i;
                     shape_segment(text, &range, &seg, feats, out);
                 }
                 seg = Segment { range: i..i, face, small, level, ..seg };
-            }
-            if strong_script {
-                script = next_script;
             }
         }
         if b > seg.range.start {
