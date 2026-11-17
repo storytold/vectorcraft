@@ -188,12 +188,19 @@ const GRID_PREVIEW: egui::Vec2 = egui::vec2(112.0, 72.0);
 /// valid value shows as `setup`, the document's setting.
 fn preview_grid(fields: &Map<String, Value>, setup: &vectorcraft_doc::DocSetup) -> (GridSize, [vectorcraft_color::Color; 2]) {
     let size = fields.get("gridSize").and_then(Value::as_str).and_then(GridSize::parse).unwrap_or(setup.grid_size);
+    (size, grid_colors(fields, setup))
+}
+
+/// The two grid colors the dialog's fields `fields` hold, read as `document.setup` reads
+/// `gridColors` (a preset name, in any letter case, or two colors): a field that is missing or not
+/// a valid value gives `setup`'s colors, the document's setting.
+fn grid_colors(fields: &Map<String, Value>, setup: &vectorcraft_doc::DocSetup) -> [vectorcraft_color::Color; 2] {
     let colors = match fields.get("gridColors") {
         Some(Value::String(name)) => GRID_COLOR_PRESETS.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|(_, pair)| *pair),
         Some(Value::Array(a)) if a.len() == 2 => a.iter().map(vectorcraft_engine::cmd::color_value).collect::<Option<Vec<_>>>().map(|c| [c[0], c[1]]),
         _ => None,
     };
-    (size, colors.unwrap_or(setup.grid_colors))
+    colors.unwrap_or(setup.grid_colors)
 }
 
 /// The checkered preview of the grid the dialog's Grid Size and Grid Colors hold, drawn with the
@@ -234,15 +241,17 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let top = ui.cursor().top();
     let sizes: Vec<(&str, &str)> = GridSize::ALL.iter().map(|g| (g.id(), g.label())).collect();
     choice(ui, d, "gridSize", tl!("Grid Size:"), &sizes);
-    let colors: Vec<String> = d
-        .fields
-        .get("gridColors")
-        .and_then(Value::as_array)
-        .map(|a| a.iter().map(|c| c.as_str().unwrap_or("").to_string()).collect())
-        .unwrap_or_default();
+    // The pair the field holds as a preset name or two colors, or the document's pair when it holds
+    // neither, so each box and hex field shows a color and the picker and hex fields set an entry of
+    // a two-color list.
+    let colors: Vec<String> = {
+        let fallback = vectorcraft_doc::DocSetup::default();
+        let setup = app.session.active().map_or(&fallback, |st| &st.doc.setup);
+        grid_colors(&d.fields, setup).iter().map(vectorcraft_color::Color::to_hex).collect()
+    };
     let preset = GRID_COLOR_PRESETS
         .iter()
-        .find(|(_, pair)| colors.len() == 2 && colors.iter().zip(pair).all(|(h, c)| h.eq_ignore_ascii_case(&c.to_hex())))
+        .find(|(_, pair)| colors.iter().zip(pair).all(|(h, c)| h.eq_ignore_ascii_case(&c.to_hex())))
         .map_or("Custom", |(n, _)| n);
     let names: Vec<&str> = GRID_COLOR_PRESETS.iter().map(|(n, _)| *n).chain(["Custom"]).collect();
     widgets::label_row(ui, tl!("Grid Colors:"), LABEL, |ui| {
@@ -252,7 +261,7 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     // The two colours (the first is also the paper colour): editing either makes them Custom. A
     // click on a color's box, or Space or Enter with the keyboard on it, opens the Color Picker on
-    // that color (white when its hex is not a color), and the picker's OK sets that color.
+    // that color, and the picker's OK sets that color.
     let mut pick = None;
     widgets::label_row(ui, "", LABEL, |ui| {
         for i in 0..2 {
@@ -281,7 +290,6 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
             if let Some(c) = widgets::hex_field_named(ui, ("grid-color", i), Some(&name), hex).and_then(|h| vectorcraft_color::Color::from_hex(&h)) {
                 let mut v = colors.clone();
-                v.resize(2, "#ffffff".into());
                 v[i] = c.to_hex();
                 d.fields.insert("gridColors".into(), json!(v));
             }
@@ -290,6 +298,12 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     grid_preview(app, ui, d, top);
     if let Some((i, c)) = pick {
+        // A preset name or a field that is not two colors becomes the pair the boxes show, so the
+        // picker's OK has an entry to set.
+        let entries = d.fields.get("gridColors").and_then(Value::as_array);
+        if !entries.is_some_and(|a| a.len() == 2 && a.iter().all(|c| vectorcraft_engine::cmd::color_value(c).is_some())) {
+            d.fields.insert("gridColors".into(), json!(colors));
+        }
         *d = super::color_picker::over_list_entry(d, "gridColors", i, c);
     }
     ui.add_space(4.0);
@@ -818,6 +832,36 @@ mod tests {
             assert!(app.ui.dialog.is_none());
             assert_eq!(app.session.active().unwrap().doc.setup.grid_colors_name(), "Light");
             assert_eq!(undo_steps(&app), 0, "cancel {cancel}");
+        }
+    }
+
+    /// When Grid Colors holds a preset name (in any letter case) or a list that is not two colors,
+    /// the boxes and hex fields show the preset's pair or the document's, a box opens the Color
+    /// Picker on its color, and the picker's OK sets only that entry of a two-color list.
+    #[test]
+    fn a_grid_color_box_opens_on_a_preset_name_or_a_short_list() {
+        for (field, index, opens, kept, name) in [
+            (json!("Blue"), 1, "#c4dcff", "#ffffff", "Blue"),
+            (json!("purple"), 0, "#ffffff", "#e2c9ff", "Purple"),
+            (json!(["#ff0000"]), 1, "#cccccc", "#ffffff", "Light"),
+        ] {
+            let (mut app, ctx) = transparency_tab();
+            app.ui.dialog.as_mut().unwrap().fields.insert("gridColors".into(), field.clone());
+            dialog_frame(&mut app, &ctx, vec![]);
+            let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+            for shown in [name, opens.trim_start_matches('#'), kept.trim_start_matches('#')] {
+                assert!(texts.iter().any(|t| t.eq_ignore_ascii_case(shown)), "{field}: no {shown} in {texts:?}");
+            }
+            click_grid_box(&mut app, &ctx, index);
+            assert_picker_over_setup(&app, opens, &field.to_string());
+            app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#00ff00"));
+            crate::dialogs::confirm(&mut app).unwrap();
+            let d = app.ui.dialog.as_ref().unwrap();
+            let mut pair = [hex(kept); 2];
+            pair[index] = hex("#00ff00");
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, pair.to_vec()), "{field}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, pair, "{field}");
         }
     }
 
