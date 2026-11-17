@@ -1379,6 +1379,7 @@
 	Files of a PDF standard can't be password-protected.	PDF સ્ટાન્ડર્ડની ફાઇલો પાસવર્ડ-સુરક્ષિત કરી શકાતી નથી.
 	Files of this standard tag their colours with ICC profiles.	આ સ્ટાન્ડર્ડની ફાઇલો તેમના રંગોને ICC પ્રોફાઇલ્સ સાથે ટૅગ કરે છે.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	આ સ્ટાન્ડર્ડની ફાઇલો તેમના રંગોને ICC પ્રોફાઇલ્સ સાથે ટૅગ કરે છે, આઉટપુટ ઇન્ટેન્ટ પ્રોફાઇલમાંના CMYK રંગો સિવાય, જે DeviceCMYK તરીકે લખાય છે.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“પ્રોફાઇલ્સ શામેલ કરશો નહીં” અને CMYK આઉટપુટ ઇન્ટેન્ટ સાથે, દરેક CMYK રંગ DeviceCMYK તરીકે લખાય છે, સિવાય કે તેને બીજી પ્રોફાઇલના CMYK ગંતવ્યમાં રૂપાંતરિત કરવામાં આવે.
 	Fill	ભરો
 	Fill & Stroke	ભરો અને સ્ટ્રોક
 	Fill (X), double-click for the Color Picker	ભરો (X), કલર પીકર માટે ડબલ-ક્લિક કરો

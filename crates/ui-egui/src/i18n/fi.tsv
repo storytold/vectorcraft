@@ -3116,6 +3116,7 @@ antiAlias	Sharp	Terävä
 	Files of a PDF standard can't be password-protected.	PDF-standardin mukaisia tiedostoja ei voi suojata salasanalla.
 	Files of this standard tag their colours with ICC profiles.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla, paitsi tulostustavoitteen profiilin CMYK-värit, jotka kirjoitetaan DeviceCMYK-muodossa.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Kun valintana on ”Älä sisällytä profiileja” ja tulostustavoite on CMYK, jokainen CMYK-väri kirjoitetaan DeviceCMYK-muodossa, ellei sitä muunneta toisen profiilin CMYK-kohteeseen.
 	Flattener preset:	Litistyksen esiasetus:
 	General › Thumbnails	Yleiset › Pikkukuvat
 	Grayscale images	Harmaasävykuvat

@@ -1142,6 +1142,7 @@ antiAlias	Sharp	Nítido
 	Files of a PDF standard can't be password-protected.	Arquivos de um padrão PDF não podem ser protegidos por senha.
 	Files of this standard tag their colours with ICC profiles.	Os arquivos deste padrão etiquetam suas cores com perfis ICC.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Os arquivos deste padrão etiquetam suas cores com perfis ICC, exceto as cores CMYK no perfil de intenção de saída, que são gravadas como DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Com “Não incluir perfis” e uma intenção de saída CMYK, cada cor CMYK é gravada como DeviceCMYK, a menos que seja convertida para um destino CMYK de outro perfil.
 	Fill	Preenchimento
 	Fill & Stroke	Preenchimento e Traçado
 	Fill Color	Cor de Preenchimento

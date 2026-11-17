@@ -722,6 +722,15 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
                 "Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK."
             ),
         );
+        // A preset or the dialog's params can bring `none` with the standard; the picker can't change it.
+        if choice::<ProfileInclusion>(d, "output.profiles") == Some(ProfileInclusion::None) {
+            note(
+                ui,
+                tl!(
+                    "With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile."
+                ),
+            );
+        }
     } else if standard != Standard::None {
         note(ui, tl!("Files of this standard tag their colours with ICC profiles."));
     }

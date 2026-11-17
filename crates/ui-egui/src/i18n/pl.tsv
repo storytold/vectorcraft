@@ -3062,6 +3062,7 @@ antiAlias	Sharp	Ostre
 	Files of a PDF standard can't be password-protected.	Plików standardu PDF nie można chronić hasłem.
 	Files of this standard tag their colours with ICC profiles.	Pliki tego standardu oznaczają kolory profilami ICC.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Pliki tego standardu oznaczają kolory profilami ICC, z wyjątkiem kolorów CMYK w profilu docelowych warunków wyjściowych, które są zapisywane jako DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Przy opcji „Nie dołączaj profili” i docelowych warunkach wyjściowych CMYK każdy kolor CMYK jest zapisywany jako DeviceCMYK, chyba że zostanie przekonwertowany do miejsca docelowego CMYK z innym profilem.
 	Flattener preset:	Ustawienie spłaszczania:
 	General › Thumbnails	Ogólne › Miniatury
 	Grayscale images	Obrazy w skali szarości

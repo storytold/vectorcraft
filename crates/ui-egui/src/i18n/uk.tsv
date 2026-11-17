@@ -1260,6 +1260,7 @@ font-technology	Variable	Варіативні
 	Files of a PDF standard can't be password-protected.	Файли стандарту PDF не можуть бути захищені паролем.
 	Files of this standard tag their colours with ICC profiles.	Файли цього стандарту позначають свої кольори профілями ICC.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файли цього стандарту позначають свої кольори профілями ICC, крім кольорів CMYK у профілі призначення виведення, які записуються як DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	З «Не включати профілі» та призначенням виведення CMYK кожен колір CMYK записується як DeviceCMYK, якщо його не перетворено в призначення CMYK з іншим профілем.
 	Fill	Заливка
 	Fill & Stroke	Заливка та обведення
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів

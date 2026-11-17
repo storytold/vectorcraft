@@ -5041,6 +5041,7 @@ antiAlias	Sharp	მკვეთრი
 	Files of a PDF standard can't be password-protected.	PDF სტანდარტის ფაილების პაროლით დაცვა შეუძლებელია.
 	Files of this standard tag their colours with ICC profiles.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	ამ სტანდარტის ფაილები ფერებს ICC პროფილებით აღნიშნავს, გარდა გამოტანის მიზნის პროფილის CMYK ფერებისა, რომლებიც DeviceCMYK-ად იწერება.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„პროფილების გარეშე“ და CMYK გამოტანის მიზნით ყველა CMYK ფერი DeviceCMYK-ად იწერება, თუ ის სხვა პროფილის CMYK დანიშნულებაში არ გარდაიქმნება.
 	Flattener preset:	გაბრტყელების პრესეტი:
 	General › Thumbnails	ზოგადი › ესკიზები
 	Grayscale images	ნაცრისფერი გამოსახულებები

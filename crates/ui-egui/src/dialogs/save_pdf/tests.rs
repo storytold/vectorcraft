@@ -552,6 +552,24 @@ fn choosing_pdfx3_or_pdfx4_unsets_profile_inclusion() {
     }
 }
 
+/// Opened with PDF/X-3 or PDF/X-4 and `none` (params or a preset, without choosing the standard),
+/// the dialog keeps `none` and its Output note says every CMYK color is written as DeviceCMYK.
+#[test]
+fn a_loaded_pdfx_standard_with_no_profiles_says_cmyk_is_device_cmyk() {
+    const NOTE: &str = "every CMYK color is written as DeviceCMYK";
+    let (mut app, _, _) = app();
+    for (standard, profiles, shown) in
+        [(Standard::PdfX4, "none", true), (Standard::PdfX3, "none", true), (Standard::PdfX4, "all", false), (Standard::PdfX1a, "none", false)]
+    {
+        let params = json!({"path": "/tmp/x.pdf", "standard": standard.id(), "output": {"profiles": profiles}});
+        app.run("ui.savePdfDialog", params).unwrap();
+        set_field(&mut app, "__section", json!("Output"));
+        assert_eq!(get(app.ui.dialog.as_ref().unwrap(), "output.profiles"), &json!(profiles));
+        let text = crate::tests_labels::painted_text(&mut app, |app, ui| super::super::show(app, ui.ctx()));
+        assert_eq!(text.contains(NOTE), shown, "{} {profiles}: {text}", standard.id());
+    }
+}
+
 /// "Write pages longer than 200 in at full size in points" is enabled only without a standard, at
 /// PDF 1.5 and later: PDF/X files and PDF 1.3 and 1.4 files write long pages in points anyway, and
 /// PDF/A files keep the `UserUnit`.

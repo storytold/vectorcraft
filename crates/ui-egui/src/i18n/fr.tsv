@@ -1248,6 +1248,7 @@ font-technology	Variable	Variables
 	Files of a PDF standard can't be password-protected.	Les fichiers conformes à une norme PDF ne peuvent pas être protégés par mot de passe.
 	Files of this standard tag their colours with ICC profiles.	Les fichiers conformes à cette norme balisent leurs couleurs avec des profils ICC.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Les fichiers conformes à cette norme balisent leurs couleurs avec des profils ICC, sauf les couleurs CMJN du profil du mode de sortie, qui sont écrites en DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Avec l’option Ne pas inclure les profils et un mode de sortie CMJN, chaque couleur CMJN est écrite en DeviceCMYK, sauf si elle est convertie vers une destination CMJN d’un autre profil.
 	Fill	Fond
 	Fill & Stroke	Fond et contour
 	Fill (X), double-click for the Color Picker	Fond (X), double-cliquez pour ouvrir le Sélecteur de couleurs

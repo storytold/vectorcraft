@@ -1257,6 +1257,7 @@ font-technology	Variable	Variables
 	Files of a PDF standard can't be password-protected.	Los archivos de un estándar PDF no se pueden proteger con contraseña.
 	Files of this standard tag their colours with ICC profiles.	Los archivos de este estándar etiquetan sus colores con perfiles ICC.
 	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Los archivos de este estándar etiquetan sus colores con perfiles ICC, excepto los colores CMYK en el perfil de propósito de salida, que se escriben como DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Con «No incluir perfiles» y un propósito de salida CMYK, cada color CMYK se escribe como DeviceCMYK, salvo que se convierta a un destino CMYK de otro perfil.
 	Fill	Relleno
 	Fill & Stroke	Relleno y trazo
 	Fill (X), double-click for the Color Picker	Relleno (X), doble clic para el selector de color
