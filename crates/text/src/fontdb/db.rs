@@ -1,4 +1,4 @@
-use super::build::make_face;
+use super::build::{make_face, without_file};
 #[cfg(not(target_arch = "wasm32"))]
 use super::build::{style_italic, style_weight};
 #[cfg(not(target_arch = "wasm32"))]
@@ -312,15 +312,18 @@ impl FontDb {
             f.family.eq_ignore_ascii_case(family) && f.style.eq_ignore_ascii_case(style) && f.version == version
         };
         let mut made: Vec<FontFace> = Vec::new();
+        let mut held = Vec::new();
         for (bytes, path) in files {
             let data = Arc::new(bytes);
             for (i, spec) in enumerate_faces(&data) {
                 let version = skrifa::FontRef::from_index(&data, i).ok().and_then(|f| name(&f, &[StringId::VERSION_STRING])).unwrap_or_default();
                 let present = |f: &FontFace| same(f, &spec.family, &spec.style, &version);
-                // Bytes without a file (the session's) for a face loaded from an installed file
-                // are not skipped: they take its place below, so it stays when the file goes.
-                let loaded = |f: &FontFace| present(f) && (path.is_some() || f.path.is_none());
-                if self.read_faces().iter().any(|f| loaded(f)) || made.iter().any(present) {
+                if self.read_faces().iter().any(|f| present(f)) || made.iter().any(present) {
+                    // The session's bytes (no file) for a face loaded from an installed file make
+                    // that face the session's (below).
+                    if path.is_none() {
+                        held.push((spec.family.clone(), spec.style.clone(), version.clone()));
+                    }
                     continue;
                 }
                 if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, spec, path.clone()) {
@@ -330,20 +333,21 @@ impl FontDb {
         }
         let mut faces = self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut added = Vec::new();
-        for mut f in made {
-            match faces.iter().position(|g| same(g, &f.family, &f.style, &f.version)) {
-                None => {
-                    added.push((f.family.clone(), f.style.clone()));
-                    faces.push(Arc::new(f));
-                }
-                // Loaded from an installed file: the session's face takes its place and its id
-                // (lookups and cached outlines stay), and a rescan without the file keeps it.
-                Some(at) if f.path.is_none() && faces[at].path.is_some() => {
-                    f.id = faces[at].id;
-                    faces[at] = Arc::new(f);
-                }
-                // Another thread may have added the same face meanwhile.
-                Some(_) => {}
+        for f in made {
+            // Another thread may have added the same face meanwhile.
+            if !faces.iter().any(|g| same(g, &f.family, &f.style, &f.version)) {
+                added.push((f.family.clone(), f.style.clone()));
+                faces.push(Arc::new(f));
+            }
+        }
+        // A face loaded from an installed file that the session gave bytes for is the session's
+        // now: the same face, with its bytes, id and cached outlines, but no file, so a rescan
+        // after the file is removed keeps it. The session's bytes are not used.
+        for (family, style, version) in &held {
+            if let Some(at) = faces.iter().position(|g| g.path.is_some() && same(g, family, style, version))
+                && let Some(g) = without_file(&faces[at])
+            {
+                faces[at] = Arc::new(g);
             }
         }
         drop(faces);

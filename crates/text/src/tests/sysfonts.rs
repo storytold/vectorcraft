@@ -344,6 +344,7 @@ fn a_font_added_as_bytes_that_is_installed_too_stays_when_its_file_is_removed() 
     let (kept, m) = db.resolve(FAMILY, "Regular").unwrap();
     assert_eq!((kept.family.as_str(), kept.style.as_str(), m), (FAMILY, "Regular", FontMatch::Exact));
     assert_eq!(kept.id(), face.id());
+    assert!(std::ptr::eq(kept.file_data(), face.file_data()), "the bytes loaded from the file, not the session's copy");
     assert!(Arc::ptr_eq(&db.outline(&kept, glyph), &outline), "its cached outlines stay");
 }
 
