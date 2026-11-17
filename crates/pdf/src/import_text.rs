@@ -611,9 +611,16 @@ impl TextLine {
     /// glyph's text takes the stroke; strokes over glyphs next to each other in a run gather and
     /// restyle their text as one run, so a word filled whole and stroked whole stays one run. The
     /// glyphs around them keep their own stroke or none (#7741).
+    ///
+    /// Only opaque type takes its stroke: the file composites a translucent fill and stroke
+    /// apiece, darker where they overlap, while one object's opacity applies to its fill and
+    /// stroke together. Translucent fill and stroke stay type objects of their own, as do a fill
+    /// and stroke at different opacities.
     pub fn stroke_filled(&mut self, font: u128, at: Placement, opacity: f32, text: &str, stroke: TypeStroke, overprint: bool) -> bool {
-        // A stroke at another opacity than the fill's (`CA` and `ca` differ) is type of its own.
-        let rest = if opacity == self.opacity { self.filled.get(self.stroked..) } else { None };
+        // A stroke at another opacity than the fill's (`CA` and `ca` differ), or over a
+        // translucent fill, is type of its own.
+        let opaque = opacity >= 0.999 && self.opacity >= 0.999;
+        let rest = if opaque { self.filled.get(self.stroked..) } else { None };
         let found = rest.and_then(|rest| {
             rest.iter().position(|g| {
                 g.font == font
@@ -625,8 +632,8 @@ impl TextLine {
             // Stroked text of its own (stroke rendering): no later stroke goes back over the
             // glyphs filled before it, so no stroke looks through them again.
             self.stroked = self.filled.len();
-            // Nor does a stroke at another opacity join the glyph just filled: the line has one.
-            return opacity == self.opacity && self.stroke_last(font, at, text, stroke, overprint);
+            // Nor does a translucent stroke join the glyph just filled.
+            return opaque && self.stroke_last(font, at, text, stroke, overprint);
         };
         let continues = self
             .pending

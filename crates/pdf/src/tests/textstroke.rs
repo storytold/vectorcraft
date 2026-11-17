@@ -267,6 +267,28 @@ fn a_glyph_stroked_at_another_opacity_than_its_fill_stays_its_own_type() {
     }
 }
 
+/// Type filled and stroked at the same opacity below 1 stays a filled object and a stroked one:
+/// the file composites the fill and the stroke apiece (darker where they overlap), while an
+/// object's opacity applies to its fill and stroke together. Opaque, it is one object (#8015).
+#[test]
+fn translucent_fill_and_stroke_text_stays_two_objects() {
+    let half = |fill, stroke| (128.0 / 255.0, fill, stroke);
+    for show in ["(A) Tj", "(AB) Tj"] {
+        let content = format!("/G gs 1 0 0 rg 0 0 1 RG 2 w BT /F1 20 Tf 2 Tr 1 0 0 1 10 20 Tm {show} 0 Tr ET");
+        for (state, want) in [("/ca 0.5 /CA 0.5", vec![half(true, false), half(false, true)]), ("/ca 1 /CA 1", vec![(1.0, true, true)])] {
+            let d = import(&crate::tests::reader_compat::text_pdf_with(state, &content)).unwrap();
+            let mut texts = vec![];
+            d.walk(|n| {
+                if let NodeKind::Text(t) = &n.kind {
+                    let st = t.first_style();
+                    texts.push((n.opacity, !st.fill.is_none(), !st.stroke.is_none()));
+                }
+            });
+            assert_eq!(texts, want, "{state}: {content}");
+        }
+    }
+}
+
 /// A stroke goes only over a glyph filled with the same text: "AB" filled, its "A" stroked, then
 /// an "X" stroked where the "B" stands is type of its own, and the "B" stays unstroked (#8015).
 #[test]

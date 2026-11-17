@@ -1155,7 +1155,11 @@ impl<'p> Builder<'p> {
             && look.fill.is_none()
             && line.stroke_filled(key, at, opacity, &text, s.clone(), overprint)
         {
-            self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+            // Upright glyphs aren't kept as outlines (nor, below, are those filled only): a
+            // vertical line that came in as its outlines would lose the ones filled only.
+            if top.is_none() {
+                self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+            }
             return true;
         }
         if !self.text.as_mut().is_some_and(place) {
