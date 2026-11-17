@@ -3514,6 +3514,8 @@ mark-style	Japanese	Kiểu Nhật
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hút đầu mút của đoạn thẳng để nó gặp một đoạn thẳng ở gần theo góc vuông.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Hiển thị trên khung vẽ số của mỗi lát cắt trong một ô ở góc trên bên trái của nó; khi tắt, đường viền của các lát cắt vẫn hiện.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Màu của đường viền lát cắt người dùng và lát cắt đối tượng cùng các ô số của chúng; lát cắt tự động dùng một sắc độ nhạt hơn của màu này.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Văn bản mới nhận ngôn ngữ này khi ngôn ngữ trong Thiết lập tài liệu là Tiếng Anh: Mỹ; văn bản đã có trong tài liệu giữ ngôn ngữ của nó.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Trong các đoạn bật Gạch nối, một từ trong danh sách chỉ được ngắt tại các dấu gạch nối đã gõ trong từ, hoặc không ngắt ở đâu nếu không có, bất kể ngôn ngữ hay chữ hoa thường.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi

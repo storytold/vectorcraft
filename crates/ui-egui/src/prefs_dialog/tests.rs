@@ -1798,12 +1798,13 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     assert_eq!(preferences_window(&ctx).size(), size);
 }
 
-/// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides and Slices
-/// categories show, the Smart Guides box included, has exactly one sentence, and no key has two.
+/// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices and
+/// Hyphenation categories show, the Smart Guides box included, has exactly one sentence, and no key
+/// has two.
 #[test]
-fn every_general_selection_guides_smart_guides_and_slices_setting_has_one_description() {
+fn every_general_selection_guides_smart_guides_slices_and_hyphenation_setting_has_one_description() {
     let mut bad = vec![];
-    let categories = ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides", "Slices"];
+    let categories = ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides", "Slices", "Hyphenation"];
     for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
             1 => {}
@@ -2065,6 +2066,58 @@ fn keyboard_focus_on_a_slices_row_shows_its_description() {
     }
     let described = shown.expect("Tab reaches the Show Slice Numbers row and its sentence shows");
     assert!(described.iter().any(|d| d == numbers), "the focused control carries the sentence: {described:?}");
+}
+
+/// The pointer over Hyphenation's Default Language row and over its Exceptions row shows each
+/// row's sentence.
+#[test]
+fn hovering_a_hyphenation_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Hyphenation"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t.starts_with(label)).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let language = descriptions::description("hyphenationLanguage").expect("Default Language has a sentence");
+    let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Default Language:"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, language) && !painted(&after, exceptions), "the Default Language row's sentence shows: {after:?}");
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, "Exceptions"))]);
+    let (after, _) = description_frame(&mut a, &ctx, vec![]);
+    assert!(painted(&after, exceptions) && !painted(&after, language), "the Exceptions row's sentence shows: {after:?}");
+}
+
+/// Tab from the search field reaches Hyphenation's Default Language menu and then its Exceptions
+/// field: the line shows each one's sentence in turn, and a screen reader gets it as the focused
+/// control's description.
+#[test]
+fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Hyphenation"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let language = descriptions::description("hyphenationLanguage").expect("Default Language has a sentence");
+    let exceptions = descriptions::description("hyphenationExceptions").expect("Exceptions has a sentence");
+    let mut tab_to = |sentence: &str| {
+        for _ in 0..40 {
+            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+            if painted(&texts, sentence) {
+                return Some(described);
+            }
+        }
+        None
+    };
+    let described = tab_to(language).expect("Tab reaches the Default Language row and its sentence shows");
+    assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
+    let described = tab_to(exceptions).expect("Tab goes on to the Exceptions row and its sentence shows");
+    assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the

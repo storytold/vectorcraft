@@ -4266,6 +4266,8 @@ font-technology	Variable	Variabel
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Menjepretkan ujung segmen garis agar bertemu segmen lurus di dekatnya pada sudut siku-siku.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Menampilkan nomor setiap irisan dalam kotak di sudut kiri atasnya di kanvas; saat nonaktif, garis tepi irisan tetap ditampilkan.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Warna garis tepi irisan pengguna dan objek serta kotak nomornya; irisan otomatis memakai nuansa yang lebih redup dari warna ini.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Teks baru mendapat bahasa ini selama bahasa di Pengaturan dokumen adalah Inggris: USA; teks yang sudah ada di dokumen mempertahankan bahasanya sendiri.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Di paragraf dengan Pemenggalan kata aktif, kata dalam daftar hanya dipenggal pada tanda hubung yang diketik di dalamnya, atau tidak di mana pun jika tidak ada, apa pun bahasa atau huruf besar-kecilnya.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar

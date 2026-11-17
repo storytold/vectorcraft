@@ -163,6 +163,15 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     // Slices
     ("showSliceNumbers", "Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show."),
     ("sliceLineColor", "The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it."),
+    // Hyphenation
+    (
+        "hyphenationLanguage",
+        "New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.",
+    ),
+    (
+        "hyphenationExceptions",
+        "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.",
+    ),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

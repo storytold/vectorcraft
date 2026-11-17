@@ -3745,6 +3745,8 @@ mark-style	Japanese	Japán
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Egy szakasz végét úgy illeszti, hogy derékszögben találkozzon egy közeli egyenes szakasszal.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	A vásznon minden szelet számát egy keretben mutatja a szelet bal felső sarkában; kikapcsolva a szeletek körvonalai továbbra is látszanak.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A felhasználói és objektumszeletek körvonalainak és számkereteinek színe; az automatikus szeletek ennek egy halványabb árnyalatát használják.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Az új szöveg ezt a nyelvet kapja, amíg a Dokumentumbeállítás nyelve Angol: amerikai; a dokumentumban már meglévő szöveg megtartja a saját nyelvét.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Azokban a bekezdésekben, ahol az Elválasztás be van kapcsolva, a felsorolt szó csak a beleírt kötőjeleknél válik el, vagy sehol, ha nincs benne, nyelvétől és kis- vagy nagybetűitől függetlenül.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása

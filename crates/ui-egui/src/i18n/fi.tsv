@@ -4534,6 +4534,8 @@ font-technology	Variable	Muuttuvat
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Kohdistaa janan pään niin, että se kohtaa lähellä olevan suoran segmentin suorassa kulmassa.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
+	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	Uusi teksti saa tämän kielen, kun Asiakirjan asetusten kieli on Englanti: USA; asiakirjassa jo oleva teksti säilyttää oman kielensä.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	Kappaleissa, joissa Tavuta on käytössä, luettelon sana tavutetaan vain siihen kirjoitettujen yhdysmerkkien kohdalta tai ei lainkaan, jos niitä ei ole, kielestä ja kirjainkoosta riippumatta.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Oletukset otetaan käyttöön, kun valitset Asetuksissa OK. Peruuta siellä säilyttää nykyiset asetuksesi.
 	Smaller ↔ Larger	Pienempi ↔ Suurempi
