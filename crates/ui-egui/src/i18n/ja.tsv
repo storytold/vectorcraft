@@ -2330,7 +2330,8 @@ antiAlias	Sharp	シャープ
 	Location	場所
 	Location:	位置:
 	Lock (⌘2)	ロック (⌘2)
-	Lossless (lossy WebP isn't available yet)	ロスレス (非可逆 WebP は未対応)
+	Lossless	ロスレス
+	Lossy	非可逆
 	Lossy:	圧縮率:
 	Luminosity	輝度
 	Magic Wand Options	自動選択オプション
@@ -3225,6 +3226,7 @@ mark-style	Japanese	日本式
 	No recent commands	最近使ったコマンドはありません
 	Type to search commands, tools, panels and effects	入力してコマンド、ツール、パネル、効果を検索
 	Clear Recent Commands	最近使ったコマンドを消去
+	Search commands	コマンドを検索
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
 	Select All Assets	すべてのアセットを選択
@@ -9385,6 +9387,7 @@ breakText	Glyphs	字形
 @msg	Too many Revolve faces for visibility evaluation	可視判定を行うには回転体の面が多すぎます
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft がスウォッチ交換ファイルから読み込めるカラーとグループは {ASE_MAX_ENTRIES} 個までですが、このライブラリには {entries} 個あります
 @msg	WebP encoding failed: {e}	WebP のエンコードに失敗しました: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP のエンコードに失敗しました: 画像が大きすぎて非可逆 WebP にできません: 解像度を下げるか、ロスレスを選択してください
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` には smallThumb、mediumThumb、largeThumb、smallList、largeList のいずれかを指定してください

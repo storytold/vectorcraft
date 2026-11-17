@@ -2805,7 +2805,8 @@ antiAlias	Sharp	शार्प
 	Long Lines	लंबी रेखाएँ
 	Long Strokes	लंबे स्ट्रोक
 	Longest:	सबसे लंबे:
-	Lossless (lossy WebP isn't available yet)	लॉसलेस (लॉसी WebP अभी उपलब्ध नहीं है)
+	Lossless	लॉसलेस
+	Lossy	लॉसी
 	Lossy:	हानि:
 	Low	निम्न
 	Low Fidelity Photo	लो फिडेलिटी फोटो
@@ -4481,6 +4482,7 @@ antiAlias	Sharp	शार्प
 	No recent commands	कोई हाल का आदेश नहीं
 	Type to search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजने के लिए टाइप करें
 	Clear Recent Commands	हाल के आदेश साफ़ करें
+	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
@@ -9299,6 +9301,7 @@ theme	Appearance	अपीयरेंस
 @msg	Too many Revolve faces for visibility evaluation	दृश्यता की गणना के लिए रिवॉल्व के फ़ेस बहुत अधिक हैं
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft स्वॉच एक्सचेंज फ़ाइल से अधिकतम {ASE_MAX_ENTRIES} रंग और ग्रुप पढ़ता है, और इस लाइब्रेरी में {entries} हैं
 @msg	WebP encoding failed: {e}	WebP एन्कोडिंग विफल: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP एन्कोडिंग विफल: छवि लॉसी WebP के लिए बहुत बड़ी है: रिज़ॉल्यूशन कम करें या लॉसलेस चुनें
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index` पूरी संख्या होनी चाहिए
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList या largeList होता है

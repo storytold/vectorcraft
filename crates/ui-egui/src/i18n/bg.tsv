@@ -1956,7 +1956,8 @@ font-technology	Variable	Променливи
 	Lock Others	Заключване на другите
 	Lock Slices	Заключване на фрагментите
 	Lock Station Point	Заключване на базовата точка
-	Lossless (lossy WebP isn't available yet)	Без загуба (загубеният WebP все още не е наличен)
+	Lossless	Без загуба
+	Lossy	Със загуба
 	Lossy:	С загуба:
 	Low	Ниско
 	lowercase	малки букви
@@ -3202,6 +3203,7 @@ digits	Malayalam	Малаялам
 	No recent commands	Няма последни команди
 	Type to search commands, tools, panels and effects	Въведете текст, за да търсите команди, инструменти, панели и ефекти
 	Clear Recent Commands	Изчистване на последните команди
+	Search commands	Търсене на команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
 	Section Symbol	Символ за раздел
