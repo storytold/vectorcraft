@@ -235,6 +235,54 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "monitorProfileDisplay",
         "Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.",
     ),
+    // File Handling
+    ("backgroundSave", "On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written."),
+    (
+        "backgroundExport",
+        "On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.",
+    ),
+    (
+        "autosaveRecovery",
+        "Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.",
+    ),
+    ("autosaveInterval", "How many minutes pass between recovery copies while Automatically Save Recovery Data is on."),
+    (
+        "recoveryFolder",
+        "On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.",
+    ),
+    ("recoveryOffForComplex", "No timed recovery copies are made of documents with more than 20,000 objects."),
+    (
+        "recentFilesCount",
+        "Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.",
+    ),
+    (
+        "lowResProxyEps",
+        "When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.",
+    ),
+    (
+        "antiAliasedBitmaps",
+        "In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.",
+    ),
+    (
+        "updateLinks",
+        "When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.",
+    ),
+    (
+        "templatesFolder",
+        "On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.",
+    ),
+    (
+        "editOriginalSystemDefaults",
+        "Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.",
+    ),
+    (
+        "appendConverted",
+        "A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.",
+    ),
+    (
+        "useCompression",
+        "VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.",
+    ),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

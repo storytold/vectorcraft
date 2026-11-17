@@ -1799,10 +1799,11 @@ fn a_row_without_a_description_leaves_the_line_empty() {
 }
 
 /// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices,
-/// Hyphenation, Plug-ins & Scratch Disks, User Interface and Performance categories show on this
-/// platform, the Smart Guides box included, has exactly one sentence, and no key has two.
+/// Hyphenation, Plug-ins & Scratch Disks, User Interface, Performance and File Handling categories
+/// show on this platform, the Smart Guides box included, has exactly one sentence, and no key has
+/// two.
 #[test]
-fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_user_interface_and_performance_setting_has_one_description() {
+fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_user_interface_performance_and_file_handling_setting_has_one_description() {
     let mut bad = vec![];
     let categories = [
         "General",
@@ -1814,6 +1815,7 @@ fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_user_i
         "Plug-ins & Scratch Disks",
         "User Interface",
         "Performance",
+        "File Handling",
     ];
     for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
@@ -2356,6 +2358,98 @@ fn keyboard_focus_on_a_performance_row_shows_its_description() {
         None
     };
     for key in ["gpuPerformance", "animatedZoom", "gpuPreference", "historyStates"] {
+        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
+        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
+        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
+    }
+}
+
+/// The pointer over each of the 14 File Handling rows, from Enable Background Save to Use
+/// Compression, shows that row's sentence and no other row's.
+#[test]
+fn hovering_a_file_handling_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("File Handling"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let rows = [
+        ("Enable Background Save", "backgroundSave"),
+        ("Enable Background Export", "backgroundExport"),
+        ("Automatically Save Recovery Data", "autosaveRecovery"),
+        ("Every (minutes):", "autosaveInterval"),
+        ("Folder:", "recoveryFolder"),
+        ("Turn off Data Recovery for complex documents", "recoveryOffForComplex"),
+        ("Number of Recent Files to Display:", "recentFilesCount"),
+        ("Use Low Resolution Proxy for Linked EPS", "lowResProxyEps"),
+        ("Display Bitmaps as Anti-aliased Images in Pixel Preview", "antiAliasedBitmaps"),
+        ("Update Links:", "updateLinks"),
+        ("Templates Folder:", "templatesFolder"),
+        ("Use System Defaults for Edit Original", "editOriginalSystemDefaults"),
+        ("Mark Older Files as [Converted] When Opened", "appendConverted"),
+        ("Use Compression", "useCompression"),
+    ];
+    let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    // The last rows can be under the bottom of the list: the wheel scrolls them into view.
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -40.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let mut texts = texts;
+    for (i, (label, _)) in rows.iter().enumerate() {
+        for _ in 0..20 {
+            if texts.iter().any(|(t, _)| t == label) {
+                break;
+            }
+            texts = description_frame(&mut a, &ctx, vec![wheel.clone()]).0;
+        }
+        // The wheel scrolls smoothly over several frames: wait until the row stays put.
+        for _ in 0..60 {
+            let next = description_frame(&mut a, &ctx, vec![]).0;
+            let still = row(&next, label) == row(&texts, label);
+            texts = next;
+            if still {
+                break;
+            }
+        }
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        for (j, sentence) in sentences.iter().enumerate() {
+            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+        }
+        texts = after;
+    }
+}
+
+/// Tab from the search field reaches the Enable Background Save and Enable Background Export
+/// checkboxes, Automatically Save Recovery Data and the Every (minutes) field: the line shows each
+/// one's sentence in turn, and a screen reader gets it as the focused control's description.
+#[test]
+fn keyboard_focus_on_a_file_handling_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("File Handling"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let mut tab_to = |sentence: &str| {
+        for _ in 0..40 {
+            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+            if painted(&texts, sentence) {
+                return Some(described);
+            }
+        }
+        None
+    };
+    for key in ["backgroundSave", "backgroundExport", "autosaveRecovery", "autosaveInterval"] {
         let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
         let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
         assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");

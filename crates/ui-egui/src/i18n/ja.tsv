@@ -3210,6 +3210,20 @@ mark-style	Japanese	日本式
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	アートワークを描画するワーカースレッドの数です。-1 は VectorCraft が使えるコア数より 1 つ少なく (最大 8)、0 はワーカーを使いません。Web 版では常に使いません。
 	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	次回の起動から、Wayland デスクトップでは X11 (XWayland) がウィンドウを XWayland 経由で開きます。ほかの選択肢では、ペンが接続されているときだけそうします。
 	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	システムがまだ変換していない場合、カンバス上のアートワークとアートボードをディスプレイのカラープロファイルに変換します。オフの場合、カンバスは sRGB で描画されます。
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	デスクトップ版では、ファイルへの保存は編集を続けている間にバックグラウンドで書き込まれます。オフの場合、書き込みが終わるまで待ちます。
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	デスクトップ版では、ファイルへの書き出しとパッケージは編集を続けている間にバックグラウンドで書き込まれます（3D の書き出しを除く）。オフの場合、終わるまで待ちます。
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	数分ごとに、前回のコピー以降に未保存の変更がある各ドキュメントの復帰用コピーを作ります。オフの場合、定期的なコピーは作りません。
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	復帰用データを自動保存がオンの間、復帰用コピーを作る間隔（分）です。
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	デスクトップ版で復帰用コピーを置くフォルダーです。空欄にすると VectorCraft 独自のフォルダーを使います。Web 版ではブラウザーに保存します。
+	No timed recovery copies are made of documents with more than 20,000 objects.	オブジェクトが 20,000 個を超えるドキュメントでは、定期的な復帰用コピーを作りません。
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	最近使用したファイルを開くとホーム画面に表示する最近のファイルの最大数です。0 では表示しませんが、VectorCraft は最大 30 個まで覚えています。
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	ドキュメントを開くとき、保存済みのプレビューを表示しているリンクされた EPS 画像は、EPS ファイルを読み直さずにそのプレビューを保ちます。変更されたファイルには引き続きリンクを更新の設定が適用されます。
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	ピクセルプレビューで画像を滑らかに描画します。オフの場合、ピクセルの端がはっきり表示されます。ピクセルプレビュー以外では画像は常に滑らかです。
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	リンクされたファイルが変更されたとき、自動では読み直し、変更時に確認では先に確認し、手動ではそのままにしてステータスバーにメモを表示します。
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	デスクトップ版で、テンプレートから新規…とテンプレートとして保存…が最初に開くフォルダーです。空欄にすると書類フォルダー内の VectorCraft Templates を使います。
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	オリジナルを編集で、リンクされたファイルを種類に応じたシステムの既定のアプリで開きます。オフの場合、リンクされたラスター画像はインストールされていれば PhotoCraft で開きます。
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	古いバージョンの VectorCraft で保存されたファイルは名前の後に [Converted] が付いて開き、保存では保存先を確認します。オフの場合、保存でファイルを置き換えます。
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft のファイルとテンプレートは、保存で別の指定がない限り圧縮して小さく保存します。圧縮ファイルを開けないバージョン向けの保存は圧縮しません。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。

@@ -3084,6 +3084,20 @@ digits	Malayalam	马拉雅拉姆数字
 	How many worker threads draw the artwork; -1 uses one fewer than the cores VectorCraft may use, at most 8, and 0 uses none. The web version always uses none.	绘制图稿的工作线程数；-1 使用比 VectorCraft 可用核心数少一个的线程，最多 8 个，0 则不使用。Web 版始终不使用。
 	From the next start on a Wayland desktop, X11 (XWayland) opens the window through XWayland; the other choices do so only when a pen is attached.	从下次启动起，在 Wayland 桌面上，X11 (XWayland) 通过 XWayland 打开窗口；其他选项仅在连接了笔时才这样做。
 	Converts the artwork and artboards on the canvas to the display's color profile where the system does not already do so; off, the canvas is drawn in sRGB.	在系统尚未进行转换时，将画布上的图稿和画板转换为显示器的颜色配置文件；关闭此项后，画布以 sRGB 绘制。
+	On the desktop, a save to a file is written in the background while you keep editing; off, you wait until it is written.	在桌面版中，保存到文件时会在后台写入，你可以继续编辑；关闭此项后，需要等到写入完成。
+	On the desktop, exports to files and packages are written in the background while you keep editing, except 3D exports; off, you wait for them.	在桌面版中，导出到文件和打包会在后台写入，你可以继续编辑（3D 导出除外）；关闭此项后，需要等它们完成。
+	Every few minutes, keeps a recovery copy of each document with unsaved changes made since its last copy; off, no timed copies are made.	每隔几分钟，为自上次副本以来有未保存更改的每个文档保留一份恢复副本；关闭此项后，不再定时制作副本。
+	How many minutes pass between recovery copies while Automatically Save Recovery Data is on.	开启“自动保存恢复数据”时，两份恢复副本之间相隔的分钟数。
+	On the desktop, the folder recovery copies are kept in; leave it blank for VectorCraft's own folder. The web version keeps them in the browser.	在桌面版中，存放恢复副本的文件夹；留空则使用 VectorCraft 自己的文件夹。Web 版把它们存放在浏览器中。
+	No timed recovery copies are made of documents with more than 20,000 objects.	对象超过 20,000 个的文档不会定时制作恢复副本。
+	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	“打开最近文件”和主页屏幕最多列出这么多最近文件；为 0 时不列出，但 VectorCraft 仍会记住最多 30 个。
+	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	打开文档时，显示已保存预览的链接 EPS 图像会保留该预览，而不重新读取 EPS 文件；已更改的文件仍按“更新链接”处理。
+	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	在像素预览中，图像以平滑方式绘制；关闭此项后，像素边缘清晰锐利。像素预览之外，图像始终平滑显示。
+	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	链接文件更改时，“自动”会重新读取，“修改时询问”会先询问你，“手动”则保持不变并在状态栏显示提示。
+	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	在桌面版中，“从模板新建…”和“存为模板…”打开时所在的文件夹；留空则使用文档文件夹中的 VectorCraft Templates。
+	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	“编辑原稿”用系统中该类型的默认应用打开链接文件；关闭此项后，若已安装 PhotoCraft，链接的栅格图像会在 PhotoCraft 中打开。
+	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	由旧版 VectorCraft 保存的文件打开时名称后会加上 [Converted]，“保存”会询问保存位置；关闭此项后，“保存”会替换该文件。
+	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	除非保存时另有指定，VectorCraft 文件和模板以压缩形式保存，因此更小；为无法打开压缩文件的版本保存时不压缩。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
