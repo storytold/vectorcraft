@@ -2073,7 +2073,8 @@ file-filter	Templates	Modelli
 	Lock Others	Blocca altri
 	Lock Slices	Blocca sezioni
 	Lock Station Point	Blocca punto di osservazione
-	Lossless (lossy WebP isn't available yet)	Senza perdita (WebP con perdita non è ancora disponibile)
+	Lossless	Senza perdita
+	Lossy	Con perdita
 	Lossy:	Con perdita:
 	Low	Bassa
 	lowercase	minuscole
@@ -3346,6 +3347,7 @@ digits	Malayalam	Malayalam
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
 	Type to search commands, tools, panels and effects	Digita per cercare comandi, strumenti, pannelli ed effetti
+	Search commands	Cerca comandi
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario
 	Section Symbol	Simbolo di sezione
@@ -9307,6 +9309,7 @@ breakText	Glyphs	Glifi
 @msg	Too many Revolve faces for visibility evaluation	Troppe facce di Rivoluzione per il calcolo della visibilità
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft legge al massimo {ASE_MAX_ENTRIES} colori e gruppi da un file di scambio campioni, e questa libreria ne ha {entries}
 @msg	WebP encoding failed: {e}	Codifica WebP non riuscita: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Codifica WebP non riuscita: l'immagine è troppo grande per il WebP con perdita: riduci la risoluzione o scegli Senza perdita
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` è smallThumb, mediumThumb, largeThumb, smallList o largeList

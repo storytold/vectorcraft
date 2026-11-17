@@ -2320,7 +2320,8 @@ antiAlias	Sharp	날카롭게
 	Location	위치
 	Location:	위치:
 	Lock (⌘2)	잠금 (⌘2)
-	Lossless (lossy WebP isn't available yet)	무손실 (손실 WebP는 아직 지원되지 않음)
+	Lossless	무손실
+	Lossy	손실
 	Lossy:	손실 압축:
 	Luminosity	광도
 	Magic Wand Options	마술봉 옵션
@@ -3213,6 +3214,7 @@ mark-style	Japanese	일본식
 	Recent Commands	최근 명령
 	No recent commands	최근 명령 없음
 	Type to search commands, tools, panels and effects	입력하여 명령, 도구, 패널 및 효과 검색
+	Search commands	명령 검색
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
 	Select All Assets	모든 에셋 선택
@@ -7470,6 +7472,7 @@ breakText	Glyphs	글리프
 @msg	Too many Revolve faces for visibility evaluation	회전체의 면이 너무 많아 가시성을 계산할 수 없습니다
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft는 견본 교환 파일에서 색상과 그룹을 최대 {ASE_MAX_ENTRIES}개까지 읽는데, 이 라이브러리에는 {entries}개가 있습니다
 @msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 인코딩 실패: 이미지가 너무 커서 손실 WebP로 만들 수 없습니다: 해상도를 낮추거나 무손실을 선택하세요
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index`은(는) 정수여야 합니다
