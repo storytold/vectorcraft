@@ -101,11 +101,11 @@ mod textedit;
 mod xmlattrs;
 
 pub use textedit::effective_kerning;
+mod retype;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
 pub(crate) mod typecmd;
-mod retype;
 mod typemenu;
 mod variablecmds;
 pub(crate) mod views;
