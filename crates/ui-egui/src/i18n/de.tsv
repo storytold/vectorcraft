@@ -3067,6 +3067,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mit gedrückter Befehls-/Strg-Taste scrollt das Mausrad die Arbeitsfläche seitwärts.
 	Dragging sideways on a numeric field's label changes the field's value.	Seitliches Ziehen auf der Beschriftung eines Zahlenfelds ändert den Wert des Felds.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Eine Drehgeste mit zwei Fingern auf einem Trackpad dreht die Ansicht der Arbeitsfläche.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Halten Sie eine Taste, wird das Werkzeug oder der Befehl aus ihrer Spalte „Halten“ unter „Tastaturbefehle“ ausgeführt; ein kurzer Druck führt ihren üblichen Tastaturbefehl aus.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Wie viele Sekunden eine Taste gehalten werden muss, bevor statt ihres üblichen Tastaturbefehls ihr Halte-Tastaturbefehl ausgeführt wird.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Solange Sie das Tastaturkürzel eines Werkzeugs gedrückt halten, ist dieses Werkzeug gewählt; danach wird wieder das vorherige gewählt.
 	Shows the bounding box while you move the selection or draw a shape.	Zeigt den Begrenzungsrahmen an, während Sie die Auswahl verschieben oder eine Form zeichnen.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	„Schnittmarken erstellen“ zeichnet japanische statt römische Marken.

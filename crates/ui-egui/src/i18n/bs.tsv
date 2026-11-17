@@ -4452,6 +4452,8 @@ font-technology	Variable	Varijabilni
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kreiraj oznake za obrezivanje crta oznake u japanskom stilu umjesto rimskih.

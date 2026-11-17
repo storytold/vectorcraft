@@ -4207,6 +4207,8 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Menahan tombol menjalankan alat atau perintah di kolom Tahan pada Pintasan papan ketik; tekanan singkat menjalankan pintasan biasanya.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Berapa detik tombol harus ditahan sebelum pintasan tahannya berjalan sebagai ganti pintasan biasanya.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
 	Shows the bounding box while you move the selection or draw a shape.	Menampilkan kotak pembatas saat Anda memindahkan seleksi atau menggambar bentuk.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Buat tanda potong menggambar tanda bergaya Jepang, bukan Romawi.

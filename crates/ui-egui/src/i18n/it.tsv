@@ -3148,6 +3148,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rotellina del mouse con Cmd/Ctrl premuto scorre l'area di lavoro in orizzontale.
 	Dragging sideways on a numeric field's label changes the field's value.	Trascinare in orizzontale sull'etichetta di un campo numerico ne cambia il valore.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto di rotazione con due dita sul trackpad ruota la vista dell'area di lavoro.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Tenere premuto un tasto esegue lo strumento o il comando della sua colonna Tieni premuto in Scelte rapide da tastiera; una pressione breve esegue la sua scorciatoia abituale.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Per quanti secondi va tenuto premuto un tasto prima che venga eseguita la sua scorciatoia a pressione prolungata invece di quella abituale.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Tenere premuta la scorciatoia di uno strumento lo sceglie finché non la rilasci, poi viene scelto di nuovo lo strumento precedente.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra il riquadro di delimitazione mentre sposti la selezione o disegni una forma.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Crea segni di taglio disegna segni in stile giapponese invece di quelli romani.

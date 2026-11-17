@@ -2872,6 +2872,8 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl basılıyken fare tekerleği tuvali yana kaydırır.
 	Dragging sideways on a numeric field's label changes the field's value.	Sayısal bir alanın etiketi üzerinde yana sürüklemek alanın değerini değiştirir.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Bir tuşu basılı tutmak, Klavye Kısayolları'ndaki Basılı tutun sütununda bulunan aracı veya komutu çalıştırır; kısa basış olağan kısayolunu çalıştırır.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Olağan kısayolu yerine basılı tutma kısayolunun çalışması için bir tuşun kaç saniye basılı tutulması gerektiği.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
 	Shows the bounding box while you move the selection or draw a shape.	Seçimi taşırken veya bir şekil çizerken sınırlayıcı kutuyu gösterir.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kesim İşaretleri Oluşturun, Roma tarzı yerine Japon tarzı işaretler çizer.

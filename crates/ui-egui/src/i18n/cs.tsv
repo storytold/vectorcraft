@@ -4556,6 +4556,8 @@ font-technology	Variable	Variabilní
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
 	Dragging sideways on a numeric field's label changes the field's value.	Tažení do stran po popisku číselného pole mění hodnotu pole.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Podržení klávesy spustí nástroj nebo příkaz ze sloupce Podržení v Klávesových zkratkách; krátký stisk spustí její obvyklou zkratku.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Jak dlouho v sekundách je nutné klávesu podržet, než se místo obvyklé zkratky spustí její zkratka podržením.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
 	Shows the bounding box while you move the selection or draw a shape.	Zobrazí ohraničovací rámeček, když přesouváte výběr nebo kreslíte tvar.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Vytvořit značky ořezu nakreslí značky v japonském stylu místo římských.
