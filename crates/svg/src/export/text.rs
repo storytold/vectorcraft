@@ -292,6 +292,11 @@ impl Writer<'_> {
                 self.warn("type on a path with Tsume is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // Justification…'s Desired word and letter spacing and glyph scaling do too.
+            if (0..t.paragraph_count()).any(|i| !t.layout_justification(t.para_at(i)).desired_is_default()) {
+                self.warn("type on a path with Justification spacing or glyph scaling is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             // A `<textPath>` holds the characters of the text, not the bullets or numbers drawn
             // before them.
             if !lay.markers.is_empty() {

@@ -1150,3 +1150,42 @@ fn an_image_past_the_pixels_left_stays_unmade() {
     let mut budget = super::RasterBudget { images: 0, pixels, left: 0 };
     assert!(super::raster_image(&mut d, &n, &mut budget).is_err(), "no image is left");
 }
+
+/// A group whose Transform effect's copies each carry the drop shadow listed before it, with a
+/// symbol instance whose random Transform effect takes its seed from the instance's id, stays as it
+/// is when the raster budget has no image left for a copy's shadow, with none left or with one for
+/// the first copy's: the copies keep the ids their random moves are drawn with, the group draws as
+/// before, and the document holds no image the first copy's expansion made, nor the budget its
+/// charge.
+#[test]
+fn copies_the_raster_budget_leaves_keep_their_random_moves() {
+    let (mut s, id) = session_with_rect();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let id = NodeId(s.execute("symbol.new", &json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap());
+    let random = json!({"moveH": 40, "moveV": 40, "random": true});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": random})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "stylize.dropShadow", "params": shadow})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "distort.transform", "params": {"moveV": 150, "copies": 1}})).unwrap();
+    let draw = |d: &vectorcraft_doc::Document| {
+        vectorcraft_render::Renderer::new().render(d, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    for images in [0, 1] {
+        let mut d = s.doc().unwrap().doc.as_ref().clone();
+        let before = d.node(g).cloned().unwrap();
+        assert!(effects::outer_effects(&before).len() < before.appearance.effects.len(), "each copy carries the shadow");
+        let (drawn, keys) = (draw(&d), d.images.keys().cloned().collect::<Vec<_>>());
+
+        let mut budget = super::RasterBudget { images, pixels: u64::MAX, left: 0 };
+        let mut out = vec![];
+        super::expand_node(&mut d, g, &[], &mut out, &mut budget);
+        assert!(budget.left > 0, "{images}: a copy's shadow is left");
+        assert!(out.is_empty(), "{images}: nothing expands: {out:?}");
+        assert_eq!(d.node(g), Some(&before), "{images}: the group stays as it is");
+        assert!(draw(&d) == drawn, "{images}: the group draws as before");
+        assert_eq!(d.images.keys().cloned().collect::<Vec<_>>(), keys, "{images}: no image is added");
+        assert_eq!((budget.images, budget.pixels), (images, u64::MAX), "{images}: the budget gets back what the copies took");
+    }
+}
