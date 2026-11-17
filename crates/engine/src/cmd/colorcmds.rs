@@ -1186,7 +1186,8 @@ fn composite(mode: BlendMode, x: ([f32; 3], f32), opacity: f32, backdrop: ([f32;
 /// Whether `a` and `b` draw a color alike: the same blend modes and isolation, and unless
 /// `given_opacity` (which takes the place of their opacities) the same opacities. With `below`, the
 /// levels that change what they draw must be the same objects too, since the art below each one is
-/// read with that object hidden.
+/// read with that object hidden, and the object's opacity must be the same apart from its row's,
+/// since the row draws over the object's rows below it and the object over the art behind it.
 fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
     let counts = |l: &&Level| l.blend != BlendMode::Normal || l.isolate || (!given_opacity && l.opacity < 1.0);
     let level = |x: &Level, y: &Level| {
@@ -1204,7 +1205,7 @@ fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
         && a.blend == b.blend
         && (row(a).is_none() || a.isolate == b.isolate)
         && (given_opacity || (total(a) - total(b)).abs() < 1e-6)
-        && (given_opacity || row(a).is_none() || (a.opacity - b.opacity).abs() < 1e-6)
+        && (given_opacity || (row(a).is_none() && !below) || (a.opacity - b.opacity).abs() < 1e-6)
         && la.len() == lb.len()
         && la.iter().zip(&lb).all(|(x, y)| level(x, y))
 }

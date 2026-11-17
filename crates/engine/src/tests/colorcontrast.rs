@@ -393,6 +393,32 @@ fn objects_that_draw_one_color_differently_have_no_one_answer() {
     assert!((ratio(&r) - 21.0).abs() < 1e-6, "{r}");
 }
 
+/// A 50 % white row over a blue row in an opaque object draws over the blue; an opaque white row in
+/// a 50 % object draws over what is behind it, though both draw the white at 50 %.
+#[test]
+fn a_row_and_an_object_of_one_total_opacity_draw_differently_over_the_rows_below() {
+    let mut s = session();
+    let id = |v: Value| v["id"].as_u64().unwrap();
+    let a = id(s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let st = s.active().unwrap();
+    let items = &st.doc.node(st.selection.objects[0]).unwrap().appearance.items;
+    let top = items.iter().rposition(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+    s.execute("appearance.setItem", &json!({"index": top, "color": "#ffffff", "opacity": 50})).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": null})).unwrap();
+    let b = id(s.execute("shape.rectangle", &json!({"x": 80, "y": 20, "width": 40, "height": 40})).unwrap());
+    s.execute("paint.setFill", &json!({"color": "#ffffff"})).unwrap();
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    s.execute("select.set", &json!({"ids": [a, b]})).unwrap();
+    let e = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("the selected objects' colors differ: give `color`"), "{e}");
+    // A given background stands for the rows below, so both draw the white at 50 % over it.
+    let r = s.execute("color.contrast", &json!({"against": "#000000"})).unwrap();
+    let gray = vectorcraft_color::wcag::contrast_ratio([0.5; 3], [0.0; 3]);
+    assert!((ratio(&r) - gray).abs() < 1e-3, "{r}");
+}
+
 #[test]
 fn a_selected_group_whose_objects_draw_one_color_differently_has_no_one_answer() {
     let mut s = session();
