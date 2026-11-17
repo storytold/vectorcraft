@@ -21,10 +21,11 @@ use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::VectorcraftApp;
 
-/// What was read: one file to place, the files to load the place cursor with, or a bitmap to paste.
+/// What was read: one file to place, the files to load the place cursor with (and whether they ask
+/// for their import options when placed), or a bitmap to paste.
 enum Read {
     Place(Box<PlaceRead>),
-    Queue(QueueRead),
+    Queue(QueueRead, bool),
     Paste(Box<Paste>),
 }
 
@@ -178,6 +179,23 @@ pub struct Placing {
     pub(crate) reading: std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>,
 }
 
+impl Placing {
+    /// Unit tests: wait until the reader thread has finished every read started so far. The thread
+    /// runs its jobs in order, so a job sent after them runs once they have handed back their files.
+    #[cfg(test)]
+    pub(crate) fn wait_for_reads(&self) {
+        if let Some(reader) = &self.reader {
+            let (tx, rx) = channel();
+            let marker: Job = Box::new(move || {
+                let _ = tx.send(());
+            });
+            if reader.send(marker).is_ok() {
+                let _ = rx.recv();
+            }
+        }
+    }
+}
+
 struct PendingSwatch {
     clipboard: Clipboard,
     insertion: Insertion,
@@ -219,17 +237,18 @@ pub fn start(app: &mut VectorcraftApp, p: &Value, dropped: bool) -> Result<Value
 
 /// `file.place.queue` with `p` for the active document, its files read and their thumbnails made off
 /// the UI thread → `{background: true, status}`; the place cursor is loaded once they are ready. When no thread could start, the cursor is loaded at once → `file.place.queue`'s reply.
-pub fn start_queue(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+/// `asks`: the cursor's files ask for their import options when placed ([`crate::place::show_thumbnails`]).
+pub fn start_queue(app: &mut VectorcraftApp, p: &Value, asks: bool) -> Result<Value, String> {
     let job = app.session.prepare_place_queue(p).map_err(|e| e.to_string())?;
     let names = job.names().join(", ");
-    let started = spawn(app, names.clone(), names, false, move || job.read().map(Read::Queue).map_err(|e| e.to_string()))?;
+    let started = spawn(app, names.clone(), names, false, move || job.read().map(|r| Read::Queue(r, asks)).map_err(|e| e.to_string()))?;
     match started {
         Some(r) => Ok(r),
         None => {
             let r = app.session.execute("file.place.queue", p).map_err(|e| e.to_string());
             app.sync_views();
             let r = r?;
-            crate::place::show_thumbnails(app, &r);
+            crate::place::show_thumbnails(app, &r, asks);
             Ok(r)
         }
     }
@@ -468,7 +487,9 @@ fn finish(app: &mut VectorcraftApp, p: &Pending, r: Result<Read, String>) {
     app.session.set_active(i);
     let r = match r {
         Ok(Read::Place(read)) => app.session.place_read(*read).map(|_| ()).map_err(|e| e.to_string()),
-        Ok(Read::Queue(read)) => app.session.place_queue_read(read).map(|r| crate::place::show_thumbnails(app, &r)).map_err(|e| e.to_string()),
+        Ok(Read::Queue(read, asks)) => {
+            app.session.place_queue_read(read).map(|r| crate::place::show_thumbnails(app, &r, asks)).map_err(|e| e.to_string())
+        }
         Ok(Read::Paste(paste)) => return finish_paste(app, *paste),
         Err(e) => Err(e),
     };

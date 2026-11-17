@@ -448,7 +448,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state.take(),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             (self.block_start, self.block_end),
             // The art is the brush's own: not on `%_` lines, in a drawn look or in a symbol that
             // first uses the brush.
@@ -488,7 +488,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state,
             self.gs,
-            self.clip,
+            (self.clip, self.shown),
             (self.block_start, self.block_end),
             (self.hidden, self.in_look, self.in_symbol),
             self.styled,

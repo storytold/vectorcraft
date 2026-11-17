@@ -27,6 +27,7 @@
 //! moves into its sizes ([`size_scale`], [`fold_scale`]), and the rest (a stretch, skew,
 //! rotation or reflection) stays its transform.
 
+use craft_svg::tree::usvg;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -35,12 +36,12 @@ use std::ops::{Range, RangeInclusive};
 use std::rc::Rc;
 use std::str::FromStr;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{CharStyle, Dash, Justify, LineCap, LineJoin, ParaDirection, ParaStyle, StrokeLayer, TextKind, TextObject, TextRun};
 use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect};
-use vectorcraft_text::{FontDb, TextLayout};
+use vectorcraft_text::{FontDb, PositionedGlyph, TextLayout, spacing_scale};
 
 use super::css::{Styles, XNode};
 use super::{DEFAULT_FONT_SIZE, PT_PER_IN, href, vector_effect};
@@ -130,6 +131,7 @@ const BIDI_NESTED: &str = "a unicode-bidi embedding inside another imported one 
 const BIDI_TEXT_OVERRIDE: &str = "unicode-bidi override on the text imported as its paragraph direction; directional override is not supported";
 
 /// One character of a text and the adjustments its position needs.
+#[derive(Clone)]
 struct Cell {
     ch: char,
     style: CharStyle,
@@ -178,6 +180,9 @@ pub(super) struct PendingText {
     pub obj: TextObject,
     /// For each run, the index of its fill's and stroke's `url(#…)` paint, if any.
     pub servers: Vec<(Option<usize>, Option<usize>)>,
+    /// The other point type objects of a text whose absolutely placed characters one object cannot
+    /// put on their x ([`split`]), after `obj` in text order, each with its runs' paint indices.
+    pub rest: Vec<(TextObject, Vec<Key>)>,
     /// Number of `url(#…)` paints (the placeholder paths after the main one, in order).
     pub paints: usize,
     /// `vector-effect="non-scaling-stroke"`: the character strokes keep their width on screen.
@@ -233,7 +238,14 @@ impl TextSlots {
             return Some(bp.clone());
         }
         let t = self.texts.get(i)?;
-        let bp = Rc::new(vectorcraft_text::layout(FontDb::global(), &t.obj).to_bezpath());
+        let mut bp = vectorcraft_text::layout(FontDb::global(), &t.obj).to_bezpath();
+        // The other objects of a split text, in the first one's text space.
+        for (o, _) in &t.rest {
+            let mut more = vectorcraft_text::layout(FontDb::global(), o).to_bezpath();
+            more.apply_affine(t.obj.xf.inverse() * o.xf);
+            bp.extend(more.elements().iter().copied());
+        }
+        let bp = Rc::new(bp);
         self.outlines.borrow_mut().insert(i, bp.clone());
         Some(bp)
     }
@@ -378,24 +390,29 @@ fn clip_uses(
             Some(s) => own_transform(&cx.css, s),
             None => t.attribute("transform").unwrap_or("").to_string(),
         };
-        // One element can carry one clip path. The text's own clip path is in the text's user space
-        // and wins; a clip path of the `<use>` is in the `<use>`'s, so the text's transform moves
-        // to the importer instead.
-        let clipped = |n: XNode| cx.css.own(n, "clip-path").is_some_and(|v| v.trim() != "none");
+        // One element can carry one clip path. The text's own clip path is in the text's user space;
+        // a clip path of the `<use>` is in the `<use>`'s. With only the `<use>`'s, the text's
+        // transform moves to the importer. With both, the placeholder's clip path is one that
+        // holds both ([`both_clips`]).
+        let clipped = |n: XNode| cx.css.own(n, "clip-path").filter(|v| v.trim() != "none");
         let id = format!("{}{i}-{k}", slots.prefix);
-        let transform = if style_t.is_some_and(clipped) {
-            if clipped(style_u) {
-                let label = u.attribute("id").map_or_else(|| "a use of a text".to_string(), |id| format!("'{id}'"));
-                warnings.push(format!("clip path of {label} in a clip path ignored: the text's own applies"));
-            }
-            format!("{placed} {text_xf}")
-        } else {
-            slots.inner.insert(id.clone(), parse_transform(Some(&text_xf)));
-            placed
-        };
         let props = clip_props(&cx.css, style_t, Some(style_u));
         let mut out = String::new();
-        clip_placeholder(&mut out, q, &id, &transform, &props, u, marker);
+        match (style_t.and_then(clipped), clipped(style_u)) {
+            (Some(text_clip), Some(use_clip)) => {
+                let both = both_clips(&mut out, q, &id, &text_clip, &use_clip, parse_transform(Some(&text_xf)), marker);
+                let props = match (both, props.split_once(';')) {
+                    (Some(both), Some((_, rest))) => format!("clip-path:url(#{both});{rest}"),
+                    _ => props,
+                };
+                clip_placeholder(&mut out, q, &id, &format!("{placed} {text_xf}"), &props, u, marker);
+            }
+            (Some(_), None) => clip_placeholder(&mut out, q, &id, &format!("{placed} {text_xf}"), &props, u, marker),
+            (None, _) => {
+                slots.inner.insert(id.clone(), parse_transform(Some(&text_xf)));
+                clip_placeholder(&mut out, q, &id, &placed, &props, u, marker);
+            }
+        }
         // Another `<use>` can still show this one by its id: a copy of it stays in a `<defs>`, which
         // the clip path leaves out, with the properties style rules gave it written out.
         if u.attribute("id").is_some() {
@@ -529,7 +546,10 @@ fn use_slot(
         shown.build(style_xml, style_t, &label, &mut found)
     };
     let differs = |(text, paints): &(PendingText, Vec<String>)| {
-        slots.texts.get(shared).is_none_or(|old| old.obj != text.obj || old.servers != text.servers || old.under != text.under)
+        slots
+            .texts
+            .get(shared)
+            .is_none_or(|old| old.obj != text.obj || old.servers != text.servers || old.rest != text.rest || old.under != text.under)
             || inst.paints.get(shared) != Some(paints)
     };
     let slot = built.filter(differs).map(|(text, paints)| {
@@ -654,6 +674,42 @@ fn clip_placeholder(out: &mut String, q: &str, id: &str, transform: &str, props:
     let _ = write!(out, " d=\"M{} {}H{}V{}H{}Z\"/>", b.x0, b.y0, b.x1, b.y1, b.x0);
 }
 
+/// Write, in a `<defs>` (which a clip path leaves out), a clip path for the placeholder `id` of a
+/// text with bounds `b` and transform `text_xf` shown by a `<use>`, when both have a clip path:
+/// it clips by the text's clip path `text_clip` in the text's user space and by the `<use>`'s
+/// `use_clip` in the `<use>`'s, each on a rectangle over the text's bounds there, so a clip path in
+/// bounding box units measures the text. Its id, or `None` when `text_xf` can't be inverted (the
+/// text then draws nothing).
+fn both_clips(out: &mut String, q: &str, id: &str, text_clip: &str, use_clip: &str, text_xf: Affine, b: Rect) -> Option<String> {
+    let det = text_xf.determinant();
+    if !det.is_finite() || det == 0.0 {
+        return None;
+    }
+    let [a, b2, c, d, e, f] = text_xf.inverse().as_coeffs();
+    let ub = text_xf.transform_rect_bbox(b);
+    let (id_u, id_t) = (format!("{id}-u"), format!("{id}-t"));
+    let rect = |out: &mut String, clip: &str, r: Rect| {
+        let _ = write!(
+            out,
+            "<{q}path style=\"transform:{IDENTITY};clip-path:{};display:inline\" d=\"M{} {}H{}V{}H{}Z\"/>",
+            xml_escape(clip),
+            r.x0,
+            r.y0,
+            r.x1,
+            r.y1,
+            r.x0
+        );
+    };
+    // The `<use>`'s clip path, moved back by the inverse of the text's transform from the
+    // placeholder's user space to the `<use>`'s.
+    let _ = write!(out, "<{q}defs><{q}clipPath id=\"{}\" style=\"transform:matrix({a} {b2} {c} {d} {e} {f})\">", xml_escape(&id_u));
+    rect(out, use_clip, ub);
+    let _ = write!(out, "</{q}clipPath><{q}clipPath id=\"{}\" style=\"clip-path:url(#{})\">", xml_escape(&id_t), xml_escape(&id_u));
+    rect(out, text_clip, b);
+    let _ = write!(out, "</{q}clipPath></{q}defs>");
+    Some(id_t)
+}
+
 /// Write the placeholder group for text `t` (namespace prefix `q`), slot `index`, with the text's
 /// id when `with_id`.
 #[allow(clippy::too_many_arguments)]
@@ -711,13 +767,21 @@ struct Ctx {
     sizes: RefCell<HashMap<roxmltree::NodeId, f64>>,
     weights: RefCell<HashMap<roxmltree::NodeId, u16>>,
     elems: RefCell<HashMap<roxmltree::NodeId, Rc<ElemStyle>>>,
-    /// Whether the first strong character of each element read so far is right to left
-    /// ([`Self::first_strong_rtl`]); `None` where it holds none.
-    strong: RefCell<HashMap<roxmltree::NodeId, Option<bool>>>,
+    /// The first strong characters of each `<text>` read so far, by the `<text>`
+    /// ([`Self::first_strong_rtl`]).
+    strong: RefCell<HashMap<roxmltree::NodeId, Rc<FirstStrong>>>,
     /// The path each `<textPath>` read so far follows ([`Self::text_path`]); `None` where it has
     /// no usable one. The styles of a `<use>` instance share it, so each path is found and parsed
     /// once however many `<use>` elements show its text.
-    paths: Rc<RefCell<HashMap<roxmltree::NodeId, Option<Rc<BezPath>>>>>,
+    paths: Rc<RefCell<HashMap<roxmltree::NodeId, Option<Rc<FollowedPath>>>>>,
+}
+
+/// The path a `<textPath>` follows ([`Ctx::text_path`]).
+struct FollowedPath {
+    path: BezPath,
+    /// The `pathLength` of the element the `<textPath>` points at, 0 or greater; `None` when the
+    /// `<textPath>` has its own `path` or the element has no such value.
+    author_length: Option<f64>,
 }
 
 #[cfg(test)]
@@ -965,6 +1029,12 @@ impl Ctx {
         "normal".into()
     }
 
+    /// Whether the computed `direction` of element `n` is `rtl`, in any letter case (CSS keywords
+    /// are ASCII case-insensitive, https://www.w3.org/TR/css-values-3/#keywords).
+    fn is_rtl(&self, n: XNode) -> bool {
+        self.prop(n, "direction").is_some_and(|d| d.trim().eq_ignore_ascii_case("rtl"))
+    }
+
     /// The Character Direction of the characters of element `n` inside a `<text>`, and what it
     /// leaves out (SVG 1.1 §10.7.4,
     /// https://www.w3.org/TR/SVG11/text.html#RelationshipWithBi-directionality, and CSS Writing
@@ -987,7 +1057,7 @@ impl Ctx {
         let inherited = parent.as_ref().and_then(|p| p.style.char_direction);
         let mut notes = parent.map_or_else(Vec::new, |p| p.bidi_notes.clone());
         let rtl = |rtl: bool| Some(if rtl { ParaDirection::RightToLeft } else { ParaDirection::LeftToRight });
-        let own = || rtl(self.prop(n, "direction").is_some_and(|d| d.trim() == "rtl"));
+        let own = || rtl(self.is_rtl(n));
         let (dir, note) = match bidi.as_str() {
             "embed" => (own(), None),
             "bidi-override" => (own(), Some(BIDI_OVERRIDE)),
@@ -1006,22 +1076,39 @@ impl Ctx {
     }
 
     /// Whether the first strong character (UAX #9 P2) of the characters [`Self::collect`] reads
-    /// from element `n` is right to left; `None` when they hold none. Each element is read once.
+    /// from element `n` is right to left; `None` when they hold none. The characters of the whole
+    /// `<text>` are read once, as one sequence, so an isolate that opens in one text node and
+    /// closes in a later one is skipped whole ([`FirstStrong`]).
     fn first_strong_rtl(&self, n: XNode) -> Option<bool> {
-        if let Some(s) = self.strong.borrow().get(&n.id()) {
-            return *s;
+        // The `<text>` (or outermost element) whose characters hold those of `n`.
+        let mut root = n;
+        while let Some(p) = root.parent_element().filter(|_| root.tag_name().name() != "text" && self.is_inline_child(root)) {
+            root = p;
         }
-        let s = n.children().find_map(|c| {
-            if c.is_text() {
-                text_first_strong_rtl(c.text().unwrap_or(""))
-            } else if self.is_inline_child(c) {
-                self.first_strong_rtl(c)
-            } else {
-                None
-            }
+        let strong = self.strong.borrow().get(&root.id()).cloned();
+        let strong = strong.unwrap_or_else(|| {
+            let mut chars = vec![];
+            let mut spans = HashMap::new();
+            self.inline_chars(root, &mut chars, &mut spans);
+            let s = Rc::new(FirstStrong::new(&chars, spans));
+            self.strong.borrow_mut().insert(root.id(), s.clone());
+            s
         });
-        self.strong.borrow_mut().insert(n.id(), s);
-        s
+        strong.of(n.id())
+    }
+
+    /// Appends the characters of element `n` and of its shown inline children to `chars`, in
+    /// document order, and the range each of those elements holds to `spans`.
+    fn inline_chars(&self, n: XNode, chars: &mut Vec<char>, spans: &mut HashMap<roxmltree::NodeId, Range<usize>>) {
+        let start = chars.len();
+        for c in n.children() {
+            if c.is_text() {
+                chars.extend(c.text().unwrap_or("").chars());
+            } else if self.is_inline_child(c) {
+                self.inline_chars(c, chars, spans);
+            }
+        }
+        spans.insert(n.id(), start..chars.len());
     }
 
     /// Whether child `c` of a `<text>` content element holds characters of the text: a shown
@@ -1108,7 +1195,7 @@ impl Ctx {
 
     /// The path a `<textPath>` follows, in the text's user space. It is read from the file once
     /// ([`Self::paths`]).
-    fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<Rc<BezPath>> {
+    fn text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<Rc<FollowedPath>> {
         if let Some(known) = self.paths.borrow().get(&tp.id()) {
             return known.clone();
         }
@@ -1120,13 +1207,14 @@ impl Ctx {
     /// How many elements the path of `<textPath>` `tp` has, when a text built so far follows it
     /// ([`Self::text_path`]); 0 for any other node.
     fn path_elements(&self, tp: XNode) -> usize {
-        self.paths.borrow().get(&tp.id()).and_then(|p| p.as_deref()).map_or(0, |p| p.elements().len())
+        self.paths.borrow().get(&tp.id()).and_then(|p| p.as_deref()).map_or(0, |p| p.path.elements().len())
     }
 
     /// Find and parse the path `<textPath>` `tp` follows.
-    fn read_text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<BezPath> {
+    fn read_text_path(&self, xml: &roxmltree::Document, tp: XNode) -> Option<FollowedPath> {
         #[cfg(test)]
         TEXT_PATH_READS.set(TEXT_PATH_READS.get() + 1);
+        let mut author_length = None;
         let mut bp = match tp.attribute("path") {
             Some(d) => BezPath::from_svg(d).ok()?,
             None => {
@@ -1138,6 +1226,8 @@ impl Ctx {
                 };
                 let mut bp = BezPath::from_svg(&d).ok()?;
                 bp.apply_affine(parse_transform(el.attribute("transform")));
+                author_length =
+                    el.attribute("pathLength").and_then(|v| v.trim().parse::<f64>().ok()).filter(|l| l.is_finite() && *l >= 0.0).map(f64::abs);
                 bp
             }
         };
@@ -1145,7 +1235,7 @@ impl Ctx {
             bp = bp.reverse_subpaths();
         }
         let usable = bp.segments().next().is_some();
-        usable.then_some(bp)
+        usable.then_some(FollowedPath { path: bp, author_length })
     }
 
     /// The equivalent path of a basic shape (SVG 2 › Basic Shapes), as path data: what a
@@ -1262,7 +1352,7 @@ impl Ctx {
         }
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
         let name = t.attribute("id").unwrap_or("").to_string();
-        Some((PendingText { name, obj, servers, paints: 0, non_scaling: false, under: None, marker }, Vec::new()))
+        Some((PendingText { name, obj, servers, rest: vec![], paints: 0, non_scaling: false, under: None, marker }, Vec::new()))
     }
 
     /// Read one `<text>`: the pending text and its `url(#…)` paints.
@@ -1359,7 +1449,7 @@ impl Ctx {
         // With `unicode-bidi: plaintext`, the text runs in the direction of its first strong
         // character, and each paragraph in that of its own ([`pin_first_strong`]).
         let plaintext = self.unicode_bidi(t) == "plaintext";
-        let rtl = if plaintext { self.first_strong_rtl(t) == Some(true) } else { self.prop(t, "direction").is_some_and(|d| d.trim() == "rtl") };
+        let rtl = if plaintext { self.first_strong_rtl(t) == Some(true) } else { self.is_rtl(t) };
         let pin = |obj: &mut TextObject| {
             pin_direction(obj, rtl);
             if plaintext {
@@ -1386,7 +1476,7 @@ impl Ctx {
                 let chunk: String = cs.chars[i..end].iter().map(|c| c.0).collect();
                 text_first_strong_rtl(&chunk) == Some(true)
             };
-            let rtl = if plaintext { chunk_rtl() } else { self.prop(el, "direction").is_some_and(|d| d.trim() == "rtl") };
+            let rtl = if plaintext { chunk_rtl() } else { self.is_rtl(el) };
             if !vertical && rtl { 1.0 - a } else { a }
         };
         let anchor = anchor_of(0);
@@ -1394,7 +1484,9 @@ impl Ctx {
         let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
         let mut breaks: Vec<Break> = vec![];
         let mut para_styles: Vec<ParaStyle> = vec![];
-        if let Some((tp, bp)) = path {
+        let mut rest = vec![];
+        if let Some((tp, followed)) = path {
+            let bp = &followed.path;
             // Along the path: dx is extra advance, dy shifts off the path.
             let mut off = 0.0;
             for i in 0..n {
@@ -1406,12 +1498,51 @@ impl Ctx {
             }
             let len: f64 = bp.segments().map(|s| s.arclen(1e-4)).sum();
             let em = self.font_size(tp);
-            let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
+            // `startOffset` as a share of the path's length. A percentage is of the path's computed
+            // length. Any other length is in the units of the referenced element's `pathLength`
+            // when it has one, and a `pathLength` of 0 puts any offset other than 0 infinitely far
+            // along (SVG 2 › Paths › The pathLength attribute). An offset infinitely far along
+            // starts as far past the path's end, or before its start, as type may go.
+            let share = tp
+                .attribute("startOffset")
+                .and_then(|v| {
+                    let o = self.length(v, em, len)?;
+                    let share = match followed.author_length {
+                        Some(p) if !v.trim().ends_with('%') => {
+                            if o == 0.0 {
+                                0.0
+                            } else {
+                                o / p
+                            }
+                        }
+                        _ => o / len,
+                    };
+                    Some(if share.is_infinite() { vectorcraft_doc::PATH_LEAD_MAX.copysign(share) } else { share })
+                })
+                .unwrap_or(0.0);
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
-            // Text that would start before the path's beginning starts at it, with all its glyphs
-            // on the path (SVG does not draw the glyphs that fall off it).
-            let start = Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| s.clamp(0.0, 1.0));
-            obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start, end: None };
+            // On a path of one closed subpath, text that starts before the path's start or past its
+            // end wraps around the path. On an open path text may start before the path's start,
+            // and its characters before the start are not drawn; text that starts past the end
+            // starts at the end. Other paths start it at the path's start or end.
+            let path = PathData::from_bezpath(bp);
+            let wraps = path.subpaths.len() == 1 && path.is_closed();
+            let open = !path.is_closed();
+            let wrap = |s: f64| {
+                // `rem_euclid` can round a tiny negative value up to 1.
+                let s = s.rem_euclid(1.0);
+                if s < 1.0 { s } else { 0.0 }
+            };
+            let start = Some(share + (dx[0] - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| {
+                if wraps {
+                    wrap(s)
+                } else if open {
+                    s.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0)
+                } else {
+                    s.clamp(0.0, 1.0)
+                }
+            });
+            obj.kind = TextKind::OnPath { path, start, end: None };
             obj.xf = Affine::IDENTITY;
         } else if vertical {
             // Type on a vertical path: dy is extra advance, dx shifts across the column.
@@ -1434,41 +1565,37 @@ impl Ctx {
             obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start: 0.0, end: None };
             obj.xf = Affine::IDENTITY;
         } else {
-            let origin = Point::new(x[0].unwrap_or(0.0) + dx[0], y[0].unwrap_or(0.0) + dy[0]);
-            let (justify, left, starts) = lines(&mut cells, &x, &y, &dx, &dy, &anchor_of, &pin, origin.x, &mut breaks);
-            obj.para.justify = justify;
-            obj.xf = Affine::translate((finite(left), finite(origin.y)));
-            // Lines anchored differently or at different x (paragraphs aligned or indented
-            // differently): each line's paragraph takes its alignment, and indents that put it
-            // where it was.
-            if starts.iter().any(|&(_, a, ax)| a != starts[0].1 || ax != starts[0].2) {
-                for (k, &(_, a, ax)) in starts.iter().enumerate() {
-                    let d = finite(ax - left);
-                    let mut pa = ParaStyle { justify: justify_of(a), ..ParaStyle::default() };
-                    match pa.justify {
-                        Justify::Center if d >= 0.0 => pa.left_indent = 2.0 * d,
-                        Justify::Center => pa.right_indent = -2.0 * d,
-                        Justify::Right => pa.right_indent = -d,
-                        _ => pa.left_indent = d,
-                    }
-                    let count = if k == 0 { 1 } else { breaks.get(k - 1).map_or(1, |b| b.count) };
-                    para_styles.extend(std::iter::repeat_n(pa, count));
+            let whole = cells.clone();
+            let mut ys = vec![];
+            let (b, p, unplaced) = place(&mut cells, &x, &y, &dx, &dy, &anchor_of, &pin, &mut obj, &mut ys);
+            (breaks, para_styles) = (b, p);
+            if !unplaced.is_empty() {
+                // One object cannot put every absolutely placed character on its x: the text becomes
+                // several, the first of them `obj`.
+                let mut pieces = split(&whole, &x, &y, &dx, &dy, &ys, &anchor_of, &pin, unplaced).into_iter();
+                if let Some(first) = pieces.next() {
+                    (obj, cells, breaks, para_styles) = (first.obj, first.cells, first.breaks, first.paras);
                 }
+                rest = pieces
+                    .map(|mut p| {
+                        let servers = finish(&mut p.obj, &p.cells, &p.breaks, p.paras, &pin);
+                        (p.obj, servers)
+                    })
+                    .collect();
+                warnings.push(format!(
+                    "{label}: imported as {} point type objects in a group, since one object cannot put every character on its own x",
+                    rest.len() + 1
+                ));
             }
         }
-        let (runs, servers) = assemble(&cells, &breaks).0;
-        obj.runs = runs;
-        if !para_styles.is_empty() {
-            obj.set_paragraph_styles(para_styles);
-        }
-        pin(&mut obj);
-        keep_reader_anchors(&mut obj);
+        let servers = finish(&mut obj, &cells, &breaks, para_styles, &pin);
         // The placeholder covers the text (laid out when a paint server needs its bounding box).
-        let b = if paints.is_empty() { obj.bounds() } else { Some(obj.xf.transform_rect_bbox(measure(&obj).bounds)) }.unwrap_or_default();
+        let bounds = |o: &TextObject| if paints.is_empty() { o.bounds() } else { Some(o.xf.transform_rect_bbox(measure(o).bounds)) };
+        let b = rest.iter().filter_map(|(o, _)| bounds(o)).fold(bounds(&obj), |all, b| Some(all.map_or(b, |a| a.union(b)))).unwrap_or_default();
         let marker = Rect::new(b.x0, b.y0, b.x1.max(b.x0 + 1.0), b.y1.max(b.y0 + 1.0));
         let name = t.attribute("id").unwrap_or("").to_string();
         let non_scaling = vector_effect::is_non_scaling(&self.css, t);
-        Some((PendingText { name, obj, servers, paints: paints.len(), non_scaling, under, marker }, paints))
+        Some((PendingText { name, obj, servers, rest, paints: paints.len(), non_scaling, under, marker }, paints))
     }
 }
 
@@ -1563,12 +1690,145 @@ fn leading_tolerance(spacing: f64) -> f64 {
     0.01_f64.min(spacing.abs() * 1e-3)
 }
 
+/// Point type `obj` of `cells` placed by the positioning lists ([`lines`]): sets its justification
+/// and transform, and returns its line breaks, its paragraph styles and the absolutely placed
+/// characters kerning cannot put on their x. `ys` takes each character's line baseline and y.
+#[allow(clippy::too_many_arguments)]
+fn place(
+    cells: &mut [Cell],
+    x: &[Option<f64>],
+    y: &[Option<f64>],
+    dx: &[f64],
+    dy: &[f64],
+    anchor_of: &dyn Fn(usize) -> f64,
+    pin: &dyn Fn(&mut TextObject),
+    obj: &mut TextObject,
+    ys: &mut Vec<(f64, f64)>,
+) -> (Vec<Break>, Vec<ParaStyle>, Vec<usize>) {
+    let mut breaks = vec![];
+    let mut para_styles = vec![];
+    let origin = Point::new(x[0].unwrap_or(0.0) + dx[0], y[0].unwrap_or(0.0) + dy[0]);
+    let (justify, left, starts, unplaced) = lines(cells, x, y, dx, dy, anchor_of, pin, origin.x, &mut breaks, ys);
+    obj.para.justify = justify;
+    obj.xf = Affine::translate((finite(left), finite(origin.y)));
+    // Lines anchored differently or at different x (paragraphs aligned or indented
+    // differently): each line's paragraph takes its alignment, and indents that put it
+    // where it was.
+    if starts.iter().any(|&(_, a, ax)| a != starts[0].1 || ax != starts[0].2) {
+        for (k, &(_, a, ax)) in starts.iter().enumerate() {
+            let d = finite(ax - left);
+            let mut pa = ParaStyle { justify: justify_of(a), ..ParaStyle::default() };
+            match pa.justify {
+                Justify::Center if d >= 0.0 => pa.left_indent = 2.0 * d,
+                Justify::Center => pa.right_indent = -2.0 * d,
+                Justify::Right => pa.right_indent = -d,
+                _ => pa.left_indent = d,
+            }
+            let count = if k == 0 { 1 } else { breaks.get(k - 1).map_or(1, |b| b.count) };
+            para_styles.extend(std::iter::repeat_n(pa, count));
+        }
+    }
+    (breaks, para_styles, unplaced)
+}
+
+/// Gives `obj` the runs of `cells` with `breaks`, its paragraph styles and its paragraph
+/// directions; returns the paint indices of its runs.
+fn finish(obj: &mut TextObject, cells: &[Cell], breaks: &[Break], para_styles: Vec<ParaStyle>, pin: &dyn Fn(&mut TextObject)) -> Vec<Key> {
+    let (runs, servers) = assemble(cells, breaks).0;
+    obj.runs = runs;
+    if !para_styles.is_empty() {
+        obj.set_paragraph_styles(para_styles);
+    }
+    pin(obj);
+    keep_reader_anchors(obj);
+    servers
+}
+
+/// One point type object of a text [`split`] into several, before [`finish`].
+struct Piece {
+    obj: TextObject,
+    cells: Vec<Cell>,
+    breaks: Vec<Break>,
+    paras: Vec<ParaStyle>,
+}
+
+/// How many times [`split`] cuts a piece before the characters kerning cannot place; a piece that
+/// still has such characters is then cut before each of its chunks.
+const MAX_SPLITS: usize = 3;
+
+/// Point type objects, in text order, that together put every absolutely placed character of
+/// `cells` (before [`place`] kerned them) on its x. SVG anchors each chunk on its own and reorders
+/// right-to-left characters only within a chunk (SVG 2 › Text, https://www.w3.org/TR/SVG2/text.html),
+/// while one object reorders the whole
+/// line: a left-to-right character drawn right before a right-to-left one has no kerning between
+/// them. The text is cut before each character `unplaced` lists, and each piece placed again. `ys`
+/// holds each character's line baseline and y, so that a piece keeps its characters' baselines.
+#[allow(clippy::too_many_arguments)]
+fn split(
+    cells: &[Cell],
+    x: &[Option<f64>],
+    y: &[Option<f64>],
+    dx: &[f64],
+    dy: &[f64],
+    ys: &[(f64, f64)],
+    anchor_of: &dyn Fn(usize) -> f64,
+    pin: &dyn Fn(&mut TextObject),
+    unplaced: Vec<usize>,
+) -> Vec<Piece> {
+    let piece = |r: Range<usize>| {
+        let s = r.start;
+        let mut cells = cells[r.clone()].to_vec();
+        let (base, cur) = ys.get(s).copied().unwrap_or((0.0, 0.0));
+        // The piece starts on its line's baseline, and its first character keeps its own y.
+        cells[0].style.baseline_shift += base - cur;
+        let py: Vec<Option<f64>> = r
+            .clone()
+            .map(|i| match i - s {
+                0 => Some(base),
+                1 => y[i].or(Some(cur)),
+                _ => y[i],
+            })
+            .collect();
+        let mut pdy = dy[r.clone()].to_vec();
+        pdy[0] = 0.0;
+        let mut obj = TextObject::point(Point::ZERO, "", CharStyle::default());
+        let (breaks, paras, unplaced) = place(&mut cells, &x[r.clone()], &py, &dx[r], &pdy, &|j| anchor_of(s + j), pin, &mut obj, &mut vec![]);
+        (Piece { obj, cells, breaks, paras }, unplaced.into_iter().map(|j| s + j).collect::<Vec<_>>())
+    };
+    let mut done = vec![];
+    let mut todo = vec![(0..cells.len(), unplaced, 0)];
+    while let Some((range, failed, round)) = todo.pop() {
+        // Past the last round every chunk of the piece is a piece of its own, and so has no
+        // characters to place.
+        let mut cuts: Vec<usize> = if round < MAX_SPLITS { failed } else { (range.start + 1..range.end).filter(|&i| x[i].is_some()).collect() };
+        cuts.sort_unstable();
+        cuts.dedup();
+        let mut from = range.start;
+        for to in cuts.into_iter().chain([range.end]) {
+            if to <= from || to > range.end {
+                continue;
+            }
+            match piece(from..to) {
+                (p, failed) if failed.is_empty() => done.push((from, p)),
+                (_, failed) => todo.push((from..to, failed, round + 1)),
+            }
+            from = to;
+        }
+    }
+    done.sort_by_key(|p| p.0);
+    done.into_iter().map(|p| p.1).collect()
+}
+
+/// A line's first character, alignment (as for [`justify_of`]) and anchor x.
+type LineStart = (usize, f64, f64);
+
 /// Point type: line breaks, baseline shifts and kerning from the positioning lists. Returns the
 /// justification, the x of the first line's left (or anchor) edge and each line's first
 /// character, alignment (as for [`justify_of`]) and anchor x. `anchor_of` gives where the chunk
 /// starting at a character sits on its anchor, and `pin` sets the paragraph directions of the
 /// text ([`pin_direction`]). When characters are placed on their own, every line is left-aligned
-/// and its anchor x is its left edge.
+/// and its anchor x is its left edge. Also returns the absolutely placed characters kerning cannot
+/// put on their x. `ys` takes each character's line baseline and y.
 #[allow(clippy::too_many_arguments)]
 fn lines(
     cells: &mut [Cell],
@@ -1580,10 +1840,13 @@ fn lines(
     pin: &dyn Fn(&mut TextObject),
     x0: f64,
     breaks: &mut Vec<Break>,
-) -> (Justify, f64, Vec<(usize, f64, f64)>) {
+    ys: &mut Vec<(f64, f64)>,
+) -> (Justify, f64, Vec<LineStart>, Vec<usize>) {
     let n = cells.len();
     let y0 = y[0].unwrap_or(0.0) + dy[0];
     let (mut base, mut cur) = (y0, y0);
+    ys.clear();
+    ys.push((y0, y0));
     // Line starts (first character, anchor x) and absolutely placed characters (index, x).
     let mut lines = vec![(0, x0)];
     let mut targets: Vec<(usize, f64)> = vec![];
@@ -1602,9 +1865,11 @@ fn lines(
             breaks.push(Break { at: i, count: count as usize, leading: gap / count });
             lines.push((i, ax + dx[i]));
             (base, cur) = (ny, ny);
+            ys.push((base, cur));
             continue;
         }
         cur = ny;
+        ys.push((base, cur));
         match x[i] {
             Some(ax) => targets.push((i, ax + dx[i])),
             None => cells[i - 1].kern += dx[i],
@@ -1623,7 +1888,7 @@ fn lines(
     }
     if targets.is_empty() {
         let starts = lines.iter().map(|&(s, lx)| (s, anchor_of(s), lx)).collect();
-        return (justify_of(anchor_of(0)), x0, starts);
+        return (justify_of(anchor_of(0)), x0, starts, vec![]);
     }
     // Absolutely placed characters: lay the text out left-aligned and kern each one onto its x.
     // SVG anchors every absolutely placed chunk on its own, so a chunk not anchored at its left
@@ -1633,59 +1898,122 @@ fn lines(
     // Chunk starts in order: line starts and absolutely placed characters.
     let mut starts: Vec<usize> = lines.iter().map(|l| l.0).chain(targets.iter().map(|t| t.0)).collect();
     starts.sort_unstable();
-    // The left and right edges of the chunk starting at character `s`, from each character's pen and end.
-    let edges = |s: usize, pens: &[Option<f64>], ends: &[Option<f64>]| {
+    // The left and right edges of the chunk starting at character `s`, and the character drawn at its left.
+    let edges = |s: usize, pens: &[Option<Pen>]| {
         let e = starts.get(starts.partition_point(|&c| c <= s)).copied().unwrap_or(n);
-        let left = (s..e).filter_map(|j| pens[j]).fold(f64::INFINITY, f64::min);
-        let right = (s..e).filter_map(|j| ends[j]).fold(f64::NEG_INFINITY, f64::max);
-        (left.is_finite() && right.is_finite()).then_some((left, right))
+        let (mut left, mut right, mut at) = (f64::INFINITY, f64::NEG_INFINITY, s);
+        for (j, p) in pens.iter().enumerate().take(e).skip(s) {
+            let Some(p) = p else { continue };
+            if p.start < left {
+                (left, at) = (p.start, j);
+            }
+            right = right.max(p.end);
+        }
+        (left.is_finite() && right.is_finite()).then_some((left, right, at))
     };
     let mut line_left: Vec<f64> = lines.iter().map(|l| l.1).collect();
+    // Where each line's first chunk's left edge goes.
+    let mut first_left: Vec<f64> = vec![];
     // Where each absolutely placed character's pen goes, from the left edge of its line's first chunk.
     let mut wants: Vec<(usize, f64)> = vec![];
+    // Absolutely placed characters drawn right next to a placed neighbor with no kerning between
+    // them (a left-to-right character between right-to-left ones): they stay where the layout puts them.
+    let mut unplaced = vec![];
     // Kerning changes shaping (pair kerning is off for manually kerned characters): repeat until
     // every character sits on its x.
     for round in 0..4 {
         let (runs, bytes) = assemble(cells, breaks);
         let mut text = with_runs(runs.0);
         pin(&mut text);
-        let (pens, ends) = pens(&measure(&text), &bytes);
+        let pens = pens(&measure(&text), &bytes, cells);
         // The edges of each line's first chunk, found once a round.
-        let first: Vec<Option<(f64, f64)>> = lines.iter().map(|&(s, _)| edges(s, &pens, &ends)).collect();
+        let first: Vec<Option<(f64, f64, usize)>> = lines.iter().map(|&(s, _)| edges(s, &pens)).collect();
         if round == 0 {
             // The chunks as they lie before any is moved: each one's left edge on its anchor.
-            let left_at = |s: usize, x: f64, chunk: Option<(f64, f64)>| chunk.map_or(x, |(left, right)| x - anchor_of(s) * (right - left));
-            let first_left: Vec<f64> = lines.iter().zip(&first).map(|(&(s, lx), &chunk)| left_at(s, lx, chunk)).collect();
+            let left_at = |s: usize, x: f64, chunk: Option<(f64, f64, usize)>| chunk.map_or(x, |(left, right, _)| x - anchor_of(s) * (right - left));
+            first_left = lines.iter().zip(&first).map(|(&(s, lx), &chunk)| left_at(s, lx, chunk)).collect();
             wants = targets
                 .iter()
                 .map(|&(i, x)| {
-                    let chunk = edges(i, &pens, &ends);
+                    let chunk = edges(i, &pens);
                     // The pen of a right-to-left chunk's first character is right of the chunk's left edge.
-                    let pen = pens[i].zip(chunk).map_or(0.0, |(p, (left, _))| p - left);
+                    let pen = pens[i].zip(chunk).map_or(0.0, |(p, (left, ..))| p.start - left);
                     (i, left_at(i, x, chunk) + pen - first_left[line_of(i)])
                 })
                 .collect();
-            // A line's layout starts at the line's left edge, and its first chunk's left edge is `left` from there.
-            line_left = first_left.iter().zip(&first).map(|(&x, chunk)| x - chunk.map_or(0.0, |(left, _)| left)).collect();
         }
-        let (mut line, mut moved, mut worst) = (usize::MAX, 0.0, 0.0f64);
-        for &(i, want) in &wants {
-            let l = line_of(i);
-            if l != line {
-                (line, moved) = (l, 0.0);
+        // A line's layout starts at the line's left edge, and its first chunk's left edge is `left`
+        // from there (right-to-left kerning can move that chunk).
+        line_left = first_left.iter().zip(&first).map(|(&x, chunk)| x - chunk.map_or(0.0, |(left, ..)| left)).collect();
+        // Kerning a character widens its advance to the right: the glyphs drawn right of it move
+        // right, and so does a right-to-left glyph's own left edge (its kerning is at its left). In
+        // drawing order the kerning before an absolutely placed character is a cut after the
+        // character before it (before that character when it runs right to left), and what is drawn
+        // after the cut moves. Places in drawing order are doubled (from 2) to put cuts between them.
+        // Each gap between two placed characters drawn one after the other takes the kerning of one
+        // cut in it, so placing a character moves none placed before it. Kerning is drawn at the
+        // character's horizontal scale, so each correction is divided by it.
+        let mut worst = 0.0f64;
+        let mut from = 0;
+        unplaced.clear();
+        while from < wants.len() {
+            let l = line_of(wants[from].0);
+            let to = from + wants[from..].partition_point(|&(i, _)| line_of(i) == l);
+            let on_line = &wants[from..to];
+            from = to;
+            let Some((p0, _, at)) = first[l] else { continue };
+            let Some(home) = pens[at].map(|p| 2 * p.rank + 2) else { continue };
+            // A character drawn as part of the glyph before it (a mark) is kerned where that glyph is.
+            // The kerning stays on the character just before the placed one: a mark whose kerning
+            // differs from its base's is drawn as a glyph of its own, and kerning the base would put
+            // the space between the base and its mark.
+            // Each search stops at the nearest earlier character with a glyph, at the latest the
+            // placed character before it, so the searches of a line read each character once.
+            let mut cuts: Vec<(usize, usize)> = on_line
+                .iter()
+                .filter(|&&(i, _)| pens[i].is_some())
+                .filter_map(|&(i, _)| (lines[l].0..i).rev().find_map(|j| pens[j]).map(|k| (2 * k.rank + if k.rtl { 1 } else { 3 }, i - 1)))
+                .collect();
+            cuts.sort_unstable();
+            let mut points: Vec<(usize, f64, f64, usize)> =
+                on_line.iter().filter_map(|&(i, want)| pens[i].map(|p| (2 * p.rank + 2, p.start, want, i))).collect();
+            points.sort_by_key(|p| p.0);
+            // The character kerned at the first cut between places `a` and `b`.
+            let cut = |a: usize, b: usize| cuts.get(cuts.partition_point(|c| c.0 <= a)).filter(|c| c.0 < b).map(|c| c.1);
+            let split = points.partition_point(|p| p.0 < home);
+            // Drawn right of the line's first chunk: kerning moves the character away from it.
+            let (mut prev, mut moved) = (home, 0.0);
+            for &(place, start, want, i) in &points[split..] {
+                if let Some(k) = cut(prev, place) {
+                    let d = want - (start - p0 + moved);
+                    cells[k].kern += d / spacing_scale(&cells[k].style, false);
+                    moved += d;
+                    worst = worst.max(d.abs());
+                } else {
+                    unplaced.push(i);
+                }
+                prev = place;
             }
-            let (Some(p), Some((p0, _))) = (pens[i], first[l]) else { continue };
-            let d = want - (p - p0 + moved);
-            cells[i - 1].kern += d;
-            moved += d;
-            worst = worst.max(d.abs());
+            // Drawn left of it: kerning moves the chunk (and what lies between) away from the character.
+            (prev, moved) = (home, 0.0);
+            for &(place, start, want, i) in points[..split].iter().rev() {
+                if let Some(k) = cut(place, prev) {
+                    let d = start - p0 - moved - want;
+                    cells[k].kern += d / spacing_scale(&cells[k].style, false);
+                    moved += d;
+                    worst = worst.max(d.abs());
+                } else {
+                    unplaced.push(i);
+                }
+                prev = place;
+            }
         }
         if worst < 0.01 {
             break;
         }
     }
     let starts = lines.iter().zip(&line_left).map(|(&(s, _), &lx)| (s, 0.0, lx)).collect();
-    (Justify::Left, line_left[0], starts)
+    (Justify::Left, line_left[0], starts, unplaced)
 }
 
 /// Centred and right-aligned lines of point type `obj` where a reader draws them. `text-anchor`
@@ -1774,6 +2102,56 @@ fn text_first_strong_rtl(text: &str) -> Option<bool> {
     (!vectorcraft_text::paragraph_is_rtl(&format!("{line}\u{5D0}"), None)).then_some(false)
 }
 
+/// The first strong characters (UAX #9 P2) of the elements of one `<text>`, found for each element
+/// in constant time from one pass over the text's characters. An isolate initiator is skipped to
+/// its matching PDI (UAX #9 BD9), and one without a matching PDI to the end; paragraph separators
+/// count as spaces, as in [`text_first_strong_rtl`].
+struct FirstStrong {
+    /// The characters each element holds: a range of indices into `next`.
+    spans: HashMap<roxmltree::NodeId, Range<usize>>,
+    /// For each character and for the end: the index of the first strong character from there on,
+    /// isolates skipped, and whether it is right to left; `None` when there is none.
+    next: Vec<Option<(usize, bool)>>,
+}
+
+impl FirstStrong {
+    fn new(chars: &[char], spans: HashMap<roxmltree::NodeId, Range<usize>>) -> Self {
+        use unicode_bidi::BidiClass::{AL, FSI, L, LRI, PDI, R, RLI};
+        let class = |c: char| unicode_bidi::bidi_class(c);
+        // The matching PDI of each isolate initiator.
+        let mut pdi = vec![None; chars.len()];
+        let mut open = vec![];
+        for (i, &c) in chars.iter().enumerate() {
+            match class(c) {
+                LRI | RLI | FSI => open.push(i),
+                PDI => {
+                    if let Some(at) = open.pop() {
+                        pdi[at] = Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut next = vec![None; chars.len() + 1];
+        for (i, &c) in chars.iter().enumerate().rev() {
+            next[i] = match class(c) {
+                L => Some((i, false)),
+                R | AL => Some((i, true)),
+                LRI | RLI | FSI => pdi[i].and_then(|p| next[p + 1]),
+                _ => next[i + 1],
+            };
+        }
+        Self { spans, next }
+    }
+
+    /// Whether the first strong character of element `n` is right to left; `None` when it holds
+    /// none. An isolate that opens inside `n` and closes after it hides the rest of `n`.
+    fn of(&self, n: roxmltree::NodeId) -> Option<bool> {
+        let span = self.spans.get(&n)?;
+        self.next.get(span.start).copied().flatten().filter(|&(at, _)| at < span.end).map(|(_, rtl)| rtl)
+    }
+}
+
 /// A left-aligned point text of `runs` at the origin (for measuring).
 fn with_runs(runs: Vec<TextRun>) -> TextObject {
     let mut t = TextObject::point(Point::ZERO, "", CharStyle::default());
@@ -1794,16 +2172,44 @@ fn advance(t: &TextObject) -> f64 {
     measure(t).glyphs.iter().map(|g| g.advance).sum()
 }
 
-/// Pen x (start) and end x of the glyph that starts at each character's byte offset.
-fn pens(lay: &TextLayout, bytes: &[usize]) -> (Vec<Option<f64>>, Vec<Option<f64>>) {
-    let mut at: HashMap<usize, (f64, f64)> = HashMap::with_capacity(lay.glyphs.len());
-    for g in &lay.glyphs {
-        at.entry(g.byte).or_insert((g.origin.x, g.origin.x + g.advance));
-    }
-    bytes.iter().map(|b| at.get(b).map_or((None, None), |&(s, e)| (Some(s), Some(e)))).unzip()
+/// Where the glyph that starts a character is drawn on a line of point type.
+#[derive(Clone, Copy)]
+struct Pen {
+    /// Its left edge. Manual kerning on a right-to-left glyph is at its left, and the glyph is
+    /// drawn right of it: its left edge is past that kerning.
+    start: f64,
+    /// The right edge of its advance.
+    end: f64,
+    /// Its place in the order its line is drawn in, from the left.
+    rank: usize,
+    rtl: bool,
 }
 
-type Key = (Option<usize>, Option<usize>);
+/// The [`Pen`] of the glyph that starts at each character's byte offset (`bytes`, parallel to `cells`).
+fn pens(lay: &TextLayout, bytes: &[usize], cells: &[Cell]) -> Vec<Option<Pen>> {
+    // A line's glyphs are laid out in the order they are drawn.
+    let mut at: HashMap<usize, (usize, &PositionedGlyph)> = HashMap::with_capacity(lay.glyphs.len());
+    for (rank, g) in lay.glyphs.iter().enumerate() {
+        at.entry(g.byte).or_insert((rank, g));
+    }
+    bytes
+        .iter()
+        .zip(cells)
+        .map(|(b, c)| {
+            let &(rank, g) = at.get(b)?;
+            let mut start = g.origin.x;
+            if g.rtl {
+                let st = c.final_style();
+                let kern = st.kerning.unwrap_or(0.0) / 1000.0 * st.size * spacing_scale(&st, false);
+                start += finite(kern);
+            }
+            Some(Pen { start, end: g.origin.x + g.advance, rank, rtl: g.rtl })
+        })
+        .collect()
+}
+
+/// The indices of a run's fill and stroke `url(#…)` paints.
+pub(super) type Key = (Option<usize>, Option<usize>);
 type Runs = (Vec<TextRun>, Vec<Key>);
 
 /// Runs (and their paint indices) from the characters, with `breaks` inserted; also the byte offset

@@ -4,7 +4,7 @@ use super::entry::{
     UNNAMED_CHARACTERS_NOTE, max_objects,
 };
 use super::reshaped;
-use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, line_width, mean_scale, paints, round3, same_stroke, stroke_layer};
+use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, mean_scale, paints, round3, same_stroke, stroke_layer, type_stroke};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
     FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
@@ -361,8 +361,9 @@ impl<'p> Builder<'p> {
                     Some(MaskSpec::Mask(m)) => (opacity, Some(m.clone())),
                     None => (opacity, None),
                 };
-                // Isolation only shows with blending inside; knockout with several objects.
-                let isolate = isolate && Node::children_blend(&children, &mut |c| c.blends_through());
+                // Isolation only shows with blending or overprinting inside; knockout with several
+                // objects.
+                let isolate = isolate && (Node::children_blend(&children, &mut |c| c.blends_through()) || children_overprint(&children));
                 let knockout = knockout && children.len() > 1;
                 let plain = opacity >= 0.999 && blend == BlendMode::Normal && mask.is_none() && !isolate && !knockout;
                 if children.is_empty() {
@@ -747,8 +748,15 @@ impl<'p> Builder<'p> {
                 self.opaque.insert(mkey);
                 return None;
             };
-            let mut png = Vec::new();
-            image::GrayImage::from_raw(a.width, a.height, a.data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+            let raw = craft_image_codecs::Image::from_raw(
+                a.width,
+                a.height,
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U8,
+                a.data,
+            )
+            .ok()?;
+            let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
             let blob = ImageBlob::new("image/png", png);
             let k = blob.content_key();
             self.images.insert(k.clone(), blob);
@@ -961,7 +969,7 @@ impl<'p> Builder<'p> {
             }
             None => (None, 1.0),
         };
-        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
         let look = Look {
             font: font_key,
             family: info.family,
@@ -1109,7 +1117,7 @@ impl<'p> Builder<'p> {
         };
         // What the glyph is drawn with as an outline, should its line be kept so.
         let drawn = paint.clone().map(|p| (p, stroke.cloned()));
-        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
         let look = Look {
             font: key,
             family: info.family,
@@ -1182,4 +1190,17 @@ fn visual_glyph_text(text: String) -> String {
     let Some((order, _)) = vectorcraft_text::logical_order(&text) else { return text };
     let chars: Vec<char> = text.chars().collect();
     order.iter().filter_map(|&i| chars.get(i)).collect()
+}
+
+/// Whether a visible fill or stroke among `children` overprints, characters' too, directly or
+/// through children that don't isolate. In an isolated group an overprinting object is drawn on
+/// the group's empty backdrop, so it covers the inks of the art below the group that it does not
+/// paint; without isolation it leaves them.
+fn children_overprint(children: &[Arc<Node>]) -> bool {
+    children.iter().any(|c| {
+        c.visible
+            && (c.appearance.items.iter().any(|i| i.visible() && i.overprint())
+                || matches!(&c.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
+                || (!c.isolate && c.children().is_some_and(|ch| children_overprint(ch))))
+    })
 }

@@ -16,30 +16,34 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
         crate::panels::empty_state(ui, "swatch-book", tl!("No document"), tl!("Open a document to see its swatches."));
         return;
     }
-    let view: View = pstate(ui.ctx(), "swatch-view");
+    let view = app.ui.swatches_view;
     let kind: Kind = pstate(ui.ctx(), "swatch-kind");
     // Top row: proxy at left, list / grid view toggles at right.
     ui.horizontal(|ui| {
         crate::panels::proxy(app, ui, 34.0);
         ui.add_space(ui.available_width() - 58.0);
+        let mut to = None;
         if widgets::icon_button(ui, "dc-list-view", tl!("Show List View"), view.is_list(), 26.0).clicked() {
-            set_pstate(ui.ctx(), "swatch-view", View::SmallList);
+            to = Some(View::SmallList);
         }
         if widgets::icon_button(ui, "dc-grid-view", tl!("Show Thumbnail View"), !view.is_list(), 26.0).clicked() {
-            set_pstate(ui.ctx(), "swatch-view", View::MediumThumb);
+            to = Some(View::MediumThumb);
+        }
+        if let Some(v) = to {
+            app.run("ui.panelView", json!({ "panel": "swatches", "view": v })).ok();
         }
     });
     ui.add_space(4.0);
     // A recent colour paints the active proxy (Alt: the inactive one), as a swatch does, and
     // becomes the Color Guide's base color. The panel menu's Show Recent Colors hides the row.
-    if app.ui.swatches_show_recent_colors {
-        if let Some(c) = crate::panels::recent_colors_row(app, ui) {
-            crate::panels::color_guide::choose_base(app, c);
-            crate::panels::apply_click(app, ui, json!({"color": crate::panels::color_json(&c)}));
-        }
-        widgets::divider(ui);
+    // Neither the row nor the list has a visible heading (#8041): the list sits under the row, or
+    // under the proxy row while the row is hidden.
+    if app.ui.swatches_show_recent_colors
+        && let Some(c) = crate::panels::recent_colors_row(app, ui, false)
+    {
+        crate::panels::color_guide::choose_base(app, c);
+        crate::panels::apply_click(app, ui, json!({"color": crate::panels::color_json(&c)}));
     }
-    widgets::subheader(ui, tl!("Swatch Tiles"));
     let query = if pstate(ui.ctx(), "swatch-show-find") { widgets::search_field(ui, find_id(), tl!("Find")) } else { String::new() };
     let items = entries(app, kind, &query);
     let active_swatch = kept_swatch(app, ui, active_swatch(app));
@@ -48,14 +52,20 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
     // Without a selection the swatch of the active paint is highlighted.
     let fallback: Vec<String> = if selected.is_empty() { active_swatch.into_iter().collect() } else { vec![] };
     let sel = if selected.is_empty() { &fallback } else { &selected };
-    let lit = app.session.active().map(|st| highlighted(&st.doc, sel)).unwrap_or_default();
-    let is_sel = |name: &str| lit.contains(&name);
+    let lit: Vec<String> = app.session.active().map(|st| highlighted(&st.doc, sel).into_iter().map(str::to_string).collect()).unwrap_or_default();
+    let is_sel = |name: &str| lit.iter().any(|n| n == name);
     let mut ev = TileEvents::default();
     // In a sized panel the list fills the space above the footer (#1638), as the Artboards list
     // does; elsewhere it keeps its 150 pt (200 pt for large thumbnails).
     let fixed = widgets::panel_footer_bottom(ui).is_some();
     let list_height = widgets::panel_list_height(ui, if view == View::LargeThumb { 200.0 } else { 150.0 }, 2.0 + ui.spacing().item_spacing.y);
     widgets::list_box(ui, |ui| {
+        // Screen readers read the box that holds the tiles as the "Swatch Tiles" list, with the
+        // box's bounds set below once the tiles are laid out.
+        ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_role(egui::accesskit::Role::List);
+            node.set_label(tl!("Swatch Tiles"));
+        });
         let scroll = egui::ScrollArea::vertical()
             .id_salt("swatch-scroll")
             .max_height(list_height)
@@ -80,6 +90,7 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                         Entry::Folder(_) => draw_folder(ui, chip),
                     }
                     list_row_name(ui, r, chip, crate::i18n::t_name("swatch", name));
+                    super::item_context_menu(app, ui, &resp, e);
                     tile_input(ui, resp, e, &items, sel, true, &mut ev);
                 }
             } else {
@@ -100,12 +111,17 @@ pub(super) fn body(app: &mut VectorcraftApp, ui: &mut Ui, salt: &'static str) {
                         }
                         Entry::Folder(_) => folder_tile(ui, cell, is_sel(name)),
                     }
+                    super::item_context_menu(app, ui, &resp, e);
                     tile_input(ui, resp, e, &items, sel, false, &mut ev);
                 }
             }
         });
         let zone = ui.interact(out.inner_rect, ui.scope_id().with("swatch-drop"), Sense::hover());
         zone_input(ui, &zone, &mut ev);
+        let r = ui.min_rect();
+        ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_bounds(egui::accesskit::Rect { x0: r.min.x.into(), y0: r.min.y.into(), x1: r.max.x.into(), y1: r.max.y.into() });
+        });
     });
     match ev.edit {
         Some(Entry::Folder(g)) => edit_group(app, &g),

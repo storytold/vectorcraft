@@ -21,9 +21,10 @@
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
 //! - Names: an `/ArtDictionary` after an object, its `AI10_ArtUID` the name's XML id.
 //! - Artboards: the `ArtboardArray` of the `/Document` dictionary, with each one's display
-//!   options, else `%AI3_Cropmarks`, else the art size around the template box's centre
-//!   (`%AI3_TemplateBox`, `%%TemplateBox` in older files), else (a file in the legacy format
-//!   another app wrote) the bounding box.
+//!   options, else `%AI3_Cropmarks`, else the art size (`%AI5_ArtSize`; VectorCraft's own default,
+//!   US Letter, in a `.ai` of versions 3 and 4, which don't give it) around the template box's center (`%AI3_TemplateBox`,
+//!   `%%TemplateBox` in older files), which the version 7 specification (§2.2) puts at the
+//!   artboard's center, else (a file in the legacy format another app wrote) the bounding box.
 //! - Document settings: Document Raster Effects Settings from the `/Document` dictionary's
 //!   `AI Auto Rasterize`; the author from the header's `%%For`; swatches for the custom colors of
 //!   `%%CMYKCustomColor` and `%%RGBCustomColor` that the document has none of.
@@ -102,8 +103,10 @@
 //!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
 //!   ty /RTransformMatrix ;`, the matrix taking the symbol's art to art space; in a symbol's art,
 //!   it takes it to art space about the canvas point of art space's origin, as a pattern's
-//!   gradients are. Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after
-//!   it.
+//!   gradients are. Files of versions 10 to 13 write `a b c d tx ty /TransformMatrix` instead,
+//!   the matrix taking the symbol's art to the canvas (y down, art space's origin at the canvas
+//!   point the template box gives); in a symbol's art, it takes the art to that symbol's space.
+//!   Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after it.
 //!
 //! Sections the reader doesn't need (styles, filters) are skipped; type, instances of symbols it
 //! can't read, fills with a pattern it can't read, placed files without a preview and operators
@@ -153,9 +156,10 @@ use graph::Graph;
 pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
+pub(crate) use types::BLEND_BUDGET;
 pub(crate) use types::MAX_NODES;
 pub use types::PlacedPage;
-use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
+use types::{BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -215,6 +219,9 @@ pub struct Structure {
     pub text_patterns: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
+    /// The data's symbols are at their own size, whatever its scale: VectorCraft wrote it (its
+    /// `%%Creator` is [`crate::ai_editing::CREATOR_TEXT`]).
+    pub symbols_own_size: bool,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
     /// id two objects have.
     pub xml_ids: HashMap<String, Option<NodeId>>,
@@ -268,12 +275,28 @@ pub(crate) fn read_over_page(data: &[u8], large_canvas: bool, names: NameEncodin
     read_with(data, large_canvas, true, names)
 }
 
-fn read_with(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+/// [`read_in`] (or [`read_over_page`] when `page_art`) for the program of a `.ai` in the legacy
+/// format: one of versions 3 and 4 that has a template box but no art size has a US Letter
+/// artboard ([`Reader::sized_board`]).
+pub(crate) fn read_program(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
     let mut r = Reader::with_names(data, names);
-    r.large_canvas = large_canvas.then_some(1.0);
-    r.page_art = page_art;
-    r.run()?;
-    r.finish()
+    r.legacy_ai = true;
+    r.read_as(large_canvas, page_art)
+}
+
+fn read_with(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+    Reader::with_names(data, names).read_as(large_canvas, page_art)
+}
+
+impl Reader<'_> {
+    /// The structure read, the declared large canvas scale applied when `large_canvas`, the page's
+    /// art replacing the objects not read when `page_art` ([`read_over_page`]).
+    fn read_as(mut self, large_canvas: bool, page_art: bool) -> Result<Structure, String> {
+        self.large_canvas = large_canvas.then_some(1.0);
+        self.page_art = page_art;
+        self.run()?;
+        self.finish()
+    }
 }
 
 /// How many objects [`read`] counts against [`MAX_NODES`] in the editing data `data`.
@@ -559,6 +582,10 @@ struct Reader<'a> {
     blend_budget: usize,
     /// The group on `%_` lines an envelope's dictionary just took (see [`Reader::drop_envelope_art`]).
     envelope_art: Option<Node>,
+    /// The envelope dictionaries whose `AIDeformArtKey` block (`X=` … `X+`) is being read, as how
+    /// many frames were open with each one innermost, innermost last. The block's art is art: a
+    /// dictionary in it is read as it is in a container ([`Reader::end_obj`]).
+    envelope_blocks: Vec<usize>,
     /// Envelopes waiting for their drawn art, innermost last.
     envelopes: Vec<PendingEnvelope>,
     /// How many more envelopes and warped text objects this import may draw to check
@@ -599,6 +626,10 @@ struct Reader<'a> {
     compound_groups: HashSet<NodeId>,
     /// Groups of a text object and its look (see [`Self::style_marker`]), which aren't a look.
     text_looks: HashSet<NodeId>,
+    /// Objects followed by samples of the pen (`(…) Xt n XD`), which aren't read: such an object
+    /// whose style has a Calligraphic brush that varies with the pen keeps its drawn look (see
+    /// [`Self::style_marker`]).
+    pen_samples: HashSet<NodeId>,
     /// The gradient mesh being read (`/Mesh X!` … `/End X!`), and whether it started on a `%_` line.
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
@@ -636,6 +667,11 @@ struct Reader<'a> {
     /// The artboard's size and centre in files without artboards or crop marks.
     art_size: Option<(f64, f64)>,
     template_center: Option<(f64, f64)>,
+    /// The data is the program of a `.ai` in the legacy format ([`read_program`]), not an EPS's:
+    /// without an art size, its artboard can be US Letter ([`Reader::sized_board`]).
+    legacy_ai: bool,
+    /// The header has `%AI5_FileFormat`, which files of version 5 and later write.
+    file_format: bool,
     /// `%AI24_LargeCanvasScale`: a Large Canvas document's editing data is written at 1/N scale
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
@@ -644,6 +680,8 @@ struct Reader<'a> {
     page_art: bool,
     /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
     canvas_scale: f64,
+    /// [`Structure::symbols_own_size`], from the header's `%%Creator`.
+    symbols_own_size: bool,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -780,6 +818,7 @@ impl<'a> Reader<'a> {
             blend_record: None,
             blend_budget: BLEND_BUDGET,
             envelope_art: None,
+            envelope_blocks: Vec::new(),
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
@@ -791,6 +830,7 @@ impl<'a> Reader<'a> {
             ruler_guides: HashMap::new(),
             compound_groups: HashSet::new(),
             text_looks: HashSet::new(),
+            pen_samples: HashSet::new(),
             group_ended: false,
             mesh_ended: false,
             layer_state: None,
@@ -815,9 +855,12 @@ impl<'a> Reader<'a> {
             xml_id_bytes: 0,
             art_size: None,
             template_center: None,
+            legacy_ai: false,
+            file_format: false,
             large_canvas: None,
             page_art: false,
             canvas_scale: 1.0,
+            symbols_own_size: false,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),

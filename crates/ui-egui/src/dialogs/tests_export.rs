@@ -80,7 +80,24 @@ fn png_options_draw_and_export_with_the_chosen_options() {
     assert_eq!(png[28], 1, "interlaced");
     let phys = png.windows(4).position(|w| w == b"pHYs").unwrap();
     assert_eq!(&png[phys + 4..phys + 8], ((200.0f64 / 0.0254).round() as u32).to_be_bytes());
-    let img = image::load_from_memory(&png).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (167, 111), "60 × 40 pt at 200 ppi");
     assert_eq!(img.get_pixel(0, 0).0, [0x20, 0x40, 0x80, 255]);
     // JPEG Options: quality, and no transparent background.
@@ -112,7 +129,28 @@ fn export_as_png_picks_the_file_then_shows_png_options() {
 fn export_as_png_exports_the_active_artboard() {
     let (mut app, written) = app(2);
     // The ellipse is on the first artboard; the second is empty.
-    let opaque = |bytes: &[u8]| image::load_from_memory(bytes).unwrap().to_rgba8().pixels().any(|p| p.0[3] > 0);
+    let opaque = |bytes: &[u8]| {
+        craft_image_codecs::decode(bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .pixels()
+            .any(|p| p.0[3] > 0)
+    };
     app.view_mut().unwrap().artboard = 1;
     app.run("file.export.png", json!({})).unwrap();
     assert_eq!(app.ui.dialog.as_ref().unwrap().fields["artboard"], json!(1));
@@ -165,7 +203,24 @@ fn export_as_with_a_range_then_png_options_writes_one_file_per_artboard() {
     assert_eq!(names(&written), ["/out/Untitled-1-Artboard-1.png", "/out/Untitled-1-Artboard-3.png"]);
     let png = &written.borrow()[0].1;
     assert_eq!(png[28], 1, "interlaced");
-    let img = image::load_from_memory(png).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (120, 80), "144 ppi");
     assert!(img.pixels().all(|p| p[3] == 0 || p[3] == 255), "no anti-aliasing");
 }
@@ -256,7 +311,24 @@ fn jpeg_and_webp_options_draw_and_export() {
     set(&mut app, "quality", json!(70));
     frame(&mut app);
     assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.jpg");
-    let img = image::load_from_memory(&written.borrow()[0].1).unwrap().to_rgb8();
+    let img = craft_image_codecs::decode(&written.borrow()[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8();
     assert_eq!(img.dimensions(), (30, 20));
     let px = img.get_pixel(0, 0);
     assert!(px[2] > 100 && px[0] < 60, "the background colour: {px:?}");
@@ -271,7 +343,27 @@ fn jpeg_and_webp_options_draw_and_export() {
     confirm(&mut app).unwrap();
     let (path, bytes) = written.borrow().last().cloned().unwrap();
     assert_eq!(path, "/out/Untitled-1.webp", "one artboard is one file, named as picked");
-    assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 30);
+    assert_eq!(
+        craft_image_codecs::decode(&bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .width(),
+        30
+    );
 }
 
 #[test]
@@ -302,6 +394,23 @@ fn nothing_to_export_keeps_export_as_open_before_the_save_dialog() {
     confirm(&mut app).unwrap();
     assert_eq!(kind(&app), Some("pngOptions"));
     assert!(written.borrow().is_empty());
+}
+
+/// Art that a plot leaves out (here at 0% opacity) is nothing to export as HP-GL of the art's
+/// bounds, before the save dialog; other formats still export it.
+#[test]
+fn art_a_plot_leaves_out_keeps_hpgl_export_as_open_before_the_save_dialog() {
+    let (mut app, _) = app(1);
+    app.services.pick_save = Some(Box::new(|_: &crate::FilePick| panic!("no save dialog without art the plot draws")));
+    app.run("select.all", json!({})).unwrap();
+    app.run("transparency.set", json!({"opacity": 0})).unwrap();
+    app.run("file.exportAs", json!({"format": "hpgl"})).unwrap();
+    assert!(confirm(&mut app).unwrap_err().contains("no visible art"));
+    assert_eq!(kind(&app), Some("exportAs"));
+    app.services.pick_save = Some(Box::new(|p: &crate::FilePick| Some(format!("/out/{}", p.name))));
+    set(&mut app, "format", json!("png"));
+    confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some("pngOptions"));
 }
 
 #[test]

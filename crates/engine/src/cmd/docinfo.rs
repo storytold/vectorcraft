@@ -344,44 +344,9 @@ fn spot_swatches(d: &Document) -> HashSet<&str> {
     first.into_iter().filter(|&(name, spot)| spot && name != vectorcraft_color::swatch::REGISTRATION).map(|(name, _)| name).collect()
 }
 
-/// Which of gradient `g`'s stops color some part of it that draws, by the stretches
-/// [`vectorcraft_color::Gradient::sample`] mixes in, for stops in any order: the pair of stop `k`
-/// and stop `k + 1` covers the offsets above every offset of stops `0..=k` up to stop `k + 1`'s,
-/// and both its stops count when that stretch has positive width and either stop is above opacity
-/// 0. The first stop also counts when it is above opacity 0, since it colors the offsets up to its
-/// own, and so does the last stop, since it colors the offsets above every stop's. Any other stop,
-/// opaque or not, counts only through a pair: a stop out of order whose pairs have no width
-/// (another stop before it reaches past both ends) colors nothing. A freeform gradient draws from
-/// its points, so each of its stops counts while any stop is above opacity 0.
-fn drawn_stops(g: &vectorcraft_color::Gradient) -> Vec<bool> {
-    let stops = &g.stops;
-    if g.kind == vectorcraft_color::GradientKind::Freeform {
-        let any = stops.iter().any(|s| s.opacity > 0.0);
-        return vec![any; stops.len()];
-    }
-    let mut drawn = vec![false; stops.len()];
-    if let (Some(first), Some(d)) = (stops.first(), drawn.first_mut()) {
-        *d = first.opacity > 0.0;
-    }
-    if let (Some(last), Some(d)) = (stops.last(), drawn.last_mut()) {
-        *d |= last.opacity > 0.0;
-    }
-    // `f32::max` skips a NaN offset, which the sampler never picks either.
-    let mut reach = f32::NEG_INFINITY;
-    for k in 0..stops.len().saturating_sub(1) {
-        reach = reach.max(stops[k].offset);
-        let (a, b) = (&stops[k], &stops[k + 1]);
-        if b.offset > reach && (a.opacity > 0.0 || b.opacity > 0.0) {
-            drawn[k] = true;
-            drawn[k + 1] = true;
-        }
-    }
-    drawn
-}
-
 /// The spot colors paint `p` prints (`spots`: [`spot_swatches`]): the spot swatch a solid color is
-/// linked to, or those a gradient's drawn stops ([`drawn_stops`]) are linked to, each once, in the
-/// order of the stops. A link at a tint of 0 prints no ink, a stop that colors only parts of a
+/// linked to, or those a gradient's drawn stops ([`vectorcraft_color::Gradient::drawn_stops`]) are
+/// linked to, each once, in the order of the stops. A link at a tint of 0 prints no ink, a stop that colors only parts of a
 /// gradient at an opacity of 0 prints none, and a color that only looks like a spot color is not
 /// linked to one.
 fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
@@ -398,7 +363,7 @@ fn spot_labels(spots: &HashSet<&str>, p: &Paint) -> Vec<String> {
     match p {
         Paint::Solid { swatch, tint, .. } => add(swatch, *tint),
         Paint::Gradient(g) => {
-            let drawn = drawn_stops(&g.gradient);
+            let drawn = g.gradient.drawn_stops();
             g.gradient.stops.iter().zip(drawn).filter(|&(_, d)| d).for_each(|(s, _)| add(&s.swatch, s.tint));
         }
         _ => {}
@@ -892,14 +857,12 @@ mod tests {
         let mut s = Session::new();
         s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
         let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
-        s.execute(
-            "paint.setFill",
-            &json!({"gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]}}),
-        )
-        .unwrap();
+        let gradient = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("paint.setFill", &json!({"gradient": gradient})).unwrap();
         let t = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        // New type starts black (#7975); filled with the gradient, its characters make it a gradient object too.
+        s.execute("paint.setFill", &json!({"gradient": gradient, "ids": [t]})).unwrap();
         let i = s.execute("document.info", &json!({})).unwrap();
-        // The type's characters take the current gradient fill, so it is a gradient object too.
         assert_eq!(
             (i["objects"]["paths"].as_u64(), i["objects"]["textObjects"].as_u64(), i["objects"]["gradients"].as_u64()),
             (Some(1), Some(1), Some(2))
@@ -1535,9 +1498,41 @@ mod tests {
         s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
         s.execute("swatch.new", &json!({"name": "Ink", "color": {"model": "cmyk", "c": 0, "m": 1, "y": 1, "k": 0}, "spot": true})).unwrap();
         let mut bytes = Vec::new();
-        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
-            .unwrap();
+        {
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| bytes.extend_from_slice(&__b))
+        }
+        .unwrap();
         let image = s
             .edit("Place", |d, sel| {
                 d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));
@@ -1662,39 +1657,6 @@ mod tests {
         assert!(!["Far", "Edge", "Seam"].iter().any(|n| text.contains(n)), "{text}");
     }
 
-    /// A gradient's stops print where they color a stretch that draws, for stops in any order: the
-    /// sampler mixes stop `k` with stop `k + 1` above every offset of the stops before it, so an
-    /// out-of-order stop's pair can have no width.
-    #[test]
-    fn drawn_stops_follow_the_sampled_stretches() {
-        use vectorcraft_color::{Color, Gradient, GradientKind, GradientStop};
-        let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::BLACK) };
-        let g = |stops: Vec<GradientStop>| Gradient::new(GradientKind::Linear, stops);
-        // In order: the clear stop next to the opaque one, not the one after it.
-        assert_eq!(drawn_stops(&g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)])), vec![true, true, false]);
-        // Out of order: the pair (0.8, 0.3) has no width, so the clear stop at 0.3 mixes only with
-        // the clear stop at 0.8 before it, and the pair (0.3, 1.0) is sampled above 0.8.
-        assert_eq!(drawn_stops(&g(vec![stop(0.0, 0.0), stop(0.8, 0.0), stop(0.3, 0.0), stop(1.0, 1.0)])), vec![false, false, true, true]);
-        // An opaque stop out of order: the pairs (0, 0.8) and (0.7, 1) cover every offset, so the
-        // pairs next to the stop at 0.3 have no width and it colors nothing.
-        let out_of_order = |o: f32| g(vec![stop(0.0, 0.0), stop(0.8, o), stop(0.3, 1.0), stop(0.7, 0.0), stop(1.0, 0.0)]);
-        assert_eq!(drawn_stops(&out_of_order(0.0)), vec![false; 5]);
-        // With the stop at 0.8 opaque, the pairs next to it with width are drawn.
-        assert_eq!(drawn_stops(&out_of_order(1.0)), vec![true, true, false, false, false]);
-        // The last stop colors the offsets above every stop's, even when it is out of order.
-        assert_eq!(drawn_stops(&g(vec![stop(0.0, 0.0), stop(0.6, 0.0), stop(0.5, 1.0)])), vec![false, false, true]);
-        // The first stop colors the offsets up to its own.
-        assert_eq!(drawn_stops(&g(vec![stop(0.0, 1.0), stop(0.0, 0.0), stop(1.0, 0.0)])), vec![true, false, false]);
-        // One stop, every stop clear, and no stops at all.
-        assert_eq!(drawn_stops(&g(vec![stop(0.5, 1.0)])), vec![true]);
-        assert_eq!(drawn_stops(&g(vec![stop(0.0, 0.0), stop(1.0, 0.0)])), vec![false, false]);
-        assert!(drawn_stops(&g(vec![])).is_empty());
-        // A freeform gradient draws from its points: its stops count while any is above opacity 0.
-        let mut free = g(vec![stop(0.0, 1.0), stop(0.5, 0.0), stop(1.0, 0.0)]);
-        free.kind = GradientKind::Freeform;
-        assert_eq!(drawn_stops(&free), vec![true, true, true]);
-    }
-
     /// Brushes, Spot Color Objects, Pattern Objects and Gradient Objects leave out a hidden object,
     /// an object at an opacity of 0 and the objects inside a hidden layer or a group at an opacity of
     /// 0, with Selection Only too: their fills, strokes, characters and colorized pixels paint no
@@ -1725,9 +1687,41 @@ mod tests {
         s.execute("paint.setStroke", &json!({"ids": [word], "none": true})).unwrap();
         // A grayscale image colorized with the spot color.
         let mut bytes = Vec::new();
-        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap())
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
-            .unwrap();
+        {
+            let __dyn: image::DynamicImage = image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap());
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| bytes.extend_from_slice(&__b))
+        }
+        .unwrap();
         let image = s
             .edit("Place", |d, sel| {
                 d.images.insert("gray".into(), vectorcraft_doc::ImageBlob::png(bytes));

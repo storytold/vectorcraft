@@ -61,6 +61,32 @@ fn file_ends_with_exit() {
     assert!(matches!(last, Item::Cmd("Exit", "app.quit", _)), "{last:?}");
 }
 
+/// Help starts with Search Commands…, the command search's own command, showing its shortcut,
+/// then a separator; the menus list it once.
+#[test]
+fn help_starts_with_search_commands() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let tree = menu_tree();
+    let (_, help) = tree.iter().find(|(t, _)| *t == "Help").unwrap();
+    assert!(matches!(help[0], Item::Cmd("Search Commands…", "help.commandPalette", _)), "{:?}", help[0]);
+    assert!(matches!(help[1], Item::Sep), "{:?}", help[1]);
+    let Some(Entry::Item(row)) = entry(&app, &help[0]) else { panic!("Search Commands… is not shown") };
+    assert!(row.enabled);
+    assert_eq!(row.shortcut, shortcut_of("help.commandPalette"));
+    assert!(row.shortcut.is_some(), "the search's shortcut shows next to the item");
+    fn count(items: &[Item]) -> usize {
+        items
+            .iter()
+            .map(|it| match it {
+                Item::Cmd(_, "help.commandPalette", _) => 1,
+                Item::Sub(_, children) => count(children),
+                _ => 0,
+            })
+            .sum()
+    }
+    assert_eq!(tree.iter().map(|(_, items)| count(items)).sum::<usize>(), 1);
+}
+
 /// No application menu in the window (as in Illustrator): the bar starts at File.
 #[test]
 fn the_bar_starts_at_file() {
@@ -1006,6 +1032,57 @@ fn expand_appearance_is_an_object_menu_item_only() {
     let paths: Vec<Vec<String>> =
         menu_entries(&app).into_iter().filter(|e| e.command.as_deref() == Some("effect.expandAppearance")).map(|e| e.path).collect();
     assert_eq!(paths, [vec!["Object".to_string()]]);
+}
+
+/// Object › Distribute follows Object › Align and lists the Align panel's Distribute Objects and
+/// Distribute Spacing buttons, each item running the button's command: dimmed with nothing
+/// selected, spacing three objects evenly, and with a key object sending the Distribute Spacing value.
+#[test]
+fn object_distribute_runs_the_distribute_buttons() {
+    let object = menu_tree().into_iter().find(|(t, _)| *t == "Object").map(|(_, items)| items).unwrap_or_default();
+    let subs: Vec<&str> = object.iter().filter_map(|it| if let Item::Sub(l, _) = it { Some(*l) } else { None }).collect();
+    let align = subs.iter().position(|l| *l == "Align").unwrap_or_else(|| panic!("Object › Align: {subs:?}"));
+    assert_eq!(subs.get(align + 1), Some(&"Distribute"), "{subs:?}");
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let items = |app: &VectorcraftApp| -> Vec<MenuEntry> { menu_entries(app).into_iter().filter(|e| e.path == ["Object", "Distribute"]).collect() };
+    let listed: Vec<(String, Option<String>)> = items(&app).into_iter().map(|e| (e.label, e.command)).collect();
+    let expected: Vec<(String, Option<String>)> = [
+        ("Horizontal Distribute Left", "align.distributeHorizontalLeft"),
+        ("Horizontal Distribute Center", "align.distributeHorizontalCenter"),
+        ("Horizontal Distribute Right", "align.distributeHorizontalRight"),
+        ("Vertical Distribute Top", "align.distributeVerticalTop"),
+        ("Vertical Distribute Center", "align.distributeVerticalCenter"),
+        ("Vertical Distribute Bottom", "align.distributeVerticalBottom"),
+        ("Horizontal Distribute Space", "align.distributeHorizontalSpace"),
+        ("Vertical Distribute Space", "align.distributeVerticalSpace"),
+    ]
+    .into_iter()
+    .map(|(l, id)| (l.to_string(), Some(id.to_string())))
+    .collect();
+    assert_eq!(listed, expected);
+    assert!(items(&app).iter().all(|e| !e.enabled), "nothing selected");
+    let ids: Vec<Value> = [0, 30, 100]
+        .into_iter()
+        .map(|x| app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone())
+        .collect();
+    app.run("select.set", json!({"ids": ids})).unwrap();
+    let lefts = |app: &VectorcraftApp| -> Vec<f64> {
+        let doc = &app.session.active().unwrap().doc;
+        ids.iter().map(|id| doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0).collect()
+    };
+    let click = |app: &mut VectorcraftApp, label: &str| {
+        let e = items(app).into_iter().find(|e| e.label == label).unwrap_or_else(|| panic!("{label}"));
+        assert!(e.enabled, "{label}");
+        let (id, p) = click_target(&e.label, e.command.as_deref().unwrap_or_default(), &e.params);
+        invoke(app, &id, p);
+    };
+    click(&mut app, "Horizontal Distribute Left");
+    assert_eq!(lefts(&app), [0.0, 50.0, 100.0], "{}", app.ui.status);
+    app.ui.align_spacing = 5.0;
+    app.run("select.key", json!({"id": ids[0]})).unwrap();
+    click(&mut app, "Horizontal Distribute Space");
+    assert_eq!(lefts(&app), [0.0, 15.0, 30.0], "{}", app.ui.status);
 }
 
 /// Isolation keeps the Lock and Hide actions available for selected members.

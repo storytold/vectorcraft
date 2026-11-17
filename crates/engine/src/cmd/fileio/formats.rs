@@ -206,11 +206,15 @@ const LOSSLESS: FormatOption = FormatOption {
     name: "lossless",
     ty: "boolean",
     default: "true",
-    description: "lossless WebP; false asks for lossy, which isn't available yet (written lossless, with a warning)",
+    description: "lossless WebP (every pixel kept exactly); false writes lossy WebP at quality: a smaller file that loses some detail",
 };
 
-const WEBP_QUALITY: FormatOption =
-    FormatOption { name: "quality", ty: "integer", default: "90", description: "lossy quality 0–100 (for when lossy WebP is available)" };
+const WEBP_QUALITY: FormatOption = FormatOption {
+    name: "quality",
+    ty: "integer",
+    default: "90",
+    description: "lossy WebP quality 0–100 (with lossless false; higher keeps more detail in a larger file; more than 100 is refused)",
+};
 
 /// The options of the palette formats (PNG-8, GIF).
 const PALETTE_OPTIONS: &[FormatOption] = &[
@@ -308,7 +312,7 @@ const PSD_LAYERS: FormatOption = FormatOption {
     name: "layers",
     ty: "boolean",
     default: "true",
-    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent",
+    description: "write layers: each top-level layer a pixel layer with its opacity and blend mode (a background colour is a Background layer); false: one flat image, on white where transparent. The user and object slices are written either way",
 };
 
 const MAX_EDITABILITY: FormatOption = FormatOption {
@@ -316,6 +320,13 @@ const MAX_EDITABILITY: FormatOption = FormatOption {
     ty: "boolean",
     default: "false",
     description: "with layers: layers and sublayers become groups and every object a layer of its own, named as the Layers panel names it (text by its text); clipping, masked or knockout layers stay one layer",
+};
+
+const PRESERVE_TEXT: FormatOption = FormatOption {
+    name: "preserveText",
+    ty: "boolean",
+    default: "false",
+    description: "with layers: horizontal and vertical point type in solid colors, with left-to-right paragraphs that set only their alignment, without strokes, effects or an appearance of its own, becomes editable type layers (with their pixels); a layer holding such type becomes a group of its type layers and pixel layers of the art between them, unless other art in it blends in a mode other than normal; refused with layers: false",
 };
 
 const PSD_HIDDEN_LAYERS: FormatOption = FormatOption {
@@ -339,6 +350,7 @@ const PSD_OPTIONS: &[FormatOption] = &[
     ANTI_ALIAS,
     COLOR_MODEL,
     PSD_LAYERS,
+    PRESERVE_TEXT,
     MAX_EDITABILITY,
     PSD_HIDDEN_LAYERS,
     EMBED_ICC,

@@ -287,9 +287,7 @@ fn apply_color_mask(s: &mut Session, p: &Value) -> Result<Value> {
 /// The size in pixels of masked pixels `blob` (from its header), or the object's when it can't be
 /// read.
 fn mask_size(blob: Option<&ImageBlob>, width: u32, height: u32) -> (u32, u32) {
-    blob.and_then(|b| image::ImageReader::new(std::io::Cursor::new(b.bytes.as_slice())).with_guessed_format().ok()?.into_dimensions().ok())
-        .filter(|(w, h)| *w > 0 && *h > 0)
-        .unwrap_or((width, height))
+    blob.and_then(|b| b.pixel_size()).filter(|(w, h)| *w > 0 && *h > 0).unwrap_or((width, height))
 }
 
 /// The mask of image node `n` made again for the image's own pixels, with the masked pixels when
@@ -320,7 +318,8 @@ fn fresh(doc: &Document, n: &Node, cmd: &str) -> Option<Result<(ColorMask, Optio
 
 /// After an edit from `before` (`None`: everything is new, as after a document's links are read):
 /// the color masks of images in `doc`'s art ([`Document::art_roots`]: layers, symbols, graph
-/// designs, patterns and the original of the pattern being edited, opacity mask art included)
+/// designs, patterns, the original of the pattern being edited and the art of the stored brushes
+/// while it is set on the document, opacity mask art included)
 /// whose own pixels were replaced are made again for the new pixels ([`Refresh::made`]). Only the
 /// art that changed since `before` is looked at.
 pub(crate) fn refresh(before: Option<&Document>, doc: &mut Document) {

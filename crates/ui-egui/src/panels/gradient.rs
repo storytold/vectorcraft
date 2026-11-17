@@ -601,7 +601,7 @@ fn thumbnail(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: 
     let dresp = dresp.on_hover_text(tl!("Gradient swatches"));
     egui::Popup::menu(&dresp).show(|ui| {
         widgets::menu_scroll(ui, |ui| {
-            ui.set_min_width(200.0);
+            widgets::menu_min_width(ui, 200.0);
             let mut chosen = None;
             let swatches = gradient_swatches(app);
             if swatches.is_empty() {
@@ -815,7 +815,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool, w: f
     let add_resp = ui.interact(below, ui.scope_id().with("grad-add"), Sense::click());
     let bar_resp = ui.interact(bar, ui.scope_id().with("grad-bar"), Sense::click());
     if add_resp.hovered() && is_grad {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
+        crate::cursors::set_add_cursor(app, ui.ctx());
     }
     if !is_grad && (bar_resp.clicked() || add_resp.clicked()) {
         edit(app, json!({}), Live::Released);

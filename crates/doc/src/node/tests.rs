@@ -24,6 +24,7 @@ fn extras_are_written_flat_in_order() {
         e.envelope_edit_margin = Some([0.5, 0.5, 0.25, 0.25]);
         e.pixel_aligned = true;
         e.warp_piece = true;
+        e.clip_pieces = true;
     }
     /// The top-level keys of a JSON object, in the order written.
     struct Keys(Vec<String>);
@@ -71,11 +72,13 @@ fn extras_are_written_flat_in_order() {
         "envelope_edit_margin",
         "pixel_aligned",
         "warp_piece",
+        "clip_pieces",
     ];
     assert_eq!(keys, order);
     assert_eq!(v["shape_mode"], "exclude");
     assert_eq!(v["pixel_aligned"], true);
     assert_eq!(v["warp_piece"], true);
+    assert_eq!(v["clip_pieces"], true);
     assert_eq!(serde_json::from_value::<Node>(v).unwrap(), n);
     let plain = Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 4.0, 2.0)), Appearance::default_art());
     let back: Node = serde_json::from_value(serde_json::to_value(&plain).unwrap()).unwrap();
@@ -801,4 +804,32 @@ fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
     group.map_ruler_guide_positions(&mut |_, _| calls += 1);
     assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
     assert_eq!(calls, 0);
+}
+
+/// `try_walk` visits in `walk`'s order and visits nothing after the node that breaks it: not its
+/// children, its later siblings or its ancestors' later siblings.
+#[test]
+fn try_walk_ends_at_the_break() {
+    use std::ops::ControlFlow;
+    let leaf = |id| Arc::new(Node::group(NodeId(id), vec![]));
+    let inner = Node::group(NodeId(2), vec![leaf(3), leaf(4), leaf(5)]);
+    let root = Node::group(NodeId(1), vec![Arc::new(inner), leaf(6), leaf(7)]);
+    let mut all = vec![];
+    root.walk(&mut |n| all.push(n.id));
+    let mut seen = vec![];
+    assert_eq!(
+        root.try_walk(&mut |n| {
+            seen.push(n.id);
+            ControlFlow::<()>::Continue(())
+        }),
+        ControlFlow::Continue(())
+    );
+    assert_eq!(seen, all, "without a break it visits what walk visits, in the same order");
+    seen.clear();
+    let flow = root.try_walk(&mut |n| {
+        seen.push(n.id);
+        if n.id == NodeId(3) { ControlFlow::Break(n.id) } else { ControlFlow::Continue(()) }
+    });
+    assert_eq!(flow, ControlFlow::Break(NodeId(3)));
+    assert_eq!(seen, [NodeId(1), NodeId(2), NodeId(3)]);
 }

@@ -37,10 +37,12 @@ pub(super) fn body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let id = d.str("__effect");
             let defaults = vectorcraft_effects::default_params(&id).unwrap_or(json!({}));
-            // Reset all resets the shape, view and light; the mapped graphics stay.
+            // Reset all resets the shape, view and light; the mapped graphics and the render
+            // settings stay.
             let defaults = match defaults {
                 Value::Object(mut m) => {
                     m.remove(vectorcraft_effects::GRAPHICS);
+                    m.remove(vectorcraft_effects::RENDER);
                     Value::Object(m)
                 }
                 other => other,
@@ -118,7 +120,7 @@ pub(crate) fn controls(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
     number(ui, d, "offset", tl!("Offset"), (0.0, 100000.0), "", 1, Some(unit));
     ui.horizontal(|ui| {
         let cap = flag(d, "cap", true);
-        let tip = tl!("Close the circular ends of open profiles. Partial sweeps keep their cut sides open.");
+        let tip = tl!("Close the circular ends of open profiles. Partial sweeps also close their cut sides.");
         if widgets::check3_tip(ui, c3("Cap"), cap, true, tip) {
             d.fields.insert("cap".into(), json!(cap != Some(true)));
         }
@@ -246,7 +248,7 @@ fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     number(ui, d, "taper", tl!("Taper"), (1.0, 100.0), "%", 1, None);
     choice(ui, d, "cap", c3("Cap"), &[(json!(true), c3("Solid")), (json!(false), c3("Hollow"))]);
     ui.add_space(10.0);
-    heading(ui, c3("Bevel"));
+    bevel_heading(ui, d);
     let shapes: Vec<(Value, &str)> =
         super::effect::own_choices(EXTRUDE, "bevel", false).unwrap_or_default().into_iter().map(|(label, value)| (json!(value), label)).collect();
     choice(ui, d, "bevel", tl!("Bevel Shape"), &shapes);
@@ -260,7 +262,55 @@ fn extrude_controls(ui: &mut egui::Ui, d: &mut Dialog, unit: Unit) {
     });
 }
 
-/// Rotation presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate.
+/// Extrude & Bevel's bevel settings (every parameter named `bevel…`) with their defaults.
+fn bevel_defaults() -> serde_json::Map<String, Value> {
+    match vectorcraft_effects::default_params(EXTRUDE) {
+        Some(Value::Object(m)) => m.into_iter().filter(|(k, _)| k.starts_with("bevel")).collect(),
+        _ => serde_json::Map::new(),
+    }
+}
+
+/// Does any setting in `defaults` differ from its default in `d`? A setting the 3D and Materials
+/// panel's selected effects hold with different values (null) counts as changed.
+fn differs_from(d: &Dialog, defaults: &serde_json::Map<String, Value>) -> bool {
+    defaults.iter().any(|(k, v)| match (d.fields.get(k), v.as_f64()) {
+        (Some(Value::Null), _) => true,
+        (_, Some(default)) => (d.f64(k, default) - default).abs() > 1e-6,
+        (field, None) => field.is_some_and(|f| f != v),
+    })
+}
+
+/// The Bevel heading with its Reset button, which puts every bevel setting back to its default and
+/// leaves the other settings as they are. The button is off while every bevel setting is at its
+/// default.
+fn bevel_heading(ui: &mut egui::Ui, d: &mut Dialog) {
+    let defaults = bevel_defaults();
+    let changed = differs_from(d, &defaults);
+    let mut reset = false;
+    ui.horizontal(|ui| {
+        heading(ui, c3("Bevel"));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_enabled_ui(changed, |ui| {
+                let t = Tokens::get(ui.ctx());
+                let (r, _) = ui.allocate_exact_size(vec2(56.0, 20.0), Sense::hover());
+                let response = ui.interact(r, Id::unique("revolve-reset-bevel"), Sense::click());
+                response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset")));
+                if response.hovered() {
+                    ui.painter().rect_filled(r, 3.0, t.hover);
+                }
+                let color = if ui.is_enabled() { t.text } else { t.text_disabled };
+                ui.painter().text(r.right_center() - vec2(4.0, 0.0), Align2::RIGHT_CENTER, tl!("Reset"), FontId::proportional(11.5), color);
+                reset = response.clicked();
+            });
+        });
+    });
+    if reset {
+        d.fields.extend(defaults);
+    }
+}
+
+/// Rotation presets, rotation and perspective for Extrude & Bevel, Inflate and Rotate, and the
+/// classic 3D effects, which have the track cube below the presets.
 fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     heading(ui, tl!("Rotation"));
     let names = [
@@ -294,6 +344,9 @@ fn view_controls(ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.extend([("rotationX".into(), json!(x)), ("rotationY".into(), json!(y)), ("rotationZ".into(), json!(z))]);
         }
     });
+    if vectorcraft_effects::is_classic_three_d(&d.str("__effect")) {
+        super::three_d_classic::track_cube(ui, d);
+    }
     for (key, name) in [("rotationX", tl!("Rotation X")), ("rotationY", tl!("Rotation Y")), ("rotationZ", tl!("Rotation Z"))] {
         number(ui, d, key, name, (-180.0, 180.0), "°", 2, None);
     }
@@ -362,6 +415,10 @@ fn lighting_controls(ui: &mut egui::Ui, d: &mut Dialog) {
     // A mixed Shading leaves the light settings on, for the effects that shade.
     ui.add_enabled_ui(flag(d, "shade", true) != Some(false), |ui| {
         lighting_presets(ui, d);
+        // The panel's lighting widget; the dialog moves lights with its rings on the artboard.
+        if d.bool("__panel") {
+            super::revolve_lights::show(ui, d);
+        }
         light_list(ui, d);
         let mut selected = selected_light(d);
         let before = light_record(&selected);
@@ -429,7 +486,7 @@ const LIGHT_KEYS: [(&str, &str); 6] = [
     ("behind", "lightBehind"),
 ];
 
-fn explicit_lights(d: &Dialog) -> Option<&Vec<Value>> {
+pub(super) fn explicit_lights(d: &Dialog) -> Option<&Vec<Value>> {
     d.fields.get("lights").and_then(Value::as_array).filter(|v| !v.is_empty() && v.len() <= vectorcraft_three_d::MAX_LIGHTS)
 }
 

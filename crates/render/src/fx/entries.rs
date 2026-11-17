@@ -14,6 +14,9 @@ pub(super) struct Content<'a> {
     pub(super) cache: Option<usize>,
     /// Document-space bounds of the painted content.
     pub(super) reach: Rect,
+    /// `reach` before the effects of an earlier part of a split stack spread it: the bounds Radial
+    /// Blur's Blur Center is placed in, so the center stays put wherever the stack splits.
+    pub(super) object: Rect,
     /// Its silhouette: Feather and Inner Glow clip to it (without one, Feather only blurs and
     /// Inner Glow is skipped).
     pub(super) outline: Option<(&'a BezPath, FillRule)>,
@@ -28,7 +31,7 @@ pub(super) struct Content<'a> {
 /// The image of the last Rasterize before a split in an effect stack ([`Renderer::raster_fx`]). It
 /// is made the first time the effects after the split draw the content and drawn from here the
 /// other times, so the content before the split is drawn once.
-pub(super) struct Kept {
+pub(crate) struct Kept {
     /// Where the effects after the split take the content from: the visible area grown by how
     /// far they paint.
     pub(super) window: Rect,
@@ -36,6 +39,17 @@ pub(super) struct Kept {
     /// [`Renderer::rasterize_image`]'s limits: the content is then drawn in that frame.
     pub(super) frame: Option<(Affine, f64)>,
     pub(super) image: std::cell::RefCell<Option<KeptImage>>,
+    /// Kept for the placements of a path's Rasterize image that the Transform effects after it
+    /// copy ([`Renderer::draw_staged`]): it holds only the image on its own grid
+    /// ([`KeptImage::Grid`]), and each placement keeps its own raster across frames.
+    pub(super) shared: bool,
+}
+
+impl Kept {
+    /// A [`Kept`] for the placements of one path's Rasterize image (`shared`).
+    pub(super) fn for_placements() -> Self {
+        Kept { window: Rect::ZERO, frame: None, image: std::cell::RefCell::new(None), shared: true }
+    }
 }
 
 #[derive(Clone)]

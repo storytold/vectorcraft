@@ -16,7 +16,7 @@ pub(crate) const MAX_NODES: usize = 4_000_000;
 
 /// The most objects all the blends of one import may lay out to be checked (each twice) and made
 /// live; past it, blends keep their drawn steps.
-pub(super) const BLEND_BUDGET: usize = 50_000;
+pub(crate) const BLEND_BUDGET: usize = 50_000;
 
 /// Most points in one path.
 pub(super) const MAX_POINTS: usize = 4_000_000;
@@ -386,9 +386,8 @@ pub(super) const IGNORED: &[&str] = &[
     // Path resolution (`Ar`, §12): how finely curves print.
     "Ar",
     "Xs",
+    // The samples of the pen that `XD` notes on the object before them (`Reader::pen_samples`).
     "Xt",
-    // Five indexed curves of samples along a brushed path (`(…) Xt n XD`), on its hidden source path.
-    "XD",
     "Xi",
     "XI",
     "LB2",

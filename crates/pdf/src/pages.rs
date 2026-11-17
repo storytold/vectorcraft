@@ -297,6 +297,17 @@ impl Opened {
             bleed,
         }
     }
+
+    /// How far page `index`'s (0-based) bleed box reaches past its trim box, `[top, bottom, left,
+    /// right]` in points, as the page shows (rotated); `None` past the last page, and when the bleed
+    /// box doesn't hold the trim box.
+    pub fn page_bleed(&self, index: usize) -> Option<[f64; 4]> {
+        let page = self.pdf.pages().get(index)?;
+        let init = Affine::new(page.initial_transform(true).as_coeffs());
+        let (trim, bleed) = (init.transform_rect_bbox(page_box(page, CropTo::Trim)), init.transform_rect_bbox(page_box(page, CropTo::Bleed)));
+        let sides = [trim.y0 - bleed.y0, bleed.y1 - trim.y1, trim.x0 - bleed.x0, bleed.x1 - trim.x1];
+        sides.iter().all(|b| b.is_finite() && *b >= 0.0).then_some(sides)
+    }
 }
 
 /// A PDF's pages as an import on their trim boxes sizes them ([`Opened::trim_pages`]).
@@ -491,25 +502,42 @@ pub struct IllustratorData {
 /// objects, and only the private data streams are read, with the same limits. `None` when the
 /// file itself can't be opened, or as for [`illustrator_data`].
 pub fn illustrator_data_without_pdf_part(bytes: &[u8], password: Option<&str>) -> Option<IllustratorData> {
-    let pdf = open_structural_with_options(bytes, password, &open_options()).ok()?;
-    let data = private_data(&pdf)?;
-    let page = pdf.pages().first()?;
+    read_illustrator_data_without_pdf_part(bytes, password).ok().flatten()
+}
+
+/// [`illustrator_data_without_pdf_part`], with why the private data can't be read: `Ok(None)`
+/// when the file can't be opened or has no private data, `Err` (for a note, such as "it is larger
+/// than 256 MB") when it has private data that can't be read.
+pub fn read_illustrator_data_without_pdf_part(bytes: &[u8], password: Option<&str>) -> Result<Option<IllustratorData>, String> {
+    let Ok(pdf) = open_structural_with_options(bytes, password, &open_options()) else { return Ok(None) };
+    let Some(data) = read_private_data(&pdf)? else { return Ok(None) };
+    let Some(page) = pdf.pages().first() else { return Ok(None) };
     // (The page transform is in points: it applies the `UserUnit`.)
     let trim = frame(page, CropTo::Trim).1;
-    Some(IllustratorData { data, user_unit: f64::from(page.user_unit()), trim: (trim.width(), trim.height()) })
+    Ok(Some(IllustratorData { data, user_unit: f64::from(page.user_unit()), trim: (trim.width(), trim.height()) }))
 }
 
 /// The private data of `pdf`'s first page, as [`illustrator_data`] reads it.
 fn private_data(pdf: &Pdf) -> Option<Vec<u8>> {
-    let page = pdf.pages().first()?;
-    let private = page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private")?;
+    read_private_data(pdf).ok().flatten()
+}
+
+/// [`private_data`], with why a private data stream can't be read ([`inflated`]).
+fn read_private_data(pdf: &Pdf) -> Result<Option<Vec<u8>>, String> {
+    let Some(private) = pdf
+        .pages()
+        .first()
+        .and_then(|page| page.raw().get::<Dict<'_>>(b"PieceInfo")?.get::<Dict<'_>>(PRIVATE_DATA_OWNER)?.get::<Dict<'_>>(b"Private"))
+    else {
+        return Ok(None);
+    };
     let key = if private.contains_key(b"AIPrivateData1") { "AIPrivateData" } else { "AIPDFPrivateData" };
     let mut data = vec![];
     for n in 1..=100_000u32 {
         let Some(stream) = private.get::<Stream<'_>>(format!("{key}{n}").as_bytes()) else { break };
-        data.extend_from_slice(&inflated(&stream, MAX_PRIVATE - data.len())?);
+        data.extend_from_slice(&inflated(&stream, MAX_PRIVATE - data.len()).map_err(|why| why.to_string())?);
     }
-    (!data.is_empty()).then_some(data)
+    Ok((!data.is_empty()).then_some(data))
 }
 
 /// Does the PDF's first page carry an editor's copy of the art: a PDF-compatible `.ai`
@@ -527,10 +555,12 @@ fn has_private_data_keys(pdf: &Pdf) -> bool {
 /// `stream` decoded, up to `most` bytes: the decoder is run here rather than by the PDF reader's
 /// `decoded()`, which has no limit, so a stream of zeros can't grow to the size of the memory. Only a
 /// stream that is plain or only deflated is read (the private data is no other), without decode
-/// parameters; else, or when it is larger once decoded, `None`. A filter the reader doesn't know
-/// counts as another filter.
-fn inflated(stream: &Stream<'_>, most: usize) -> Option<Vec<u8>> {
+/// parameters; else, or when it is larger once decoded, `Err` with why. A filter the reader
+/// doesn't know counts as another filter.
+fn inflated(stream: &Stream<'_>, most: usize) -> Result<Vec<u8>, String> {
     use std::io::Read;
+    let unread = || "it is stored in a form that isn't read".to_string();
+    let too_large = || format!("it is larger than {} MB", MAX_PRIVATE >> 20);
     let dict = stream.dict();
     let named = |key: &[u8]| match dict.get::<Object<'_>>(key) {
         None | Some(Object::Null(_)) => Some(0),
@@ -544,24 +574,28 @@ fn inflated(stream: &Stream<'_>, most: usize) -> Option<Vec<u8>> {
         Some(_) => true,
     };
     if params(b"DecodeParms") || params(b"DP") {
-        return None;
+        return Err(unread());
     }
     let filters = stream.filters();
     // (The reader leaves out the filters it doesn't know.)
-    if named(b"Filter")?.max(named(b"F")?) != filters.len() {
-        return None;
+    if named(b"Filter").zip(named(b"F")).is_none_or(|(a, b)| a.max(b) != filters.len()) {
+        return Err(unread());
     }
     let raw = stream.raw_data();
     let mut out = vec![];
-    let limit = u64::try_from(most).ok()?.checked_add(1)?;
+    let limit = u64::try_from(most).ok().and_then(|m| m.checked_add(1)).ok_or_else(too_large)?;
     match filters.as_slice() {
         [] if raw.len() <= most => out.extend_from_slice(&raw),
+        [] => return Err(too_large()),
         [craft_pdf::syntax::Filter::FlateDecode] => {
-            flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).ok()?;
+            flate2::read::ZlibDecoder::new(&*raw).take(limit).read_to_end(&mut out).map_err(|_| "its zlib compression is damaged".to_string())?;
         }
-        _ => return None,
+        _ => return Err(unread()),
     }
-    (out.len() <= most).then_some(out)
+    if out.len() > most {
+        return Err(too_large());
+    }
+    Ok(out)
 }
 
 /// Does `page` carry an editor's private data (`PieceInfo` keys starting with `AIPrivateData`)?

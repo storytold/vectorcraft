@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
-use vectorcraft_geom::{Point, Rect, shapes};
+use vectorcraft_geom::{Point, Rect, Shape, shapes};
 
 /// Type tests need glyph outlines, which only the optional craft-fonts build input provides.
 fn skip_without_craft_fonts() -> bool {
@@ -793,7 +793,7 @@ fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
 }
 
 #[test]
-fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
+fn type_in_a_clipping_group_with_a_fill_of_its_own_keeps_its_effect() {
     if skip_without_craft_fonts() {
         return;
     }
@@ -808,9 +808,59 @@ fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
     g.children_mut().unwrap().push(Arc::new(clip));
     let d = bake_document(&doc_with(g)).unwrap();
     assert_eq!(type_origins(&d), [(20.0, 60.0), (220.0, 60.0)]);
-    // The type clips by its plain outlines, as the canvas clips by them: its own effect is left out.
+    // The type clips by its outlines moved by its own effect, as the canvas clips by them.
     let b = d.node(NodeId(59)).and_then(|n| n.geometric_bounds()).unwrap();
-    assert!(b.y0 > 30.0 && b.y1 < 70.0, "{b:?}");
+    assert!(b.y0 > 330.0 && b.y1 < 370.0, "{b:?}");
+}
+
+#[test]
+fn clipping_type_whose_fill_has_a_geometry_effect_clips_by_its_plain_outlines() {
+    if skip_without_craft_fonts() {
+        return;
+    }
+    let near = |a: Rect, b: Rect, tol: f64| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|v| v.abs() < tol);
+    for stroke in [Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0))] {
+        // Type that clips a square, with a Transform effect on its own fill.
+        let mut t = type_node(60);
+        t.appearance = Appearance::basic(Paint::solid(Color::BLACK), stroke.clone(), 1.0).into();
+        for item in &mut t.appearance.items {
+            if let AppearanceItem::Fill(f) = item {
+                f.effects.push(fx("distort.transform", json!({"moveH": 300})));
+            }
+        }
+        let square = Node::path(NodeId(61), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+        let clip = Node::new(NodeId(62), NodeKind::Group { children: vec![Arc::new(t.clone()), Arc::new(square)], clip: true });
+        let canvas = crate::clip_outline(&t).map(|(bp, _)| bp.bounding_box()).unwrap();
+        assert!(canvas.x1 < 100.0, "the canvas clips by the plain outlines: {canvas:?}");
+        let d = bake_document(&doc_with(clip)).unwrap();
+        let baked = d.node(NodeId(62)).unwrap();
+        // With a stroke, the clip group sits in a group with the stroke over it, outside the clip.
+        let group = match baked.kind {
+            NodeKind::Group { clip: true, .. } => {
+                assert!(stroke.is_none(), "{baked:?}");
+                baked
+            }
+            _ => {
+                let ch = baked.children().unwrap();
+                assert_eq!(ch.len(), 2, "{baked:?}");
+                let strokes = ch[1].appearance.items.iter().all(|i| matches!(i, AppearanceItem::Stroke(_)));
+                assert!(matches!(ch[1].kind, NodeKind::Text(_)) && strokes, "the type with only its stroke: {:?}", ch[1]);
+                &ch[0]
+            }
+        };
+        let ch = group.children().unwrap();
+        assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }) && ch.len() == 3, "{group:?}");
+        // The export clips by the outlines the canvas clips by.
+        assert!(matches!(ch[0].kind, NodeKind::Path { clipping: true, .. }), "{:?}", ch[0]);
+        let b = crate::clip_outline(&ch[0]).map(|(bp, _)| bp.bounding_box()).unwrap();
+        assert!(near(b, canvas, 1e-6), "canvas {canvas:?}, export {b:?}");
+        // The fills (the characters' and the moved one) paint behind the square, inside the clip.
+        let fill = ch[1].geometric_bounds().unwrap();
+        assert!((fill.x0 - canvas.x0).abs() < 1e-6 && fill.x1 > canvas.x1 + 250.0, "{fill:?}");
+        assert_eq!(ch[2].id, NodeId(61));
+        let mut ids = std::collections::HashSet::new();
+        baked.walk(&mut |n| assert!(ids.insert(n.id), "duplicate id {}", n.id));
+    }
 }
 
 #[test]
@@ -1064,4 +1114,546 @@ fn exporting_a_path_with_a_transform_gives_each_copy_its_own_gradient() {
     let d = bake_document(&doc_with(gradient_copies(50))).unwrap();
     // Three squares of their own, not one path spanning all three.
     assert_eq!(gradient_pieces(d.node(NodeId(50)).unwrap()), vec![10.0; 3]);
+}
+
+/// A 10 × 10 square at (10, 40), with id `id`, that a Transform effect moves 100 pt right.
+fn moved_square(id: u64) -> Node {
+    let mut n = Node::path(NodeId(id), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::default_art());
+    n.appearance.effects.push(fx("distort.transform", json!({"moveH": 100.0})));
+    n
+}
+
+fn instance(id: u64, symbol: &str, xf: vectorcraft_geom::Affine) -> Node {
+    Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: symbol.into(), xf })
+}
+
+fn add_symbol(d: &mut Document, name: &str, art: Node) {
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+}
+
+fn bounds(d: &Document, id: u64) -> Rect {
+    d.node(NodeId(id)).and_then(|n| n.geometric_bounds()).unwrap_or_else(|| panic!("node {id} has bounds"))
+}
+
+fn near_rect(a: Rect, b: Rect) -> bool {
+    [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(x, y)| (x - y).abs() < 1e-6)
+}
+
+/// Each instance draws its symbol's art with the art's effects applied where the instance places
+/// it: an instance that doubles the art's size moves it the effect's 100 pt, as the canvas draws
+/// it, not 200 pt. Plain baking leaves the instances and the symbols' art as they are.
+#[test]
+fn placing_symbols_bakes_their_art_where_each_instance_places_it() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)) * Affine::scale(2.0))).unwrap();
+    add_symbol(&mut d, "S", moved_square(800));
+    assert!(bake_document(&d).is_none(), "nothing in the layers needs baking");
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    assert!(matches!(out.node(NodeId(900)).unwrap().kind, NodeKind::Group { .. }));
+    assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 40.0, 120.0, 50.0)), "{:?}", bounds(&out, 900));
+    assert!(near_rect(bounds(&out, 901), Rect::new(120.0, 180.0, 140.0, 200.0)), "{:?}", bounds(&out, 901));
+    assert_eq!(out.symbols[0].art.appearance.effects.len(), 1, "the symbol's art keeps its effect");
+}
+
+/// An instance of a symbol whose art holds an instance of another symbol with effects draws that
+/// art with its effects too.
+#[test]
+fn placing_symbols_reaches_the_art_of_nested_instances() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", moved_square(800));
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::translate((0.0, 100.0))))]));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 140.0, 120.0, 150.0)), "{:?}", bounds(&out, 900));
+}
+
+/// A 10 pt square with id `id`, masked by `art` (the mask enabled unless `disabled`).
+fn masked_square(id: u64, art: Node, disabled: bool) -> Node {
+    let mut n = Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    let mut mask = vectorcraft_doc::OpacityMask::new(art, false);
+    mask.disabled = disabled;
+    n.extras_mut().mask = Some(Box::new(mask));
+    n
+}
+
+/// Whether the art of `n`'s opacity mask is still a symbol instance, and its bounds when it is not.
+fn mask_art(n: &Node) -> (bool, Option<Rect>) {
+    let art = &n.extras().mask.as_ref().unwrap_or_else(|| panic!("node {:?} has a mask", n.id)).art;
+    (matches!(art.kind, NodeKind::SymbolInstance { .. }), art.geometric_bounds())
+}
+
+/// An instance in the art of an enabled opacity mask is placed and baked like any other, so the
+/// mask masks with the art the instance draws, and the masked object stays as it is (a clipping
+/// path stays one); one in a disabled mask, in the mask of an object the export leaves out, or in
+/// a ruler guide's mask, stays as it is.
+#[test]
+fn placing_symbols_reaches_instances_in_opacity_masks() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(masked_square(700, instance(900, "S", Affine::IDENTITY), false));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, masked_square(701, instance(901, "S", Affine::IDENTITY), true)).unwrap();
+    let mut hidden = masked_square(702, instance(902, "S", Affine::IDENTITY), false);
+    hidden.visible = false;
+    d.insert(Some(layer), 2, hidden).unwrap();
+    let mut clipping = masked_square(703, instance(903, "S", Affine::IDENTITY), false);
+    if let NodeKind::Path { clipping: c, .. } = &mut clipping.kind {
+        *c = true;
+    }
+    d.insert(Some(layer), 3, Node::group(NodeId(704), vec![Arc::new(clipping)])).unwrap();
+    let mut guide = Node::new(NodeId(705), NodeKind::RulerGuide { vertical: false, pos: 5.0, artboard: None });
+    guide.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(instance(905, "S", Affine::IDENTITY), false)));
+    d.insert(Some(layer), 4, guide).unwrap();
+    add_symbol(&mut d, "S", moved_square(800));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    for id in [700, 703] {
+        let (still, b) = mask_art(out.node(NodeId(id)).unwrap());
+        assert!(!still && b.is_some_and(|b| near_rect(b, Rect::new(110.0, 40.0, 120.0, 50.0))), "{id}: {b:?}");
+    }
+    assert!(matches!(out.node(NodeId(703)).unwrap().kind, NodeKind::Path { clipping: true, .. }), "the clipping path stays one");
+    assert!(mask_art(out.node(NodeId(701)).unwrap()).0, "a disabled mask's instance stays");
+    assert!(mask_art(out.node(NodeId(702)).unwrap()).0, "a hidden object's mask's instance stays");
+    assert!(mask_art(out.node(NodeId(705)).unwrap()).0, "a ruler guide's mask's instance stays");
+}
+
+/// A symbol whose art holds an instance only in an opacity mask's art is placed too, and the
+/// instance in its mask is placed with it.
+#[test]
+fn placing_symbols_reaches_instances_in_the_masks_of_symbol_art() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", moved_square(800));
+    add_symbol(&mut d, "Outer", masked_square(803, instance(802, "Inner", Affine::IDENTITY), false));
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    assert!(!is_instance(&out, 900), "the outer instance is placed");
+    let mut found = None;
+    out.node(NodeId(900)).unwrap().walk(&mut |n| {
+        if n.id == NodeId(803) {
+            found = Some(mask_art(n));
+        }
+    });
+    let (still, b) = found.unwrap_or_else(|| panic!("the masked square is in the placed art"));
+    assert!(!still && b.is_some_and(|b| near_rect(b, Rect::new(110.0, 40.0, 120.0, 50.0))), "{b:?}");
+}
+
+/// A symbol whose art holds an instance of itself is placed until the depth limit, and the export
+/// ends.
+#[test]
+fn placing_a_symbol_that_holds_itself_stops() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Loop", Affine::IDENTITY));
+    add_symbol(
+        &mut d,
+        "Loop",
+        Node::group(NodeId(801), vec![Arc::new(moved_square(800)), Arc::new(instance(802, "Loop", Affine::translate((0.0, 1.0))))]),
+    );
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    let mut lefts = vec![];
+    out.node(NodeId(900)).unwrap().walk(&mut |n| lefts.extend(n.path_data().and_then(|p| p.bounds()).map(|b| b.x0)));
+    assert!(lefts.len() > 1 && lefts.iter().all(|x| (x - 110.0).abs() < 1e-6), "{lefts:?}");
+    let mut depth = 0;
+    let mut n = out.node(NodeId(900)).unwrap();
+    while let Some(next) = n.children().and_then(|ch| ch.last()) {
+        n = next;
+        depth += 1;
+    }
+    assert!(depth <= 3 * (vectorcraft_doc::depth::MAX_DEPTH + 1), "{depth}");
+}
+
+/// A dynamic symbol instance's own paint for an object of the art applies before the object's
+/// effects are baked: a fill whose own Transform effect makes the square a group of pieces still
+/// paints in the instance's red, and its sibling keeps the symbol's paint.
+#[test]
+fn placing_symbols_keeps_dynamic_instances_changes() {
+    use vectorcraft_geom::Affine;
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let mut square = Node::path(NodeId(800), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::default_art());
+    if let Some(AppearanceItem::Fill(f)) = square.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
+        f.effects.push(fx("distort.transform", json!({"moveH": 100.0})));
+    }
+    let sibling = Node::path(NodeId(801), shapes::rectangle(Rect::new(10.0, 60.0, 20.0, 70.0)), Appearance::default_art());
+    let mut inst = instance(900, "D", Affine::IDENTITY);
+    inst.extras_mut().symbol_overrides = vec![vectorcraft_doc::SymbolOverride { path: vec![0], fill: Some(red.clone()), ..Default::default() }];
+    let mut d = doc_with(inst);
+    add_symbol(&mut d, "D", Node::group(NodeId(802), vec![Arc::new(square), Arc::new(sibling)]));
+    d.symbols[0].dynamic = true;
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    let mut fills = vec![];
+    out.node(NodeId(900)).unwrap().walk(&mut |n| {
+        if n.path_data().is_some()
+            && let Some(b) = n.geometric_bounds()
+        {
+            fills.push((b.x0.round(), b.y0.round(), n.appearance.fill_paint()));
+        }
+    });
+    assert!(fills.contains(&(110.0, 40.0, red)), "{fills:?}");
+    assert!(fills.contains(&(10.0, 60.0, Paint::solid(Color::WHITE))), "{fills:?}");
+}
+
+/// An instance whose fill stains its symbol's art places the art in its stained colors, with the
+/// art's effects applied after the stain: a Transform moves the stained square and an Invert
+/// inverts the stained color.
+#[test]
+fn placing_symbols_keeps_the_instances_stain() {
+    use vectorcraft_geom::Affine;
+    let blue = Color::rgb8(30, 90, 220);
+    let mut inst = instance(900, "Mark", Affine::IDENTITY);
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    inst.appearance.items.retain(|i| i.is_fill());
+    if let AppearanceItem::Fill(f) = &mut inst.appearance.items[0] {
+        f.opacity = 0.5;
+    }
+    let square =
+        Node::path(NodeId(800), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::basic(Paint::solid(blue), Paint::None, 0.0));
+    let stained = vectorcraft_doc::symbol_overrides::instance_art(&square, &inst).appearance.fill_paint().color().unwrap();
+    assert_ne!(stained.to_hex(), blue.to_hex());
+    let [r, g, b] = stained.to_rgb();
+    let inverted = Color::rgb(1.0 - r, 1.0 - g, 1.0 - b);
+    for (id, params, want) in [("distort.transform", json!({"moveH": 100.0}), stained), (crate::addons::color::INVERT, json!({}), inverted)] {
+        let mut art = square.clone();
+        art.appearance.effects.push(fx(id, params));
+        let mut d = doc_with(inst.clone());
+        add_symbol(&mut d, "Mark", art);
+        let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+        assert!(!is_instance(&out, 900), "{id}: the instance is placed");
+        let mut fills = vec![];
+        out.node(NodeId(900)).unwrap().walk(&mut |n| {
+            if n.path_data().is_some() {
+                fills.extend(n.appearance.fill_paint().color().map(|c| c.to_hex()));
+            }
+        });
+        assert_eq!(fills, [want.to_hex()], "{id}");
+    }
+}
+
+/// Every layer written, as DXF writes them (template layers are never written).
+const ALL: WrittenLayers = WrittenLayers { hidden: true, non_printing: true, hidden_objects: false };
+
+fn is_instance(d: &Document, id: u64) -> bool {
+    d.node(NodeId(id)).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
+}
+
+/// The art placed for an export is counted as baked: the copies an effect makes count, so an
+/// instance whose baked art passes what is left of the budget stays an instance, and the budget
+/// holds the baked art of the instances placed, exactly.
+#[test]
+fn placing_symbols_counts_the_baked_art() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)))).unwrap();
+    add_symbol(&mut d, "S", gradient_copies(800));
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let each = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    assert!(each > 2, "the instance's group, and the copies as objects of their own: {each}");
+    assert_eq!(all.node(NodeId(901)).map(|n| n.count_with_masks() as u64), Some(each));
+    let fits = bake(&d, Some((true, 2 * each, ALL))).unwrap();
+    assert!(!is_instance(&fits, 900) && !is_instance(&fits, 901));
+    let short = bake(&d, Some((true, 2 * each - 1, ALL))).unwrap();
+    assert_eq!(usize::from(is_instance(&short, 900)) + usize::from(is_instance(&short, 901)), 1, "one instance stays as it is");
+}
+
+/// The baked art of an instance placed inside another's art is counted once: a budget of exactly
+/// the outer instance's baked art places both.
+#[test]
+fn placing_symbols_counts_nested_art_once() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", gradient_copies(800));
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::IDENTITY))]));
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let total = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    let exact = bake(&d, Some((true, total, ALL))).unwrap();
+    assert!(!is_instance(&exact, 900) && !is_instance(&exact, 802), "both are placed within {total}");
+    let short = bake(&d, Some((true, total - 1, ALL))).unwrap();
+    assert!(is_instance(&short, 900), "the outer instance stays as it is");
+}
+
+/// While an instance's art bakes, the art's own objects are held in the budget: an instance
+/// nested in it whose art does not fit in what is left stays as it is, and the outer instance is
+/// placed around it.
+#[test]
+fn placing_symbols_holds_the_outer_art_while_it_bakes() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", Node::group(NodeId(803), vec![Arc::new(gradient_copies(800))]));
+    let mut art: Vec<Arc<Node>> = (0..5)
+        .map(|i| Arc::new(Node::path(NodeId(810 + i), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art())))
+        .collect();
+    art.push(Arc::new(instance(802, "Inner", Affine::IDENTITY)));
+    let outer = Node::group(NodeId(801), art);
+    // The outer instance's group around its art, with the inner instance left as it is.
+    let around = 1 + outer.count_with_masks() as u64;
+    add_symbol(&mut d, "Outer", outer);
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let inner = all.node(NodeId(802)).map_or(0, |n| n.count_with_masks() as u64);
+    assert!(inner > 2 && inner <= around, "the inner art alone fits: {inner} <= {around}");
+    let out = bake(&d, Some((true, around, ALL))).unwrap();
+    assert!(!is_instance(&out, 900) && is_instance(&out, 802), "the outer instance is placed around the inner one");
+}
+
+/// Art baked for an instance and then left out, because it passes the budget, still counts: an
+/// instance after it whose art would fit in the budget alone stays as it is, and a budget with
+/// room for both places both.
+#[test]
+fn placing_symbols_counts_the_art_it_drops() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(901, "Small", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(900, "Big", Affine::IDENTITY)).unwrap();
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    add_symbol(&mut d, "Small", moved_square(810));
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    let count = |id: u64| all.node(NodeId(id)).map_or(0, |n| n.count_with_masks() as u64);
+    let (big, small) = (count(900), count(901));
+    assert!(small < big, "{small} < {big}");
+    let short = bake(&d, Some((true, big - 1, ALL))).unwrap();
+    assert!(is_instance(&short, 900), "the big art passes {}", big - 1);
+    assert!(is_instance(&short, 901), "the big art's {big} objects count, so the small art does not fit");
+    let both = bake(&d, Some((true, big + small, ALL))).unwrap();
+    assert!(!is_instance(&both, 900) && !is_instance(&both, 901));
+}
+
+/// Instances the export does not write are not placed and do not count against the budget: with
+/// room for one instance's baked art, hidden instances, an instance in a hidden group, one on a
+/// template layer, one on a layer that does not print and one on a hidden layer (when the export
+/// leaves those layers out) come first and stay as they are, and the visible instance after them
+/// is placed. An export that writes those layers places their instances first.
+#[test]
+fn placing_symbols_skips_instances_the_export_leaves_out() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    add_symbol(&mut d, "S", gradient_copies(800));
+    let each = bake(&d, Some((true, u64::MAX, ALL))).unwrap().node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    let layer = d.layers[0].id;
+    let mut hidden = instance(901, "S", Affine::IDENTITY);
+    hidden.visible = false;
+    let mut group = Node::group(NodeId(902), vec![Arc::new(instance(903, "S", Affine::IDENTITY))]);
+    group.visible = false;
+    for (i, n) in [hidden, group].into_iter().enumerate() {
+        d.insert(Some(layer), i, n).unwrap();
+    }
+    let mut left_out = vec![];
+    for (id, template, printable, visible) in [(910, true, true, true), (920, false, false, true), (930, false, true, false)] {
+        let mut l = Node::layer(NodeId(id), &format!("L{id}"), vectorcraft_doc::LayerColor::Preset(0));
+        if let NodeKind::Layer { template: t, printable: p, .. } = &mut l.kind {
+            *t = template;
+            *p = printable;
+        }
+        l.visible = visible;
+        if let Some(ch) = l.children_mut() {
+            ch.push(Arc::new(instance(id + 1, "S", Affine::IDENTITY)));
+        }
+        left_out.push(Arc::new(l));
+    }
+    d.layers.splice(0..0, left_out);
+    let out = bake(&d, Some((true, each, WrittenLayers::default()))).unwrap();
+    assert!(!is_instance(&out, 900), "the visible instance is placed within {each}");
+    for id in [901, 903, 911, 921, 931] {
+        assert!(is_instance(&out, id), "{id} stays as it is");
+    }
+    // An export that writes the layers that do not print, or the hidden layers, places that
+    // layer's instance first; the template layer's instance is never placed.
+    for (layers, first) in
+        [(WrittenLayers { non_printing: true, ..WrittenLayers::default() }, 921), (WrittenLayers { hidden: true, ..WrittenLayers::default() }, 931)]
+    {
+        let out = bake(&d, Some((true, each, layers))).unwrap();
+        assert!(!is_instance(&out, first) && is_instance(&out, 900) && is_instance(&out, 911), "{layers:?}");
+    }
+    // An export that writes hidden objects (SVG keeping hidden layers) places the hidden instance
+    // first, and the instance in the hidden group would come next; the hidden layer's instance
+    // stays, since that layer is still left out.
+    let out = bake(&d, Some((true, each, WrittenLayers { hidden_objects: true, ..WrittenLayers::default() }))).unwrap();
+    assert!(!is_instance(&out, 901), "the hidden instance is placed");
+    for id in [900, 903, 911, 921, 931] {
+        assert!(is_instance(&out, id), "{id} stays as it is");
+    }
+}
+
+/// `leaf` in `levels` groups, with ids from `id` up.
+fn in_groups(id: u64, levels: u64, leaf: Node) -> Node {
+    (0..levels).fold(leaf, |n, i| Node::group(NodeId(id + i), vec![Arc::new(n)]))
+}
+
+/// Placed art is drawn no deeper than the document may draw: an instance whose art's effects add
+/// a level past it stays an instance, and the instances around it are placed.
+#[test]
+fn placing_symbols_keeps_the_baked_art_within_the_drawn_depth() {
+    use vectorcraft_doc::depth::{DrawnHeights, MAX_DRAWN_DEPTH};
+    use vectorcraft_geom::Affine;
+    // The instance on the layer is 2 deep; A to D each hold the next 31 objects down, and E's
+    // square is 2 deep in its art: 2 + 4 × 31 + 2 = MAX_DRAWN_DEPTH.
+    let mut d = doc_with(instance(900, "A", Affine::IDENTITY));
+    for (i, (name, next)) in [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")].into_iter().enumerate() {
+        let base = 1000 * (i as u64 + 1);
+        add_symbol(&mut d, name, in_groups(base, 30, instance(base + 100, next, Affine::IDENTITY)));
+    }
+    add_symbol(&mut d, "E", in_groups(5000, 1, gradient_copies(5100)));
+    assert!(!d.too_deep(None));
+    assert_eq!(DrawnHeights::of(&d).deepest(&d.layers[0], 1), MAX_DRAWN_DEPTH);
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
+    // E's square becomes a group of copies, a level past the cap: E's instance stays.
+    assert!(is_instance(&out, 4100), "E's instance stays as it is");
+    assert!(!is_instance(&out, 900) && !is_instance(&out, 3100), "A to D are placed");
+    assert!(DrawnHeights::of(&out).deepest(&out.layers[0], 1) <= MAX_DRAWN_DEPTH);
+    // Without the chain above it, E's art is placed.
+    let mut shallow = doc_with(instance(900, "E", Affine::IDENTITY));
+    add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
+    assert!(!is_instance(&bake_document_placing_symbols(&shallow, true, ALL).unwrap(), 900));
+}
+
+/// Art baked for an instance and then left out because it draws too deep still counts when the
+/// baked art of a later instance is checked: that art fits before its effects add copies, but
+/// not once they do.
+#[test]
+fn placing_symbols_counts_art_dropped_for_depth_against_later_baked_art() {
+    use vectorcraft_geom::Affine;
+    // The chain of placing_symbols_keeps_the_baked_art_within_the_drawn_depth, then F, whose
+    // square becomes a group of copies once baked.
+    let mut d = doc_with(instance(900, "A", Affine::IDENTITY));
+    for (i, (name, next)) in [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")].into_iter().enumerate() {
+        let base = 1000 * (i as u64 + 1);
+        add_symbol(&mut d, name, in_groups(base, 30, instance(base + 100, next, Affine::IDENTITY)));
+    }
+    add_symbol(&mut d, "E", in_groups(5000, 1, gradient_copies(5100)));
+    add_symbol(&mut d, "F", gradient_copies(6000));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 1, instance(901, "F", Affine::IDENTITY)).unwrap();
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
+    assert!(is_instance(&all, 4100) && !is_instance(&all, 900) && !is_instance(&all, 901));
+    let count = |d: &Document, id: u64| d.node(NodeId(id)).map_or(0, |n| n.count_with_masks() as u64);
+    let (a, f) = (count(&all, 900), count(&all, 901));
+    // E's baked art, as placed where nothing above it draws deep.
+    let mut shallow = doc_with(instance(4100, "E", Affine::IDENTITY));
+    add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
+    let e = count(&bake(&shallow, Some((true, u64::MAX, ALL))).unwrap(), 4100);
+    assert!(f > 2, "F's copies are objects of their own: {f}");
+    let short = bake(&d, Some((true, a + e + f - 1, ALL))).unwrap();
+    assert!(!is_instance(&short, 900) && is_instance(&short, 4100), "A to D are placed, E is not");
+    assert!(is_instance(&short, 901), "E's dropped {e} objects count, so F's baked {f} do not fit");
+    let room = bake(&d, Some((true, a + e + f, ALL))).unwrap();
+    assert!(!is_instance(&room, 900) && !is_instance(&room, 901));
+}
+
+/// Instance `id` of `symbol` with a geometry effect, so baking it reshapes its art.
+fn offset_instance(id: u64, symbol: &str) -> Node {
+    let mut n = instance(id, symbol, vectorcraft_geom::Affine::IDENTITY);
+    n.appearance.effects.push(fx("path.offsetPath", json!({"offset": 1.0})));
+    n
+}
+
+/// `n` baked as an instance inside another instance's art, with `spent` objects of nested symbol
+/// art already baked: the baked object, and the objects counted after it, art baked and dropped
+/// included.
+fn bake_nested(d: &mut Document, n: &Node, spent: u64) -> (Option<Node>, u64) {
+    INSTANCE_DEPTH.with(|c| c.set(1));
+    NESTED_NODES.with(|c| c.set(spent));
+    NESTED_DROPPED.with(|c| c.set(0));
+    let out = bake_node(d, n);
+    INSTANCE_DEPTH.with(|c| c.set(0));
+    (out, NESTED_NODES.with(|c| c.replace(0)).saturating_add(NESTED_DROPPED.with(|c| c.replace(0))))
+}
+
+/// The object with id `id` in `n`'s subtree.
+fn find(n: &Node, id: u64) -> Option<&Node> {
+    if n.id == NodeId(id) {
+        return Some(n);
+    }
+    n.children().into_iter().flatten().find_map(|c| find(c, id))
+}
+
+/// Is `n` an object other than a symbol instance?
+fn baked(n: Option<&Node>) -> bool {
+    n.is_some_and(|n| !matches!(n.kind, NodeKind::SymbolInstance { .. }))
+}
+
+/// An instance baked inside another instance's art counts the art it bakes to, the copies its
+/// symbol's effects make included: art that fits exactly takes the last of the budget, and art
+/// whose symbol fits but whose baked art does not leaves the instance as it is and still counts.
+#[test]
+fn nested_reshape_counts_baked_art() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Inner", gradient_copies(800));
+    let n = offset_instance(900, "Inner");
+    let source = d.symbols[0].art.count() as u64;
+    let (all, spent) = bake_nested(&mut d, &n, 0);
+    let baked = all.map_or(0, |m| m.count() as u64);
+    assert!(baked > source + 1, "the copies are objects of their own: {baked} > {source} + 1");
+    assert_eq!(spent, baked, "the baked art is counted in place of the symbol's art");
+    let max = crate::SYMBOL_ART_MAX_NODES;
+    let (exact, spent) = bake_nested(&mut d, &n, max - baked);
+    assert!(exact.is_some(), "{baked} objects fit in {baked}");
+    assert_eq!(spent, max);
+    let (short, spent) = bake_nested(&mut d, &n, max - baked + 1);
+    assert!(short.is_none(), "the symbol's {source} objects fit, the {baked} baked ones do not");
+    assert_eq!(spent, max + 1, "the art baked for the instance left as it is still counts");
+}
+
+/// An instance left as it is because its baked art does not fit still counts the art baked for
+/// it: an instance after it is left as it is too, before its art bakes.
+#[test]
+fn nested_reshape_refusal_keeps_its_work_counted() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    add_symbol(&mut d, "Small", moved_square(810));
+    let (big, small) = (offset_instance(900, "Big"), offset_instance(901, "Small"));
+    let count = |d: &mut Document, n: &Node| bake_nested(d, n, 0).0.map_or(0, |m| m.count() as u64);
+    let (b, s) = (count(&mut d, &big), count(&mut d, &small));
+    assert!(s < b, "{s} < {b}");
+    let first = crate::SYMBOL_ART_MAX_NODES - b + 1;
+    let (refused, spent) = bake_nested(&mut d, &big, first);
+    assert!(refused.is_none(), "the big art passes the budget");
+    assert_eq!(spent, first + b, "the big art baked and dropped counts");
+    let (later, after) = bake_nested(&mut d, &small, spent);
+    assert!(later.is_none(), "the small art does not fit after the dropped art");
+    assert_eq!(after, spent, "the small instance is refused before it bakes");
+}
+
+/// Sibling instances inside other instances' art whose baked art each passes what is left: the
+/// first is baked and dropped, and its art counts, so the others are left as they are before
+/// their art bakes. With room for all of them, every one is baked.
+#[test]
+fn nested_reshape_refused_siblings_bake_once() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Big", gradient_copies(800));
+    let one = offset_instance(900, "Big");
+    let b = bake_nested(&mut d, &one, 0).0.map_or(0, |m| m.count() as u64);
+    let siblings: Vec<Arc<Node>> = (0..16).map(|i| Arc::new(offset_instance(1000 + i, "Big"))).collect();
+    let group = Node::group(NodeId(999), siblings);
+    let first = crate::SYMBOL_ART_MAX_NODES - b + 1;
+    let (refused, spent) = bake_nested(&mut d, &group, first);
+    let refused = refused.unwrap_or_else(|| group.clone());
+    assert!((0..16).all(|i| !baked(find(&refused, 1000 + i))), "no sibling fits: {refused:?}");
+    assert_eq!(spent, first + b, "only the first sibling's art is baked and counted: {spent}");
+    let (room, spent) = bake_nested(&mut d, &group, 0);
+    let room = room.unwrap_or_else(|| panic!("the siblings are baked"));
+    assert!((0..16).all(|i| baked(find(&room, 1000 + i))), "every sibling is baked");
+    assert_eq!(spent, 16 * b);
+}
+
+/// An instance inside another instance's art whose own art holds a reshaped instance counts that
+/// instance's baked art once: a budget of exactly the outer art's baked objects bakes both, and
+/// with one object less the art baked and dropped still counts.
+#[test]
+fn nested_reshape_counts_successful_descendants_once() {
+    let mut d = Document::new(400.0, 400.0);
+    add_symbol(&mut d, "Inner", gradient_copies(800));
+    let square = Node::path(NodeId(803), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(offset_instance(802, "Inner")), Arc::new(square)]));
+    let outer = offset_instance(900, "Outer");
+    let (all, spent) = bake_nested(&mut d, &outer, 0);
+    let all = all.unwrap_or_else(|| panic!("the outer instance is baked"));
+    assert!(baked(find(&all, 802)), "the inner instance is baked: {all:?}");
+    let total = all.count() as u64;
+    assert_eq!(spent, total);
+    let max = crate::SYMBOL_ART_MAX_NODES;
+    let (exact, spent) = bake_nested(&mut d, &outer, max - total);
+    let exact = exact.unwrap_or_else(|| panic!("{total} objects fit in {total}"));
+    assert!(baked(find(&exact, 802)), "the inner instance is baked too");
+    assert_eq!(spent, max);
+    let (short, spent) = bake_nested(&mut d, &outer, max - total + 1);
+    assert!(short.as_ref().is_none_or(|m| !baked(find(m, 802))), "with one object less, not both are baked");
+    assert!(spent > max, "the art baked and dropped counts: {spent}");
+    assert!(spent <= max - total + 1 + 2 * total, "at most the outer and the inner art are dropped: {spent}");
 }

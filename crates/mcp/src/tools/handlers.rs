@@ -1,5 +1,6 @@
 use super::dispatch::trace_views;
 use super::{Backend, Map, ToolResult, Value, json};
+use vectorcraft_doc::resample::{Resample, fitted};
 
 // ---------- implementation ----------
 
@@ -498,14 +499,16 @@ const MAX_CAPTURE_SIDE: u32 = 16_384;
 
 /// `png` decoded, refused when a side is longer than `side` or the decode needs more than 256 MiB:
 /// the picture is the app's reply, and its header names the size it is decoded at.
-pub(super) fn decode_png(png: &[u8], side: u32) -> Result<image::DynamicImage, image::ImageError> {
-    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(png), image::ImageFormat::Png);
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(side);
-    limits.max_image_height = Some(side);
-    limits.max_alloc = Some(256 << 20);
-    reader.limits(limits);
-    reader.decode()
+pub(super) fn decode_png(png: &[u8], side: u32) -> Result<image::DynamicImage, String> {
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_width = side;
+    opts.limits.max_height = side;
+    opts.limits.max_alloc = 256 << 20;
+    let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, png, &opts).map_err(|e| e.to_string())?;
+    let (w, h) = img.dimensions();
+    image::RgbaImage::from_raw(w, h, img.to_rgba8())
+        .map(image::DynamicImage::ImageRgba8)
+        .ok_or_else(|| "decoded PNG buffer size mismatch".to_string())
 }
 
 /// A window capture with `max_side`: scaled down when its longer side is larger, with its own size
@@ -521,12 +524,20 @@ fn fit_capture(png: Vec<u8>, max: Option<u32>, info: &mut Value) -> Result<Vec<u
         info["height"] = json!(img.height());
         return Ok(png);
     }
-    let img = img.thumbnail(max, max);
+    let img = fitted(img, max, max, Resample::Average);
     info["width"] = json!(img.width());
     info["height"] = json!(img.height());
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode capture: {e}"))?;
-    Ok(out.into_inner())
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .map_err(|e| format!("encode capture: {e}"))?;
+    craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| format!("encode capture: {e}"))
 }
 
 pub(super) fn image_result(png: &[u8], info: Value) -> ToolResult {
@@ -545,9 +556,15 @@ mod decode_tests {
 
     #[test]
     fn a_picture_with_a_side_past_the_limit_is_not_decoded() {
-        let mut png = std::io::Cursor::new(Vec::new());
-        image::RgbaImage::new(200, 10).write_to(&mut png, image::ImageFormat::Png).unwrap();
-        let png = png.into_inner();
+        let img = craft_image_codecs::Image::from_raw(
+            200,
+            10,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            vec![0; 200 * 10 * 4],
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         assert!(decode_png(&png, 100).is_err());
         assert_eq!(decode_png(&png, 200).unwrap().width(), 200);
     }

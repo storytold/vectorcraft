@@ -40,9 +40,10 @@ pub fn open(app: &mut VectorcraftApp) -> Value {
 }
 
 /// Reset: the center and 0.
-fn reset(_: &VectorcraftApp, d: &mut Dialog) {
+fn reset(_: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     d.fields.insert("pivot".into(), json!(CENTER));
     d.fields.insert("rotate".into(), json!(0.0));
+    Ok(())
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -61,8 +62,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_space(8.0);
     let r = widgets::flat_button(ui, tl!("Reset"), 64.0);
     r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset")));
-    if r.clicked() {
-        reset(app, d);
+    if r.clicked()
+        && let Err(e) = reset(app, d)
+    {
+        app.status(e);
     }
     false
 }

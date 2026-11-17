@@ -4,6 +4,7 @@ use super::handlers::{
     select_ids, transform,
 };
 use super::{ARTBOARD_PARAMS, Backend, Map, ToolResult, Value, json, writable_format};
+use vectorcraft_doc::resample::{Resample, fitted};
 
 /// The `menu` argument of the command listings.
 pub(super) const MENU_FILTER: &str =
@@ -18,6 +19,29 @@ pub(super) const MAX_SIDE_WINDOW: &str =
 
 /// The `traceViews` argument of the artboard renders.
 pub(super) const TRACE_VIEWS: &str = "Draw Image Trace objects in the view set with imageTrace.setView (outlines, the source image…), as the app's window does; by default they draw their tracing result, as exports do";
+
+/// The `text_wrap` tool's `release` and its `offset` and `invert` for `object.textWrap.make`, checked
+/// before the tool changes the selection: an omitted or null value is left out, an `offset` that is
+/// not a number or lies outside [`vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE`] is an error, and so is
+/// an `invert` or `release` that is not true or false.
+fn text_wrap_args(a: &Args) -> Result<(bool, Value), String> {
+    let mut p = json!({});
+    for k in ["offset", "invert", "release"] {
+        let Some(v) = a.get(k).filter(|v| !v.is_null()) else { continue };
+        if k == "offset" {
+            let range = vectorcraft_engine::TEXT_WRAP_OFFSET_RANGE;
+            let n = v.as_f64().ok_or_else(|| format!("`{k}` must be a number, not {v}"))?;
+            if !range.contains(&n) {
+                return Err(format!("`{k}` must be from {} to {}", range.start(), range.end()));
+            }
+        } else if !v.is_boolean() {
+            return Err(format!("`{k}` must be true or false"));
+        }
+        p[k] = v.clone();
+    }
+    let release = p.as_object_mut().and_then(|m| m.remove("release")).is_some_and(|v| v == true);
+    Ok((release, p))
+}
 
 /// `traceViews`: false when absent.
 pub(super) fn trace_views(a: &Args) -> Result<bool, String> {
@@ -121,7 +145,7 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             for (i, e) in events.iter().enumerate() {
                 let kind = e.get("kind").and_then(Value::as_str).unwrap_or("");
                 if crate::headless::pointer_kind(kind).is_none() {
-                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick)"));
+                    return Err(format!("event {i}: unknown kind `{kind}` (down, drag, up, move, doubleclick, tripleclick)"));
                 }
                 if !e.get("x").is_some_and(Value::is_number) || !e.get("y").is_some_and(Value::is_number) {
                     return Err(format!("event {i}: numeric `x` and `y` required"));
@@ -260,15 +284,10 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Args) -> Result<ToolResult, Str
             j(exec(b, "graph.create", p)?)
         }
         "text_wrap" => {
+            let (release, p) = text_wrap_args(a)?;
             select_ids(b, a)?;
-            if a.get("release").and_then(Value::as_bool) == Some(true) {
+            if release {
                 return j(exec(b, "object.textWrap.release", json!({}))?);
-            }
-            let mut p = json!({});
-            for k in ["offset", "invert"] {
-                if let Some(v) = a.get(k) {
-                    p[k] = v.clone();
-                }
             }
             j(exec(b, "object.textWrap.make", p)?)
         }
@@ -445,8 +464,17 @@ fn render_preview(b: &mut dyn Backend, a: &Args) -> Result<ToolResult, String> {
     let png = vectorcraft_format::base64_decode(encoded).ok_or("renderer returned bad base64")?;
     // The render was asked for at most 4096 a side.
     let img = super::handlers::decode_png(&png, 8192).map_err(|e| format!("read preview: {e}"))?;
-    let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img };
-    let mut out = std::io::Cursor::new(Vec::new());
-    img.write_to(&mut out, image::ImageFormat::Png).map_err(|e| format!("encode preview: {e}"))?;
-    Ok(image_result(out.get_ref(), json!({"width":img.width(),"height":img.height()})))
+    let img = if img.width() > max || img.height() > max { fitted(img, max, max, Resample::Average) } else { img };
+    let rgba = img.to_rgba8();
+    let raw = craft_image_codecs::Image::from_raw(
+        rgba.width(),
+        rgba.height(),
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.into_raw(),
+    )
+    .map_err(|e| format!("encode preview: {e}"))?;
+    let out = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+        .map_err(|e| format!("encode preview: {e}"))?;
+    Ok(image_result(&out, json!({"width":img.width(),"height":img.height()})))
 }

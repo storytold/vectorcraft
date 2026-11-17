@@ -40,7 +40,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee, objects_at, selected_hidden_at};
+use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, selected_hidden_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -48,9 +48,7 @@ use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_dra
 use crate::blendwidget::{self, BlendWidgetDrag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
-use crate::objects_on_path::{
-    MemberDrag, MoveAllDrag, RotateAllDrag, SpaceDrag, member_hover, over_member, over_move_all, over_rotate_all, over_space,
-};
+use crate::objects_on_path::{MemberDrag, MoveAllDrag, RotateAllDrag, SpaceDrag, WidgetDrag, WidgetKind, member_hover, widget_at};
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
@@ -94,6 +92,9 @@ enum State {
         /// The point that snaps, moving with the pointer: `start`, or where a press on a path's
         /// stroke or beside its edge took hold of the path ([`hold_point`]).
         hold: Point,
+        /// The press grabbed the selection by an anchor (`start`): it snaps as
+        /// [`MoveSnap::by_anchor`] says.
+        by_anchor: bool,
         began: bool,
         /// Shift-pressed on this selected object: released without a drag, it leaves the
         /// selection.
@@ -146,6 +147,8 @@ enum State {
     Mirror(crate::mirror::MirrorDrag),
     /// Drag a grid repeat's row, column or corner handle or a spacing slider.
     GridRepeat(crate::repeat_grid::GridDrag),
+    /// Drag a radial repeat's instances or radius handle.
+    RadialRepeat(crate::repeat_radial::RadialDrag),
     /// Dragging a bracket of type on a path.
     Bracket(BracketDrag),
     /// Dragging a 9-slice guide of the symbol being edited.
@@ -171,6 +174,8 @@ pub struct SelectionTool {
     /// The params of the move's last preview: in Shaper's Construction mode the move ends with
     /// them and `releaseOutside` ([`construction`]).
     last_move: Option<Value>,
+    /// How far the move's last preview carried the selection ([`Tool::readout`]).
+    moved: Option<Vec2>,
     /// Held state used for the most recent bounding-box preview.
     last_backquote: bool,
     /// Pointer position used for the most recent bounding-box preview.
@@ -201,14 +206,14 @@ enum DistanceTo {
 }
 
 /// Distance Guides: with Smart Guides and Smart Guides → Invoke Distance Guides on, something
-/// selected and Alt held (`m`), the object under `p` unless it is selected, or over no object the
-/// artboard `p` is on.
+/// selected and Alt held (`m`), the object under `p` unless it or selected art inside it is under
+/// `p` ([`selected_under`]), or over no object the artboard `p` is on.
 fn distance_target(cx: &ToolContext, p: Point, m: Mods) -> Option<DistanceTo> {
     if !(cx.smart_guides && cx.distance_guides && m.alt) || cx.selection.objects.is_empty() {
         return None;
     }
-    match hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.top_object(cx.isolation)) {
-        Some(id) => (!cx.selection.contains(id)).then_some(DistanceTo::Object(id)),
+    match hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| (h.top_object(cx.isolation), h)) {
+        Some((id, h)) => selected_under(cx, &h, id).is_none().then_some(DistanceTo::Object(id)),
         None => cx.doc.artboard_at(p).map(DistanceTo::Artboard),
     }
 }
@@ -247,13 +252,24 @@ pub(crate) struct MoveSnap {
 
 impl MoveSnap {
     pub(crate) fn new(cx: &ToolContext) -> Self {
+        Self::gather(cx, Targets::for_move)
+    }
+
+    /// [`Self::new`] for a selection grabbed by one of its anchors: with Smart Guides, that anchor
+    /// also lands on the other art's paths and where they cross (#7411), as Direct Selection lands
+    /// an anchor it drags.
+    pub(crate) fn by_anchor(cx: &ToolContext) -> Self {
+        Self::gather(cx, Targets::for_move_by_anchor)
+    }
+
+    fn gather(cx: &ToolContext, for_move: fn(&ToolContext, &[NodeId]) -> Targets) -> Self {
         let guides = cx.smart_guides && !cx.snap_to_grid;
         let points = |exclude: &[NodeId]| if cx.snap_to_grid { None } else { Targets::snap_to_point(cx, exclude) };
         Self {
             bounds: selection_bounds(cx),
-            targets: guides.then(|| Targets::for_move(cx, &cx.selection.objects)),
+            targets: guides.then(|| for_move(cx, &cx.selection.objects)),
             points: points(&cx.selection.objects),
-            copy_targets: guides.then(|| Targets::for_move(cx, &[])),
+            copy_targets: guides.then(|| for_move(cx, &[])),
             copy_points: points(&[]),
             rulers: (guides && cx.snap_to_point).then(|| Targets::rulers(cx)),
         }
@@ -286,6 +302,9 @@ impl MoveSnap {
         }
         // The axes (x, y) Smart Guides already put in line with other art.
         let mut taken = [false; 2];
+        // The grabbed anchor landed on a path or a crossing, which a ruler guide does not pull
+        // it off.
+        let mut on_path = false;
         if let (Some(t), Some(b)) = (targets, self.bounds) {
             // The point the selection was grabbed by, near another object's anchor or centre,
             // lands on it, rather than the bounds lining up a little beside it (#955).
@@ -294,6 +313,13 @@ impl MoveSnap {
                 d = q - start;
                 guides = ov;
                 taken = [true; 2];
+            } else if let Some((q, ov)) = t.snap_onto_path(start + d, cx.snap_tol(), self.rulers.as_ref()) {
+                // Grabbed by an anchor ([`Self::by_anchor`]), it lands on a path near it, or where
+                // the path crosses another or a ruler guide, instead of lining the bounds up.
+                d = q - start;
+                guides = ov;
+                taken = [true; 2];
+                on_path = true;
             } else {
                 let (adj, ov, axes) = t.snap_rects_axes(&[b + d], cx.snap_tol());
                 d += adj;
@@ -304,7 +330,7 @@ impl MoveSnap {
         // A ruler guide within reach of the grabbed point wins over lining the bounds up; on an
         // axis without one that Smart Guides left free, the bounds line up with the ruler guides
         // (#5746), alongside the Smart Guides.
-        if let Some(t) = &self.rulers {
+        if let Some(t) = self.rulers.as_ref().filter(|_| !on_path) {
             let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.snap_tol(), taken);
             if adj != Vec2::ZERO {
                 d += adj;
@@ -660,12 +686,16 @@ impl SelectionTool {
             return None;
         }
         let reach = cx.tol(HOVER_REACH);
-        let under = hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.top_object(cx.isolation));
+        let hit = hit_test(cx.doc, p, cx.selection_hit_options());
+        let under = hit.as_ref().map(|h| h.top_object(cx.isolation));
         let nearest = |points: &mut dyn Iterator<Item = Point>| {
             points.filter(|q| q.distance(p) <= reach).min_by(|a, b| a.distance(p).total_cmp(&b.distance(p)))
         };
-        // A press on an unselected object selects it alone: the selected ones stay behind.
-        let selected = if under.is_none_or(|u| cx.selection.contains(u)) { &cx.selection.objects[..] } else { &[] };
+        // A press on an unselected object selects it alone: the selected ones stay behind. A press
+        // on selected art inside it keeps the selection, and that art is the object grabbed.
+        let kept = hit.as_ref().zip(under).and_then(|(h, u)| selected_under(cx, h, u));
+        let under = kept.or(under);
+        let selected = if hit.is_none() || kept.is_some() { &cx.selection.objects[..] } else { &[] };
         with_object_bounds(cx, |bounds| {
             under.into_iter().chain(selected.iter().copied()).find_map(|id| {
                 let n = cx.doc.node(id)?;
@@ -679,6 +709,15 @@ impl SelectionTool {
                 })
             })
         })
+    }
+
+    /// The point a press `ev` grabs the selection by ([`Self::hover_point`]), and whether it is an
+    /// anchor. Nothing for other pointer events.
+    fn grabbed_at(cx: &ToolContext, ev: &PointerEvent) -> (Option<Point>, bool) {
+        match ev.kind {
+            PointerKind::Down => Self::hover_point(cx, ev.pos).map_or((None, false), |(q, label)| (Some(q), label == "anchor")),
+            _ => (None, false),
+        }
     }
 
     /// On a press, notes the text the pointer is loaded with ([`Self::loaded_at_press`]); a
@@ -794,6 +833,12 @@ impl Tool for SelectionTool {
             return d.cancel();
         }
         if key == ToolKey::Escape
+            && matches!(self.state, State::RadialRepeat(_))
+            && let State::RadialRepeat(d) = std::mem::take(&mut self.state)
+        {
+            return d.cancel();
+        }
+        if key == ToolKey::Escape
             && matches!(self.state, State::NineSlice(_))
             && let State::NineSlice(d) = std::mem::take(&mut self.state)
         {
@@ -842,7 +887,7 @@ impl Tool for SelectionTool {
             State::Marquee { .. } => key == ToolKey::Letter('e'),
             State::Corner(_) => matches!(key, ToolKey::Up | ToolKey::Down),
             State::BlendWidget(_) => matches!(key, ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right),
-            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::NineSlice(_) => key == ToolKey::Escape,
+            State::Loaded { .. } | State::Mirror(_) | State::GridRepeat(_) | State::RadialRepeat(_) | State::NineSlice(_) => key == ToolKey::Escape,
             _ => false,
         }
     }
@@ -867,6 +912,10 @@ impl Tool for SelectionTool {
         matches!(self.state, State::Moving { began: true, .. })
     }
 
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        self.moved.filter(|_| self.moving()).map(crate::Readout::drag)
+    }
+
     fn transforming(&self) -> bool {
         match &self.state {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
@@ -880,6 +929,7 @@ impl Tool for SelectionTool {
             State::Bracket(b) => b.adjusting(),
             State::Mirror(d) => d.adjusting(),
             State::GridRepeat(d) => d.adjusting(),
+            State::RadialRepeat(d) => d.adjusting(),
             _ => false,
         }
     }
@@ -913,7 +963,7 @@ impl Tool for SelectionTool {
         let m = ev.mods;
         // A press near a centre or an anchor grabs the object by it.
         self.hover = None;
-        let grabbed = if matches!(ev.kind, PointerKind::Down) { Self::hover_point(cx, p).map(|(q, _)| q) } else { None };
+        let (grabbed, by_anchor) = Self::grabbed_at(cx, ev);
         let grab = grabbed.unwrap_or(p);
         if matches!(ev.kind, PointerKind::Move) && matches!(self.state, State::Idle) {
             self.hover = Self::hover_point(cx, p);
@@ -939,7 +989,7 @@ impl Tool for SelectionTool {
                 {
                     let several = cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty();
                     let (deselect, key) = if m.shift { (Some(id), None) } else { (None, (several && !m.alt).then_some(id)) };
-                    self.state = State::Moving { start: p, press: p, hold: center, began: false, deselect, key, exclude: None };
+                    self.state = State::Moving { start: p, press: p, hold: center, by_anchor: false, began: false, deselect, key, exclude: None };
                     return vec![];
                 }
                 // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
@@ -947,7 +997,8 @@ impl Tool for SelectionTool {
                     && cx.select_behind
                     && let Some(behind) = object_behind(cx, p)
                 {
-                    self.state = State::Moving { start: p, press: p, hold: p, began: false, deselect: None, key: None, exclude: None };
+                    self.state =
+                        State::Moving { start: p, press: p, hold: p, by_anchor: false, began: false, deselect: None, key: None, exclude: None };
                     return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
                 }
                 let (hit, scope) = match selected_source_hit(cx, p) {
@@ -961,25 +1012,27 @@ impl Tool for SelectionTool {
                         let (mut deselect, mut key, mut exclude) = (None, None, None);
                         if m.shift {
                             (deselect, exclude) = shift_press(cx, &h, top, &mut out);
-                        } else if !cx.selection.contains(top) {
+                        } else if let Some(picked) = selected_under(cx, &h, top) {
+                            if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
+                                key = Some(picked);
+                            }
+                        } else {
                             out.push(Action::Exec("select.set".into(), json!({ "ids": [top.0] })));
-                        } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
-                            key = Some(top);
                         }
                         // Grabbed by no anchor or centre, a press on a path's stroke or beside its
                         // edge holds the path there, and that point of it snaps (#3701).
                         let hold = if grabbed.is_some() { grab } else { hold_point(cx, &h, p) };
-                        self.state = State::Moving { start: grab, press: p, hold, began: false, deselect, key, exclude };
+                        self.state = State::Moving { start: grab, press: p, hold, by_anchor, began: false, deselect, key, exclude };
                         out
                     }
                     None => {
-                        self.press_nothing(cx, p, grab, m);
+                        self.press_nothing(cx, p, grab, by_anchor, m);
                         vec![]
                     }
                 }
             }
-            (PointerKind::Drag, State::Moving { start, press, hold, began, exclude, .. }) => {
-                self.drag_moving(cx, p, m, ev.backquote, (start, press, hold, began), exclude)
+            (PointerKind::Drag, State::Moving { start, press, hold, by_anchor, began, exclude, .. }) => {
+                self.drag_moving(cx, p, m, ev.backquote, (start, press, hold, by_anchor, began), exclude)
             }
             (PointerKind::Drag, State::Scaling { handle, bx, areas }) => {
                 self.last_backquote = ev.backquote;
@@ -1125,7 +1178,7 @@ impl Tool for SelectionTool {
                 if r.width() < Self::drag_threshold(cx) && r.height() < Self::drag_threshold(cx) {
                     return if toggle { vec![] } else { vec![Action::Exec("select.none".into(), json!({}))] };
                 }
-                let touched = marquee(cx.doc, r, cx.isolation, false);
+                let touched = marquee_in_view(cx.doc, r, cx.isolation, false, cx.outline);
                 let enclosed = marquee_enclosed(cx, enclosed, marquee_direction(cx, start, p, directional_inside));
                 let ids = if enclosed { inside(cx, r, touched) } else { touched };
                 let art = Action::Exec(if toggle { "select.toggle" } else { "select.set" }.into(), json!({ "ids": json_ids(&ids) }));
@@ -1190,6 +1243,9 @@ impl Tool for SelectionTool {
         if let State::GridRepeat(d) = &self.state {
             return d.cursor(cx);
         }
+        if let State::RadialRepeat(d) = &self.state {
+            return d.cursor(cx);
+        }
         if matches!(self.state, State::NineSlice(_)) || (matches!(self.state, State::Idle) && crate::nineslice::over_guide(cx, p)) {
             return Cursor::Move;
         }
@@ -1197,7 +1253,8 @@ impl Tool for SelectionTool {
             && !m.cmd
             && !m.ctrl
             && !m.alt
-            && let Some(cursor) = crate::mirror::cursor(cx, p).or_else(|| crate::repeat_grid::cursor(cx, p))
+            && let Some(cursor) =
+                crate::mirror::cursor(cx, p).or_else(|| crate::repeat_grid::cursor(cx, p)).or_else(|| crate::repeat_radial::cursor(cx, p))
         {
             return cursor;
         }
@@ -1235,14 +1292,11 @@ impl Tool for SelectionTool {
         if blendwidget::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
-        if over_rotate_all(cx, p) {
-            return Cursor::Rotate;
-        }
-        if over_space(cx, p) {
-            return Cursor::ArrowHollow;
-        }
-        if over_move_all(cx, p) || over_member(cx, p) {
-            return Cursor::Move;
+        match widget_at(cx, p) {
+            Some(WidgetKind::RotateAll) => return Cursor::Rotate,
+            Some(WidgetKind::Space) => return Cursor::ArrowHollow,
+            Some(WidgetKind::MoveAll | WidgetKind::Member) => return Cursor::Move,
+            None => {}
         }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
@@ -1276,7 +1330,7 @@ impl Tool for SelectionTool {
             return Cursor::Move;
         }
         if let Some(h) = hit_test(cx.doc, p, cx.selection_hit_options()) {
-            if cx.selection.contains(h.top_object(cx.isolation)) || m.alt {
+            if selected_under(cx, &h, h.top_object(cx.isolation)).is_some() || m.alt {
                 return Cursor::Move;
             }
             return Cursor::Arrow;
@@ -1293,16 +1347,30 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
     stack.get(next).or(stack.first()).copied()
 }
 
-/// A Shift-press on `top` (hit by `h`): a Shift-click takes a selected object out of the selection
-/// when it is released, and a Shift-drag moves the selection, constrained. On an object of the
+/// The selected object a press on `h` lands on: `top` when it is selected, else the outermost
+/// object selected whole between it and the art under the pointer, such as members of a group
+/// picked with Group Selection. A press there keeps the selection and a drag moves it (#8047). A
+/// member with only some anchors or segments selected does not count: the press selects `top`.
+fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
+    if cx.selection.contains(top) {
+        return Some(top);
+    }
+    let whole = |id: NodeId| cx.selection.contains(id) && cx.selection.partial(id).is_none() && !cx.selection.segments.contains_key(&id);
+    let below = h.ancestry.iter().position(|id| *id == top).map_or(&[][..], |i| h.ancestry.get(i..).unwrap_or_default());
+    below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
+}
+
+/// A Shift-press on `top` (hit by `h`): a Shift-click takes a selected object, or the selected art
+/// inside it that the press lands on ([`selected_under`]), out of the selection when it is
+/// released, and a Shift-drag moves the selection, constrained. On an object of the
 /// Global Edit that is highlighted, the release leaves that object out of the edit instead, and a
 /// drag selects `top` when it starts. Returns the object to deselect and the object to leave out
 /// on release (with `top`); adds to `out` the action that selects `top` at once.
 fn shift_press(cx: &ToolContext, h: &Hit, top: NodeId, out: &mut Vec<Action>) -> (Option<NodeId>, Option<(NodeId, NodeId)>) {
     if let Some(member) = global_edit_member(cx, h) {
         (None, Some((member, top)))
-    } else if cx.selection.contains(top) {
-        (Some(top), None)
+    } else if let Some(picked) = selected_under(cx, h, top) {
+        (Some(picked), None)
     } else {
         out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
         (None, None)
@@ -1518,6 +1586,21 @@ impl SelectionTool {
                 _ => return Some(vec![]),
             }
         }
+        if let State::RadialRepeat(mut d) = self.state.clone() {
+            match ev.kind {
+                PointerKind::Drag | PointerKind::Up => {
+                    let mut out = d.drag(ev.pos);
+                    if ev.kind == PointerKind::Up {
+                        out.extend(d.finish());
+                        self.state = State::Idle;
+                    } else {
+                        self.state = State::RadialRepeat(d);
+                    }
+                    return Some(out);
+                }
+                _ => return Some(vec![]),
+            }
+        }
         if matches!(self.state, State::Idle)
             && ev.kind == PointerKind::Down
             && let Some(d) = crate::mirror::MirrorDrag::hit(cx, ev.pos, ev.mods)
@@ -1531,6 +1614,14 @@ impl SelectionTool {
             && let Some(d) = crate::repeat_grid::GridDrag::hit(cx, ev.pos, ev.mods)
         {
             self.state = State::GridRepeat(d);
+            self.hover = None;
+            return Some(vec![]);
+        }
+        if matches!(self.state, State::Idle)
+            && ev.kind == PointerKind::Down
+            && let Some(d) = crate::repeat_radial::RadialDrag::hit(cx, ev.pos, ev.mods)
+        {
+            self.state = State::RadialRepeat(d);
             self.hover = None;
             return Some(vec![]);
         }
@@ -1617,20 +1708,13 @@ impl SelectionTool {
             self.state = State::BlendWidget(d);
             return Some(vec![]);
         }
-        if let Some(d) = RotateAllDrag::hit(cx, ev) {
-            self.state = State::RotateAll(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = SpaceDrag::hit(cx, ev) {
-            self.state = State::Space(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = MoveAllDrag::hit(cx, ev) {
-            self.state = State::MoveAll(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = MemberDrag::hit(cx, ev) {
-            self.state = State::Member(d);
+        if let Some(d) = WidgetDrag::hit(cx, ev) {
+            self.state = match d {
+                WidgetDrag::RotateAll(d) => State::RotateAll(d),
+                WidgetDrag::Space(d) => State::Space(d),
+                WidgetDrag::MoveAll(d) => State::MoveAll(d),
+                WidgetDrag::Member(d) => State::Member(d),
+            };
             return Some(vec![]);
         }
         if let Some(b) = BracketDrag::hit(cx, ev) {
@@ -1679,9 +1763,10 @@ impl SelectionTool {
     /// A press at `p` that hits no object starts a marquee, except where a clipping mask hides
     /// the art of a selected object (picked in the Layers panel, say): there, without Shift, it
     /// grabs the selection by that art (at `grab`), as a press on its visible part does.
-    fn press_nothing(&mut self, cx: &ToolContext, p: Point, grab: Point, m: Mods) {
+    /// `by_anchor`: `grab` is an anchor of it.
+    fn press_nothing(&mut self, cx: &ToolContext, p: Point, grab: Point, by_anchor: bool, m: Mods) {
         self.state = if !m.shift && selected_hidden_at(cx.doc, p, cx.selection_hit_options(), &cx.selection.objects).is_some() {
-            State::Moving { start: grab, press: p, hold: grab, began: false, deselect: None, key: None, exclude: None }
+            State::Moving { start: grab, press: p, hold: grab, by_anchor, began: false, deselect: None, key: None, exclude: None }
         } else {
             State::Marquee { start: p, cur: p, toggle: m.shift, enclosed: false, directional_inside: false }
         };
@@ -1693,7 +1778,7 @@ impl SelectionTool {
         p: Point,
         m: Mods,
         backquote: bool,
-        (start, press, hold, began): (Point, Point, Point, bool),
+        (start, press, hold, by_anchor, began): (Point, Point, Point, bool, bool),
         exclude: Option<(NodeId, NodeId)>,
     ) -> Vec<Action> {
         let mut out = vec![];
@@ -1701,6 +1786,7 @@ impl SelectionTool {
             if p.distance(press) < Self::drag_threshold(cx) {
                 return out;
             }
+            let gather = if by_anchor { MoveSnap::by_anchor } else { MoveSnap::new };
             // A Shift-drag from a highlighted object of the Global Edit selects it and moves it
             // with the selection: its snap targets are gathered for the selection with it.
             self.moving = Some(match exclude {
@@ -1708,9 +1794,9 @@ impl SelectionTool {
                     out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
                     let mut selection = cx.selection.clone();
                     selection.add(top);
-                    MoveSnap::new(&ToolContext { selection: &selection, ..*cx })
+                    gather(&ToolContext { selection: &selection, ..*cx })
                 }
-                None => MoveSnap::new(cx),
+                None => gather(cx),
             });
             out.push(Action::Begin(if m.alt { "Copy".into() } else { "Move".into() }));
         }
@@ -1721,7 +1807,7 @@ impl SelectionTool {
         }
         // Shift has already constrained `d`: any change is a snap.
         self.snapped = (d - unsnapped).hypot() > 1e-9;
-        self.state = State::Moving { start, press, hold, began: true, deselect: None, key: None, exclude: None };
+        self.state = State::Moving { start, press, hold, by_anchor, began: true, deselect: None, key: None, exclude: None };
         self.measure = cx.measurement_labels.then(|| (p, cx.offset_label(d.x, d.y)));
         let mut params = json!({ "matrix": matrix_json(Affine::translate(d)), "copy": m.alt });
         if backquote {
@@ -1729,6 +1815,7 @@ impl SelectionTool {
             params["patterns"] = json!(true);
         }
         self.last_move = Some(params.clone());
+        self.moved = Some(d);
         out.push(Action::Preview("object.transform".into(), params));
         out
     }

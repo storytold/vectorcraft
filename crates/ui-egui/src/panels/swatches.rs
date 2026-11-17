@@ -190,13 +190,14 @@ fn swatch_params(e: &Entry) -> Option<Value> {
 /// Apply a clicked swatch to the active proxy (Alt: the inactive one). An Alt-click on a color
 /// swatch with a gradient stop selected recolors the stop as dropping the swatch on it does,
 /// and with a freeform gradient point selected it recolors the point. A color swatch also becomes
-/// the Color Guide's base color.
+/// the Color Guide's base color, linked to the spot color it is or is a tint of.
 fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
     let Some(params) = swatch_params(e) else { return };
-    if let Entry::Swatch { paint, .. } = e
+    if let Entry::Swatch { name, paint, .. } = e
         && let Some(c) = paint.color()
     {
-        super::color_guide::choose_base(app, c);
+        let link = app.session.active().and_then(|st| st.doc.swatch_link(name));
+        super::color_guide::choose_linked_base(app, c, link);
     }
     if super::alt_held(ui)
         && let Some(c) = drag_of(e, vec![]).color()
@@ -209,6 +210,43 @@ fn apply(app: &mut VectorcraftApp, ui: &Ui, e: &Entry) {
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     body(app, ui, TILE);
+}
+
+/// Item actions target the clicked swatch, independently of the paint or other selected chips.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &Ui, resp: &Response, e: &Entry) {
+    if e.is_folder() {
+        return;
+    }
+    let name = e.name();
+    if resp.secondary_clicked() {
+        let selected = dnd::selection(app, ui);
+        if selected.last().map(String::as_str) != Some(name) {
+            set_pstate(ui.ctx(), "swatch-selected", vec![name.to_string()]);
+            set_pstate(ui.ctx(), "swatch-anchor", name.to_string());
+        }
+    }
+    resp.context_menu(|ui| {
+        // Recheck the document each frame: a swatch can be deleted while its menu is open.
+        let enabled = app.session.active().and_then(|st| st.doc.swatch(name)).is_some_and(|s| !s.is_reserved());
+        let command = if menu_item(ui, tl!("Swatch Options…"), enabled, false) {
+            Some("ui.swatchOptions")
+        } else if menu_item(ui, tl!("Duplicate Swatch"), enabled, false) {
+            Some("swatch.duplicate")
+        } else if menu_item(ui, tl!("Delete Swatch"), enabled, false) {
+            Some("swatch.delete")
+        } else {
+            None
+        };
+        if let Some(command) = command {
+            if command == "swatch.delete" {
+                actions::delete(app, vec![name.to_string()], false);
+            } else {
+                // run reports failures through the app's status message.
+                let _ = app.run(command, json!({"name": name}));
+            }
+            ui.close();
+        }
+    });
 }
 
 /// The panel in a Fill/Stroke chip popover (the Control bar's and Properties'): the same body, its
