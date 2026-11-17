@@ -537,6 +537,21 @@ fn choosing_a_pdfx_standard_sets_its_version_and_writes_the_standard() {
     assert_eq!((get(d, "compatibility"), get(d, "createLayers")), (&json!("1.6"), &json!(true)));
 }
 
+/// Profile inclusion is disabled with a standard, so choosing PDF/X-3 or PDF/X-4 sets it back to
+/// unset: a `none` chosen before would write every CMYK color as DeviceCMYK.
+#[test]
+fn choosing_pdfx3_or_pdfx4_unsets_profile_inclusion() {
+    let (mut app, _, _) = app();
+    for standard in [Standard::PdfX3, Standard::PdfX4] {
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "output": {"profiles": "none"}})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!(get(d, "output.profiles"), &json!("none"));
+        set(d, "standard", json!(standard.id()));
+        standard_chosen(d, standard);
+        assert_eq!(get(d, "output.profiles"), &json!(vectorcraft_pdf::UNSET_CHOICE), "{}", standard.id());
+    }
+}
+
 /// "Write pages longer than 200 in at full size in points" is enabled only without a standard, at
 /// PDF 1.5 and later: PDF/X files and PDF 1.3 and 1.4 files write long pages in points anyway, and
 /// PDF/A files keep the `UserUnit`.

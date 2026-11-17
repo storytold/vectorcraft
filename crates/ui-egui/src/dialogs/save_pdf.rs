@@ -452,7 +452,8 @@ pub(super) fn section_list(ui: &mut egui::Ui, d: &mut Dialog, sections: &[&str],
 
 /// What choosing `standard` changes: the compatibility, to its version unless it allows the one
 /// chosen, and off what files of a standard can't have (editing data, passwords; layers in PDF/X-1a
-/// and PDF/X-3).
+/// and PDF/X-3). In PDF/X-3 and PDF/X-4, Profile inclusion goes back to unset: the picker is
+/// disabled there, and `none` would write every CMYK color as DeviceCMYK.
 fn standard_chosen(d: &mut Dialog, standard: Standard) {
     if choice::<Compatibility>(d, "compatibility").is_some_and(|c| !standard.allows(c)) {
         set(d, "compatibility", json!(standard.version().id()));
@@ -465,6 +466,9 @@ fn standard_chosen(d: &mut Dialog, standard: Standard) {
     }
     if !standard.allows_layers() {
         set(d, "createLayers", json!(false));
+    }
+    if standard.is_pdfx() && !standard.cmyk_only() {
+        set(d, "output.profiles", json!(vectorcraft_pdf::UNSET_CHOICE));
     }
 }
 
