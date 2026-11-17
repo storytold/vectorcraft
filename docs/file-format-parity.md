@@ -146,7 +146,13 @@ private editing data. VectorCraft:
   effects or a group's own fills and strokes, blends in opacity masks, pattern tiles, symbols and art cut to a
   clipping object or nested eight levels deep in art written in place of other objects (symbol instances, live
   objects, brushed strokes), blends whose art would pass the most objects VectorCraft's reader reads, and every blend
-  on a large canvas.
+  on a large canvas. Gradient meshes are written as meshes: each mesh point's place, color, opacity and handles, patch by
+  patch; a reflected mesh is written with its columns in reverse order, and opens with each row's points in reverse
+  order. Meshes with a point in a Lab color, with
+  more than 128 rows or columns, folded meshes (patches whose corners turn different ways), meshes VectorCraft's reader
+  wouldn't open as they are drawn, meshes in pattern tiles and in art cut to a clipping object, and every mesh on a
+  large canvas are written as their drawn look with a warning. In a symbol's art, an envelope's contents are written in
+  the canvas's space with y down.
   Point type, area type (with its rows, columns,
   gutters and first baseline, threaded frames included) and type on a path are written as text: a text object for
   each, naming its story in the text document, with the characters, fonts, sizes, leading, tracking, baseline shift,
@@ -161,7 +167,7 @@ private editing data. VectorCraft:
   clipping object, mirrored type, turned or unevenly scaled area type and type on a path, area type in an open frame,
   type on an open path whose ends meet, area type whose wrap cannot be reconstructed from plain saved paths, compound paths or groups, type of only white space, threads of
   type on a path, threads whose frames differ in orientation, type and stories past the sizes VectorCraft's reader reads, and
-  type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, other clipping objects and live
+  type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, other clipping objects and other live
   objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
   or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
   color, each with a warning. Gradients that dither are written without dither's noise, Perceptual gradients and
@@ -299,6 +305,8 @@ A Scatter brush in the editing data whose last 15 numbers start with 1 comes int
 An object in a pattern's art or in a brush's art takes the file's art styles in the same way as an object on a layer: with a style VectorCraft reads, it comes in as itself with its effects live, not as the look it draws. An object in a pattern's art with a style in the file's style list keeps that graphic style's id, as does an object in an opacity mask's art. An art styles section inside a symbol's, a pattern's or a brush's art is skipped.
 
 Names in the editing data that aren't UTF-8 (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches, brushes, symbols, variables and data sets) are read as Windows-1252 unless `legacyNameEncoding` (`convert --legacy-name-encoding`) picks `macintosh`, `windows-949`, `shift_jis`, `gbk` or `big5`; the open result's warnings list the first three such names as read and count the rest. The text values of data sets are read in the same encoding.
+
+Gradient meshes in the editing data keep each point's own color where a patch's corners differ in color model. In a symbol's art, a gradient mesh's corners and an envelope's grid are read in the space an image's matrix is read in there, and an envelope's contents in its dictionary in the canvas's space with y down. In a file without a template box such a mesh or grid is not read, and its symbol's instances open as the page draws them, as with an image there. An envelope in a symbol's art whose grid and contents are in the symbol's own space, as earlier VectorCraft builds wrote them, opens as the art it draws.
 
 ## Format by format
 
