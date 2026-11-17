@@ -249,7 +249,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.rotateToSelection" | crate::addons::arrange::ZOOM => app.session.active().is_some_and(|d| !d.selection.objects.is_empty()),
         id if id.starts_with("file.openRecent") => recent_slot(app, id).is_some(),
         "file.clearRecent" => !app.ui.recent_files.is_empty(),
-        "help.clearRecentCommands" => !app.ui.recent_commands.is_empty(),
+        "help.clearRecentCommands" => !app.ui.recent_commands.is_empty() || !app.ui.command_uses.is_empty(),
         id if id.starts_with("type.recentFont") => {
             id["type.recentFont".len()..].parse::<usize>().is_ok_and(|n| n >= 1 && n <= app.recent_fonts().len()) && app.session.active().is_some()
         }

@@ -3140,10 +3140,11 @@ dropped.
 
 Help › Search Commands… keeps the last commands, tools, panels and effects picked from it, most recent first: an
 empty search lists them, and so does the Recent Commands list beside the search field. The desktop app saves the ids
-with the UI state. `help.clearRecentCommands {}` (Clear Recent Commands) empties the list and the saved ids, and
-returns `null`. A pick of it in the search is not kept as a recent pick. It is a UI command, so it needs the desktop
-app (`--connect`); `command_list` gives it `enabled: false` while no ids are saved. Saved ids the list leaves out, such as those of a
-plug-in that is not loaded, count as saved and are cleared with the rest.
+with the UI state, and also how many times each command was picked, which ranks the results.
+`help.clearRecentCommands {}` (Clear Recent Commands) empties the list, the saved ids and the pick counts, and
+returns `null`. A pick of it in the search is not kept as a recent pick or counted. It is a UI command, so it needs
+the desktop app (`--connect`); `command_list` gives it `enabled: false` while no ids and no counts are saved. Saved ids
+the list leaves out, such as those of a plug-in that is not loaded, count as saved and are cleared with the rest.
 
 ## Navigator panel options
 

@@ -685,6 +685,11 @@ impl CommandUses {
         }
     }
 
+    /// Whether no command is counted.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.uses.is_empty()
+    }
+
     /// The count of `id`'s picks as a grade from 0 (never picked) to 9: the base-2 logarithm of
     /// the count plus one, so 1 pick gives 1, 3 give 2, 7 give 3, and so on.
     fn grade(&self, id: &str) -> u8 {
@@ -1021,18 +1026,18 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.ui.palette_open = false;
         // A pick goes first in Recent Commands before it runs, and stays there when it ran or
         // opened a dialog, even when the dialog is then canceled. A refused pick puts the list
-        // back as it was. Only a pick that stays in the list is counted.
-        let before = (id != PALETTE_TOGGLE).then(|| app.ui.recent_commands.clone());
+        // back as it was. The pick is counted with it, before it runs, so Clear Recent Commands
+        // clears its own pick and count, and a refused pick puts the counts back too.
+        let before = (id != PALETTE_TOGGLE).then(|| (app.ui.recent_commands.clone(), app.ui.command_uses.clone()));
         if before.is_some() {
             remember(&mut app.ui.recent_commands, &id, |c| entries.list.iter().any(|e| e.id == c));
+            app.ui.command_uses.count(&id);
         }
-        let picked = run_pick(app, &id);
-        if let Some(before) = before {
-            if picked == Picked::Refused {
-                app.ui.recent_commands = before;
-            } else {
-                app.ui.command_uses.count(&id);
-            }
+        if run_pick(app, &id) == Picked::Refused
+            && let Some((recent, uses)) = before
+        {
+            app.ui.recent_commands = recent;
+            app.ui.command_uses = uses;
         }
     } else if outside {
         app.ui.palette_open = false;
@@ -1944,6 +1949,36 @@ mod tests {
         assert!(menus::enabled(&open.app, CLEAR));
         open.app.run(CLEAR, serde_json::json!({})).unwrap();
         assert!(open.app.ui.recent_commands.is_empty());
+    }
+
+    /// Clear Recent Commands also empties the pick counts, and a pick of it from the search is not
+    /// counted afterward; with counts left and no recent picks, it is still enabled.
+    #[test]
+    fn clear_recent_commands_also_clears_the_pick_counts() {
+        const CLEAR: &str = "help.clearRecentCommands";
+        let mut open = Open::new("clear recent commands", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into()];
+        for _ in 0..3 {
+            open.app.ui.command_uses.count("paint.swap");
+        }
+        open.app.ui.command_uses.count("object.group");
+        let k = open.listed().iter().position(|id| id == CLEAR).expect("the command's result");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        assert_eq!(open.highlighted(), k);
+        open.press(egui::Key::Enter, 1);
+        assert!(open.app.ui.recent_commands.is_empty(), "{:?}", open.app.ui.recent_commands);
+        assert_eq!(open.app.ui.command_uses, CommandUses::default(), "the pick of Clear is not counted either");
+        let saved: crate::state::UiState = serde_json::from_value(serde_json::to_value(&open.app.ui).unwrap()).unwrap();
+        assert_eq!(saved.command_uses, CommandUses::default());
+        assert!(!menus::enabled(&open.app, CLEAR));
+        // Counts without recent picks (Recent Commands emptied some other way) still enable it,
+        // and running it as a command empties them.
+        open.app.ui.command_uses.count("paint.swap");
+        assert!(menus::enabled(&open.app, CLEAR), "enabled while a count is saved");
+        open.app.run(CLEAR, serde_json::json!({})).unwrap();
+        assert_eq!(open.app.ui.command_uses, CommandUses::default());
+        assert_eq!(open.app.ui.command_uses.grade("paint.swap"), 0);
     }
 
     /// The palette opens again with its first row highlighted, even when it shows the same rows.
