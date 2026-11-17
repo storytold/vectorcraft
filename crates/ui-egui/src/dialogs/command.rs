@@ -9,7 +9,7 @@ use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
 
 pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |d| tl!(&d.str("__label")).to_string(),
+    heading: heading_label,
     body: |app, ui, d| {
         let command = d.str("__command");
         let (lengths, order) = (lengths(&command), order(&command));
@@ -22,6 +22,9 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
         let cmyk = app.session.active().is_some_and(|s| s.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk);
         let choices = |k: &str| rasterize_color_models(&command, k, cmyk).or_else(|| choices(&command, k));
         form::param_fields(ui, d, &|k| lengths.contains(&k), &choices, &rank, app.session.general_unit());
+        if command == crate::addons::packaging::SET_ROLE_SWATCH {
+            crate::addons::packaging::follow_role(app, d);
+        }
         if linked
             && d.fields.get("rowGutter") == d.fields.get("__rowGutterLinked")
             && let Some(g) = d.fields.get("gutter").cloned()
@@ -59,12 +62,29 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
+/// The dialog's heading (`__label`, English) in the UI language.
+fn heading_label(d: &Dialog) -> String {
+    heading_in(crate::i18n::current(), &d.str("__label"))
+}
+
+/// `label` as a heading in `lang`. A menu item opens the dialog with its label less the "…", so
+/// the menu item's row (the label with "…") is looked up first, without its "…", and then the
+/// plain row, as the effect dialog's heading is (`effect.rs`, `heading_label`).
+fn heading_in(lang: crate::i18n::Lang, label: &str) -> String {
+    use crate::i18n::{has, tr};
+    let dotted = format!("{label}…");
+    if has(lang, &dotted) {
+        return tr(lang, &dotted).trim_end_matches('…').trim_end().to_string();
+    }
+    tr(lang, label).to_string()
+}
+
 /// Does this dialog show a Preview checkbox? Grid Repeat Options does: the public page for the
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
 /// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask and
-/// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes. (Cancel rolls a
-/// preview back whichever dialog started it.)
+/// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes, and Path
+/// Precision Tools › Common Tangents. (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
@@ -74,7 +94,8 @@ fn previews(d: &Dialog) -> bool {
         | crate::addons::image::COLOR_MASK
         | crate::addons::cutting::WEED
         | crate::addons::cutting::BANNER
-        | crate::addons::cutting::NEST => true,
+        | crate::addons::cutting::NEST
+        | crate::addons::pathtools::COMMON_TANGENTS => true,
         _ => false,
     }
 }
@@ -159,6 +180,8 @@ fn order(command: &str) -> &'static [&'static str] {
             &["background", "colors", "contiguous", "match", "tolerance", "softness"]
         }
         crate::addons::cutting::BRIDGES => &["width", "count", "direction", "keepOriginal"],
+        crate::addons::packaging::SET_ROLE_SWATCH => &["role", "swatch"],
+        crate::addons::pathtools::COMMON_TANGENTS => &["tangents", "centerline"],
         _ => &[],
     }
 }
@@ -168,12 +191,14 @@ fn choices(command: &str, key: &str) -> Option<form::Choices> {
     match (command, key) {
         ("type.pathOptions", "effect") => Some(crate::menus::PATH_EFFECTS),
         ("type.pathOptions", "alignToPath") => Some(PATH_ALIGN),
+        (crate::addons::packaging::SET_ROLE_SWATCH, "role") => Some(crate::addons::packaging::ROLES),
         (crate::addons::typetools::RELEASE, "mode") => Some(crate::addons::typetools::RELEASE_MODES),
         (crate::addons::cutting::BRIDGES, "direction") => Some(crate::addons::cutting::BRIDGE_DIRECTIONS),
         ("text.areaOptions", "fit") => Some(AREA_FIT),
         ("text.areaOptions", "firstBaseline") => Some(FIRST_BASELINE),
         ("text.areaOptions", "verticalAlign") => Some(VERTICAL_ALIGN),
         (crate::addons::cutting::WEED, "direction") => Some(crate::addons::cutting::WEED_DIRECTIONS),
+        (crate::addons::pathtools::COMMON_TANGENTS, "tangents") => Some(crate::addons::pathtools::TANGENT_KINDS),
         (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "background") => Some(crate::addons::image::BACKGROUNDS),
         (crate::addons::image::REMOVE_BACKGROUND | crate::addons::image::COLOR_MASK, "match") => Some(crate::addons::image::MATCHES),
         _ => None,
@@ -377,9 +402,46 @@ mod tests {
             Some(NodeKind::Image(i)) => Some(i.key.clone()),
             _ => None,
         });
-        let img = image::load_from_memory(&st.doc.images[&key.expect("the rectangle became an image")].bytes).unwrap().to_rgba8();
+        let decoded = craft_image_codecs::decode(&st.doc.images[&key.expect("the rectangle became an image")].bytes).unwrap();
+        let img = image::RgbaImage::from_raw(decoded.width(), decoded.height(), decoded.to_rgba8()).unwrap();
         let p = img.get_pixel(img.width() / 2, img.height() / 2).0;
         assert!(p[0] == p[1] && p[1] == p[2] && p[0] < 128, "red in grayscale: {p:?}");
+    }
+
+    /// Object › Path › Clean Up… opens this dialog headed "Clean Up", which most catalogs hold only
+    /// as the menu label "Clean Up…" (#7991). In French the heading and every option are translated.
+    #[test]
+    fn clean_up_dialog_is_drawn_in_the_ui_language() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let entries = crate::menus::menu_entries(&app);
+        let item = entries.iter().find(|e| e.path == ["Object", "Path"] && e.label == "Clean Up…").expect("listed");
+        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        crate::menus::invoke(&mut app, &cmd, p);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("__label"), "Clean Up");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let heading = heading_label(app.ui.dialog.as_ref().unwrap());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(heading, "Nettoyer");
+        for s in ["Nettoyer", "Points isolés", "Objets sans fond ni contour", "Tracés de texte vides"] {
+            assert!(shown.contains(s), "{s} in {shown}");
+        }
+        for s in ["Clean Up", "Stray Points", "Unpainted Objects", "Empty Text Paths"] {
+            assert!(!shown.contains(s), "{s} left in English: {shown}");
+        }
+        assert_eq!(heading_label(app.ui.dialog.as_ref().unwrap()), "Clean Up", "English keeps the label");
+        // Every language with complete menus has the options, and heads the dialog as the menu
+        // item that opened it reads (Hindi also has a plain "Clean Up" row with other wording).
+        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
+            let menu = crate::i18n::tr(lang, &item.label);
+            assert_ne!(menu, item.label, "{}: menu item", lang.code());
+            assert_eq!(heading_in(lang, "Clean Up"), menu.trim_end_matches('…').trim_end(), "{}: heading", lang.code());
+            for key in ["strayPoints", "unpaintedObjects", "emptyTextPaths"] {
+                let label = form::humanize(key);
+                assert!(crate::i18n::has(lang, label.trim_end_matches(':')), "{}: {label}", lang.code());
+            }
+        }
     }
 
     /// A document with a rectangle made a 2 x 2 Grid Repeat and selected, its Repeat Options

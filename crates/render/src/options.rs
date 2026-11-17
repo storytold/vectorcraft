@@ -350,11 +350,16 @@ impl Rendered {
     /// Encode as PNG without metadata (thumbnails, screenshots, embedded rasters; exports use
     /// [`encode`]).
     pub fn to_png(&self) -> Result<Vec<u8>, String> {
-        let mut buf = Vec::new();
-        let img = image::RgbaImage::from_raw(self.width, self.height, self.to_straight())
-            .ok_or("PNG encoding failed: pixel buffer doesn't match the image size")?;
-        img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png).map_err(|e| format!("PNG encoding failed: {e}"))?;
-        Ok(buf)
+        let img = craft_image_codecs::Image::from_raw(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            self.to_straight(),
+        )
+        .map_err(|e| format!("PNG encoding failed: {e}"))?;
+        craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map_err(|e| format!("PNG encoding failed: {e}"))
     }
     /// Each pixel's grey level and alpha: the Rec. 709 luma of its straight colour, with `bilevel`
     /// black below 128 and white from there up. A clear pixel is white: no ink where a fill

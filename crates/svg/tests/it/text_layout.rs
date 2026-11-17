@@ -2,6 +2,7 @@
 //! its leading, baseline shift, scaling and kerning, and a renderer with the same font draws the
 //! export where the canvas draws the text.
 
+use craft_svg::tree::usvg;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
@@ -357,6 +358,19 @@ fn a_chosen_glyph_is_written_as_outlines() {
     assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
 }
 
+/// Type with an Adjust Diacritic Position is written as outlines: a reader's `<text>` would draw
+/// the marks where the font puts them.
+#[test]
+fn moved_diacritics_are_written_as_outlines() {
+    let svg = export(&area_doc(vec![run("re\u{301}sume\u{301}", style(12.0))], 280.0, Justify::Left), &ExportOptions::default());
+    assert!(svg.contains("<text"), "without a moved mark the text stays live: {svg}");
+    for moved in [CharStyle { diacritic_horizontal: 100.0, ..style(12.0) }, CharStyle { diacritic_vertical: -100.0, ..style(12.0) }] {
+        let d = area_doc(vec![run("re\u{301}", style(12.0)), run("sume\u{301}", moved)], 280.0, Justify::Left);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+    }
+}
+
 /// A run whose font size measures the cap height is written at the em size it is drawn at: 14 pt
 /// measuring a 0.7 em cap height is `font-size="20"`, after a 12 pt run measuring the em box,
 /// which takes the `<text>` element's 12.
@@ -657,6 +671,37 @@ fn justification_spacing_and_glyph_scaling_are_drawn_in_place() {
     }
 }
 
+/// Type on a path with Justification…'s Desired word or letter spacing or glyph scaling is outlined
+/// with a warning, since a `<textPath>` places its characters one after the other at their own
+/// advances. With the default Desired values it stays a `<textPath>`.
+#[test]
+fn justification_spacing_on_a_path_is_outlined() {
+    use vectorcraft_doc::JustificationOptions;
+    let doc = |j: JustificationOptions| {
+        let mut t = TextObject::point(Point::ZERO, "HO HO", style(12.0));
+        t.para.justification = j;
+        let mut line = BezPath::new();
+        line.move_to((20.0, 100.0));
+        line.line_to((280.0, 100.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        vectorcraft_svg::export_full(&d, &ExportOptions::default(), None)
+    };
+    let out = doc(JustificationOptions::default());
+    assert!(out.svg.contains("<textPath") && out.warnings.is_empty(), "{:?}", out.warnings);
+    for j in [
+        JustificationOptions { word_spacing: [0.0, 200.0, 300.0], ..JustificationOptions::default() },
+        JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() },
+        JustificationOptions { glyph_scaling: [50.0, 150.0, 200.0], ..JustificationOptions::default() },
+    ] {
+        let out = doc(j);
+        assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Justification")), "{:?}", out.warnings);
+    }
+}
+
 /// Justified and Mojikumi lines whose characters a reader draws where the layout does are written
 /// as before: a segment per style run, and per word on a justified line.
 #[test]
@@ -821,7 +866,7 @@ fn viewer_outlines(svg: &str) -> Vec<BezPath> {
                     let m = Affine::new([m.sx as f64, m.ky as f64, m.kx as f64, m.sy as f64, m.tx as f64, m.ty as f64]);
                     let mut bp = BezPath::new();
                     for s in p.data().segments() {
-                        use usvg::tiny_skia_path::PathSegment as S;
+                        use craft_svg::tree::usvg::tiny_skia_path::PathSegment as S;
                         let pt = |q: usvg::tiny_skia_path::Point| m * Point::new(q.x as f64, q.y as f64);
                         match s {
                             S::MoveTo(a) => bp.move_to(pt(a)),
@@ -908,5 +953,97 @@ fn paragraphs_aligned_differently_keep_their_alignment() {
         let js: Vec<Justify> = text.paragraph_styles().iter().map(|p| p.justify).collect();
         assert_eq!(js, [Justify::Left, Justify::Center, Justify::Right], "{svg}");
         assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.01);
+    }
+}
+
+/// With Kurikaeshi Moji Shori on, live type writes a repeat mark that starts a line as the
+/// character it is drawn as and places the text after it anew, with and without embedded fonts; a
+/// mark inside a line stays.
+#[test]
+fn a_repeat_mark_at_a_line_start_is_written_as_the_character_it_draws() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), ..style(12.0) };
+    for on in [false, true] {
+        let mut t = TextObject::point(Point::new(20.0, 40.0), "龘\u{2028}々龘龘々", st.clone());
+        t.para.kurikaeshi_moji_shori = on;
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        for embed_fonts in [false, true] {
+            let svg = export(&d, &ExportOptions { embed_fonts, ..Default::default() });
+            if !on {
+                assert!(svg.contains(">々龘龘々<"), "{svg}");
+                continue;
+            }
+            // The drawn character takes the mark's width on the canvas, so the text after it is
+            // placed where the canvas draws it.
+            let rest = svg.find(">龘龘々<").unwrap_or_else(|| panic!("{svg}"));
+            let tag = &svg[svg[..rest].rfind('<').unwrap_or(0)..rest];
+            assert!(tag.contains(" x=\""), "{tag}: {svg}");
+            assert_eq!(svg.matches('々').count(), 1, "only the mark inside the line stays: {svg}");
+        }
+    }
+}
+
+/// Kurikaeshi Moji Shori in horizontally scaled type: the character a repeat mark is drawn as is
+/// stretched (`textLength`) to the width the canvas draws that character at, not to the mark's
+/// advance, so a reader does not distort it when the two characters' widths differ.
+#[test]
+fn a_drawn_repeat_mark_in_scaled_type_keeps_the_width_of_its_character() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    // The test font draws 龘 and 々 with glyphs of different widths.
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), h_scale: 50.0, ..style(12.0) };
+    let mut t = TextObject::point(Point::new(20.0, 40.0), "龘\u{2028}々", st);
+    t.para.kurikaeshi_moji_shori = true;
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    // The textLength of each `<tspan>` that holds 龘 alone: the one on the first line and the one
+    // the mark is drawn as on the second.
+    let lengths: Vec<&str> = svg
+        .match_indices(">龘<")
+        .map(|(at, _)| {
+            let tag = &svg[svg[..at].rfind('<').unwrap_or(0)..at];
+            let from = tag.find("textLength=\"").unwrap_or_else(|| panic!("{tag}: {svg}")) + "textLength=\"".len();
+            &tag[from..from + tag[from..].find('"').unwrap_or(0)]
+        })
+        .collect();
+    assert_eq!(lengths.len(), 2, "{svg}");
+    assert_eq!(lengths[0], lengths[1], "{svg}");
+}
+
+/// Kurikaeshi Moji Shori: a `<textPath>` cannot draw a character in another character's width, so
+/// type on a path whose threaded frame starts with a repeat mark drawn as the character it repeats
+/// is outlined, with a warning; with the setting off it stays live text.
+#[test]
+fn a_repeat_mark_starting_a_frame_on_a_path_is_outlined() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), ..style(12.0) };
+    let mut line = BezPath::new();
+    line.move_to((20.0, 40.0));
+    line.line_to((280.0, 40.0));
+    for on in [false, true] {
+        let mut t = TextObject::point(Point::ZERO, "々龘々", st.clone());
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        t.para.kurikaeshi_moji_shori = on;
+        t.first_para_continues = true;
+        t.first_para_lead = Some('龘');
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+        let warned = out.warnings.iter().any(|w| w.contains("repeat mark"));
+        if on {
+            assert!(!out.svg.contains("<textPath") && warned, "{:?}: {}", out.warnings, out.svg);
+        } else {
+            assert!(out.svg.contains(">々龘々<") && !warned, "{:?}: {}", out.warnings, out.svg);
+        }
     }
 }

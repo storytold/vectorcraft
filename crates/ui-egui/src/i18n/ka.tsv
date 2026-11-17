@@ -2099,6 +2099,121 @@
 @msg	two character sets are named `{name}`	ორ სიმბოლოთა ნაკრებს ერთი სახელი აქვს: `{name}`
 @msg	unknown key `{k}`; a font takes name, parts and custom	უცნობი გასაღები `{k}`; შრიფტი იღებს name, parts და custom
 @msg	{label} failed: {e}	{label} ვერ შესრულდა: {e}
+	Glyph Categories	გლიფების კატეგორიები
+	Import Metadata Template…	მეტამონაცემების შაბლონის იმპორტირება…
+	Metadata Templates	მეტამონაცემების შაბლონები
+	PSD Info	PSD ინფორმაცია
+	Convert Layers to Objects	შრეების ობიექტებად გარდაქმნა
+	Flatten Layers to a Single Image	შრეების ერთ გამოსახულებად გაბრტყელება
+	Import Hidden Layers	დამალული შრეების იმპორტირება
+	Import Slices	ნაჭრების იმპორტირება
+	Limit to Library	ბიბლიოთეკით შეზღუდვა
+	PSD Import Options	PSD-ის იმპორტის პარამეტრები
+	Pick from Swatches	ფერის ნიმუშებიდან არჩევა
+	Place PSD	PSD-ის განთავსება
+@msg	`args` is larger than 1 MiB	`args` 1 MiB-ზე დიდია
+@msg	`args` must be an object	`args` უნდა იყოს ობიექტი
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 64 დონეზე ღრმადაა ჩადგმული
+@msg	`baseAlong` must be one of x, y	`baseAlong` უნდა იყოს ერთ-ერთი: x, y
+@msg	`family` is required	`family` აუცილებელია
+@msg	`family` must be a string	`family` უნდა იყოს სტრიქონი
+@msg	`from.byte` is past the end of {id}'s text	`from.byte` ობიექტის {id} ტექსტის ბოლოს იქითაა
+@msg	`from.byte` must be a whole number	`from.byte` უნდა იყოს მთელი რიცხვი
+@msg	`from.id` must be a type object's id	`from.id` უნდა იყოს ტექსტური ობიექტის id
+@msg	`from.id` {id} is not a type object	`from.id` {id} ტექსტური ობიექტი არ არის
+@msg	`from.id` {id} is not one of the type objects checked	`from.id` {id} შემოწმებულ ტექსტურ ობიექტებს შორის არ არის
+@msg	`from` must be {{id, byte}}	`from` უნდა იყოს {{id, byte}}
+@msg	`from` takes id and byte, not `{k}`	`from` იღებს id და byte, არა `{k}`
+@msg	`installed` takes a `path`, not a `source`	`installed` იღებს `path`, არა `source`
+@msg	`limit` must be a whole number from 1 to {MAX_SIMILAR}	`limit` უნდა იყოს მთელი რიცხვი 1-დან {MAX_SIMILAR}-მდე
+@msg	`lineWidth` must be a number, not {w}	`lineWidth` უნდა იყოს რიცხვი და არა {w}
+@msg	`lineWidth` must be from {min} to {max} pt, not {w}	`lineWidth` უნდა იყოს {min}-დან {max} pt-მდე და არა {w}
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` უნდა იყოს მთელი რიცხვი 1-დან {_1}-მდე
+@msg	`max` must be 1 to {MAX_WORDS}	`max` უნდა იყოს 1-დან {MAX_WORDS}-მდე
+@msg	`path` is empty	`path` ცარიელია
+@msg	`path` must name a .js or .jsx file	`path` უნდა მიუთითებდეს .js ან .jsx ფაილს
+@msg	`reference` must be a whole number from 0 to 8	`reference` უნდა იყოს მთელი რიცხვი 0-დან 8-მდე
+@msg	`ringSeed` must be below 2^53, not {r}	`ringSeed` უნდა იყოს 2^53-ზე ნაკლები და არა {r}
+@msg	`source` is the only path, line or label that graph group `target` stands for	`source` ერთადერთი ტრაექტორია, ხაზი ან წარწერაა, რომელსაც დიაგრამის ჯგუფი `target` წარმოადგენს
+@msg	`tolerance` must be from {_1} to {_2} pt	`tolerance` უნდა იყოს {_1}-დან {_2} pt-მდე
+@msg	`words` must be a list of {{id, start, end}}	`words` უნდა იყოს {{id, start, end}} ელემენტების სია
+@msg	`{key}` must be a whole number between {min} and {max} (got {n})	`{key}` უნდა იყოს მთელი რიცხვი {min}-სა და {max}-ს შორის (მიღებულია {n})
+@msg	`{key}` must be a whole number of at least 0, not {v}	`{key}` უნდა იყოს არაუარყოფითი მთელი რიცხვი და არა {v}
+@msg	`{key}` must be from 0 to {max}, not {n}	`{key}` უნდა იყოს 0-დან {max}-მდე და არა {n}
+@msg	`{name}` already carries the {_1} role	ფერის ნიმუში `{name}` უკვე ხაზის ტიპს {_1} ეკუთვნის
+@msg	`{name}` isn't a global or spot color	`{name}` გლობალური ან სპოტ-ფერი არ არის
+@msg	`{var_key}` must be from {_1} to {most}	`{var_key}` უნდა იყოს {_1}-დან {most}-მდე
+@msg	a slice in the slices' descriptor has no bounds	ნაჭრების დესკრიპტორში ერთ-ერთ ნაჭერს საზღვრები არ აქვს
+@msg	a slice's bounds in the slices' descriptor aren't numbers	ნაჭრების დესკრიპტორში ნაჭრის საზღვრები რიცხვები არ არის
+@msg	a slice's text has more than the {MAX_SLICE_TEXT} characters a PSD file holds	ნაჭრის ტექსტი {MAX_SLICE_TEXT}-ზე მეტ სიმბოლოს შეიცავს, PSD ფაილი კი მაქსიმუმ ამდენს იტევს
+@msg	a text in the slices has more than the {MAX_TEXT} characters read	ნაჭრების ერთ-ერთი ტექსტი {MAX_TEXT}-ზე მეტ სიმბოლოს შეიცავს, წაიკითხება კი მაქსიმუმ ამდენი
+@msg	a word's `id` must be a type object's id	სიტყვის `id` უნდა იყოს ტექსტური ობიექტის id
+@msg	a word's `{k}` must be a whole number	სიტყვის `{k}` უნდა იყოს მთელი რიცხვი
+@msg	alignToPixelGrid must be true or false	alignToPixelGrid უნდა იყოს true ან false
+@msg	an image is too large to draw	გამოსახულება დასახატად ზედმეტად დიდია
+@msg	an image of {sw} × {sh} pixels is too large to resample	{sw} × {sh} პიქსელის გამოსახულება გარჩევადობის შესაცვლელად ზედმეტად დიდია
+@msg	byColor needs the seam fills' group under every path: move it to the bottom or delete it	byColor-ს სჭირდება, რომ ნაკერების შევსებების ჯგუფი ყველა ტრაექტორიის ქვემოთ იყოს: გადაიტანეთ ის ყველაზე ქვემოთ ან წაშალეთ
+@msg	cannot apply brush `{name}`: path has no stroke	ფუნჯის `{name}` გამოყენება შეუძლებელია: ტრაექტორიას კონტური არ აქვს
+@msg	could not decode image: {_1}	გამოსახულების დეკოდირება ვერ მოხერხდა: {_1}
+@msg	duplicate attribute `{key}`	დუბლირებული ატრიბუტი `{key}`
+@msg	duplicate expanded attribute `{key}`	გაშლილი სახელით დუბლირებული ატრიბუტი `{key}`
+@msg	each of `words` must be {{id, start, end}}	`words`-ის თითოეული ელემენტი უნდა იყოს {{id, start, end}}
+@msg	each of `words` takes id, start and end, not `{k}`	`words`-ის თითოეული ელემენტი იღებს id, start და end, არა `{k}`
+@msg	give `points` or `rect`, not both	მიუთითეთ `points` ან `rect`, ორივე არა
+@msg	give exactly one of `path` and `source`	მიუთითეთ ზუსტად ერთი: `path` ან `source`
+@msg	hiddenLayers applies to a PSD file placed with layers: true	hiddenLayers ეხება PSD ფაილს, რომელიც განთავსებულია პარამეტრით layers: true
+@msg	image is too large to draw	გამოსახულება დასახატად ზედმეტად დიდია
+@msg	importSlices must be true or false	importSlices უნდა იყოს true ან false
+@msg	importSlices: a linked PSD file is placed as its flat image; give link: false to embed it with its slices	importSlices: დაკავშირებული PSD ფაილი განთავსდება როგორც მისი ბრტყელი გამოსახულება; ნაჭრებთან ერთად ჩასაშენებლად მიუთითეთ link: false
+@msg	invalid 16-bit pixel buffer	არასწორი 16-ბიტიანი პიქსელების ბუფერი
+@msg	invalid 8-bit pixel buffer	არასწორი 8-ბიტიანი პიქსელების ბუფერი
+@msg	layers: a linked PSD file is placed as its flat image; leave link out or give link: false	layers: დაკავშირებული PSD ფაილი განთავსდება როგორც მისი ბრტყელი გამოსახულება; არ მიუთითოთ link ან მიუთითეთ link: false
+@msg	missing `role`	აკლია `role`
+@msg	missing `swatch`	აკლია `swatch`
+@msg	mode must be replace or append	mode უნდა იყოს replace ან append
+@msg	pdfs `single` writes artboards as the pages of one PDF: assets, layers and selection `each` write a PDF each	pdfs `single` სამუშაო დაფებს ერთი PDF-ის გვერდებად წერს: assets, layers და selection `each` თითოეულ ელემენტს ცალკე PDF-ად წერს
+@msg	preserveText writes type layers: it needs layers: true	preserveText ტექსტურ შრეებს წერს: მას სჭირდება layers: true
+@msg	rect is [x, y, width, height] in points, with a width and a height above 0	rect არის [x, y, width, height] პუნქტებში, 0-ზე მეტი სიგანითა და სიმაღლით
+@msg	select a path that is neither locked nor hidden: text, images and symbol instances can't have a fold line role	მონიშნეთ ტრაექტორია, რომელიც არც ჩაკეტილია და არც დამალული: ტექსტს, გამოსახულებებსა და სიმბოლოს ეგზემპლარებს მოკეცვის ხაზის ტიპი ვერ მიენიჭება
+@msg	slice {number} has no finite bounds and can't be written to PSD	ნაჭერს {number} სასრული საზღვრები არ აქვს და PSD-ში ვერ ჩაიწერება
+@msg	style `{style}` of `{family}` is not available	შრიფტის ოჯახის `{family}` სტილი `{style}` მიუწვდომელია
+@msg	the decoded samples don't fit the image	დეკოდირებული პიქსელური მნიშვნელობები გამოსახულებას არ შეესაბამება
+@msg	the document has {count} slices, more than the {MAX_SLICES} a PSD file holds	დოკუმენტში ნაჭრების რაოდენობაა {count}, PSD ფაილი კი მაქსიმუმ {MAX_SLICES}-ს იტევს
+@msg	the document it was dropped on was closed	დოკუმენტი, რომელზეც ის ჩამოაგდეს, დაიხურა
+@msg	the document it was dropped on was reverted	დოკუმენტი, რომელზეც ის ჩამოაგდეს, წინა ვერსიაზე დაბრუნდა
+@msg	the document was switched	აქტიური დოკუმენტი შეიცვალა
+@msg	the file has {_1} slices, more than the {MAX_SLICES} read	ფაილში ნაჭრების რაოდენობაა {_1}, წაიკითხება კი მაქსიმუმ {MAX_SLICES}
+@msg	the file has {count} slices, more than the {MAX_SLICES} read	ფაილში ნაჭრების რაოდენობაა {count}, წაიკითხება კი მაქსიმუმ {MAX_SLICES}
+@msg	the file is no longer loaded	ფაილი აღარ არის ჩატვირთული
+@msg	the image is too large to change	გამოსახულება შესაცვლელად ზედმეტად დიდია
+@msg	the image is too large to draw	გამოსახულება დასახატად ზედმეტად დიდია
+@msg	the image's size can't be read	გამოსახულების ზომა ვერ იკითხება
+@msg	the lines and labels in graph group {_1} have different appearance rows: pass `aligned: true` or their ids	დიაგრამის ჯგუფში {_1} ხაზებსა და წარწერებს იერსახის სხვადასხვა სტრიქონები აქვს: მიუთითეთ `aligned: true` ან მათი id-ები
+@msg	the slices are stored in version {v}, which isn't read	ნაჭრები შენახულია ვერსიით {v}, რომელიც არ იკითხება
+@msg	the slices are too large for PSD (at most 4 GB)	ნაჭრები PSD-ისთვის ზედმეტად დიდია (მაქსიმუმ 4 GB)
+@msg	the slices' descriptor has a reference of an unknown kind ({_1})	ნაჭრების დესკრიპტორში უცნობი სახის მიმართვაა ({_1})
+@msg	the slices' descriptor has a value of an unknown type ({_1})	ნაჭრების დესკრიპტორში უცნობი ტიპის მნიშვნელობაა ({_1})
+@msg	the slices' descriptor has a version other than 16	ნაჭრების დესკრიპტორის ვერსია 16 არ არის
+@msg	the slices' descriptor has no list of slices	ნაჭრების დესკრიპტორში ნაჭრების სია არ არის
+@msg	the slices' descriptor holds too many values	ნაჭრების დესკრიპტორი ზედმეტად ბევრ მნიშვნელობას შეიცავს
+@msg	the slices' descriptor lists something other than a slice	ნაჭრების დესკრიპტორი ნაჭრის გარდა სხვა რამესაც ჩამოთვლის
+@msg	the slices' descriptor nests too deep	ნაჭრების დესკრიპტორი ზედმეტად ღრმადაა ჩადგმული
+@msg	through applies to scope "connected"	through მხოლოდ scope-ის მნიშვნელობით "connected" მოქმედებს
+@msg	through must be an array of at most 4096 edge ids	through უნდა იყოს კიდეების id-ების მასივი, მაქსიმუმ 4096 ელემენტით
+@msg	through: {id} is not an edge of {g}, or is given twice	through: {id} ჯგუფის {g} კიდე არ არის, ან ორჯერაა მითითებული
+@msg	too many in-scope namespace declarations	მოქმედების არეში სახელთა სივრცის ზედმეტად ბევრი გამოცხადებაა
+@msg	unknown role `{id}`: cut, crease, partialCut or perforation	უცნობი ხაზის ტიპი `{id}`: cut, crease, partialCut ან perforation
+@msg	unknown role `{id}`: cut, crease, partialCut, perforation or none	უცნობი ხაზის ტიპი `{id}`: cut, crease, partialCut, perforation ან none
+@msg	words of {_1} overlap at byte {a}	ობიექტის {_1} სიტყვები ერთმანეთს ფარავს ბაიტზე {a}
+@msg	{_1} is not a type object	{_1} ტექსტური ობიექტი არ არის
+@msg	{a}..{b} is not a word of {_1}'s text	{a}..{b} ობიექტის {_1} ტექსტის სიტყვა არ არის
+@msg	{label}: the clipping masks hide the selected art	{label}: მომჭრელი ნიღბები მონიშნულ ნახატს მალავს
+@msg	{path}: invalid pixel buffer	{path}: არასწორი პიქსელების ბუფერი
+@msg	{why} (the {_1} role's swatch; addon.packaging.setRoleSwatch picks another)	{why} (ხაზის ტიპის {_1} ფერის ნიმუში; სხვას addon.packaging.setRoleSwatch ირჩევს)
+@msg	{w} × {h} pixels take {rgba} bytes as RGBA	{w} × {h} პიქსელი RGBA-ში {rgba} ბაიტს იკავებს
+@msg	Image Trace finished, but its document was reverted: trace it again	გამოსახულების ვექტორიზაცია დასრულდა, მაგრამ მისი დოკუმენტი წინა ვერსიაზე დაბრუნდა: გაუშვით ვექტორიზაცია ხელახლა
+@msg	ppi can't be more than {max} for this image	ამ გამოსახულებისთვის ppi ვერ იქნება {max}-ზე მეტი
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim გამოსახულების პიქსელებს უცვლელად ტოვებს: ppi არ მიუთითოთ
 
 	Glowing Edges…	მანათობელი კიდეები…
 	About VectorCraft	VectorCraft-ის შესახებ
@@ -2461,7 +2576,7 @@
 @msg	type on an open or compound path cannot be centered on its top or bottom: {open}	ღია ან შედგენილ ტრაექტორიაზე ტექსტი ვერ მოთავსდება ზემოთ ან ქვემოთ ცენტრში: {open}
 @msg	type on a path with no length or no height cannot be centered: {flat}	ტექსტი ვერ მოთავსდება ცენტრში ტრაექტორიაზე, რომელსაც არ აქვს სიგრძე ან სიმაღლე: {flat}
 @msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	დაკავშირებულ ტექსტში ტრაექტორიაზე ტექსტი ვერ მოთავსდება ზემოთ ან ქვემოთ ცენტრში: {frames}
-@msg	select type on a closed path	მონიშნეთ დახურულ ტრაექტორიაზე ტექსტი
+@msg	select type on a closed path	მონიშნეთ შეკრულ ტრაექტორიაზე ტექსტი
 	Fill with Placeholder Text	შემავსებელი ტექსტით შევსება
 	Insert Inline Symbol	ჩადგმული სიმბოლოს ჩასმა
 	Show Hidden Characters	დამალული სიმბოლოების ჩვენება
@@ -2544,6 +2659,7 @@
 	Highlight Size	ელვარების ზომა
 	Blend Steps	შერევის საფეხურები
 	Shading Color	დაჩრდილვის ფერი
+	Black Overprint	ზედდაბეჭდილი შავი
 	Draw Hidden Faces	დამალული წახნაგების დახატვა
 	Revolve…	ბრუნვა…
 	Inflate…	გაბერვა…
@@ -2873,6 +2989,7 @@
 	VectorCraft Help…	VectorCraft-ის დახმარება…
 	Automatic	ავტომატური
 	Isolate Selected Group	მონიშნული ჯგუფის იზოლირება
+	Isolate Selected Path	მონიშნული ტრაექტორიის იზოლირება
 	Exit Isolation Mode	იზოლაციის რეჟიმიდან გამოსვლა
 	Make Clipping Mask	მომჭრელი ნიღბის შექმნა
 	Release Clipping Mask	მომჭრელი ნიღბის მოხსნა
@@ -3008,6 +3125,7 @@
 	Change Panel Layout	პანელების განლაგების შეცვლა
 	Close Panel	პანელის დახურვა
 	Collapse Panel Group	პანელების ჯგუფის აკეცვა
+	Cycle Display Sizes	ჩვენების ზომების გადართვა
 	Move Panel	პანელის გადაადგილება
 	Group with	ერთად დაჯგუფება
 	Resize panels	პანელების ზომის შეცვლა
@@ -3027,6 +3145,8 @@
 	Reset all Revolve settings to their defaults.	ბრუნვის ყველა პარამეტრის ნაგულისხმევზე დაბრუნება.
 	Drag values or labels. Double-click a value to type.	გადაათრიეთ მნიშვნელობები ან წარწერები. მნიშვნელობის ასაკრეფად ორჯერ დაწკაპეთ.
 	Drag rings to rotate. Shift snaps to 15°.	შესაბრუნებლად გადაათრიეთ რგოლები. Shift მიაბამს 15°-ის ჯერად კუთხეებზე.
+	Track cube	შემობრუნების კუბი
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	შესაბრუნებლად გადაათრიეთ წახნაგი, წიბო ან რგოლი. Shift აბრუნებს ეკრანის ერთი ღერძის გარშემო.
 	Drag the light, or its rings. Shift snaps to 15°.	გადაათრიეთ სინათლე ან მისი რგოლები. Shift მიაბამს 15°-ის ჯერად კუთხეებზე.
 lighting	Light	სინათლე
 	Keep visible surfaces only when expanding	გაშლისას მხოლოდ ხილული ზედაპირების შენარჩუნება
@@ -3265,7 +3385,7 @@ lighting	Light	სინათლე
 	Name* @ 66.67% (RGB/Preview)	სახელი* @ 66.67% (RGB/წინასწარი ნახვა)
 	No Document	დოკუმენტი არ არის
 	Press 	დააჭირეთ 
-	Search commands and tools	ბრძანებებისა და ხელსაწყოების ძიება
+	Search commands, tools, panels and effects	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება
 	Style:	სტილი:
 	Switch workspace	სამუშაო სივრცის გადართვა
 	Show all open documents	ყველა ღია დოკუმენტის ჩვენება
@@ -3372,6 +3492,8 @@ lighting	Light	სინათლე
 	Lasso Tool	ლასოს ხელსაწყო
 	Enclosing Lasso Tool	შემომსაზღვრელი ლასოს ხელსაწყო
 	Enclosing Lasso	შემომსაზღვრელი ლასო
+	Polygonal Lasso Tool	მრავალკუთხა ლასოს ხელსაწყო
+	Polygonal Lasso	მრავალკუთხა ლასო
 	Line Cut Tool	ხაზით ჭრის ხელსაწყო
 	Line Graph Tool	ხაზოვანი დიაგრამის ხელსაწყო
 	Line Segment Tool	ხაზის სეგმენტის ხელსაწყო
@@ -3447,6 +3569,10 @@ lighting	Light	სინათლე
 	Play Current Selection	მიმდინარე მონიშნულის შესრულება
 	Save Actions…	მოქმედებების შენახვა…
 	Load Actions…	მოქმედებების ჩატვირთვა…
+	Reset Actions	მოქმედებების ჩამოყრა
+	Replace the current actions with the default set?	ჩანაცვლდეს მიმდინარე მოქმედებები ნაგულისხმევი ნაკრებით?
+	Append adds the default set after the current sets instead.	„დამატება“ ამის ნაცვლად ნაგულისხმევ ნაკრებს მიმდინარე ნაკრებების შემდეგ ამატებს.
+	Append	დამატება
 	Reflect Horizontal	ჰორიზონტალურად არეკვლა
 	Rotate 90° CW	90°-ით შემობრუნება საათის ისრის მიმართულებით
 	Set 1	ნაკრები 1
@@ -3554,6 +3680,8 @@ lighting	Light	სინათლე
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
 	Tsume	ცუმე
+	Adjust Horizontal Diacritic Position	დიაკრიტიკის ჰორიზონტალური პოზიციის მორგება
+	Adjust Vertical Diacritic Position	დიაკრიტიკის ვერტიკალური პოზიციის მორგება
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -3664,6 +3792,10 @@ digits	Malayalam	მალაიალამური
 	Em Box	Em-ბლოკი
 	x-Height	x-სიმაღლე
 	ICF Box	ICF-ბლოკი
+	Show Sample	ნიმუშის ჩვენება
+	Hide Sample	ნიმუშის დამალვა
+	Max Ascent/Descent	მაქს. სიმაღლე/სიღრმე
+	Max Ascender	მაქს. ზედა გამონაშვერი
 	Copy Color Value (Hex)	ფერის მნიშვნელობის კოპირება (Hex)
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
@@ -3919,14 +4051,17 @@ digits	Malayalam	მალაიალამური
 	Select text to set its OpenType features.	OpenType შესაძლებლობების დასაყენებლად მონიშნეთ ტექსტი.
 	Standard Ligatures	სტანდარტული ლიგატურები
 	Stylistic Alternates	სტილისტური ალტერნატივები
+	Ligatures	ლიგატურები
+	Ornaments	ორნამენტები
+	Figures	ციფრები
 	Swash	მოხატული ასოები (swash)
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
 	Titling Alternates	სათაურის ალტერნატივები
 	Middle Eastern & South Asian Single-line Composer	სტრიქონის მიხედვით აწყობა (შუა აღმოსავლეთი და სამხრეთ აზია)
 	Middle Eastern & South Asian Every-line Composer	აბზაცის მიხედვით აწყობა (შუა აღმოსავლეთი და სამხრეთ აზია)
-	Standard Single-line Composer	სტანდარტული სტრიქონის მიხედვით აწყობა
-	Standard Every-line Composer	სტანდარტული აბზაცის მიხედვით აწყობა
+	Standard Single-line Composer	სტრიქონის მიხედვით აწყობა (სტანდარტული)
+	Standard Every-line Composer	აბზაცის მიხედვით აწყობა (სტანდარტული)
 	First-line Left Indent	პირველი სტრიქონის მარცხენა შეწევა
 	Hyphenation…	სიტყვების გადატანა…
 	Justification…	სწორება…
@@ -3955,6 +4090,7 @@ digits	Malayalam	მალაიალამური
 	Roman Hanging Punctuation	რომაული გამოწეული პუნქტუაცია
 	Korean Line Break Anywhere	კორეული სტრიქონის გადატანა ნებისმიერ ადგილას
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	აღმოსავლეთ აზიური აწყობის პარამეტრები
 	Korean Composition Settings	კორეული აწყობის პარამეტრები
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
@@ -4439,6 +4575,18 @@ digits	Malayalam	მალაიალამური
 	Author Title:	ავტორის თანამდებობა:
 	Author:	ავტორი:
 	Copyright Info URL:	საავტორო უფლების ინფორმაციის URL:
+	Save Metadata Template…	მეტამონაცემების შაბლონის შენახვა…
+	Import Options	იმპორტის პარამეტრები
+	Clear existing fields and use the template's	არსებული ველების გასუფთავება და შაბლონის ველების გამოყენება
+	Keep existing fields, but replace those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების ჩანაცვლება
+	Keep existing fields, but append those the template has	არსებული ველების შენარჩუნება, მაგრამ შაბლონში არსებულების დამატება
+@msg	the template name can't be empty	შაბლონის სახელი ცარიელი ვერ იქნება
+@msg	the template name isn't usable as a file name	შაბლონის სახელი ფაილის სახელად ვერ გამოდგება
+@msg	no metadata templates folder here	აქ მეტამონაცემების შაბლონების საქაღალდე არ არის
+@msg	give `name` or `path`, not both	მიუთითეთ `name` ან `path`, ორივე არა
+@msg	give one of `path`, `name` and `data`	მიუთითეთ ერთ-ერთი: `path`, `name` ან `data`
+@msg	mode must be replace, keep or append	mode უნდა იყოს replace, keep ან append
+@msg	the file is not an XMP metadata template	ფაილი არ არის XMP მეტამონაცემების შაბლონი
 	Copyright Notice:	საავტორო უფლების შენიშვნა:
 	Copyright Status:	საავტორო უფლების სტატუსი:
 	Created:	შექმნილია:
@@ -4760,6 +4908,12 @@ digits	Malayalam	მალაიალამური
 	Show smooth color wheel	გლუვი ფერთა წრის ჩვენება
 	Show segmented color wheel	სეგმენტირებული ფერთა წრის ჩვენება
 	Show color bars	ფერთა ზოლების ჩვენება
+	Show brightness and hue on wheel	სიკაშკაშისა და ფერის ტონის ჩვენება წრეზე
+	Show saturation and hue on wheel	გაჯერებისა და ფერის ტონის ჩვენება წრეზე
+	Add Color Tool	ფერის დამატების ხელსაწყო
+	Remove Color Tool	ფერის წაშლის ხელსაწყო
+	Remove Color	ფერის წაშლა
+	Find the selected colors in the artwork	მონიშნული ფერების ძებნა ნახატში
 	Keep this row's colors (exclude)	ამ სტრიქონის ფერების შენარჩუნება (გამორიცხვა)
 	Limit to Library:	ბიბლიოთეკით შეზღუდვა:
 	Link harmony colors	ჰარმონიის ფერების დაკავშირება
@@ -5328,6 +5482,12 @@ theme	Appearance	იერსახე
 	Find Font Files	შრიფტის ფაილების ძებნა
 	Add Font Files	შრიფტის ფაილების დამატება
 	Font List	შრიფტების სია
+	Show Similar Fonts	მსგავსი შრიფტების ჩვენება
+	Clear Similar Fonts	მსგავსი შრიფტების გასუფთავება
+	Fonts used in this document	ამ დოკუმენტში გამოყენებული შრიფტები
+	This document uses no available fonts	ეს დოკუმენტი არ იყენებს ხელმისაწვდომ შრიფტებს
+	Recently Added	ახლახან დამატებული
+	Fonts added in the last 30 days	ბოლო 30 დღეში დამატებული შრიფტები
 	Fonts in Document	დოკუმენტის შრიფტები
 	Refresh Font List	შრიფტების სიის განახლება
 	Replace Font	შრიფტის ჩანაცვლება
@@ -5344,7 +5504,9 @@ theme	Appearance	იერსახე
 	Create Graph	დიაგრამის შექმნა
 	Graph Data	დიაგრამის მონაცემები
 	Graph Type	დიაგრამის ტიპი
-	Graph Options	გრაფიკის პარამეტრები
+	Graph Type…	დიაგრამის ტიპი…
+	Graph Data…	დიაგრამის მონაცემები…
+	Graph Options	დიაგრამის პარამეტრები
 	Left Axis	მარცხენა ღერძი
 	Right Axis	მარჯვენა ღერძი
 	Category Axis	კატეგორიების ღერძი
@@ -5361,6 +5523,7 @@ theme	Appearance	იერსახე
 	Connect Data Points	მონაცემთა წერტილების შეერთება
 	Edge-to-Edge Lines	ხაზები კიდიდან კიდემდე
 	Draw Filled Lines	შევსებული ხაზების დახატვა
+	Line Width	ხაზის სისქე
 	Tick Values	დანაყოფების მნიშვნელობები
 	Override Calculated Values	გამოთვლილი მნიშვნელობების შეცვლა
 	Divisions	დანაყოფები
@@ -5369,15 +5532,15 @@ theme	Appearance	იერსახე
 	Draw Tick Marks Between Labels	ნიშნების დახატვა წარწერებს შორის
 	Add Labels	წარწერების დამატება
 	Maximum must be more than Minimum.	მაქსიმუმი მინიმუმზე მეტი უნდა იყოს.
-	Column Graph	სვეტოვანი გრაფიკი
-	Stacked Column Graph	დაწყობილი სვეტოვანი გრაფიკი
-	Bar Graph	ზოლოვანი გრაფიკი
-	Stacked Bar Graph	დაწყობილი ზოლოვანი გრაფიკი
-	Line Graph	ხაზოვანი გრაფიკი
-	Area Graph	არეების გრაფიკი
-	Scatter Graph	გაფანტული გრაფიკი
-	Pie Graph	წრიული გრაფიკი
-	Radar Graph	რადარული გრაფიკი
+	Column Graph	სვეტოვანი დიაგრამა
+	Stacked Column Graph	დასტად სვეტოვანი დიაგრამა
+	Bar Graph	ზოლოვანი დიაგრამა
+	Stacked Bar Graph	დასტად ზოლოვანი დიაგრამა
+	Line Graph	ხაზოვანი დიაგრამა
+	Area Graph	ფართობითი დიაგრამა
+	Scatter Graph	წერტილოვანი დიაგრამა
+	Pie Graph	წრიული დიაგრამა
+	Radar Graph	რადარული დიაგრამა
 	Vector Halftone	ვექტორული ნახევარტონი
 	spot	სპოტ
 	Text	ტექსტი
@@ -6052,7 +6215,13 @@ font-technology	Variable	ცვლადი
 	Saved {path}	შენახულია: {path}
 	Saving	შენახვა
 	Saving {}	ინახება: {}
-	Search commands and tools…	ბრძანებებისა და ხელსაწყოების ძიება…
+	Search commands, tools, panels and effects…	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება…
+	No commands match	შესაბამისი ბრძანება არ არის
+	{pos} of {total}: {name}	{pos} / {total}: {name}
+@plural	{n} result|{n} results	{n} შედეგი
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} შედეგიდან {shown}. გააგრძელეთ აკრეფა მათ შესამცირებლად.
+	Recent Commands	ბოლოდროინდელი ბრძანებები
+	No recent commands	ბოლოდროინდელი ბრძანებები არ არის
 	Dashed Line	ტირეებიანი ხაზი
 	Panel menu	პანელის მენიუ
 	Unembed…	ჩაშენების მოხსნა…
@@ -6063,6 +6232,12 @@ font-technology	Variable	ცვლადი
 	Preferences	პარამეტრები
 	Previous	წინა
 	Restore every preference to its default (applied on OK)	ყველა პარამეტრის ნაგულისხმევ მნიშვნელობაზე დაბრუნება (გამოიყენება OK-ზე დაჭერისას)
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ერთეული ახალი დოკუმენტებისთვის (ჩაშენებული ზომებით, პიქსელურის გარდა) და იმ გახსნილი ფაილებისთვის, რომლებშიც ერთეული არ წერია; OK-ზე დაწკაპებისას აქტიური დოკუმენტიც ამ ერთეულს მიიღებს.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	კონტურის სისქე, ტირეები და შუალედები ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	ტექსტის ზომა, სტრიქონთა დაშორება და საბაზისო ხაზის წანაცვლება ამ ერთეულში ჩანს, და მათთვის აკრეფილი რიცხვები ამ ერთეულში იკითხება.
+	The unit for East Asian type measurements, which no field uses yet.	აღმოსავლეთაზიური ტექსტის ზომების ერთეული, რომელსაც ჯერჯერობით არცერთი ველი არ იყენებს.
+	When on, a number typed without a unit into a field in picas is read in points.	ჩართვისას პიკებში მოცემულ ველში ერთეულის გარეშე აკრეფილი რიცხვი პუნქტებში იკითხება.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID-ის არჩევისას ობიექტების სახელები შრეების პანელში, ცვლადების პანელსა და შრის პარამეტრებში XML ID-ებად ჩანს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
@@ -6308,6 +6483,7 @@ font-technology	Variable	ცვლადი
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	ზოგიერთი რასტრული ეფექტი გამოსახულებად არ გადაიქცა: მათ დასჭირდებოდა 1024-ზე მეტი გამოსახულება ან ჯამში 256 მეგაპიქსელი
 @msg	Expand: no brush strokes selected	გაშლა: ფუნჯის შტრიხები მონიშნული არ არის
 @msg	Expand: no gradient fills	გაშლა: გრადიენტული შევსებები არ არის
 @msg	Expand: nothing to expand	გაშლა: გასაშლელი არაფერია
@@ -6485,7 +6661,7 @@ font-technology	Variable	ცვლადი
 @msg	cannot split an open path at its end point	ღია ტრაექტორიის ბოლო წერტილში გაყოფა შეუძლებელია
 @msg	closing needs three anchors	შეკვრას სამი საყრდენი წერტილი სჭირდება
 @msg	check an asset to export	მონიშნეთ ექსპორტის რესურსი
-@msg	check an artboard to export	მონიშნეთ ექსპორტის სახატავი დაფა
+@msg	check an artboard to export	მონიშნეთ ექსპორტის სამუშაო დაფა
 @msg	choice must be "merge" or "add", not `{choice}`	choice უნდა იყოს "merge" ან "add" და არა `{choice}`
 @msg	choose a direction to divide in	აირჩიეთ დაყოფის მიმართულება
 @msg	choose a folder to export to	აირჩიეთ ექსპორტის საქაღალდე
@@ -6555,6 +6731,9 @@ font-technology	Variable	ცვლადი
 @msg	no active document	აქტიური დოკუმენტი არ არის
 @msg	no active perspective plane	აქტიური პერსპექტივის სიბრტყე არ არის
 @msg	no anchor points selected	საყრდენი წერტილები მონიშნული არ არის
+@msg	`points` must be three [x, y] pairs of numbers	`points` უნდა იყოს რიცხვების სამი [x, y] წყვილი
+@msg	direct-select three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ სამი საყრდენი წერტილი ან მიუთითეთ `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის
 @msg	no artboard	სამუშაო დაფა არ არის
 @msg	no artboard {i} (0-based; the document has {_1})	სამუშაო დაფა {i} არ არსებობს (0-დან ითვლება; დოკუმენტს აქვს {_1})
@@ -6858,6 +7037,8 @@ font-technology	Variable	ცვლადი
 @msg	unknown option `{path}.{k}`	უცნობი პარამეტრი `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	უცნობი ზედდაბეჭდვა `{o}` (preserve, simulate ან discard)
 @msg	unknown panel `{raw}`	უცნობი პანელი `{raw}`
+@msg	`{panel}` has no display sizes to cycle	`{panel}` პანელს არ აქვს გადასართავი ჩვენების ზომები
+@msg	the panels are not shown	პანელები არ ჩანს
 @msg	panels can't be shown in Presentation Mode	პრეზენტაციის რეჟიმში პანელების ჩვენება შეუძლებელია
 @msg	unknown preference `{key}`	უცნობი პარამეტრი `{key}`
 @msg	Preferences imported.	პარამეტრები იმპორტირებულია.
@@ -7482,6 +7663,9 @@ font-technology	Variable	ცვლადი
 @msg	a 3D effect on a group's fill or stroke draws nothing	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი არაფერს ხატავს
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
+@msg	feConvolveMatrix's order	feConvolveMatrix-ის order
+@msg	feMorphology's radius	feMorphology-ის radius
+@msg	a blur's stdDeviation	დაბინდვის stdDeviation
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` უნდა იყოს ობიექტი, რომელიც შეიცავს მხოლოდ `mode`-ს, მნიშვნელობით shaded ან wireframe
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
@@ -7749,6 +7933,31 @@ imageTrace	Outline	კონტური
 @msg	$.evalFile requires a file path	$.evalFile-ს სჭირდება ფაილის მისამართი
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: დროის ლიმიტი უნდა იყოს მილიწამების სასრული რიცხვი, 0 ან მეტი
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: იღებს ფაილის მისამართს და დროის ლიმიტს
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} არ არის განსაზღვრული
+@msg	cannot read property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ წაიკითხება
+@msg	cannot set property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ დაყენდება
+@msg	cannot read a property of {base}	{base} მნიშვნელობის თვისება ვერ წაიკითხება
+@msg	cannot set a property of {base}	{base} მნიშვნელობის თვისება ვერ დაყენდება
+@msg	cannot define property '{key}': {why}	თვისება '{key}' ვერ განისაზღვრება: {why}
+@msg	cannot assign to property '{key}': {why}	თვისებას '{key}' მნიშვნელობა ვერ მიენიჭება: {why}
+@msg	cannot delete property '{key}'	თვისება '{key}' ვერ წაიშლება
+@msg	cannot declare function {ident}	ფუნქცია {ident} ვერ გამოცხადდება
+@msg	invalid assignment target	მინიჭების არასწორი სამიზნე
+@msg	the array's length is read-only	მასივის სიგრძე მხოლოდ წასაკითხია
+@msg	the property cannot be redefined	თვისება ხელახლა ვერ განისაზღვრება
+@msg	the object is not extensible	ობიექტი არ არის გაფართოებადი
+@msg	the length cannot be redefined	სიგრძე ხელახლა ვერ განისაზღვრება
+@msg	it is read-only	ის მხოლოდ წასაკითხია
+@msg	an element cannot be deleted	ელემენტი ვერ წაიშლება
+@msg	it has only a getter	მას მხოლოდ getter აქვს
+@msg	the value is a primitive	მნიშვნელობა პრიმიტიულია
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: სტრიქონი {line}, სვეტი {column}: {e} (გამონაკლისი)
 @msg	{name}: {e} (thrown)	{name}: {e} (გამონაკლისი)
@@ -7789,6 +7998,27 @@ imageTrace	Outline	კონტური
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის უკუძახილში, getter-ში, გარდაქმნაში ან ფაილში, რომელსაც $.evalFile უშვებს; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: შემდეგი პასუხი `answers`-ში არის {_1}-ისთვის და არა {name}-ისთვის
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers`-ში ამ დიალოგისთვის პასუხი აღარ დარჩა
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers`-ში დარჩა {n} პასუხი, რომელიც სკრიპტს არ გამოუყენებია
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	ხელსაწყომ „{_1}“ ფუნჯის ქვეშ {n} ობიექტი უცვლელად დატოვა ({_2}): ის მხოლოდ ტრაექტორიების ფორმას ცვლის
+liquify-tool	Warp	გაღუნვა
+liquify-tool	Twirl	დახვევა
+liquify-tool	Pucker	შეკუმშვა
+liquify-tool	Bloat	გაბერვა
+liquify-tool	Scallop	დაკბილვა
+liquify-tool	Crystallize	კრისტალიზაცია
+liquify-tool	Wrinkle	დანაოჭება
+liquify-kind	graphs	დიაგრამები
+liquify-kind	type	ტექსტი
+liquify-kind	symbols	სიმბოლოები
+liquify-kind	images	გამოსახულებები
+liquify-kind	meshes	ბადეები
+liquify-kind	envelopes	გარსები
+liquify-kind	repeats	გამეორებები
+liquify-kind	placed documents	განთავსებული დოკუმენტები
+liquify-kind	blends	გადასვლები
+liquify-list-two	{0}, {1}	{0} და {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} და {1}
 @msg	vc.document{place} is too large for a script	vc.document{place} ზედმეტად დიდია სკრიპტისთვის
 @msg	vc.log: the log of this run is full	vc.log: ამ გაშვების ჟურნალი სავსეა
 @msg	this function's script run has ended	ამ ფუნქციის სკრიპტის გაშვება დასრულდა
@@ -7980,7 +8210,7 @@ imageTrace	Outline	კონტური
 @msg	Unknown dimension orientation	ზომის უცნობი ორიენტაცია
 @msg	Unknown dimension style	ზომის უცნობი სტილი
 @msg	Unknown unit	უცნობი ერთეული
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეები ღია რჩება.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ღია პროფილების წრიული ბოლოების დახურვა. ნაწილობრივი ბრუნვისას ჭრის მხარეებიც იხურება.
 	Distance	მანძილი
 # Upstream sync 2026-10-16 (2): Smart Blur modes, Layers panel filter, Color panel options, templates, PostScript files.
 	Mode	რეჟიმი
@@ -8025,6 +8255,7 @@ imageTrace	Outline	კონტური
 	Export Data Sets…	მონაცემთა ნაკრებების ექსპორტი…
 	Load Variable Library…	ცვლადების ბიბლიოთეკის ჩატვირთვა…
 	Save Variable Library…	ცვლადების ბიბლიოთეკის შენახვა…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	„იმპორტი“ კითხულობს მონაცემთა წყაროს ფაილს გაფართოებით .csv, .tsv, .txt ან .xml
 @msg	a variable library holds text variables, and the document has none	ცვლადების ბიბლიოთეკა ტექსტურ ცვლადებს შეიცავს, დოკუმენტს კი არცერთი არ აქვს
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	ცვლადი `{name}` ვერ შეინახება ცვლადების ბიბლიოთეკაში: გადაარქვით სახელი ისე, რომ იწყებოდეს ასოთი ან `_`-ით, ჰარეების და `-`, `_` და `.`-ის გარდა სხვა სიმბოლოების გარეშე
 @msg	{k} has control characters	{k} შეიცავს მმართველ სიმბოლოებს
@@ -8222,14 +8453,14 @@ imageTrace	Outline	კონტური
 	JavaScript:	JavaScript:
 	Large Gaps	დიდი ღრეჩოები
 	Last Artboard	ბოლო სამუშაო დაფა
-	Status Bar Show	ჩვენება მდგომარეობის ზოლში
+	Status Bar Show	სტატუსის ზოლში ჩვენება
 	Artboard Name	სამუშაო დაფის სახელი
 	Current Tool	მიმდინარე ხელსაწყო
 	Date and Time	თარიღი და დრო
 	Number of Undos	დაბრუნებების რაოდენობა
 	Document Color Profile	დოკუმენტის ფერის პროფილი
-	Undos	დაბრუნებები
-	Redos	ხელახლა შესრულებები
+	Undos	დაბრუნება
+	Redos	ხელახლა შესრულება
 	Levels	დონეები
 	Library Panel Options	ბიბლიოთეკის პანელის პარამეტრები
 	Locate Library…	ბიბლიოთეკის მოძებნა…
@@ -9123,6 +9354,7 @@ anchor	Points:	წერტილები:
 	Open a document to check it for issues.	გახსენით დოკუმენტი, რომ პრობლემებზე შეამოწმოთ.
 	Empty Text	ცარიელი ტექსტი
 	Unpainted Objects	შეუღებავი ობიექტები
+	Empty Text Paths	ცარიელი ტექსტური ტრაექტორიები
 	Zero-Opacity Objects	ნულოვანი გაუმჭვირვალობის ობიექტები
 	Duplicate Objects	დუბლირებული ობიექტები
 	Off-Artboard Art	სამუშაო დაფებს გარეთ მყოფი გრაფიკა
@@ -9476,9 +9708,43 @@ breakText	Glyphs	გლიფები
 	Remove Gaps	ღრეჩოების მოცილება
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ეს ძალიან ბევრ ნაწილს იძლევა (მაქსიმუმ 100000): გაზარდეთ ტირეების სიგრძე
 @msg	select paths, or segments, to divide	აირჩიეთ დასაყოფი ტრაექტორიები ან სეგმენტები
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	საერთო მხებები…
+	Common Tangents	საერთო მხებები
+	Tangents	მხებები
+	Centerline	ცენტრების შემაერთებელი ხაზი
+	External	გარე
+	Internal	შიდა
+@msg	select two closed paths	მონიშნეთ ორი შეკრული ტრაექტორია
+@msg	a selected path is open	ერთ-ერთი მონიშნული ტრაექტორია ღიაა
+@msg	a selected path is not convex	ერთ-ერთი მონიშნული ტრაექტორია არ არის ამოზნექილი
+@msg	a selected path has no area	ერთ-ერთ მონიშნულ ტრაექტორიას ფართობი არ აქვს
+@msg	a selected path has more than 10000 segments	ერთ-ერთ მონიშნულ ტრაექტორიას 10000-ზე მეტი სეგმენტი აქვს
+@msg	the two paths have the same outline	ორივე ტრაექტორიას ერთნაირი მოხაზულობა აქვს
+@msg	One path lies inside the other, so they have no common tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ საერთო მხებები არ აქვთ
+@msg	The paths overlap, so they have no internal tangents	ტრაექტორიები ერთმანეთს ფარავს, ამიტომ მათ შიდა მხებები არ აქვთ
+@msg	One path lies inside the other, so they have no internal tangents	ერთი ტრაექტორია მეორის შიგნითაა, ამიტომ მათ შიდა მხებები არ აქვთ
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	ტირეების ტრაექტორიებად გაშლა
 @msg	select paths with dashed strokes to expand	აირჩიეთ გასაშლელი ტირეებიანი ხაზის კონტურები
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	მხები წრე…
+	Tangent Circle	მხები წრე
+	Circle:	წრე:
+@msg	`ids` names an object twice	`ids` ერთსა და იმავე ობიექტს ორჯერ მიუთითებს
+@msg	select two or three paths or compound paths	მონიშნეთ ორი ან სამი ტრაექტორია ან შედგენილი ტრაექტორია
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` უნდა იყოს 0.01-დან 1000000 pt-მდე
+@msg	two shapes need a `radius`	ორ ფიგურას `radius` სჭირდება
+@msg	three shapes set the radius themselves: leave `radius` out	სამი ფიგურა რადიუსს თავად ადგენს: გამოტოვეთ `radius`
+@msg	`circle` must be from 0 to 64	`circle` უნდა იყოს 0-დან 64-მდე
+@msg	a shape has no outline	ერთ-ერთ ფიგურას მოხაზულობა არ აქვს
+@msg	the shapes are too complex: at most 2000 segments in all	ფიგურები ზედმეტად რთულია: სულ არაუმეტეს 2000 სეგმენტი
+@msg	these shapes take too long to search	ამ ფიგურებისთვის ძიება ზედმეტად დიდ დროს მოითხოვს
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	ამ ფიგურებს 64-ზე მეტი წრე ეხება: შესაძლოა მთელი მრუდის გასწვრივ ეხებოდნენ
+@msg	no circle touches these shapes	ამ ფიგურებს არცერთი წრე არ ეხება
+@msg	`circle` is past the last circle found ({found})	`circle` ბოლო ნაპოვნი წრის შემდეგაა ({found})
+@msg	object {value} is not a path or compound path	ობიექტი {value} არ არის ტრაექტორია ან შედგენილი ტრაექტორია
+@msg	these shapes are too small to measure	ეს ფიგურები ზედმეტად პატარაა გასაზომად
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	დოკუმენტის ხელსაწყოები
 	Save a Timestamped Copy	ასლის შენახვა თარიღითა და დროით
@@ -9502,6 +9768,9 @@ breakText	Glyphs	გლიფები
 	Urdu	ურდუ
 	Assamese	ასამური
 	Sanskrit	სანსკრიტი
+	Nepali	ნეპალური
+	Konkani	კონკანი
+	Sindhi	სინდჰური
 	German: Swiss	გერმანული: შვეიცარია
 	Catalan	კატალანური
 	Danish	დანიური
@@ -9552,7 +9821,7 @@ breakText	Glyphs	გლიფები
 @msg	stroke cannot be set on a symbol instance	stroke ვერ დაყენდება სიმბოლოს ეგზემპლარზე
 @msg	fill on a symbol instance must be a solid color or none	სიმბოლოს ეგზემპლარის fill უნდა იყოს ერთფეროვანი ფერი ან none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} ვერ დაყენდება გამოსახულებაზე „ფიგურად გარდაქმნის“ ან „ობიექტის კონტურებად გარდაქმნის“ ეფექტის გარეშე
-@msg	pass newName, registration, exportType, nineSlice and/or type	მიუთითეთ newName, registration, exportType, nineSlice და/ან type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	მიუთითეთ newName, registration, exportType, nineSlice, type და/ან alignToPixelGrid
 	Text Flow	ტექსტის დინება
 	By Rows	სტრიქონების მიხედვით
 	By Columns	სვეტების მიხედვით
@@ -9847,6 +10116,8 @@ font-script	Japanese	იაპონური
 @msg	No bridge of this width fits across the selected art	ამ სიგანის ხიდი მონიშნულ ნახატზე არ ეტევა
 @msg	Some islands could not be joined to the area around the art	ზოგიერთი კუნძული ვერ დაუკავშირდა ნახატის გარშემო არეს
 @msg	`width` must be from {lo} to {hi} pt	`width` უნდა იყოს {lo}-დან {hi} pt-მდე
+@msg	`angle` must be from -180 to 180 degrees	`angle` უნდა იყოს -180-დან 180 გრადუსამდე
+@msg	`roundness` must be from 1 to 100%	`roundness` უნდა იყოს 1-დან 100%-მდე
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` უნდა იყოს მთელი რიცხვი 1-დან {MAX_BRIDGES_PER_ISLAND}-მდე
 	Weed Box and Lines…	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები…
 	Weed Box and Lines	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები
@@ -9862,4 +10133,41 @@ font-script	Japanese	იაპონური
 	Nest Shapes…	ფორმების განლაგება…
 	Nest Shapes	ფორმების განლაგება
 	Roll	რულონი
+	Packaging Tools	შეფუთვის ხელსაწყოები
+	Fold Lines	მოკეცვის ხაზები
+	Make Cut Line	ჭრის ხაზად გადაქცევა
+	Make Crease Line	ბიგის ხაზად გადაქცევა
+	Make Partial Cut Line	ნაწილობრივი ჭრის ხაზად გადაქცევა
+	Make Perforation Line	პერფორაციის ხაზად გადაქცევა
+	Make Fold Line	მოკეცვის ხაზად გადაქცევა
+	Role Swatches…	ხაზის ტიპების ფერის ნიმუშები…
+	Role Swatches	ხაზის ტიპების ფერის ნიმუშები
+	Role	ხაზის ტიპი
+	Cut Line	ჭრის ხაზი
+	Crease Line	ბიგის ხაზი
+	Partial Cut Line	ნაწილობრივი ჭრის ხაზი
+	Perforation Line	პერფორაციის ხაზი
+	No objects are selected.	ობიექტები არ არის მონიშნული.
+	Open a document to mark its fold lines.	გახსენით დოკუმენტი მისი მოკეცვის ხაზების მარკირებისთვის.
+	Remove Fold Line Role	ხაზის ტიპის მოხსნა
+	Check	შემოწმება
+	Check Fold Lines	მოკეცვის ხაზების შემოწმება
+@msg	No cut lines are in the selection.	მონიშვნაში ჭრის ხაზები არ არის.
+@msg	No cut lines are in the document.	დოკუმენტში ჭრის ხაზები არ არის.
+@msg	The cut lines do not enclose an area.	ჭრის ხაზები არცერთ არეს არ შემოფარგლავს.
+@msg	A cut line ends without meeting another cut line.	ჭრის ხაზი მთავრდება ისე, რომ სხვა ჭრის ხაზს არ ხვდება.
+@msg	A gap between cut lines was closed.	ჭრის ხაზებს შორის ღრეჩო დაიხურა.
+@msg	The fold lines are too complex to check.	მოკეცვის ხაზები შესამოწმებლად ზედმეტად რთულია.
+@msg	A cut line and a crease lie on top of each other.	ჭრის ხაზი და ბიგის ხაზი ერთმანეთზე დევს.
+@msg	No cut lines are among the given objects.	მითითებულ ობიექტებში ჭრის ხაზები არ არის.
+@msg	Two fold lines lie on top of each other.	მოკეცვის ორი ხაზი ერთმანეთზე დევს.
+@msg	A crease ends inside a panel.	ბიგის ხაზი პანელის შიგნით მთავრდება.
+@msg	A crease does not divide two panels.	ბიგის ხაზი ორ პანელს არ ყოფს.
+@msg	A crease lies outside the cut outline, wholly or in part.	ბიგის ხაზი მთლიანად ან ნაწილობრივ ჭრის კონტურის გარეთაა.
+@msg	The pieces of a hinge are not on one straight line.	ანჯამის ნაწილები ერთ სწორ ხაზზე არ დევს.
+@msg	A gap between cut lines is too narrow to tell apart.	ჭრის ხაზებს შორის ღრეჩო ზედმეტად ვიწროა გასარჩევად.
+@msg	A cut-out area holds other fold lines or another blank.	ამოჭრილი არე სხვა მოკეცვის ხაზებს ან სხვა ნამზადს შეიცავს.
+@msg	A panel is not joined to the rest by a crease.	პანელი დანარჩენს არცერთი ბიგის ხაზით არ უერთდება.
+@msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არაბეჭდვად შრეზეა.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"

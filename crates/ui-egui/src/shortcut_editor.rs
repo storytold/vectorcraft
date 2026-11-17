@@ -753,7 +753,7 @@ fn menu_bar_paths() -> &'static HashMap<&'static str, Vec<(String, Value)>> {
 /// The menu path of the item of the menu bar that runs command `id` as a key press runs it
 /// ([`a_menu_bar_item_runs`]): the first item that runs it with no params, or else the first item,
 /// whose params all its items give.
-fn menu_bar_path(id: &str) -> Option<&'static str> {
+pub(crate) fn menu_bar_path(id: &str) -> Option<&'static str> {
     let (_, params) = command_doc(id)?;
     let items = menu_bar_paths().get(id).filter(|_| a_menu_bar_item_runs(id, params))?;
     chosen_path(items)
@@ -924,7 +924,7 @@ pub(crate) fn menu_target_now(app: &VectorcraftApp, id: &str) -> Option<Result<(
 /// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed: the status
 /// line, with the engine's reason when it gives one. The app's own rules ([`menus::enabled`]) dim
 /// UI commands, and some commands the engine would run, without giving a reason.
-fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
+pub(crate) fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
     let Some(why) = vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()) else {
         return Err(format!("command `{id}` is not available right now"));
     };
@@ -936,7 +936,7 @@ fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
 /// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
 /// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
 /// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
-fn needs_a_value(key: &str) -> bool {
+pub(crate) fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
         vectorcraft_engine::command_specs()
@@ -1184,7 +1184,7 @@ pub fn export_text(set: &str, overrides: &Overrides) -> String {
     let snapshot = snapshot();
     let km = crate::keymap::keymap_in(&snapshot, overrides);
     let backtick = backtick_text();
-    let shown_set = if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set };
+    let shown_set = shown_set_name(set);
     let mut out = format!("{}\n{} {shown_set}\n", tl!("Keyboard Shortcuts"), tl!("Set:"));
     for (tools, heading) in [(true, "Tools"), (false, "Menu Commands")] {
         out += &format!("\n{}\n", tl!(heading));
@@ -1195,6 +1195,139 @@ pub fn export_text(set: &str, overrides: &Overrides) -> String {
         }
     }
     out
+}
+
+/// A set's name as the dialog shows it: the presets and Custom in the UI language.
+fn shown_set_name(set: &str) -> &str {
+    if PRESETS.contains(&set) || set == CUSTOM { tl!(set) } else { set }
+}
+
+/// Export Text's file formats.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextFormat {
+    /// [`export_text`]'s text file.
+    Text,
+    /// The printable shortcut sheet as a PDF ([`crate::shortcut_sheet::sheet_pdf`]).
+    Sheet,
+    /// A CSV file of [`export_sections`] ([`crate::shortcut_sheet::csv`]).
+    Csv,
+}
+
+impl TextFormat {
+    pub const ALL: [Self; 3] = [Self::Text, Self::Sheet, Self::Csv];
+
+    /// The `format` param's value.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Sheet => "sheet",
+            Self::Csv => "csv",
+        }
+    }
+
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Text => "txt",
+            Self::Sheet => "pdf",
+            Self::Csv => "csv",
+        }
+    }
+
+    /// The save dialog's file type.
+    fn filter(self) -> crate::FileFilter {
+        let label = match self {
+            Self::Text => "Text",
+            Self::Sheet => "Shortcut sheet",
+            Self::Csv => "CSV",
+        };
+        crate::FilePick::filter(label, &[self.extension()])
+    }
+
+    fn file_name(self) -> String {
+        format!("VectorCraft Shortcuts.{}", self.extension())
+    }
+
+    /// `path` with `format`'s extension: kept when it has it in any letter case, the extension of
+    /// another of these formats replaced, and the extension added to any other path.
+    fn with_extension(path: &str, format: Self) -> String {
+        let ext = vectorcraft_engine::cmd::fileio::extension(path);
+        if ext.eq_ignore_ascii_case(format.extension()) {
+            path.to_string()
+        } else if Self::ALL.iter().any(|f| f.extension().eq_ignore_ascii_case(&ext)) {
+            std::path::Path::new(path).with_extension(format.extension()).to_string_lossy().into_owned()
+        } else {
+            format!("{path}.{}", format.extension())
+        }
+    }
+
+    /// The format a save dialog's answer picked: the file type it reports, else the extension of
+    /// `path`; text for any other.
+    fn picked(path: &str, file_type: Option<&str>) -> Self {
+        let ext = file_type.map_or_else(|| vectorcraft_engine::cmd::fileio::extension(path), str::to_string);
+        Self::ALL.into_iter().find(|f| f.extension().eq_ignore_ascii_case(ext.trim_start_matches('.'))).unwrap_or(Self::Text)
+    }
+}
+
+/// The section name for menu commands no menu holds, as Export Text's heading has it.
+const MENU_COMMANDS: &str = "Menu Commands";
+
+/// Export Text's rows in sections, for the shortcut sheet and the CSV file: Tools, then one section
+/// per top-level menu in the order the dialog first lists a command of it, with the names and
+/// shortcuts as the dialog shows them, each name without its top-level menu. Every row the dialog
+/// lists is there, with an empty shortcut when it has none.
+pub fn export_sections(overrides: &Overrides) -> Vec<crate::shortcut_sheet::Section> {
+    use crate::shortcut_sheet::{Row, Section};
+    let snapshot = snapshot();
+    let km = crate::keymap::keymap_in(&snapshot, overrides);
+    let backtick = backtick_text();
+    let mut tools = Section { title: tl!("Tools").to_string(), rows: vec![] };
+    let mut menus: Vec<Section> = vec![];
+    for e in snapshot.entries.iter().filter(|e| listed(km.overrides(), e)) {
+        let shortcut = dialog_shortcuts_with(&km, &e.key, backtick.as_deref()).unwrap_or_default();
+        if e.is_tool {
+            tools.rows.push(Row { name: shown_name(e), shortcut });
+            continue;
+        }
+        let group = shown_group(&e.group);
+        let (top, rest) = group.split_once(" › ").unwrap_or((group.as_str(), ""));
+        let top = if top.is_empty() { tl!(MENU_COMMANDS) } else { top };
+        let label = shown_label(e);
+        let inner = if rest.is_empty() { label.to_string() } else { format!("{rest} › {label}") };
+        let name = if e.shows_key { format!("{inner} ({})", e.key) } else { inner };
+        match menus.iter_mut().find(|s| s.title == top) {
+            Some(s) => s.rows.push(Row { name, shortcut }),
+            None => menus.push(Section { title: top.to_string(), rows: vec![Row { name, shortcut }] }),
+        }
+    }
+    std::iter::once(tools).chain(menus).collect()
+}
+
+/// The file `format` writes for `set` with `overrides`: the sheet on `page`.
+fn export_text_file(format: TextFormat, set: &str, overrides: &Overrides, page: crate::shortcut_sheet::PageSize) -> Result<Vec<u8>, String> {
+    match format {
+        TextFormat::Text => Ok(export_text(set, overrides).into_bytes()),
+        TextFormat::Sheet => {
+            let title = format!("{} · {}", tl!("Keyboard Shortcuts"), shown_set_name(set));
+            crate::shortcut_sheet::sheet_pdf(&title, &export_sections(overrides), page)
+        }
+        TextFormat::Csv => Ok(crate::shortcut_sheet::csv(&export_sections(overrides), ["Group", "Command", "Shortcut"]).into_bytes()),
+    }
+}
+
+/// The sheet's paper when `pageSize` is left out: A4 when the current document prints on A4 (its
+/// print settings, or, with none saved, a first artboard of A4 size either way up), else Letter.
+fn default_sheet_page(app: &VectorcraftApp) -> crate::shortcut_sheet::PageSize {
+    use crate::shortcut_sheet::PageSize;
+    let Some(st) = app.session.active() else { return PageSize::Letter };
+    let a4 = match st.doc.print_setup.clone().and_then(|v| serde_json::from_value::<vectorcraft_pdf::PrintSettings>(v).ok()) {
+        Some(settings) => settings.media == vectorcraft_pdf::Media::A4,
+        None => st.doc.artboards.first().is_some_and(|a| {
+            let (w, h) = PageSize::A4.landscape();
+            let (long, short) = (a.rect.width().max(a.rect.height()), a.rect.width().min(a.rect.height()));
+            (long - w).abs() < 1.0 && (short - h).abs() < 1.0
+        }),
+    };
+    if a4 { PageSize::A4 } else { PageSize::Letter }
 }
 
 // ---------- UI commands ----------
@@ -1329,19 +1462,75 @@ pub fn run_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Resu
                     return Some(Err(format!("`{key}` must be a string")));
                 }
             };
-            let text = export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides);
-            let pick =
-                crate::FilePick { filters: vec![crate::FilePick::filter("Text", &["txt"])], ..crate::FilePick::named("VectorCraft Shortcuts.txt") };
-            match path.or_else(|| crate::picks::save(app, &pick)) {
+            let format = match s("format") {
+                Ok(None) => None,
+                Ok(Some(f)) => match TextFormat::ALL.into_iter().find(|t| t.name() == f) {
+                    Some(t) => Some(t),
+                    None => {
+                        let key = "format";
+                        return Some(Err(format!("`{key}` must be one of {}", TextFormat::ALL.map(TextFormat::name).join(", "))));
+                    }
+                },
+                Err(e) => return Some(Err(e)),
+            };
+            let page = match s("pageSize") {
+                Ok(None) => default_sheet_page(app),
+                Ok(Some(n)) => match crate::shortcut_sheet::PageSize::parse(&n) {
+                    Some(page) => page,
+                    None => {
+                        let key = "pageSize";
+                        return Some(Err(format!(
+                            "`{key}` must be one of {}",
+                            crate::shortcut_sheet::PageSize::ALL.map(crate::shortcut_sheet::PageSize::name).join(", ")
+                        )));
+                    }
+                },
+                Err(e) => return Some(Err(e)),
+            };
+            // A given path is written as text unless `format` says otherwise; a save dialog offers
+            // every format (text first) unless `format` names one, and its answer picks the format.
+            let (path, format) = match path {
+                Some(path) => (Some(path), format.unwrap_or(TextFormat::Text)),
+                None => {
+                    let shown = format.unwrap_or(TextFormat::Text);
+                    let filters = format.map_or_else(|| TextFormat::ALL.map(TextFormat::filter).to_vec(), |f| vec![f.filter()]);
+                    let pick = crate::FilePick { filters, ..crate::FilePick::named(&shown.file_name()) };
+                    match crate::picks::save_with_type(app, &pick) {
+                        Some((answer, file_type)) => {
+                            let picked = format.unwrap_or_else(|| TextFormat::picked(&answer, file_type.as_deref()));
+                            // The format that `format` names, or that a dialog reports as the type
+                            // picked, gives the name its extension. A file already at a path
+                            // changed that way, which the dialog did not check, is replaced only
+                            // after asking.
+                            let typed = format.is_some() || file_type.is_some();
+                            let path = if typed { TextFormat::with_extension(&answer, picked) } else { answer.clone() };
+                            let request = crate::picks::PickRequest::Save(pick.clone());
+                            if path != answer && crate::picks::ask_to_replace(app, request, &answer, file_type.as_deref(), &path) {
+                                return Some(Err("cancelled".into()));
+                            }
+                            (Some(path), picked)
+                        }
+                        None => (None, shown),
+                    }
+                }
+            };
+            // Its save dialog is open: the file is made and written when it answers.
+            if path.is_none() && app.file_dialog_open() {
+                return Some(Err("cancelled".into()));
+            }
+            let bytes = match export_text_file(format, &app.ui.shortcut_set, &app.ui.shortcut_overrides, page) {
+                Ok(bytes) => bytes,
+                Err(e) => return Some(Err(e)),
+            };
+            match path {
                 Some(path) => match app.services.write.as_mut() {
-                    Some(w) => w(&path, text.as_bytes()).map(|_| json!({"path": path})),
+                    Some(w) => w(&path, &bytes).map(|_| json!({"path": path})),
                     None => Err("no file writer".into()),
                 },
-                // Its save dialog is open: the file is written when it answers.
-                None if app.file_dialog_open() => Err("cancelled".into()),
                 None => match app.services.download.as_mut() {
-                    Some(dl) => dl("VectorCraft Shortcuts.txt", text.as_bytes()).map(|()| Value::Null),
-                    None => Ok(json!({"text": text})),
+                    Some(dl) => dl(&format.file_name(), &bytes).map(|()| Value::Null),
+                    None if format == TextFormat::Sheet => Ok(json!({"pdf": vectorcraft_svg::base64_encode(&bytes)})),
+                    None => Ok(json!({"text": String::from_utf8_lossy(&bytes)})),
                 },
             }
         }
@@ -2171,6 +2360,169 @@ mod tests {
         assert_eq!(*text, expected);
     }
 
+    /// The sheet's sections: Tools first, then each top-level menu once, in the
+    /// order the dialog first lists a command of it, holding every row the dialog lists with its
+    /// shortcut, the command named without its top-level menu.
+    #[test]
+    fn export_sections_hold_every_listed_row_once_by_top_level_menu() {
+        let mut ov = Overrides::new();
+        crate::keymap::set_override(&mut ov, "edit.preferences", "Ctrl+Alt+Shift+9");
+        let (sections, listed_rows, tops) = with_steady_plugins(|| {
+            let km = keymap_with(&ov);
+            let listed: Vec<Entry> = entries().iter().filter(|e| listed(km.overrides(), e)).cloned().collect();
+            let mut tops: Vec<String> = vec![];
+            for e in listed.iter().filter(|e| !e.is_tool) {
+                let top = e.group.split(" › ").next().filter(|t| !t.is_empty()).unwrap_or(MENU_COMMANDS).to_string();
+                if !tops.contains(&top) {
+                    tops.push(top);
+                }
+            }
+            (export_sections(&ov), listed.len(), tops)
+        });
+        let titles: Vec<&str> = sections.iter().map(|s| s.title.as_str()).collect();
+        assert_eq!(titles[0], "Tools");
+        assert_eq!(titles[1..], tops.iter().map(String::as_str).collect::<Vec<_>>()[..], "one section per top-level menu");
+        for menu in ["File", "Edit", "Object", "Type", "Select", "Effect", "View", "Window", "Help"] {
+            assert!(titles.contains(&menu), "no {menu} section: {titles:?}");
+        }
+        assert_eq!(sections.iter().map(|s| s.rows.len()).sum::<usize>(), listed_rows, "every listed row once");
+        let prefs = entry("edit.preferences").expect("the Preferences row");
+        let top = prefs.group.split(" › ").next().unwrap_or_default().to_string();
+        let name = shown_name(&prefs).strip_prefix(&format!("{top} › ")).map(str::to_string).expect("Preferences is in a menu");
+        let section = sections.iter().find(|s| s.title == top).expect("its menu's section");
+        assert!(section.rows.iter().any(|r| r.name == name && r.shortcut.ends_with('9')), "{name} in {:?}", section.rows);
+        let pen = sections[0].rows.iter().find(|r| r.shortcut == menus::pretty_shortcut(default_of("tool:pen").unwrap_or_default()));
+        assert!(pen.is_some(), "the Pen tool's row");
+    }
+
+    /// `format` picks the file: text (the default, the same bytes as before) or the PDF sheet. A
+    /// given path is written as text whatever its extension, and a bad `format` or `pageSize` is an
+    /// error that writes nothing.
+    #[test]
+    fn export_text_command_writes_text_or_a_sheet() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, Vec<u8>)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let w = written.clone();
+        app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+            w.borrow_mut().push((path.to_string(), b.to_vec()));
+            Ok(())
+        }));
+        let (files, text) = with_steady_plugins(|| {
+            written.borrow_mut().clear();
+            app.run("shortcuts.exportText", json!({"path": "/a/plain.txt"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/named.txt", "format": "text"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/as-text.pdf"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/sheet.pdf", "format": "sheet", "pageSize": "a4"})).unwrap();
+            app.run("shortcuts.exportText", json!({"path": "/a/sheet.txt", "format": "sheet"})).unwrap();
+            (written.borrow().clone(), export_text(&app.ui.shortcut_set, &app.ui.shortcut_overrides))
+        });
+        let [plain, named, as_text, sheet, sheet_as_named] = files.as_slice() else { panic!("{} files", files.len()) };
+        for f in [plain, named, as_text] {
+            assert_eq!(f.1, text.as_bytes(), "{}", f.0);
+        }
+        assert!(sheet.1.starts_with(b"%PDF-"), "{}", sheet.0);
+        assert_eq!(sheet_as_named.0, "/a/sheet.txt", "a path is written as given");
+        assert!(sheet_as_named.1.starts_with(b"%PDF-"));
+        written.borrow_mut().clear();
+        let mut err = |p: Value| app.run("shortcuts.exportText", p);
+        assert_eq!(err(json!({"path": "/a/x", "format": "xlsx"})), Err("`format` must be one of text, sheet, csv".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": "Sheet"})), Err("`format` must be one of text, sheet, csv".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "format": 3})), Err("`format` must be a string".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "pageSize": "legal"})), Err("`pageSize` must be one of letter, a4".to_string()));
+        assert_eq!(err(json!({"path": "/a/x", "pageSize": "A4"})), Err("`pageSize` must be one of letter, a4".to_string()));
+        assert!(written.borrow().is_empty());
+    }
+
+    /// `format: "csv"` writes the CSV file: the `Group,Command,Shortcut` header, then a record per
+    /// row the dialog lists, every group and row of [`export_sections`] once. Without a file it
+    /// comes back under `text`.
+    #[test]
+    fn export_text_command_writes_a_csv_file() {
+        type Files = std::rc::Rc<std::cell::RefCell<Vec<(String, Vec<u8>)>>>;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let written: Files = Default::default();
+        let (returned, files, sections) = with_steady_plugins(|| {
+            app.services.write = None;
+            written.borrow_mut().clear();
+            let returned = app.run("shortcuts.exportText", json!({"format": "csv"}));
+            let w = written.clone();
+            app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+                w.borrow_mut().push((path.to_string(), b.to_vec()));
+                Ok(())
+            }));
+            app.run("shortcuts.exportText", json!({"path": "/a/list.csv", "format": "csv"})).unwrap();
+            (returned, written.borrow().clone(), export_sections(&app.ui.shortcut_overrides))
+        });
+        let [(path, bytes)] = files.as_slice() else { panic!("{} files", files.len()) };
+        assert_eq!(path, "/a/list.csv");
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        assert_eq!(returned.unwrap()["text"].as_str(), Some(text.as_str()), "the same file without a writer");
+        assert_eq!(text, crate::shortcut_sheet::csv(&sections, ["Group", "Command", "Shortcut"]));
+        assert!(text.starts_with("\u{feff}Group,Command,Shortcut\r\nTools,"), "{text}");
+        let records = text.matches("\r\n").count();
+        assert_eq!(records, 1 + sections.iter().map(|s| s.rows.len()).sum::<usize>(), "a header and a record per row");
+        for s in &sections {
+            assert!(text.contains(&format!("\r\n{},", s.title)), "no {} group", s.title);
+        }
+    }
+
+    /// With no `pageSize` the sheet is on A4 when the current document prints on A4: its print
+    /// settings say so, or, with none saved, its first artboard is A4 either way up; else Letter.
+    #[test]
+    fn the_sheet_is_on_a4_when_the_document_prints_on_a4() {
+        use crate::shortcut_sheet::PageSize;
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "no document");
+        app.session.add_document(vectorcraft_doc::Document::new(612.0, 792.0), None);
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "a Letter artboard");
+        app.session.add_document(vectorcraft_doc::Document::new(595.28, 841.89), None);
+        assert_eq!(default_sheet_page(&app), PageSize::A4, "an A4 artboard");
+        let printing = |w, h, media| {
+            let mut doc = vectorcraft_doc::Document::new(w, h);
+            doc.print_setup = serde_json::to_value(vectorcraft_pdf::PrintSettings { media, ..Default::default() }).ok();
+            doc
+        };
+        app.session.add_document(printing(595.28, 841.89, vectorcraft_pdf::Media::Letter), None);
+        assert_eq!(default_sheet_page(&app), PageSize::Letter, "an A4 artboard printing on Letter");
+        app.session.add_document(printing(612.0, 792.0, vectorcraft_pdf::Media::A4), None);
+        assert_eq!(default_sheet_page(&app), PageSize::A4, "printing on A4");
+    }
+
+    /// Without a path, a file writer or a download, `shortcuts.exportText` returns the file: the
+    /// text file under `text` and the sheet as base64 under `pdf`.
+    #[test]
+    fn export_text_without_a_file_returns_it() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let (text, sheet) =
+            with_steady_plugins(|| (app.run("shortcuts.exportText", json!({})), app.run("shortcuts.exportText", json!({"format": "sheet"}))));
+        let text = text.unwrap();
+        assert!(text["text"].as_str().unwrap_or_default().starts_with("Keyboard Shortcuts\n"), "{text}");
+        let sheet = sheet.unwrap();
+        // "%PDF-" in base64.
+        assert!(sheet["pdf"].as_str().unwrap_or_default().starts_with("JVBERi0"), "{}", sheet.to_string().len());
+    }
+
+    /// The save dialog's answer picks the format: the file type it reports, else the extension
+    /// typed; text for any other.
+    #[test]
+    fn the_save_dialogs_answer_picks_the_export_text_format() {
+        assert_eq!(TextFormat::picked("/a/sheet.PDF", None), TextFormat::Sheet);
+        assert_eq!(TextFormat::picked("/a/list", Some("pdf")), TextFormat::Sheet);
+        assert_eq!(TextFormat::picked("/a/list.pdf", Some("txt")), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list.txt", None), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list", None), TextFormat::Text);
+        assert_eq!(TextFormat::picked("/a/list.json", None), TextFormat::Text);
+        assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Sheet), "/a/list.pdf");
+        assert_eq!(TextFormat::with_extension("/a/list.txt", TextFormat::Sheet), "/a/list.pdf");
+        assert_eq!(TextFormat::with_extension("/a/list", TextFormat::Text), "/a/list.txt");
+        assert_eq!(TextFormat::picked("/a/list.CSV", None), TextFormat::Csv);
+        assert_eq!(TextFormat::picked("/a/list", Some("csv")), TextFormat::Csv);
+        assert_eq!(TextFormat::with_extension("/a/list.pdf", TextFormat::Csv), "/a/list.csv");
+        assert_eq!(TextFormat::with_extension("/a/list.PDF", TextFormat::Sheet), "/a/list.PDF");
+        assert_eq!(TextFormat::with_extension("/a/v1.2", TextFormat::Sheet), "/a/v1.2.pdf");
+    }
+
     /// The dialog's Import… leaves an action its function key when the imported set gives the key
     /// to a command, through both Cancel and OK.
     #[test]
@@ -2838,5 +3190,17 @@ mod tests {
         let r = app.run("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": null})).unwrap();
         assert_eq!(r["shortcut"], "Cmd+Alt+Shift+F11");
         assert!(app.run("shortcuts.preset", json!({"name": null})).unwrap_err().starts_with("unknown preset"));
+    }
+
+    /// A command that needs a value is listed in the editor once the user gives it a key, but the
+    /// command search still leaves it out: a pick gives it no value.
+    #[test]
+    fn a_command_given_a_key_that_needs_a_value_is_no_pick() {
+        let mut overrides = Overrides::default();
+        crate::keymap::set_override(&mut overrides, "document.setUnits", "Cmd+Alt+Shift+F12");
+        let entry = entries().iter().find(|e| e.key == "document.setUnits").cloned().expect("the editor has a row for it");
+        assert!(!listed(&Overrides::default(), &entry) && listed(&overrides, &entry));
+        assert!(needs_a_value("document.setUnits"));
+        assert!(crate::palette::items().iter().all(|(_, id, _)| id != "document.setUnits"));
     }
 }

@@ -158,8 +158,9 @@
 //! art, the character and paragraph attributes the text document doesn't hold, freeform gradients, gradients
 //! along or across a stroke and gradients without stops, with more than 256 stops or without extent
 //! as their average color
-//! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
-//! to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
+//! (gradients that dither are written without dither's noise, Perceptual gradients and gradients
+//! mixed around the hue wheel as the stops on their curve in process colors, at most 256, and
+//! gradient stops linked to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
 //! the tile or is painted with patterns, and pattern fills in symbols, as their tiles cut
 //! to the shape, clipping groups and clipping layers whose clipping object isn't a path,
 //! and the clipping groups inside them, as their art cut to that object (its fill cut too, its
@@ -265,6 +266,15 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
 
 /// [`export_ai_editing`] writing at most `max_objects` objects, counted as the reader counts them.
 fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Result<AiEditingOutput, String> {
+    export_held(doc, o, max_objects, true)
+}
+
+/// [`export_within`]; with `keep_wraps`, wrapped area type the reader wraps the same is written as
+/// type ([`writer::wraps_held`]). When such type is written and art is left out at the object
+/// limit, the wrap objects above it may be among what is left out, and the document is written
+/// again with that type as its outlines.
+fn export_held(source: &Document, o: &AiEditingOptions, max_objects: usize, keep_wraps: bool) -> Result<AiEditingOutput, String> {
+    let doc = source;
     let board = doc.artboards.first().ok_or("the document has no artboard")?.rect;
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
@@ -277,6 +287,8 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     let (symbol_styled, pattern_styled) = writer::styled_definitions(doc);
     let own_styles = doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles;
     let links = writer::style_links(doc);
+    // Before baking, which leaves the wrap objects that may be written as they are unchanged.
+    let wraps_held = if keep_wraps { writer::wraps_held(doc, &styled) } else { HashSet::new() };
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
@@ -309,6 +321,7 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     w.brushes_live = scale == 1.0;
     w.symbol_doc = symbol_doc;
     w.max_objects = max_objects;
+    w.wraps_held = wraps_held;
     w.reserve_swatch_gradients();
     if scale == 1.0 {
         w.styled = styled;
@@ -319,6 +332,9 @@ fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Re
     }
     for layer in &doc.layers {
         w.layer(layer);
+    }
+    if w.wrapped_type_cut() {
+        return export_held(source, o, max_objects, false);
     }
     // The symbols no instance uses too; their art adds definitions.
     w.symbols();

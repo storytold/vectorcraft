@@ -834,7 +834,41 @@ fn tiny_png() -> Vec<u8> {
         *p = image::Rgba([if x < 2 { 255 } else { 0 }, 0, 0, 255]);
     }
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -859,7 +893,24 @@ fn image_roundtrip() {
     assert_eq!((im.width, im.height), (4, 2));
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(20.0, 30.0, 60.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
     let blob = &out.images[&im.key];
-    let decoded = image::load_from_memory(&blob.bytes).unwrap().to_rgba8();
+    let decoded = craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(decoded.get_pixel(0, 0).0, [255, 0, 0, 255]);
     assert_eq!(decoded.get_pixel(3, 0).0, [0, 0, 0, 255]);
 }
@@ -891,9 +942,42 @@ fn a_pixelated_image_asks_viewers_not_to_smooth_it() {
 
 /// A 4 × 2 red image encoded as `format`, cut short `keep` bytes past the first `tag` in it: its
 /// header reads, and its pixel data can't be decoded.
-fn cut_image(format: image::ImageFormat, tag: &[u8], keep: usize) -> Vec<u8> {
+fn cut_image(format: craft_image_codecs::Format, tag: &[u8], keep: usize) -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut out), format).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, format, &craft_image_codecs::EncodeOptions::default()).map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     let at = out.windows(tag.len()).position(|w| w == tag).expect("tag");
     out.truncate(at + tag.len() + keep);
     out
@@ -908,10 +992,10 @@ fn an_image_whose_pixels_cant_be_decoded_is_left_out_with_one_note() {
     let mut d = doc(200.0, 300.0);
     let blobs = [
         ("good", ImageBlob::new("image/png", tiny_png())),
-        ("png", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 4))),
-        ("png2", ImageBlob::new("image/png", cut_image(image::ImageFormat::Png, b"IDAT", 6))),
-        ("gif", ImageBlob::new("image/gif", cut_image(image::ImageFormat::Gif, b"GIF89a", 7))),
-        ("webp", ImageBlob::new("image/webp", cut_image(image::ImageFormat::WebP, b"VP8L", 9))),
+        ("png", ImageBlob::new("image/png", cut_image(craft_image_codecs::Format::Png, b"IDAT", 4))),
+        ("png2", ImageBlob::new("image/png", cut_image(craft_image_codecs::Format::Png, b"IDAT", 6))),
+        ("gif", ImageBlob::new("image/gif", cut_image(craft_image_codecs::Format::Gif, b"GIF89a", 7))),
+        ("webp", ImageBlob::new("image/webp", cut_image(craft_image_codecs::Format::WebP, b"VP8L", 9))),
     ];
     for (i, (key, blob)) in blobs.into_iter().enumerate() {
         d.images.insert(key.into(), blob);

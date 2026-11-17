@@ -69,6 +69,11 @@ pub(super) fn defaults(kind: &str) -> Option<&'static Value> {
 /// Set when the Print Tiling tool placed the pages (`tileOrigin`): the placement is ignored.
 const PLACED: &str = "tileOrigin.placed";
 
+/// The link between Scale W and H.
+const SCALE_LINKED: &str = "scale.linked";
+/// Scale W and H as [`link_scale`] last left them, to tell which one changed since.
+const SCALE_SEEN: &str = "__scaleSeen";
+
 /// The fields that aren't print settings.
 const NOT_SETTINGS: [&str; 5] = ["printer", "toFile", "discard", "preset", "name"];
 
@@ -97,6 +102,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let preset = app.session.prefs.print_presets.iter().find(|p| p.settings == saved).map_or(DEFAULT_PRESET, |p| p.name.as_str());
     fields.insert("preset".into(), json!(preset));
     fields.insert(LOADED.into(), json!(preset));
+    see_scale(&mut fields);
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(Value::Null)
 }
@@ -118,6 +124,7 @@ fn sync_preset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     d.fields.insert(LOADED.into(), json!(name));
     let set = app.session.print_preset_settings(&name).ok_or_else(|| format!("no print preset named `{name}`"))?;
     d.fields.extend(fields_of(&set)?);
+    see_scale(&mut d.fields);
     Ok(())
 }
 
@@ -148,6 +155,7 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
     fields.insert(EDITING.into(), json!(editing));
     fields.insert("__section".into(), json!(SECTIONS[0]));
     fields.insert("__sheet".into(), json!(0));
+    see_scale(&mut fields);
     app.ui.dialog = Some(Dialog { kind: PRESET_KIND.into(), fields });
     Ok(Value::Null)
 }
@@ -155,6 +163,9 @@ pub fn open_preset(app: &mut VectorcraftApp, params: &Value) -> Result<Value, St
 /// Save Preset (the preset editor's OK): `print.presets.save`, then back to Edit → Print Presets on
 /// it. A new preset may not take the name of another one.
 fn confirm_preset(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut d = d.clone();
+    link_scale(&mut d);
+    let d = &d;
     let (name, editing) = (d.str("name"), d.str(EDITING));
     let p = if editing.is_empty() {
         if app.session.print_preset_settings(&name).is_some() {
@@ -188,6 +199,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     // Done's flag holds for this press only: the dialog may stay open.
     let done = d.fields.remove("discard").is_some_and(|v| v == true);
     let synced = sync_preset(app, &mut d);
+    link_scale(&mut d);
     app.ui.dialog = Some(d.clone());
     synced?;
     // While Save Preset… asks for a name, OK (and Enter) saves the preset instead.
@@ -217,6 +229,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if let Err(e) = sync_preset(app, d) {
         app.status(e);
     }
+    link_scale(d);
     if d.kind == PRESET_KIND {
         row_with(ui, tl!("Preset name:"), TOP_LABEL_WIDTH, |ui| {
             form::text_edit(ui, d, "name", 288.0);
@@ -577,6 +590,75 @@ fn whole(ui: &mut egui::Ui, d: &mut Dialog, path: &str, range: std::ops::RangeIn
     });
 }
 
+/// A Scale percentage at `path`, 1–1000 %: the value typed, once one was.
+fn percent(ui: &mut egui::Ui, d: &mut Dialog, path: &str, enabled: bool) -> Option<f64> {
+    let v = get(d, path).as_f64().unwrap_or(100.0);
+    let typed = ui.add_enabled_ui(enabled, |ui| widgets::range_field(ui, path, v, 1.0..=1000.0, "%", 3, 64.0)).inner;
+    if let Some(x) = typed {
+        set(d, path, json!(x));
+    }
+    typed
+}
+
+/// The link after Scale W and H: on, either field sets both, and turning it on sets H to W. With
+/// the keyboard on it, Space or Enter toggles it unless it is dimmed.
+fn scale_link(ui: &mut egui::Ui, d: &mut Dialog, linked: bool) {
+    const NAME: &str = "Constrain Width and Height Proportions";
+    let size = crate::panels::transform::CONSTRAIN_LINK_SIZE;
+    let (_, at) = ui.allocate_exact_size(egui::Vec2::splat(size), egui::Sense::click());
+    let enabled = ui.is_enabled();
+    let keyed = enabled
+        && at.has_focus()
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space) | i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    let resp = widgets::paint_icon_button(ui, at, if linked { "link" } else { "link-2-off" }, NAME, linked);
+    // Off is a state too: screen readers hear the link as off, not as a plain button.
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, linked, tl!(NAME)));
+    if resp.clicked() || keyed {
+        set(d, SCALE_LINKED, json!(!linked));
+        link_scale(d);
+    }
+}
+
+/// While the Scale link is on, keep H equal to W: the field that changed since the last call (a
+/// field typed in, or `ui.dialog.set`) gives its value to the other, and when neither changed H
+/// takes W, as turning the link on does. As `print.setup` reads a `scale`: one set with W and H
+/// apart and without a `linked` key turns the link off, one that leaves out W, H or `linked` (or
+/// gives `null`) keeps it as it was, and one that changes both W and H apart while linked is left
+/// as it is (and stays changed on later calls), for confirming to refuse.
+fn link_scale(d: &mut Dialog) {
+    let seen = d.fields.get(SCALE_SEEN).cloned().unwrap_or_default();
+    if let Some(Value::Object(s)) = d.fields.get_mut("scale") {
+        let num = |s: &serde_json::Map<String, Value>, k: &str| s.get(k).and_then(Value::as_f64);
+        let stated = |s: &serde_json::Map<String, Value>, k: &str| s.get(k).is_some_and(|v| !v.is_null());
+        if s.get("linked").is_none() && num(s, "width").zip(num(s, "height")).is_some_and(|(w, h)| w != h) {
+            s.insert("linked".into(), json!(false));
+        }
+        for (i, k) in ["width", "height", "linked"].into_iter().enumerate() {
+            if !stated(s, k) && !seen[i].is_null() {
+                s.insert(k.into(), seen[i].clone());
+            }
+        }
+    }
+    let (w, h) = (get(d, "scale.width").clone(), get(d, "scale.height").clone());
+    if get(d, SCALE_LINKED).as_bool() == Some(true) && w.as_f64() != h.as_f64() {
+        let (w_kept, h_kept) = (seen[0].as_f64() == w.as_f64(), seen[1].as_f64() == h.as_f64());
+        if (w_kept && !h_kept) || w.as_f64().is_none() {
+            set(d, "scale.width", h);
+        } else if h_kept || seen.is_null() {
+            set(d, "scale.height", w);
+        } else {
+            return;
+        }
+    }
+    see_scale(&mut d.fields);
+}
+
+/// Remember Scale W, H and the link as the fields hold them, for [`link_scale`].
+fn see_scale(fields: &mut serde_json::Map<String, Value>) {
+    let s = fields.get("scale").cloned().unwrap_or_default();
+    fields.insert(SCALE_SEEN.into(), json!([s["width"], s["height"], s["linked"]]));
+}
+
 fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let unit = app.session.general_unit();
     row(ui, tl!("Copies:"), |ui| {
@@ -662,10 +744,16 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     row(ui, tl!("Scale:"), |ui| {
         let on = scaling == PrintScaling::Custom || tiles;
+        let linked = get(d, SCALE_LINKED).as_bool() == Some(true);
         ui.label(tl!("W:"));
-        number(ui, d, "scale.width", "%", on);
+        if let Some(w) = percent(ui, d, "scale.width", on).filter(|_| linked) {
+            set(d, "scale.height", json!(w));
+        }
         ui.label(tl!("H:"));
-        number(ui, d, "scale.height", "%", on);
+        if let Some(h) = percent(ui, d, "scale.height", on).filter(|_| linked) {
+            set(d, "scale.width", json!(h));
+        }
+        ui.add_enabled_ui(on, |ui| scale_link(ui, d, linked));
     });
     row(ui, tl!("Overlap:"), |ui| length(ui, d, "overlap", unit, tiles));
     row(ui, tl!("Tile Range:"), |ui| text(ui, d, "tileRange", tiles));
@@ -689,6 +777,7 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog, pv: &Result<Value, String>) {
     });
     let separations = choice::<OutputMode>(d, "output.mode") == Some(OutputMode::Separations);
     flag(ui, d, "output.spotsToProcess", tl!("Convert All Spot Colors to Process"), separations);
+    flag(ui, d, "output.overprintBlack", tl!("Overprint Black"), separations);
     heading(ui, tl!("Document Ink Options"));
     let inks = pv.as_ref().ok().and_then(|v| v["inks"].as_array()).map(Vec::as_slice).unwrap_or_default();
     if !separations || inks.is_empty() {

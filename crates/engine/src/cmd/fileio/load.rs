@@ -1,7 +1,5 @@
 //! `document.open`: every readable format into a new document.
 
-use std::io::Cursor;
-
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
 use vectorcraft_geom::Affine;
@@ -73,8 +71,10 @@ pub struct RasterImage {
     pub height: u32,
     /// The resolution the file declares (see [`super::ppi::resolution`]).
     pub ppi: Option<(f64, f64)>,
-    /// A DCS file's clipping path, in the image's pixel space ([`crate::cmd::place::dcs`]).
-    pub clip: Option<vectorcraft_geom::PathData>,
+    /// The clipping path its file draws it through, in the image's pixel space, with its fill rule:
+    /// a DCS file's (nonzero, [`crate::cmd::place::dcs`]), or a PSD or PSB file's (even-odd,
+    /// [`psdread::clipping_path`]).
+    pub clip: Option<(vectorcraft_geom::PathData, vectorcraft_geom::FillRule)>,
 }
 
 pub(super) fn err(e: impl std::fmt::Display) -> EngineError {
@@ -131,7 +131,7 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     if super::heifread::is_heif(bytes) {
         return format("heif");
     }
-    if let Some(f) = image::guess_format(bytes).ok().and_then(image_format) {
+    if let Some(f) = craft_image_codecs::detect(bytes).and_then(image_format) {
         return Some(f);
     }
     // A version 2 PICT is known by its version opcodes after the picture's frame, at byte 522 of a
@@ -157,9 +157,17 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     by_name
 }
 
-/// The readable raster format behind an `image` crate format.
-fn image_format(f: image::ImageFormat) -> Option<&'static Format> {
-    f.extensions_str().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
+/// The readable raster format behind a craft-image-codecs format.
+fn image_format(f: craft_image_codecs::Format) -> Option<&'static Format> {
+    f.extensions().iter().find_map(|e| format(e)).filter(|f| f.read && f.raster)
+}
+
+/// The image's size and the bytes a pixel of it takes decoded, from its header
+/// ([`vectorcraft_doc::decode::decoded_layout`]), for bytes in a format craft-image-codecs tells.
+fn header_layout(bytes: &[u8]) -> Option<(craft_image_codecs::Format, u32, u32, u64)> {
+    let format = craft_image_codecs::detect(bytes)?;
+    let (w, h, per_pixel) = vectorcraft_doc::decode::decoded_layout(bytes, format)?;
+    Some((format, w, h, per_pixel))
 }
 
 /// Why a file carrying editing data (an SVG or PDF saved with Preserve Editing) opened as plain
@@ -278,16 +286,24 @@ fn editing_copy(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<
 
 /// A `.ai`, or a PDF saved with the editing data, whose PDF part can't be read (`e`, the import's
 /// error) from the editor's own copy of its art alone, as a file saved without PDF compatibility
-/// is read, its first note saying why: `None` when pages are picked, layers or the editing data
-/// are off, or the file has no editing data that reads. Its type is outlines when `opts` asks.
-fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: &EngineError) -> Option<(Document, Vec<String>)> {
+/// is read, its first note saying why. Else `e`: as it is when pages are picked, layers or the
+/// editing data are off, or the file has no editing data, and followed by why when the file has
+/// editing data that can't be read. Its type is outlines when `opts` asks.
+fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: EngineError) -> Result<(Document, Vec<String>)> {
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
-        return None;
+        return Err(e);
     }
-    let private = vectorcraft_pdf::illustrator_data_without_pdf_part(bytes, opts.password.as_deref())?;
-    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit, opts.legacy_names).ok()?;
-    let notes = std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
-    Some(outlined_if_asked(doc, notes, opts))
+    let read = vectorcraft_pdf::read_illustrator_data_without_pdf_part(bytes, opts.password.as_deref())
+        .and_then(|private| private.map(|p| vectorcraft_eps::ai_alone_on_page(&p.data, p.trim, p.user_unit, opts.legacy_names)).transpose());
+    match read {
+        Ok(Some((doc, warnings))) => {
+            let notes =
+                std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
+            Ok(outlined_if_asked(doc, notes, opts))
+        }
+        Ok(None) => Err(e),
+        Err(why) => Err(err(format!("{e}; its editing data couldn't be read either ({why})"))),
+    }
 }
 
 /// Is `w` a note on the PDF part as a page, which says nothing was skipped: that the art off the
@@ -489,7 +505,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         .inspect(|_| editing_data = true),
                     // A PDF part that can't be read (a stream the import refuses): the editing copy
                     // alone where it reads, else the error.
-                    Err(e) => without_pdf_part(bytes, opts, &e).inspect(|_| editing_data = true).ok_or(e),
+                    Err(e) => without_pdf_part(bytes, opts, e).inspect(|_| editing_data = true),
                 }
             })?;
             // The File Info of a file read from its pages or its editing copy.
@@ -890,16 +906,19 @@ pub(crate) use vectorcraft_doc::MAX_RASTER_ALLOC;
 /// says so; the pixels aren't read): Open, Place and the Links panel say it ([`size_note`], #1479).
 /// `None` for images within the allowance, and for bytes that aren't an image.
 pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
-    use image::ImageDecoder as _;
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Some(format!("an image of {w} × {h} pixels is too large to draw"));
     }
-    let d = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
-    let (w, h) = d.dimensions();
+    let (format, w, h, per_pixel) = header_layout(bytes)?;
     // The allowance also counts the pixels as RGBA: an image of fewer than 4 bytes a pixel (gray,
     // gray with alpha, RGB) takes more than the decoder counts (#1717).
     let rgba_over = u64::from(w) * u64::from(h) > MAX_RASTER_ALLOC / 4;
-    (rgba_over || d.total_bytes() > MAX_RASTER_ALLOC).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
+    let samples_over = (u64::from(w) * u64::from(h)).saturating_mul(per_pixel) > MAX_RASTER_ALLOC;
+    // The renderer can stream a non-interlaced PNG a row at a time when those buffers fit. Its
+    // full decoded byte count can exceed the allowance even though drawing it at native size is
+    // safe; use the renderer's decision for that case instead of warning from total_bytes alone.
+    let png_streams_at_size = samples_over && format == craft_image_codecs::Format::Png && vectorcraft_render::reduced_size(bytes) == Some((w, h));
+    (rgba_over || (samples_over && !png_streams_at_size)).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
 }
 
 /// What Open, Place and the Links panel say of encoded image `bytes` that [`too_large_note`] is
@@ -909,7 +928,7 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
 pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
     let note = too_large_note(bytes)?;
     let Some(drawn) = vectorcraft_render::reduced_size(bytes) else { return Some(note) };
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
+    let (w, h) = vectorcraft_doc::header_size(bytes)?;
     (drawn != (w, h)).then(|| format!("an image of {w} × {h} pixels is shown at reduced size"))
 }
 
@@ -942,7 +961,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// or TIFF keeps its inks, at the 8 or 16 bits the file has, and its CMYK ICC profile as a CMYK
 /// TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]). An image the decoder reads and that is stored as
 /// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
-/// other samples become 8-bit RGBA.
+/// other samples become 8-bit RGBA. A Photoshop document's PNG keeps the clipping path the file
+/// names ([`png_with_clip`]).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -950,7 +970,8 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     }
     if psdread::is_psd(bytes) {
         let cms = vectorcraft_color::cms::active();
-        return as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi);
+        let img = as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi)?;
+        return Ok(png_with_clip(img, psdread::clipping_path(bytes)));
     }
     if jxlread::is_jxl(bytes) {
         let (img, icc, orientation) = jxlread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?;
@@ -967,17 +988,14 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     if super::pxrread::is_pxr(bytes) {
         return as_png(super::pxrread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().map_err(err)?;
-    if reader.format().is_none() && super::tgaread::is_targa(bytes) {
-        reader.set_format(image::ImageFormat::Tga);
+    let mut detected = craft_image_codecs::detect(bytes);
+    if detected.is_none() && super::tgaread::is_targa(bytes) {
+        detected = Some(craft_image_codecs::Format::Tga);
     }
-    if reader.format().is_none() && super::pcxread::is_pcx(bytes) {
+    if (detected.is_none() || detected == Some(craft_image_codecs::Format::Pcx)) && super::pcxread::is_pcx(bytes) {
         return as_png(super::pcxread::decode(bytes, MAX_RASTER_ALLOC).map_err(err)?, None, ppi);
     }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    let kind = reader.format().ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
+    let kind = detected.ok_or_else(|| err("not an image VectorCraft reads (see document.formats)"))?;
     let f = image_format(kind).ok_or_else(|| err(format!("{kind:?} images can't be opened (see document.formats)")))?;
     // A photo whose EXIF orientation turns or flips it (a camera held upright) is stored as it is
     // seen, so it places the way it was taken (#4284); the others keep their own bytes.
@@ -998,8 +1016,8 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         _ => None,
     };
     if let Some(kept) = kept {
-        let (width, height) = reader.into_dimensions().map_err(err)?;
-        return stored(kept, f.mime, (width, height), ppi);
+        let size = vectorcraft_doc::header_size(bytes).ok_or_else(|| err("the image's size can't be read"))?;
+        return stored(kept, f.mime, size, ppi);
     }
     let extra_samples = || {
         let cms = vectorcraft_color::cms::active();
@@ -1012,21 +1030,23 @@ pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
         None => match (f.id == "tiff").then(|| vectorcraft_doc::cmyk::group3_tiff_rgba(bytes)).flatten() {
             Some(read) => image::DynamicImage::ImageRgba8(read.map_err(err)?),
             None => {
-                use image::ImageDecoder as _;
-                let mut decoder = reader.into_decoder().map_err(err)?;
                 // The allowance counts the decoded samples and the RGBA pixels they become (#1717).
-                let (w, h) = decoder.dimensions();
-                if decoder.total_bytes() > MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > MAX_RASTER_ALLOC {
+                // A Targa file's size is read from its header, which no signature points a probe at.
+                let tga = || (kind == craft_image_codecs::Format::Tga).then(|| super::tgaread::size(bytes)).flatten().map(|(w, h)| (w, h, 4));
+                let (w, h, per_pixel) =
+                    vectorcraft_doc::decode::decoded_layout(bytes, kind).or_else(tga).ok_or_else(|| err("the image's size can't be read"))?;
+                let pixels = u64::from(w) * u64::from(h);
+                if pixels.saturating_mul(per_pixel) > MAX_RASTER_ALLOC || pixels * 4 > MAX_RASTER_ALLOC {
                     return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
                 }
-                // A profile the decoder can't read leaves the image without one. The image decoder
-                // reads a TIFF's tags within the size of its pixels, so a small TIFF's profile is
-                // read by the TIFF decoder itself.
+                let (img, profile) = vectorcraft_doc::decode::decode_image(kind, bytes, MAX_RASTER_ALLOC).map_err(err)?;
+                // A profile the decoder can't read leaves the image without one. A TIFF's profile is
+                // read by the TIFF reader, as before.
                 icc = match f.id {
                     "tiff" => vectorcraft_doc::cmyk::tiff_icc_profile(bytes),
-                    _ => decoder.icc_profile().ok().flatten(),
+                    _ => profile,
                 };
-                image::DynamicImage::from_decoder(decoder).map_err(err)?
+                img
             }
         },
     };
@@ -1098,11 +1118,8 @@ pub fn texture_image(bytes: &[u8]) -> Result<String> {
             LoadedTexture::from_rgba(inks.width, inks.height, &rgba)
         }
         None => {
-            let mut reader = image::ImageReader::new(Cursor::new(blob.bytes.as_slice())).with_guessed_format().map_err(err)?;
-            let mut limits = image::Limits::default();
-            limits.max_alloc = Some(MAX_RASTER_ALLOC);
-            reader.limits(limits);
-            let img = reader.decode().map_err(err)?.to_rgba8();
+            let kind = craft_image_codecs::detect(&blob.bytes).ok_or_else(|| err("the image can't be read as a texture"))?;
+            let img = vectorcraft_doc::decode::decode_image(kind, &blob.bytes, MAX_RASTER_ALLOC).map_err(err)?.0.to_rgba8();
             LoadedTexture::from_rgba(img.width(), img.height(), img.as_raw())
         }
     };
@@ -1118,10 +1135,48 @@ fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: 
     Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip: None })
 }
 
+/// The keyword of the PNG text chunk holding the clipping path of the file a PNG was made from
+/// ([`png_with_clip`]).
+const CLIP_KEYWORD: &str = "VectorCraft clip";
+
+/// Longest clipping path a PNG keeps (bytes of its JSON).
+const MAX_PNG_CLIP: usize = 16 << 20;
+
+/// `img`, a PNG made from a PSD or PSB file, with `clip`, the clipping path that file names in the
+/// image's pixel space (even-odd): the image keeps it, and its PNG keeps it in a text chunk, so the
+/// Links commands know a clip group of that path as the file's ([`png_clip`]). A path whose JSON is
+/// longer than [`MAX_PNG_CLIP`] is left out, and the image comes in unclipped.
+fn png_with_clip(mut img: RasterImage, clip: Option<vectorcraft_geom::PathData>) -> RasterImage {
+    let Some(clip) = clip else { return img };
+    let Some(json) = serde_json::to_string(&clip).ok().filter(|j| j.len() <= MAX_PNG_CLIP) else { return img };
+    let png = vectorcraft_render::encode::png::with_text(img.blob.bytes.to_vec(), &[(CLIP_KEYWORD, json.into())]);
+    img.blob = ImageBlob::new("image/png", png);
+    img.key = img.blob.content_key();
+    img.clip = Some((clip, vectorcraft_geom::FillRule::EvenOdd));
+    img
+}
+
+/// The clipping path a PNG made from a PSD or PSB file keeps ([`png_with_clip`]), in its pixel
+/// space; `None` for other images, and for a text chunk longer than [`MAX_PNG_CLIP`] or a path
+/// past [`vectorcraft_geom::path::MAX_READ_ANCHORS`]. Reads only the chunks before the image data.
+pub(crate) fn png_clip(png: &[u8]) -> Option<vectorcraft_geom::PathData> {
+    if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return None;
+    }
+    let keyword = [CLIP_KEYWORD.as_bytes(), &[0]].concat();
+    let json = super::ppi::png_chunks(png)
+        .take_while(|(ty, _)| *ty != b"IDAT")
+        .find_map(|(ty, data)| data.strip_prefix(keyword.as_slice()).filter(|_| ty == b"tEXt"))?;
+    if json.len() > MAX_PNG_CLIP {
+        return None;
+    }
+    vectorcraft_geom::path::with_anchor_budget(vectorcraft_geom::path::MAX_READ_ANCHORS, || serde_json::from_slice(json).ok())
+}
+
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, ppi, .. } = raster_image(bytes)?;
+    let RasterImage { key, blob, width, height, ppi, clip } = raster_image(bytes)?;
     let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
     let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;
@@ -1131,7 +1186,7 @@ pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
         id,
         NodeKind::Image(Box::new(ImageObject { key: key.clone(), width, height, xf, link: None, placement: Default::default(), pixels: None })),
     );
-    let mut n = file_clipped(&mut d, n, psdread::clipping_path(bytes));
+    let mut n = file_clipped(&mut d, n, clip.map(|(path, _)| path));
     n.name = Some(name.to_string());
     d.images.insert(key, blob);
     d.insert(Some(layer), 0, n).map_err(err)?;

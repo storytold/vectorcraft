@@ -1,5 +1,5 @@
 //! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF, DXF and HP-GL input,
-//! mutated raster images (Photoshop documents and JPEG XL images among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
+//! mutated raster images (Photoshop documents and JPEG XL images among them) placed with File → Place, Photoshop documents' slices (damaged or cut short) opened and placed, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
 //! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
@@ -37,7 +37,41 @@ fn config() -> ProptestConfig {
 fn affinity_preview_sample() -> Vec<u8> {
     let im = image::RgbaImage::from_pixel(2, 1, image::Rgba([220, 40, 60, 255]));
     let mut png = Vec::new();
-    im.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = im.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut b = vec![0; 72];
     b[..4].copy_from_slice(vectorcraft_affinity::MAGIC);
     b[4..6].copy_from_slice(&12u16.to_le_bytes());
@@ -1759,13 +1793,46 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     let img = image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10]));
     let mut out = vec![];
     for (name, f) in [
-        ("a.png", image::ImageFormat::Png),
-        ("a.jpg", image::ImageFormat::Jpeg),
-        ("a.tif", image::ImageFormat::Tiff),
-        ("a.bmp", image::ImageFormat::Bmp),
+        ("a.png", craft_image_codecs::Format::Png),
+        ("a.jpg", craft_image_codecs::Format::Jpeg),
+        ("a.tif", craft_image_codecs::Format::Tiff),
+        ("a.bmp", craft_image_codecs::Format::Bmp),
     ] {
         let mut b = vec![];
-        img.write_to(&mut std::io::Cursor::new(&mut b), f).unwrap();
+        {
+            let __dyn: image::DynamicImage = img.clone().into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, f, &craft_image_codecs::EncodeOptions::default()).map(|__b| b.extend_from_slice(&__b))
+        }
+        .unwrap();
         out.push((name, b));
     }
     out[0].1 = vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&out[0].1, (300.0, 150.0));
@@ -1794,14 +1861,25 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     psb.extend((0..8u8).flat_map(|v| [0xfe, v * 30]));
     out.push(("a.psb", psb));
     // JPEG XL: an 8-bit RGBA codestream, and a 16-bit gray one in the container.
-    use zune_core::{bit_depth::BitDepth, colorspace::ColorSpace, options::EncoderOptions};
-    let jxl = |space, depth, samples: &[u8]| {
-        let mut b = vec![];
-        zune_jpegxl::JxlSimpleEncoder::new(samples, EncoderOptions::new(5, 3, space, depth)).encode(&mut b).unwrap();
-        b
-    };
-    out.push(("a.jxl", jxl(ColorSpace::RGBA, BitDepth::Eight, &(0..60).map(|i| (i * 17) as u8).collect::<Vec<_>>())));
-    let gray = jxl(ColorSpace::Luma, BitDepth::Sixteen, &(0..30).map(|i| (i * 41) as u8).collect::<Vec<_>>());
+    use craft_jxl::{EncodeOptions, ImageRef, Layout, Samples};
+    let opts = EncodeOptions { lossless: true, ..EncodeOptions::default() };
+    let rgba: Vec<u8> = (0..60).map(|i| (i * 17) as u8).collect();
+    out.push((
+        "a.jxl",
+        craft_jxl::encode(
+            &ImageRef { width: 5, height: 3, layout: Layout::Rgba, samples: Samples::U8(&rgba) },
+            opts,
+            &craft_jxl::Metadata::default(),
+        )
+        .unwrap(),
+    ));
+    let gray_u16: Vec<u16> = (0..15).map(|i| u16::from_ne_bytes([(i * 2 * 41) as u8, ((i * 2 + 1) * 41) as u8])).collect();
+    let gray = craft_jxl::encode(
+        &ImageRef { width: 5, height: 3, layout: Layout::Gray, samples: Samples::U16(&gray_u16) },
+        opts,
+        &craft_jxl::Metadata::default(),
+    )
+    .unwrap();
     let mut boxed = vec![0, 0, 0, 0x0c, b'J', b'X', b'L', b' ', 0x0d, 0x0a, 0x87, 0x0a];
     boxed.extend(20u32.to_be_bytes());
     boxed.extend(b"ftypjxl \0\0\0\0jxl ");
@@ -1939,6 +2017,271 @@ proptest! {
     }
 }
 
+// ---------- PSD slices ----------
+
+/// A Unicode string as a PSD file stores it: a count of UTF-16 units, then the units.
+fn psd_unicode(s: &str) -> Vec<u8> {
+    let units: Vec<u16> = s.encode_utf16().collect();
+    let mut b = (units.len() as u32).to_be_bytes().to_vec();
+    b.extend(units.iter().flat_map(|u| u.to_be_bytes()));
+    b
+}
+
+/// A descriptor key or class ID: length 0 and its four characters, or its length and its characters.
+fn psd_key(k: &str) -> Vec<u8> {
+    let mut b = if k.len() == 4 { 0u32 } else { k.len() as u32 }.to_be_bytes().to_vec();
+    b.extend(k.as_bytes());
+    b
+}
+
+/// A descriptor's class (an empty name and the ID `null`), then the count of its items.
+fn psd_class(count: usize) -> Vec<u8> {
+    let mut b = psd_unicode("");
+    b.extend(psd_key("null"));
+    b.extend((count as u32).to_be_bytes());
+    b
+}
+
+/// A descriptor of `items`, each a key and a typed value.
+fn psd_descriptor(items: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    let mut b = psd_class(items.len());
+    for (k, v) in items {
+        b.extend(psd_key(k));
+        b.extend(v);
+    }
+    b
+}
+
+/// A typed descriptor value: its four-character type, then `body`.
+fn psd_value(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+    [kind.as_slice(), body].concat()
+}
+
+fn psd_long(v: i32) -> Vec<u8> {
+    psd_value(b"long", &v.to_be_bytes())
+}
+
+fn psd_text(t: &str) -> Vec<u8> {
+    psd_value(b"TEXT", &psd_unicode(t))
+}
+
+fn psd_enum(kind: &str, v: &str) -> Vec<u8> {
+    psd_value(b"enum", &[psd_key(kind), psd_key(v)].concat())
+}
+
+/// A bounds object: left, top, right and bottom (px), stored top, left, bottom, right.
+fn psd_bounds([l, t, r, b]: [i32; 4]) -> Vec<u8> {
+    psd_value(b"Objc", &psd_descriptor(&[("Top ", psd_long(t)), ("Left", psd_long(l)), ("Btom", psd_long(b)), ("Rght", psd_long(r))]))
+}
+
+/// The slices of the samples: origin (0: generated automatically, 1: follows a layer, 2: made by
+/// the user), name, and left, top, right and bottom on the 12 × 10 px canvas. Two come in; the
+/// automatic one between them is left out.
+const PSD_SLICES: [(u32, &str, [i32; 4]); 3] = [(2, "a", [1, 2, 5, 6]), (0, "auto", [0, 0, 12, 1]), (1, "b", [6, 3, 11, 9])];
+
+/// The data of an image resource 1050 holding [`PSD_SLICES`].
+struct SliceSample {
+    version: u32,
+    data: Vec<u8>,
+    /// Where the slice count starts in `data`.
+    count_at: usize,
+}
+
+/// Version 6: the bounds of all the slices, the group's name, the count and one record per slice.
+/// The first record is followed by a Photoshop 7 descriptor (version 16) with a nested object, which
+/// the reader reads past to the second record.
+fn psd_slices_v6() -> SliceSample {
+    let mut b = 6u32.to_be_bytes().to_vec();
+    b.extend([0i32, 0, 10, 12].iter().flat_map(|v| v.to_be_bytes()));
+    b.extend(psd_unicode("group"));
+    let count_at = b.len();
+    b.extend((PSD_SLICES.len() as u32).to_be_bytes());
+    for (i, (origin, name, rect)) in PSD_SLICES.iter().enumerate() {
+        // The ID, the group ID and the origin; a slice that follows a layer gives the layer's ID.
+        b.extend((i as u32 + 1).to_be_bytes());
+        b.extend(0u32.to_be_bytes());
+        b.extend(origin.to_be_bytes());
+        if *origin == 1 {
+            b.extend(4u32.to_be_bytes());
+        }
+        b.extend(psd_unicode(name));
+        // An Image slice: its rectangle, link, target, message, alternative text, plain cell text,
+        // alignment and background color (alpha, red, green, blue).
+        b.extend(1u32.to_be_bytes());
+        b.extend(rect.iter().flat_map(|v| v.to_be_bytes()));
+        for t in ["https://example.com/", "_blank", "", "alt"] {
+            b.extend(psd_unicode(t));
+        }
+        b.push(0);
+        b.extend(psd_unicode(""));
+        b.extend([0u8; 8]);
+        b.extend([255, 10, 20, 30]);
+        if i == 0 {
+            b.extend(16u32.to_be_bytes());
+            let color = psd_value(b"Objc", &psd_descriptor(&[("Rd  ", psd_value(b"doub", &128f64.to_be_bytes()))]));
+            b.extend(psd_descriptor(&[("topOutset", psd_long(0)), ("bgColor", color)]));
+        }
+    }
+    SliceSample { version: 6, data: b, count_at }
+}
+
+/// Versions 7 and 8: a version 16 descriptor with the slices' bounds, base name and `slices` list,
+/// each slice an object with a nested bounds and background color object.
+fn psd_slices_descriptor(version: u32) -> SliceSample {
+    let mut b = version.to_be_bytes().to_vec();
+    b.extend(16u32.to_be_bytes());
+    b.extend(psd_class(3));
+    b.extend(psd_key("bounds"));
+    b.extend(psd_bounds([0, 0, 12, 10]));
+    b.extend(psd_key("baseName"));
+    b.extend(psd_text("sheet"));
+    b.extend(psd_key("slices"));
+    b.extend(b"VlLs");
+    let count_at = b.len();
+    b.extend((PSD_SLICES.len() as u32).to_be_bytes());
+    for (i, (origin, name, rect)) in PSD_SLICES.iter().enumerate() {
+        let origin = match origin {
+            0 => "autoGenerated",
+            1 => "layerGenerated",
+            _ => "userGenerated",
+        };
+        let doub = |v: f64| psd_value(b"doub", &v.to_be_bytes());
+        let color = psd_value(b"Objc", &psd_descriptor(&[("Rd  ", doub(10.0)), ("Grn ", doub(20.0)), ("Bl  ", doub(30.0))]));
+        b.extend(psd_value(
+            b"Objc",
+            &psd_descriptor(&[
+                ("sliceID", psd_long(i as i32 + 1)),
+                ("groupID", psd_long(0)),
+                ("origin", psd_enum("ESliceOrigin", origin)),
+                ("Type", psd_enum("ESliceType", "Img ")),
+                ("bounds", psd_bounds(*rect)),
+                ("Nm  ", psd_text(name)),
+                ("url", psd_text("https://example.com/")),
+                ("bgColorType", psd_enum("ESliceBGColorType", "Clr ")),
+                ("bgColor", color),
+            ]),
+        ));
+    }
+    SliceSample { version, data: b, count_at }
+}
+
+/// Resource 1050 in versions 6, 7 and 8.
+fn psd_slice_samples() -> Vec<SliceSample> {
+    vec![psd_slices_v6(), psd_slices_descriptor(7), psd_slices_descriptor(8)]
+}
+
+/// A flat 12 × 10 px RGB PSD file whose one image resource is 1050 holding `data`, and where
+/// `data` lies in it.
+fn sliced_psd(data: &[u8]) -> (Vec<u8>, std::ops::Range<usize>) {
+    // The signature, version 1, reserved bytes, 3 channels, 10 rows, 12 columns, 8 bits, RGB, and
+    // no color mode data.
+    let mut f = b"8BPS\0\x01\0\0\0\0\0\0\0\x03".to_vec();
+    f.extend(10u32.to_be_bytes());
+    f.extend(12u32.to_be_bytes());
+    f.extend([0, 8, 0, 3]);
+    f.extend([0; 4]);
+    let mut block = b"8BIM".to_vec();
+    block.extend(1050u16.to_be_bytes());
+    block.extend([0, 0]);
+    block.extend((data.len() as u32).to_be_bytes());
+    let start = f.len() + 4 + block.len();
+    block.extend(data);
+    block.resize(block.len().next_multiple_of(2), 0);
+    f.extend((block.len() as u32).to_be_bytes());
+    f.extend(block);
+    // No layer and mask information, then the merged image, raw.
+    f.extend([0; 4]);
+    f.extend([0, 0]);
+    f.extend((0..360u32).map(|v| (v * 7) as u8));
+    (f, start..start + data.len())
+}
+
+/// PSD file `f` opened (the names of the document's slices, and the open's warnings), counted by
+/// `document.psdInfo`, and placed embedded in a new document (the count of the slices it brings in).
+fn sliced_psd_imports(f: &[u8]) -> (Vec<String>, Value, Value, usize) {
+    let mut s = vectorcraft_engine::Session::new();
+    let p = json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(f)});
+    let r = s.execute("document.open", &p).unwrap();
+    let names = s.doc().unwrap().doc.slices.iter().map(|x| x.options.name.clone()).collect();
+    let info = s.execute("document.psdInfo", &p).unwrap();
+    s.execute("file.new", &json!({})).unwrap();
+    let placed = s.execute("file.place", &json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(f), "link": false})).unwrap();
+    (names, r["warnings"].clone(), info["slices"].clone(), placed["slices"].as_array().map_or(0, Vec::len))
+}
+
+/// Each sample reaches the slice reader: its two user slices open and place, without a warning,
+/// and `document.psdInfo` counts them; the automatic one is left out.
+#[test]
+fn the_sliced_psd_samples_bring_in_their_user_slices() {
+    for sample in psd_slice_samples() {
+        let (names, warnings, info, placed) = sliced_psd_imports(&sliced_psd(&sample.data).0);
+        assert_eq!(names, ["a", "b"], "version {}: {warnings}", sample.version);
+        assert_eq!(warnings.as_array().map_or(0, Vec::len), 0, "version {}: {warnings}", sample.version);
+        assert_eq!((info, placed), (json!(2), 2), "version {}", sample.version);
+    }
+}
+
+/// A slice count past the 10,000 read, or one larger than the slices stored, and resource data cut
+/// short, open and place the file without its slices, with a warning, and `document.psdInfo`
+/// counts none.
+#[test]
+fn sliced_psd_samples_with_huge_counts_or_cut_short_come_in_without_their_slices() {
+    for sample in psd_slice_samples() {
+        let mut damaged = vec![];
+        for count in [10_001u32, 0x7fff_ffff, u32::MAX] {
+            let mut d = sample.data.clone();
+            d[sample.count_at..sample.count_at + 4].copy_from_slice(&count.to_be_bytes());
+            damaged.push((format!("count {count}"), d));
+        }
+        damaged.push(("one byte short".into(), sample.data[..sample.data.len() - 1].to_vec()));
+        damaged.push(("cut in the count".into(), sample.data[..sample.count_at + 2].to_vec()));
+        for (what, d) in damaged {
+            let (names, warnings, info, placed) = sliced_psd_imports(&sliced_psd(&d).0);
+            let warned = warnings.as_array().is_some_and(|w| w.iter().any(|w| w.as_str().is_some_and(|w| w.contains("the slices can't be read"))));
+            assert!(warned, "version {}, {what}: {warnings}", sample.version);
+            assert_eq!((names.len(), info, placed), (0, json!(0), 0), "version {}, {what}", sample.version);
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated copies of the slice samples never crash opening the file, `document.psdInfo` or
+    /// placing it embedded: the resource's data mutated, then kept whole, cut short with the
+    /// resource's length saying so, or with the file cut short in the resource's block.
+    #[test]
+    fn mutated_psd_slices_never_panic(which in 0usize..3, mode in 0u8..3, cut in any::<usize>(), edits in prop::collection::vec((any::<usize>(), any::<u8>()), 0..12)) {
+        let SliceSample { version, mut data, .. } = psd_slice_samples().swap_remove(which);
+        let len = data.len();
+        for (at, b) in edits {
+            data[at % len] = b;
+        }
+        let bytes = match mode {
+            0 => sliced_psd(&data).0,
+            1 => {
+                data.truncate(cut % (len + 1));
+                sliced_psd(&data).0
+            }
+            _ => {
+                let (mut f, at) = sliced_psd(&data);
+                f.truncate(at.start - 12 + cut % (len + 13));
+                f
+            }
+        };
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let p = json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &p));
+            let _ = no_panic(s.execute("document.psdInfo", &p));
+            let _ = no_panic(s.execute("file.new", &json!({})));
+            let p = json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(&bytes), "link": false});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "version {version}, mode {mode}: panicked: {:?}", r.err());
+    }
+}
+
 /// 1-bit TIFFs compressed with CCITT Group 3: modified Huffman (Compression 2) in three strips, T.4
 /// (Compression 3) with two-dimensional rows, fill bits, six EOLs at the end and each byte's lowest
 /// bit first, and T.4 two-dimensional rows in 16 × 16 tiles.
@@ -1993,7 +2336,41 @@ proptest! {
 /// and a 32-bit one with an extension area.
 fn targa_samples() -> Vec<(&'static str, Vec<u8>)> {
     let mut rle = vec![];
-    image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10])).write_to(&mut std::io::Cursor::new(&mut rle), image::ImageFormat::Tga).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Tga, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| rle.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut s = rich_session();
     let r = s.execute("document.export", &json!({"format": "tga", "depth": 16, "ppi": 2})).unwrap();
     let export = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
@@ -2511,6 +2888,32 @@ proptest! {
         paste_from_elsewhere("clipboard.importEps", json!({"dataBase64": vectorcraft_format::base64_encode(ps.as_bytes())}))?;
     }
 
+    /// Any bytes read by `readhexstring` or `readline` into strings of any length, from the
+    /// program's own file, through a filter decoded when first read, or from a file being run:
+    /// read as data, or as an error.
+    #[test]
+    fn eps_readhexstring_and_readline_data_never_panic(
+        data in prop::collection::vec(prop::sample::select(vec![b'0', b'9', b'a', b'F', b'g', b' ', b'\t', b'\r', b'\n', b'>', b'%', b'(', 0u8, 0xff]), 0..300),
+        len in 0usize..40,
+        line in any::<bool>(),
+        source in 0usize..3,
+    ) {
+        let op = if line { "readline" } else { "readhexstring" };
+        let file = if source == 1 { "currentfile /ASCIIHexDecode filter" } else { "currentfile" };
+        let reads = format!("/s {len} string def /f {file} def 30 {{ f s {op} pop pop }} repeat");
+        let mut bytes = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+        if source == 2 {
+            bytes.extend_from_slice(format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{reads}\n").as_bytes());
+            bytes.extend_from_slice(&data);
+            bytes.extend_from_slice(b"\nendstream\nshowpage\n");
+        } else {
+            bytes.extend_from_slice(format!("{reads}\n").as_bytes());
+            bytes.extend_from_slice(&data);
+            bytes.extend_from_slice(b"\nshowpage\n");
+        }
+        survive("readhexstring and readline data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
     /// Damaged or hostile CMYK images (a CMYK JPEG, an image with a key color): read as images,
     /// or as an error.
     #[test]
@@ -2682,7 +3085,24 @@ fn the_ccitt_images_fixture_reads_both_images() {
     let mut found = vec![];
     d.walk(|n| {
         if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
-            let px = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+            let px = craft_image_codecs::decode(&d.images[&im.key].bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8();
             found.push(px.pixels().map(shade).collect::<String>());
         }
     });
@@ -2739,7 +3159,7 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             "gsave", "grestore", "save", "restore", "concat", "translate", "scale", "rotate", "setlinewidth", "setdash", "setgray",
             "setrgbcolor", "setcmykcolor", "sethsbcolor", "setcolorspace", "setcolor", "setpattern", "makepattern", "shfill", "arc", "arcn",
             "arct", "arcto", "rectfill", "rectclip", "rectstroke", "image", "imagemask", "colorimage", "currentfile", "filter",
-            "readhexstring", "readstring", "show", "stringwidth", "charpath", "findfont", "scalefont", "makefont", "setfont", "selectfont",
+            "readhexstring", "readstring", "readline", "show", "stringwidth", "charpath", "findfont", "scalefont", "makefont", "setfont", "selectfont",
             "def", "bind", "load", "dup", "exch", "pop", "roll", "index", "copy", "for", "repeat", "loop", "exit", "if", "ifelse", "exec",
             "stopped", "begin", "end", "dict", "array", "string", "get", "put", "getinterval", "putinterval", "aload", "astore", "forall",
             "[", "]", "<<", ">>", "{", "}", "matrix", "currentmatrix", "setmatrix", "transform", "itransform", "invertmatrix", "pathbbox",
@@ -4104,7 +4524,8 @@ proptest! {
         })?;
         match opened {
             Some(Ok(editing)) => prop_assert!(editing),
-            Some(Err(e)) => prop_assert_eq!(Some(e), page_error),
+            // The page's error, followed by why the editing data couldn't be read when it says.
+            Some(Err(e)) => prop_assert!(page_error.as_deref().is_some_and(|p| e == p || e.starts_with(&format!("{p}; its editing data couldn't be read either ("))), "{e}"),
             None => {}
         }
     }

@@ -5,8 +5,22 @@
 //! Illustrator). ↑/↓ during a polygon/star drag change the side/point count; during a star drag,
 //! Ctrl/Cmd keeps the inner radius where it is while the outer one follows the pointer, and Alt
 //! keeps the star's shoulders straight (#812). The start point and
-//! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too.
+//! the dragged corner snap to Smart Guides ([`DrawSnap`]), hovering before the press too. With Snap
+//! to Tangent on, a line pressed on one convex curved path and dragged near another lands on a
+//! common tangent of the two, both its ends moving to the touch points ([`TangentLine`]).
 //! Escape cancels the drag and puts back the options its keys and Ctrl/Cmd changed.
+//! Backtick (`` ` ``, the grave accent) held while dragging leaves a copy of the shape being drawn
+//! every [`COPY_SPACING`] screen points the pointer travels, up to [`MAX_COPIES`] in one drag; the
+//! release keeps the copies and the last shape as one undo step
+//! (<https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=469>).
+//!
+//! With the Ellipse tool, three Shift-clicks draw the circle through the three points clicked
+//! (`shape.circleThroughPoints`). Once a point is placed, a Shift-click on the selection's handles
+//! or widgets places a point too. Escape, a click without Shift, a drag, a press without Shift on the
+//! selection or a shape widget, and an edit, Undo or Redo made outside the tool drop the points
+//! placed so far.
+//! While the perspective grid shows with an active plane, a Shift-click opens the size dialog, as a
+//! click does, and the shape goes on the plane.
 //!
 //! The selection keeps its bounding box and its Live Shape widgets on show with the Rectangle,
 //! Rounded Rectangle, Ellipse, Polygon and Star tools, so a shape just drawn can be adjusted at
@@ -15,6 +29,10 @@
 //! box's eight handles scales the selection, a press on the selection's centre point (Show Center)
 //! moves it, and one just outside a corner of its box turns it about that centre, as the Selection
 //! tool's handles, centre point and rotate zone do; a press anywhere else draws a new shape (#5477).
+//!
+//! With Smart Guides and Snap to Tangent on, a circle drawn from its center with the Ellipse tool (Alt and Shift)
+//! takes the radius at which it touches a nearby path whenever its radius comes within the
+//! snapping tolerance of it ([`DrawSnap::circle_radius`]).
 
 use serde_json::{Value, json};
 use vectorcraft_doc::OrientedBox;
@@ -22,7 +40,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::bbox::{Handle, move_delta, rotate_for_drag, scale_for_drag};
 use crate::corners::{self, CornerDrag};
-use crate::guides::{DrawSnap, Leave, PointSnap, Targets, square};
+use crate::guides::{DrawSnap, Leave, PointSnap, TangentLine, Targets, square};
 use crate::pie::{self, PieDrag};
 use crate::select::{MoveSnap, handle_cursor, hit_center, is_area_type, matrix_json, rotate_zone, shown_box};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
@@ -31,6 +49,14 @@ use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, Tool
 /// Corner Radius, which the tool's radius is (its `prefs.list` spec), so ↑ and a Tool Options
 /// value stop there too.
 pub const MAX_CORNER_RADIUS: f64 = 1296.0;
+
+/// How far (screen points) the pointer travels with Backtick held between two copies a shape drag
+/// leaves: VectorCraft's own spacing.
+pub const COPY_SPACING: f64 = 8.0;
+
+/// The most copies one shape drag with Backtick held leaves, besides the shape it ends with:
+/// VectorCraft's own limit.
+pub const MAX_COPIES: usize = 128;
 
 /// How far (screen points, along each axis) from a bounding-box handle's centre a shape tool's
 /// press scales the selection: half the drawn handle square, which is 6 points wide at the default
@@ -84,17 +110,26 @@ pub struct ShapeTool {
     began: bool,
     pub sides: u32,
     pub points: u32,
+    /// The anchors an ellipse made by a click has (the Ellipse dialog opens on it); 4 is a live
+    /// ellipse.
+    pub anchors: u32,
     pub corner_radius: f64,
     /// Star inner radius as a fraction of the outer radius.
     pub star_ratio: f64,
     /// The star's inner radius held while Ctrl/Cmd is down in a drag.
     inner: Option<f64>,
+    /// Where the last drag put the dragged corner of a circle drawn from its center, from the
+    /// center, when Snap to Tangent sized it ([`Self::tangent_circle`]); none when the pointer
+    /// sized it. Space moving the circle moves the corner it was drawn with there and clears it.
+    tangent_corner: Option<Vec2>,
     /// Line Segment Tool Options: the length and angle (degrees) a click's dialog opens with, and
     /// Fill Line (new lines take the current fill).
     pub line_length: f64,
     pub line_angle: f64,
     pub fill_line: bool,
     snap: DrawSnap,
+    /// Snap to Tangent for a line from one curve to another: both ends on a common tangent.
+    tangent_line: TangentLine,
     /// The options a drag's keys and Ctrl/Cmd change, as they were when the drag began: Escape
     /// puts them back.
     before_drag: Option<DragOptions>,
@@ -109,6 +144,32 @@ pub struct ShapeTool {
     /// The move of the selection snapped to a point, a guide or the grid at its last step: the
     /// arrow turns hollow, as the Selection tool's does.
     snapped: bool,
+    /// The copies the drag has left with Backtick held, oldest first: each shape's command and
+    /// params as the drag showed it when the copy was left.
+    copies: Vec<(String, Value)>,
+    /// While Backtick is held in a drag, the pointer position the next copy is measured from: where
+    /// the last copy was left, or where the drag first had the key down.
+    copy_from: Option<Point>,
+    /// Ellipse tool: the points placed by Shift-clicks so far (fewer than three); the third
+    /// Shift-click draws the circle through them ([`circle_through_points`]).
+    through: Vec<Point>,
+    /// Where the pointer was last seen while `through` holds points, for the circle's preview.
+    hover: Option<Point>,
+    /// The press in progress came with Shift held, with the Ellipse tool and no active perspective
+    /// plane: a click places a point.
+    places_point: bool,
+}
+
+/// Whether the perspective grid shows with an active plane: shapes then go on the plane.
+fn perspective_plane_shown(cx: &ToolContext) -> bool {
+    let g = crate::distort::perspective::PerspectiveGrid::current(cx.doc);
+    g.visible && g.plane != crate::distort::perspective::Plane::None
+}
+
+/// The command three Shift-clicks with the Ellipse tool run: the circle through their points.
+fn circle_through_points(points: &[Point]) -> (String, Value) {
+    let pairs: Vec<Value> = points.iter().map(|p| json!([p.x, p.y])).collect();
+    ("shape.circleThroughPoints".into(), json!({ "points": pairs }))
 }
 
 /// The options that keys and Ctrl/Cmd change while a shape is dragged out.
@@ -146,10 +207,13 @@ impl ShapeTool {
             began: false,
             sides: 6,
             points: 5,
+            anchors: 4,
             corner_radius: 12.0,
             star_ratio: 0.5,
             inner: None,
+            tangent_corner: None,
             snap: DrawSnap::default(),
+            tangent_line: TangentLine::default(),
             line_length: 100.0,
             line_angle: 0.0,
             fill_line: false,
@@ -159,7 +223,63 @@ impl ShapeTool {
             guides: vec![],
             measure: None,
             snapped: false,
+            through: vec![],
+            hover: None,
+            places_point: false,
+            copies: vec![],
+            copy_from: None,
         }
+    }
+
+    /// Whether a press with `m` places another point for a circle: Shift with the Ellipse tool once
+    /// a point is placed. Such a press skips the selection's handles and widgets.
+    fn placing_point(&self, m: Mods) -> bool {
+        self.id == "ellipse" && m.shift && !self.through.is_empty()
+    }
+
+    /// With Backtick `held` at pointer `raw`, leave a copy of the shape the drag shows (`cmd` and
+    /// `params`) once the pointer is [`COPY_SPACING`] screen points from the last copy, or from
+    /// where the key was first held. A shape with no width, height or length, one the same as the
+    /// last copy, and any past [`MAX_COPIES`] are not left. Without the key, the next copy is
+    /// measured from where it goes down again.
+    fn leave_copy(&mut self, cx: &ToolContext, raw: Point, held: bool, cmd: &str, params: &Value) {
+        if !held {
+            self.copy_from = None;
+            return;
+        }
+        let Some(from) = self.copy_from else {
+            self.copy_from = Some(raw);
+            return;
+        };
+        let (x, y) = screen_offset(cx, raw - from);
+        if x.hypot(y) < COPY_SPACING || self.copies.len() >= MAX_COPIES || !draws_something(cmd, params) {
+            return;
+        }
+        self.copy_from = Some(raw);
+        if self.copies.last().is_some_and(|(c, p)| c == cmd && p == params) {
+            return;
+        }
+        self.copies.push((cmd.to_owned(), params.clone()));
+    }
+
+    /// The preview of the shape `cmd` with `params`: with copies left, a `command.batch` that draws
+    /// them and then the shape, unless it has no size or is the same as the last copy.
+    fn preview(&self, cmd: String, params: Value) -> Action {
+        if self.copies.is_empty() {
+            return Action::Preview(cmd, params);
+        }
+        let step = |c: &str, p: &Value| json!({ "command": c, "params": p });
+        let mut commands: Vec<Value> = self.copies.iter().map(|(c, p)| step(c, p)).collect();
+        if draws_something(&cmd, &params) && self.copies.last().is_none_or(|(c, p)| *c != cmd || *p != params) {
+            commands.push(step(&cmd, &params));
+        }
+        Action::Preview("command.batch".into(), json!({ "label": self.label(), "commands": commands }))
+    }
+
+    /// Forget the copies of the drag that ended.
+    fn clear_copies(&mut self) {
+        self.copies.clear();
+        self.copy_from = None;
     }
 
     fn drag_options(&self) -> DragOptions {
@@ -414,6 +534,27 @@ impl ShapeTool {
         }
     }
 
+    /// Snap to Tangent for a circle drawn from its center `s` (the Ellipse tool with Alt and
+    /// Shift): the dragged corner `p` moved toward or away from `s` so that the circle touches a
+    /// nearby path, when its radius is within the snapping tolerance of a touching one
+    /// ([`DrawSnap::circle_radius`]); `raw` is the pointer before snapping. The radius is measured
+    /// along the Constrain Angle's axes, as the drawn box is ([`turned_box`]). None for any other
+    /// shape or modifiers, or with `p` on `s`.
+    fn tangent_circle(&mut self, cx: &ToolContext, s: Point, raw: Point, p: Point, m: Mods) -> Option<Point> {
+        if self.id != "ellipse" || !(m.alt && m.shift) || m.space {
+            return None;
+        }
+        let axes = vectorcraft_geom::constrain_axes(cx.constrain_angle).unwrap_or(Affine::IDENTITY);
+        let back = axes.inverse();
+        let (c, d) = (back * s, back * p - back * s);
+        let r = d.x.abs().max(d.y.abs());
+        if r.is_nan() || r <= 0.0 {
+            return None;
+        }
+        let radius = self.snap.circle_radius(cx, s, raw, p, r)?;
+        Some(axes * (c + d * (radius / r)))
+    }
+
     /// The command for a drag from `start` to `p` (snapped: a line's end already keeps Shift's
     /// angle).
     pub fn command(&self, start: Point, p: Point, m: Mods) -> (String, Value) {
@@ -458,6 +599,19 @@ impl ShapeTool {
                 (cmd.into(), v)
             }
         }
+    }
+}
+
+/// Does the shape command `cmd` with `params` draw something: a box with a width and a height, a
+/// polygon or star with a radius, a line with a length?
+fn draws_something(cmd: &str, params: &Value) -> bool {
+    let n = |k: &str| params.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    match cmd {
+        // The drag gives a polygon or star a radius of at least 0.01 pt, even on its centre.
+        "shape.polygon" => n("radius") > 0.01,
+        "shape.star" => n("radius1") > 0.01,
+        "shape.line" => (n("x2") - n("x1")).hypot(n("y2") - n("y1")) > 0.0,
+        _ => n("width").abs() > 0.0 && n("height").abs() > 0.0,
     }
 }
 
@@ -527,35 +681,57 @@ impl Tool for ShapeTool {
         match ev.kind {
             PointerKind::Move => {
                 // Over a widget a press would drag, no Smart Guide for a new shape's start.
-                if self.over_widget(cx, ev.pos)
-                    || self.over_handle(cx, ev.pos).is_some()
-                    || self.over_center(cx, ev.pos)
-                    || self.over_rotate(cx, ev.pos).is_some()
+                if !self.placing_point(ev.mods)
+                    && (self.over_widget(cx, ev.pos)
+                        || self.over_handle(cx, ev.pos).is_some()
+                        || self.over_center(cx, ev.pos)
+                        || self.over_rotate(cx, ev.pos).is_some())
                 {
                     self.snap.clear();
+                    // A press there drags the widget or the selection, which drops the points.
+                    self.hover = None;
                 } else {
-                    self.snap.hover(cx, ev.pos, &[], None);
+                    // The snapped point: the third Shift-click lands where the press snaps.
+                    let p = self.snap.hover(cx, ev.pos, &[], None);
+                    self.hover = (!self.through.is_empty()).then_some(p);
                 }
                 vec![]
             }
             PointerKind::Down => {
-                if self.press_widget(cx, ev) {
-                    self.snap.clear();
-                    return vec![];
-                }
-                if let Some(out) = self.press_selection(cx, ev) {
-                    return out;
+                if !self.placing_point(ev.mods) {
+                    if self.press_widget(cx, ev) {
+                        self.snap.clear();
+                        self.through.clear();
+                        return vec![];
+                    }
+                    if let Some(out) = self.press_selection(cx, ev) {
+                        self.through.clear();
+                        return out;
+                    }
                 }
                 let p = self.snap.press(cx, ev.pos, &[], None);
+                if self.id == "lineSegment" {
+                    // The pressed spot finds the curve; a press that snapped to an anchor, center
+                    // or crossing off that curve keeps the line's start there.
+                    let held = self.snap.snapped_to_point(cx, ev.pos, p).then_some(p);
+                    self.tangent_line.press(cx, ev.pos, held);
+                }
                 self.start = Some(p);
                 self.last = ev.pos;
                 self.began = false;
+                self.places_point = self.id == "ellipse" && ev.mods.shift && !perspective_plane_shown(cx);
                 self.inner = None;
                 self.before_drag = None;
+                self.clear_copies();
+                // Backtick already held at the press: the copies are measured from there.
+                if ev.backquote {
+                    self.copy_from = Some(ev.pos);
+                }
                 vec![]
             }
             PointerKind::Drag => {
                 let Some(mut s) = self.start else { return vec![] };
+                let raw = ev.pos;
                 let pos = self.snap.drag(cx, ev.pos, self.leave(cx, s, ev.mods).as_ref());
                 let ev = &PointerEvent { pos, ..*ev };
                 // The inner radius of the star the last drag showed, with the ratio it drew with:
@@ -563,34 +739,77 @@ impl Tool for ShapeTool {
                 // first arrives with the next position.
                 let ratio = if self.mods.alt { straight_ratio(self.points).unwrap_or(self.star_ratio) } else { self.star_ratio };
                 let shown = (self.last - s).hypot() * ratio;
+                // Space moves a circle Snap to Tangent sized from the corner it was drawn with, so
+                // it keeps that size while it moves and after Space is let go.
+                if ev.mods.space
+                    && self.began
+                    && let Some(d) = self.tangent_corner.take()
+                {
+                    self.last = s + d;
+                }
                 space_moves(&mut s, &mut self.last, ev, self.began);
+                if ev.mods.space && self.began {
+                    // The start no longer lies on the pressed path.
+                    self.tangent_line.clear();
+                }
                 self.start = Some(s);
                 self.mods = ev.mods;
                 if self.id == "star" {
                     self.hold_inner(shown, s, ev.pos, ev.mods);
                 }
+                // A circle from its center takes a radius that touches a nearby path. Whether the
+                // drag has begun is judged before that snap.
+                let dragged = ev.pos;
+                self.tangent_corner = self.tangent_circle(cx, s, raw, ev.pos, ev.mods).map(|q| q - s);
+                let ev = &PointerEvent { pos: self.tangent_corner.map_or(ev.pos, |d| s + d), ..*ev };
                 let mut out = vec![];
                 if !self.began {
-                    if ev.pos.distance(s) < cx.tol(2.0) {
+                    if dragged.distance(s) < cx.tol(2.0) {
                         return out;
                     }
                     self.began = true;
                     self.before_drag = Some(self.drag_options());
                     out.push(Action::Begin(self.label().into()));
                 }
-                let (c, v) = self.command_at(s, ev.pos, ev.mods, cx.constrain_angle);
-                out.push(Action::Preview(c, v));
+                // Snap to Tangent: a line pressed on one curve and ending near another moves both
+                // its ends onto a common tangent of the two, unless Shift, Alt or Space is held or
+                // an anchor or crossing nearer the pointer pulls it.
+                let tangent = if self.id == "lineSegment" && !(ev.mods.shift || ev.mods.alt || ev.mods.space) {
+                    let rival = self.snap.point_within_reach(cx, raw);
+                    self.tangent_line.snap(cx, raw, rival)
+                } else {
+                    self.tangent_line.drop_line();
+                    None
+                };
+                let (a, b) = tangent.unwrap_or((s, ev.pos));
+                let (c, v) = self.command_at(a, b, ev.mods, cx.constrain_angle);
+                self.leave_copy(cx, raw, ev.backquote, &c, &v);
+                out.push(self.preview(c, v));
                 out
             }
             PointerKind::Up => {
                 let Some(s) = self.start.take() else { return vec![] };
                 self.snap.clear();
+                self.tangent_line.clear();
                 self.inner = None;
                 self.before_drag = None;
+                self.clear_copies();
                 if self.began {
                     self.began = false;
+                    self.through.clear();
                     vec![Action::Commit]
+                } else if self.places_point {
+                    // A Shift-click places a point; the third draws the circle through the three.
+                    self.through.push(s);
+                    self.hover = None;
+                    if self.through.len() < 3 {
+                        return vec![];
+                    }
+                    let (c, v) = circle_through_points(&self.through);
+                    self.through.clear();
+                    vec![Action::Exec(c, v)]
                 } else {
+                    self.through.clear();
                     // Alt (draw from centre) is passed on, so the size dialog can centre the shape on the click.
                     let args = if ev.mods.alt { json!({ "x": s.x, "y": s.y, "alt": true }) } else { json!({ "x": s.x, "y": s.y }) };
                     vec![Action::Dialog(self.id.into(), args)]
@@ -618,6 +837,17 @@ impl Tool for ShapeTool {
                 },
                 _ => vec![],
             };
+        }
+        // Escape drops the points Shift-clicks placed for a circle; the document stays as it is. A
+        // press that has not begun a drag is dropped too, so its release places no point.
+        if key == ToolKey::Escape && !self.began && !self.through.is_empty() {
+            self.through.clear();
+            self.hover = None;
+            if self.start.take().is_some() {
+                self.places_point = false;
+                self.snap.clear();
+            }
+            return vec![];
         }
         let Some(s) = self.start.filter(|_| self.began) else { return vec![] };
         let changed = match (self.id, key) {
@@ -649,15 +879,18 @@ impl Tool for ShapeTool {
         };
         if changed {
             let (c, v) = self.command_at(s, self.last, self.mods, cx.constrain_angle);
-            vec![Action::Preview(c, v)]
+            vec![self.preview(c, v)]
         } else if key == ToolKey::Escape {
             self.start = None;
             self.began = false;
+            self.through.clear();
             self.inner = None;
+            self.clear_copies();
             if let Some(o) = self.before_drag.take() {
                 self.restore_drag_options(o);
             }
             self.snap.clear();
+            self.tangent_line.clear();
             vec![Action::Cancel]
         } else {
             vec![]
@@ -695,8 +928,22 @@ impl Tool for ShapeTool {
         match (&self.widget, &self.selection) {
             (Some(WidgetDrag::Corner(_)), _) => matches!(key, ToolKey::Up | ToolKey::Down),
             (_, Some(_)) => key == ToolKey::Escape,
-            _ => false,
+            _ => key == ToolKey::Escape && !self.through.is_empty(),
         }
+    }
+    /// Points placed by Shift-clicks for a circle: Escape drops them.
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
+        !self.through.is_empty()
+    }
+    /// The pointer left the canvas: the circle's preview through it goes.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = None;
+    }
+    /// An edit, Undo or Redo made outside the tool, or another document, drops the points placed
+    /// for a circle.
+    fn history_moved(&mut self) {
+        self.through.clear();
+        self.hover = None;
     }
     /// The widget being dragged, the Smart Guides of the shape being drawn or the selection being
     /// moved, and its size, angle or offset label.
@@ -706,15 +953,29 @@ impl Tool for ShapeTool {
             Some(WidgetDrag::Pie(d)) => return d.overlays(cx),
             None => {}
         }
-        let mut o = self.snap.guides().to_vec();
+        // A line on a common tangent shows that snap's guides, and its length and angle.
+        let tangent = self.tangent_line.line().filter(|_| self.start.is_some());
+        let mut o = if tangent.is_some() { self.tangent_line.guides(cx) } else { self.snap.guides().to_vec() };
         o.extend(self.guides.iter().cloned());
+        // The points Shift-clicks placed, and after two of them the circle through them and the
+        // pointer, dashed.
+        for p in &self.through {
+            o.push(Overlay::Anchor { p: *p, color: crate::draw2::FEEDBACK, filled: true, size: 6.0 });
+        }
+        if let ([a, b], Some(h)) = (self.through.as_slice(), self.hover)
+            && let Some((c, r)) = vectorcraft_geom::shapes::circle_through(*a, *b, h)
+        {
+            let path = vectorcraft_geom::shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath();
+            o.push(Overlay::Path { path, color: crate::draw2::FEEDBACK, width: 1.0, dashed: true });
+        }
         if let Some((p, text)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: text.clone() });
         }
         if let Some(s) = self.start.filter(|_| self.began && cx.measurement_labels) {
             let p = self.last + Vec2::new(cx.tol(12.0), cx.tol(12.0));
             let text = if self.id == "lineSegment" {
-                cx.segment_measure_label(s, self.last)
+                let (a, b) = tangent.unwrap_or((s, self.last));
+                cx.segment_measure_label(a, b)
             } else {
                 // A box's size as drawn (from its centre with Alt, square with Shift).
                 match self.id {
@@ -729,7 +990,9 @@ impl Tool for ShapeTool {
                         let (w, h) = match self.id {
                             "polygon" => ((self.last - s).x.abs(), (self.last - s).y.abs()),
                             _ => {
-                                let (r, _) = turned_box(s, self.last, self.mods, cx.constrain_angle);
+                                // The corner Snap to Tangent moved a circle's to, as the preview draws it.
+                                let corner = self.tangent_corner.map_or(self.last, |d| s + d);
+                                let (r, _) = turned_box(s, corner, self.mods, cx.constrain_angle);
                                 (r.width(), r.height())
                             }
                         };
@@ -763,8 +1026,9 @@ impl Tool for ShapeTool {
             None => {}
         }
         // A press takes the corner and pie widgets first, then the box's handles, then the centre
-        // point, then the zone just outside a corner; everywhere else it draws a new shape.
-        if idle {
+        // point, then the zone just outside a corner; everywhere else it draws a new shape. A
+        // Shift-press that places another point for a circle skips them all.
+        if idle && !self.placing_point(m) {
             if shows_shape_widgets(self.id) && corners::over_widget(cx, p, false) {
                 return Cursor::CornerRadius;
             }
@@ -787,6 +1051,7 @@ impl Tool for ShapeTool {
         json!({
             "sides": self.sides,
             "points": self.points,
+            "anchors": self.anchors,
             "cornerRadius": self.corner_radius,
             "starRatio": self.star_ratio,
             "length": self.line_length,
@@ -799,6 +1064,7 @@ impl Tool for ShapeTool {
         match key {
             "sides" => self.sides = v.as_u64().unwrap_or(6).clamp(3, 1000) as u32,
             "points" => self.points = v.as_u64().unwrap_or(5).clamp(3, 1000) as u32,
+            "anchors" => self.anchors = v.as_u64().unwrap_or(4).clamp(2, 1000) as u32,
             "cornerRadius" => self.corner_radius = finite.unwrap_or(12.0).clamp(0.0, MAX_CORNER_RADIUS),
             "starRatio" => self.star_ratio = v.as_f64().unwrap_or(0.5).clamp(0.01, 1.0),
             "length" => self.line_length = finite.map_or(self.line_length, |n| n.abs().min(1e6)),

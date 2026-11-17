@@ -11,3 +11,6 @@ workspace = true
 [dependencies]
 vectorcraft-geom = { workspace = true }
 vectorcraft-pathops = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

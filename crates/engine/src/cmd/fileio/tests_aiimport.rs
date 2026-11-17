@@ -571,7 +571,24 @@ fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
     assert_eq!(names(&doc.layers), ["Art"], "{r}");
     let mut found = vec![];
     doc.visit_images(|_, im| {
-        let img = image::load_from_memory(&doc.images[&im.key].bytes).unwrap().to_rgb8();
+        let img = craft_image_codecs::decode(&doc.images[&im.key].bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgb8();
         found.push(img.pixels().map(|p| p.0).collect::<Vec<_>>());
     });
     assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
@@ -589,7 +606,27 @@ fn a_zero_width_stroke_in_the_editing_data_draws_a_hairline() {
         assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
         let v = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
         let png = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
-        image::load_from_memory(&png).unwrap().to_rgba8().pixels().filter(|p| p.0[3] > 0).count()
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .pixels()
+            .filter(|p| p.0[3] > 0)
+            .count()
     };
     assert!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nS\n") > 0, "the hairline draws");
     assert_eq!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nN\n"), 0, "the unstroked path draws nothing");
@@ -762,7 +799,7 @@ fn unread_pdf_part(e: &str) -> String {
 
 /// #4366: a `.ai`, or a PDF saved with the editing data, whose PDF part can't be read opens from
 /// its editing data, with a first note saying why. Pages picked, layers off or the editing data
-/// off keep the error, and so does editing data that can't be read.
+/// off keep the error. Editing data that can't be read keeps it too, followed by why.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     let mut s = Session::new();
@@ -780,8 +817,23 @@ fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     }
     for (name, file) in refused_files(b"%AI12_CompressedData not zlib", ai::page_pdf()) {
         let plain = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
-        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), plain, "{name}");
+        let both = format!("{plain}; its editing data couldn't be read either (its zlib compression is damaged)");
+        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), both, "{name}");
+        for p in [json!({"pages": "1"}), json!({"layers": false})] {
+            assert_eq!(open(&mut s, name, &file, p.clone()).unwrap_err().to_string(), plain, "{name}: {p}");
+        }
     }
+}
+
+/// #4366: editing data stored in a form the reader doesn't take, beside a PDF part that can't be
+/// read, is named in the error.
+#[test]
+fn the_error_says_why_the_editing_data_couldnt_be_read() {
+    let mut s = Session::new();
+    let file = ai::ai_with_private_streams(&compressed(&ai::sample_data()), ai::page_pdf(), REFUSED_CONTENT, "/Filter /Bogus ");
+    let plain = open(&mut s, "art.ai", &file, json!({"editingData": false})).unwrap_err().to_string();
+    let e = open(&mut s, "art.ai", &file, json!({})).unwrap_err().to_string();
+    assert_eq!(e, format!("{plain}; its editing data couldn't be read either (it is stored in a form that isn't read)"));
 }
 
 /// A file saved in units of 10 points (`/UserUnit 10`, as in
