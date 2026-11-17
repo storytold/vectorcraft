@@ -3224,6 +3224,11 @@ mark-style	Japanese	日本式
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	オリジナルを編集で、リンクされたファイルを種類に応じたシステムの既定のアプリで開きます。オフの場合、リンクされたラスター画像はインストールされていれば PhotoCraft で開きます。
 	A file saved by an older VectorCraft version opens with [Converted] after its name, and Save asks where to save it; off, Save replaces the file.	古いバージョンの VectorCraft で保存されたファイルは名前の後に [Converted] が付いて開き、保存では保存先を確認します。オフの場合、保存でファイルを置き換えます。
 	VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.	VectorCraft のファイルとテンプレートは、保存で別の指定がない限り圧縮して小さく保存します。圧縮ファイルを開けないバージョン向けの保存は圧縮しません。
+	Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.	コピーと切り取りは、アートの SVG コードも他のアプリに渡します。デスクトップでは、アートに 1 MiB を超える画像が埋め込まれていると、コードはテキストとしてコピーされません。
+	On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet.	Windows では、コピーと切り取りはアートの PDF も他のアプリに渡します。他のプラットフォームはまだ PDF をコピーしません。
+	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft はこの選択を保存しますが、コピーと切り取りはまだ従来のベクタークリップボードの形式を使用しません。
+	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	従来のベクタークリップボードの「パスを保持」または「アピアランスとオーバープリントを保持」です。VectorCraft は選択を保存しますが、まだ使用しません。
+	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	「書式を保持」では、VectorCraft のテキストオブジェクトからコピーしたテキストをテキストオブジェクトに貼り付けるとスタイルを保持します。「テキストのみを保持」では、貼り付け先のスタイルになります。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。

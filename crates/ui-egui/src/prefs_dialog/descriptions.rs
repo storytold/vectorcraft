@@ -283,6 +283,21 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "useCompression",
         "VectorCraft files and templates are saved compressed, so they are smaller, unless a save says otherwise; saves for versions that cannot open compressed files stay uncompressed.",
     ),
+    // Clipboard Handling
+    (
+        "copyAsSvg",
+        "Copy and Cut also give other apps SVG code of the art; on the desktop, the code is not copied as text when the art embeds more than 1 MiB of images.",
+    ),
+    ("copyAsPdf", "On Windows, Copy and Cut also give other apps a PDF of the art; the other platforms do not copy a PDF yet."),
+    ("copyAicb", "VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet."),
+    (
+        "aicbMode",
+        "Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.",
+    ),
+    (
+        "pasteTextFormatting",
+        "Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.",
+    ),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.

@@ -1799,11 +1799,11 @@ fn a_row_without_a_description_leaves_the_line_empty() {
 }
 
 /// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices,
-/// Hyphenation, Plug-ins & Scratch Disks, User Interface, Performance and File Handling categories
-/// show on this platform, the Smart Guides box included, has exactly one sentence, and no key has
-/// two.
+/// Hyphenation, Plug-ins & Scratch Disks, User Interface, Performance, File Handling and Clipboard
+/// Handling categories show on this platform, the Smart Guides box included, has exactly one
+/// sentence, and no key has two.
 #[test]
-fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_user_interface_performance_and_file_handling_setting_has_one_description() {
+fn every_setting_from_general_to_clipboard_handling_has_one_description() {
     let mut bad = vec![];
     let categories = [
         "General",
@@ -1816,6 +1816,7 @@ fn every_general_selection_guides_smart_guides_slices_hyphenation_plugins_user_i
         "User Interface",
         "Performance",
         "File Handling",
+        "Clipboard Handling",
     ];
     for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
@@ -2450,6 +2451,65 @@ fn keyboard_focus_on_a_file_handling_row_shows_its_description() {
         None
     };
     for key in ["backgroundSave", "backgroundExport", "autosaveRecovery", "autosaveInterval"] {
+        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
+        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
+        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
+    }
+}
+
+/// The pointer over each of the five Clipboard Handling rows, from Include SVG Code to When
+/// pasting text, shows that row's sentence and no other row's.
+#[test]
+fn hovering_a_clipboard_handling_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Clipboard Handling"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let rows = [
+        ("Include SVG Code", "copyAsSvg"),
+        ("PDF", "copyAsPdf"),
+        ("Legacy vector clipboard (no transparency)", "copyAicb"),
+        ("Legacy vector clipboard:", "aicbMode"),
+        ("When pasting text:", "pasteTextFormatting"),
+    ];
+    let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    for (i, (label, _)) in rows.iter().enumerate() {
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        for (j, sentence) in sentences.iter().enumerate() {
+            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+        }
+    }
+}
+
+/// Tab from the search field reaches the Include SVG Code, PDF and Legacy vector clipboard (no
+/// transparency) checkboxes, then the Legacy vector clipboard and When pasting text menus: the line
+/// shows each one's sentence in turn, and a screen reader gets it as the focused control's
+/// description.
+#[test]
+fn keyboard_focus_on_a_clipboard_handling_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Clipboard Handling"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let mut tab_to = |sentence: &str| {
+        for _ in 0..40 {
+            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+            if painted(&texts, sentence) {
+                return Some(described);
+            }
+        }
+        None
+    };
+    for key in ["copyAsSvg", "copyAsPdf", "copyAicb", "aicbMode", "pasteTextFormatting"] {
         let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
         let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` control and its sentence shows"));
         assert!(described.iter().any(|d| d == sentence), "the focused `{key}` control carries the sentence: {described:?}");
