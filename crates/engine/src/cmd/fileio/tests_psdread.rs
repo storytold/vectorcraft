@@ -215,7 +215,24 @@ fn exported(s: &mut Session, p: Value) -> Vec<u8> {
 #[test]
 fn psd_exports_open_and_place_again() {
     let mut s = art();
-    let png = image::load_from_memory(&exported(&mut s, json!({"format": "png"}))).unwrap().to_rgba8();
+    let png = craft_image_codecs::decode(&exported(&mut s, json!({"format": "png"})))
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     for (options, what) in [(json!({}), "layered RGB"), (json!({"layers": false}), "flat RGB"), (json!({"colorModel": "gray"}), "grey")] {
         let f = exported(&mut s, merge(json!({"format": "psd"}), options));
         let back = decode(&f, 1 << 30, naive).unwrap();
@@ -412,6 +429,98 @@ fn a_plain_image_replacing_a_clipped_psd_keeps_its_rotation() {
     let r = s.execute("file.place", &json!({"name": "plain.psd", "dataBase64": plain, "replace": true})).unwrap();
     let after = xf(&s, NodeId(r["ids"][0].as_u64().unwrap()));
     assert!(after.iter().zip(before).all(|(a, b)| (a - b).abs() < 1e-9), "{after:?} != {before:?}");
+}
+
+/// A square saved as "Square" and the clipping path naming it.
+fn square_resources() -> Vec<u8> {
+    let square = saved_path(false, &[(true, &[[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]])]);
+    [resource(2000, b"Square", &square), clipping_name(b"Square")].concat()
+}
+
+/// `bytes` written as `name` in `dir`, by its path.
+fn write_file(dir: &std::path::Path, name: &str, bytes: &[u8]) -> String {
+    let p = dir.join(name);
+    std::fs::write(&p, bytes).unwrap();
+    p.to_string_lossy().into_owned()
+}
+
+/// links.relink and links.update put a linked PSD file's image in the clip group of the clipping
+/// path its new file names, take that clip group's clipping path away when the new file names
+/// none, and give it back when a later file names one again.
+#[test]
+fn relink_and_update_follow_the_clipping_path_of_a_linked_psd() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-relink-clip");
+    let cut = write_file(&dir, "cut.psd", &red_psd(&triangle_resources()));
+    let square = write_file(&dir, "square.psd", &red_psd(&square_resources()));
+    let plain = write_file(&dir, "plain.psd", &red_psd(&[]));
+    let triangle = vec![[50.0, 0.0], [100.0, 50.0], [0.0, 50.0]];
+    let squared = vec![[25.0, 12.5], [75.0, 12.5], [75.0, 37.5], [25.0, 37.5]];
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"path": cut, "at": [50, 25]})).unwrap();
+    let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), r["image"].as_u64().unwrap());
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (triangle.clone(), true, NodeId(image)));
+    s.execute("links.relink", &json!({"ids": [image], "path": square})).unwrap();
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (squared.clone(), true, NodeId(image)), "the new file's clipping path");
+    s.execute("links.relink", &json!({"ids": [image], "path": plain})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    match d.node(group).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, clip: false }) => assert_eq!(children.iter().map(|c| c.id.0).collect::<Vec<_>>(), [image]),
+        other => panic!("a plain group of the image: {other:?}"),
+    }
+    s.execute("links.relink", &json!({"ids": [image], "path": cut})).unwrap();
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (triangle.clone(), true, NodeId(image)), "clipped again");
+    // The file is saved again with another clipping path.
+    std::fs::write(&cut, red_psd(&square_resources())).unwrap();
+    s.execute("links.update", &json!({"ids": [image]})).unwrap();
+    assert_eq!(clip_group(&s.doc().unwrap().doc, group), (squared, true, NodeId(image)), "links.update reads the clipping path again");
+}
+
+/// The PNG a PSD file's merged image is kept as holds the clipping path the file names, and only a
+/// text chunk within the size limit that reads as a path gives one back.
+#[test]
+fn the_kept_png_holds_the_clipping_path_within_bounds() {
+    let img = raster_image(&red_psd(&triangle_resources())).unwrap();
+    let (path, rule) = img.clip.clone().expect("the file's clipping path");
+    assert_eq!(rule, vectorcraft_geom::FillRule::EvenOdd);
+    assert_eq!(super::load::png_clip(&img.blob.bytes), Some(path));
+    let plain = raster_image(&red_psd(&[])).unwrap();
+    assert!(plain.clip.is_none() && super::load::png_clip(&plain.blob.bytes).is_none());
+    let with = |text: String| vectorcraft_render::encode::png::with_text(plain.blob.bytes.to_vec(), &[("VectorCraft clip", text.into())]);
+    assert_eq!(super::load::png_clip(&with("not a path".into())), None);
+    assert_eq!(super::load::png_clip(&with(" ".repeat((16 << 20) + 1))), None, "a chunk past the limit is not read");
+}
+
+/// A plain image relinked to a PSD file that names a clipping path goes into a clip group of that
+/// path, under the even-odd rule; a clipping mask made in the document stays around it.
+#[test]
+fn a_plain_image_relinked_to_a_clipped_psd_is_clipped_by_its_path() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-relink-plain");
+    let plain = write_file(&dir, "plain.psd", &red_psd(&[]));
+    let cut = write_file(&dir, "cut.psd", &red_psd(&triangle_resources()));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"path": plain, "at": [50, 25]})).unwrap();
+    let image = NodeId(r["ids"][0].as_u64().unwrap());
+    s.execute("links.relink", &json!({"ids": [image.0], "path": cut})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let group = d.parent_of(image).expect("a clip group");
+    assert_eq!(clip_group(d, group), (vec![[50.0, 0.0], [100.0, 50.0], [0.0, 50.0]], true, image));
+    // The clipping path's fill rule changed in the document makes it the document's own mask: a
+    // relink keeps it and puts the file's clip group inside it.
+    let clip = match d.node(group).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, .. }) => children[0].id,
+        other => panic!("{other:?}"),
+    };
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(vectorcraft_doc::Node { kind: NodeKind::Path { rule, .. }, .. }) = doc.node_mut(clip) {
+        *rule = vectorcraft_geom::FillRule::NonZero;
+    }
+    s.execute("links.relink", &json!({"ids": [image.0], "path": cut})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let inner = d.parent_of(image).unwrap();
+    assert_eq!(d.parent_of(inner), Some(group), "the document's mask holds the file's clip group");
+    assert!(clip_group(d, inner).1, "the file's clip group is even-odd");
 }
 
 #[test]

@@ -126,14 +126,18 @@ fn kinds(p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<(bool, bool)>> {
         .collect()
 }
 
-/// Each kind's item target and objects: (fill?, item, ids).
-fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
+/// Each kind's item target and objects: (fill?, item, ids). With `edit`, the art of graph designs drawn in graph series
+/// is left out, and an explicit item that the art left out has no row of that kind for is an error, as when the edit
+/// resolves it on the other objects. Without it, the art is read with the other objects.
+fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>, edit: bool) -> Result<Vec<(bool, ItemTarget, Vec<NodeId>)>> {
     let item = item_target(s, p, cmd)?;
     kinds
         .into_iter()
         .map(|fill| {
             let it = item.of_kind(s, fill);
-            Ok((fill, it, it.targets(s, p)?))
+            let ids = it.targets(s, p)?;
+            let ids = if edit { super::appearance::drop_design_art_rows(s, ids, it, fill, cmd)? } else { ids };
+            Ok((fill, it, ids))
         })
         .collect()
 }
@@ -159,12 +163,7 @@ pub(super) type OverprintJob = ((bool, ItemTarget, Vec<NodeId>), bool);
 /// `object.setOverprint` aims, leaving out the art of graph designs drawn in graph series.
 pub(super) fn overprint_jobs(s: &Session, p: &Value, cmd: &str, keys: [&str; 2]) -> Result<Vec<OverprintJob>> {
     let kinds = kinds(p, cmd, keys)?;
-    let d = &s.doc()?.doc;
-    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0))?
-        .into_iter()
-        .map(|(fill, it, ids)| (fill, it, super::appearance::drop_design_art(d, ids)))
-        .zip(kinds.iter().map(|k| k.1))
-        .collect())
+    Ok(aims(s, p, cmd, kinds.iter().map(|k| k.0), true)?.into_iter().zip(kinds.iter().map(|k| k.1)).collect())
 }
 
 /// Apply `jobs` to `d`, adding the objects changed to `changed`.
@@ -203,7 +202,7 @@ fn attributes(s: &Session, p: &Value) -> Result<AttributesInfo> {
     let d = &s.doc()?.doc;
     let mut info = AttributesInfo { ids: targets(s, p)?, recent_urls: s.recent_urls.clone(), ..Default::default() };
     super::attributes::fill_info(d, &mut info);
-    for (fill, item, ids) in aims(s, p, C, [true, false])? {
+    for (fill, item, ids) in aims(s, p, C, [true, false], false)? {
         let mut all =
             ids.iter().filter_map(|id| d.node(*id)).filter_map(|n| Some(flags(n, fill, item.resolve(&n.appearance, fill, C).ok()?))).flatten();
         let same = all.next().and_then(|first| all.all(|b| b == first).then_some(first));

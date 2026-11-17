@@ -227,6 +227,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
+    (crate::addons::packaging::ID, "Fold Lines", "scissors"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
@@ -691,6 +692,9 @@ pub struct UiState {
     /// Type → Recent Fonts, most recent first.
     #[serde(default)]
     pub recent_fonts: Vec<String>,
+    /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
+    #[serde(default)]
+    pub recent_commands: Vec<String>,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -717,6 +721,10 @@ pub struct UiState {
     /// saved.
     #[serde(skip)]
     pub color_guide_base: Option<vectorcraft_color::Color>,
+    /// Color Guide panel: the spot color swatch the base is a tint of, when it was chosen from one
+    /// ([`crate::panels::color_guide::SpotBase`]). Not saved.
+    #[serde(skip)]
+    pub color_guide_spot: Option<crate::panels::color_guide::SpotBase>,
     /// Align panel: the Align To choice, Selection or Artboard, which Object → Align and the align
     /// buttons follow ([`crate::panels::align::with_align_to`]).
     #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
@@ -1227,6 +1235,7 @@ impl Default for UiState {
             workspace_changes: vec![],
             recent_files: vec![],
             recent_fonts: vec![],
+            recent_commands: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             color_guide: Default::default(),
@@ -1234,6 +1243,7 @@ impl Default for UiState {
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
+            color_guide_spot: None,
             align_to: Default::default(),
             align_spacing: 0.0,
             color_mode: None,

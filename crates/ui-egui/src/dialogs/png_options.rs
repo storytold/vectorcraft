@@ -1,6 +1,6 @@
 //! The raster export options: PNG Options (resolution, background, anti-aliasing, interlaced),
 //! JPEG Options (no transparency; colour model, quality 0–10, method and scans, profile, image
-//! map), WebP Options, and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
+//! map), WebP Options (lossless, or lossy at a quality 0–100), and PNG-8 and GIF Options (the palette: colour reduction, colours, dither,
 //! transparency and matte), TIFF, BMP and Targa Options ([`super::tiff_bmp_tga`]) and PSD Options
 //! ([`super::psd_options`]). Fields
 //! are `document.export` params (format, path, artboard choice…); `__`-prefixed ones are the
@@ -39,6 +39,10 @@ const MATTES: [&str; 3] = ["none", "white", "black"];
 const MATTE_LABELS: [&str; 4] = ["None", "White", "Black", "Other"];
 /// JPEG quality on the dialog's 0–10 scale: the band each step falls in.
 const QUALITY_BANDS: [&str; 11] = ["Low", "Low", "Low", "Medium", "Medium", "Medium", "High", "High", "Maximum", "Maximum", "Maximum"];
+/// WebP compression labels: `lossless` true, then false.
+const WEBP_COMPRESSION_LABELS: [&str; 2] = ["Lossless", "Lossy"];
+/// The lossy WebP quality a new export starts with (0–100).
+const WEBP_QUALITY: u8 = 90;
 
 /// The dialog kind of a raster format (`pngOptions`, `jpgOptions`, `webpOptions`, `gifOptions`,
 /// `png8Options`).
@@ -80,6 +84,9 @@ pub(super) fn defaults(app: &VectorcraftApp, f: &Format) -> Map<String, Value> {
     match f.id {
         "png" => {
             o.insert("interlaced".into(), json!(false));
+        }
+        "webp" => {
+            o.extend([("lossless".into(), json!(true)), ("quality".into(), json!(WEBP_QUALITY))]);
         }
         "jpg" => {
             let model = if cmyk { ColorModel::Cmyk } else { ColorModel::Rgb };
@@ -207,11 +214,7 @@ pub(super) fn option_rows(ui: &mut egui::Ui, d: &mut Dialog, id: &str, screens: 
         }
         "jpg" => jpeg_rows(ui, d, &label, screens),
         "gif" | "png8" => palette_rows(ui, d, &label),
-        "webp" => {
-            ui.label("");
-            label(ui, tl!("Lossless (lossy WebP isn't available yet)"));
-            ui.end_row();
-        }
+        "webp" => webp_rows(ui, d, &label),
         "psd" => psd_options::rows(ui, d, &label),
         id => tiff_bmp_tga::rows(ui, d, id, &label),
     }
@@ -248,6 +251,26 @@ fn quality_row(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, 
             d.fields.insert("quality".into(), json!(u32::from(q) * 10));
         }
         label(ui, QUALITY_BANDS[q as usize]);
+    });
+    ui.end_row();
+}
+
+/// The WebP Options rows: Lossless or Lossy compression, and the quality 0–100 that Lossy uses
+/// (dimmed while Lossless is chosen, keeping its value).
+fn webp_rows(ui: &mut egui::Ui, d: &mut Dialog, label: &dyn Fn(&mut egui::Ui, &str) -> egui::Response) {
+    label(ui, tl!("Compression:"));
+    let lossless = d.fields.get("lossless").and_then(Value::as_bool).unwrap_or(true);
+    if let Some(i) = widgets::dropdown(ui, "ro-webp", WEBP_COMPRESSION_LABELS[usize::from(!lossless)], &WEBP_COMPRESSION_LABELS, 150.0) {
+        d.fields.insert("lossless".into(), json!(i == 0));
+    }
+    ui.end_row();
+
+    label(ui, tl!("Quality:"));
+    let mut q = d.f64("quality", f64::from(WEBP_QUALITY)).round().clamp(0.0, 100.0) as u8;
+    ui.add_enabled_ui(!lossless, |ui| {
+        if widgets::slider(ui, egui::Slider::new(&mut q, 0..=100)).changed() {
+            d.fields.insert("quality".into(), json!(q));
+        }
     });
     ui.end_row();
 }
@@ -344,5 +367,9 @@ pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str],
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (format, path) = (d.str("format"), d.str("path"));
     app.ui.dialog = None;
-    io::export(app, Some(&format), Some(path), &super::export_as::exported(d, form::params(d)))
+    let mut params = form::params(d);
+    if format == "psd" {
+        psd_options::drop_unused(&mut params);
+    }
+    io::export(app, Some(&format), Some(path), &super::export_as::exported(d, params))
 }

@@ -2,14 +2,17 @@
 //! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
 //! Superscript, Subscript, Underline and Strikethrough toggles and the Language menu.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_engine::DocState;
 use vectorcraft_tools::{Mods, ToolKey};
 
 use super::{pstate, set_pstate};
@@ -28,6 +31,8 @@ pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0
 pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
 /// Tsume presets, in percent.
 pub const TSUME_PRESETS: [f64; 5] = [0.0, 25.0, 50.0, 75.0, 100.0];
+/// Adjust Horizontal and Vertical Diacritic Position presets, in thousandths of an em.
+pub const DIACRITIC_PRESETS: [f64; 7] = [-200.0, -100.0, -50.0, 0.0, 50.0, 100.0, 200.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -587,7 +592,62 @@ pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
 /// in selected groups, each with every frame of its threaded story (locked and hidden frames
 /// included), each once, the frames of a story in thread order.
 pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
-    let Some(st) = app.session.active() else { return Vec::new() };
+    app.session.active().map_or_else(Vec::new, |st| story_frames(st).to_vec())
+}
+
+/// The last list [`selected_stories`] worked out, with the document version (its address, which
+/// the held `Weak` keeps from being reused, and its revision) and the selected objects it was
+/// worked out for. The Character and Paragraph panels read the list once for each field they show.
+struct StoryFrames {
+    doc: Weak<vectorcraft_doc::Document>,
+    revision: u64,
+    selection: Vec<NodeId>,
+    frames: Rc<[NodeId]>,
+}
+
+thread_local! {
+    static STORY_FRAMES: RefCell<Option<StoryFrames>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`build_selected_stories`] ran on this thread.
+    static STORY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`story_frames`] builds the list on every read instead of keeping it.
+    static STORIES_UNKEPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`selected_stories`] of `st`: the kept list while `st`'s document, revision and selected
+/// objects are the ones it was worked out for, else a new one, kept in its place.
+fn story_frames(st: &DocState) -> Rc<[NodeId]> {
+    #[cfg(test)]
+    if STORIES_UNKEPT.get() {
+        return build_selected_stories(st).into();
+    }
+    STORY_FRAMES.with_borrow_mut(|kept| {
+        if let Some(k) = kept.as_ref()
+            && k.revision == st.revision
+            && k.doc.strong_count() > 0
+            && std::ptr::eq(k.doc.as_ptr(), Arc::as_ptr(&st.doc))
+            && k.selection == st.selection.objects
+        {
+            return k.frames.clone();
+        }
+        let frames: Rc<[NodeId]> = build_selected_stories(st).into();
+        *kept = Some(StoryFrames {
+            doc: Arc::downgrade(&st.doc),
+            revision: st.revision,
+            selection: st.selection.objects.clone(),
+            frames: frames.clone(),
+        });
+        frames
+    })
+}
+
+/// The list [`selected_stories`] describes, worked out from `st`'s selection.
+fn build_selected_stories(st: &DocState) -> Vec<NodeId> {
+    #[cfg(test)]
+    STORY_BUILDS.set(STORY_BUILDS.get() + 1);
     let mut frames = Vec::new();
     let mut taken = HashSet::new();
     for selected in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
@@ -607,9 +667,9 @@ pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
 /// The type objects of [`selected_stories`].
 pub(crate) fn selected_story_texts(app: &VectorcraftApp) -> Vec<&vectorcraft_doc::TextObject> {
     let Some(st) = app.session.active() else { return Vec::new() };
-    selected_stories(app)
-        .into_iter()
-        .filter_map(|id| match st.doc.node(id).map(|n| &n.kind) {
+    story_frames(st)
+        .iter()
+        .filter_map(|&id| match st.doc.node(id).map(|n| &n.kind) {
             Some(NodeKind::Text(t)) => Some(t.as_ref()),
             _ => None,
         })
@@ -881,9 +941,10 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 /// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
 /// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
 /// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
-/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume. With Show Font
-/// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
-/// Properties panel shows its first rows.
+/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume, and with Show Indic
+/// Options (the Middle Eastern options) on a row with Adjust Horizontal and Vertical Diacritic
+/// Position. With Show Font Height Options on, a row under Font Size holds the Set Font Height
+/// Reference dropdown. The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -984,6 +1045,24 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
                     format(app, json!({ "tsume": v.min(vectorcraft_doc::text::MAX_TSUME) }));
                 }
             });
+            ui.end_row();
+        }
+        // Adjust Horizontal and Vertical Diacritic Position, with the Middle Eastern options: the
+        // marks of the characters move across and up, in thousandths of an em.
+        if app.session.prefs.show_indic_options {
+            let max = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+            for (field, label, key, icon) in [
+                ("ch-diacritic-h", tl!("Adjust Horizontal Diacritic Position"), "diacriticHorizontal", "´↔"),
+                ("ch-diacritic-v", tl!("Adjust Vertical Diacritic Position"), "diacriticVertical", "´↕"),
+            ] {
+                cell(ui, icon, label, |ui| {
+                    let value = shared(app, |s| if key == "diacriticHorizontal" { s.diacritic_horizontal } else { s.diacritic_vertical });
+                    if let Some(v) = widgets::spin_plain(ui, field, value, "", 0, fw, 10.0, -max, &DIACRITIC_PRESETS) {
+                        // The field stops at the largest value the command takes.
+                        format(app, json!({ key: v.min(max) }));
+                    }
+                });
+            }
             ui.end_row();
         }
     });
@@ -1730,7 +1809,8 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Warichu, Standard Vertical Roman Alignment and
 /// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the default Warichu Settings (2 lines, no
 /// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
-/// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// Kashidas on, the Default digits, Adjust Horizontal and Vertical Diacritic Position 0 and the Em Box
+/// font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
@@ -1752,7 +1832,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "tsume": d.tsume, "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
             "warichuAlign": d.warichu_align,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
-            "digits": d.digits, "fontHeightReference": d.font_height_reference
+            "digits": d.digits, "diacriticHorizontal": d.diacritic_horizontal, "diacriticVertical": d.diacritic_vertical,
+            "fontHeightReference": d.font_height_reference
         }),
     );
     set_anti_alias(app, TypeAntiAlias::Sharp);
