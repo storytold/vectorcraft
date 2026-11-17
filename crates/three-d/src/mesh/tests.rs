@@ -206,6 +206,24 @@ fn flat_triangles_keep_corners_on_the_edge_an_ear_would_cut() {
 }
 
 #[test]
+fn flat_triangles_pass_over_an_ear_whose_new_edge_runs_through_a_dent() {
+    // The first ear's new edge, from (0, 4) to (4, 0), runs through the dent's corner at (2, 2).
+    let p = |x: f64, y: f64| Point::new(x, y);
+    let outline = vec![p(0.0, 0.0), p(4.0, 0.0), p(4.0, 4.0), p(2.0, 2.0), p(0.0, 4.0)];
+    let mut work = 0;
+    let triangles = flat_triangles(std::slice::from_ref(&outline), &mut work, usize::MAX).unwrap();
+    let area = |t: &[Point; 3]| ((t[1].x - t[0].x) * (t[2].y - t[0].y) - (t[1].y - t[0].y) * (t[2].x - t[0].x)) / 2.0;
+    assert!((triangles.iter().map(area).sum::<f64>() - 12.0).abs() < 1e-9);
+    for t in &triangles {
+        for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
+            for q in &outline {
+                assert!(!super::touches((q.x, q.y), (a.x, a.y), (b.x, b.y)), "{q:?} lies inside the edge {a:?} to {b:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn flat_triangles_stop_at_their_budget() {
     let p = |x: f64, y: f64| Point::new(x, y);
     let outline = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)];
