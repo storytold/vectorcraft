@@ -222,6 +222,8 @@ antiAlias	Sharp	Sắc nét
 	Crisp	Rõ nét
 	Strong	Đậm
 	Anti-aliasing:	Khử răng cưa:
+	Art Optimized	Tối ưu cho hình vẽ
+	Type Optimized	Tối ưu cho chữ
 	Any Kind	Bất kỳ loại
 	Font Technology	Công nghệ phông chữ
 font-technology	Variable	Biến thiên
@@ -794,6 +796,9 @@ font-technology	Variable	Biến thiên
 	Create from Selection	Tạo từ vùng chọn
 	Create From:	Tạo từ:
 	Create Gradient Mesh…	Tạo lưới chuyển sắc…
+	Flat	Phẳng
+	To Center	Về tâm
+	To Edge	Về cạnh
 	Create Graph	Tạo biểu đồ
 	Create New Fields by	Tạo trường mới bằng
 	Create New Layer	Tạo lớp mới

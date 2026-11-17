@@ -153,6 +153,8 @@ antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强
 	Anti-aliasing:	消除锯齿：
+	Art Optimized	图稿优化
+	Type Optimized	文字优化
 	Appearance	外观
 	Appearance Attribute	外观属性
 	Appearance Item	外观项目
@@ -637,6 +639,9 @@ antiAlias	Sharp	锐利
 	Create from Selection	从选区创建
 	Create From:	创建自：
 	Create Gradient Mesh…	创建渐变网格…
+	Flat	平面
+	To Center	向中心
+	To Edge	向边缘
 	Create Graph	创建图表
 	Create New Layer	创建新图层
 	Create New Sublayer	创建新子图层
