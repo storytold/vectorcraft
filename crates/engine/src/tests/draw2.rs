@@ -86,8 +86,57 @@ fn blob_tip_zero_and_invalid_values_are_safe() {
         p[key] = value;
         assert!(s.execute("path.blob", &p).is_err(), "{key}: {p}");
     }
-    s.execute("path.blob", &json!({"points": [[100, 200], [300, 200]], "angle": 1e300, "roundness": -1e300, "merge": false})).unwrap();
-    assert!(paths(&s)[1].1.control_bounds().unwrap().height().is_finite());
+    let stroke = json!({"points": [[100, 200], [300, 200]], "merge": false});
+    refuses_with(&mut s, "path.blob", &with(&stroke, json!({"angle": 1e300})), "`angle` must be from -180 to 180 degrees");
+    refuses_with(&mut s, "path.blob", &with(&stroke, json!({"roundness": -1e300})), "`roundness` must be from 0 to 100%");
+    assert_eq!(paths(&s).len(), 1);
+}
+
+/// `path.blob` refuses an `angle`, `roundness` or `fidelity` outside its range and changes nothing;
+/// each end of a range paints, and a key left out or null takes its default (0°, 100% and no fitting).
+#[test]
+fn blob_brush_rejects_out_of_range_tip_and_fidelity_without_edit() {
+    let mut s = session();
+    let stroke = json!({"points": [[100, 100], [300, 100]], "size": 20, "merge": false});
+    let angle = "`angle` must be from -180 to 180 degrees";
+    let roundness = "`roundness` must be from 0 to 100%";
+    let fidelity = "`fidelity` must be from 0.01 to 100 pt";
+    for (extra, want) in [
+        (json!({"angle": -180.5}), angle),
+        (json!({"angle": 181}), angle),
+        (json!({"angle": 1e300}), angle),
+        (json!({"roundness": -0.5}), roundness),
+        (json!({"roundness": 101}), roundness),
+        (json!({"fidelity": 0.005}), fidelity),
+        (json!({"fidelity": 0}), fidelity),
+        (json!({"fidelity": -1}), fidelity),
+        (json!({"fidelity": 101}), fidelity),
+        (json!({"fidelity": 1e300}), fidelity),
+        (json!({"angle": 45, "roundness": 50, "fidelity": 100.5}), fidelity),
+    ] {
+        refuses_with(&mut s, "path.blob", &with(&stroke, extra), want);
+    }
+    assert!(paths(&s).is_empty());
+    let painted = |s: &mut Session, extra: serde_json::Value| {
+        let id = NodeId(s.execute("path.blob", &with(&stroke, extra)).unwrap()["id"].as_u64().unwrap());
+        path(s, id)
+    };
+    for extra in [
+        json!({"angle": -180}),
+        json!({"angle": 180}),
+        json!({"roundness": 0}),
+        json!({"roundness": 100}),
+        json!({"fidelity": 0.01}),
+        json!({"fidelity": 100}),
+    ] {
+        let pd = painted(&mut s, extra.clone());
+        assert!(pd.control_bounds().is_some_and(|b| b.height().is_finite() && b.height() > 0.0), "{extra}: {pd:?}");
+    }
+    let defaults = painted(&mut s, json!({}));
+    let nulls = painted(&mut s, json!({"angle": null, "roundness": null, "fidelity": null}));
+    let given = painted(&mut s, json!({"angle": 0, "roundness": 100}));
+    assert_eq!(nulls, defaults);
+    assert_eq!(given, defaults);
 }
 
 #[test]
@@ -328,6 +377,41 @@ fn pencil_connect_keeps_the_rest_of_a_compound_path_and_refuses_the_extended_pat
     assert_eq!(sp.anchors[sp.anchors.len() - 1].p, Point::new(300.0, 400.0));
     assert!(sp.anchors.iter().any(|x| x.p == Point::new(400.0, 400.0)));
     assert!(s.execute("path.freehand", &json!({"points": points, "extend": {"id": a.0}, "connect": {"id": a.0}})).is_err());
+}
+
+/// `path.freehand` refuses a `style` other than "pencil" or "brush" and an `extend` end other than
+/// "start" or "end" and changes nothing; left out or null, the style is "pencil" and the stroke
+/// continues the path from its end.
+#[test]
+fn pencil_refuses_an_unknown_style_or_extend_end() {
+    let mut s = session();
+    let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let stroke = json!({"points": [[100, 300], [200, 320], [300, 300]]});
+    for style in [json!("calligraphic"), json!("Brush"), json!(""), json!(1), json!(true)] {
+        refuses_with(&mut s, "path.freehand", &with(&stroke, json!({ "style": style })), "style must be \"pencil\" or \"brush\"");
+    }
+    let from_end = json!({"points": [[200, 100], [250, 150], [300, 100]]});
+    for end in [json!("middle"), json!("START"), json!(""), json!(0), json!(false)] {
+        let p = with(&from_end, json!({"extend": {"id": a.0, "end": end}}));
+        refuses_with(&mut s, "path.freehand", &p, "extend end must be \"start\" or \"end\"");
+    }
+    assert_eq!((paths(&s).len(), path(&s, a).anchor_count()), (1, 2), "refused: nothing changed");
+    for style in [json!("pencil"), json!("brush"), json!(null)] {
+        s.execute("path.freehand", &with(&stroke, json!({ "style": style }))).unwrap();
+    }
+    assert_eq!(paths(&s).len(), 4);
+    for end in [json!(null), json!("end")] {
+        let mut s = session();
+        let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+        s.execute("path.freehand", &with(&from_end, json!({"extend": {"id": a.0, "end": end}}))).unwrap();
+        let sp = &path(&s, a).subpaths[0];
+        assert_eq!((sp.anchors[0].p, sp.anchors[sp.anchors.len() - 1].p), (Point::new(100.0, 100.0), Point::new(300.0, 100.0)), "{end}");
+    }
+    let mut s = session();
+    let a = line(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("path.freehand", &json!({"points": [[100, 100], [50, 150], [0, 100]], "extend": {"id": a.0, "end": "start"}})).unwrap();
+    let ends: Vec<Point> = path(&s, a).subpaths[0].anchors.iter().map(|x| x.p).collect();
+    assert!(ends.contains(&Point::new(0.0, 100.0)) && ends.contains(&Point::new(200.0, 100.0)), "continued from its start: {ends:?}");
 }
 
 /// With Keep selected off, a compound path whose direct-selected anchors all lie on the subpath
