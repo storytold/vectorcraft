@@ -111,16 +111,21 @@ pub(crate) struct Look {
 }
 
 impl Look {
-    /// Can a glyph drawn with `other` join a run drawn with this? A fill joins a run whose
-    /// glyphs were also stroked over (fill and stroke rendering draws each glyph twice); invisible
-    /// text (neither fill nor stroke) joins only invisible text.
+    /// Can a glyph drawn with `other` join a run drawn with this? Only a run drawn alike: fill,
+    /// stroke and overprints. A glyph filled only never joins a run whose glyphs were also stroked
+    /// over: it takes a stroke only when one is drawn over it later
+    /// ([`TextLine::stroke_filled`]), which then joins it to the run before if that is stroked
+    /// alike (fill and stroke rendering draws each glyph twice), and a glyph filled only after
+    /// one filled and stroked stays unstroked (#8300). Invisible text (neither fill nor stroke)
+    /// joins only invisible text.
     fn takes(&self, other: &Look) -> bool {
         self.font == other.font
             && (self.size - other.size).abs() <= self.size * 0.01
             && (self.h_scale - other.h_scale).abs() < 0.5
             && self.fill == other.fill
             && self.overprint_fill == other.overprint_fill
-            && ((other.stroke.is_none() && other.fill.is_some()) || (self.stroke == other.stroke && self.overprint_stroke == other.overprint_stroke))
+            && self.stroke == other.stroke
+            && self.overprint_stroke == other.overprint_stroke
     }
 
     fn style(&self) -> CharStyle {
@@ -658,8 +663,9 @@ impl TextLine {
 
     /// Restyle the glyphs gathered for a stroke ([`stroke_filled`](Self::stroke_filled)): their
     /// text becomes a run of its own with the stroke, unless the run is stroked so already, and the
-    /// text before and after it in the run keeps its stroke. A run they make up whole is stroked
-    /// whole; text that comes right after a run drawn alike joins it.
+    /// text before and after it in the run keeps its stroke. Text that comes right after a run
+    /// drawn alike joins it, a run made up of it whole too: fill and stroke rendering glyph by
+    /// glyph fills each glyph as a run of its own ([`Look::takes`]) before its stroke (#8300).
     fn flush_stroke(&mut self) {
         let Some(PendingStroke { run, start, end, stroke, overprint }) = self.pending.take() else { return };
         let last = run.saturating_add(1) == self.runs.len();
@@ -669,10 +675,6 @@ impl TextLine {
             return;
         }
         if !(start < end && end <= text.len() && text.is_char_boundary(start) && text.is_char_boundary(end)) {
-            return;
-        }
-        if start == 0 && end == text.len() {
-            (look.stroke, look.overprint_stroke) = (Some(stroke), overprint);
             return;
         }
         let tail = text.split_off(end);
@@ -738,11 +740,10 @@ impl TextLine {
     /// A stroke over glyph `glyph` just drawn at `at` in `font`, which `overprint`s or not: that
     /// glyph is stroked. `false`: it isn't that glyph (another place, font or text).
     ///
-    /// A filled glyph joins a run of the same fill whatever its stroke ([`Look::takes`]), so the
-    /// run can hold glyphs before it that are stroked otherwise or not at all: then the glyph's
-    /// text becomes a run of its own with this stroke, and the glyphs before it keep theirs
-    /// (#7741). The line's text is the same either way, so the characters' slots, gaps and
-    /// authored flags, kept along the whole line, still line up.
+    /// The glyph's run can hold glyphs before it, filled alike and not stroked
+    /// ([`Look::takes`]): then the glyph's text becomes a run of its own with this stroke, and
+    /// the glyphs before it stay unstroked (#7741). The line's text is the same either way, so
+    /// the characters' slots, gaps and authored flags, kept along the whole line, still line up.
     fn stroke_last(&mut self, font: u128, at: Placement, glyph: &str, stroke: TypeStroke, overprint: bool) -> bool {
         self.flush_stroke();
         let start = self.last_start;
