@@ -1856,6 +1856,50 @@ fn break_link_then_update_redefines_all_instances() {
     assert!((bounds(&s, other).center().x - 300.0).abs() < 1e-6);
 }
 
+/// Redefine Symbol refuses art that holds an instance of the symbol it redefines, directly, in a
+/// group, in an opacity mask, or through the art of another symbol it holds an instance of, and
+/// then changes nothing and adds no undo step. An instance of an unrelated symbol still redefines
+/// it.
+#[test]
+fn redefine_refuses_art_holding_an_instance_of_the_symbol() {
+    let mut s = session();
+    let (inst, name, _) = make_symbol(&mut s);
+    // Ring's art is an instance of Box.
+    let ring = NodeId(s.execute("symbol.new", &json!({"name": "Ring", "ids": [inst.0]})).unwrap()["id"].as_u64().unwrap());
+    let place =
+        |s: &mut Session, x: f64| NodeId(s.execute("symbol.place", &json!({"name": name, "x": x, "y": 200})).unwrap()["id"].as_u64().unwrap());
+    let direct = place(&mut s, 300.0);
+    let plain = rect(&mut s, 20.0, 220.0, 30.0, 30.0);
+    let grouped = place(&mut s, 100.0);
+    // A rectangle whose opacity mask is a Box instance.
+    let masked = rect(&mut s, 60.0, 260.0, 30.0, 30.0);
+    let mut mask_art = node(&s, direct);
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    mask_art.id = doc.alloc_id();
+    doc.node_mut(masked).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(mask_art, true)));
+    let cases = [
+        ("a Box instance", vec![direct.0]),
+        ("Ring, whose art holds Box", vec![ring.0]),
+        ("art with a Box instance", vec![plain.0, grouped.0]),
+        ("art masked by a Box instance", vec![masked.0]),
+    ];
+    for (case, ids) in cases {
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        let e = s.execute("symbol.update", &json!({"name": name, "ids": ids})).unwrap_err();
+        assert!(e.to_string().contains("can't hold an instance of itself"), "{case}: {e}");
+        assert!(std::sync::Arc::ptr_eq(&before, &s.doc().unwrap().doc), "{case}: the document is unchanged");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{case}: no undo step");
+    }
+    // An instance of a symbol that does not hold Box redefines it.
+    let dot = rect(&mut s, 200.0, 20.0, 10.0, 10.0);
+    let dot = NodeId(s.execute("symbol.new", &json!({"name": "Dot", "ids": [dot.0]})).unwrap()["id"].as_u64().unwrap());
+    let r = s.execute("symbol.update", &json!({"name": name, "ids": [dot.0]})).unwrap();
+    assert_eq!(r["name"], json!(name));
+    let art = s.doc().unwrap().doc.symbols.iter().find(|x| x.name == name).map(|x| x.art.clone()).unwrap();
+    assert!(matches!(&art.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == "Dot"), "{}", art.kind_label());
+}
+
 /// A linked opacity mask of a 10 × 10 square at (100, 50).
 fn square_mask(s: &mut Session) -> Box<vectorcraft_doc::OpacityMask> {
     let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
