@@ -696,6 +696,7 @@ mod cursor_tests {
             ("pathEraser", Cursor::PathEraser),
             ("join", Cursor::Join),
             ("knife", Cursor::Knife),
+            (addons::trim::ID, Cursor::Knife),
             ("shaper", Cursor::Shaper),
             ("livePaintBucket", Cursor::LivePaintBucket),
             ("measure", Cursor::Measure),
@@ -713,10 +714,10 @@ mod cursor_tests {
             assert_eq!(cursor_of(id), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
             // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
-            // Live Paint Bucket's bucket is drawn.
+            // Live Paint Bucket's bucket and the Knife's knife are drawn.
             let stand_in = match id {
                 "mesh" => Some(Cursor::PenAdd),
-                "blobBrush" | "eraser" | "livePaintBucket" => None,
+                "blobBrush" | "eraser" | "livePaintBucket" | "knife" | addons::trim::ID => None,
                 _ => Some(Cursor::Crosshair),
             };
             assert_eq!(c.stand_in(), stand_in, "{id}");

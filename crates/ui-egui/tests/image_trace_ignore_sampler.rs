@@ -417,3 +417,109 @@ fn actual_canvas_shows_original_while_armed_then_restores_the_stored_view() {
         std::fs::write(dir.join("binding.json"), serde_json::to_vec_pretty(&binding).unwrap()).unwrap();
     }
 }
+
+/// Cancelling while Cmd/Ctrl borrows Selection also clears the parked eyedropper's one-shot.
+#[test]
+fn cancelling_a_borrowed_sampler_clears_the_restored_eyedropper() {
+    fn loan_frame(app: &mut VectorcraftApp, ctx: &egui::Context, mut events: Vec<Event>) -> egui::FullOutput {
+        events.insert(0, Event::ModifiersChanged(egui::Modifiers { ctrl: true, command: true, ..Default::default() }));
+        frame(app, ctx, events)
+    }
+
+    fn borrow_and_release(app: &mut VectorcraftApp, ctx: &egui::Context, point: Point, stale: bool) {
+        let modifiers = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+        assert_eq!(app.session.lent_tool_id(&modifiers), Some("selection"), "exercise the real engine loan");
+        let at = canvas::Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), ctx.zoom_factor()).to_screen(point);
+        assert!(app.canvas_rect.unwrap().contains(at));
+        let press = |pressed| Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers { ctrl: true, command: true, ..Default::default() },
+        };
+        loan_frame(app, ctx, vec![Event::PointerMoved(at), press(true)]).textures_delta.clear();
+        assert_eq!(app.session.tool_id(), "selection", "the eyedropper is now parked in Session::lender");
+        if stale {
+            app.run("select.none", json!({})).unwrap();
+        }
+        let state = app.session.active().unwrap();
+        let (document, selection, revision) = (state.doc.clone(), state.selection.clone(), state.revision);
+        let history = (state.history.undo.len(), state.history.redo.len());
+        let paint = app.session.paint.clone();
+        loan_frame(app, ctx, vec![]).textures_delta.clear();
+        assert_eq!(app.session.tool_id(), "selection", "cancellation respects the borrowed gesture");
+        assert!(app.ui.trace_ignore_sampler.is_none(), "the real frame ends the UI-owned sampler");
+        let state = app.session.active().unwrap();
+        assert_eq!(state.doc, document);
+        assert_eq!(state.selection, selection);
+        assert_eq!(state.revision, revision);
+        assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
+        assert_eq!(app.session.paint, paint, "cancelling a parked sampler does not paint");
+        loan_frame(app, ctx, vec![press(false)]).textures_delta.clear();
+        frame(app, ctx, vec![Event::ModifiersChanged(egui::Modifiers::NONE)]).textures_delta.clear();
+        assert_eq!(app.session.tool_id(), "eyedropper", "ordinary engine loan restoration is retained");
+    }
+
+    fn ordinary_sample(app: &mut VectorcraftApp, ctx: &egui::Context, point: Point) -> (usize, usize, u64) {
+        app.run("select.none", json!({})).unwrap();
+        app.run("paint.setFill", json!({"color": "#e020c0"})).unwrap();
+        assert!(app.session.fill_active);
+        let state = app.session.active().unwrap();
+        let (document, selection, revision) = (state.doc.clone(), state.selection.clone(), state.revision);
+        let history = (state.history.undo.len(), state.history.redo.len());
+        let old_paint = app.session.paint.clone();
+        let view = app.view_info();
+        let down = PointerEvent::new(PointerKind::Down, point.x, point.y).with_mods(vectorcraft_tools::Mods { shift: true, ..Default::default() });
+        canvas::dispatch(app, &down, view);
+        canvas::dispatch(app, &PointerEvent::new(PointerKind::Up, point.x, point.y), view);
+        frame(app, ctx, vec![]).textures_delta.clear();
+        assert_eq!(app.session.tool_id(), "eyedropper", "a normal sample does not consume a stale one-shot or switch tools");
+        assert_ne!(app.session.paint, old_paint, "the normal color sample actually runs");
+        assert_eq!(app.session.paint.fill, vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK));
+        let state = app.session.active().unwrap();
+        assert_eq!(state.doc, document, "with no selection a normal sample changes only paint defaults");
+        assert_eq!(state.selection, selection);
+        (state.history.undo.len() - history.0, state.history.redo.len().abs_diff(history.1), state.revision - revision)
+    }
+
+    for stale in [false, true] {
+        // The same ordinary loan is the control for legitimate selection/default/history work.
+        let (mut control, control_ctx) = fixture(true, [37, 83, 149], false);
+        let control_point = source_point(&control, 0.25);
+        let control_target = selected(&control).id;
+        let control_revision = control.session.active().unwrap().revision;
+        let control_document = control.session.active().unwrap().doc.clone();
+        let control_history = {
+            let state = control.session.active().unwrap();
+            (state.history.undo.len(), state.history.redo.len())
+        };
+        control.select_tool("eyedropper");
+        borrow_and_release(&mut control, &control_ctx, control_point, stale);
+        let expected_selection: Vec<bool> = control.session.active().unwrap().selection.objects.iter().map(|id| *id == control_target).collect();
+        let expected_revision_delta = control.session.active().unwrap().revision - control_revision;
+        assert_eq!(control.session.active().unwrap().doc, control_document);
+        assert_eq!((control.session.active().unwrap().history.undo.len(), control.session.active().unwrap().history.redo.len()), control_history);
+        let expected_paint = control.session.paint.clone();
+        let expected_sample_effects = ordinary_sample(&mut control, &control_ctx, control_point);
+
+        let (mut app, ctx) = fixture(true, [37, 83, 149], false);
+        let point = source_point(&app, 0.25);
+        let target = selected(&app).id;
+        let state = app.session.active().unwrap();
+        let (document, revision) = (state.doc.clone(), state.revision);
+        let history = (state.history.undo.len(), state.history.redo.len());
+        click_control(&mut app, &ctx, SAMPLE_TIP);
+        assert_eq!(app.session.tool_id(), "eyedropper");
+        assert!(!app.session.tool_options()["imageTraceIgnoreColor"].is_null());
+        borrow_and_release(&mut app, &ctx, point, stale);
+        assert!(app.session.tool_options()["imageTraceIgnoreColor"].is_null(), "stale={stale}: the returned lender must not stay armed");
+        assert!(app.session.tool_options()["stop"].is_null(), "stale={stale}: no ghost return-tool action");
+        let state = app.session.active().unwrap();
+        assert_eq!(state.doc, document);
+        assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
+        assert_eq!(state.selection.objects.iter().map(|id| *id == target).collect::<Vec<_>>(), expected_selection);
+        assert_eq!(state.revision - revision, expected_revision_delta);
+        assert_eq!(app.session.paint, expected_paint, "only the ordinary borrowed gesture's default changes are permitted");
+        assert_eq!(ordinary_sample(&mut app, &ctx, point), expected_sample_effects, "the next real click follows the ordinary eyedropper path");
+    }
+}

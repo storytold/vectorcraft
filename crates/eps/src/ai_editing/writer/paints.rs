@@ -19,8 +19,8 @@ pub(in crate::ai_editing) const GRADIENTS: &str =
 pub(in crate::ai_editing) const GRADIENT_SHAPES: &str = "gradients without stops or with more than 256, gradients whose ramp has no length and radial gradients flattened to a line are written as their average color in the editing data for other apps";
 pub(in crate::ai_editing) const SWATCH_PLACEMENT: &str =
     "the placement of pattern swatches that move, turn or scale their pattern is left out of the editing data for other apps";
-pub(in crate::ai_editing) const GRADIENT_MIX: &str =
-    "gradients that mix their colors perceptually or dither are written as classic gradients in the editing data for other apps";
+pub(in crate::ai_editing) const GRADIENT_DITHER: &str = "gradients that dither are written without dither's noise in the editing data for other apps";
+pub(in crate::ai_editing) const GRADIENT_PERCEPTUAL: &str = "Perceptual gradients are written in process colors, with the colors between their stops as stops of their own (at most 256), in the editing data for other apps";
 pub(in crate::ai_editing) const GRADIENT_HUE: &str = "gradients mixed around the hue wheel are written in process colors, with the colors between their stops as stops of their own (at most 256), in the editing data for other apps";
 pub(in crate::ai_editing) const CONIC: &str =
     "conic gradients are written as linear gradients along their vector, with the same stops, in the editing data for other apps";
@@ -57,13 +57,14 @@ fn writable_gradient(g: &Gradient) -> bool {
     g.kind != GradientKind::Freeform && !g.stops.is_empty() && g.stops.len() <= crate::import::MAX_GRADIENT_STOPS
 }
 
-/// `g` as the data holds its colors: one mixed around the hue wheel (the data's gradients mix
-/// their stops' colors directly) as a classic gradient of the stops on its curve
-/// ([`Gradient::as_classic_curve`]), no more than the `.ai` reader reads when it pads
-/// ([`GRADIENT_HUE`]); others as they are.
-fn hue_as_stops(g: &Gradient) -> std::borrow::Cow<'_, Gradient> {
+/// `g` as the data holds its colors: one mixed by the Perceptual method or around the hue wheel
+/// (the data's gradients mix their stops' colors directly) as a classic gradient of the stops on
+/// its curve in process colors ([`Gradient::as_classic_curve`]), no more than the `.ai` reader
+/// reads when it pads ([`GRADIENT_PERCEPTUAL`], [`GRADIENT_HUE`]); a classic one, and one the
+/// data can't hold as a gradient ([`writable_gradient`]), as it is.
+fn curve_as_stops(g: &Gradient) -> std::borrow::Cow<'_, Gradient> {
     use std::borrow::Cow;
-    if !g.method.is_hue() {
+    if g.method.is_classic() || !writable_gradient(g) {
         return Cow::Borrowed(g);
     }
     let curve = g.as_classic_curve();
@@ -88,6 +89,16 @@ pub(in crate::ai_editing) fn free_gradient_name(next: &mut u64, mut taken: impl 
     }
 }
 
+/// Is `stop` linked to a global process color of `doc` (one [`Writer::stop_color`] writes as its
+/// color, [`STOP_LINKS`])?
+fn links_global_process(doc: &vectorcraft_doc::Document, stop: &GradientStop) -> bool {
+    stop.swatch
+        .as_deref()
+        .filter(|n| *n != REGISTRATION)
+        .and_then(|name| doc.swatch(name))
+        .is_some_and(|sw| matches!(sw.paint, Paint::Solid { swatch: None, .. }) && !sw.spot && sw.global)
+}
+
 /// The stops of `g` in order of their place on the ramp.
 fn sorted_stops(g: &Gradient) -> Vec<&GradientStop> {
     let mut stops: Vec<&GradientStop> = g.stops.iter().collect();
@@ -100,10 +111,11 @@ impl Writer<'_> {
     pub(in crate::ai_editing) fn reserve_swatch_gradients(&mut self) {
         let doc = self.doc;
         for sw in doc.swatches_iter() {
-            // As `swatch_paint` writes it: one mixed around the hue wheel as the stops on its curve,
-            // and the stops of one that repeats or reflects repeated.
+            // As `swatch_paint` writes it: one mixed by the Perceptual method or around the hue
+            // wheel as the stops on its curve, and the stops of one that repeats or reflects
+            // repeated.
             if let Paint::Gradient(g) = &sw.paint
-                && let stops = hue_as_stops(&g.gradient)
+                && let stops = curve_as_stops(&g.gradient)
                 && let gradient = stops.unrolled_within(crate::import::MAX_GRADIENT_STOPS)
                 && writable_gradient(&gradient)
                 && !self.gradients.iter().any(|d| d.name == sw.name)
@@ -165,9 +177,11 @@ impl Writer<'_> {
         // The data has no spread: a gradient that repeats or reflects is written with its stops
         // repeated over `area` (a conic one, written linear, around its turn).
         let mut g: GradientPaint = (**g).clone();
-        if g.gradient.method.is_hue() {
-            self.warn(GRADIENT_HUE);
-            g.gradient = hue_as_stops(&g.gradient).into_owned();
+        // A gradient written as its average color (a freeform one, or one without stops or with
+        // more than the reader reads) keeps its own stops.
+        if !g.gradient.method.is_classic() && writable_gradient(&g.gradient) {
+            self.warn_curve(&g.gradient);
+            g.gradient = curve_as_stops(&g.gradient).into_owned();
         }
         if g.gradient.is_spread() {
             self.warn(SPREAD);
@@ -190,6 +204,18 @@ impl Writer<'_> {
             return Paint::solid(average(&g.gradient));
         }
         Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..g }))
+    }
+
+    /// The warnings for gradient `g`, mixed by the Perceptual method or around the hue wheel,
+    /// written as the stops on its curve ([`curve_as_stops`]): [`GRADIENT_PERCEPTUAL`] or
+    /// [`GRADIENT_HUE`], and [`STOP_LINKS`] when one of its stops is linked to a global process
+    /// color (the stops on the curve hold no links).
+    fn warn_curve(&mut self, g: &Gradient) {
+        self.warn(if g.method.is_hue() { GRADIENT_HUE } else { GRADIENT_PERCEPTUAL });
+        let doc = self.doc;
+        if g.stops.iter().any(|s| links_global_process(doc, s)) {
+            self.warn(STOP_LINKS);
+        }
     }
 
     /// The fills and strokes of `n` that paint (outline `bp`), their gradients placed
@@ -363,8 +389,8 @@ impl Writer<'_> {
     /// linear gradient's from the last to the first and a radial one's from the first to the last,
     /// `BD`, `%AI5_EndGradient`.
     fn gradient_def(&mut self, s: &mut String, d: &GradientDef) {
-        if d.gradient.dither || !d.gradient.method.is_classic() {
-            self.warn(GRADIENT_MIX);
+        if d.gradient.dither {
+            self.warn(GRADIENT_DITHER);
         }
         if d.gradient.kind == GradientKind::Conic {
             self.warn(CONIC);
@@ -587,16 +613,17 @@ impl Writer<'_> {
     /// be written.
     pub(super) fn swatch_paint(&mut self, s: &mut String, sw: &vectorcraft_color::swatch::Swatch) -> bool {
         // A swatch has no placement: one that repeats or reflects holds its stops repeated along
-        // its vector, and one mixed around the hue wheel the stops on its curve.
+        // its vector, and one mixed by the Perceptual method or around the hue wheel the stops on
+        // its curve.
         let stops = match &sw.paint {
-            Paint::Gradient(g) => Some(hue_as_stops(&g.gradient)),
+            Paint::Gradient(g) => Some(curve_as_stops(&g.gradient)),
             _ => None,
         };
         let unrolled = stops.as_deref().map(|g| g.unrolled_within(crate::import::MAX_GRADIENT_STOPS));
         match &sw.paint {
             Paint::Gradient(g) if unrolled.as_deref().is_some_and(writable_gradient) => {
-                if g.gradient.method.is_hue() {
-                    self.warn(GRADIENT_HUE);
+                if !g.gradient.method.is_classic() {
+                    self.warn_curve(&g.gradient);
                 }
                 if g.gradient.is_spread() {
                     self.warn(SPREAD);

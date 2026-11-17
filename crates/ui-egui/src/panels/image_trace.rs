@@ -260,10 +260,10 @@ fn sampler_tool_active(app: &VectorcraftApp, s: &crate::state::TraceIgnoreSample
 /// Clear only this temporary mode. An explicit tool choice keeps the tool the user chose.
 pub(crate) fn cancel_ignore_sampler(app: &mut VectorcraftApp, restore: bool) {
     let Some(s) = app.ui.trace_ignore_sampler.take() else { return };
-    if sampler_tool_active(app, &s) {
-        app.session.set_tool_option("imageTraceIgnoreColor", &Value::Null);
-        app.session.set_tool_option("stop", &Value::Null);
-    }
+    // This UI session owns these transient fields even while Cmd/Ctrl parks the eyedropper
+    // behind a borrowed selection tool. The named setter also updates that stored lender.
+    let options = serde_json::Map::from_iter([("imageTraceIgnoreColor".into(), Value::Null), ("stop".into(), Value::Null)]);
+    app.session.set_tool_options(Some("eyedropper"), &options);
     if restore && app.session.tool_id() == "eyedropper" {
         app.return_to_tool(&s.back);
     }
