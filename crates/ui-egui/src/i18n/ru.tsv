@@ -7118,6 +7118,8 @@ axis	Y Axis	Ось Y
 	VectorCraft Default	VectorCraft по умолчанию
 	VectorCraft Defaults	Стандартные VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Общий CMYK VectorCraft (как SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK VectorCraft для мелованной бумаги (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK VectorCraft для немелованной бумаги (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Образцы VectorCraft (.vcswatches)
 	Vertical Align	Вертикальное выравнивание
 	Vertical Area Type	Вертикальный текст в области
