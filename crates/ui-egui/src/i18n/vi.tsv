@@ -1591,6 +1591,10 @@ file-filter	Templates	Mẫu
 	Font List	Danh sách phông
 	Show Similar Fonts	Hiển thị phông tương tự
 	Clear Similar Fonts	Xóa phông tương tự
+	Fonts used in this document	Phông được dùng trong tài liệu này
+	This document uses no available fonts	Tài liệu này không dùng phông nào có sẵn
+	Recently Added	Mới thêm gần đây
+	Fonts added in the last 30 days	Phông được thêm trong 30 ngày qua
 	Font Preview Size	Cỡ xem trước phông
 	Font Size	Cỡ chữ
 	Variable Font	Phông chữ biến thiên
@@ -2372,7 +2376,8 @@ digits	Hindi	Hindi
 	Long Lines	Nét dài
 	Long Strokes	Nét vẽ dài
 	Longest:	Dài nhất:
-	Lossless (lossy WebP isn't available yet)	Không mất dữ liệu (WebP mất dữ liệu chưa hỗ trợ)
+	Lossless	Không mất dữ liệu
+	Lossy	Mất dữ liệu
 	Lossy:	Mất dữ liệu:
 	Low	Thấp
 	lowercase	chữ thường
@@ -3676,6 +3681,7 @@ mark-style	Japanese	Kiểu Nhật
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
+	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
 	Searching…	Đang tìm kiếm…
@@ -5266,6 +5272,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no active document	không có tài liệu đang hoạt động
 @msg	no active perspective plane	không có mặt phẳng phối cảnh đang hoạt động
 @msg	no anchor points selected	chưa chọn điểm neo
+@msg	`points` must be three [x, y] pairs of numbers	`points` phải là ba cặp số [x, y]
+@msg	direct-select three anchor points, or give `points`	hãy chọn trực tiếp ba điểm neo hoặc cung cấp `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
 @msg	no artboard {i} (0-based; the document has {_1})	không có bảng vẽ {i} (bắt đầu từ 0; tài liệu có {_1})
@@ -6770,6 +6779,7 @@ anchor	Points:	Điểm:
 	Open a document to check it for issues.	Mở một tài liệu để kiểm tra vấn đề.
 	Empty Text	Văn bản trống
 	Unpainted Objects	Đối tượng không tô màu
+	Empty Text Paths	Đường dẫn văn bản trống
 	Zero-Opacity Objects	Đối tượng có độ mờ đục bằng 0
 	Duplicate Objects	Đối tượng trùng lặp
 	Off-Artboard Art	Hình vẽ ngoài bảng vẽ
@@ -7559,6 +7569,7 @@ breakText	Glyphs	Glyph
 @msg	Too many Revolve faces for visibility evaluation	Quá nhiều mặt Xoay tròn để tính toán phần nhìn thấy
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft đọc tối đa {ASE_MAX_ENTRIES} màu và nhóm từ một tệp trao đổi mẫu màu, còn thư viện này có {entries}
 @msg	WebP encoding failed: {e}	Mã hóa WebP thất bại: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Mã hóa WebP thất bại: ảnh quá lớn cho WebP có mất dữ liệu: hãy giảm độ phân giải hoặc chọn Không mất dữ liệu
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` phải là số nguyên

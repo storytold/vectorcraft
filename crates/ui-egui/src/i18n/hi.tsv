@@ -2007,6 +2007,10 @@ antiAlias	Sharp	शार्प
 	Font List	फ़ॉन्ट सूची
 	Show Similar Fonts	समान फ़ॉन्ट दिखाएँ
 	Clear Similar Fonts	समान फ़ॉन्ट साफ़ करें
+	Fonts used in this document	इस डॉक्यूमेंट में उपयोग किए गए फ़ॉन्ट
+	This document uses no available fonts	यह डॉक्यूमेंट कोई उपलब्ध फ़ॉन्ट उपयोग नहीं करता
+	Recently Added	हाल में जोड़े गए
+	Fonts added in the last 30 days	पिछले 30 दिनों में जोड़े गए फ़ॉन्ट
 	Font Preview Size	फ़ॉन्ट प्रीव्यू साइज़
 	Font Size	फ़ॉन्ट साइज़
 	Font Size:	फ़ॉन्ट साइज़:
@@ -2801,7 +2805,8 @@ antiAlias	Sharp	शार्प
 	Long Lines	लंबी रेखाएँ
 	Long Strokes	लंबे स्ट्रोक
 	Longest:	सबसे लंबे:
-	Lossless (lossy WebP isn't available yet)	लॉसलेस (लॉसी WebP अभी उपलब्ध नहीं है)
+	Lossless	लॉसलेस
+	Lossy	लॉसी
 	Lossy:	हानि:
 	Low	निम्न
 	Low Fidelity Photo	लो फिडेलिटी फोटो
@@ -4475,6 +4480,7 @@ antiAlias	Sharp	शार्प
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
+	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
@@ -5521,6 +5527,7 @@ antiAlias	Sharp	शार्प
 	Unlock Variables	वेरिएबल्स अनलॉक करें
 	Unnamed Objects	नामरहित ऑब्जेक्टएं
 	Unpainted Objects	अनपेक्षित ऑब्जेक्टएं
+	Empty Text Paths	खाली टेक्स्ट पाथ
 	Unprintable margin:	अनप्रिंटेबल मार्जिन:
 	Unselected Artwork	अनसिलेक्टेड आर्टवर्क
 	Unsharp Mask	अनशार्प मास्क
@@ -7534,6 +7541,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
+@msg	`points` must be three [x, y] pairs of numbers	`points` में संख्याओं के तीन [x, y] जोड़े होने चाहिए
+@msg	direct-select three anchor points, or give `points`	तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
+@msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
 @msg	no artboard	कोई आर्टबोर्ड नहीं
@@ -9289,6 +9299,7 @@ theme	Appearance	अपीयरेंस
 @msg	Too many Revolve faces for visibility evaluation	दृश्यता की गणना के लिए रिवॉल्व के फ़ेस बहुत अधिक हैं
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft स्वॉच एक्सचेंज फ़ाइल से अधिकतम {ASE_MAX_ENTRIES} रंग और ग्रुप पढ़ता है, और इस लाइब्रेरी में {entries} हैं
 @msg	WebP encoding failed: {e}	WebP एन्कोडिंग विफल: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP एन्कोडिंग विफल: छवि लॉसी WebP के लिए बहुत बड़ी है: रिज़ॉल्यूशन कम करें या लॉसलेस चुनें
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index` पूरी संख्या होनी चाहिए
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList या largeList होता है

@@ -1374,6 +1374,10 @@ file-filter	Templates	Modelli
 	Font List	Elenco font
 	Show Similar Fonts	Mostra font simili
 	Clear Similar Fonts	Cancella font simili
+	Fonts used in this document	Font usati in questo documento
+	This document uses no available fonts	Questo documento non usa font disponibili
+	Recently Added	Aggiunti di recente
+	Fonts added in the last 30 days	Font aggiunti negli ultimi 30 giorni
 	Font Preview Size	Dimensione anteprima font
 	Font Size	Dimensione font
 	Variable Font	Font variabile
@@ -2069,7 +2073,8 @@ file-filter	Templates	Modelli
 	Lock Others	Blocca altri
 	Lock Slices	Blocca sezioni
 	Lock Station Point	Blocca punto di osservazione
-	Lossless (lossy WebP isn't available yet)	Senza perdita (WebP con perdita non è ancora disponibile)
+	Lossless	Senza perdita
+	Lossy	Con perdita
 	Lossy:	Con perdita:
 	Low	Bassa
 	lowercase	minuscole
@@ -3341,6 +3346,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} di {n} risultato. Continua a digitare per restringerli.|{shown} di {n} risultati. Continua a digitare per restringerli.
 	Recent Commands	Comandi recenti
 	No recent commands	Nessun comando recente
+	Search commands	Cerca comandi
 	Search Commands…	Cerca comandi…
 	Secondary	Secondario
 	Section Symbol	Simbolo di sezione
@@ -4945,6 +4951,9 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	no active document	nessun documento attivo
 @msg	no active perspective plane	nessun piano prospettico attivo
 @msg	no anchor points selected	nessun punto di ancoraggio selezionato
+@msg	`points` must be three [x, y] pairs of numbers	`points` deve essere composto da tre coppie di numeri [x, y]
+@msg	direct-select three anchor points, or give `points`	seleziona con Selezione diretta tre punti di ancoraggio oppure indica `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	nessun cerchio passa per questi punti: due coincidono oppure tutti e tre sono allineati
 @msg	no app to open files here	nessuna app per aprire file qui
 @msg	no artboard	nessuna tavola da disegno
 @msg	no artboard {i} (0-based; the document has {_1})	nessuna tavola da disegno {i} (a partire da 0; il documento ne ha {_1})
@@ -6757,6 +6766,7 @@ anchor	Points:	Punti:
 	Open a document to check it for issues.	Apri un documento per controllarne i problemi.
 	Empty Text	Testo vuoto
 	Unpainted Objects	Oggetti senza colore
+	Empty Text Paths	Tracciati di testo vuoti
 	Zero-Opacity Objects	Oggetti con opacità zero
 	Duplicate Objects	Oggetti duplicati
 	Off-Artboard Art	Grafica fuori dalle tavole da disegno
@@ -9298,6 +9308,7 @@ breakText	Glyphs	Glifi
 @msg	Too many Revolve faces for visibility evaluation	Troppe facce di Rivoluzione per il calcolo della visibilità
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft legge al massimo {ASE_MAX_ENTRIES} colori e gruppi da un file di scambio campioni, e questa libreria ne ha {entries}
 @msg	WebP encoding failed: {e}	Codifica WebP non riuscita: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Codifica WebP non riuscita: l'immagine è troppo grande per il WebP con perdita: riduci la risoluzione o scegli Senza perdita
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` è smallThumb, mediumThumb, largeThumb, smallList o largeList

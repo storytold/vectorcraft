@@ -1007,6 +1007,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Trap: mere end {_1} par objekter ligger tæt nok til overfyldning, eller for mange objekter deler et vandret område; anvend Trap på færre objekter ad gangen
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft læser højst {ASE_MAX_ENTRIES} farver og grupper fra en farveprøveudvekslingsfil, og dette bibliotek har {entries}
 @msg	WebP encoding failed: {e}	WebP-kodning mislykkedes: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-kodning mislykkedes: billedet er for stort til WebP med tab: sænk opløsningen, eller vælg Tabsfri
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Lugeramme og lugelinjer: ingen lugelinje passer uden for grafikken, og lugerammen er slået fra
 @msg	\\ at end of pattern	\\ i slutningen af mønsteret
 @msg	`alignOn` cannot be empty	`alignOn` må ikke være tom
@@ -3924,6 +3925,7 @@ lighting	Light	Lys
 	Search commands, tools, panels and effects	Søg i kommandoer, værktøjer, paneler og effekter
 	Style:	Typografi:
 	Switch workspace	Skift arbejdsområde
+	Search commands	Søg i kommandoer
 	Show all open documents	Vis alle åbne dokumenter
 	Use 	Brug 
 	 the object to select  |  	 på objektet for at markere det  |  
@@ -5376,7 +5378,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Skjul videolinealer
 	Client-side (.html)	Klientbaseret (.html)
 	Color Reduction:	Farvereduktion:
-	Lossless (lossy WebP isn't available yet)	Tabsfri (WebP med tab er ikke tilgængelig endnu)
+	Lossless	Tabsfri
+	Lossy	Med tab
 	Scans:	Scanninger:
 	Server-side (.map)	Serverbaseret (.map)
 	{format} Options	Indstillinger for {format}
@@ -6131,6 +6134,10 @@ theme	Appearance	Udseende
 	Font List	Skrifttypeliste
 	Show Similar Fonts	Vis lignende skrifttyper
 	Clear Similar Fonts	Ryd lignende skrifttyper
+	Fonts used in this document	Skrifttyper brugt i dette dokument
+	This document uses no available fonts	Dette dokument bruger ingen tilgængelige skrifttyper
+	Recently Added	Nyligt tilføjet
+	Fonts added in the last 30 days	Skrifttyper tilføjet inden for de sidste 30 dage
 	Fonts in Document	Skrifttyper i dokumentet
 	Refresh Font List	Opdatér skrifttypeliste
 	Replace Font	Erstat skrifttype
@@ -7395,6 +7402,9 @@ imageTrace	Outline	Kontur
 @msg	no active document	intet aktivt dokument
 @msg	no active perspective plane	intet aktivt perspektivplan
 @msg	no anchor points selected	ingen ankerpunkter er markeret
+@msg	`points` must be three [x, y] pairs of numbers	`points` skal være tre talpar [x, y]
+@msg	direct-select three anchor points, or give `points`	direkte markér tre ankerpunkter, eller angiv `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går gennem disse punkter: to er ens, eller alle tre ligger på én linje
 @msg	no app to open files here	ingen app til at åbne filer her
 @msg	no artboard	ingen tegneflade
 @msg	no artboard {i} (0-based; the document has {_1})	ingen tegneflade {i} (0-baseret; dokumentet har {_1})
@@ -9211,6 +9221,7 @@ anchor	Points:	Punkter:
 	Open a document to check it for issues.	Åbn et dokument for at kontrollere det for problemer.
 	Empty Text	Tom tekst
 	Unpainted Objects	Objekter uden farve
+	Empty Text Paths	Tomme tekststier
 	Zero-Opacity Objects	Objekter med 0 % opacitet
 	Duplicate Objects	Dublerede objekter
 	Off-Artboard Art	Grafik uden for kunstpladerne

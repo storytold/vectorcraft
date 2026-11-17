@@ -1365,6 +1365,10 @@ file-filter	Templates	Шаблоны
 	Font List	Список шрифтов
 	Show Similar Fonts	Показать похожие шрифты
 	Clear Similar Fonts	Сбросить похожие шрифты
+	Fonts used in this document	Шрифты, используемые в этом документе
+	This document uses no available fonts	В этом документе не используются доступные шрифты
+	Recently Added	Недавно добавленные
+	Fonts added in the last 30 days	Шрифты, добавленные за последние 30 дней
 	Font Preview Size	Размер предварительного просмотра шрифта
 	Font Size	Размер шрифта
 	Variable Font	Вариативный шрифт
@@ -2060,7 +2064,8 @@ file-filter	Templates	Шаблоны
 	Lock Others	Заблокировать остальные
 	Lock Slices	Заблокировать фрагменты
 	Lock Station Point	Заблокировать точку стояния
-	Lossless (lossy WebP isn't available yet)	Без потерь (WebP с потерями пока недоступен)
+	Lossless	Без потерь
+	Lossy	С потерями
 	Lossy:	С потерями:
 	Low	Низкая
 	lowercase	строчные
@@ -3330,6 +3335,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
+	Search commands	Поиск команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный
 	Section Symbol	Символ параграфа
@@ -4941,6 +4947,9 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no active document	нет активного документа
 @msg	no active perspective plane	нет активной плоскости перспективы
 @msg	no anchor points selected	опорные точки не выделены
+@msg	`points` must be three [x, y] pairs of numbers	`points` должен содержать три пары чисел [x, y]
+@msg	direct-select three anchor points, or give `points`	выделите прямым выделением три опорные точки или задайте `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
 @msg	no app to open files here	здесь нет приложения для открытия файлов
 @msg	no artboard	нет монтажной области
 @msg	no artboard {i} (0-based; the document has {_1})	нет монтажной области {i} (счёт с 0; в документе {_1})
@@ -7124,6 +7133,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Откройте документ, чтобы проверить его на проблемы.
 	Empty Text	Пустой текст
 	Unpainted Objects	Объекты без заливки и обводки
+	Empty Text Paths	Пустые текстовые контуры
 	Zero-Opacity Objects	Объекты с нулевой непрозрачностью
 	Duplicate Objects	Дублирующиеся объекты
 	Off-Artboard Art	Графика за пределами монтажных областей
@@ -9781,6 +9791,7 @@ shape	Open	Открытый
 @msg	Too many Revolve faces for visibility evaluation	Слишком много граней вращения для расчёта видимости
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читает из файла обмена образцами не более {ASE_MAX_ENTRIES} цветов и групп, а в этой библиотеке их {entries}
 @msg	WebP encoding failed: {e}	Ошибка кодирования WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Ошибка кодирования WebP: изображение слишком велико для WebP с потерями: уменьшите разрешение или выберите «Без потерь»
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` принимает значения smallThumb, mediumThumb, largeThumb, smallList или largeList

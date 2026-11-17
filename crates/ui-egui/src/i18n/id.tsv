@@ -1231,6 +1231,7 @@ lighting	Light	Cahaya
 	Search commands, tools, panels and effects	Cari perintah, alat, panel, dan efek
 	Style:	Gaya:
 	Switch workspace	Ganti ruang kerja
+	Search commands	Cari perintah
 	Show all open documents	Tampilkan semua dokumen terbuka
 	Use 	Gunakan 
 	 the object to select  |  	 objek untuk memilihnya  |  
@@ -2634,7 +2635,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Sembunyikan penggaris video
 	Client-side (.html)	Sisi klien (.html)
 	Color Reduction:	Reduksi warna:
-	Lossless (lossy WebP isn't available yet)	Tanpa kehilangan (WebP lossy belum tersedia)
+	Lossless	Tanpa kehilangan
+	Lossy	Dengan kehilangan
 	Scans:	Pemindaian:
 	Server-side (.map)	Sisi server (.map)
 	{format} Options	Opsi {format}
@@ -3389,6 +3391,10 @@ theme	Appearance	Tampilan
 	Font List	Daftar font
 	Show Similar Fonts	Tampilkan font serupa
 	Clear Similar Fonts	Hapus font serupa
+	Fonts used in this document	Font yang digunakan dalam dokumen ini
+	This document uses no available fonts	Dokumen ini tidak menggunakan font yang tersedia
+	Recently Added	Baru ditambahkan
+	Fonts added in the last 30 days	Font yang ditambahkan dalam 30 hari terakhir
 	Fonts in Document	Font dalam dokumen
 	Refresh Font List	Segarkan daftar font
 	Replace Font	Ganti font
@@ -6460,6 +6466,7 @@ anchor	Points:	Titik:
 	Open a document to check it for issues.	Buka dokumen untuk memeriksa masalahnya.
 	Empty Text	Teks kosong
 	Unpainted Objects	Objek tanpa warna
+	Empty Text Paths	Jalur teks kosong
 	Zero-Opacity Objects	Objek dengan opasitas nol
 	Duplicate Objects	Objek duplikat
 	Off-Artboard Art	Karya di luar artboard
