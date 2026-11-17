@@ -401,6 +401,7 @@ registry! {
     TextImport: [text_import::KIND] => text_import::SPEC,
     PdfPresets: [pdf_presets::KIND] => pdf_presets::SPEC,
     PdfPreset: [save_pdf::PRESET_KIND] => save_pdf::PRESET_SPEC,
+    PdfFlattenerOptions: [save_pdf::CUSTOM_KIND] => save_pdf::CUSTOM_SPEC,
     SaveOptions: [save_options::KIND] => save_options::SPEC,
     TextExport: [text_export::KIND] => text_export::SPEC,
     OfficeExport: [office_export::KIND] => office_export::SPEC,
@@ -658,7 +659,7 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
 /// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
-/// `flattenerPreset`, which drops the Custom… options), a change
+/// and Save PDF's `flattenerPreset`, which drop the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
 /// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size. A value
 /// Composite Fonts' Show Sample can't take is refused.
@@ -672,6 +673,10 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
     }
     if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == eps_options::KIND) {
         eps_options::field_set(d, field);
+        return Ok(());
+    }
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == save_pdf::KIND) {
+        save_pdf::field_set(d, field);
         return Ok(());
     }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };

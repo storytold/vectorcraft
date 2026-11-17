@@ -1361,7 +1361,9 @@ with `flattenerPreset` (empty: High Resolution; `high`, `medium`, `low` or a sav
 and `flattener` options over it (as `object.flattenTransparency` takes them); images with see-through pixels count as
 transparency and rasterized areas are clipped to their regions. Layers the file leaves out (non-printing ones, unless
 `includeNonPrinting` or `createLayers` is set) are left out of the flattening. A file that would still have transparency fails the
-export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too.
+export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too. In the Save PDF dialog, the Custom… button beside Flattener
+preset sets `flattener` (`ui.savePdfDialog` keeps a `flattener` it is given, and refuses one it can't read). PDF
+presets (`pdf.preset.save`) keep `flattenerPreset` but not `flattener`.
 In PDF/A-2b files, `.ai` saves and files written with `longPagesInPoints: false`, a page with a side longer than
 14,400 pt is written with a `UserUnit` (PDF 1.6): its longer side divided by 14,400,
 rounded up to the next thousandth, with the page's sizes and coordinates in those units, so that no side is longer than

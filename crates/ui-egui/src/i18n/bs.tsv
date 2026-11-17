@@ -2885,6 +2885,8 @@ digits	Malayalam	Malajalam
 	Overprint and Transparency Flattener Options	Opcije pretiska i spljoštavanja prozirnosti
 	Custom…	Prilagođeno…
 	Custom Transparency Flattener Options	Prilagođene opcije spljoštavanja prozirnosti
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF postavka zadržava postavku spljoštavanja, ali ne i postavke iz Prilagođeno….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 datoteke isijecaju rasterizirana područja po njihovim regijama, a Pretisak određuje da li se pretisci zadržavaju.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS nema alfa prozirnost, a Pretisci određuju da li se pretisci zadržavaju.
 	Place the pages with the placement again	Ponovo postavi stranice s postavljanjem
 	Placement:	Postavljanje:

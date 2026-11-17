@@ -2912,6 +2912,8 @@ digits	Malayalam	Malajalam
 	Overprint and Transparency Flattener Options	Päällepainatuksen ja läpinäkyvyyden litistyksen asetukset
 	Custom…	Mukautettu…
 	Custom Transparency Flattener Options	Läpinäkyvyyden litistyksen mukautetut asetukset
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF-esiasetus säilyttää litistyksen esiasetuksen mutta ei Mukautettu…-asetuksia.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 -tiedostot rajaavat rasteroidut alueet niiden muotoon, ja Päällepainatus määrää, säilytetäänkö päällepainatukset.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS:ssä ei ole alfa-läpinäkyvyyttä, ja Päällepainatukset määrää, säilytetäänkö päällepainatukset.
 	Place the pages with the placement again	Sijoita sivut uudelleen sijoittelun mukaan
 	Placement:	Sijoittelu:
