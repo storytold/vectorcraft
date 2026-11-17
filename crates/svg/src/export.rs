@@ -1,5 +1,6 @@
 //! The SVG writer.
 
+use craft_svg::tree::usvg;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -20,12 +21,15 @@ use crate::{
     xml_escape,
 };
 
+use craft_svg::write::SvgWriter;
+
 use crate::css::{self, Props, blend_css, css_string, font_descriptor};
 
 mod nodes;
 mod output;
 mod paint;
 mod text;
+mod variables;
 
 use nodes::SymbolDef;
 pub(crate) use nodes::{MASK_FLAGS, Reuse};
@@ -37,7 +41,13 @@ const UNIQUE_PLACEHOLDER: &str = "u_vc_unique_-";
 
 pub(crate) fn export(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>) -> Output {
     // Live geometry effects (Roughen, Warp, Offset Path, Effect → Pathfinder…) export as their result.
-    let baked = vectorcraft_effects::bake_document(doc);
+    // An instance of a symbol whose art has such effects is written as that art placed by the
+    // instance and then baked, as the canvas draws it; other symbols keep one `<symbol>` def.
+    // Hidden layers and objects are written when the options keep them; layers that do not print
+    // always are. `native` (Preserve Editing) is the document as it is, with its live effects.
+    let hidden = opts.hidden_layers;
+    let layers = vectorcraft_effects::WrittenLayers { hidden, non_printing: true, hidden_objects: hidden };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     if opts.object_ids != ObjectIds::Unique {
         return write(doc, opts, native, "");
@@ -102,6 +112,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         region_boxes: None,
         art_reach: HashMap::new(),
         warnings: vec![],
+        setting_notes: vec![],
         id_prefix,
         linked: Vec::new(),
         instance_xf: Affine::IDENTITY,
@@ -117,8 +128,10 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         layer_nest: 0,
         non_latin1_names: false,
         foreign_ns: BTreeMap::new(),
+        bound: HashMap::new(),
     };
     w.assign_name_ids();
+    w.assign_bound_ids();
     for layer in &doc.layers {
         w.count_colorized_images(layer);
     }
@@ -135,38 +148,46 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         w.line("</g>");
     }
 
+    // Include Variable Data, once the body has written the bound objects' ids.
+    let variables = w.variable_sets();
     // XML names cannot use character references. Preserve names that Latin-1 cannot encode.
     let encoding = if opts.encoding == Encoding::Latin1 && w.non_latin1_names {
-        w.warn("Unicode data attribute names require UTF-8; SVG was written in UTF-8");
+        w.note_setting("Unicode data attribute names require UTF-8; SVG was written in UTF-8");
         Encoding::Utf8
     } else {
         opts.encoding
     };
     let nl = if opts.minify { "" } else { "\n" };
-    let mut out = String::new();
+    let mut svg = SvgWriter::fragment();
     // A file in neither UTF-8 nor UTF-16 must name its encoding.
     if !opts.minify || encoding == Encoding::Latin1 {
-        out.push_str(&format!("<?xml version=\"1.0\" encoding=\"{}\"?>{nl}", encoding.xml_name()));
+        svg.decl(encoding.xml_name(), nl);
     }
     if opts.styling == Styling::StyleEntities && !w.classes.is_empty() {
-        out.push_str("<!DOCTYPE svg [");
-        for (i, c) in w.classes.iter().enumerate() {
-            out.push_str(&format!("{nl}{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)));
-        }
-        out.push_str(&format!("{nl}]>{nl}"));
+        let entities = w
+            .classes
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!("{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)))
+            .collect::<Vec<_>>()
+            .join(nl);
+        svg.doctype_internal("svg", &entities, nl);
     }
     let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
-    out.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
+    let mut root = svg.root().attr("xmlns:xlink", "http://www.w3.org/1999/xlink");
     for (ns, prefix) in &w.foreign_ns {
-        out.push_str(&format!(" xmlns:{prefix}=\"{}\"", xml_attr_escape(ns)));
+        root = root.attr(&format!("xmlns:{prefix}"), ns);
     }
     if w.tiny() {
-        out.push_str(" version=\"1.2\" baseProfile=\"tiny\"");
+        root = root.attr("version", "1.2").attr("baseProfile", "tiny");
     }
     if !opts.responsive {
-        out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
+        // Unitless width/height stay in this one branch so #7105 (physical unit suffixes) can rebase here.
+        root = root.attr("width", &ww).attr("height", &hh);
     }
-    out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
+    root.attr("viewBox", format_args!("0 0 {ww} {hh}")).open();
+    let mut out = svg.as_str().to_string();
+    out.push_str(nl);
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();
     let fonts = w.font_faces();
     if !w.defs.is_empty() || css || !fonts.is_empty() {
@@ -188,7 +209,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
     // An artboard exported on its own is named after it (#3544), else after the document.
     // A name that is blank once the characters XML can't hold are dropped falls back too.
     let board = opts.artboard.filter(|_| opts.artboard_title).and_then(|i| doc.artboards.get(i)).map(|a| xml_text(&a.name));
-    let title = board.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| xml_text(&doc.title));
+    let title = board.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| xml_text(doc.info_title()));
     if !title.is_empty() {
         out.push_str(&w.indent(1));
         out.push_str(&format!("<title>{title}</title>{nl}"));
@@ -207,6 +228,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         out.push_str(&w.indent(1));
         out.push_str(&format!("<script xlink:href=\"{}\"/>{nl}", xml_attr_escape(file)));
     }
+    out.push_str(&variables);
     let latin1 = encoding == Encoding::Latin1;
     if latin1 {
         latin1_refs(&mut out);
@@ -223,7 +245,7 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
     out.push_str(&w.body);
     out.push_str("</svg>");
     out.push_str(nl);
-    Output { svg: out, linked: w.linked, warnings: w.warnings, encoding }
+    Output { svg: out, linked: w.linked, warnings: w.warnings, setting_notes: w.setting_notes, encoding }
 }
 
 type ColorizedKey = (String, u32, u32, Option<[u8; 3]>);
@@ -268,6 +290,8 @@ struct Writer<'a> {
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     /// Features written approximately (once each).
     warnings: Vec<String>,
+    /// Notes on how the options were applied (once each).
+    setting_notes: Vec<String>,
     /// Prepended to every id and class name ([`ObjectIds::Unique`]).
     id_prefix: &'a str,
     /// Image files the SVG links to ([`ImageMode::Link`]).
@@ -302,4 +326,7 @@ struct Writer<'a> {
     /// The prefix written for each namespace of other applications' attributes, by its URI
     /// ([`Writer::foreign_attrs`]): declared on the root.
     foreign_ns: BTreeMap<String, String>,
+    /// Include Variable Data: the objects text variables are bound to, with the element id each
+    /// was written with, once written ([`Writer::note_bound`]).
+    bound: HashMap<NodeId, variables::Bound>,
 }

@@ -11,7 +11,9 @@
 //! `__color` (the colour table's selected colour, by source), `__presetName` (shown while saving a
 //! preset) and `__hasSlices`. Save… remembers
 //! the settings and writes the files (`file.saveForWeb`); Done only remembers them; Preview in
-//! Browser opens the HTML page (`file.saveForWeb.browser`). The previews are what Save writes:
+//! Browser opens the HTML page (`file.saveForWeb.browser`). While Alt (Option on macOS) is held,
+//! Cancel reads Reset, which puts the remembered settings back and leaves the dialog open
+//! (`ui.dialogReset`). The previews are what Save writes:
 //! [`webexport::preview_image`], decoded back, cached until the art or a setting changes.
 
 use std::sync::Arc;
@@ -39,6 +41,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok: Some("Save…"),
     ok_label: Some(|app| if io::is_web(app) { "Download" } else { "Save…" }),
     discard: Some("Done"),
+    reset: Some(reset),
     min_width: PREVIEW_W + GAP + SIDE_W,
     inputs: |_| &["path", "preset"],
     ..DialogSpec::FORM
@@ -71,14 +74,8 @@ const QUALITIES: [(&str, u8); 5] = [("Low", 10), ("Medium", 30), ("High", 60), (
 
 /// Open on the document's active artboard, keeping the other remembered settings.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let n = app.session.active().ok_or("no document")?.doc.artboards.len();
-    let mut s = app.session.last_web_settings();
-    s.artboard = Some(crate::panels::artboards::selected(app, n));
-    // A document with no artboards has no valid index.
-    if s.artboard.is_some_and(|a| a >= n) {
-        s.artboard = None;
-    }
-    let mut fields = settings_fields(&s);
+    app.session.active().ok_or("no document")?;
+    let mut fields = settings_fields(&remembered(app));
     let slices = app.session.active().is_some_and(|st| !st.doc.slice_layout().is_empty());
     fields.extend([
         ("__view".into(), json!("2up")),
@@ -88,6 +85,28 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     ]);
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(Value::Null)
+}
+
+/// The remembered settings (the defaults when none are remembered) on the document's active
+/// artboard; no artboard when the document has none.
+fn remembered(app: &VectorcraftApp) -> WebSettings {
+    let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
+    let mut s = app.session.last_web_settings();
+    s.artboard = Some(crate::panels::artboards::selected(app, n)).filter(|a| *a < n);
+    s
+}
+
+/// Reset (Cancel with Alt or Option held, or `ui.dialogReset`): the settings go back to the
+/// remembered ones on the document's active artboard ([`remembered`]), and a pending `preset`, a
+/// pending Done (`discard`, which a failed Done leaves), the preset name being typed and the
+/// selected color table entry are dropped. The view, zoom, connection speed and `path` stay,
+/// nothing is remembered or written, and the dialog stays open.
+fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    for key in ["preset", "discard", "__presetName", "__color"] {
+        d.fields.remove(key);
+    }
+    d.fields.extend(settings_fields(&remembered(app)));
+    Ok(())
 }
 
 /// The settings as dialog fields.
@@ -133,8 +152,8 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 }
 
 /// `file.saveForWeb` with settings: write the files (`path`, else a picked file: the page with HTML
-/// output, else the image); the web downloads them. The status bar shows the export's first
-/// warning.
+/// output, else the image); the web downloads them. The status bar shows the export's warnings as
+/// [`io::report_saved`] shows a save's notes.
 pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
     // Bad settings never open a save panel.
     let s = app.session.web_settings(&p)?;
@@ -170,7 +189,7 @@ pub(crate) fn save(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, Stri
 }
 
 /// Whether an export's reply `r` has warnings (an image that couldn't be decoded):
-/// [`io::report_saved`] puts the first in the status bar as a save's note.
+/// [`io::report_saved`] shows them in the status bar as a save's notes.
 fn has_warnings(r: &Value) -> bool {
     r["warnings"].as_array().is_some_and(|w| !w.is_empty())
 }
@@ -183,8 +202,8 @@ pub(super) fn preview_name(stem: &str) -> &str {
 }
 
 /// `file.saveForWeb.browser`: the HTML page and its images in a new temporary folder, opened in the
-/// default browser (desktop). When the export has warnings, the status bar shows the first in
-/// place of "Opened …".
+/// default browser (desktop). When the export has warnings, the status bar shows them as
+/// [`io::report_saved`] shows a save's notes.
 pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if io::is_web(app) {
         return Err("Preview in Browser needs the desktop app (the web downloads files instead)".into());
@@ -536,7 +555,7 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
             let (original, shots) = previews(app, ui.ctx(), s, &panes);
             let zoom = d.str("__zoom").parse::<f32>().ok().filter(|z| z.is_finite() && *z > 0.0).map(|z| z / 100.0);
             let kbps = d.f64("__kbps", 56.6);
-            let Some(checker) = app.session.active().map(|st| crate::canvas::checker_texture(ui.ctx(), &st.doc.setup)) else { return false };
+            let Some(checker) = app.session.active().map(|st| crate::canvas::checker_texture(ui.ctx(), &st.doc.setup, None)) else { return false };
             let cells: Vec<(egui::Rect, Pane)> = match view {
                 0 => vec![(area, Pane::Original)],
                 1 => vec![(area, Pane::Optimized(0))],

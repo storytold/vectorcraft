@@ -250,7 +250,8 @@ impl ParamSchema {
     /// What is wrong with the schema itself, or `None`: a parameter name that is empty, repeated
     /// or holds `.`, `[` or `]`; a required parameter with a default; a default that isn't JSON or
     /// doesn't pass its parameter's type; an enum with no names or a repeated name; a range with
-    /// an end that isn't finite or that no value can be in; nesting past [`MAX_DEPTH`].
+    /// an end that isn't finite or that no value can be in; nesting past [`MAX_DEPTH`], or a
+    /// [`Type::Ids`] or [`Type::Point`], whose values are all lists, at the nesting limit.
     pub fn definition_problem(&self) -> Option<String> {
         object_problem("", self.params, 0)
     }
@@ -319,7 +320,9 @@ pub enum Problem {
     Missing,
     /// The value is not of the parameter's type: `expected` says what it must be.
     WrongType { expected: String, got: String },
-    /// The schema nests deeper than [`MAX_DEPTH`] here ([`ParamSchema::definition_problem`]).
+    /// The value nests deeper than [`MAX_DEPTH`] here: a list given for a [`Type::Color`] at the
+    /// nesting limit, or any value under a schema that nests too deeply itself
+    /// ([`ParamSchema::definition_problem`]).
     TooDeep,
 }
 
@@ -779,6 +782,8 @@ fn type_problem(at: &str, ty: &Type, depth: usize) -> Option<String> {
         Type::Object(params) => object_problem(at, params, depth + 1),
         Type::Array(_) if depth >= MAX_DEPTH => Some(format!("`{at}` nests deeper than {MAX_DEPTH} levels")),
         Type::Array(item) => type_problem(&format!("{at}[]"), item, depth + 1),
+        // Every value of these is a list, and a list at the nesting limit is refused.
+        Type::Ids | Type::Point if depth >= MAX_DEPTH => Some(format!("`{at}` nests deeper than {MAX_DEPTH} levels")),
         _ => None,
     }
 }

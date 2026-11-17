@@ -15,8 +15,22 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   path's length. A press on an anchor picks it when the pointer moves less than 8 pixels
   before the release; a longer drag drags out the dimension of the segment under the pointer. A
   curved segment is measured from end to end. With Smart Guides on, both points also snap into line with other objects'
-  anchors and centres, and the second onto the construction guides through the first; the guides
-  show while hovering, before each click.
+  anchors and centres. With Snap to Perpendicular or Snap to Tangent on, the second point also
+  snaps onto a segment where the line from the first meets it square or grazes a curve. When the
+  first point was picked on an anchor, the second also snaps onto the construction guides through
+  it; any other first point has no construction guides through it. The guides
+  show while hovering, before each click. VectorCraft's own rules decide where a point lands: an
+  anchor within 8 pixels takes it first; with Smart Guides or Snap to Point on, the end of a line
+  of a visible, unlocked dimension already drawn (its dimension line, or the far end of an
+  extension line) within 8 pixels takes it next, without a link to that dimension; a point on a
+  guide stays on the guide where the pointer
+  is, except that it moves onto a segment within the Smart Guides snapping tolerance, or, on a
+  construction guide or a Snap to Glyph guide that runs at an angle, onto the place where that
+  guide crosses another object's alignment line within twice that tolerance; a point that no
+  anchor, guide, grid or pixel snapping places lands on the closest point of a segment, or of a
+  line of a dimension already drawn, within 8 pixels. With Smart Guides and Anchor/Path Labels
+  on, a point on an anchor or a line end shows the "anchor" label, and a point on a segment or
+  line shows the "path" label. These rules apply to the Linear points.
   A linear dimension is aligned, horizontal or vertical, as the
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
   describes: after the second click, clicking again places an aligned dimension, and moving the
@@ -61,7 +75,8 @@ Measurements follow the art they measure through moves, scaling and anchor and h
 undo and redo included. When the art is reflected, the line of a linked linear dimension goes to
 the reflected side, as far past the outermost point as before. This does not happen for art whose
 anchors and handles all lie on one line, such as a straight line, which a half turn puts in the
-same place as a reflection. Deleting the art, changing its number of anchors or whether it is
+same place as a reflection. An unlinked aligned dimension that is reflected, or scaled by a
+negative factor, has its line on the reflected side of its points. Deleting the art, changing its number of anchors or whether it is
 closed, turning an angle's arm into a curve, or making a measured circle or arc no longer circular
 leaves its dimensions where they were, no longer linked, in the same undo step, rather than
 attaching them to a different edge. Undo links them again. A linked dimension moved on its own
@@ -74,14 +89,27 @@ paths and text as ordinary art. Object › Expand, Object › Expand Appearance,
 and Object › Path › Outline Stroke turn a dimension whose art they change into a plain group of that
 art, also when they reach only a part of it: moving or scaling the group does not redraw it, it does
 not follow the art it measured, and undoing the command gives the live dimension back. The menus dim
-Object › Expand… while a whole dimension is selected, because its label has appearance items;
-Object › Expand Appearance and the `object.expand` command still reach it. A dimension selected with
-the art it measures also becomes a plain group when Object › Expand, Object › Expand Appearance or
-Object › Path › Outline Stroke changes only that art and the art no longer fits the dimension's link,
-for example because its number of anchors changed. When the art keeps its id and anchor count and the
-dimension's own art does not change, the dimension stays live and its label shows the new length. Pasted
-dimensions keep their geometry and drop their links, so they never bind to unrelated art in another
-document.
+Object › Expand… while a whole dimension is selected without the art it measures, because its label
+has appearance items; Object › Expand Appearance and the `object.expand` command still reach it.
+
+When a whole dimension is selected together with art it measures, directly or in selected groups
+without fills, strokes or effects of their own, Object › Expand, Object › Expand Appearance and
+Object › Path › Outline Stroke leave the dimension's lines and label as they are and change only the
+other art. The menus do not dim Object › Expand… for the label of such a dimension. If the new art no
+longer fits the dimension's link, for example because its number of anchors changed, the dimension
+stays where it was, no longer linked, as it does when its art is deleted. Undoing the command links
+it again. When the art keeps its id and anchor count, the dimension stays linked and its label shows
+the new length. When the dimension is all the command would change, the command changes nothing and
+reports the error it gives for a selection with nothing to change: "Expand: nothing to expand",
+"Expand Appearance: the selection has a basic appearance" or "Outline Stroke: no stroked paths
+selected". A selected group with fills, strokes or effects of its own changes everything it holds
+when its appearance expands, its dimensions included: a geometry effect is baked into their lines
+and label, which become a plain group, and a blur, feather or inner glow turns them into part of the
+image that replaces the group's art. Type › Create Outlines still outlines the label of a dimension
+selected with its art, which turns the dimension into a plain group.
+
+Pasted dimensions keep their geometry and drop their links, so they never bind to unrelated art in
+another document.
 
 ## Commands
 

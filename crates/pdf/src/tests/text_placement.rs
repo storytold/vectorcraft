@@ -112,6 +112,25 @@ fn type3(first: usize, upm: f64) -> Vec<String> {
     vec![font, a, b]
 }
 
+/// A Type 3 font with a ToUnicode CMap.
+fn type3_with_to_unicode(first: usize, upm: f64) -> Vec<String> {
+    let s = 1.0 / upm;
+    let (h, w) = (upm * 0.5, upm);
+    let a = stream("", &format!("{h} 0 0 0 {h} {upm} d1 0 0 {} {} re f", h * 0.8, upm * 0.7));
+    let b = stream("", &format!("{w} 0 0 0 {w} {upm} d1 0 0 {} {} re f", w * 0.9, upm * 0.7));
+    let to_u = stream(
+        "",
+        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def /CMapName /T3-UCS def /CMapType 2 def 1 begincodespacerange <00> <FF> endcodespacerange 2 beginbfchar\n<61> <0061>\n<62> <0062>\nendbfchar endcmap CMapName currentdict /CMap defineresource pop end end",
+    );
+    let font = format!(
+        "<< /Type /Font /Subtype /Type3 /FontBBox [0 0 {w} {w}] /FontMatrix [{s} 0 0 {s} 0 0] /CharProcs << /a {} 0 R /b {} 0 R >> /Encoding << /Type /Encoding /Differences [97 /a /b] >> /FirstChar 97 /LastChar 98 /Widths [{h} {w}] /ToUnicode {} 0 R /Resources << >> >>",
+        first + 1,
+        first + 2,
+        first + 3
+    );
+    vec![font, a, b, to_u]
+}
+
 /// A 300 × 200 pt page drawing `content`, plus `entries` in the page dictionary, with fonts:
 /// - `/F1`: Source Sans 3, embedded, a simple TrueType font;
 /// - `/F4`: Source Sans 3 as a Type 0 font, Identity-H (two-byte glyph ids, see [`gids`]);
@@ -146,9 +165,13 @@ fn sized_page(w: f64, h: f64, content: &str, entries: &str) -> Vec<u8> {
     let t3 = n + objs.len();
     objs.extend(type3(t3, 1000.0));
     objs.extend(type3(t3 + 3, 100.0));
+    let t3u = t3 + 6;
+    objs.extend(type3_with_to_unicode(t3u, 1000.0));
+    let t30u = t3u + 4;
+    objs.extend(type3_with_to_unicode(t30u, 100.0));
     let refs: Vec<&str> = objs.iter().map(String::as_str).collect();
     let resources = format!(
-        "/Font << /F1 {} 0 R /F4 {} 0 R /F5 {} 0 R /F6 {} 0 R /T3 {t3} 0 R /T30 {} 0 R /HV << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >>",
+        "/Font << /F1 {} 0 R /F4 {} 0 R /F5 {} 0 R /F6 {} 0 R /T3 {t3} 0 R /T30 {} 0 R /T3U {t3u} 0 R /T30U {t30u} 0 R /HV << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >>",
         n + 2,
         n + 5,
         n + 6,
@@ -286,6 +309,21 @@ fn spacing_and_scaling_keep_each_glyph_where_the_file_put_it() {
     }
 }
 
+/// Character spacing in horizontally scaled type: a PDF scales `Tc` by its horizontal scaling
+/// (ISO 32000-1 §9.4.4), as layout scales tracking by the Horizontal Scale
+/// (`vectorcraft_text::spacing_scale`), so the type's tracking is the file's `Tc` in thousandths of
+/// its size: 1.5 pt at 16 pt is 93.75, set 80% wide.
+#[test]
+fn character_spacing_in_horizontally_scaled_type_is_the_files_tc() {
+    let bytes = page("BT /F1 16 Tf 1.5 Tc 80 Tz 20 50 Td (Spaced and narrow) Tj ET", "");
+    let t = texts(&open_as(&bytes, TextAs::Text));
+    assert_eq!(t.len(), 1);
+    assert!(t[0].runs.iter().all(|r| (r.style.h_scale - 80.0).abs() < 1e-6), "{:?}", t[0].runs);
+    let tracking: Vec<f64> = t[0].runs.iter().map(|r| r.style.tracking).collect();
+    assert!(tracking.iter().all(|v| (v - 93.75).abs() < 0.5), "{tracking:?}");
+    assert!(displacement(&bytes) < 0.02);
+}
+
 /// Word spacing stays on the spaces, as tracking of their own; evenly spaced letters keep one
 /// tracking value for the line, and a file that didn't kern opens with kerning off.
 #[test]
@@ -401,7 +439,16 @@ fn vertical_glyphs_narrower_than_an_em_stay_on_their_column() {
 fn type3_glyphs_follow_the_font_matrix() {
     for font in ["T3", "T30"] {
         let d = open_as(&page(&format!("BT /{font} 20 Tf 20 50 Td (ab) Tj ET"), ""), TextAs::Text);
-        assert!(texts(&d).is_empty(), "Type 3 text keeps its outlines");
+        assert!(texts(&d).is_empty(), "Type 3 text without ToUnicode keeps its outlines");
+        let mut groups = 0;
+        d.walk(|n| {
+            if let NodeKind::Group { .. } = &n.kind
+                && n.name.as_deref() == Some("<g>")
+            {
+                groups += 1;
+            }
+        });
+        assert_eq!(groups, 1, "{font}: Type 3 text run must be preserved inside named group <g>");
         let mut boxes = contours(&d);
         boxes.sort_by(|a, b| a.x0.total_cmp(&b.x0));
         // `a` at x 20 (0.4 em = 8 pt wide), `b` after its half-em advance; 0.7 em = 14 pt tall,
@@ -412,6 +459,60 @@ fn type3_glyphs_follow_the_font_matrix() {
             assert!(off(*b, w) < 1e-3, "{font}: {b:?} vs {w:?}");
         }
     }
+}
+
+/// Type 3 fonts with ToUnicode import as live text in Text mode, and as named groups <g> in Paths mode.
+/// Tests both 1000 UPM (/T3U) and 100 UPM (/T30U) to verify FontMatrix scaling.
+#[test]
+fn type3_font_with_to_unicode_imports_as_live_text() {
+    for font in ["T3U", "T30U"] {
+        let d_text = open_as(&page(&format!("BT /{font} 20 Tf 20 50 Td (ab) Tj ET"), ""), TextAs::Text);
+        let t = texts(&d_text);
+        assert_eq!(t.len(), 1, "{font}: Type 3 with ToUnicode should import as live text");
+        assert_eq!(t[0].plain_text(), "ab");
+        let run = &t[0].runs[0];
+        assert!((run.style.size - 20.0).abs() < 1e-3, "{font}: font size should be 20 pt, got {}", run.style.size);
+
+        let d_paths = open_as(&page(&format!("BT /{font} 20 Tf 20 50 Td (ab) Tj ET"), ""), TextAs::Outlines);
+        assert!(texts(&d_paths).is_empty(), "In Outlines mode, Type 3 text should be outlines");
+        let mut groups = 0;
+        d_paths.walk(|n| {
+            if let NodeKind::Group { .. } = &n.kind
+                && n.name.as_deref() == Some("<g>")
+            {
+                groups += 1;
+            }
+        });
+        assert_eq!(groups, 1, "In Paths mode, Type 3 text should be grouped in <g>");
+    }
+}
+
+/// Invisible Type 3 text (mode 3) with ToUnicode imports as searchable text.
+#[test]
+fn type3_invisible_with_to_unicode_imports_as_searchable_text() {
+    let d = open_as(&page("BT /T3U 20 Tf 3 Tr 20 50 Td (ab) Tj ET", ""), TextAs::Text);
+    let t = texts(&d);
+    assert_eq!(t.len(), 1, "Invisible Type 3 text with ToUnicode imports as searchable text");
+    assert_eq!(t[0].plain_text(), "ab");
+    for r in &t[0].runs {
+        assert!(r.style.fill.is_none(), "Invisible text has no fill: {:?}", r.style.fill);
+        assert!(!r.style.has_stroke(), "Invisible text has no stroke");
+    }
+}
+
+/// Type 3 text with ActualText replacement honors authored text or suppression.
+#[test]
+fn type3_with_actual_text() {
+    // Authored replacement "XYZ" over Type 3 glyphs (ab)
+    let d = open_as(&page("/Span << /ActualText (XYZ) >> BDC BT /T3U 20 Tf 20 50 Td (ab) Tj ET EMC", ""), TextAs::Text);
+    let t = texts(&d);
+    assert_eq!(t.len(), 1, "Type 3 with ActualText should import as live text");
+    assert_eq!(t[0].plain_text(), "XYZ");
+
+    // Empty ActualText suppresses mapped text
+    let d_empty = open_as(&page("/Span << /ActualText () >> BDC BT /T3U 20 Tf 20 50 Td (ab) Tj ET EMC", ""), TextAs::Text);
+    let t_empty = texts(&d_empty);
+    assert!(t_empty.is_empty(), "Empty ActualText should suppress text");
 }
 
 /// A font that isn't embedded or installed is set in a stand-in: the line still starts where

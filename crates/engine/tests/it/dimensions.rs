@@ -419,6 +419,56 @@ fn a_reflected_horizontal_dimension_keeps_its_line_on_the_reflected_side() {
     assert_eq!(text(&s, id), "100.00 pt");
 }
 
+/// An unlinked aligned dimension reflected on its own has its line on the reflected side of its
+/// points: a line 30 pt above a level pair is 30 pt below it after a flip top to bottom, and a
+/// half turn moves it below them as well, by turning it.
+#[test]
+fn a_reflected_aligned_dimension_keeps_its_line_on_the_reflected_side() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,200],"offset":-30}))["id"].as_u64().unwrap();
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 170.0), (200.0, 170.0)]);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,200]}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 230.0), (200.0, 230.0)]);
+    assert_eq!(text(&s, id), "100.00 pt");
+    // Reflected left to right, the points swap ends and the line stays below them.
+    run(&mut s, "object.reflect", json!({"axis":"vertical","origin":[150,0]}));
+    assert_eq!(path_ends(&s, id)[2], vec![(200.0, 230.0), (100.0, 230.0)]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 170.0), (200.0, 170.0)]);
+    // A half turn about the points' midpoint puts the line below them by turning it.
+    run(&mut s, "object.rotate", json!({"angle":180,"origin":[150,200]}));
+    let ends = path_ends(&s, id)[2].iter().map(|(x, y)| (x.round(), y.round())).collect::<Vec<_>>();
+    assert_eq!(ends, vec![(200.0, 230.0), (100.0, 230.0)]);
+}
+
+/// An unlinked aligned dimension of a diagonal pair reflected about a mirror line through its
+/// points has its line on the other side of them, and a scale by a negative factor reverses the
+/// side as a reflection does, while a scale by positive factors keeps it.
+#[test]
+fn an_aligned_dimension_reflected_about_an_angle_or_scaled_by_a_negative_factor_changes_sides() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,100],"offset":-30}))["id"].as_u64().unwrap();
+    let k = 30.0 / 2f64.sqrt();
+    let near = |got: &[(f64, f64)], want: [(f64, f64); 2]| got.iter().zip(want).all(|(g, w)| (g.0 - w.0).abs() < 1e-6 && (g.1 - w.1).abs() < 1e-6);
+    let ends = path_ends(&s, id)[2].clone();
+    assert!(near(&ends, [(100.0 - k, 200.0 - k), (200.0 - k, 100.0 - k)]), "{ends:?}");
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    // The mirror line at 45 degrees through (150, 150) holds both points.
+    run(&mut s, "object.reflect", json!({"axis":45,"origin":[150,150]}));
+    let ends = path_ends(&s, id)[2].clone();
+    assert!(near(&ends, [(100.0 + k, 200.0 + k), (200.0 + k, 100.0 + k)]), "{ends:?}");
+    run(&mut s, "edit.undo", json!({}));
+    let level = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,200],"offset":-30}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[level]}));
+    run(&mut s, "object.scale", json!({"sx":-200,"sy":100,"origin":[150,0]}));
+    assert_eq!(path_ends(&s, level)[2], vec![(250.0, 170.0), (50.0, 170.0)]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":200,"origin":[150,200]}));
+    assert_eq!(path_ends(&s, level)[2], vec![(50.0, 170.0), (250.0, 170.0)]);
+}
+
 /// The line of a linked horizontal dimension below both points stays below them when the art
 /// turns a half turn; a line between the points keeps its distance from the first point.
 #[test]
@@ -1164,16 +1214,10 @@ fn an_expand_that_changes_no_art_leaves_a_dimension_live() {
     assert_eq!(art(&s, id), live);
 }
 
-/// A dimension selected with the art it measures, or held by a selected group, expands the same
-/// way: outlining that art does not remove it.
+/// A dimension held by a selected group without the art it measures expands as a dimension
+/// selected on its own does.
 #[test]
-fn a_dimension_expanded_with_its_art_or_in_a_group_stays_plain_art() {
-    let mut s = session();
-    let line = edge(&mut s);
-    let id = dim(&mut s, line);
-    run(&mut s, "select.set", json!({"ids":[line, id]}));
-    run(&mut s, "object.expand", json!({}));
-    stays_plain_art(&mut s, id);
+fn a_dimension_expanded_in_a_group_without_its_art_stays_plain_art() {
     let mut s = session();
     let line = edge(&mut s);
     let id = dim(&mut s, line);
@@ -1183,8 +1227,176 @@ fn a_dimension_expanded_with_its_art_or_in_a_group_stays_plain_art() {
     stays_plain_art(&mut s, id);
 }
 
-/// Expand replacing only the art a selected dimension measures leaves the dimension's art as it
-/// is, without a link to the art that went.
+/// `command` on a dimension selected with the art it measures, or on a group holding both, leaves
+/// the dimension's own lines and label as they are and replaces only the art: the dimension stays
+/// where it was, no longer linked, and one undo links it again.
+fn keeps_its_own_lines_and_label(command: &str) {
+    for grouped in [false, true] {
+        let context = format!("{command}, grouped: {grouped}");
+        let mut s = session();
+        let art_id = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":72,"height":72}))["id"].as_u64().unwrap();
+        run(&mut s, "paint.setStroke", json!({"ids":[art_id],"color":"#000000"}));
+        run(&mut s, "select.set", json!({"ids":[art_id]}));
+        run(&mut s, "appearance.addStroke", json!({}));
+        let id = dim(&mut s, art_id);
+        let live = art(&s, id);
+        let label = text(&s, id);
+        let at = bounds(&s, id);
+        let linked = recipe(&s, id);
+        let measured = s.doc().unwrap().doc.node(NodeId(art_id)).unwrap().clone();
+        run(&mut s, "select.set", json!({"ids":[art_id, id]}));
+        if grouped {
+            run(&mut s, "object.group", json!({}));
+        }
+        let steps = s.doc().unwrap().history.undo.len();
+        let result = run(&mut s, command, json!({}));
+        if command == "effect.expandAppearance" {
+            let mut own = vec![];
+            s.doc().unwrap().doc.node(NodeId(id)).unwrap().walk(&mut |c| own.push(json!(c.id.0)));
+            assert!(result["ids"].as_array().unwrap().iter().all(|i| !own.contains(i)), "{context}: {result}");
+        }
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "{context}: one undo step");
+        assert_ne!(s.doc().unwrap().doc.node(NodeId(art_id)), Some(&measured), "{context}: the art is replaced");
+        assert_eq!(art(&s, id), live, "{context}: its own lines and label");
+        assert_eq!(bounds(&s, id), at, "{context}: where it was");
+        stays_unlinked(&mut s, id, &label, &context);
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(art(&s, id), live, "{context}");
+        assert_eq!(recipe(&s, id), linked, "{context}: one undo links it again");
+        assert_eq!(s.doc().unwrap().doc.node(NodeId(art_id)), Some(&measured), "{context}");
+    }
+}
+
+#[test]
+fn expand_leaves_a_dimension_selected_with_its_art_as_it_is() {
+    keeps_its_own_lines_and_label("object.expand");
+}
+
+#[test]
+fn expand_appearance_leaves_a_dimension_selected_with_its_art_as_it_is() {
+    keeps_its_own_lines_and_label("effect.expandAppearance");
+}
+
+#[test]
+fn outline_stroke_leaves_a_dimension_selected_with_its_art_as_it_is() {
+    keeps_its_own_lines_and_label("object.path.outlineStroke");
+}
+
+/// A selected group whose blur Expand Appearance turns into an image takes the dimension it holds,
+/// with the art it measures, into that image.
+#[test]
+fn a_blurred_group_expanded_takes_its_dimension_into_the_image() {
+    let mut s = session();
+    let art_id = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":72,"height":72}))["id"].as_u64().unwrap();
+    let id = dim(&mut s, art_id);
+    run(&mut s, "select.set", json!({"ids":[art_id, id]}));
+    let group = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[group]}));
+    run(&mut s, "effect.apply", json!({"effect":"blur.gaussian"}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(NodeId(id)).is_none(), "the dimension is part of the image");
+    let mut images = 0;
+    d.walk(|n| images += usize::from(matches!(n.kind, NodeKind::Image(_))));
+    assert_eq!(images, 1);
+}
+
+/// Object › Expand keeps a dimension selected with its art in the export assets that list it and
+/// bound to its variables.
+#[test]
+fn expand_keeps_a_dimension_in_its_asset_and_its_variable_binding() {
+    let mut s = session();
+    let art_id = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":72,"height":72}))["id"].as_u64().unwrap();
+    run(&mut s, "paint.setStroke", json!({"ids":[art_id],"color":"#000000"}));
+    let id = dim(&mut s, art_id);
+    let asset = run(&mut s, "assets.add", json!({"ids":[id]}))["assets"][0].as_u64().unwrap();
+    run(&mut s, "variable.define", json!({"name":"Shown","kind":"visibility"}));
+    run(&mut s, "variable.bind", json!({"variable":"Shown","ids":[id]}));
+    run(&mut s, "select.set", json!({"ids":[art_id, id]}));
+    run(&mut s, "object.expand", json!({}));
+    let d = &s.doc().unwrap().doc;
+    assert!(d.node(NodeId(id)).is_some_and(|n| n.extras().dimension.is_some()), "still a dimension");
+    let listed = d.assets.iter().find(|a| a.id == asset).map(|a| a.nodes.clone());
+    assert_eq!(listed, Some(vec![NodeId(id)]), "in its asset");
+    assert!(d.variables.bindings.get(&NodeId(id)).is_some_and(|b| b.contains("Shown")), "bound to its variable");
+}
+
+/// A selected group with a geometry effect of its own bakes that effect into everything it holds
+/// when its appearance expands, the dimension's lines and label included: the dimension becomes a
+/// plain group of that art, as one selected without its art does.
+#[test]
+fn a_group_effect_expanded_reaches_the_dimension_it_holds() {
+    for command in ["effect.expandAppearance", "object.expand"] {
+        let mut s = session();
+        let art_id = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":72,"height":72}))["id"].as_u64().unwrap();
+        let id = dim(&mut s, art_id);
+        let live = art(&s, id);
+        run(&mut s, "select.set", json!({"ids":[art_id, id]}));
+        let group = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+        run(&mut s, "select.set", json!({"ids":[group]}));
+        run(&mut s, "effect.apply", json!({"effect":"distort.puckerBloat"}));
+        run(&mut s, command, json!({}));
+        let d = &s.doc().unwrap().doc;
+        let n = d.node(NodeId(id)).unwrap_or_else(|| panic!("{command}: the dimension's group is still there"));
+        assert!(n.extras().dimension.is_none(), "{command}: a plain group");
+        assert_ne!(art(&s, id), live, "{command}: its art is baked with the group's effect");
+    }
+}
+
+/// When the dimension selected with its art is all there is to change, the command fails and
+/// changes nothing.
+#[test]
+fn a_dimension_selected_with_art_that_has_nothing_to_expand_changes_nothing() {
+    let mut s = session();
+    let art_id = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":72,"height":72}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[art_id]}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    // A plain path: Expand would make a live rectangle a path.
+    run(&mut s, "object.expand", json!({}));
+    let id = dim(&mut s, art_id);
+    for grouped in [false, true] {
+        run(&mut s, "select.set", json!({"ids":[art_id, id]}));
+        if grouped {
+            run(&mut s, "object.group", json!({}));
+        }
+        let before = s.doc().unwrap().doc.clone();
+        let steps = s.doc().unwrap().history.undo.len();
+        let info = run(&mut s, "object.expand.info", json!({}));
+        assert_eq!(info["appearance"], json!(false), "grouped: {grouped}: Object › Expand… is not dimmed for the dimension's label");
+        assert_eq!(info["stroke"], json!(false), "grouped: {grouped}: {info}");
+        assert!(!vectorcraft_engine::cmd::expand::has_appearance(&s), "grouped: {grouped}: the menus read this");
+        for (command, p) in [
+            ("object.expand", json!({})),
+            ("object.expand", json!({"object":false,"fill":false})),
+            ("object.path.outlineStroke", json!({})),
+            ("effect.expandAppearance", json!({})),
+        ] {
+            assert!(s.execute(command, &p).is_err(), "grouped: {grouped}: {command} {p}");
+            assert_eq!(s.doc().unwrap().doc.layers, before.layers, "grouped: {grouped}: {command} {p}");
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps, "grouped: {grouped}: {command} {p}");
+        }
+    }
+}
+
+/// The dimension `id` is a dimension that measures nothing, still showing `label`, and a move
+/// takes it along without redrawing it from other art.
+fn stays_unlinked(s: &mut Session, id: u64, label: &str, context: &str) {
+    let live = art(s, id);
+    assert!(live.2, "{context}: still a dimension");
+    assert!(recipe(s, id).source.is_none(), "{context}: no longer linked");
+    assert_eq!(text(s, id), label, "{context}");
+    let at = bounds(s, id);
+    run(s, "select.set", json!({"ids":[id]}));
+    run(s, "object.move", json!({"dx":30,"dy":0}));
+    assert_eq!(art(s, id), live, "{context}");
+    assert_eq!(text(s, id), label, "{context}");
+    let moved = bounds(s, id);
+    assert!((moved[0] - at[0] - 30.0).abs() < 1e-6 && (moved[1] - at[1]).abs() < 1e-6, "{context}: {at:?} moved to {moved:?}");
+    run(s, "edit.undo", json!({}));
+}
+
+/// Expand replacing only the art a selected dimension measures leaves the dimension where it was,
+/// still a dimension, without a link to the art that went; undo links it again.
 #[test]
 fn a_dimension_keeps_no_link_to_the_art_expand_replaced() {
     for circle in [false, true] {
@@ -1197,18 +1409,21 @@ fn a_dimension_keeps_no_link_to_the_art_expand_replaced() {
         } else {
             dim(&mut s, art_id)
         };
-        let (nodes, labels, _) = art(&s, id);
+        let live = art(&s, id);
+        let label = text(&s, id);
         run(&mut s, "select.set", json!({"ids":[art_id, id]}));
         run(&mut s, "object.expand", json!({"object":false,"stroke":false}));
-        assert_eq!(art(&s, id), (nodes, labels, false), "circle: {circle}");
-        run(&mut s, "select.set", json!({"ids":[id]}));
-        run(&mut s, "object.move", json!({"dx":30,"dy":0}));
-        assert_eq!(art(&s, id), (nodes, labels, false), "circle: {circle}");
+        stays_unlinked(&mut s, id, &label, &format!("circle: {circle}"));
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(art(&s, id), live, "circle: {circle}");
+        assert!(recipe(&s, id).source.is_some(), "circle: {circle}: one undo links it again");
     }
 }
 
-/// Outline Stroke and Expand Appearance replacing the art a selected dimension measures leave the
-/// dimension as a plain group, whether or not they change its own art.
+/// Outline Stroke and Expand Appearance replacing only the art a selected dimension measures
+/// leave the dimension where it was, still a dimension, no longer linked; undo links it again.
+/// Here the dimension's lines are guides, which neither command changes, and the selection holds
+/// the whole dimension or one of its lines.
 #[test]
 fn a_dimension_outlasts_the_art_outline_stroke_or_expand_appearance_replaced() {
     for command in ["object.path.outlineStroke", "effect.expandAppearance"] {
@@ -1225,17 +1440,42 @@ fn a_dimension_outlasts_the_art_outline_stroke_or_expand_appearance_replaced() {
             };
             run(&mut s, "select.set", json!({"ids":lines}));
             run(&mut s, "view.guides.make", json!({}));
+            let live = art(&s, id);
+            let label = text(&s, id);
             let picked = if whole { id } else { lines[0] };
             run(&mut s, "select.set", json!({"ids":[art_id, picked]}));
             run(&mut s, command, json!({}));
             assert!(s.doc().unwrap().doc.node(NodeId(id)).is_some(), "{command} removed the dimension, whole: {whole}");
-            let plain = art(&s, id);
-            assert!(!plain.2, "{command}: no recipe left, whole: {whole}");
-            run(&mut s, "select.set", json!({"ids":[id]}));
-            run(&mut s, "object.move", json!({"dx":30,"dy":0}));
-            assert_eq!(art(&s, id), plain, "{command}, whole: {whole}");
+            stays_unlinked(&mut s, id, &label, &format!("{command}, whole: {whole}"));
+            run(&mut s, "edit.undo", json!({}));
+            assert_eq!(art(&s, id), live, "{command}, whole: {whole}");
+            assert!(recipe(&s, id).source.is_some(), "{command}, whole: {whole}: one undo links it again");
         }
     }
+}
+
+/// Object › Expand that outlines only the stroke of the art a selected dimension measures leaves
+/// the dimension a dimension, no longer linked, as Outline Stroke does.
+#[test]
+fn a_dimension_outlasts_the_stroke_expand_outlined() {
+    let mut s = session();
+    let art_id = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":72,"height":72}))["id"].as_u64().unwrap();
+    run(&mut s, "paint.setStroke", json!({"ids":[art_id],"color":"#000000"}));
+    let id = dim(&mut s, art_id);
+    let lines: Vec<u64> = {
+        let children = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap();
+        children.iter().filter(|c| matches!(c.kind, NodeKind::Path { .. })).map(|c| c.id.0).collect()
+    };
+    run(&mut s, "select.set", json!({"ids":lines}));
+    run(&mut s, "view.guides.make", json!({}));
+    let live = art(&s, id);
+    let label = text(&s, id);
+    run(&mut s, "select.set", json!({"ids":[art_id, id]}));
+    run(&mut s, "object.expand", json!({"object":false,"fill":false}));
+    stays_unlinked(&mut s, id, &label, "object.expand stroke");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(art(&s, id), live);
+    assert!(recipe(&s, id).source.is_some(), "one undo links it again");
 }
 
 /// A part of a dimension expanded on its own ends the link too, so the move does not undo it.
@@ -1271,10 +1511,11 @@ fn a_dimension_in_an_expanded_symbol_instance_stays_plain_art() {
     stays_plain_art(&mut s, root);
 }
 
-/// Create Outlines on a dimension, or on its label alone, ends the link in the same undo step.
+/// Create Outlines on a dimension, also one selected with the art it measures, or on its label
+/// alone, ends the link in the same undo step.
 #[test]
 fn outlining_a_dimension_or_its_label_ends_its_link() {
-    for label_alone in [false, true] {
+    for target in ["dimension", "label", "with its art"] {
         let mut s = session();
         let line = edge(&mut s);
         let id = dim(&mut s, line);
@@ -1283,8 +1524,12 @@ fn outlining_a_dimension_or_its_label_ends_its_link() {
             let children = s.doc().unwrap().doc.node(NodeId(id)).unwrap().children().unwrap();
             children.iter().find(|c| matches!(c.kind, NodeKind::Text(_))).unwrap().id
         };
-        let target = if label_alone { label.0 } else { id };
-        run(&mut s, "select.set", json!({"ids":[target]}));
+        let ids = match target {
+            "label" => vec![label.0],
+            "with its art" => vec![line, id],
+            _ => vec![id],
+        };
+        run(&mut s, "select.set", json!({"ids":ids}));
         run(&mut s, "type.createOutlines", json!({}));
         stays_plain_art(&mut s, id);
         run(&mut s, "edit.undo", json!({}));
@@ -1526,8 +1771,9 @@ fn both_points_snap_onto_anchors_with_a_visible_indicator() {
 }
 
 /// Smart Guides for the Linear picks: hovering away from any line, the first point slides into
-/// line with another object's corner and its guides show before the click; the second slides onto
-/// the construction guide through the first. The dimension measures between the snapped points.
+/// line with another object's corner and its guides show before the click; the second slides into
+/// line with the other corner, with no construction guide through the first point pulling it
+/// sideways. The dimension measures between the snapped points.
 #[test]
 fn linear_picks_show_and_snap_to_smart_guides() {
     use vectorcraft_engine::tools::Overlay;
@@ -1543,18 +1789,148 @@ fn linear_picks_show_and_snap_to_smart_guides() {
     assert!(o.iter().any(|o| matches!(o, Overlay::Line { .. } | Overlay::Label { .. })), "its guides show before the click: {o:?}");
     ev(&mut s, PointerKind::Down, 250.0, 202.5);
     ev(&mut s, PointerKind::Up, 250.0, 202.5);
-    // Straight below the first point, 1.5 pt off: the rubber band ends on the vertical through it.
-    ev(&mut s, PointerKind::Move, 251.5, 260.0);
+    // Below the first point, 1.5 pt to its right and 2.5 pt off the bottom edge's level: the
+    // rubber band ends on that level, where the pointer is across it.
+    ev(&mut s, PointerKind::Move, 251.5, 262.5);
     let end = overlays(&mut s).into_iter().find_map(|o| if let Overlay::Line { b, dashed: true, .. } = o { Some(b) } else { None }).unwrap();
-    assert_eq!((end.x, end.y), (250.0, 260.0), "on the construction guide");
-    ev(&mut s, PointerKind::Down, 251.5, 260.0);
-    ev(&mut s, PointerKind::Up, 251.5, 260.0);
+    assert_eq!((end.x, end.y), (251.5, 260.0), "in line with the bottom edge, not on a vertical through the first point");
+    ev(&mut s, PointerKind::Down, 251.5, 262.5);
+    ev(&mut s, PointerKind::Up, 251.5, 262.5);
     ev(&mut s, PointerKind::Move, 220.0, 230.0);
     assert!(!overlays(&mut s).iter().any(|o| matches!(o, Overlay::Label { .. })), "placing: the guides are gone");
     ev(&mut s, PointerKind::Down, 220.0, 230.0);
     ev(&mut s, PointerKind::Up, 220.0, 230.0);
     let id = s.doc().unwrap().selection.objects[0].0;
-    assert_eq!(text(&s, id), "60.00 pt");
+    // Aligned from (250, 200) to (251.5, 260): √(1.5² + 60²).
+    assert_eq!(text(&s, id), "60.02 pt");
+}
+
+/// A shape with a curve at each top corner, for the tests of where Linear picks land.
+const CURVED_TOP: &str = "M130 358 C185 358 230 315 230 260 L425 260 C490 260 541 305 541 358 L541 440 L130 440 Z";
+
+/// Where the next Linear click lands (the last marker the overlays draw, and its size) and the
+/// labels shown, with the pointer at (`x`, `y`).
+fn linear_marker(s: &mut Session, view: ViewInfo, x: f64, y: f64) -> (Option<(vectorcraft_geom::Point, f32)>, Vec<String>) {
+    use vectorcraft_engine::tools::Overlay;
+    s.pointer(&PointerEvent::new(PointerKind::Move, x, y), view).unwrap();
+    let o = s.overlays(view);
+    let at = o.iter().filter_map(|o| if let Overlay::Anchor { p, size, .. } = o { Some((*p, *size)) } else { None }).next_back();
+    let labels = o.iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text.clone()) } else { None }).collect();
+    (at, labels)
+}
+
+/// A plain click at (`x`, `y`): the pointer moves there, then presses and releases.
+fn linear_click(s: &mut Session, view: ViewInfo, x: f64, y: f64) {
+    for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+    }
+}
+
+/// Linear picks land on the anchors and paths of the art with an "anchor" or "path" label, and on
+/// the ends and lines of dimensions already drawn, from as far as on the art's anchors: zoomed in,
+/// a dimension started a few pixels from the end of another starts exactly at that end.
+#[test]
+fn linear_picks_land_on_anchors_paths_and_drawn_dimensions() {
+    let (plain, zoomed) = (ViewInfo::default(), ViewInfo { zoom: 8.0, ..ViewInfo::default() });
+    let mut s = session();
+    run(&mut s, "path.create", json!({"d": CURVED_TOP}));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let pt = vectorcraft_geom::Point::new;
+    let hover = |s: &mut Session, view: ViewInfo, x: f64, y: f64| {
+        let (at, labels) = linear_marker(s, view, x, y);
+        (at.map(|(p, _)| p), labels)
+    };
+    // Beside the end of the curve: on the anchor, labeled.
+    assert_eq!(hover(&mut s, plain, 231.0, 262.0), (Some(pt(230.0, 260.0)), vec!["anchor".to_string()]));
+    // Beside the curve: on its closest point, labeled.
+    let (at, labels) = hover(&mut s, plain, 200.0, 337.0);
+    assert!(at.is_some_and(|q| q.distance(pt(200.0, 337.0)) < 6.0 && q != pt(200.0, 337.0)), "{at:?}");
+    assert_eq!(labels, ["path"]);
+    // A first dimension from the bottom of the curve to its top, placed above the art.
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 230.0, 260.0);
+    linear_click(&mut s, plain, 180.0, 207.0);
+    let first = s.doc().unwrap().selection.objects[0].0;
+    assert_eq!((recipe(&s, first).a, recipe(&s, first).b), (pt(130.0, 358.0), pt(230.0, 260.0)));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", zoomed).unwrap();
+    // Zoomed in, 5.8 pixels from the end of its dimension line: on that end, marked as an anchor.
+    assert_eq!(linear_marker(&mut s, zoomed, 230.6, 207.4), (Some((pt(230.0, 207.0), 10.0)), vec!["anchor".to_string()]));
+    // 6.4 pixels beside its extension line: on the line.
+    let (at, labels) = hover(&mut s, zoomed, 230.8, 230.0);
+    assert!(at.is_some_and(|q| (q.x - 230.0).abs() < 1e-6 && (q.y - 230.0).abs() < 1e-6), "{at:?}");
+    assert_eq!(labels, ["path"]);
+    // The next dimension starts where the first one's line ends.
+    linear_click(&mut s, zoomed, 230.6, 207.4);
+    linear_click(&mut s, zoomed, 425.0, 260.0);
+    linear_click(&mut s, zoomed, 330.0, 207.0);
+    let second = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(second, first);
+    let d = recipe(&s, second);
+    assert!(near(d.a, pt(230.0, 207.0)) && near(d.b, pt(425.0, 260.0)), "{:?} {:?}", d.a, d.b);
+}
+
+/// An anchor of the art that a dimension already measures takes a point picked beside it, not the
+/// end of the extension line a few points off it. A locked dimension pulls no point, and with
+/// Smart Guides and Snap to Point off no dimension pulls a point and no label shows. A press on
+/// the end of a dimension's line over a segment of the art that moves a few pixels before the
+/// release picks that end, as a press on an anchor does.
+#[test]
+fn an_anchor_beside_a_drawn_dimension_takes_the_point() {
+    let (plain, zoomed) = (ViewInfo::default(), ViewInfo { zoom: 8.0, ..ViewInfo::default() });
+    let off = ViewInfo { smart_guides: false, snap_to_point: false, ..zoomed };
+    let mut s = session();
+    run(&mut s, "path.create", json!({"d": CURVED_TOP}));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let pt = vectorcraft_geom::Point::new;
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 230.0, 260.0);
+    linear_click(&mut s, plain, 180.0, 207.0);
+    let first = s.doc().unwrap().selection.objects[0].0;
+    // Locked, the first dimension's line end does not pull a point 5.8 pixels away.
+    run(&mut s, "object.lock", json!({}));
+    let (at, _) = linear_marker(&mut s, zoomed, 230.6, 207.4);
+    assert!(at.is_none_or(|(p, _)| p != pt(230.0, 207.0)), "a locked dimension: {at:?}");
+    run(&mut s, "object.unlockAll", json!({}));
+    run(&mut s, "select.none", json!({}));
+    // 2.5 pixels above the curve's top anchor and 1.5 pixels below the end of the extension line
+    // that starts 4 points above it: on the anchor, linked to the art.
+    assert_eq!(linear_marker(&mut s, plain, 230.0, 257.5), (Some((pt(230.0, 260.0), 10.0)), vec!["anchor".to_string()]));
+    // Smart Guides and Snap to Point off: no pull to the dimension's line end, and no labels.
+    let (at, labels) = linear_marker(&mut s, off, 230.6, 207.4);
+    assert!(at.is_none_or(|(p, _)| p != pt(230.0, 207.0)) && labels.is_empty(), "{at:?} {labels:?}");
+    let (at, labels) = linear_marker(&mut s, off, 230.1, 260.1);
+    assert!(at.is_some_and(|(p, _)| p == pt(230.0, 260.0)) && labels.is_empty(), "{at:?} {labels:?}");
+    // Snap to Point on and Smart Guides off: the line end takes the point, and no label shows.
+    assert_eq!(linear_marker(&mut s, ViewInfo { snap_to_point: true, ..off }, 230.6, 207.4), (Some((pt(230.0, 207.0), 10.0)), vec![]));
+    // A second dimension whose line lies on the bottom edge, from x 425 to x 541.
+    linear_click(&mut s, plain, 425.0, 260.0);
+    linear_click(&mut s, plain, 541.0, 358.0);
+    linear_click(&mut s, plain, 480.0, 440.0);
+    let second = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(second, first);
+    run(&mut s, "select.none", json!({}));
+    // A press 1.4 pixels from its line's left end, on the bottom edge, moved 5 pixels: the end is
+    // picked, and no dimension of the edge is dragged out.
+    for (kind, x) in [(PointerKind::Move, 426.0), (PointerKind::Down, 426.0), (PointerKind::Drag, 431.0), (PointerKind::Up, 431.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 441.0), plain).unwrap();
+    }
+    linear_click(&mut s, plain, 541.0, 440.0);
+    linear_click(&mut s, plain, 480.0, 470.0);
+    let third = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(third, second);
+    let d = recipe(&s, third);
+    assert!(near(d.a, pt(425.0, 440.0)) && near(d.b, pt(541.0, 440.0)), "{:?} {:?}", d.a, d.b);
+    // A dimension of the left edge whose line lies 4 points off it, where its extension lines
+    // start: zoomed in, the end of its line still takes a point 4.7 pixels away.
+    run(&mut s, "select.none", json!({}));
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 130.0, 440.0);
+    linear_click(&mut s, plain, 126.0, 400.0);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(linear_marker(&mut s, zoomed, 125.5, 358.3), (Some((pt(126.0, 358.0), 10.0)), vec!["anchor".to_string()]));
 }
 
 /// The page content streams of exported PDF `v`, inflated.

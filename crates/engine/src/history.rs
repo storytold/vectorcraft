@@ -27,7 +27,8 @@ pub struct HistoryEntry {
     pub(crate) named: Option<NamedStep>,
     /// A number no other step takes ([`History::step`]).
     serial: u64,
-    /// Original and converted new-art colors, only for steps that change document color mode.
+    /// Original and changed new-art paints, only for steps that change them: a document color mode
+    /// change, and a pattern Cancel, Delete or rename that clears or renames a pattern paint.
     pub(crate) color_mode_paints: Option<(vectorcraft_tools::PaintDefaults, vectorcraft_tools::PaintDefaults)>,
     /// Owned new-art snapshots included in both directional estimates.
     color_mode_bytes: usize,

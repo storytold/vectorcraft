@@ -63,3 +63,37 @@ fn abbreviated_styles_in_postscript_names_are_spelled_out() {
 fn an_installed_face_of_the_postscript_name_names_the_font() {
     assert_eq!(crate::family_style("ABCDEF+SourceSans3-Semibold"), ("Source Sans 3".to_string(), "Semibold".to_string()));
 }
+
+/// The PostScript name and version of the face each `show` of a program that sets `fonts` in turn
+/// draws its type in.
+fn faces_shown(fonts: &[&str]) -> Vec<(String, String)> {
+    let body: String = fonts.iter().map(|f| format!("/{f} findfont 12 scalefont setfont 10 20 moveto (Hi) show\n")).collect();
+    let eps = format!("%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n{body}showpage\n%%EOF\n");
+    let r = import(eps.as_bytes()).unwrap();
+    let mut faces = vec![];
+    r.document.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            let face = FontDb::global().style_face(&t.runs[0].style).unwrap();
+            faces.push((face.postscript_name(), face.version.clone()));
+        }
+    });
+    faces
+}
+
+/// Type a PostScript program sets is drawn in the installed face of exactly the font's PostScript
+/// name, as type from a text document is: not another family spelled alike but for case and
+/// punctuation, nor a face whose name differs only in case and loads first.
+#[test]
+fn shown_type_takes_the_face_of_its_exact_postscript_name() {
+    use vectorcraft_text::test_fonts::named_copy;
+    for (inter, names) in [
+        (true, ("FUZZSHOW INK", "Regular", "Version 1.000", "FUZZSHOWINK-Regular")),
+        (false, ("Fuzzshow/Ink", "Regular", "Version 1.000", "FuzzshowInk")),
+        (true, ("CASESHOW INK", "Regular", "Version 1.000", "CASESHOWINK")),
+        (false, ("Caseshow Ink", "Regular", "Version 2.000", "CaseshowInk")),
+    ] {
+        assert_eq!(FontDb::global().add_font(named_copy(inter, names).unwrap()), 1, "{names:?}");
+    }
+    let names: Vec<String> = faces_shown(&["FuzzshowInk", "CaseshowInk", "CASESHOWINK"]).into_iter().map(|f| f.0).collect();
+    assert_eq!(names, ["FuzzshowInk", "CaseshowInk", "CASESHOWINK"]);
+}

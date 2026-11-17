@@ -201,6 +201,15 @@ pub struct FontFace {
     pub(super) colour_layers: bool,
     /// Has an `SVG ` table: OpenType SVG glyphs ([`FontDb::glyph_colour`]).
     pub(super) svg_glyphs: bool,
+    /// What the `GSUB` table substitutes ([`Self::substitutions`]), read the first time it is asked
+    /// for.
+    pub(super) gsub: std::sync::OnceLock<super::gsub::GsubIndex>,
+    /// [`Self::unencoded_glyphs`], read once.
+    pub(super) unencoded: std::sync::OnceLock<std::sync::Arc<[u32]>>,
+    /// [`Self::mapped_chars`], read once.
+    pub(super) char_list: std::sync::OnceLock<Arc<[(char, u32)]>>,
+    /// [`Self::name_owner`]'s glyph names to characters, read once.
+    pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
@@ -349,6 +358,11 @@ impl FontFace {
     pub fn x_height(&self) -> f64 {
         self.x_height
     }
+    /// The height of the capital letters in font units, positive (estimated from the ascent when
+    /// the font has no OS/2 value).
+    pub fn cap_height(&self) -> f64 {
+        self.cap_height
+    }
     /// The line gap the font asks for between lines, in font units (from the same table as
     /// [`vertical_metrics`](Self::vertical_metrics); 0 when it has none).
     pub fn line_gap(&self) -> f64 {
@@ -356,11 +370,20 @@ impl FontFace {
     }
     /// Every mapped character and its glyph id, sorted by code point (the Glyphs panel).
     pub fn chars(&self) -> Vec<(char, u32)> {
-        let Some(f) = self.skrifa() else { return vec![] };
-        let mut v: Vec<(char, u32)> = f.charmap().mappings().filter_map(|(cp, g)| char::from_u32(cp).map(|c| (c, g.to_u32()))).collect();
-        v.sort_unstable_by_key(|x| x.0);
-        v.dedup_by_key(|x| x.0);
-        v
+        self.mapped_chars().to_vec()
+    }
+    /// [`Self::chars`], read from the font once for the face and shared by every caller. Empty when
+    /// the font cannot be read or maps no character.
+    pub fn mapped_chars(&self) -> Arc<[(char, u32)]> {
+        self.char_list
+            .get_or_init(|| {
+                let Some(f) = self.skrifa() else { return Arc::from([]) };
+                let mut v: Vec<(char, u32)> = f.charmap().mappings().filter_map(|(cp, g)| char::from_u32(cp).map(|c| (c, g.to_u32()))).collect();
+                v.sort_unstable_by_key(|x| x.0);
+                v.dedup_by_key(|x| x.0);
+                v.into()
+            })
+            .clone()
     }
     /// Advance width of glyph `gid` in font units.
     pub fn advance(&self, gid: u32) -> f64 {

@@ -133,16 +133,16 @@ fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchor
     // the objects differ, the members of groups and the objects in symbols' art included, and with
     // strokes that scale, when the sizes are out of proportion. The objects are then measured one
     // by one ([`Spans::measure`]), and the scales solved for. Objects with geometry effects,
-    // objects with a butt-capped stroke along a segment at a slant, whose margins change with the
-    // segment's direction, and type measured by its glyphs, are measured as drawn after each scale
-    // tried instead ([`refit_drawn`]).
+    // objects with a stroke that stops at the corners of a segment at a slant (butt caps, bevel and
+    // miter joins), whose margins change with the segment's direction, and type measured by its
+    // glyphs, are measured as drawn after each scale tried instead ([`refit_drawn`]).
     let to_local = frame.to_doc().inverse();
     let drawn = || {
         by_glyphs
             || ids
                 .iter()
                 .filter_map(|id| d.node(*id))
-                .any(|n| effects::preview::draws_geometry(&symbols, n) || n.has_slanted_butt_stroke(&symbols, to_local))
+                .any(|n| effects::preview::draws_geometry(&symbols, n) || n.has_slanted_stroke_corners(&symbols, to_local))
     };
     // Without Use Preview Bounds the box has no margins (`v`, `vs` and `g` are one box, glyph ink
     // included), so the scales above are exact and nothing is refitted.

@@ -63,6 +63,52 @@ pub(crate) fn ask_replace(app: &mut VectorcraftApp, path: &str, typed: &str) {
     app.ui.dialog = Some(Dialog::new(REPLACE, fields));
 }
 
+/// The dialog kind of the question whether a save or export may replace the files it writes beside
+/// the one picked in the save panel ([`ask_replace_files`]). Fields: `message`, `detail`, `files`
+/// (their paths), `allowed` (files an earlier OK allowed), `doc` (the document's uid), `__command`
+/// and `__params`.
+pub const REPLACE_FILES: &str = "replaceFiles";
+
+pub(super) const REPLACE_FILES_SPEC: DialogSpec = DialogSpec { confirm: replace_files, ..SPEC };
+
+/// Ask whether to replace `files`, files that are there beside the one a save or export of the
+/// document `doc` (its uid) writes, which the save panel did not ask about (a file per artboard, a
+/// linked image). OK runs `command` with `params` again on that document, now replacing those
+/// files and `allowed` (those an earlier OK allowed); Cancel writes nothing.
+pub(crate) fn ask_replace_files(app: &mut VectorcraftApp, doc: u64, files: &[String], allowed: &[String], command: &str, params: Value) {
+    let name = files.first().map(|f| vectorcraft_engine::cmd::fileio::file_name(f)).unwrap_or_default();
+    let message = crate::i18n::fmt(tl!("“{name}” already exists. Replace it?"), &[("name", &name)]);
+    // Several: every one of them, by name.
+    let detail = match files {
+        [_, _, ..] => files.iter().map(|f| vectorcraft_engine::cmd::fileio::file_name(f)).collect::<Vec<_>>().join("\n"),
+        _ => String::new(),
+    };
+    let fields =
+        json!({"message": message, "detail": detail, "files": files, "allowed": allowed, "doc": doc, "__command": command, "__params": params});
+    let d = Dialog::new(REPLACE_FILES, fields);
+    // Asked when a Background Save or Export ends: a dialog open then stays, and this waits its turn
+    // (however many messages wait: the save or export needs the answer).
+    match app.ui.dialog {
+        None => app.ui.dialog = Some(d),
+        Some(_) => app.ui.told.push(d),
+    }
+}
+
+/// OK on [`ask_replace_files`]: what asked runs again on its document, and the files the question
+/// named are replaced; one it writes now that was not named is asked about again. The save or export
+/// reads the allowance when it starts, before a background one hands its work to the worker.
+fn replace_files(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    app.ui.dialog = None;
+    if !crate::picks::on_document(app, d.fields.get("doc").and_then(Value::as_u64)) {
+        return Ok(Value::Null);
+    }
+    let paths = |k: &str| d.fields.get(k).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string);
+    app.picks.replace_files_ok = paths("allowed").chain(paths("files")).collect();
+    let r = confirm(app, d);
+    app.picks.replace_files_ok.clear();
+    r
+}
+
 /// The dialog kind of the question Reset Preferences asks over the Preferences dialog
 /// ([`ask_reset_prefs`]). Fields: `message`, `detail`.
 pub const RESET_PREFS: &str = "resetPreferences";
@@ -86,6 +132,28 @@ fn reset_prefs(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     crate::prefs_dialog::reset_fields(&mut prefs);
     app.ui.dialog = Some(prefs);
     Ok(Value::Null)
+}
+
+/// The dialog kind of the question Reset Actions asks in the Actions panel menu
+/// ([`ask_reset_actions`]). Fields: `message`, `detail`, `append` (set by Append).
+pub const RESET_ACTIONS: &str = "resetActions";
+
+pub(super) const RESET_ACTIONS_SPEC: DialogSpec = DialogSpec { confirm: reset_actions, alternate: Some(("Append", "append")), ..SPEC };
+
+/// Ask whether to replace the Actions panel's sets with the built-in set. OK replaces them, Append
+/// adds the built-in set after them ([`crate::panels::actions::reset`]), and Cancel or Escape
+/// changes nothing.
+pub(crate) fn ask_reset_actions(app: &mut VectorcraftApp) {
+    let message = tl!("Replace the current actions with the default set?");
+    let detail = tl!("Append adds the default set after the current sets instead.");
+    app.ui.dialog = Some(Dialog::new(RESET_ACTIONS, json!({"message": message, "detail": detail, "append": false})));
+}
+
+/// OK or Append on [`ask_reset_actions`]: closes, then resets the action sets.
+fn reset_actions(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mode = if d.fields.get("append").and_then(Value::as_bool) == Some(true) { "append" } else { "replace" };
+    app.ui.dialog = None;
+    app.run(crate::panels::actions::RESET, json!({ "mode": mode }))
 }
 
 /// Most messages kept for later while a dialog is open ([`tell`]).

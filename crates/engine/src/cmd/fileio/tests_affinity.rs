@@ -4,12 +4,45 @@
 use super::*;
 use proptest::prelude::*;
 use serde_json::json;
-use std::io::Cursor;
 
 fn png() -> Vec<u8> {
     let im = image::RgbaImage::from_fn(2, 1, |x, _| if x == 0 { image::Rgba([220, 40, 60, 255]) } else { image::Rgba([0, 0, 0, 0]) });
     let mut bytes = Vec::new();
-    im.write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = im.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| bytes.extend_from_slice(&__b))
+    }
+    .unwrap();
     bytes
 }
 
@@ -265,6 +298,66 @@ mod native {
             (tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))])),
         ]);
         synth::container(&[("doc.dat", &doc, method)], Some(&png()))
+    }
+
+    /// A version-12 document at 144 ppi holding a 100 px square filled with a red-to-blue conical
+    /// gradient centered at (50, 40) px, 40 px across: its unit +y points down the page, or up
+    /// (`mirror`).
+    fn conical_document(mirror: bool) -> Vec<u8> {
+        let stop = |id: u32, c: F| F::Def(id, vec![tag(b"RGBA")], vec![(tag(b"_col"), c)]);
+        let positions = [[0.0f32, 0.5], [1.0, 0.5]].iter().map(|p| p.iter().flat_map(|v| v.to_le_bytes()).collect()).collect();
+        let grad = F::Obj(
+            tag(b"Grad"),
+            vec![
+                (tag(b"Cols"), F::Shared(vec![stop(23, rgba(1.0, 0.0, 0.0, 1.0)), stop(24, rgba(0.0, 0.0, 1.0, 1.0))])),
+                (tag(b"Posn"), F::Records(8, positions)),
+            ],
+        );
+        let fill = F::Def(22, vec![tag(b"FilG")], vec![(tag(b"Type"), F::Enum(3, 0)), (tag(b"Grad"), grad)]);
+        let unit = F::F64s(vec![40.0, 0.0, 50.0, 0.0, if mirror { -40.0 } else { 40.0 }, 40.0]);
+        let gradient = F::Def(21, vec![tag(b"FDsc")], vec![(tag(b"FDeX"), unit), (tag(b"FDeF"), fill)]);
+        let square = F::Def(
+            20,
+            vec![tag(b"ShpN")],
+            vec![
+                (tag(b"Shpe"), F::Def(25, vec![tag(b"ShNR")], vec![])),
+                (tag(b"ShpB"), F::F64s(vec![0.0, 0.0, 100.0, 100.0])),
+                (tag(b"BFFl"), F::Shared(vec![gradient])),
+            ],
+        );
+        let spread =
+            F::Def(2, vec![tag(b"Sprd")], vec![(tag(b"SprB"), F::F64s(vec![0.0, 0.0, 200.0, 200.0])), (tag(b"Chld"), F::Shared(vec![square]))]);
+        let doc = synth::stream(&[
+            (tag(b"UVCn"), F::Obj(tag(b"UVCn"), vec![(tag(b"UPPI"), F::F64(144.0))])),
+            (tag(b"DocR"), F::Def(1, vec![tag(b"DocN")], vec![(tag(b"Chld"), F::Shared(vec![spread]))])),
+        ]);
+        synth::container(&[("doc.dat", &doc, Method::Stored)], Some(&png()))
+    }
+
+    #[test]
+    fn conical_gradients_open_as_conic_gradients() {
+        use vectorcraft_color::{GradientKind, Paint};
+        for mirror in [false, true] {
+            let mut s = Session::new();
+            let r = open_bytes(&mut s, "conic.af", &conical_document(mirror), None).unwrap();
+            assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("conical")), "{r}");
+            let mut paint = None;
+            s.doc().unwrap().doc.walk(|n| {
+                if let Paint::Gradient(g) = n.appearance.fill_paint() {
+                    paint = Some(g.clone());
+                }
+            });
+            let g = paint.expect("a gradient fill");
+            assert_eq!(g.gradient.kind, GradientKind::Conic);
+            let geom = g.geom.unwrap();
+            // At 144 ppi: centered at (25, 20) pt, 20 pt across, red where the sweep starts.
+            assert!(geom.start.distance(kurbo::Point::new(25.0, 20.0)) < 1e-9 && (geom.length() - 20.0).abs() < 1e-9, "{geom:?}");
+            assert_eq!(geom.is_mirrored(), mirror, "{geom:?}");
+            // A quarter turn on lies along the unit +y: below the center, or above it mirrored.
+            let quarter = kurbo::Point::new(25.0, if mirror { 10.0 } else { 30.0 });
+            assert!((geom.param_at(GradientKind::Conic, quarter) - 0.25).abs() < 1e-9, "{geom:?}");
+            assert_eq!(g.gradient.stops[0].color.to_hex(), "#ff0000");
+        }
     }
 
     #[test]

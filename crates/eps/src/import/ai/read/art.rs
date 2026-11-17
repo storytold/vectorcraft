@@ -2,8 +2,8 @@ use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::raster::{self, Limits, Shape};
 use super::types::{
-    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE,
-    NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
+    FLIP, Frame, GState, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS,
+    MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
@@ -224,21 +224,15 @@ impl<'a> Reader<'a> {
             items.push(AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(fill_paint.unwrap_or(gs.fill.clone())) }));
         }
         if stroke {
-            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
-            st.cap = gs.cap;
-            st.join = gs.join;
-            st.miter_limit = gs.miter;
-            st.dash = gs.dash.clone();
-            st.overprint = gs.overprint_stroke;
+            let st = self.stroke_layer(stroke_paint.unwrap_or(gs.stroke.clone()), &gs);
             items.push(AppearanceItem::Stroke(st));
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
-        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        // A ruler guide is written as a straight `(N) *` guide path on its layer, shown or hidden.
         if guide
             && op == "N"
             && !hidden
-            && !gs.hidden
             && !clip
             && self.pattern.is_none()
             && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
@@ -331,15 +325,27 @@ impl<'a> Reader<'a> {
         if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
-        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.line_width());
-        st.cap = gs.cap;
-        st.join = gs.join;
-        st.miter_limit = gs.miter;
-        st.dash = gs.dash.clone();
-        st.overprint = gs.overprint_stroke;
+        let st = self.stroke_layer(gs.stroke.clone(), &gs);
+        let Some(n) = self.frames.last_mut().and_then(|f| f.children.last_mut()) else { return };
         let mut a = (*n.appearance).clone();
         a.items.push(AppearanceItem::Stroke(st));
         n.appearance = a.into();
+    }
+
+    /// A stroke of `paint` with graphics state `gs`'s weight, caps, joins, miter limit, dashes and
+    /// overprint, its weight and dashes at the scale the art is read at ([`Self::space_scale`]).
+    fn stroke_layer(&mut self, paint: Paint, gs: &GState) -> StrokeLayer {
+        let k = self.space_scale();
+        let mut st = StrokeLayer::new(paint, gs.line_width() * k);
+        st.cap = gs.cap;
+        st.join = gs.join;
+        st.miter_limit = gs.miter;
+        st.dash = gs.dash.clone().map(|mut d| {
+            d.scale(k);
+            d
+        });
+        st.overprint = gs.overprint_stroke;
+        st
     }
 
     pub(super) fn set_instance(&mut self, i: &Instance) {
@@ -370,15 +376,18 @@ impl<'a> Reader<'a> {
 
     // ---- images ----------------------------------------------------------------------------
 
-    /// The samples after `XI`, its operands on the stack.
-    pub(super) fn image(&mut self, data: &[u8]) -> Result<(), String> {
+    /// The samples after `XI`, its operands on the stack; `hidden` when they are on `%_` lines.
+    pub(super) fn image(&mut self, data: &[u8], hidden: bool) -> Result<(), String> {
         let vals = self.operands();
         // Operands that came before an `XI` on their own line.
         let vals = match self.raster.as_mut().and_then(|r| r.operands.take()) {
             Some(before) if !vals.iter().any(|v| matches!(v, V::Arr(_))) => before,
             _ => vals,
         };
-        self.image_from(vals, data, false)
+        self.image_hidden = hidden;
+        let read = self.image_from(vals, data, false);
+        self.image_hidden = false;
+        read
     }
 
     /// The matrix and the numbers of an image's operands (`[a b c d tx ty] llx lly urx ury w h bits
@@ -542,15 +551,20 @@ impl<'a> Reader<'a> {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], a]);
             }
         }
-        let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba) else {
+        let Ok(img) = craft_image_codecs::Image::from_raw(
+            w as u32,
+            h as u32,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            rgba,
+        ) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let mut png = vec![];
-        if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+        let Ok(png) = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
+        };
         self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32), None)
     }
 
@@ -575,12 +589,13 @@ impl<'a> Reader<'a> {
                 gray.push(v);
             }
         }
-        let mut png = vec![];
-        let written = image::GrayImage::from_raw(w, h, gray).map(|img| img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png));
-        if !matches!(written, Some(Ok(()))) {
+        let written = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray)
+            .ok()
+            .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok());
+        let Some(png) = written else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
+        };
         self.add_raster(ImageBlob::new("image/png", png), alpha, m, (w, h), Some(paint))
     }
 
@@ -668,15 +683,16 @@ impl<'a> Reader<'a> {
         let blob = if cmyk {
             Inks::new(ow, oh, pixels).and_then(|i| ImageBlob::cmyk_tiff(&i))
         } else {
-            use image::ImageEncoder as _;
-            let colour = match (s.channels, inline && opacity.is_some()) {
-                (1, false) => image::ExtendedColorType::L8,
-                (1, true) => image::ExtendedColorType::La8,
-                (_, false) => image::ExtendedColorType::Rgb8,
-                (_, true) => image::ExtendedColorType::Rgba8,
+            let layout = match (s.channels, inline && opacity.is_some()) {
+                (1, false) => craft_image_codecs::ChannelLayout::Gray,
+                (1, true) => craft_image_codecs::ChannelLayout::GrayA,
+                (_, false) => craft_image_codecs::ChannelLayout::Rgb,
+                (_, true) => craft_image_codecs::ChannelLayout::Rgba,
             };
-            let mut png = vec![];
-            image::codecs::png::PngEncoder::new(&mut png).write_image(&pixels, ow, oh, colour).ok().map(|()| ImageBlob::new("image/png", png))
+            craft_image_codecs::Image::from_raw(ow, oh, layout, craft_image_codecs::SampleType::U8, pixels)
+                .ok()
+                .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok())
+                .map(|png| ImageBlob::new("image/png", png))
         };
         // One that can't be encoded is left to the page's art, as one past the hard limits.
         let Some(blob) = blob else {
@@ -713,7 +729,8 @@ impl<'a> Reader<'a> {
 
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
     /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
-    /// image, and `colorize` as the color that colorizes it.
+    /// image, and `colorize` as the color that colorizes it. It is on `%_` lines when its samples
+    /// are ([`Self::image`]).
     fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32), colorize: Option<Paint>) -> Result<(), String> {
         // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
         // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
@@ -735,7 +752,8 @@ impl<'a> Reader<'a> {
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
         let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
-        self.add_image_colorized(im, mask, colorize, false)
+        // An image on `%_` lines is the copy of a styled object, as the other objects there are.
+        self.add_image_colorized(im, mask, colorize, self.image_hidden)
     }
 
     /// An image that isn't read is left out, with `warning`; in a symbol's art, the symbol isn't
@@ -762,8 +780,10 @@ impl<'a> Reader<'a> {
         if alpha.iter().all(|v| *v == 255) {
             return None;
         }
-        let mut png = Vec::new();
-        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let raw =
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, alpha.to_vec())
+                .ok()?;
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
@@ -1020,8 +1040,9 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
             rgba.extend_from_slice(&[straight(r), straight(g), straight(b), a]);
         }
     }
-    let mut png = vec![];
-    image::RgbaImage::from_raw(width, height, rgba)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    let raw =
+        craft_image_codecs::Image::from_raw(width, height, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
     Some((png, width, height))
 }
 

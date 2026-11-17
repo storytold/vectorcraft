@@ -645,7 +645,7 @@ fn flatten(rgba: &[u8], matte: [u8; 3]) -> impl Iterator<Item = [u8; 3]> + '_ {
 
 /// The File Info text `s.metadata` lets into the files: `(keyword, text)`.
 fn metadata(doc: &Document, s: &WebSettings) -> Vec<(&'static str, String)> {
-    doc.metadata.png_text(&doc.title).into_iter().filter(|(k, _)| s.metadata.keeps(k)).map(|(k, v)| (k, v.into_owned())).collect()
+    doc.metadata.png_text(doc.info_title()).into_iter().filter(|(k, _)| s.metadata.keeps(k)).map(|(k, v)| (k, v.into_owned())).collect()
 }
 
 /// Encode straight RGBA pixels (`w`×`h`) as `s` says; `doc` gives the metadata.
@@ -782,9 +782,9 @@ fn palette_image(rgba: &[u8], w: u32, h: u32, s: &WebSettings, matte: Option<[u8
 
 /// An optimised image as straight RGBA → `(pixels, width, height)` (the dialog's preview).
 pub fn decode(o: &Optimized) -> std::result::Result<(Vec<u8>, u32, u32), String> {
-    let img = image::load_from_memory(o.display()).map_err(|e| format!("the optimised image can't be read back: {e}"))?.to_rgba8();
+    let img = craft_image_codecs::decode(o.display()).map_err(|e| format!("the optimised image can't be read back: {e}"))?;
     let (w, h) = img.dimensions();
-    Ok((img.into_raw(), w, h))
+    Ok((img.to_rgba8(), w, h))
 }
 
 /// Seconds to download `bytes` at `kbps` kilobits per second.

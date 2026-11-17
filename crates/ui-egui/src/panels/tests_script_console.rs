@@ -6,7 +6,7 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 
 use super::pstate;
-use super::script_console::{DRAWN, ID, show};
+use super::script_console::{DRAWN, ID, show, shown};
 use crate::tests_labels::painted_text;
 use crate::{Services, VectorcraftApp, script_runs};
 
@@ -95,4 +95,49 @@ fn copy_all_and_copy_selected_put_the_lines_on_the_clipboard() {
     app.run("ui.copyScriptConsole", json!({})).unwrap();
     let all = app.clipboard_out.take().unwrap();
     assert!(all.lines().next().is_some_and(|l| l.contains("lines dropped")), "Copy All starts with the notice: {}", &all[..80]);
+}
+
+/// A report line reads in English as `script.console` gives it: "time unavailable" for a run
+/// without a clock, one host call in the singular, and the slowest commands.
+#[test]
+fn a_report_line_reads_as_script_console_gives_it() {
+    use vectorcraft_engine::script::console::{ConsoleLine, Entry, Slow};
+    let slow = vec![Slow { id: "a.b".into(), calls: 2, total_ms: 7, max_ms: 4 }, Slow { id: "c".into(), calls: 1, total_ms: 1, max_ms: 1 }];
+    for ms in [None, Some(0), Some(12)] {
+        for host_calls in [0, 1, 2] {
+            for slowest in [vec![], slow.clone()] {
+                let entry = Entry::Report { ms, host_calls, slowest };
+                let want = format!("#3 c.js: {}", entry.text());
+                assert_eq!(shown(&ConsoleLine { run: 3, name: "c.js".into(), entry }), want);
+            }
+        }
+    }
+    let line = |ms, host_calls| shown(&ConsoleLine { run: 1, name: "c.js".into(), entry: Entry::Report { ms, host_calls, slowest: vec![] } });
+    assert_eq!(line(None, 1), "#1 c.js: time unavailable, 1 host call");
+    assert_eq!(line(Some(0), 2), "#1 c.js: 0 ms, 2 host calls");
+}
+
+/// The notice counts the lines dropped and the lines cut each in its own form, a count of one in
+/// the singular; Copy All starts with it.
+#[test]
+fn the_notice_counts_one_line_in_the_singular() {
+    for (dropped, cut, want) in [
+        (1, 0, "1 earlier line dropped, 0 lines cut"),
+        (0, 1, "0 earlier lines dropped, 1 line cut"),
+        (1, 2, "1 earlier line dropped, 2 lines cut"),
+        (2, 1, "2 earlier lines dropped, 1 line cut"),
+        (2, 2, "2 earlier lines dropped, 2 lines cut"),
+    ] {
+        let mut app = app();
+        // A run adds a start, an end and a report line to its output lines.
+        let lines = if dropped > 0 { vectorcraft_engine::script::console::MAX_CONSOLE_LINES - 3 + dropped } else { cut + 1 };
+        let source = format!("var big = 'x'; while (big.length < 5000) big += big; for (var i = 0; i < {lines}; i++) $.writeln(i < {cut} ? big : i)");
+        run(&mut app, &source);
+        let c = app.session.script_console();
+        assert_eq!((c.dropped_lines(), c.truncated_lines()), (dropped as u64, cut as u64));
+        app.run("ui.copyScriptConsole", json!({})).unwrap();
+        let all = app.clipboard_out.take().unwrap();
+        assert_eq!(all.lines().next(), Some(want));
+        assert!(painted_text(&mut app, show).contains(want));
+    }
 }

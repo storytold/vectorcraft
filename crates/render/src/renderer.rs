@@ -19,7 +19,7 @@ use super::{
 };
 
 #[cfg(test)]
-pub(crate) use paint::{SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
+pub(crate) use paint::{CONTROL_BOXES_MEASURED, SLICES_MADE, STROKES_OUTLINED, anchors_moved, offset_between};
 
 mod images;
 mod nodes;
@@ -56,6 +56,8 @@ impl Renderer {
             fx_owner: None,
             live_root: None,
             fx_geom: PtrMap::default(),
+            fx_stages: PtrMap::default(),
+            fx_placement: None,
             stamp: 0,
             alpha: 1.0,
             contexts: Vec::new(),
@@ -150,7 +152,7 @@ impl Renderer {
         let screen = if opts.rich_black { Ink::RichBlack } else { Ink::Display };
         let symbols = doc.symbol_boxes().quick();
         let output = Affine::scale(1.0 / f64::from(cell.max(1))) * view;
-        let plates = proof::plate_lut(opts);
+        let plates = proof::plate_lut(opts, doc);
         let frame = Frame { mt: threads > 0, doc, symbols: &symbols, view, visible, px, opts, ink: screen, output, plates: plates.as_deref() };
         self.begin_frame();
         // View Opacity Mask: the mask's coverage in greyscale instead of the artwork.
@@ -229,6 +231,9 @@ impl Renderer {
         }
         if self.fx_geom.len() > 256 {
             self.fx_geom.retain(|_, e| g - e.stamp <= 3);
+        }
+        if self.fx_stages.len() > 256 {
+            self.fx_stages.retain(|_, e| g - e.3 <= 3);
         }
         // Filtered rasters are large: only those of the last frame stay.
         self.pixel_fx.retain(|_, e| e.stamp == g);

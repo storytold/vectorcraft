@@ -55,3 +55,70 @@ fn an_aligned_character_stroke_is_clipped_to_its_side_of_the_glyphs() {
         assert!(ops.contains(&if clip { "W*" } else { "W" }), "{align:?}: clipped to its side");
     }
 }
+
+/// The cap, join and miter limit a PDF strokes its type with, whatever the rendering mode that
+/// strokes it (stroke, fill and stroke, and either with a clip), and with replacement text
+/// (`ActualText`) too: not butt caps and miter joins (#7741).
+#[test]
+fn imported_stroked_type_keeps_the_files_cap_join_and_miter_limit() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let page = |content: &str| {
+        let resources = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>";
+        pdf(&[PdfPage { resources: resources.into(), ..PdfPage::new(300.0, 200.0, content) }], None)
+    };
+    let styles = |content: &str| {
+        let d = import(&page(content)).unwrap();
+        let mut runs = vec![];
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                runs.extend(t.runs.iter().map(|r| r.style.clone()));
+            }
+        });
+        runs
+    };
+    let cases = [
+        ("1 J 1 j", (LineCap::Round, LineJoin::Round, 10.0)),
+        ("2 J 2 j 3 M", (LineCap::Square, LineJoin::Bevel, 3.0)),
+        ("0 J 0 j 3 M", (LineCap::Butt, LineJoin::Miter, 3.0)),
+    ];
+    for (settings, want) in cases {
+        for mode in ["1", "2", "5", "6"] {
+            // A word shown at once, a glyph at a time (a stroke over the glyph just filled), and
+            // in a span with replacement text.
+            for text in ["(WAVE) Tj", "(W) Tj (A) Tj", "/Span << /ActualText (WAVE) >> BDC (WAVE) Tj EMC"] {
+                let content = format!("0 g 0 0 0 RG 4 w {settings} BT {mode} Tr /F1 60 Tf 40 110 Td {text} 0 Tr ET");
+                let runs = styles(&content);
+                let stroked: Vec<_> = runs.iter().filter(|s| !s.stroke.is_none()).collect();
+                assert!(!stroked.is_empty(), "{content}: stroked type comes in: {runs:?}");
+                if matches!(mode, "2" | "6") && !text.starts_with("(WAVE)") {
+                    assert!(stroked.iter().any(|s| !s.fill.is_none()), "{content}: the stroke is over the filled glyphs: {runs:?}");
+                }
+                for s in stroked {
+                    assert!((s.stroke_width - 4.0).abs() < 1e-6, "{content}: width {}", s.stroke_width);
+                    let got = (s.stroke_cap, s.stroke_join, s.stroke_miter_limit);
+                    assert_eq!(got, want, "{content}");
+                }
+            }
+        }
+    }
+    // Glyphs stroked with another join are a run of their own.
+    let runs = styles("0 0 0 RG 4 w BT 1 Tr /F1 60 Tf 40 110 Td 1 j (WA) Tj 0 j (VE) Tj 0 Tr ET");
+    let joins: Vec<_> = runs.iter().map(|s| s.stroke_join).collect();
+    assert_eq!(joins, [LineJoin::Round, LineJoin::Miter]);
+    // Filled and stroked a glyph at a time: the next glyph's fill joins the run before it, and its
+    // stroke, with another join, restyles that glyph alone.
+    for mode in ["2", "6"] {
+        let content = format!("0 g 0 0 0 RG 4 w BT {mode} Tr /F1 60 Tf 40 110 Td 1 j (W) Tj 0 j (A) Tj 0 Tr ET");
+        let runs = styles(&content);
+        let d = import(&page(&content)).unwrap();
+        let mut text = String::new();
+        d.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                text.push_str(&t.plain_text());
+            }
+        });
+        assert_eq!(text, "WA", "{content}");
+        let joins: Vec<_> = runs.iter().map(|s| (!s.stroke.is_none()).then_some(s.stroke_join)).collect();
+        assert_eq!(joins, [Some(LineJoin::Round), Some(LineJoin::Miter)], "{content}: {runs:?}");
+    }
+}

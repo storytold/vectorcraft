@@ -259,10 +259,12 @@ pub(crate) fn follow_history(st: &mut crate::DocState, was: Option<NodeId>) {
 /// mode when the object or the layer is gone (e.g. deleted).
 pub(crate) fn sync(d: &mut Document) {
     let Some(me) = d.mask_edit else { return };
-    let art: Option<Vec<Arc<Node>>> = d.node(me.layer).and_then(|l| l.children().cloned());
+    // The layer's art: ruler guides on it are not part of the mask.
+    let art: Option<Vec<Arc<Node>>> =
+        d.node(me.layer).and_then(|l| l.children()).map(|ch| ch.iter().filter(|c| !c.is_ruler_guide()).cloned().collect());
     let (Some(art), true) = (art, d.node(me.object).is_some_and(|n| n.extras().mask.is_some())) else {
         d.mask_edit = None;
-        let _ = d.remove(me.layer);
+        let _ = d.remove_edit_layer(me.layer);
         return;
     };
     let new_art = match art.as_slice() {

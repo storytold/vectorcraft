@@ -55,7 +55,9 @@ pub(super) enum NotOne {
 /// it applies to, even within a patch; a mesh starts grey. Besides the device spaces it may be a
 /// named colour, `[c m y k /DeviceCMYK (name) /Process]` (or `/Spot`), or several process or spot
 /// inks, `[[ink] [ink] … n /NChannel]` (each ink `[c m y k /DeviceCMYK (name) /Separation]`). A
-/// corner gives a named colour's tint (1 is the full colour), or each ink's in order.
+/// corner gives a named color's tint (1 is the full color), or each ink's, process and spot inks
+/// alike, the last ink listed first: under `[[Yellow] [Magenta] [Cyan] 3 /NChannel]`, `[0 0 1 …]`
+/// is full yellow.
 #[derive(Debug, Clone, Default, PartialEq)]
 enum Space {
     #[default]
@@ -113,10 +115,11 @@ impl Space {
             Space::Cmyk => Color::cmyk(u(0)?, u(1)?, u(2)?, u(3)?),
             Space::Inks(inks) => match inks.as_slice() {
                 [one] => one.tinted(u(0)?),
-                // Several inks overprint: their CMYK at their tints, added up.
+                // Several inks overprint: their CMYK at their tints, added up. The tints come in
+                // the opposite order to the inks.
                 many => {
                     let mut sum = [0.0f32; 4];
-                    for (i, ink) in many.iter().enumerate() {
+                    for (i, ink) in many.iter().rev().enumerate() {
                         let Color::Cmyk { c, m, y, k } = *ink else { return None };
                         let t = u(i)?;
                         for (s, v) in sum.iter_mut().zip([c, m, y, k]) {
@@ -911,7 +914,8 @@ mod tests {
         let mut reader = MeshReader::default();
         square(&mut reader, [&[0.25, 1.0], &[0.0, 0.0], &[1.0, 1.0], &[0.0, 0.0]], [vec![(channels(2.0), "CS")], vec![], vec![], vec![]]);
         assert!(!reader.unread);
-        assert_color(reader.patches[0].points[0].color, Color::cmyk(0.0, 1.0, 0.25, 0.0));
+        // The tints come last ink first: 0.25 Magenta, 1 Yellow.
+        assert_color(reader.patches[0].points[0].color, Color::cmyk(0.0, 0.25, 1.0, 0.0));
         assert_color(reader.patches[0].points[3].color, Color::cmyk(0.0, 1.0, 1.0, 0.0));
 
         // An ink count that doesn't match its inks, or an ink in a space not read.
@@ -921,6 +925,51 @@ mod tests {
             square(&mut reader, [&[1.0, 1.0]; 4], [vec![(space, "CS")], vec![], vec![], vec![]]);
             assert!(reader.unread && reader.patches.is_empty());
         }
+    }
+
+    /// `/NChannel` inks take a corner's tints in the opposite order to their listing, whatever
+    /// order the inks are listed in, spot inks included: under Yellow, Magenta, Cyan `0 0 1` is
+    /// full yellow and `1 0.5 0` full cyan with half magenta; under Cyan, Magenta, Yellow `0 0 1`
+    /// is full cyan; under a spot ink and Cyan, `0.5 1` is the full spot ink with half cyan.
+    #[test]
+    fn inks_take_their_tints_last_listed_first() {
+        let ink = |c: [f64; 4], name: &str| {
+            let mut v: Vec<V> = c.iter().map(|x| V::Num(*x)).collect();
+            v.extend([V::Name("DeviceCMYK".into()), V::Str(name.as_bytes().to_vec()), V::Name("Separation".into())]);
+            V::Arr(v)
+        };
+        let channels = |inks: Vec<V>| {
+            let n = inks.len() as f64;
+            let mut a = inks;
+            a.extend([V::Num(n), V::Name("NChannel".into())]);
+            V::Arr(a)
+        };
+        let (yellow, magenta, cyan) = (ink([0.0, 0.0, 1.0, 0.0], "Yellow"), ink([0.0, 1.0, 0.0, 0.0], "Magenta"), ink([1.0, 0.0, 0.0, 0.0], "Cyan"));
+        let rose = ink([0.1, 0.6, 0.4, 0.2], "Rose");
+        // Two corners' tints (then opacity) under the inks, and the colors they give.
+        let check = |inks: Vec<V>, a: &[f64], b: &[f64], want_a: Color, want_b: Color| {
+            let mut reader = MeshReader::default();
+            square(&mut reader, [a, b, a, b], [vec![(channels(inks), "CS")], vec![], vec![], vec![]]);
+            assert!(!reader.unread);
+            let points = &reader.patches[0].points;
+            assert_color(points[0].color, want_a);
+            assert_color(points[2].color, want_b);
+        };
+        check(
+            vec![yellow.clone(), magenta.clone(), cyan.clone()],
+            &[0.0, 0.0, 1.0, 1.0],
+            &[1.0, 0.5, 0.0, 1.0],
+            Color::cmyk(0.0, 0.0, 1.0, 0.0),
+            Color::cmyk(1.0, 0.5, 0.0, 0.0),
+        );
+        check(
+            vec![cyan.clone(), magenta, yellow],
+            &[0.0, 0.0, 1.0, 1.0],
+            &[1.0, 0.5, 0.0, 1.0],
+            Color::cmyk(1.0, 0.0, 0.0, 0.0),
+            Color::cmyk(0.0, 0.5, 1.0, 0.0),
+        );
+        check(vec![rose, cyan], &[0.5, 1.0, 1.0], &[1.0, 0.0, 1.0], Color::cmyk(0.6, 0.6, 0.4, 0.2), Color::cmyk(1.0, 0.0, 0.0, 0.0));
     }
 
     /// A corner holding anything but numbers is unread: skipping it would shift the numbers after

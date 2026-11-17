@@ -2,6 +2,7 @@
 //! its leading, baseline shift, scaling and kerning, and a renderer with the same font draws the
 //! export where the canvas draws the text.
 
+use craft_svg::tree::usvg;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};
@@ -109,6 +110,122 @@ fn rich_text_writes_spacing_shift_and_scale() {
     assert_eq!(attr(tags[1], "y"), attr(tags[0], "y"));
 }
 
+/// The space before a line's first character (`kerningBefore`, #5111) moves the line's first
+/// `<tspan>` to where the character is drawn, left aligned or anchored at a centred line's centre.
+#[test]
+fn the_space_before_a_lines_first_character_moves_its_tspan() {
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    // 250/1000 em of 12 pt: 3 pt. The second paragraph's first character takes it too; the "O" after
+    // the first "H" is inside its line, so its value does nothing.
+    let runs = vec![run("HO", before.clone()), run("H\n", style(12.0)), run("H", before.clone()), run("O", style(12.0))];
+    let svg = export(&area_doc(runs, 200.0, Justify::Left), &ExportOptions::default());
+    // The first <tspan> on each baseline.
+    let mut starts: Vec<(f64, f64)> = vec![];
+    for t in tspans(&svg) {
+        let (x, y) = (attr(t, "x").unwrap(), attr(t, "y").unwrap());
+        if starts.last().is_none_or(|&(_, last)| last != y) {
+            starts.push((x, y));
+        }
+    }
+    assert_eq!(starts.iter().map(|s| s.0).collect::<Vec<_>>(), vec![3.0, 3.0], "{svg}");
+    // Centred, the line is 3 pt longer and the anchor sits at the middle of what a reader draws.
+    let svg = export(&area_doc(vec![run("H", before.clone()), run("OH", style(12.0))], 200.0, Justify::Center), &ExportOptions::default());
+    let x = tspans(&svg).iter().find_map(|t| attr(t, "x")).unwrap();
+    assert!((x - 101.5).abs() < 0.01, "{svg}");
+    // A justified line, which a reader's own advances place word by word, starts there too.
+    let words = vec![run("H", before.clone()), run("OH OH OH OH OH OH OH OH OH OH", style(12.0))];
+    let svg = export(&area_doc(words, 90.0, Justify::JustifyLeft), &ExportOptions::default());
+    assert_eq!(attr(tspans(&svg)[0], "x"), Some(3.0), "{svg}");
+}
+
+/// On a path, the space before the first character is its `dx` along the path. One before a
+/// character after a line break, which the `<textPath>` can't write, is kept as outlines.
+#[test]
+fn the_space_before_the_first_character_on_a_path_is_its_dx() {
+    let doc = |runs: Vec<TextRun>| {
+        let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+        t.runs = runs;
+        let mut line = BezPath::new();
+        line.move_to((20.0, 100.0));
+        line.line_to((280.0, 100.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        vectorcraft_svg::export_full(&d, &ExportOptions::default(), None)
+    };
+    let before = CharStyle { kerning_before: 250.0, ..style(12.0) };
+    let out = doc(vec![run("HO", before.clone()), run("H", style(12.0))]);
+    let tags = tspans(&out.svg);
+    assert!(out.svg.contains("<textPath"), "{}", out.svg);
+    assert_eq!((attr(tags[0], "dx"), attr(tags[1], "dx")), (Some(3.0), None), "{}", out.svg);
+    let out = doc(vec![run("HO\n", style(12.0)), run("H", before)]);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("line break")), "{:?}", out.warnings);
+}
+
+/// Insert Aki: each character the layout moves by its Aki starts a `<tspan>` where the character is
+/// drawn, so a reader draws the text where the canvas does, on left-aligned, centered and
+/// right-aligned lines and with fewer `<tspan>`s asked for too. On a path the type is outlined.
+#[test]
+fn insert_aki_places_each_moved_character() {
+    // 250/1000 em of 12 pt before the O (3 pt) and 500/1000 after it (6 pt), then a run with Aki
+    // after every character, and a second line.
+    let spaced = CharStyle { aki_left: 250.0, aki_right: 500.0, ..style(12.0) };
+    let runs = vec![run("H", style(12.0)), run("O", spaced), run("H ", style(12.0)), run("OHO\nHO", CharStyle { aki_right: 500.0, ..style(12.0) })];
+    // A centered or right-aligned line whose characters the Aki moves is placed segment by
+    // segment, not anchored.
+    for justify in [Justify::Center, Justify::Right] {
+        assert_drawn_in_place(&area_doc(runs.clone(), 200.0, justify));
+    }
+    let d = area_doc(runs, 200.0, Justify::Left);
+    assert_drawn_in_place(&d);
+    let plain = tspans(&export(&area_doc(vec![run("HOH OHO\nHO", style(12.0))], 200.0, Justify::Left), &ExportOptions::default())).len();
+    let fewer = tspans(&export(&d, &ExportOptions { fewer_tspans: true, ..Default::default() })).len();
+    assert!(fewer > plain, "each moved character is placed with fewer tspans too: {plain} {fewer}");
+    let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+    t.runs = vec![run("HO", CharStyle { aki_left: 250.0, ..style(12.0) })];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Insert Aki")), "{:?}", out.warnings);
+}
+
+/// Tsume: each character the layout moves by its Tsume starts a `<tspan>` where the character is
+/// drawn, so a reader draws the text where the canvas does, with fewer `<tspan>`s asked for too.
+/// On a path the type is outlined.
+#[test]
+fn tsume_places_each_moved_character() {
+    let tight = CharStyle { tsume: 50.0, ..style(12.0) };
+    let runs =
+        vec![run("H", style(12.0)), run("O", tight.clone()), run("H ", style(12.0)), run("OHO\nHO", CharStyle { tsume: 100.0, ..style(12.0) })];
+    for justify in [Justify::Left, Justify::Center, Justify::Right] {
+        assert_drawn_in_place(&area_doc(runs.clone(), 200.0, justify));
+    }
+    let d = area_doc(runs, 200.0, Justify::Left);
+    let plain = tspans(&export(&area_doc(vec![run("HOH OHO\nHO", style(12.0))], 200.0, Justify::Left), &ExportOptions::default())).len();
+    let fewer = tspans(&export(&d, &ExportOptions { fewer_tspans: true, ..Default::default() })).len();
+    assert!(fewer > plain, "each moved character is placed with fewer tspans too: {plain} {fewer}");
+    let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+    t.runs = vec![run("HO", tight)];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Tsume")), "{:?}", out.warnings);
+}
+
 /// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.
 #[test]
 fn proportional_metrics_write_palt() {
@@ -121,6 +238,19 @@ fn proportional_metrics_write_palt() {
     assert!(!tags[0].contains("palt"), "{}", tags[0]);
     assert!(tags[1].contains("font-feature-settings:&quot;palt&quot; 1"), "{}", tags[1]);
     assert!(tags[2].contains("dlig") && tags[2].contains("palt"), "{}", tags[2]);
+}
+
+/// A feature with a value (`salt=2`) is written as that value, `-tag` as 0, a plain tag as 1; a
+/// tag whose value is not a number is left out.
+#[test]
+fn feature_values_write_their_number() {
+    let valued = CharStyle { features: vec!["salt=2".into(), "-liga".into(), "ss01".into(), "swsh=12".into(), "salt=x".into()], ..style(12.0) };
+    let d = area_doc(vec![run("ab ", style(12.0)), run("cd", valued)], 280.0, Justify::Left);
+    let svg = export(&d, &ExportOptions::default());
+    let tags = tspans(&svg);
+    assert_eq!(tags.len(), 2, "{svg}");
+    assert!(tags[1].contains("font-feature-settings:&quot;salt&quot; 2, &quot;liga&quot; 0, &quot;ss01&quot; 1, &quot;swsh&quot; 12"), "{}", tags[1]);
+    assert!(!tags[1].contains("salt=x") && !tags[0].contains("salt"), "{svg}");
 }
 
 /// Character Direction: live text writes each run set Left to Right as a bidi embedding
@@ -160,6 +290,40 @@ fn character_direction_is_written_on_its_runs() {
     }
 }
 
+/// A run set Left to Right keeps its Character Direction when its SVG is opened again, on a line
+/// and on a path.
+#[test]
+fn character_direction_reads_back() {
+    use vectorcraft_doc::ParaDirection;
+    let ltr = CharStyle { char_direction: Some(ParaDirection::LeftToRight), ..style(12.0) };
+    let mut on_path = TextObject::point(Point::ZERO, "", style(12.0));
+    on_path.runs = vec![run("Due ", style(12.0)), run("21 10 2026", ltr.clone())];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut path_doc = Document::new(300.0, 200.0);
+    let n = Node::new(path_doc.alloc_id(), NodeKind::Text(Box::new(on_path)));
+    let l = path_doc.layers[0].id;
+    path_doc.insert(Some(l), 0, n).unwrap();
+    let area = area_doc(vec![run("Due ", style(12.0)), run("21 10 2026", ltr), run(" ok", style(12.0))], 280.0, Justify::Left);
+    for (name, d) in [("area", area), ("path", path_doc)] {
+        let svg = export(&d, &ExportOptions::default());
+        let back = vectorcraft_svg::import(&svg).unwrap_or_else(|e| panic!("{name}: {e}\n{svg}"));
+        let mut texts = vec![];
+        back.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                texts.push((**t).clone());
+            }
+        });
+        assert_eq!(texts.len(), 1, "{name}: {svg}");
+        let t = &texts[0];
+        let dir = |part: &str| t.runs.iter().find(|r| r.text.contains(part)).map(|r| r.style.char_direction);
+        assert_eq!(dir("2026"), Some(Some(ParaDirection::LeftToRight)), "{name}: {:?}\n{svg}", t.runs);
+        assert_eq!(dir("Due"), Some(None), "{name}: {:?}", t.runs);
+    }
+}
+
 /// Digits are written as drawn: the style's numeral system, not the digits that were typed (as
 /// All Caps writes capitals).
 #[test]
@@ -192,6 +356,19 @@ fn a_chosen_glyph_is_written_as_outlines() {
     let d = area_doc(vec![run("x", plain.clone()), run("a", chosen), run("y", plain)], 280.0, Justify::Left);
     let svg = export(&d, &ExportOptions::default());
     assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+}
+
+/// Type with an Adjust Diacritic Position is written as outlines: a reader's `<text>` would draw
+/// the marks where the font puts them.
+#[test]
+fn moved_diacritics_are_written_as_outlines() {
+    let svg = export(&area_doc(vec![run("re\u{301}sume\u{301}", style(12.0))], 280.0, Justify::Left), &ExportOptions::default());
+    assert!(svg.contains("<text"), "without a moved mark the text stays live: {svg}");
+    for moved in [CharStyle { diacritic_horizontal: 100.0, ..style(12.0) }, CharStyle { diacritic_vertical: -100.0, ..style(12.0) }] {
+        let d = area_doc(vec![run("re\u{301}", style(12.0)), run("sume\u{301}", moved)], 280.0, Justify::Left);
+        let svg = export(&d, &ExportOptions::default());
+        assert!(!svg.contains("<text") && svg.contains("<path"), "{svg}");
+    }
 }
 
 /// A run whose font size measures the cap height is written at the em size it is drawn at: 14 pt
@@ -494,6 +671,37 @@ fn justification_spacing_and_glyph_scaling_are_drawn_in_place() {
     }
 }
 
+/// Type on a path with Justification…'s Desired word or letter spacing or glyph scaling is outlined
+/// with a warning, since a `<textPath>` places its characters one after the other at their own
+/// advances. With the default Desired values it stays a `<textPath>`.
+#[test]
+fn justification_spacing_on_a_path_is_outlined() {
+    use vectorcraft_doc::JustificationOptions;
+    let doc = |j: JustificationOptions| {
+        let mut t = TextObject::point(Point::ZERO, "HO HO", style(12.0));
+        t.para.justification = j;
+        let mut line = BezPath::new();
+        line.move_to((20.0, 100.0));
+        line.line_to((280.0, 100.0));
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        vectorcraft_svg::export_full(&d, &ExportOptions::default(), None)
+    };
+    let out = doc(JustificationOptions::default());
+    assert!(out.svg.contains("<textPath") && out.warnings.is_empty(), "{:?}", out.warnings);
+    for j in [
+        JustificationOptions { word_spacing: [0.0, 200.0, 300.0], ..JustificationOptions::default() },
+        JustificationOptions { letter_spacing: [0.0, 50.0, 50.0], ..JustificationOptions::default() },
+        JustificationOptions { glyph_scaling: [50.0, 150.0, 200.0], ..JustificationOptions::default() },
+    ] {
+        let out = doc(j);
+        assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Justification")), "{:?}", out.warnings);
+    }
+}
+
 /// Justified and Mojikumi lines whose characters a reader draws where the layout does are written
 /// as before: a segment per style run, and per word on a justified line.
 #[test]
@@ -551,6 +759,18 @@ fn ragged_lines_keep_their_character_spacing() {
         }
         runs.push(run("end", style(12.0)));
         assert_drawn_in_place(&area_doc(runs, 280.0, justify));
+    }
+}
+
+/// Tracking and manual kerning in type scaled uniformly, which no `textLength` stretches, take the
+/// scale in a viewer as they do on the canvas.
+#[test]
+fn spacing_in_uniformly_scaled_type_takes_the_scale() {
+    for st in [
+        CharStyle { h_scale: 200.0, v_scale: 200.0, tracking: 100.0, ..style(12.0) },
+        CharStyle { h_scale: 150.0, v_scale: 150.0, kerning: Some(80.0), ..style(12.0) },
+    ] {
+        assert_drawn_in_place(&area_doc(vec![run("tracked wide", st)], 280.0, Justify::Left));
     }
 }
 
@@ -646,7 +866,7 @@ fn viewer_outlines(svg: &str) -> Vec<BezPath> {
                     let m = Affine::new([m.sx as f64, m.ky as f64, m.kx as f64, m.sy as f64, m.tx as f64, m.ty as f64]);
                     let mut bp = BezPath::new();
                     for s in p.data().segments() {
-                        use usvg::tiny_skia_path::PathSegment as S;
+                        use craft_svg::tree::usvg::tiny_skia_path::PathSegment as S;
                         let pt = |q: usvg::tiny_skia_path::Point| m * Point::new(q.x as f64, q.y as f64);
                         match s {
                             S::MoveTo(a) => bp.move_to(pt(a)),
@@ -733,5 +953,97 @@ fn paragraphs_aligned_differently_keep_their_alignment() {
         let js: Vec<Justify> = text.paragraph_styles().iter().map(|p| p.justify).collect();
         assert_eq!(js, [Justify::Left, Justify::Center, Justify::Right], "{svg}");
         assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.01);
+    }
+}
+
+/// With Kurikaeshi Moji Shori on, live type writes a repeat mark that starts a line as the
+/// character it is drawn as and places the text after it anew, with and without embedded fonts; a
+/// mark inside a line stays.
+#[test]
+fn a_repeat_mark_at_a_line_start_is_written_as_the_character_it_draws() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), ..style(12.0) };
+    for on in [false, true] {
+        let mut t = TextObject::point(Point::new(20.0, 40.0), "龘\u{2028}々龘龘々", st.clone());
+        t.para.kurikaeshi_moji_shori = on;
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        for embed_fonts in [false, true] {
+            let svg = export(&d, &ExportOptions { embed_fonts, ..Default::default() });
+            if !on {
+                assert!(svg.contains(">々龘龘々<"), "{svg}");
+                continue;
+            }
+            // The drawn character takes the mark's width on the canvas, so the text after it is
+            // placed where the canvas draws it.
+            let rest = svg.find(">龘龘々<").unwrap_or_else(|| panic!("{svg}"));
+            let tag = &svg[svg[..rest].rfind('<').unwrap_or(0)..rest];
+            assert!(tag.contains(" x=\""), "{tag}: {svg}");
+            assert_eq!(svg.matches('々').count(), 1, "only the mark inside the line stays: {svg}");
+        }
+    }
+}
+
+/// Kurikaeshi Moji Shori in horizontally scaled type: the character a repeat mark is drawn as is
+/// stretched (`textLength`) to the width the canvas draws that character at, not to the mark's
+/// advance, so a reader does not distort it when the two characters' widths differ.
+#[test]
+fn a_drawn_repeat_mark_in_scaled_type_keeps_the_width_of_its_character() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    // The test font draws 龘 and 々 with glyphs of different widths.
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), h_scale: 50.0, ..style(12.0) };
+    let mut t = TextObject::point(Point::new(20.0, 40.0), "龘\u{2028}々", st);
+    t.para.kurikaeshi_moji_shori = true;
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let svg = export(&d, &ExportOptions::default());
+    // The textLength of each `<tspan>` that holds 龘 alone: the one on the first line and the one
+    // the mark is drawn as on the second.
+    let lengths: Vec<&str> = svg
+        .match_indices(">龘<")
+        .map(|(at, _)| {
+            let tag = &svg[svg[..at].rfind('<').unwrap_or(0)..at];
+            let from = tag.find("textLength=\"").unwrap_or_else(|| panic!("{tag}: {svg}")) + "textLength=\"".len();
+            &tag[from..from + tag[from..].find('"').unwrap_or(0)]
+        })
+        .collect();
+    assert_eq!(lengths.len(), 2, "{svg}");
+    assert_eq!(lengths[0], lengths[1], "{svg}");
+}
+
+/// Kurikaeshi Moji Shori: a `<textPath>` cannot draw a character in another character's width, so
+/// type on a path whose threaded frame starts with a repeat mark drawn as the character it repeats
+/// is outlined, with a warning; with the setting off it stays live text.
+#[test]
+fn a_repeat_mark_starting_a_frame_on_a_path_is_outlined() {
+    use vectorcraft_text::test_fonts::{RARE_REPEAT_MARK_FAMILY, rare_repeat_mark_font};
+    vectorcraft_text::FontDb::global().add_font(rare_repeat_mark_font().unwrap());
+    let st = CharStyle { font_family: RARE_REPEAT_MARK_FAMILY.into(), ..style(12.0) };
+    let mut line = BezPath::new();
+    line.move_to((20.0, 40.0));
+    line.line_to((280.0, 40.0));
+    for on in [false, true] {
+        let mut t = TextObject::point(Point::ZERO, "々龘々", st.clone());
+        t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+        t.para.kurikaeshi_moji_shori = on;
+        t.first_para_continues = true;
+        t.first_para_lead = Some('龘');
+        let mut d = Document::new(300.0, 200.0);
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+        let warned = out.warnings.iter().any(|w| w.contains("repeat mark"));
+        if on {
+            assert!(!out.svg.contains("<textPath") && warned, "{:?}: {}", out.warnings, out.svg);
+        } else {
+            assert!(out.svg.contains(">々龘々<") && !warned, "{:?}: {}", out.warnings, out.svg);
+        }
     }
 }

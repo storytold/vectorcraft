@@ -4,7 +4,7 @@
 
 use std::cmp::Ordering;
 
-use unicode_general_category::{GeneralCategory as G, get_general_category};
+use unicode_properties::{GeneralCategory as G, UnicodeGeneralCategory};
 
 /// A line terminator: LF, CR, U+2028 or U+2029 (section 7.3).
 pub fn is_line_terminator(c: u32) -> bool {
@@ -20,7 +20,7 @@ pub fn is_whitespace(c: u32) -> bool {
 /// A character an identifier may start with: a Unicode `ID_Start` character, `$` or `_`
 /// (the Names and Keywords clause of current ECMA-262 editions). `ID_Start` is the letters (categories Lu, Ll, Lt, Lm, Lo and Nl)
 /// and `Other_ID_Start`, less `Pattern_Syntax` and `Pattern_White_Space` (Unicode Standard Annex
-/// #31). The categories come from Unicode 16.0. `\u` escapes are decoded before this check.
+/// #31). The categories come from Unicode 17.0. `\u` escapes are decoded before this check.
 pub fn is_id_start(c: u32) -> bool {
     match c {
         0x24 | 0x5F => true,
@@ -58,7 +58,7 @@ fn is_other_id_start(c: u32) -> bool {
     matches!(c, 0x1885 | 0x1886 | 0x2118 | 0x212E | 0x309B | 0x309C)
 }
 
-/// `Other_ID_Continue` (Unicode PropList 16.0): characters kept in `ID_Continue` though their
+/// `Other_ID_Continue` (Unicode PropList 17.0): characters kept in `ID_Continue` though their
 /// category is not a letter, mark, digit or connector.
 fn is_other_id_continue(c: u32) -> bool {
     matches!(c, 0xB7 | 0x387 | 0x1369..=0x1371 | 0x19DA | 0x200C | 0x200D | 0x30FB | 0xFF65)
@@ -110,7 +110,7 @@ fn is_pattern_syntax(c: u32) -> bool {
 
 /// The Unicode general category of a code point; `None` for a lone surrogate.
 fn category(c: u32) -> Option<G> {
-    char::from_u32(c).map(get_general_category)
+    char::from_u32(c).map(char::general_category)
 }
 
 /// The value of a hexadecimal digit.

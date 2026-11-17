@@ -137,7 +137,10 @@ fn the_result_and_the_report_agree_and_count_each_kind_of_host_call() {
                   try { vc.run('no.such', {}); } catch (e) {} var d = vc.document; var c = vc.commands; vc.log({a: 1}); vc.log('two\\nlines'); $.writeln('w');";
     let r = run(&mut s, source).unwrap();
     assert_eq!(&r, s.script_report().unwrap());
-    assert_eq!(r["hostCallCounts"], json!({"vcRun": 3, "documentReads": 1, "commandListReads": 1, "vcLog": 2, "consoleWrites": 1}));
+    assert_eq!(
+        r["hostCallCounts"],
+        json!({"vcRun": 3, "documentReads": 1, "commandListReads": 1, "vcLog": 2, "consoleWrites": 1, "fileCalls": 0, "fileExecutes": 0})
+    );
     assert_eq!(r["timingAvailable"], true);
     assert!(r["runTimeMs"].is_u64());
     let slow = r["slowestCommands"].as_array().unwrap();
@@ -168,6 +171,55 @@ fn a_stopped_run_reports_its_diagnostics_and_its_unended_line() {
     assert_eq!(report["hostCalls"], 2);
     assert_eq!(texts(&mut s, "output"), ["so far"]);
     assert_eq!(texts(&mut s, "end"), ["ended: stopped"]);
+}
+
+/// A report line counts one host call in the singular, and gives a run without a clock as "time
+/// unavailable".
+#[test]
+fn a_report_line_counts_one_host_call_in_the_singular_and_says_when_time_is_unavailable() {
+    use crate::script::console::{Entry, Slow};
+    let report = |ms: Option<u64>, host_calls: u64| Entry::Report { ms, host_calls, slowest: vec![] }.text();
+    assert_eq!(report(Some(3), 0), "3 ms, 0 host calls");
+    assert_eq!(report(Some(3), 1), "3 ms, 1 host call");
+    assert_eq!(report(Some(0), 2), "0 ms, 2 host calls");
+    assert_eq!(report(None, 0), "time unavailable, 0 host calls");
+    assert_eq!(report(None, 1), "time unavailable, 1 host call");
+    assert_eq!(report(None, 2), "time unavailable, 2 host calls");
+    let slowest = vec![Slow { id: "a.b".into(), calls: 1, total_ms: 4, max_ms: 4 }];
+    assert_eq!(Entry::Report { ms: None, host_calls: 1, slowest }.text(), "time unavailable, 1 host call; slowest: a.b ×1 4 ms");
+}
+
+/// A run whose job is gone still ends its console entry, once, with its own number and name and no
+/// report line: as stopped when it is abandoned, as an internal fault when a slice finds it gone.
+/// The session can start the next run.
+#[test]
+fn a_run_whose_job_is_gone_still_ends_its_console_entry() {
+    for abandon in [true, false] {
+        let mut s = Session::new();
+        s.script_frames = true;
+        run(&mut s, "$.writeln('one'); while (true) {}").unwrap();
+        assert!(s.script_pump().is_none());
+        assert!(script::forget_job(&s));
+        if abandon {
+            assert!(s.script_abandon());
+        } else {
+            let e = s.script_pump().unwrap().unwrap_err();
+            assert_eq!(e.to_string(), "the script's run is no longer available");
+        }
+        assert!(!s.script_running());
+        let all = lines(&mut s);
+        let kinds: Vec<&str> = all.iter().map(|(_, k, _)| k.as_str()).collect();
+        assert_eq!(kinds, ["start", "output", "end"], "{all:?}");
+        assert_eq!(all[2].2, if abandon { "ended: stopped" } else { "ended: internal" });
+        let c = s.execute("script.console", &json!({})).unwrap();
+        assert_eq!((c["lines"][2]["run"].as_u64(), c["lines"][2]["name"].as_str()), (Some(1), Some("t.js")));
+        assert!(!s.script_abandon() && s.script_pump().is_none(), "nothing is left to end");
+        assert_eq!(lines(&mut s).len(), 3, "the entry ends once");
+        s.script_frames = false;
+        run(&mut s, "$.writeln('two')").unwrap();
+        assert_eq!(texts(&mut s, "end").last().map(String::as_str), Some("ended: finished"), "the next run starts");
+        assert_eq!(lines(&mut s).last().map(|l| l.0), Some(2));
+    }
 }
 
 #[test]
@@ -212,4 +264,32 @@ fn the_slowest_commands_are_the_longest_in_all_then_by_id() {
     let ids: Vec<&str> = slow.iter().map(|c| c.id.as_str()).collect();
     assert_eq!(ids, ["b.two", "a.one", "c.three", "f", "e"]);
     assert_eq!((slow[0].calls, slow[0].total_ms, slow[0].max_ms), (3, 9, 4));
+}
+
+/// Under automation read roots, the error lines of a failed run name the included file it stopped
+/// in by its file name also when the console cut a line inside the file's path.
+#[test]
+fn a_cut_error_line_leaves_out_an_included_files_folder_outside_the_read_root() {
+    use crate::file_access::{AutomationRoots, confine};
+    let base = crate::tests_links::Folder::new("script-report-cut-line");
+    let inside = base.0.join("in");
+    std::fs::create_dir_all(&inside).unwrap();
+    // A path longer than a console line, as the report of a failed run names it.
+    let file = base.0.join("out").join("d".repeat(MAX_LINE_BYTES)).join("bad.jsxinc").to_string_lossy().to_string();
+    let mut report = json!({"ok": false, "name": "t.js", "file": file, "line": 2, "column": 7, "message": format!("Error: stopped\nin {file}")});
+    let error = script::error_lines(&report);
+    assert!(error.len() == 2 && error.iter().all(|l| l.len() <= MAX_LINE_BYTES && l.ends_with(CUT_MARK)), "both lines are cut: {error:?}");
+    let written: Vec<String> = std::iter::once("written by the script".to_string()).chain(error).collect();
+    report["console"] = json!({"lines": written, "droppedLines": 0, "truncatedLines": 2});
+    let mut s = Session::new();
+    s.script_report = Some(report.clone());
+
+    let roots = AutomationRoots::new(&[&inside], &[]).unwrap();
+    let shown = confine(roots.as_ref(), || s.shown_script_report()).unwrap();
+    assert_eq!((&shown["file"], &shown["message"]), (&json!("bad.jsxinc"), &json!("Error: stopped\nin bad.jsxinc")), "{shown}");
+    assert_eq!(shown["console"]["lines"], json!(["written by the script", "t.js: bad.jsxinc:2:7: Error: stopped", "in bad.jsxinc"]), "{shown}");
+    let outside = json!(base.0.join("out").to_string_lossy()).to_string();
+    assert!(!shown.to_string().contains(outside.trim_matches('"')), "no path outside the root: {shown}");
+    // The person sees the report as it is.
+    assert_eq!(s.shown_script_report(), Some(report));
 }

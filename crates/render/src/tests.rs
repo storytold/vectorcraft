@@ -5,6 +5,7 @@ use vectorcraft_geom::shapes;
 
 mod adjust;
 mod alternate;
+mod arearesize;
 mod bitmapglyphs;
 mod blend;
 mod changed;
@@ -14,6 +15,7 @@ mod cmykblend;
 mod colorize;
 mod colrglyphs;
 mod container;
+mod curvedstrokeedges;
 mod dither;
 pub(super) mod fontchange;
 mod freeform;
@@ -24,8 +26,10 @@ mod knockout;
 mod layeropts;
 mod longstroke;
 mod memory;
+mod meshwarp;
 mod movedstroke;
 mod objectfx;
+mod paintedbrush;
 mod placed_document;
 mod rasterize;
 mod setup;
@@ -423,6 +427,29 @@ fn an_instance_is_culled_by_the_art_nested_9_slice_guides_move() {
     d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Holder".into(), xf })).unwrap();
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
     assert_eq!(img.pixel(95, 50), [255, 0, 0, 255]);
+}
+
+#[test]
+fn an_instance_that_only_moves_is_culled_by_the_art_its_9_slice_guides_move() {
+    // A symbol made in the app: art in the 20 × 20 square, a natural size of 2 × 2, and guides a
+    // quarter in. An instance that only moves draws it at 20 × 20, ten times its natural size. The
+    // bar from x −9.9 to 0.1 crosses the left guide and is placed by the middle column's map,
+    // x → 1.9x: moved 115 pt right, it draws from x 96.19 to 115.19 while its art box starts at
+    // x 105, out of view.
+    let mut d = Document::new(100.0, 100.0);
+    let bar = rect_node(&mut d, Rect::new(-9.9, -1.0, 0.1, 1.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Bar".into(), art: Arc::new(bar) });
+    let frame = rect_node(&mut d, Rect::new(-10.0, -10.0, 10.0, 10.0), Paint::None, Paint::None, 0.0);
+    let inner = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Bar".into(), xf: Affine::IDENTITY });
+    let art = Node::group(d.alloc_id(), vec![Arc::new(frame), Arc::new(inner)]);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(art) });
+    d.unknown.insert(vectorcraft_doc::SYMBOL_SIZES.into(), serde_json::json!({ "Panel": [2.0, 2.0] }));
+    d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+    let (id, l) = (d.alloc_id(), d.layers[0].id);
+    let xf = Affine::translate((115.0, 50.0));
+    d.insert(Some(l), 0, Node::new(id, NodeKind::SymbolInstance { symbol: "Panel".into(), xf })).unwrap();
+    let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default());
+    assert_eq!(img.pixel(98, 50), [255, 0, 0, 255]);
 }
 
 #[test]
@@ -1236,6 +1263,45 @@ fn undecodable_image_in_nested_opacity_mask_leaves_out_outer_object() {
     assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "the incomplete inner mask invalidates the outer mask");
 }
 
+/// The drop shadows of a blend's steps draw under an opacity mask with Clip off, where the mask
+/// art leaves them uncovered, as they draw without the mask; with Clip on they are hidden.
+#[test]
+fn blend_step_shadows_draw_under_an_unclipped_opacity_mask() {
+    use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+    use vectorcraft_doc::{NodeKind, OpacityMask};
+
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 15, "y": 15, "blur": 0}), visible: true };
+    let blend = |d: &mut Document, mask: Option<bool>| {
+        let end = |d: &mut Document, x: f64| {
+            let mut n = rect_node(d, Rect::new(x, 10.0, x + 10.0, 20.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+            n.appearance.effects.push(shadow.clone());
+            Arc::new(n)
+        };
+        let ends = vec![end(d, 10.0), end(d, 70.0)];
+        let spec = BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Blend { children: ends, spec: Box::new(spec) });
+        if let Some(clip) = mask {
+            let white = rect_node(d, Rect::new(0.0, 0.0, 5.0, 5.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+            n.extras_mut().mask = Some(Box::new(OpacityMask::new(white, clip)));
+        }
+        n
+    };
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let draw = |mask: Option<bool>| {
+        let mut d = Document::new(120.0, 60.0);
+        let n = blend(&mut d, mask);
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        Renderer::new().render(&d, 120, 60, Affine::IDENTITY, &opts)
+    };
+    let (plain, unclipped, clipped) = (draw(None), draw(Some(false)), draw(Some(true)));
+    for (x, y) in [(30, 30), (90, 32)] {
+        assert!(plain.pixel(x, y)[0] < 128, "the shadow draws at ({x}, {y}) without a mask: {:?}", plain.pixel(x, y));
+        assert_eq!(unclipped.pixel(x, y), plain.pixel(x, y), "the shadow draws at ({x}, {y}) under the unclipped mask");
+        assert_eq!(clipped.pixel(x, y), [255, 255, 255, 255], "the clipped mask hides the shadow at ({x}, {y})");
+    }
+    assert_eq!(unclipped.pixel(15, 15), plain.pixel(15, 15), "the first end draws under the unclipped mask");
+}
+
 /// #3580: each opacity mask is rendered over its object's pixels, not over the whole frame. 300
 /// masked 4 × 4 pt squares on a 1000 × 1000 page draw offscreen in proportion to their bounds, and
 /// still draw where their masks show them.
@@ -1621,16 +1687,18 @@ fn tiff_header(w: u32, h: u32) -> Vec<u8> {
 #[test]
 fn an_image_too_large_as_rgba_is_not_decoded() {
     let over = paint::decode_within_allowance(&png_header(23_171, 23_170));
-    assert!(matches!(over, Err(image::ImageError::Limits(_))), "{over:?}");
+    assert!(matches!(over, Err(paint::DecodeError::Limit(_))), "{over:?}");
+    assert!(over.unwrap_err().to_string().starts_with("the image is too large to decode: "));
     let failed = decode_failures();
     assert!(paint::decode_pixmap(&png_header(23_171, 23_170)).is_none());
     assert!(decode_failures() > failed);
     // Within the allowance: decoded, and its missing rows can't be read.
     let within = paint::decode_within_allowance(&png_header(23_170, 23_170));
-    assert!(matches!(within, Err(image::ImageError::Decoding(_))), "{within:?}");
+    assert!(matches!(within, Err(paint::DecodeError::Unreadable(_))), "{within:?}");
+    assert!(within.unwrap_err().to_string().starts_with("the image's pixels can't be read: "));
     // A header whose size as RGBA does not fit in 64 bits gets the same limit error.
     let huge = paint::decode_within_allowance(&tiff_header(1 << 31, 1 << 31));
-    assert!(matches!(huge, Err(image::ImageError::Limits(_))), "{huge:?}");
+    assert!(matches!(huge, Err(paint::DecodeError::Limit(_))), "{huge:?}");
 }
 
 /// A PNG of `w` × `h` noisy pixels cut off halfway through its bytes: its header reads, and its
@@ -1818,14 +1886,14 @@ fn a_png_past_the_allowance_draws_at_reduced_size() {
     assert_eq!((pm.width(), pm.height(), [c.r, c.g, c.b, c.a]), (300, 300, [200, 40, 40, 255]));
     // A row is read only while the reader's buffers fit the allowance, counting the stream buffer
     // three times for the moment it grows. Below 4,096 columns of 16-bit RGBA they take 516,103
-    // bytes and 60 a column: 1,398 columns take 599,983 bytes, within 600,000, and 1,399 columns
-    // take 600,043 and are not decoded (their samples, 8 bytes a pixel, are past it too).
+    // bytes plus 64 bytes a column: 1,310 columns take 599,943 bytes, within 600,000, and 1,311
+    // columns take 600,007 and are not decoded (their samples, 8 bytes a pixel, are past it too).
     let wide = |w: u32| {
         let img = image::ImageBuffer::<image::Rgba<u16>, _>::from_pixel(w, 60, image::Rgba([51400, 10280, 10280, 65535]));
         encoded(image::DynamicImage::ImageRgba16(img), image::ImageFormat::Png)
     };
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1398))), Some((1398, 60)));
-    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1399))), None);
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1310))), Some((1310, 60)));
+    assert_eq!(with_allowance(600_000, || paint::reduced_size(&wide(1311))), None);
     // An image of more pixels than the allowance has bytes is not read: 1,000 × 400 8-bit gray
     // pixels are drawn at 500 × 200 within 400,000 bytes, and 1,000 × 401 are not.
     let gray = |h: u32| encoded(image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(1000, h, image::Luma([90]))), image::ImageFormat::Png);
@@ -1873,13 +1941,13 @@ fn a_reduced_decode_counts_what_reading_takes_beside_the_images_paints_hold() {
     // Decoded whole: 14,400 bytes of RGB and a 16-row band of 8,960 bytes, beside a 73 × 54 result
     // of 15,768 bytes.
     let jpeg = encoded(image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(80, 60, image::Rgb([30, 120, 200]))), image::ImageFormat::Jpeg);
-    // Read a row at a time: 540,103 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
+    // Read a row at a time: 541,703 bytes in the reader's buffers for 400 columns of 16-bit RGBA,
     // beside a 387 × 387 result of 599,076 bytes.
     let png = encoded(
         image::DynamicImage::ImageRgba16(image::ImageBuffer::from_pixel(400, 400, image::Rgba([51400, 10280, 10280, 65535]))),
         image::ImageFormat::Png,
     );
-    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 540_103, (387, 387))] {
+    for (bytes, allowance, room, size) in [(&jpeg, 16_000, 15_768 + 14_400 + 8_960, (73, 54)), (&png, 600_000, 599_076 + 541_703, (387, 387))] {
         let failed = decode_failures();
         let none = with_allowance(allowance, || with_room(room - 1, || paint::decode_pixmap_or_why(bytes)));
         assert_eq!(none.err(), Some(paint::Undecoded::NoRoom), "not decoded with a byte too few, and tried again later");

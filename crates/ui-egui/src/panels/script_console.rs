@@ -39,10 +39,13 @@ pub(crate) fn shown(line: &ConsoleLine) -> String {
         Entry::Output(t) | Entry::Log(t) | Entry::Error(t) => t.clone(),
         Entry::End(e) => format!("■ {}", ending_label(*e)),
         Entry::Report { ms, host_calls, slowest } => {
-            let ms = ms.map_or_else(|| "?".to_string(), |ms| ms.to_string());
-            let mut s = crate::i18n::fmt(tl!("{ms} ms, {calls} host calls"), &[("ms", &ms), ("calls", &host_calls.to_string())]);
-            for c in slowest {
-                s.push_str(&format!("; {} ×{} {} ms", c.id, c.calls, c.total_ms));
+            let time = ms.map_or_else(|| tl!("time unavailable").to_string(), millis);
+            let calls = crate::i18n::tn(*host_calls, "{n} host call", "{n} host calls");
+            let mut s = crate::i18n::fmt(tl!("{time}, {calls}"), &[("time", &time), ("calls", &calls)]);
+            if !slowest.is_empty() {
+                let list: Vec<String> = slowest.iter().map(|c| format!("{} ×{} {}", c.id, c.calls, millis(c.total_ms))).collect();
+                s.push_str("; ");
+                s.push_str(&crate::i18n::fmt(tl!("slowest: {commands}"), &[("commands", &list.join(", "))]));
             }
             s
         }
@@ -50,13 +53,17 @@ pub(crate) fn shown(line: &ConsoleLine) -> String {
     format!("#{} {}: {}", line.run, line.name, text)
 }
 
+/// A time in milliseconds, in the UI language.
+fn millis(ms: u64) -> String {
+    crate::i18n::fmt(tl!("{ms} ms"), &[("ms", &ms.to_string())])
+}
+
 /// The notice of the lines the console dropped and cut, or `None` when it has done neither.
 fn notice(c: &Console) -> Option<String> {
     (c.dropped_lines() > 0 || c.truncated_lines() > 0).then(|| {
-        crate::i18n::fmt(
-            tl!("{dropped} earlier lines dropped, {cut} lines cut"),
-            &[("dropped", &c.dropped_lines().to_string()), ("cut", &c.truncated_lines().to_string())],
-        )
+        let dropped = crate::i18n::tn(c.dropped_lines(), "{n} earlier line dropped", "{n} earlier lines dropped");
+        let cut = crate::i18n::tn(c.truncated_lines(), "{n} line cut", "{n} lines cut");
+        crate::i18n::fmt(tl!("{dropped}, {cut}"), &[("dropped", &dropped), ("cut", &cut)])
     })
 }
 

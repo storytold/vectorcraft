@@ -113,7 +113,41 @@ fn pdfx_1a_files_have_no_rgb() {
     let png = {
         let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([10, 200, 30, 255]));
         let mut out = std::io::Cursor::new(vec![]);
-        img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+        {
+            let __dyn: image::DynamicImage = img.into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| out.get_mut().extend_from_slice(&__b))
+        }
+        .unwrap();
         out.into_inner()
     };
     d.images.insert("img".into(), ImageBlob::new("image/png", png));
@@ -223,4 +257,24 @@ fn verify_finds_what_each_standard_forbids() {
     let font = "<</Type/FontDescriptor/FontName/A>>";
     assert!(matches!(verify(&file(font), Standard::PdfX4), Err(PdfError::Unsupported(m)) if m.contains("fonts")));
     assert!(verify(&file("<</Type/FontDescriptor/FontFile2 4 0 R>>"), Standard::PdfX4).is_ok());
+}
+
+/// Names inside a string or a comment are text, not syntax: a file identifier, whose base64 hash
+/// can hold `/BM` or `/Lab`, does not make a file break its standard.
+#[test]
+fn verify_skips_names_in_strings_and_comments() {
+    use crate::pdfx::verify;
+    let file = |body: &str| format!("%PDF-1.3\n%/BM/Multiply\n1 0 obj\n{body}\nendobj\n").into_bytes();
+    for ok in [
+        "<</Size 2/ID[(q/BM+Zt1kR0x/Lab=) (q/BM+Zt1kR0x/Lab=)]>>",
+        "<</Title(a\\)/SMask 5 0 R)/Subject(a(b)/ca 0.5)>>",
+        "<</Title(stream\n/BM/Multiply\nendstream)>>",
+    ] {
+        for standard in [Standard::PdfX1a, Standard::PdfX3] {
+            assert!(verify(&file(ok), standard).is_ok(), "{standard:?}: {ok}");
+        }
+    }
+    // A name after a string is still read.
+    let after = "<</Title(a(b)c)/BM/Multiply>>";
+    assert!(matches!(verify(&file(after), Standard::PdfX3), Err(PdfError::Unsupported(m)) if m.contains("blend modes")));
 }

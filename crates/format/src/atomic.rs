@@ -18,6 +18,25 @@ use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Whether the returned write error refuses this location. Recovery errors must still be shown:
+/// their message names copies the user may need, even when their kind is PermissionDenied.
+pub fn read_only_location(error: &io::Error) -> bool {
+    matches!(error.kind(), io::ErrorKind::ReadOnlyFilesystem | io::ErrorKind::PermissionDenied)
+        && !error.get_ref().is_some_and(|e| e.is::<RecoveryError>())
+}
+
+/// Marks the existing recovery message without changing its text or the returned error kind.
+#[derive(Debug)]
+struct RecoveryError(String);
+
+impl std::fmt::Display for RecoveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for RecoveryError {}
+
 /// Write `bytes` to `path` atomically (see the module docs).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_atomic_with(path, |f| f.write_all(bytes))
@@ -102,7 +121,7 @@ fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
         let _ = std::fs::remove_file(old);
         let why =
             format!("{refused}, and the file can't be copied aside before it is overwritten ({e}); the new content is kept in {}", tmp.display());
-        return Err(io::Error::new(refused.kind(), why));
+        return Err(io::Error::new(refused.kind(), RecoveryError(why)));
     }
     let copied = to.set_len(0).and_then(|()| io::copy(&mut from, &mut to)).and_then(|_| sync_file(&to));
     drop((from, to));
@@ -115,10 +134,11 @@ fn write_over(tmp: &Path, target: &Path, refused: io::Error) -> io::Result<()> {
             }
             Ok(())
         }
-        (Err(e), Some(old)) => {
-            Err(io::Error::new(e.kind(), format!("{e} (the new content is kept in {}, the file as it was in {})", tmp.display(), old.display())))
-        }
-        (Err(e), None) => Err(io::Error::new(e.kind(), format!("{e} (the new content is kept in {})", tmp.display()))),
+        (Err(e), Some(old)) => Err(io::Error::new(
+            e.kind(),
+            RecoveryError(format!("{e} (the new content is kept in {}, the file as it was in {})", tmp.display(), old.display())),
+        )),
+        (Err(e), None) => Err(io::Error::new(e.kind(), RecoveryError(format!("{e} (the new content is kept in {})", tmp.display())))),
     }
 }
 
@@ -317,6 +337,24 @@ fn keep_permissions(_: &Path, _: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn readonly_classification_uses_the_terminal_kind_and_excludes_recovery() {
+        for (kind, expected) in [
+            (io::ErrorKind::PermissionDenied, true),
+            (io::ErrorKind::ReadOnlyFilesystem, true),
+            (io::ErrorKind::StorageFull, false),
+            (io::ErrorKind::QuotaExceeded, false),
+            (io::ErrorKind::NotFound, false),
+            (io::ErrorKind::Other, false),
+        ] {
+            assert_eq!(read_only_location(&io::Error::new(kind, "injected")), expected, "{kind:?}");
+            let recovery = io::Error::new(kind, RecoveryError("the new content is kept in a.tmp".into()));
+            assert!(!read_only_location(&recovery), "recovery: {kind:?}");
+            assert_eq!(recovery.kind(), kind);
+            assert_eq!(recovery.to_string(), "the new content is kept in a.tmp");
+        }
+    }
 
     fn dir(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("vc-atomic-{name}-{}", std::process::id()));

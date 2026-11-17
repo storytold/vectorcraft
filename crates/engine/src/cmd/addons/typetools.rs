@@ -21,7 +21,7 @@ use super::super::menucmds::whole_or;
 use super::super::object::choice;
 use super::super::textedit::{CharChange, text_mut, text_ref, type_ranges};
 use super::super::typecmd::refresh_bounds;
-use super::super::typemenu::text_ids;
+use super::super::typemenu::{bake_dynamic_text, text_ids};
 use super::super::{CommandSpec, bad, cmd, has_selection, number_or, switch_or, targets};
 use crate::{EngineError, Result, Session};
 
@@ -61,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Release Type on a Path…",
             ["Object", "Plug-ins", "Type Tools"],
             None,
-            "{mode?: \"both\" (point type and the path) | \"path\" (the path only) | \"text\" (point type only) (\"both\"), keepOriginal?: false (true: the type on a path stays and the released objects go just above it), ids?: [id…], id? (instead of ids; neither: the selection)} split each type on a path among the objects (inside groups too) into point type and the path it was set on. The point type holds the same text with the same character and paragraph attributes, on one straight line whose baseline starts where the first character sat on the path; Type on a Path Options (effect, align to path, spacing, flip, brackets) don't apply to point type and are dropped. The path keeps its exact shape (open or closed, anchors and handles, the object's transform) and comes out with no fill and no stroke, in the type's layer and place in the stacking order. Other objects are left alone, and with no type on a path among them nothing changes and no undo step is made. One undo step; the released objects are selected → {ids (released, bottom to top), paths, texts}",
+            "{mode?: \"both\" (point type and the path) | \"path\" (the path only) | \"text\" (point type only) (\"both\"), keepOriginal?: false (true: the type on a path stays and the released objects go just above it), ids?: [id…], id? (instead of ids; neither: the selection)} split each type on a path among the objects (inside groups too) into point type and the path it was set on. The point type holds the same text with the same character and paragraph attributes, on one straight line whose baseline starts where the first character sat on the path (when the type starts before an open path's start, the first character drawn on the path stays where it was drawn and the characters that were not drawn come before it); Type on a Path Options (effect, align to path, spacing, flip, brackets) don't apply to point type and are dropped; type with Dynamic Text on (type.dynamicText) comes out with it off, at the sizes it was drawn at. The path keeps its exact shape (open or closed, anchors and handles, the object's transform) and comes out with no fill and no stroke, in the type's layer and place in the stacking order. Other objects are left alone, and with no type on a path among them nothing changes and no undo step is made. One undo step; the released objects are selected → {ids (released, bottom to top), paths, texts}",
             has_selection,
             release_path
         ),
@@ -139,7 +139,8 @@ fn text_tweaker(s: &mut Session, p: &Value) -> Result<Value> {
         let mut run = 0;
         for (i, at) in chars.into_iter().enumerate() {
             let random = if shape == "random" { unit(&mut rng) } else { 0.0 };
-            let value = from + (to - from) * amount(shape, i, n, random);
+            // Rounding can carry a value a hair past the range's ends.
+            let value = (from + (to - from) * amount(shape, i, n, random)).clamp(lo, hi);
             let mut change = CharChange::parse(&json!({ key: value }), C, &setup)?;
             change.localize(&t, C)?;
             while ends.get(run).is_some_and(|&e| e <= at) {
@@ -228,31 +229,58 @@ fn first_pen(lay: &vectorcraft_text::TextLayout) -> Option<Point> {
     lay.glyphs.iter().filter(|g| g.origin.x.is_finite() && g.origin.y.is_finite()).min_by_key(|g| (g.byte, g.len != 0)).map(|g| g.origin)
 }
 
+/// A glyph of a character: its byte, whether it stands for characters (a list marker does not),
+/// and its place among the glyphs of that byte and kind (an All Caps ß is two glyphs).
+type GlyphKey = (usize, bool, usize);
+
+/// The key and pen position of the first glyph drawn in `lay`, in text order: characters before an
+/// open path's start are not drawn ([`vectorcraft_text::PositionedGlyph::off_path`]). None without
+/// a drawn glyph.
+fn first_drawn_pen(lay: &vectorcraft_text::TextLayout) -> Option<(GlyphKey, Point)> {
+    let (gi, g) = (lay.glyphs.iter().enumerate())
+        .filter(|(_, g)| !g.off_path && g.origin.x.is_finite() && g.origin.y.is_finite())
+        .min_by_key(|(gi, g)| (g.byte, g.len != 0, *gi))?;
+    let kind = g.len != 0;
+    let nth = lay.glyphs.iter().take(gi).filter(|h| h.byte == g.byte && (h.len != 0) == kind).count();
+    Some(((g.byte, kind, nth), g.origin))
+}
+
+/// The pen position of the glyph `key` names in `lay`. None without one.
+fn pen_at(lay: &vectorcraft_text::TextLayout, (byte, kind, nth): GlyphKey) -> Option<Point> {
+    let g = lay.glyphs.iter().filter(|g| g.byte == byte && (g.len != 0) == kind).nth(nth)?;
+    (g.origin.x.is_finite() && g.origin.y.is_finite()).then_some(g.origin)
+}
+
 /// `t`, type on a path, as point type on one straight line: the same runs and character and
 /// paragraph attributes, its baseline starting where its first character sat on the path (in the
-/// object's own text space, so its transform stays). Type on a Path Options are dropped. None for
-/// other type, or when it can't be placed.
+/// object's own text space, so its transform stays). Type on a Path Options are dropped, and
+/// Dynamic Text is turned off at the sizes it draws the text at. None for other type, or when it
+/// can't be placed.
 fn released_text(t: &TextObject) -> Option<TextObject> {
     let TextKind::OnPath { path, .. } = &t.kind else { return None };
     let db = vectorcraft_text::FontDb::global();
-    // Where the first character sat. Text that didn't fit on the path has no glyph there: it
-    // starts at the start bracket.
-    let at = first_pen(&vectorcraft_text::layout(db, t)).or_else(|| {
+    // Where the first drawn character sat; characters before an open path's start come before it
+    // on the line. Text that didn't fit on the path has no glyph there: it starts at the start
+    // bracket.
+    let (key, at) = first_drawn_pen(&vectorcraft_text::layout(db, t)).map(|(b, p)| (Some(b), p)).or_else(|| {
         let ap = ArcPath::new(path);
         let (from, _) = t.kind.path_span()?;
         let (p, _) = ap.at(from * ap.len());
-        (p.x.is_finite() && p.y.is_finite()).then_some(p)
+        (p.x.is_finite() && p.y.is_finite()).then_some((None, p))
     })?;
     let mut out = t.clone();
+    // Point type has no brackets to fit: it keeps the sizes the path drew it at.
+    bake_dynamic_text(&mut out);
     out.kind = TextKind::Point;
     out.path_effect = Default::default();
     out.path_align = Default::default();
     out.path_spacing = 0.0;
     // Point type is in no thread: its first paragraph starts in it.
     out.first_para_continues = false;
-    // Where the point type puts its own first character; the origin moves so it lands at `at`,
-    // whatever the paragraph's alignment and direction.
-    let own = first_pen(&vectorcraft_text::layout(db, &out)).unwrap_or(Point::ZERO);
+    // Where the point type puts that glyph; the origin moves so it lands at `at`, whatever the
+    // paragraph's alignment and direction.
+    let own_lay = vectorcraft_text::layout(db, &out);
+    let own = key.and_then(|k| pen_at(&own_lay, k)).or_else(|| first_pen(&own_lay)).unwrap_or(Point::ZERO);
     let shift = at - own;
     if !(shift.x.is_finite() && shift.y.is_finite()) {
         return None;
