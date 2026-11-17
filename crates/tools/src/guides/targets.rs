@@ -509,7 +509,7 @@ impl Targets {
     }
 
     /// A label `text` at `p`, unless Anchor/Path Labels are off.
-    fn label(&self, p: Point, text: &str) -> Option<Overlay> {
+    pub(super) fn label(&self, p: Point, text: &str) -> Option<Overlay> {
         self.style.labels.then(|| Overlay::Label { p, text: text.into(), color: self.style.color })
     }
 

@@ -26,6 +26,7 @@ mod kept_layouts;
 mod kerning_before;
 mod ligature_carets;
 mod path_joins;
+mod recently_added;
 mod ruby;
 mod scripts;
 mod shape_plans;

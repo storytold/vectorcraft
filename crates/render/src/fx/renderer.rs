@@ -1,5 +1,5 @@
 use super::bounds::{cull_bounds, effected_path_carrying, node_bezpath, rasterize_stage};
-use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, Made, Reads, Shadow, ShadowEntry};
+use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, KeptImage, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
     DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
@@ -9,6 +9,10 @@ use super::{
     Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, SymbolBoxes, Vec2,
     blend_mode, effects, fill_rule, peniko,
 };
+
+/// The cache slots of placement `k` of a path's Rasterize image ([`Renderer::draw_staged`]) start
+/// at `k << PLACEMENT_SLOT_SHIFT`, past those of its effects and of its fills and strokes.
+const PLACEMENT_SLOT_SHIFT: u32 = 20;
 
 #[cfg(test)]
 thread_local! {
@@ -367,11 +371,11 @@ impl Renderer {
 
     /// [`rasterize_stage`] of `n`, kept across frames when `owner` is `n` as held in its document
     /// (then `true` in the third place: the stage is kept, and so are its caches).
-    fn rasterize_stage_of(&mut self, f: &Frame, n: &Node, owner: Option<Arc<Node>>) -> Option<(Arc<Node>, Affine, bool)> {
+    fn rasterize_stage_of(&mut self, f: &Frame, n: &Node, owner: Option<Arc<Node>>) -> Option<(Arc<Node>, Arc<[Affine]>, bool)> {
         // Checked first: this runs for every path with effects drawn.
         effects::rasterize_stage(&n.appearance.effects)?;
         let Some(owner) = owner else {
-            return rasterize_stage(f.symbols.document(), n).map(|(stage, map)| (Arc::new(stage), map, false));
+            return rasterize_stage(f.symbols.document(), n).map(|(stage, maps)| (Arc::new(stage), maps.into(), false));
         };
         let key = Arc::as_ptr(&owner) as usize;
         let stamp = self.stamp;
@@ -379,31 +383,45 @@ impl Renderer {
             && Arc::ptr_eq(&e.0, &owner)
         {
             e.3 = stamp;
-            return Some((e.1.clone(), e.2, true));
+            return Some((e.1.clone(), e.2.clone(), true));
         }
-        let (stage, map) = rasterize_stage(f.symbols.document(), n)?;
-        let stage = Arc::new(stage);
-        self.fx_stages.insert(key, (owner, stage.clone(), map, stamp));
-        Some((stage, map, true))
+        let (stage, maps) = rasterize_stage(f.symbols.document(), n)?;
+        let (stage, maps): (Arc<Node>, Arc<[Affine]>) = (Arc::new(stage), maps.into());
+        self.fx_stages.insert(key, (owner, stage.clone(), maps.clone(), stamp));
+        Some((stage, maps, true))
     }
 
     /// Draw `stage`, the node a path's Rasterize image is made from ([`rasterize_stage`]), through
-    /// `map`, the Transform effects after that Rasterize effect: its art and its image, on the
-    /// image's own pixel grid, move with the map. A map that flattens the art leaves nothing to
-    /// draw. `bp` is the path's own path; with `kept`, `stage` is kept across frames and so are
-    /// the geometry and rasters drawn for it.
-    fn draw_staged(&mut self, ctx: &mut RenderContext, f: &Frame, (stage, map, kept): (Arc<Node>, Affine, bool), bp: &BezPath, rule: FillRule) {
-        let det = map.determinant();
-        if !(det.is_finite() && det.abs() > 1e-12) {
-            return;
+    /// each of `maps`, the Transform effects after that Rasterize effect, the lowest first: its art
+    /// and its image, on the image's own pixel grid, move with each map. A map that flattens the
+    /// art leaves nothing to draw. `bp` is the path's own path; with `kept`, `stage` is kept across
+    /// frames and so are the geometry and rasters drawn for it. With more than one map, the image
+    /// is made once for all of them ([`Kept::for_placements`]), and each placement keeps its own
+    /// rasters in its own cache slots.
+    fn draw_staged(
+        &mut self,
+        ctx: &mut RenderContext,
+        f: &Frame,
+        (stage, maps, kept): (Arc<Node>, Arc<[Affine]>, bool),
+        bp: &BezPath,
+        rule: FillRule,
+    ) {
+        let shared = (maps.len() > 1).then(|| std::rc::Rc::new(Kept::for_placements()));
+        for (k, map) in maps.iter().enumerate() {
+            let det = map.determinant();
+            if !(det.is_finite() && det.abs() > 1e-12) {
+                continue;
+            }
+            // A pixel's size in document units through the view and the map, measured as a frame
+            // measures it from its view.
+            let px = f.px / det.abs().sqrt();
+            let fr = Frame { view: f.view * *map, visible: map.inverse().transform_rect_bbox(f.visible), px, output: f.output * *map, ..*f };
+            let outer = if kept { self.fx_owner.replace(stage.clone()) } else { self.fx_owner.take() };
+            self.fx_placement = shared.as_ref().map(|s| (k << PLACEMENT_SLOT_SHIFT, s.clone()));
+            self.draw_shape_fx(ctx, &fr, &stage, bp, rule);
+            self.fx_placement = None;
+            self.fx_owner = outer;
         }
-        // A pixel's size in document units through the view and the map, measured as a frame
-        // measures it from its view.
-        let px = f.px / det.abs().sqrt();
-        let fr = Frame { view: f.view * map, visible: map.inverse().transform_rect_bbox(f.visible), px, output: f.output * map, ..*f };
-        let outer = if kept { self.fx_owner.replace(stage.clone()) } else { self.fx_owner.take() };
-        self.draw_shape_fx(ctx, &fr, &stage, bp, rule);
-        self.fx_owner = outer;
     }
 
     /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry:
@@ -435,7 +453,10 @@ impl Renderer {
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
-        let content = Content { node: n, owner: None, cache: Some(0), reach, object: reach, outline: Some((g, rule)), bounds, kept: None };
+        // One of several placements of a path's Rasterize image ([`Self::draw_staged`]).
+        let placement = self.fx_placement.take();
+        let (slot, kept) = placement.as_ref().map_or((0, None), |(slot, kept)| (*slot, Some(&**kept)));
+        let content = Content { node: n, owner: None, cache: Some(slot), reach, object: reach, outline: Some((g, rule)), bounds, kept };
         let mut items = items;
         self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
@@ -829,7 +850,11 @@ impl Renderer {
                     w.inflate(o, o)
                 });
                 let frame = last_over.then_some((f.view, f.px));
-                let kept = (split > at).then(|| Kept { window, frame, image: std::cell::RefCell::new(None) });
+                // One of several placements of a path's Rasterize image ([`Self::draw_staged`])
+                // starts from the image on its own grid that the placements share.
+                let placements = content.kept.filter(|k| k.shared);
+                let grid = placements.and_then(|k| k.image.borrow().clone().filter(|i| matches!(i, KeptImage::Grid(..))));
+                let kept = (split > at).then(|| Kept { window, frame, image: std::cell::RefCell::new(grid), shared: false });
                 let inner = Content {
                     node: content.node,
                     owner: content.owner,
@@ -854,6 +879,13 @@ impl Renderer {
                     kept: content.kept.filter(|_| split == at),
                 };
                 self.raster_fx(ctx, f, &outer, after, &mut |r, c, fr| r.raster_fx(c, fr, &inner, before, paint));
+                // The image made on its own grid is the one the other placements draw.
+                if let (Some(shared), Some(kept)) = (placements, &kept)
+                    && shared.image.borrow().is_none()
+                    && let Some(grid @ KeptImage::Grid(..)) = kept.image.borrow().clone()
+                {
+                    *shared.image.borrow_mut() = Some(grid);
+                }
                 return;
             }
         }

@@ -206,14 +206,14 @@ enum DistanceTo {
 }
 
 /// Distance Guides: with Smart Guides and Smart Guides → Invoke Distance Guides on, something
-/// selected and Alt held (`m`), the object under `p` unless it is selected, or over no object the
-/// artboard `p` is on.
+/// selected and Alt held (`m`), the object under `p` unless it or selected art inside it is under
+/// `p` ([`selected_under`]), or over no object the artboard `p` is on.
 fn distance_target(cx: &ToolContext, p: Point, m: Mods) -> Option<DistanceTo> {
     if !(cx.smart_guides && cx.distance_guides && m.alt) || cx.selection.objects.is_empty() {
         return None;
     }
-    match hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.top_object(cx.isolation)) {
-        Some(id) => (!cx.selection.contains(id)).then_some(DistanceTo::Object(id)),
+    match hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| (h.top_object(cx.isolation), h)) {
+        Some((id, h)) => selected_under(cx, &h, id).is_none().then_some(DistanceTo::Object(id)),
         None => cx.doc.artboard_at(p).map(DistanceTo::Artboard),
     }
 }
@@ -686,12 +686,16 @@ impl SelectionTool {
             return None;
         }
         let reach = cx.tol(HOVER_REACH);
-        let under = hit_test(cx.doc, p, cx.selection_hit_options()).map(|h| h.top_object(cx.isolation));
+        let hit = hit_test(cx.doc, p, cx.selection_hit_options());
+        let under = hit.as_ref().map(|h| h.top_object(cx.isolation));
         let nearest = |points: &mut dyn Iterator<Item = Point>| {
             points.filter(|q| q.distance(p) <= reach).min_by(|a, b| a.distance(p).total_cmp(&b.distance(p)))
         };
-        // A press on an unselected object selects it alone: the selected ones stay behind.
-        let selected = if under.is_none_or(|u| cx.selection.contains(u)) { &cx.selection.objects[..] } else { &[] };
+        // A press on an unselected object selects it alone: the selected ones stay behind. A press
+        // on selected art inside it keeps the selection, and that art is the object grabbed.
+        let kept = hit.as_ref().zip(under).and_then(|(h, u)| selected_under(cx, h, u));
+        let under = kept.or(under);
+        let selected = if hit.is_none() || kept.is_some() { &cx.selection.objects[..] } else { &[] };
         with_object_bounds(cx, |bounds| {
             under.into_iter().chain(selected.iter().copied()).find_map(|id| {
                 let n = cx.doc.node(id)?;
@@ -1008,10 +1012,12 @@ impl Tool for SelectionTool {
                         let (mut deselect, mut key, mut exclude) = (None, None, None);
                         if m.shift {
                             (deselect, exclude) = shift_press(cx, &h, top, &mut out);
-                        } else if !cx.selection.contains(top) {
+                        } else if let Some(picked) = selected_under(cx, &h, top) {
+                            if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
+                                key = Some(picked);
+                            }
+                        } else {
                             out.push(Action::Exec("select.set".into(), json!({ "ids": [top.0] })));
-                        } else if (cx.selection.objects.len() > 1 || !cx.selection.guides.is_empty()) && !m.cmd && !m.alt {
-                            key = Some(top);
                         }
                         // Grabbed by no anchor or centre, a press on a path's stroke or beside its
                         // edge holds the path there, and that point of it snaps (#3701).
@@ -1324,7 +1330,7 @@ impl Tool for SelectionTool {
             return Cursor::Move;
         }
         if let Some(h) = hit_test(cx.doc, p, cx.selection_hit_options()) {
-            if cx.selection.contains(h.top_object(cx.isolation)) || m.alt {
+            if selected_under(cx, &h, h.top_object(cx.isolation)).is_some() || m.alt {
                 return Cursor::Move;
             }
             return Cursor::Arrow;
@@ -1341,16 +1347,30 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
     stack.get(next).or(stack.first()).copied()
 }
 
-/// A Shift-press on `top` (hit by `h`): a Shift-click takes a selected object out of the selection
-/// when it is released, and a Shift-drag moves the selection, constrained. On an object of the
+/// The selected object a press on `h` lands on: `top` when it is selected, else the outermost
+/// object selected whole between it and the art under the pointer, such as members of a group
+/// picked with Group Selection. A press there keeps the selection and a drag moves it (#8047). A
+/// member with only some anchors or segments selected does not count: the press selects `top`.
+fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
+    if cx.selection.contains(top) {
+        return Some(top);
+    }
+    let whole = |id: NodeId| cx.selection.contains(id) && cx.selection.partial(id).is_none() && !cx.selection.segments.contains_key(&id);
+    let below = h.ancestry.iter().position(|id| *id == top).map_or(&[][..], |i| h.ancestry.get(i..).unwrap_or_default());
+    below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
+}
+
+/// A Shift-press on `top` (hit by `h`): a Shift-click takes a selected object, or the selected art
+/// inside it that the press lands on ([`selected_under`]), out of the selection when it is
+/// released, and a Shift-drag moves the selection, constrained. On an object of the
 /// Global Edit that is highlighted, the release leaves that object out of the edit instead, and a
 /// drag selects `top` when it starts. Returns the object to deselect and the object to leave out
 /// on release (with `top`); adds to `out` the action that selects `top` at once.
 fn shift_press(cx: &ToolContext, h: &Hit, top: NodeId, out: &mut Vec<Action>) -> (Option<NodeId>, Option<(NodeId, NodeId)>) {
     if let Some(member) = global_edit_member(cx, h) {
         (None, Some((member, top)))
-    } else if cx.selection.contains(top) {
-        (Some(top), None)
+    } else if let Some(picked) = selected_under(cx, h, top) {
+        (Some(picked), None)
     } else {
         out.push(Action::Exec("select.toggle".into(), json!({ "id": top.0 })));
         (None, None)
