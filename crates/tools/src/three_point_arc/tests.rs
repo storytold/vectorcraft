@@ -209,6 +209,47 @@ fn a_point_is_placed_where_the_press_is_let_go() {
     assert_eq!(t.end, Some(Point::new(380.0, 300.0)));
 }
 
+/// A release with Shift or Alt changed since the press places the point as the keys at the
+/// release keep it, even where the pointer did not move.
+#[test]
+fn a_release_places_the_point_with_the_keys_held_then() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = ThreePointArcTool::default();
+    let (none, shift) = (Mods::default(), Mods { shift: true, ..Mods::default() });
+    // The second end: pressed without Shift, let go with it.
+    click(&mut t, &cx, (300.0, 300.0));
+    t.pointer(&cx, &ev(PointerKind::Down, (380.0, 306.0), none));
+    t.pointer(&cx, &ev(PointerKind::Up, (380.0, 306.0), shift));
+    assert_eq!(t.end.map(|e| e.y), Some(300.0), "{:?}", t.end);
+    // The third point in direction mode: pressed with Shift, let go with Shift and Alt, so the
+    // direction line keeps to 45° steps from the second end.
+    t.set_option("direction", &json!(true));
+    let both = Mods { alt: true, ..shift };
+    t.pointer(&cx, &ev(PointerKind::Down, (303.0, 250.0), shift));
+    let acts = t.pointer(&cx, &ev(PointerKind::Up, (303.0, 250.0), both));
+    let [Action::Exec(_, params)] = acts.as_slice() else { panic!("{acts:?}") };
+    let at = |key: &str, i: usize| params[key][i].as_f64().unwrap_or(f64::NAN);
+    let (dx, dy) = (at("toward", 0) - at("end", 0), at("toward", 1) - at("end", 1));
+    assert!(params["at"] == "end" && (dx.abs() - dy.abs()).abs() < 1e-9, "{params}");
+}
+
+/// A first click that snaps to the rectangle's corner, 3 pt from the pointer, and is let go with
+/// Shift changed places only the first end: a change of keys alone is not a drag.
+#[test]
+fn a_click_let_go_with_shift_changed_is_not_a_drag() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let g = Point::new(200.0, 200.0);
+    let off = (203.0, 201.0);
+    let mut t = ThreePointArcTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, off, Mods::default()));
+    t.pointer(&cx, &ev(PointerKind::Up, off, Mods { shift: true, ..Mods::default() }));
+    assert_eq!((t.start, t.end), (Some(g), None));
+}
+
 /// Shift keeps the second end at 45° steps from the first.
 #[test]
 fn shift_keeps_the_second_end_at_45_degree_steps() {

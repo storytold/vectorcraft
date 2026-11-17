@@ -58,8 +58,8 @@ pub struct ThreePointArcTool {
     pointer: Option<Point>,
     /// Alt was held at the last pointer event: in direction mode, the direction is at the second end.
     at_end: bool,
-    /// Where the pressed pointer was at its last event, before snapping.
-    raw: Option<Point>,
+    /// Where the pressed pointer was at its last event, before snapping, and the keys held then.
+    raw: Option<(Point, Mods)>,
 }
 
 /// The arc from `start` to `end` shaped by `third`, as `shape.threePointArc` draws it: through
@@ -106,12 +106,14 @@ impl ThreePointArcTool {
         }
     }
 
-    /// The pressed pointer moved to `ev`: the point being placed follows it.
+    /// The pressed pointer moved to `ev`, or Shift or Alt changed: the point being placed follows
+    /// it. A change of keys alone does not make the press a drag.
     fn follow(&mut self, cx: &ToolContext, ev: &PointerEvent) {
-        self.raw = Some(ev.pos);
+        let moved = self.raw.is_none_or(|(p, _)| p != ev.pos);
+        self.raw = Some((ev.pos, ev.mods));
         match &mut self.press {
             Some(Press::Start { at, dragged }) => {
-                *dragged |= ev.pos.distance(*at) >= cx.tol(DRAG_PX);
+                *dragged |= moved && ev.pos.distance(*at) >= cx.tol(DRAG_PX);
                 let leave = Leave::segment(cx, *at, ev.mods.shift);
                 self.pointer = Some(self.snap.drag(cx, ev.pos, Some(&leave)));
             }
@@ -149,7 +151,7 @@ impl Tool for ThreePointArcTool {
                 vec![]
             }
             PointerKind::Down => {
-                self.raw = Some(ev.pos);
+                self.raw = Some((ev.pos, ev.mods));
                 let leave = self.leave(cx, ev.mods);
                 match (self.start, self.end) {
                     (None, _) => {
@@ -180,8 +182,10 @@ impl Tool for ThreePointArcTool {
                 vec![]
             }
             PointerKind::Up => {
-                // A release away from the last drag event places the point where it is let go.
-                if self.press.is_some() && self.raw != Some(ev.pos) {
+                // A release away from the last drag event places the point where it is let go, and
+                // a release with Shift or Alt changed places it as those keys keep it.
+                let same = self.raw.is_some_and(|(p, m)| p == ev.pos && (m.shift, m.alt) == (ev.mods.shift, ev.mods.alt));
+                if self.press.is_some() && !same {
                     self.follow(cx, ev);
                 }
                 match (self.press.take(), self.start, self.pointer) {
