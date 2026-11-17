@@ -577,7 +577,7 @@ pub(super) fn finish_brushes_within(
             DraftKind::Scatter { brush, art: name } => copy(&name).map(|mut a| {
                 // Each copy is the section turned over: its side with y up draws down the page
                 // before the copy's rotation, and a brush draws art's y (down here) down the page.
-                a.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+                turn_over(&mut a);
                 BrushKind::Scatter(Scatter { art: a, ..brush })
             }),
             DraftKind::Art { mut brush, art: name, settings } => copy(&name).map(|mut a| {
