@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, TextKind};
+use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, Selection, TextKind};
 use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
@@ -495,14 +495,15 @@ fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
         }
     }
     let total: usize = items.iter().map(|x| x.1.len()).sum();
-    s.select(|_, sel| {
-        sel.clear();
-        for (id, refs) in items {
-            sel.add(id);
-            sel.anchors.insert(id, refs);
-        }
-    })?;
+    s.select(|_, sel| select_anchors(sel, items))?;
     Ok(json!({ "anchors": total }))
+}
+
+/// Replaces `sel` with the paths of `items` in order, each once, and direct-selects the anchors
+/// listed with each path. A path listed twice keeps its first place and its last anchor set.
+fn select_anchors(sel: &mut Selection, items: Vec<(NodeId, BTreeSet<(usize, usize)>)>) {
+    sel.set(items.iter().map(|(id, _)| *id));
+    sel.anchors.extend(items);
 }
 
 fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1026,3 +1027,6 @@ fn close_all(s: &mut Session, _: &Value) -> Result<Value> {
     }
     Ok(json!({ "closed": n }))
 }
+
+#[cfg(test)]
+mod tests;

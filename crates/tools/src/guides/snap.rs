@@ -485,6 +485,17 @@ impl DrawSnap {
         self.guides.clear();
     }
 
+    /// Replace the guides with one label `text` at `p`, for a point a tool placed by a rule of its
+    /// own (an anchor or a path it found itself). The label uses the style of the targets the last
+    /// snap gathered. No label shows when Smart Guides or Anchor/Path Labels are off (Snap to Point
+    /// alone gathers targets without labels), or when the last snap gathered no targets.
+    pub(crate) fn label(&mut self, p: Point, text: &str) {
+        self.guides = match &self.targets {
+            Some((_, PointSnap { targets: Some((t, _)), .. })) => t.label(p, text).into_iter().collect(),
+            _ => vec![],
+        };
+    }
+
     fn gather(&mut self, cx: &ToolContext, key: SnapKey) {
         let snap = PointSnap::new(cx, || Targets::for_drawing(cx.doc, &key.exclude, visible(cx), key.snap_to_glyph));
         self.targets = Some((Some(key), snap));

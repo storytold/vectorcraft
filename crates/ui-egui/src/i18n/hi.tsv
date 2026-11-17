@@ -1019,6 +1019,7 @@ antiAlias	Sharp	शार्प
 	Constrain	सीमित करें
 	Constrain Angle	कंस्ट्रेन एंगल
 	Constrain Width and Height Proportions	चौड़ाई और ऊंचाई का अनुपात बनाए रखें
+	Copy Width to Height	चौड़ाई को ऊंचाई में कॉपी करें
 	Construction Guides	निर्माण गाइड
 	Conté Crayon	कॉन्टे क्रेयॉन
 	Conté Crayon…	कॉन्टे क्रेयॉन…
@@ -1033,6 +1034,8 @@ antiAlias	Sharp	शार्प
 	Control	नियंत्रण
 	Convert	कन्वर्ट करें
 	Convert All Spot Colors to Process	सभी स्पॉट कलर्स को प्रोसेस में कनवर्ट करें
+	Convert {name} to process	{name} को प्रोसेस में कनवर्ट करें
+	Keep {name} as spot	{name} को स्पॉट के रूप में रखें
 	Convert All Strokes to Outlines	सभी स्ट्रोक को आउटलाइन में कनवर्ट करें
 	Convert All Text to Outlines	सभी टेक्स्ट को आउटलाइन में कनवर्ट करें
 	Convert Anchor Point	एंकर पॉइंट कनवर्ट करें
@@ -1133,6 +1136,9 @@ antiAlias	Sharp	शार्प
 	Create From:	से बनाएँ:
 	Create Gradient Mesh	ग्रेडिएंट मेश बनाएँ
 	Create Gradient Mesh…	ग्रेडिएंट मेश बनाएँ…
+	Flat	समतल
+	To Center	केंद्र की ओर
+	To Edge	किनारे की ओर
 	Create Graph	ग्राफ़ बनाएँ
 	Create New {kind} Style	नई {kind} स्टाइल बनाएँ
 	Create New Action	नया एक्शन बनाएँ
@@ -2007,6 +2013,10 @@ antiAlias	Sharp	शार्प
 	Font List	फ़ॉन्ट सूची
 	Show Similar Fonts	समान फ़ॉन्ट दिखाएँ
 	Clear Similar Fonts	समान फ़ॉन्ट साफ़ करें
+	Fonts used in this document	इस डॉक्यूमेंट में उपयोग किए गए फ़ॉन्ट
+	This document uses no available fonts	यह डॉक्यूमेंट कोई उपलब्ध फ़ॉन्ट उपयोग नहीं करता
+	Recently Added	हाल में जोड़े गए
+	Fonts added in the last 30 days	पिछले 30 दिनों में जोड़े गए फ़ॉन्ट
 	Font Preview Size	फ़ॉन्ट प्रीव्यू साइज़
 	Font Size	फ़ॉन्ट साइज़
 	Font Size:	फ़ॉन्ट साइज़:
@@ -2801,7 +2811,8 @@ antiAlias	Sharp	शार्प
 	Long Lines	लंबी रेखाएँ
 	Long Strokes	लंबे स्ट्रोक
 	Longest:	सबसे लंबे:
-	Lossless (lossy WebP isn't available yet)	लॉसलेस (लॉसी WebP अभी उपलब्ध नहीं है)
+	Lossless	लॉसलेस
+	Lossy	लॉसी
 	Lossy:	हानि:
 	Low	निम्न
 	Low Fidelity Photo	लो फिडेलिटी फोटो
@@ -3750,6 +3761,18 @@ antiAlias	Sharp	शार्प
 	Preview (1 inch on the page)	प्रीव्यू (1 इंच पृष्ठ पर)
 	Preview All Layers	सभी लेयर्स का प्रीव्यू करें
 	Preview in Browser	ब्राउज़र में प्रीव्यू
+	Optimize to File Size…	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें…
+	Optimize to File Size	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें
+	Desired File Size:	वांछित फ़ाइल आकार:
+	Start With:	शुरुआत:
+	Use:	उपयोग:
+	Current Settings	वर्तमान सेटिंग्स
+	Auto Select GIF/JPEG	GIF/JPEG स्वचालित रूप से चुनें
+	Total of All Slices	सभी स्लाइस का कुल
+	Each Slice	प्रत्येक स्लाइस
+	Current Slice	वर्तमान स्लाइस
+	{size}, within {target}	{size}, {target} के भीतर
+	No setting tried fits in {target}; the smallest is {size}	आज़माई गई कोई भी सेटिंग {target} में नहीं समाती; सबसे छोटा {size} है
 	Preview in Browser needs the desktop app (the web downloads files instead)	ब्राउज़र में प्रीव्यू डेस्कटॉप ऐप (वेब डाउनलोड फ़ाइलों के बजाय) की जरूरत है
 	Preview Mode	प्रीव्यू मोड
 	Preview the document as it is now	डॉक्यूमेंट का प्रीव्यू करें क्योंकि यह अब है
@@ -4170,12 +4193,85 @@ antiAlias	Sharp	शार्प
 	Responsive	उत्तरदायी
 	Restore	पुनर्स्थापित करें
 	Restore every preference to its default (applied on OK)	प्रत्येक वरीयता को उसके डिफ़ॉल्ट में पुनर्स्थापित करें ( OK पर लागू)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	कैनवास पर सिलेक्शन या टूल के लिए कमांड बार दिखाता है; ड्रैग करते समय और प्रस्तुति मोड में यह छिप जाता है।
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	एरो कुंजी सिलेक्शन को कितनी दूर खिसकाती है; Shift के साथ यह दस गुना दूर खिसकाती है।
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	उन अक्षों का कोण जिनके साथ एरो कुंजियाँ खिसकाती हैं और जिन पर Shift ड्रॉइंग और खिसकाने को रोकता है।
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	वह कोने की त्रिज्या जिससे गोल आयत टूल ड्रॉ करता है; ड्रॉ करते समय त्रिज्या बदलने से यह मान भी बदल जाता है।
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	जब कोई स्थिति नहीं दी जाती, जैसे स्क्रिप्ट से, तब पेस्ट कॉपी को दाईं ओर और नीचे कितना खिसकाता है; ऐप में पेस्ट करने पर कॉपी व्यू के बीच में रखी जाती है।
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	पेन टूल को चुने गए पाथ पर क्लिक किए गए एंकर पॉइंट को हटाने से, या उसके सेगमेंट पर क्लिक की गई जगह नया पॉइंट जोड़ने से रोकता है।
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	ड्रॉइंग टूल अपने आइकन की जगह क्रॉसहेयर पॉइंटर दिखाते हैं; Caps Lock चालू रहने पर भी यही होता है।
+	Shows a tip when the pointer rests on a button or field that has one.	जब पॉइंटर टिप वाले किसी बटन या फ़ील्ड पर रुकता है, तब टिप दिखाता है।
+	Shows a warning before a script you choose runs.	आपकी चुनी गई स्क्रिप्ट चलने से पहले चेतावनी दिखाता है।
+	Smooths the edges of artwork on the canvas.	कैनवास पर आर्टवर्क के किनारों को चिकना करता है।
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	सिलेक्ट › समान › फ़िल रंग, स्ट्रोक रंग और फ़िल व स्ट्रोक केवल ग्लोबल या स्पॉट स्वॉच के उसी टिंट से मेल खाते हैं, उसके किसी भी टिंट से नहीं।
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	कोई डॉक्यूमेंट खुला न होने पर होम स्क्रीन दिखाता है; बंद होने पर विंडो तब तक खाली रहती है जब तक आप होम पर क्लिक नहीं करते।
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	साइज़, स्थिति और संरेखण के लिए ऑब्जेक्ट को उनके स्ट्रोक और आकार बदलने वाले इफ़ेक्ट के साथ मापता है; छाया, ग्लो और ब्लर नहीं मापे जाते।
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% ज़ूम पर डॉक्यूमेंट का एक इंच 72 की जगह 96 स्क्रीन पॉइंट लेता है।
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	सिलेक्शन टूल से किसी ग्रुप, पाथ या इमेज पर डबल-क्लिक करने से वह आइसोलेशन मोड में खुलता है।
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	पैटर्न वाले फ़िल और स्ट्रोक आर्टवर्क के साथ रूपांतरित होते हैं, जब तक कोई रूपांतरण या रूपांतरण पैनल का मेनू कुछ और न चुने।
+	Live corner radii scale with the art, unless the scale chooses otherwise.	लाइव कोनों की त्रिज्याएँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	स्ट्रोक की मोटाई, डैश और इफ़ेक्ट की दूरियाँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
+	The mouse wheel zooms the canvas instead of scrolling it.	माउस व्हील कैनवास को स्क्रॉल करने की जगह ज़ूम करता है।
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl दबाकर माउस व्हील घुमाने से कैनवास बगल की ओर स्क्रॉल होता है।
+	Dragging sideways on a numeric field's label changes the field's value.	किसी संख्या वाले फ़ील्ड के लेबल पर बगल की ओर ड्रैग करने से फ़ील्ड का मान बदलता है।
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
+	Shows the bounding box while you move the selection or draw a shape.	सिलेक्शन खिसकाते या आकार ड्रॉ करते समय बाउंडिंग बॉक्स दिखाता है।
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ट्रिम मार्क्स बनाएं रोमन की जगह जापानी शैली के निशान ड्रॉ करता है।
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	नया आर्टवर्क सिलेक्शन का केवल फ़िल और स्ट्रोक लेता है; बंद होने पर वह चुने गए ऑब्जेक्ट का पूरा रूप लेता है।
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	रूपांतरण पैनल, प्रॉपर्टीज़ पैनल या नियंत्रण बार में चौड़ाई या ऊँचाई बदलने से दूसरी भी अनुपात में बदलती है।
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	लाइव आयत की प्रॉपर्टीज़ चारों कोनों के लिए कोने की त्रिज्या का एक ही फ़ील्ड दिखाती हैं; बंद होने पर हर कोने का अपना फ़ील्ड होता है।
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	रूपांतरण पैनल में किए गए बदलाव क्या रूपांतरित करते हैं: ऑब्जेक्ट, उसकी पैटर्न टाइलें या दोनों; डिफ़ॉल्ट ट्रांसफॉर्म पैटर्न टाइलें का पालन करता है।
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	एक सिंबल इंस्टेंस चुना होने पर रूपांतरण पैनल सिंबल के रजिस्ट्रेशन पॉइंट को संदर्भ पॉइंट के रूप में इस्तेमाल करता है।
+	Darkens the canvas outside the artboards while the Artboard tool is active.	आर्टबोर्ड टूल सक्रिय रहने पर आर्टबोर्ड के बाहर का कैनवास गहरा करता है।
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	आर्टबोर्ड के बाहर का क्षेत्र धुंधला करें चालू होने पर आर्टबोर्ड टूल से ड्रैग करते समय आर्टबोर्ड के बाहर का क्षेत्र गहरा बना रहता है।
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	किसी क्लिक से ऑब्जेक्ट, एंकर पॉइंट या हैंडल चुनने के लिए पॉइंटर को उससे कितने पिक्सेल पास होना चाहिए।
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	सिलेक्शन टूल का बॉक्स छुए गए ऑब्जेक्ट चुनता है या केवल पूरी तरह अंदर वाले; खींचने की दिशा दाईं ओर खींचने पर अंदर वाले चुनती है। खींचते समय E नियम उलट देता है।
+	A click selects a filled object only on its path, not inside its fill.	क्लिक भरे हुए ऑब्जेक्ट को केवल उसके पाथ पर चुनता है, भराव के अंदर नहीं।
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	पॉइंट पर स्नैप करें द्वारा स्नैप होने के लिए किसी बिंदु को एंकर पॉइंट या रूलर गाइड से कितने पिक्सेल पास आना चाहिए; स्मार्ट गाइड्स चालू होने पर उनकी स्नैपिंग सहिष्णुता लागू होती है।
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	सिलेक्शन टूल के साथ, Cmd/Ctrl-क्लिक पॉइंटर पर चुने गए ऑब्जेक्ट के नीचे वाला ऑब्जेक्ट चुनता है; हर अगला क्लिक एक ऑब्जेक्ट और नीचे जाता है।
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	ज़ूम इन और ज़ूम आउट चयन के केंद्र को व्यू के बीच में लाते हैं।
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	आर्टबोर्ड के अंदर का लॉक और छिपा आर्टवर्क बाकी आर्टवर्क की तरह आर्टबोर्ड के साथ खिसकता, स्केल होता और कॉपी होता है।
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	कैनवास पर एंकर पॉइंट और दिशा हैंडल के सिरों का आकार; बड़े एंकर पॉइंट अधिक दूर से भी पकड़े जा सकते हैं।
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	दिशा हैंडल के सिरों को भरे बिंदु, खोखले बिंदु या बड़े भरे बिंदु के रूप में बनाता है।
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	डायरेक्ट सिलेक्शन टूल के साथ, पॉइंटर के नीचे वाला एंकर पॉइंट हाइलाइट होता है।
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	एक से अधिक एंकर पॉइंट चुने होने पर दिशा हैंडल दिखाता है; बंद होने पर वे केवल एक एंकर पॉइंट चुने होने पर दिखते हैं।
+	Corner widgets hide on corners whose angle is greater than this many degrees.	जिन कोनों का कोण इतने डिग्री से अधिक है, उन पर कॉर्नर विजेट छिप जाते हैं।
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	क्लिक करने से पहले पेन टूल अंतिम एंकर पॉइंट से पॉइंटर तक अगले सेगमेंट का पूर्वावलोकन दिखाता है।
+	The Curvature tool previews the curve to the pointer before you place the next point.	अगला बिंदु रखने से पहले वक्रता टूल पॉइंटर तक वक्र का पूर्वावलोकन दिखाता है।
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	पिक्सेल को छोड़कर बिल्ट-इन साइज़ वाले नए डॉक्यूमेंट और कोई इकाई दर्ज न करने वाली खोली गई फ़ाइलों की इकाई; इसे यहाँ चुनकर ठीक है पर क्लिक करने से यह सक्रिय डॉक्यूमेंट की इकाई भी बन जाती है।
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	स्ट्रोक की मोटाई, डैश और गैप इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	टाइप साइज़, लीडिंग और बेसलाइन शिफ़्ट इस इकाई में दिखते हैं, और उनके लिए टाइप की गई संख्याएँ इसी इकाई में पढ़ी जाती हैं।
 	The unit for East Asian type measurements, which no field uses yet.	पूर्वी एशियाई टाइप के माप की इकाई, जिसका अभी कोई फ़ील्ड उपयोग नहीं करता।
 	When on, a number typed without a unit into a field in picas is read in points.	चालू होने पर, पाइका वाले फ़ील्ड में बिना इकाई के टाइप की गई संख्या पॉइंट्स में पढ़ी जाती है।
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID चुनने पर ऑब्जेक्ट के नाम लेयर्स, वेरिएबल्स और लेयर ऑप्शन्स में XML ID के रूप में दिखते हैं।
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	ग्रिड छिपी होने पर भी ड्रॉ करना, खिसकाना और स्केल करना ग्रिड के उप-विभाजनों पर स्नैप करता है; इसके चालू रहने तक पिक्सेल के लिए स्नैप लागू नहीं होता।
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	उन गाइड्स का रंग जो चयनित नहीं हैं; गाइड लेबल वाला आर्टबोर्ड अपनी गाइड्स लेबल के रंग में बनाता है।
+	Draws guides as solid lines or as dots, including the guides already in the document.	दस्तावेज़ में पहले से मौजूद गाइड्स सहित, गाइड्स को ठोस रेखाओं या बिंदुओं के रूप में बनाता है।
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	इसके चालू होने पर VectorCraft शुरू होते समय गाइड्स लॉक रहती हैं; यह विकल्प बदलने से वे तुरंत लॉक या अनलॉक होती हैं, और व्यू › गाइड्स › गाइड्स लॉक करें अब भी लॉक बदलता है।
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	इसके चालू होने पर रूलर से खींचना शुरू करते समय Cmd/Ctrl दबाए रखने से केवल सक्रिय आर्टबोर्ड पर गाइड बनती है, या आर्टबोर्ड टूल के साथ पूरे कैनवस की गाइड बनती है।
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	ग्रिड का रंग; मुख्य ग्रिडलाइनों के बीच की रेखाएँ उसके हल्के शेड में बनती हैं।
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	ग्रिड को रेखाओं के रूप में, या हर उप-विभाजन पर मुख्य ग्रिडलाइनों के साथ बिंदुओं के रूप में बनाता है।
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	हर खुले दस्तावेज़ और नए दस्तावेज़ों में मुख्य ग्रिडलाइनों के बीच की दूरी; VectorCraft दस्तावेज़ उसी ग्रिड के साथ खुलता है जिसके साथ वह सेव किया गया था।
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	हर मुख्य ग्रिड वर्ग कितने भागों में बँटता है; ज़ूम से उनकी रेखाएँ छिपने पर भी ग्रिड पर स्नैप करें इन भागों पर स्नैप करता है।
+	Draws the grid behind the artwork; off, the grid is drawn over it.	ग्रिड को आर्टवर्क के पीछे बनाता है; बंद होने पर ग्रिड उसके ऊपर बनती है।
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	पिक्सेल प्रीव्यू में 600% या अधिक ज़ूम पर, सक्रिय व्यू आर्टवर्क के ऊपर दस्तावेज़ के हर पिक्सेल के किनारे पर रेखा दिखाता है।
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	पैटर्न संपादित करते समय दिखने वाले टाइल एज और डैश वाली स्वॉच सीमाओं का रंग।
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	ड्रॉ करने, खिसकाने और ट्रांसफ़ॉर्म करने को पास के आर्ट पर स्नैप करता है और गाइड्स व लेबल दिखाता है; पिक्सेल प्रीव्यू इन्हें बंद करता है, और ग्रिड पर स्नैप करें इनकी जगह ग्रिड पर स्नैप करता है।
+	The color of Smart Guide lines and labels.	स्मार्ट गाइड्स की रेखाओं और लेबल का रंग।
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	उस किनारे या केंद्र के साथ रेखा दिखाता है जिससे आर्ट संरेखित होता है; बंद होने पर आर्ट रेखा के बिना भी संरेखित होता है, और ग्लिफ़ पर स्नैप करें लागू नहीं होता।
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	सिलेक्शन टूल के साथ, जब आप ड्रैग नहीं कर रहे हों, पॉइंटर के नीचे के असिलेक्टेड ऑब्जेक्ट की रूपरेखा उसकी लेयर के रंग में दिखाता है।
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	आर्ट को स्केल करते, घुमाते, शियर करते या परावर्तित करते समय पॉइंटर के पास आकार या कोण दिखाता है।
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ड्रॉ करते समय पॉइंट उन रेखाओं पर स्नैप होते हैं जो चुने गए कोणों पर उस पॉइंट से गुज़रती हैं जहाँ से सेगमेंट या आकृति शुरू होती है।
+	The set of angles the construction guides follow while Construction Guides is on.	निर्माण गाइड चालू होने पर निर्माण गाइड जिन कोणों का पालन करते हैं, उनका समूह।
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	बताता है कि पॉइंट किस पर स्नैप होता है, जैसे एंकर, पाथ या संरेखण; बंद होने पर पॉइंट नामों के बिना उसी तरह स्नैप होते हैं।
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	ड्रॉ करते या खिसकाते समय पॉइंटर के पास दूरियाँ, कोण और आर्ट कितना खिसका यह दिखाता है।
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	खिसकाए गए या आकार बदले गए आर्ट को पास के ऑब्जेक्ट्स के बीच जितने ही अंतर पर स्नैप करता है और बराबर अंतर चिह्नित करता है।
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	कुछ सिलेक्ट होने पर, किसी दूसरे ऑब्जेक्ट या आर्टबोर्ड के ऊपर Alt/Option दबाए रखने से उसके और सिलेक्शन के बीच की दूरियाँ दिखती हैं।
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	ड्रैग जहाँ से शुरू हुआ था, वहाँ से स्नैपिंग सहिष्णुता के भीतर वापस ड्रैग किया गया सिलेक्शन ठीक उसी जगह लौट जाता है; कॉपी नहीं लौटती।
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	स्मार्ट गाइड्स के स्नैप करने के लिए पॉइंटर या ड्रैग किया गया पॉइंट स्क्रीन पर आर्ट के कितने पास आना चाहिए; यह दूरी हर ज़ूम पर समान रहती है।
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	लाइन सेगमेंट के सिरे को, या केंद्र से ड्रॉ किए गए वृत्त को, इस तरह स्नैप करता है कि वह पास के वक्र को छुए।
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	लाइन सेगमेंट के सिरे को इस तरह स्नैप करता है कि वह पास के सीधे सेगमेंट से समकोण पर मिले।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	डिफ़ॉल्ट तब लागू होते हैं जब आप प्रेफ़रेंसेज़ में ठीक है पर क्लिक करते हैं। वहाँ रद्द करें आपकी मौजूदा प्रेफ़रेंसेज़ बनाए रखता है।
 	Restore Recovered Documents	पुनर्स्थापना डॉक्यूमेंट
@@ -4475,6 +4571,7 @@ antiAlias	Sharp	शार्प
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
+	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
@@ -5521,6 +5618,7 @@ antiAlias	Sharp	शार्प
 	Unlock Variables	वेरिएबल्स अनलॉक करें
 	Unnamed Objects	नामरहित ऑब्जेक्टएं
 	Unpainted Objects	अनपेक्षित ऑब्जेक्टएं
+	Empty Text Paths	खाली टेक्स्ट पाथ
 	Unprintable margin:	अनप्रिंटेबल मार्जिन:
 	Unselected Artwork	अनसिलेक्टेड आर्टवर्क
 	Unsharp Mask	अनशार्प मास्क
@@ -6067,7 +6165,7 @@ antiAlias	Sharp	शार्प
 @msg	{label}…	{label}...
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} बनाया गया है और इसे हटाया नहीं जा सकता है।
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} को {lo}-{hi}{unit} ({v}) होना चाहिए।
+@msg	{name} must be {range} (got {v})	{name} को {range} होना चाहिए ({v} मिला)
 @msg	{name}: {e}	{name}: {e}
 @msg	{name}: CRC mismatch	{name}: CRC mismatch
 @msg	{name}: CRC or size mismatch	{name}: CRC या आकार मेल नहीं खाता
@@ -6598,7 +6696,6 @@ antiAlias	Sharp	शार्प
 @msg	anchor `{key}` must be a number	एंकर `{key}` को एक नंबर होना चाहिए
 @msg	anchor `smooth` must be true or false	एंकर का `smooth` true या false होना चाहिए
 @msg	anchor must name a registered panel	anchor किसी पंजीकृत पैनल का नाम होना चाहिए
-@msg	angle and roundness must be finite	कोण और गोलाई परिमित होना चाहिए
 @msg	angles must be a list as long as pins (degrees or null)	angles पिन जितनी लंबी सूची होनी चाहिए (डिग्री या null)
 @msg	Angles require two straight segments	कोणों को दो सीधे खंडों की आवश्यकता होती है
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art या type
@@ -7534,6 +7631,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
 @msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
+@msg	`points` must be three [x, y] pairs of numbers	`points` में संख्याओं के तीन [x, y] जोड़े होने चाहिए
+@msg	direct-select three anchor points, or give `points`	तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
+@msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
 @msg	no artboard	कोई आर्टबोर्ड नहीं
@@ -8004,6 +8104,11 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	preset must be standard, diffuse, topLeft or right	preset को standard, diffuse, topLeft या right होना चाहिए
 @msg	preset must be the name of a print preset	preset किसी प्रिंट प्रीसेट का नाम होना चाहिए
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ब्राउज़र में प्रीव्यू डेस्कटॉप ऐप (वेब डाउनलोड फ़ाइलों के बजाय) की जरूरत है
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` दें, K (1024 बाइट) में वांछित फ़ाइल आकार: 0 से बड़ी और अधिकतम 1048576 संख्या
+@msg	`startWith` is `current` or `auto`	`startWith` का मान `current` या `auto` होना चाहिए
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` का मान `allSlices`, `eachSlice` या `currentSlice` होना चाहिए
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`, `slice.list` से स्लाइस संख्या है, `use: currentSlice` के साथ
+@msg	Optimize to File Size: there is no image to measure	फ़ाइल आकार के अनुसार ऑप्टिमाइज़ करें: मापने के लिए कोई इमेज नहीं है
 @msg	previewMode must be default, pixel or overprint	previewMode को default, pixel या overprint होना चाहिए
 @msg	Print Ink Fixes works on CMYK documents: choose File › Document Color Mode › CMYK Color first	प्रिंट इंक फिक्स CMYK डॉक्यूमेंट्स पर काम करता है: फ़ाइल चुनें › डॉक्यूमेंट रंग मोड › CMYK कलर फर्स्ट
 @msg	print settings are not an object	प्रिंट सेटिंग एक ऑब्जेक्ट नहीं है
@@ -8801,6 +8906,18 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	panels can't be shown in Presentation Mode	प्रस्तुति मोड में पैनल्स नहीं दिखाए जा सकते
 @msg	unknown parameter `{key}`; did you mean `{near}`?	अज्ञात पैरामीटर `{key}`; क्या आपको `{near}` का मतलब है?
 @msg	unknown parameter `{key}`; the command takes no parameters	अज्ञात पैरामीटर `{key}`; कमांड कोई पैरामीटर नहीं लेता है
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	अज्ञात पैरामीटर `{key}`; `{object}` लेता है: {keys}
+@msg	unknown parameter `{key}`; {why_not}	अज्ञात पैरामीटर `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	कोई फ़ॉर्मैट इसे नहीं लेता (document.formats देखें)
+@msg	no save format takes it (see file.formatOptions)	कोई सेव फ़ॉर्मैट इसे नहीं लेता (file.formatOptions देखें)
+@msg	PDF doesn't take it (see document.formats)	PDF इसे नहीं लेता (document.formats देखें)
+@msg	EPS doesn't take it (see document.formats)	EPS इसे नहीं लेता (document.formats देखें)
+@msg	DXF doesn't take it (see document.formats)	DXF इसे नहीं लेता (document.formats देखें)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	पहले आज़माया गया ग्राफिक्स प्रोसेसर विंडो नहीं दिखा सका, इसलिए VectorCraft फिर से {summary} पर शुरू हुआ (सेटिंग्स › प्रदर्शन › ग्राफिक्स प्रोसेसर › स्वचालित उस प्रोसेसर का उपयोग करता है जो आपका डिस्प्ले चलाता है)
+@msg	Sent “{title}” to {to}	“{title}” को {to} पर भेजा गया
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” को {to} पर भेजा गया। प्रिंट कतार का उत्तर: {note}
+@msg	the default printer	डिफ़ॉल्ट प्रिंटर
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	ऑब्जेक्ट {object} पर रास्टर इफ़ेक्ट: {requested} ppi माँगा गया, 64 मिलियन पिक्सेल की सीमा के कारण {achieved} ppi मिला
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}
 @msg	the params must be an object, not {got}	पैरामीटर एक ऑब्जेक्ट होने चाहिए, {got} नहीं
 @msg	unknown parameter `{path}`; the object takes no keys	अज्ञात पैरामीटर `{path}`; ऑब्जेक्ट कोई कुंजी नहीं लेता
@@ -9231,6 +9348,10 @@ theme	Appearance	अपीयरेंस
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
 @msg	`angle` must be from -180 to 180 degrees	`angle` -180 से 180 डिग्री तक होना चाहिए
+@msg	`roundness` must be from 0 to 100%	`roundness` 0 से 100% तक होना चाहिए
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 0.01 से 100 pt तक होना चाहिए
+@msg	style must be "pencil" or "brush"	style "pencil" या "brush" होना चाहिए
+@msg	extend end must be "start" or "end"	extend अंत "start" या "end" होना चाहिए
 @msg	`roundness` must be from 1 to 100%	`roundness` 1 से 100% तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
 	Weed Box and Lines…	वीड बॉक्स और लाइनें…
@@ -9289,6 +9410,7 @@ theme	Appearance	अपीयरेंस
 @msg	Too many Revolve faces for visibility evaluation	दृश्यता की गणना के लिए रिवॉल्व के फ़ेस बहुत अधिक हैं
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft स्वॉच एक्सचेंज फ़ाइल से अधिकतम {ASE_MAX_ENTRIES} रंग और ग्रुप पढ़ता है, और इस लाइब्रेरी में {entries} हैं
 @msg	WebP encoding failed: {e}	WebP एन्कोडिंग विफल: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP एन्कोडिंग विफल: छवि लॉसी WebP के लिए बहुत बड़ी है: रिज़ॉल्यूशन कम करें या लॉसलेस चुनें
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index` पूरी संख्या होनी चाहिए
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList या largeList होता है

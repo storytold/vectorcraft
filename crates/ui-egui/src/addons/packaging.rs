@@ -4,8 +4,9 @@
 //! paths that role (`addon.packaging.setRole`). Its menu's Role Swatches… picks the swatch that
 //! carries a role (`addon.packaging.setRoleSwatch`). Its Check button, like the Check Fold Lines menu
 //! item, checks the fold lines (`addon.packaging.check`) and lists the issues found under it, each
-//! with a Select button; the list is kept until the document changes.
+//! with a Select button; each document's list is kept until that document changes.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 
 use egui::{Align, Layout, Sense, Ui, vec2};
@@ -31,7 +32,7 @@ pub const ROLES: &[(&str, &str)] =
 
 /// Where the panel keeps the last `addon.packaging.roles` answer (panel state).
 const STATE: &str = "fold-lines";
-/// Where the panel keeps the last check (panel state).
+/// Where the panel keeps the last check of each document (panel state, a [`Checks`]).
 const CHECKED: &str = "fold-lines-check";
 
 /// Object › Plug-ins › Packaging Tools.
@@ -103,6 +104,10 @@ impl Checked {
     }
 }
 
+/// The last check of each document, by the document's id. The checks are shared, so reading the
+/// map for a frame copies no issue lists.
+type Checks = HashMap<u64, Arc<Checked>>;
+
 /// The active document's [`DocKey`].
 fn doc_key(app: &VectorcraftApp) -> Option<DocKey> {
     app.session.active().map(|st| (st.uid, Arc::downgrade(&st.doc)))
@@ -110,11 +115,17 @@ fn doc_key(app: &VectorcraftApp) -> Option<DocKey> {
 
 /// Runs `addon.packaging.check` with `p` and shows its summary in the status bar → the check, kept
 /// in `ctx` for the panel.
-fn run_check(app: &mut VectorcraftApp, ctx: &egui::Context, p: Value) -> Option<Checked> {
+fn run_check(app: &mut VectorcraftApp, ctx: &egui::Context, p: Value) -> Option<Arc<Checked>> {
     let r = app.run(CHECK, p).map_err(|e| app.status(e)).ok()?;
-    let checked = Checked::of(doc_key(app)?, &r);
+    let key = doc_key(app)?;
+    let uid = key.0;
+    let checked = Arc::new(Checked::of(key, &r));
     app.status(checked.summary());
-    set_pstate(ctx, CHECKED, checked.clone());
+    let mut checks: Checks = pstate(ctx, CHECKED);
+    // A check of a document that has since changed or closed can never be shown again.
+    checks.retain(|_, c| c.key.as_ref().is_some_and(|(_, doc)| doc.strong_count() > 0));
+    checks.insert(uid, Arc::clone(&checked));
+    set_pstate(ctx, CHECKED, checks);
     Some(checked)
 }
 
@@ -130,11 +141,13 @@ pub(crate) fn check(app: &mut VectorcraftApp, p: Value) {
 }
 
 /// The last check of the active document, while the document has not changed since.
-fn last_check(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Checked> {
-    let checked: Checked = pstate(ctx, CHECKED);
-    let same = match (&checked.key, doc_key(app)) {
-        (Some((uid, doc)), Some((now, current))) => *uid == now && doc.ptr_eq(&current),
-        _ => false,
+fn last_check(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Arc<Checked>> {
+    let (now, current) = doc_key(app)?;
+    let mut checks: Checks = pstate(ctx, CHECKED);
+    let checked = checks.remove(&now)?;
+    let same = match &checked.key {
+        Some((uid, doc)) => *uid == now && doc.ptr_eq(&current),
+        None => false,
     };
     same.then_some(checked)
 }
