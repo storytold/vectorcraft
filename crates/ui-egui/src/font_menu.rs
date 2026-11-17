@@ -15,9 +15,10 @@
 //! Technology filter's Variable lists only variable font families. Preferences › Type › Enable
 //! in-menu font previews and Font Preview Size turn the samples off or size the rows. While the
 //! samples are shown, a row under the filters sets Font Preview Size to Small, Medium or Large
-//! ([`apply_preview_size`]), which sizes the rows of every font menu. The menu lays
-//! out its filters on the same five rows wherever it opens, with the size row under them while the
-//! samples are shown. However narrow its field, it opens at least wide enough for those rows and for a family name up to 220 points wide with its sample
+//! ([`apply_preview_size`]), which sizes the rows of every font menu, and the list stays on the
+//! rows it showed. The menu lays out its filters on the same five rows wherever it opens, with the
+//! size row under them while the samples are shown. However narrow its field, it opens at least
+//! wide enough for those rows and for a family name up to 220 points wide with its sample
 //! beside it, up to 60% of the window; each sample fills its row's height. Recently used families
 //! appear first, in the order they were last applied, within the same search and filters as the
 //! remaining families. In the Character and Properties panels and the Control bar,
@@ -467,6 +468,9 @@ struct MenuState {
     header: f32,
     /// The width of the widest row of filters without wrapping, last frame.
     filters: f32,
+    /// The rows' height last frame, and how far down the list its view began, in rows. At a new
+    /// height (Font Preview Size) the list scrolls back to the same row.
+    scrolled: Option<(f32, f32)>,
     /// The families the wheel steps through, listed at its first notch over the closed field and
     /// kept for that text selection while the pointer stays on it: each step makes its family a recent one, which would
     /// otherwise move it in the order. The Document filter's families are kept the same way: a
@@ -1514,14 +1518,20 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens, document: bool, row: Opt
             let gap = ui.spacing().item_spacing.x;
             let text = |s: &str| egui::RichText::new(s).size(FILTER_SIZE);
             let mut width = ui.label(text(tl!("Font Preview Size")).color(t.text_dim)).rect.width();
-            for (size, height) in PREVIEW_SIZES {
-                let on = (height - row).abs() < 0.5;
-                let resp = ui.selectable_label(on, text(preview_size_label(size)));
-                width += gap + resp.rect.width();
-                if resp.clicked() {
-                    ui.data_mut(|d| d.insert_temp(preview_size_id(), size));
+            // Screen readers find the three sizes in a radio group named after the row.
+            let group = egui::UiBuilder::new().accessibility_role(egui::accesskit::Role::RadioGroup).accessibility_label(tl!("Font Preview Size"));
+            ui.scope_builder(group, |ui| {
+                for (size, height) in PREVIEW_SIZES {
+                    let on = (height - row).abs() < 0.5;
+                    let label = preview_size_label(size);
+                    let resp = ui.selectable_label(on, text(label));
+                    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, label));
+                    width += gap + resp.rect.width();
+                    if resp.clicked() {
+                        ui.data_mut(|d| d.insert_temp(preview_size_id(), size));
+                    }
                 }
-            }
+            });
             widest = widest.max(width);
         });
     }
@@ -1712,8 +1722,16 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         let place = egui::Rect::from_min_size(egui::pos2(left, top + i as f32 * row_h), vec2(width, row_h));
         ui.scroll_to_rect_animation(place, align, egui::style::ScrollAnimation::none());
     };
+    // At a new row height (Font Preview Size, set from the menu), the view stays on the rows it
+    // showed: the scroll offset is in points.
+    let at = (ui.clip_rect().top() - top) / row_h;
+    let kept = st.scrolled.filter(|&(h, _)| !opening && (h - row_h).abs() > 0.5).map(|(_, at)| at);
+    st.scrolled = Some((row_h, kept.unwrap_or(at)));
     if let Some((i, align)) = scroll_target(st, &rows, opening, keyed) {
         scroll_to(ui, i, align);
+    } else if let Some(at) = kept {
+        let place = egui::Rect::from_min_size(egui::pos2(left, top + at * row_h), vec2(width, row_h));
+        ui.scroll_to_rect_animation(place, Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
     }
     let mut chosen: Option<(String, Option<String>)> = None;
     let mut hovered: Option<usize> = None;

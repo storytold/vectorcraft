@@ -1554,3 +1554,68 @@ fn a_preview_size_asked_for_sets_the_preference_and_keeps_the_preview() {
         "undo takes the type away: no step was added for the size"
     );
 }
+
+/// Screen readers find Small, Medium and Large as radio buttons in a group named Font Preview
+/// Size, with the size of the rows chosen.
+#[test]
+fn the_preview_size_row_is_a_radio_group_showing_the_size() {
+    use crate::widgets::accessibility_tests::{named, role_and_state, tree};
+    use egui::accesskit::{Role, Toggled};
+    // The bundled fonts alone: fonts that tests running alongside add stay out of the rows.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let sizes = ["small", "medium", "large"];
+    for size in sizes {
+        let mut st = super::MenuState::default();
+        let look = super::MenuLook { row: super::preview_row(size), ..Default::default() };
+        let nodes = tree(|ui| {
+            let _ = super::list_of(ui, &db, egui::Id::unique("size-group"), &mut st, "Inter", None, look);
+        });
+        assert_eq!(named(&nodes, "Font Preview Size").role(), Role::RadioGroup, "at {size}");
+        for other in sizes {
+            let chosen = if other == size { Toggled::True } else { Toggled::False };
+            assert_eq!(role_and_state(&nodes, super::preview_size_label(other)), (Role::RadioButton, Some(chosen)), "{other} at {size}");
+        }
+    }
+}
+
+/// A new Font Preview Size chosen in the open menu keeps the list on the rows it showed: the
+/// view starts the same number of rows down at the new height, not the same number of points.
+#[test]
+fn a_new_preview_size_keeps_the_list_on_its_rows() {
+    // The bundled fonts alone: fonts that tests running alongside add stay out of the rows.
+    let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut st = super::MenuState::default();
+    // One frame `height` points high at `size`: the list's offset, top, view height and content height.
+    let frame = |height: f32, size: &str, st: &mut super::MenuState| {
+        let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, height));
+        let look = super::MenuLook { row: super::preview_row(size), ..Default::default() };
+        let mut shown = None;
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(area), ..Default::default() }, |ui| {
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(area));
+            // Opening on the last family scrolls the list to its end.
+            let list = super::list_of(&mut child, &db, egui::Id::unique("keep-rows"), st, "Source Serif 4", None, look);
+            shown = Some((list.state.clamped_offset().y, list.inner_rect.top(), list.inner_rect.height(), list.content_size.y));
+        });
+        out.textures_delta.clear();
+        shown.unwrap_or_else(|| panic!("the list was not drawn"))
+    };
+    let (_, top, _, _) = frame(900.0, "medium", &mut st);
+    // A fresh opening, with room for fewer rows than the list holds.
+    let mut st = super::MenuState::default();
+    let mut medium = (0.0, 0.0, 0.0, 0.0);
+    for _ in 0..4 {
+        medium = frame(top + 64.0, "medium", &mut st);
+    }
+    let (offset, _, view, content) = medium;
+    assert!(content > view + 0.5 && offset > 0.5, "the list is scrolled: {medium:?}");
+    let rows_down = offset / super::preview_row("medium");
+    let mut large = (0.0, 0.0, 0.0, 0.0);
+    for _ in 0..3 {
+        large = frame(top + 64.0, "large", &mut st);
+    }
+    let expected = rows_down * super::preview_row("large");
+    assert!((large.0 - expected).abs() < 0.5, "the view starts {rows_down} rows down: offset {} for {expected}", large.0);
+    super::wait_for_samples(&ctx);
+}
