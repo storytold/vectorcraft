@@ -101,11 +101,12 @@ fn remembered(app: &VectorcraftApp) -> WebSettings {
 /// pending Done (`discard`, which a failed Done leaves), the preset name being typed and the
 /// selected color table entry are dropped. The view, zoom, connection speed and `path` stay,
 /// nothing is remembered or written, and the dialog stays open.
-fn reset(app: &VectorcraftApp, d: &mut Dialog) {
+fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
     for key in ["preset", "discard", "__presetName", "__color"] {
         d.fields.remove(key);
     }
     d.fields.extend(settings_fields(&remembered(app)));
+    Ok(())
 }
 
 /// The settings as dialog fields.

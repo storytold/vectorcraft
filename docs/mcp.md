@@ -1072,7 +1072,9 @@ given and the swatch already has keeps its model, as does a stop color that `pai
 gradient already has; a stop that names a swatch takes the swatch's color as it is, and `swatch.new` or `swatch.edit`
 with `mode` converts a color into that mode only. RGB documents keep colors as given. Harmonies, Edit
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
-`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
+`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. An entry of `swatch.new {colors}` or
+`swatch.newGroup {colors}` may be `{swatch, tint}`: a tint of a global or spot color below 100% becomes a tint swatch
+("Name 40%") linked to it, as the Color Guide panel saves the tints of a spot color base. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
 Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
 (shades, cool or muted on the left, tints, warm or vivid on the right). With `limitTo` (a swatch library id or name,
 or `"document"` for the document's swatches) every colour snaps to the library's nearest colour (ΔE 2000), as the
@@ -1260,6 +1262,10 @@ exporter plug-in's parameters. Other formats are written at once. OK writes the 
 OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). Any
 option skips the options dialog, but without `path` the save panel still picks the file. To write without a
 dialog, pass `path`. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
+In the Save PDF dialog, `ui.dialogReset {}` (Cancel while Alt, or Option on macOS, is held) puts every option back to
+the chosen preset's settings, clears the passwords, and leaves the dialog open with its preset, path, artboard range and
+section; `answer_dialog {action: "cancel"}` still closes it without saving. If the chosen saved preset was deleted
+while the dialog is open, `ui.dialogReset` returns an error naming it and leaves every field, passwords included, as it is.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -1273,6 +1279,12 @@ snapped to pixels) and, for PNG, `interlaced`. `width` or `height` sets the size
 pixels per point, and the file stores the resolution that results, as with `ppi`. `width` wins over `height`, and
 either one wins over `ppi` and `scale`. A value that is not a positive number is refused. Export for Screens rows keep
 their own size (`scale: "512w"`).
+
+WebP is lossless by default (`lossless: true`). `{"format": "webp", "lossless": false, "quality": 60}` writes a lossy
+WebP file: `quality` runs from 0 to 100 (default 90, VectorCraft's own value), and a higher value keeps more detail in
+a larger file. A lossy file keeps the alpha exactly when some pixels are not opaque. A WebP `quality` above 100, or one
+that is not a whole number, is refused; a lossless file ignores `quality`. Export for Screens takes both in a WebP row
+or in `settings.webp`.
 
 `shape.ellipse` (and `draw_shape` with `shape: "ellipse"`) takes `anchors`, the number of smooth anchors (default 4).
 Without it, or at 4, it draws a live ellipse. Any other count from 2 to 1000 draws a closed plain path with that many
@@ -3246,7 +3258,7 @@ own layout rules.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
+Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
 the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
@@ -8672,9 +8684,11 @@ documents every field:
   black art leaves the inks under it on the other plates. Which paints count as black is VectorCraft's own rule: a
   fill, stroke or character paint of solid 100% process K or 100% gray, or a gradient whose every stop is (every
   color point of a freeform gradient), each to within half a percent (99.5% K counts, and so does 0.4% cyan beside
-  it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration still
-  knock out. A symbol instance's art is judged with the paints the instance prints it in, its own fill and stroke
-  changes and its fill's stain included. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
+  it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration are not
+  marked, and paints already set to overprint keep that setting. A symbol instance's art is judged with the paints the
+  instance prints it in, its own fill and stroke changes and its fill's stain included. An instance that print leaves
+  unplaced, because placing its art would take the printed art past 16,000,000 objects or draw it deeper than 128
+  levels, is judged by its symbol's own art instead. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
   output ignores the option, and the Print dialog's Overprint Black checkbox is disabled unless Mode is Separations.
 - `graphics: {autoFlatness, flatness, fonts}` and `color: {intent, preserveNumbers}` (the intent colours separate
   with; without preserveNumbers CMYK colours are separated again).
