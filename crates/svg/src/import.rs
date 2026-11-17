@@ -208,6 +208,7 @@ pub(crate) fn import_finding(
         blends: fx::blends(&xml, &scan.markers),
         filter_sources: fx::sources(&xml, &scan.markers, |h| files.data_href(h)),
         files,
+        image_keys: HashMap::new(),
         non_scaling: found.non_scaling,
         data: found.data,
         events: found.events,
@@ -371,6 +372,9 @@ struct Importer {
     filter_sources: HashMap<String, fx::Source>,
     /// The files `<image>` elements link to.
     files: files::Files,
+    /// The image key of each raster image usvg got, by the address of its bytes, with the bytes
+    /// held so that the address isn't given to other bytes during the import.
+    image_keys: HashMap<usize, (Arc<Vec<u8>>, String)>,
     /// Ids of the shapes whose strokes don't scale ([`vector_effect`]).
     non_scaling: HashSet<String>,
     /// The `data-*` attributes of elements, by id ([`user_data`]).
