@@ -82,7 +82,7 @@ pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_objec
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use raster::{
-    RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item_effects_in, outset, raster_effects, rasterize_stage, stage_map, staged_effects,
+    RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item_effects_in, outset, raster_effects, rasterize_stage, stage_maps, staged_effects,
     without_geometry,
 };
 pub use reshape::{

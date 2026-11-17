@@ -1859,6 +1859,10 @@ antiAlias	Sharp	날카롭게
 	Font List	글꼴 목록
 	Show Similar Fonts	유사한 글꼴 표시
 	Clear Similar Fonts	유사한 글꼴 지우기
+	Fonts used in this document	이 문서에서 사용된 글꼴
+	This document uses no available fonts	이 문서는 사용 가능한 글꼴을 사용하지 않습니다
+	Recently Added	최근 추가됨
+	Fonts added in the last 30 days	최근 30일 동안 추가된 글꼴
 	Font Preview Size	글꼴 미리 보기 크기
 	Font:	글꼴:
 	Fonts	글꼴
@@ -4672,6 +4676,9 @@ theme	Appearance	외관
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
+@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
+@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
 @msg	no saved presets	저장된 프리셋이 없습니다
@@ -6722,6 +6729,7 @@ anchor	Points:	포인트:
 	Open a document to check it for issues.	문서를 열면 문제를 점검할 수 있습니다.
 	Empty Text	빈 텍스트
 	Unpainted Objects	칠하지 않은 오브젝트
+	Empty Text Paths	빈 텍스트 패스
 	Zero-Opacity Objects	불투명도 0% 오브젝트
 	Duplicate Objects	중복 오브젝트
 	Off-Artboard Art	아트보드 밖의 아트워크

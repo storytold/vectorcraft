@@ -1368,6 +1368,10 @@ file-filter	Templates	Шаблони
 	Font List	Список шрифтів
 	Show Similar Fonts	Показати схожі шрифти
 	Clear Similar Fonts	Скинути схожі шрифти
+	Fonts used in this document	Шрифти, використані в цьому документі
+	This document uses no available fonts	Цей документ не використовує доступних шрифтів
+	Recently Added	Нещодавно додані
+	Fonts added in the last 30 days	Шрифти, додані за останні 30 днів
 	Font Preview Size	Розмір попереднього перегляду шрифту
 	Font Size	Розмір шрифту
 	Variable Font	Варіативний шрифт
@@ -4930,6 +4934,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
 @msg	no anchor points selected	опорні точки не виділені
+@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
+@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})
@@ -6740,6 +6747,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Відкрийте документ, щоб перевірити його на проблеми.
 	Empty Text	Порожній текст
 	Unpainted Objects	Об’єкти без заливки й обведення
+	Empty Text Paths	Порожні текстові контури
 	Zero-Opacity Objects	Об’єкти з нульовою непрозорістю
 	Duplicate Objects	Дублікати об’єктів
 	Off-Artboard Art	Графіка поза монтажними областями

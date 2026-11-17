@@ -1340,6 +1340,10 @@ file-filter	Templates	Vorlagen
 	Font List	Schriftliste
 	Show Similar Fonts	Ähnliche Schriften anzeigen
 	Clear Similar Fonts	Ähnliche Schriften zurücksetzen
+	Fonts used in this document	In diesem Dokument verwendete Schriften
+	This document uses no available fonts	Dieses Dokument verwendet keine verfügbaren Schriften
+	Recently Added	Kürzlich hinzugefügt
+	Fonts added in the last 30 days	In den letzten 30 Tagen hinzugefügte Schriften
 	Font Preview Size	Größe der Schriftvorschau
 	Font Size	Schriftgrad
 	Variable Font	Variable Schrift
@@ -4812,6 +4816,9 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no active document	kein aktives Dokument
 @msg	no active perspective plane	keine aktive Perspektivebene
 @msg	no anchor points selected	keine Ankerpunkte ausgewählt
+@msg	`points` must be three [x, y] pairs of numbers	`points` muss aus drei Zahlenpaaren [x, y] bestehen
+@msg	direct-select three anchor points, or give `points`	wählen Sie drei Ankerpunkte direkt aus oder geben Sie `points` an
+@msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche
 @msg	no artboard {i} (0-based; the document has {_1})	keine Zeichenfläche {i} (Zählung ab 0; das Dokument hat {_1})
@@ -6722,6 +6729,7 @@ anchor	Points:	Punkte:
 	Open a document to check it for issues.	Öffnen Sie ein Dokument, um es auf Probleme zu prüfen.
 	Empty Text	Leerer Text
 	Unpainted Objects	Objekte ohne Farbe
+	Empty Text Paths	Leere Textpfade
 	Zero-Opacity Objects	Objekte mit 0 % Deckkraft
 	Duplicate Objects	Doppelte Objekte
 	Off-Artboard Art	Bildmaterial außerhalb der Zeichenflächen

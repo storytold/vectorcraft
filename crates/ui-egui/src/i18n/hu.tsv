@@ -1680,6 +1680,10 @@ file-filter	Templates	Sablonok
 	Font List	Betűtípuslista
 	Show Similar Fonts	Hasonló betűtípusok megjelenítése
 	Clear Similar Fonts	Hasonló betűtípusok törlése
+	Fonts used in this document	A dokumentumban használt betűtípusok
+	This document uses no available fonts	A dokumentum nem használ elérhető betűtípust
+	Recently Added	Nemrég hozzáadott
+	Fonts added in the last 30 days	Az elmúlt 30 napban hozzáadott betűtípusok
 	Font Preview Size	Betűtípus-előnézet mérete
 	Font Size	Betűméret
 	Variable Font	Változó betűtípus
@@ -5586,6 +5590,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no active document	nincs aktív dokumentum
 @msg	no active perspective plane	nincs aktív perspektivikus sík
 @msg	no anchor points selected	nincs kijelölt horgonypont
+@msg	`points` must be three [x, y] pairs of numbers	a `points` három [x, y] számpár legyen
+@msg	direct-select three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel három horgonypontot, vagy add meg a `points` értéket
+@msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
 @msg	no artboard {i} (0-based; the document has {_1})	nincs ilyen sorszámú rajztábla: {i} (0-tól számozva; a dokumentumban ennyi van: {_1})
@@ -7119,6 +7126,7 @@ anchor	Points:	Pontok:
 	Open a document to check it for issues.	Nyisson meg egy dokumentumot a problémák ellenőrzéséhez.
 	Empty Text	Üres szöveg
 	Unpainted Objects	Festetlen objektumok
+	Empty Text Paths	Üres szövegútvonalak
 	Zero-Opacity Objects	Nulla átlátszatlanságú objektumok
 	Duplicate Objects	Ismétlődő objektumok
 	Off-Artboard Art	Rajztáblákon kívüli grafika
