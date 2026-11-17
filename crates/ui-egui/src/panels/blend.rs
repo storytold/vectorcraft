@@ -50,10 +50,19 @@ fn available(app: &VectorcraftApp, cmd: &str) -> bool {
         && (cmd != "object.blend.reverseSpine" || !selects_blend_without_spine(app))
 }
 
-/// Is a blend made without a spine selected?
+/// Is a blend made without a spine selected? Each selected object counts as its nearest blend,
+/// itself or an ancestor, as the Object › Blend commands resolve it, so a key selected with Direct
+/// Selection counts as its blend.
 fn selects_blend_without_spine(app: &VectorcraftApp) -> bool {
-    let Ok(st) = app.session.doc() else { return false };
-    st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Blend { spec, .. }) if spec.no_spine))
+    let Some(st) = app.session.active().filter(|st| st.selection.symbol_part.is_none()) else { return false };
+    st.selection.objects.iter().any(|id| {
+        let ancestry = st.doc.ancestry(*id).unwrap_or_default();
+        let blend = ancestry.iter().rev().find_map(|a| match st.doc.node(*a).map(|n| &n.kind) {
+            Some(NodeKind::Blend { spec, .. }) => Some(spec.no_spine),
+            _ => None,
+        });
+        blend == Some(true)
+    })
 }
 
 /// `object.blend.options` parameters for spacing mode `mode`, with the step count and distance
