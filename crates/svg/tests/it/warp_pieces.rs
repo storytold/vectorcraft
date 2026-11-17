@@ -167,6 +167,37 @@ fn hidden_warp_pieces_share_no_image() {
     }
 }
 
+/// An image whose corners Perspective Distort moved is written with its pixels between those
+/// corners: opaque just inside each corner of the quad, and clear where its rectangle was but the
+/// quad is not.
+#[test]
+fn a_distorted_image_is_written_between_its_corners() {
+    let mut d = warped_pixels(&|p| p, false, [255, 0, 0, 255], |_| {});
+    let layer = std::sync::Arc::make_mut(&mut d.layers[0]);
+    let kids = layer.children_mut().unwrap();
+    let NodeKind::Group { children, .. } = &kids[0].kind else { panic!("the pieces") };
+    let NodeKind::Image(im) = &children[0].children().unwrap()[1].kind else { panic!("an image") };
+    let mut n =
+        Node::new(kids[0].id, NodeKind::Image(Box::new(ImageObject { xf: Affine::translate((10.0, 10.0)) * Affine::scale(20.0), ..(**im).clone() })));
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    n.set_image_corners(q).unwrap();
+    kids[0] = std::sync::Arc::new(n);
+    let svg = export_full(&d, &ExportOptions::default(), None).svg;
+    let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).unwrap();
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(400, 400).unwrap();
+    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(4.0, 4.0), &mut pixmap.as_mut());
+    let alpha = |x: f64, y: f64| pixmap.pixel((x * 4.0) as u32, (y * 4.0) as u32).unwrap().alpha();
+    // A point (in points) 2 pt inside each corner, toward the quad's middle.
+    let mid = Point::new(50.0, 50.0);
+    for c in q {
+        let inside = c + (mid - c).normalize() * 2.0;
+        assert!(alpha(inside.x, inside.y) > 200, "{c:?}: {}", alpha(inside.x, inside.y));
+    }
+    // The rectangle's top corners lie outside the quad.
+    assert_eq!(alpha(14.0, 14.0), 0);
+    assert_eq!(alpha(86.0, 14.0), 0);
+}
+
 /// Pieces of an opaque image are drawn one over another without knockout masks; a colorize paint
 /// draws a gray image's light pixels partly transparent, so its pieces take them.
 #[test]

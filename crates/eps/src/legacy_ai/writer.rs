@@ -322,7 +322,7 @@ impl<'a> Writer<'a> {
                 self.lock(locked);
                 self.text(t);
             }
-            NodeKind::Image(im) => {
+            NodeKind::Image(im) if !n.is_distorted_image() => {
                 self.lock(locked);
                 let shown = self.doc.shown_image(n, im);
                 let blob = self.doc.image_blob(&shown);
@@ -348,7 +348,8 @@ impl<'a> Writer<'a> {
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 self.warn(LIVE);
                 if self.nest < MAX_NEST {
                     let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);

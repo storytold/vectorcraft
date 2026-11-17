@@ -342,6 +342,10 @@ impl Node {
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric(symbols))),
             NodeKind::Text(t) => self.projected(t.bounds()),
+            // A distorted image is bounded by its corners.
+            NodeKind::Image(_) if self.is_distorted_image() => {
+                self.image_corners().map(|q| q[1..].iter().fold(Rect::from_points(q[0], q[0]), |r, p| r.union_pt(*p)))
+            }
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let art = symbols.and_then(|s| s.art(symbol)).map_or(SYMBOL_SQUARE, |a| a.geometric);
@@ -587,13 +591,19 @@ impl Node {
         {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
         }
-        // The area where an Intertwine member is drawn over the others moves with it.
+        // The area where an Intertwine member is drawn over the others moves with it, and so do a
+        // distorted image's corners.
         if let Some(e) = self.extras_if_any() {
             if let Some(area) = e.intertwine.as_mut() {
                 area.transform(a);
             }
             for area in &mut e.intertwine_tiers {
                 area.transform(a);
+            }
+            if let Some(q) = e.image_quad.as_mut() {
+                for p in q.iter_mut() {
+                    *p = a * *p;
+                }
             }
         }
     }

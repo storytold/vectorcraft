@@ -374,7 +374,9 @@ impl Exporter<'_> {
         let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
-            (NodeKind::Image(im), Some(m)) => self.masked_image(im, m, !n.extras().pixelated),
+            (NodeKind::Image(im), Some(m)) if !n.is_distorted_image() && !m.art.is_distorted_image() => {
+                self.masked_image(im, m, !n.extras().pixelated)
+            }
             _ => None,
         };
         if let Some(m) = mask
@@ -427,7 +429,7 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
+            NodeKind::Image(im) if !n.is_distorted_image() => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
                 (Some(p @ Paint::Solid { .. }), im) if self.doc.image_blob(&im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
                     let im = &*im;
                     if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
@@ -488,13 +490,15 @@ impl Exporter<'_> {
             }
             // A gradient mesh is a smooth patch shading where it can be written as one.
             NodeKind::Mesh(m) if self.mesh(s, m) => {}
-            // Live blends/envelopes/meshes export their evaluated (expanded) form.
+            // Live blends/envelopes/meshes (and distorted images) export their evaluated
+            // (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
                 for c in g.children().into_iter().flatten() {
                     self.node(s, c, page, false);

@@ -984,6 +984,21 @@ fn images_can_be_left_out_with_their_files() {
     assert!(r12.warnings.iter().any(|w| w.contains("no images")) && r12.setting_notes.is_empty());
 }
 
+/// DXF does not clip, so an image changed by Perspective Distort is written as one image at the
+/// placement nearest its corners, with a warning; an undistorted image gets no warning.
+#[test]
+fn a_distorted_image_is_written_as_its_nearest_parallelogram_with_a_warning() {
+    let mut d = image_and_fill_doc(Paint::None);
+    let warned = |o: &DxfOutput| o.warnings.iter().any(|w| w.contains("Perspective Distort or Free Distort"));
+    assert!(!warned(&export(&d, &opts(&d)).unwrap()));
+    let id = d.layers[0].children().unwrap()[1].id;
+    let q = [(12.0, 20.0), (28.0, 20.0), (30.0, 30.0), (10.0, 30.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let out = export(&d, &opts(&d)).unwrap();
+    assert!(warned(&out), "{:?}", out.warnings);
+    assert_eq!(kinds(&out).iter().filter(|k| *k == "IMAGE").count(), 1, "{:?}", kinds(&out));
+}
+
 #[test]
 fn images_and_hatches_are_left_out_independently_and_the_cnc_preset_leaves_out_both() {
     let d = image_and_fill_doc(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));

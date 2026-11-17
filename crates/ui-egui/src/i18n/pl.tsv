@@ -5344,6 +5344,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ten obrys utworzyłby ponad {max} punktów kontrolnych, więcej niż dokument może płynnie wyświetlić: zwiększ Szum, zmniejsz Ścieżki lub Kolory albo wybierz ustawienie o niższej wierności
 @msg	select an envelope	zaznacz kopertę
 @msg	select an image	zaznacz obraz
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	obiekt {_1} to obraz zmieniony przez Zniekształcenie perspektywiczne lub Swobodne zniekształcanie, na którym to polecenie nie działa
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	obrazu {_1} nie można tak zniekształcić: jego narożniki nie utworzyłyby kształtu wypukłego
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	obrazu {_1} nie można tak zniekształcić: jego narożniki przekroczyłyby horyzont zniekształcenia
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	obrazu {_1} nie można tak zniekształcić: jego narożniki byłyby zbyt blisko siebie dla odwzorowania perspektywicznego
 @msg	`background` must be edges, corners or colors	`background` musi mieć wartość edges, corners lub colors
 @msg	`match` must be distance or channels	`match` musi mieć wartość distance lub channels
 @msg	`{key}` must be from 0 to 100	`{key}` musi mieścić się w zakresie od 0 do 100

@@ -608,6 +608,20 @@ fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission
     }
 }
 
+/// A distorted image comes with its corners, and with the transform that matches it at its middle
+/// rather than the one it had before the distort.
+#[test]
+fn a_distorted_image_comes_with_its_corners() {
+    let (mut d, _, _, [_, embedded, linked, ..]) = mixed();
+    let q = [(40.0, 60.0), (42.0, 60.0), (44.0, 62.0), (40.0, 62.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(embedded).unwrap().set_image_corners(q).unwrap();
+    let e = encode_read_only(&d, d.node(embedded).unwrap()).unwrap();
+    assert_eq!(e["corners"], json!([[40.0, 60.0], [42.0, 60.0], [44.0, 62.0], [40.0, 62.0]]));
+    assert_ne!(e["transform"], json!([2.0, 0.0, 0.0, 2.0, 40.0, 60.0]));
+    let plain = encode_read_only(&d, d.node(linked).unwrap()).unwrap();
+    assert!(plain.get("corners").is_none());
+}
+
 /// A CMYK image's pixels are its inks as the working CMYK profile shows them on the canvas: black
 /// ink alone is the profile's black, not RGB black.
 #[test]

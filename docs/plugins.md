@@ -662,7 +662,9 @@ every attribute:
   of JSON: type whose runs and paragraphs don't fit what the type before it in paint order left comes with
   `truncated: true` too.
 - An image (`"image"`): `pixelSize` is its width and height in pixels; `colorMode` is `"rgb"`, `"cmyk"`, `"gray"` or
-  `"unknown"`, read from the image itself. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
+  `"unknown"`, read from the image itself. An image changed by Perspective Distort or Free Distort also has `corners`,
+  its pixel rectangle's corners on the page (top left, top right, bottom right, bottom left), and its `transform` is the
+  affine placement that matches it at its middle. An embedded image whose pixels take at most 1 MiB in base64 (443 × 443
   pixels fit) has them in `pixelsBase64`: straight RGBA, 8 bits a channel, row by row from the top, and
   `pixelsOmitted: false`. A CMYK image's pixels are its inks through the working CMYK profile, as sRGB. The pixels of
   all the images in one input take at most 16 MiB in base64, and an image the host starts to decode takes its size

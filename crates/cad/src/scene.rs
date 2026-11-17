@@ -34,6 +34,7 @@ const WIDE_LINES: &str =
     "lines wider than 2.11 mm (the widest lineweight) are written at 2.11 mm: Alter Paths for Appearance writes their true width";
 const STROKE_EXTRAS: &str = "stroke alignment, width profiles, arrowheads and brushes are left out (Maximize Editability writes strokes as lines)";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
+const DISTORTED_IMAGES: &str = "images changed by Perspective Distort or Free Distort are written as the nearest parallelogram";
 const TYPE_ITEMS: &str = "fills and strokes added to whole type objects are left out of text entities (outline the text to keep them)";
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
@@ -671,7 +672,15 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
+            NodeKind::Image(im) => match vectorcraft_doc::image_quad::nearest_affine(n) {
+                // DXF clips nothing, so a distorted image is written at the affine placement nearest
+                // its corners.
+                Some(xf) => {
+                    self.warn(DISTORTED_IMAGES);
+                    self.image(&ImageObject { xf, ..self.doc.shown_image(n, im).into_owned() });
+                }
+                None => self.image(&self.doc.shown_image(n, im)),
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
                 if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {

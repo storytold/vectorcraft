@@ -781,6 +781,16 @@ fn prepare(s: &Session, p: &Value) -> Result<PlaceJob> {
         (true, _) => return Err(bad(PLACE, "replace: select the one object to replace")),
     };
     let replaced = old.and_then(|id| st.doc.node(id)).cloned();
+    // Replace keeps the replaced image's transform, which a distortion's corners do not follow.
+    if let Some(n) = &replaced {
+        let inner = match &n.kind {
+            NodeKind::Group { children, clip: true } => children.get(1).filter(|c| c.is_distorted_image()).map(|c| c.id),
+            _ => None,
+        };
+        if let Some(id) = n.is_distorted_image().then_some(n.id).or(inner) {
+            return Err(super::xform::distorted_image_error(PLACE, id));
+        }
+    }
     Ok(PlaceJob { doc: st.uid, params: p.clone(), old, replaced, target: board_at(&st.doc, at) })
 }
 
@@ -1165,8 +1175,9 @@ pub(crate) fn image_info(s: &mut Session, p: &Value) -> Result<Value> {
     let doc = super::links::with_brush_art(&st.doc);
     let n = doc.stored_node(id).map(|(n, _)| &**n).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &n.kind else { return Err(bad(C, format!("object {} is not an image", id.0))) };
-    // Effective resolution: 72 pt per inch over the points one pixel spans along each axis.
-    let [a, b, c, d, ..] = im.xf.as_coeffs();
+    // Effective resolution: 72 pt per inch over the points one pixel spans along each axis (at the
+    // middle of a distorted image).
+    let [a, b, c, d, ..] = vectorcraft_doc::image_quad::nearest_affine(n).unwrap_or(im.xf).as_coeffs();
     let ppi = |x: f64, y: f64| Some(x.hypot(y)).filter(|l| *l > 1e-12).map_or(0.0, |l| 72.0 / l);
     let size = n.geometric_bounds().unwrap_or_default();
     // A linked file outside the read roots of the caller asking now is left unnamed, as in Link Info.

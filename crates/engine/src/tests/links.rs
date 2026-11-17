@@ -588,6 +588,53 @@ fn a_symbols_link_without_a_relative_path_follows_the_moved_file() {
     assert_eq!(paths, [moved.clone(), moved], "the layers' link, then the symbol's");
 }
 
+/// Update Links gives a distorted image its file's new pixels between the same corners: its
+/// Placement Options' fill and clip do not move or clip it.
+#[test]
+fn update_links_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-update");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    let corners = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().image_corners().unwrap();
+    let before = corners(&s);
+    assert!(s.doc().unwrap().doc.node(id).unwrap().is_distorted_image());
+    // A copy in a symbol, distorted the same way, shows the same file.
+    let copy = place(&mut s, &photo);
+    s.execute("links.placementOptions", &json!({"ids": [copy.0], "preserve": "fill", "clip": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [copy.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[240, 300], [260, 300], [300, 400], [200, 400]]})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [copy.0]})).unwrap();
+    let in_symbol = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.symbols[0].art.walk(&mut |n| {
+            if let NodeKind::Image(im) = &n.kind {
+                out.push((n.is_distorted_image(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    assert_eq!(in_symbol(&s), [(true, (20, 10))]);
+    write(&photo, &png(60, 20, BLUE));
+    let u = s.execute("links.update", &json!({})).unwrap();
+    assert_eq!(u["updated"].as_array().unwrap().len(), 2, "{u}");
+    let d = &s.doc().unwrap().doc;
+    let n = d.node(id).unwrap();
+    assert!(n.is_distorted_image());
+    assert_eq!(corners(&s), before);
+    let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+    assert_eq!((im.width, im.height), (60, 20));
+    assert!(!matches!(d.parent_of(id).and_then(|p| d.node(p)).map(|p| &p.kind), Some(NodeKind::Group { clip: true, .. })), "not clipped");
+    let mut clipped = false;
+    d.symbols[0].art.walk(&mut |n| clipped |= matches!(n.kind, NodeKind::Group { clip: true, .. }));
+    assert!(!clipped, "the symbol's image is not clipped");
+    assert_eq!(in_symbol(&s), [(true, (60, 20))]);
+}
+
 /// Update Links reads a changed file again for the images inside symbols, patterns and opacity
 /// masks too: those showing the same content as an image in the layers, and those no object in the
 /// layers shows. Each takes the file's place as its own Placement Options say, in one undo step,

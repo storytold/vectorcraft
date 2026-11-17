@@ -5660,6 +5660,10 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a symbol can't hold an instance of itself	ký hiệu không thể chứa đối tượng của chính nó
 @msg	select an envelope	hãy chọn một Envelope
 @msg	select an image	hãy chọn ảnh
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	đối tượng {_1} là ảnh đã được thay đổi bằng Làm méo phối cảnh hoặc Làm méo tự do, lệnh này không dùng được với ảnh đó
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	không thể làm méo ảnh {_1} theo cách này: các góc của ảnh sẽ không tạo thành hình lồi
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	không thể làm méo ảnh {_1} theo cách này: các góc của ảnh sẽ vượt qua đường chân trời của phép làm méo
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	không thể làm méo ảnh {_1} theo cách này: các góc của ảnh sẽ quá gần nhau để ánh xạ phối cảnh
 @msg	`background` must be edges, corners or colors	`background` phải là edges, corners hoặc colors
 @msg	`match` must be distance or channels	`match` phải là distance hoặc channels
 @msg	`{key}` must be from 0 to 100	`{key}` phải nằm trong khoảng 0 đến 100

@@ -5558,6 +5558,10 @@ imageTrace	Outline	Contour
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	deze tracering zou meer dan {max} ankerpunten opleveren, meer dan het document vloeiend kan tonen: verhoog Ruis, verlaag Paden of Kleuren, of kies een voorinstelling met een lagere getrouwheid
 @msg	select an envelope	selecteer een omvorming
 @msg	select an image	selecteer een afbeelding
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	object {_1} is een afbeelding die met Perspectief vervormen of Vrij vervormen is gewijzigd, en deze opdracht werkt daar niet op
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	afbeelding {_1} kan niet zo worden vervormd: de hoeken zouden geen convexe vorm maken
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	afbeelding {_1} kan niet zo worden vervormd: de hoeken zouden de horizon van de vervorming overschrijden
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	afbeelding {_1} kan niet zo worden vervormd: de hoeken zouden te dicht bij elkaar liggen voor een perspectivische afbeelding
 @msg	select an object in perspective	selecteer een object in perspectief
 @msg	select artwork (or a colour group) to recolor	selecteer een illustratie (of een kleurgroep) om te herkleuren
 @msg	select at least two objects	selecteer minstens twee objecten

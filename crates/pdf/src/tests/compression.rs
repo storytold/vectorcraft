@@ -154,6 +154,34 @@ fn a_warped_image_is_written_once_for_all_its_pieces() {
     }
 }
 
+/// An image changed by Perspective Distort is written as the pieces of its mesh, placed so that
+/// its pixel rectangle's corners land on its corners: read back, each corner of the quad is a
+/// corner of one of the pieces' images.
+#[test]
+fn a_distorted_image_is_written_with_its_corners_on_its_quad() {
+    let mut d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(40.0, 10.0), (60.0, 10.0), (90.0, 90.0), (10.0, 90.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let bytes = export_with_report(&d, &PdfOptions::default()).unwrap().bytes;
+    let back = crate::import(&bytes).unwrap();
+    let (mut seen, mut pieces) = ([false; 4], 0);
+    back.walk(|n| {
+        if let NodeKind::Image(im) = &n.kind {
+            pieces += 1;
+            let (w, h) = (f64::from(im.width), f64::from(im.height));
+            for p in [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)] {
+                let at = im.xf * Point::new(p.0, p.1);
+                for (i, c) in q.iter().enumerate() {
+                    seen[i] |= at.distance(*c) < 0.01;
+                }
+            }
+        }
+    });
+    assert!(pieces > 2, "{pieces}");
+    assert_eq!(seen, [true; 4]);
+}
+
 #[test]
 fn jpeg_zip_and_automatic_compression() {
     let png = doc(encoded(colour(), ImageFormat::Png), "image/png");

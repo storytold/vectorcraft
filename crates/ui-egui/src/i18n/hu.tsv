@@ -5970,6 +5970,10 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	a symbol can't hold an instance of itself	egy szimbólum nem tartalmazhatja a saját példányát
 @msg	select an envelope	jelölj ki egy burkolót
 @msg	select an image	jelölj ki egy képet
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ez a parancs nem működik Perspektivikus torzítással vagy Szabad torzítással módosított képen: {_1}
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	a kép nem torzítható így, mert a sarkai nem alkotnának konvex alakzatot: {_1}
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	a kép nem torzítható így, mert a sarkai átlépnék a torzítás horizontját: {_1}
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	a kép nem torzítható így, mert a sarkai túl közel lennének egymáshoz a perspektivikus leképezéshez: {_1}
 @msg	`background` must be edges, corners or colors	a `background` értéke edges, corners vagy colors lehet
 @msg	`match` must be distance or channels	a `match` értéke distance vagy channels lehet
 @msg	`{key}` must be from 0 to 100	a `{key}` értéke 0 és 100 között lehet

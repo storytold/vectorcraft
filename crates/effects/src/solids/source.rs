@@ -155,7 +155,8 @@ impl Resolver<'_> {
             return Ok(true);
         }
         let (w, h) = (f64::from(im.width), f64::from(im.height));
-        let corners = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)].map(|(x, y)| im.xf * Point::new(x, y));
+        // A distorted image's frame joins its corners.
+        let corners = c.image_corners().unwrap_or_else(|| [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)].map(|(x, y)| im.xf * Point::new(x, y)));
         if corners.iter().any(|p| !p.x.is_finite() || !p.y.is_finite()) {
             return Err(image_refusal(self.label));
         }

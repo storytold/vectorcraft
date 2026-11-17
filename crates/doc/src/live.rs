@@ -57,11 +57,11 @@ pub use envelope::{
     envelope_content_boxes, envelope_content_boxes_with, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of,
     envelope_overlay, envelope_stroke_margin, set_type_ink, smooth_handles, warp_grid,
 };
-pub(crate) use expand::max_outset;
 pub use expand::{
     Hooks, MAX_GENERATED, Outliner, PatternTiles, affine_near, expand_deep, expand_deep_hooks, expand_live, expand_live_hooks, expand_live_with,
-    expanded_group, expanded_group_hooks, is_live, mesh_quad_nodes, mesh_warp_cost, mesh_warp_image, subtree_has_live,
+    expanded_group, expanded_group_hooks, is_drawn_live, is_live, mesh_quad_nodes, mesh_warp_cost, mesh_warp_image, subtree_has_live,
 };
+pub(crate) use expand::{max_outset, mesh_warp_image_with};
 #[cfg(test)]
 use mesh::grid_eval;
 pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};

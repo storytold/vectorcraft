@@ -31,6 +31,7 @@ const BLENDING: &str = "blending modes are left out";
 const MASKS: &str = "opacity masks are left out";
 const RASTER_FX: &str = "raster effects (shadows, glows, blurs, feathering) are left out";
 const CLIPPING: &str = "clipping masks are not applied: the art they clip is written whole";
+const DISTORTED_IMAGES: &str = "images changed by Perspective Distort or Free Distort are written as the nearest parallelogram";
 const FLAT_GRADIENTS: &str = "gradients are written as one colour, the average of their stops";
 const FLAT_PATTERNS: &str = "pattern fills are written as one colour";
 const TOO_MANY_TILES: &str = "pattern fills past 250,000 tiles in all are written as one colour";
@@ -213,7 +214,21 @@ impl<'a> Scene<'a> {
                     self.node(&o, true);
                 }
             }
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
+            NodeKind::Image(im) => match vectorcraft_doc::image_quad::nearest_affine(n) {
+                // A format that clips writes a distorted image as the pieces of its mesh; one that
+                // doesn't, at the affine placement nearest its corners.
+                Some(_) if self.clips => {
+                    let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                    for c in g.children().into_iter().flatten() {
+                        self.node(c, false);
+                    }
+                }
+                Some(xf) => {
+                    self.warn(DISTORTED_IMAGES);
+                    self.image(&ImageObject { xf, ..self.doc.shown_image(n, im).into_owned() });
+                }
+                None => self.image(&self.doc.shown_image(n, im)),
+            },
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST

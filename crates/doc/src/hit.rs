@@ -1423,12 +1423,21 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
         // #3291, and in outline mode where the frame is all that is drawn, #6437), and where its
         // own fills and strokes paint ([`image_paint`]) except in outline mode.
         NodeKind::Image(im) => {
+            // A distorted image's frame joins its corners ([`Node::image_frame`]).
+            let distorted = n.image_frame().filter(|_| n.is_distorted_image());
             if opt.path_only || (opt.outline && !symbols.document().setup.outline_images) {
                 use vectorcraft_geom::kurbo::Shape;
-                let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
-                frame.apply_affine(im.xf);
+                let frame = distorted.unwrap_or_else(|| {
+                    let mut frame = Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1);
+                    frame.apply_affine(im.xf);
+                    frame
+                });
                 if stroke_contains(&frame, 0.0, opt.tol, p) {
                     return Some(HitKind::Outline);
+                }
+            } else if let Some(frame) = &distorted {
+                if fill_contains(frame, FillRule::NonZero, p) || stroke_contains(frame, 0.0, opt.tol, p) {
+                    return Some(HitKind::Bounds);
                 }
             } else if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
                 return Some(HitKind::Bounds);

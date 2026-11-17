@@ -58,6 +58,7 @@ impl Serialize for Node {
             e.color_mask.is_none(),
             is_default(&e.warp_piece),
             is_default(&e.clip_pieces),
+            e.image_quad.is_none(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -104,6 +105,7 @@ impl Serialize for Node {
         field!("color_mask", &e.color_mask);
         field!("warp_piece", &e.warp_piece);
         field!("clip_pieces", &e.clip_pieces);
+        field!("image_quad", &e.image_quad);
         st.end()
     }
 }
@@ -253,6 +255,8 @@ pub(super) struct NodeWire {
     warp_piece: bool,
     #[serde(default)]
     clip_pieces: bool,
+    #[serde(default)]
+    image_quad: Option<Box<[vectorcraft_geom::Point; 4]>>,
 }
 
 impl From<NodeWire> for Node {
@@ -284,6 +288,7 @@ impl From<NodeWire> for Node {
             color_mask: w.color_mask,
             warp_piece: w.warp_piece,
             clip_pieces: w.clip_pieces,
+            image_quad: w.image_quad,
         };
         Node {
             id: w.id,

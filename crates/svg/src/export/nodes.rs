@@ -89,6 +89,7 @@ impl Reuse {
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. } => (self.turns, self.scales) = (false, false),
+            NodeKind::Image(_) if n.is_distorted_image() => (self.turns, self.scales) = (false, false),
             NodeKind::SymbolInstance { symbol, .. } => {
                 // A scale reaching an instance of a symbol with 9-slice guides changes how its
                 // cells are sized.
@@ -987,7 +988,7 @@ impl Writer<'_> {
                 self.shape(n, &d.join(" "), None, &paths, *rule, export_shape_bounds(n));
             }
             NodeKind::Text(t) => self.text_node(n, t),
-            NodeKind::Image(im) => {
+            NodeKind::Image(im) if !n.is_distorted_image() => {
                 let shown = self.doc.shown_image(n, im);
                 let im = &*shown;
                 if let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref()
@@ -1089,13 +1090,15 @@ impl Writer<'_> {
                 self.line("</g>");
                 (self.xf, self.instance_xf) = saved;
             }
-            // Live blends/envelopes/meshes export their evaluated (expanded) form.
+            // Live blends/envelopes/meshes (and distorted images) export their evaluated
+            // (expanded) form.
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Mesh(_)
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
-            | NodeKind::Intertwine { .. } => {
+            | NodeKind::Intertwine { .. }
+            | NodeKind::Image(_) => {
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
                 self.share_images(&g);
                 self.node_body(&g);

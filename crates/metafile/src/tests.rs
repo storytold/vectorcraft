@@ -288,6 +288,25 @@ fn emf_clips_gradients_and_images() {
     assert_eq!((count(&k, 35), count(&k, 36)), (3, 3));
 }
 
+/// An image changed by Perspective Distort is written as the clipped pieces of its mesh where
+/// the format clips (EMF), and as one image at the placement nearest its corners, with a warning,
+/// where it does not (WMF).
+#[test]
+fn a_distorted_image_is_its_mesh_with_clips_and_its_nearest_parallelogram_without() {
+    let mut d = doc_with(100.0, 100.0, vec![]);
+    let img = image_node(&mut d, png(4, 4, [10, 20, 30, 255]), 4, 4, Affine::scale(10.0));
+    add(&mut d, img);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(16.0, 0.0), (24.0, 0.0), (40.0, 40.0), (0.0, 40.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let images = |ops: &[crate::scene::Op]| ops.iter().filter(|o| matches!(o, crate::scene::Op::Image { .. })).count();
+    let warned = |w: &[String]| w.iter().any(|w| w.contains("Perspective Distort or Free Distort"));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(images(&ops) > 2 && !warned(&warnings), "{} images, {warnings:?}", images(&ops));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, false).run();
+    assert!(images(&ops) == 1 && warned(&warnings), "{} images, {warnings:?}", images(&ops));
+}
+
 #[test]
 fn type_is_written_as_outlines() {
     let t = TextObject::point(Point::new(10.0, 50.0), "Hi", CharStyle { fill: red(), ..CharStyle::default() });

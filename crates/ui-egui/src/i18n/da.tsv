@@ -7685,6 +7685,10 @@ imageTrace	Outline	Kontur
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	denne sporing ville skabe flere end {max} ankerpunkter, hvilket er flere, end dokumentet kan vise flydende: hæv Støj, sænk Stier eller Farver, eller vælg en forudindstilling med lavere kvalitet
 @msg	select an envelope	markér en konvolut
 @msg	select an image	markér et billede
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	objektet {_1} er et billede, der er ændret med Perspektivforvrængning eller Fri forvrængning, og denne kommando virker ikke på det
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	billedet {_1} kan ikke forvrænges sådan: dets hjørner ville ikke danne en konveks form
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	billedet {_1} kan ikke forvrænges sådan: dets hjørner ville krydse forvrængningens horisont
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	billedet {_1} kan ikke forvrænges sådan: dets hjørner ville ligge for tæt på hinanden til en perspektivisk afbildning
 @msg	select an object in perspective	markér et objekt i perspektiv
 @msg	select artwork (or a colour group) to recolor	markér grafik (eller en farvegruppe) for at skifte farver
 @msg	select at least two objects	markér mindst to objekter

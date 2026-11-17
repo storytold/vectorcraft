@@ -7013,6 +7013,10 @@ font-technology	Variable	ცვლადი
 @msg	this trace would make more than {max} anchor points, more than the document can show smoothly: raise Noise, lower Paths or Colors, or pick a lower-fidelity preset	ეს ვექტორიზაცია {max}-ზე მეტ საყრდენ წერტილს შექმნიდა, რასაც დოკუმენტი შეუფერხებლად ვერ აჩვენებს: გაზარდეთ ხმაური, შეამცირეთ ტრაექტორიები ან ფერები, ან აირჩიეთ ნაკლები სიზუსტის პრესეტი
 @msg	select an envelope	მონიშნეთ გარსი
 @msg	select an image	მონიშნეთ გამოსახულება
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	ობიექტი {_1} არის პერსპექტიული დეფორმაციით ან თავისუფალი დეფორმაციით შეცვლილი გამოსახულება, რომელზეც ეს ბრძანება არ მუშაობს
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები ამოზნექილ ფორმას ვერ შექმნის
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები დეფორმაციის ჰორიზონტს გადაკვეთს
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	გამოსახულება {_1} ასე ვერ დეფორმირდება: მისი კუთხეები პერსპექტიული ასახვისთვის ერთმანეთთან ძალიან ახლოს იქნება
 @msg	`background` must be edges, corners or colors	`background` უნდა იყოს edges, corners ან colors
 @msg	`match` must be distance or channels	`match` უნდა იყოს distance ან channels
 @msg	`{key}` must be from 0 to 100	`{key}` უნდა იყოს 0-დან 100-მდე
