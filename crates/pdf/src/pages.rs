@@ -323,9 +323,9 @@ pub struct TrimPages {
     pub bleed: [f64; 4],
 }
 
-/// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
-/// uses the shared reader's immutable per-document limits, and its input copy is fallible. One
-/// image may decode to the bytes and pixels of [`crate::streams::image_limits`] for this build.
+/// The shared reader's options: files of any size are accepted. Ordinary stream decoding uses the shared reader's immutable per-document limits, and its input
+/// copy is fallible. One image may decode to the bytes and pixels of
+/// [`crate::streams::image_limits`] for this build, past the shared reader's defaults.
 pub(crate) fn open_options() -> craft_pdf::OpenOptions {
     let (bytes, pixels) = crate::streams::image_limits(crate::streams::LARGE_IMAGES);
     let decode_limits = craft_pdf::syntax::DecodeLimits::default().with_max_decoded_image(bytes).with_max_image_pixels(pixels);

@@ -312,6 +312,8 @@ impl<'a> Device<'a> for Builder<'_> {
                         let px = match (img, alpha) {
                             // An opaque image's RGB samples are encoded as they are, with no copy.
                             (ImageData::Rgb(d), None) if !white => (d.data, false),
+                            // Gray samples are stored as RGB: as a gray PNG, the image would become a
+                            // grayscale image that a fill color colorizes.
                             (ImageData::Luma(d), None) if !white => (d.data.iter().flat_map(|g| [*g; 3]).collect(), false),
                             (img, alpha) => {
                                 let a = alpha.map(|a| resize_alpha(&a, w, h)).unwrap_or_else(|| vec![255; (w * h) as usize]);
