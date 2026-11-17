@@ -1150,7 +1150,7 @@ impl Clipboard {
         if same_doc {
             return;
         }
-        let used = self.used();
+        let used = self.used(d);
         let colors: BTreeMap<String, Color> = self
             .conflicts(d, &used)
             .into_iter()
