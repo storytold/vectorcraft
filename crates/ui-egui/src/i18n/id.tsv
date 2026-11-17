@@ -34,7 +34,7 @@
 	Clear Recent Files	Kosongkan berkas terbaru
 	Show in Folder	Tampilkan di folder
 	Close	Tutup
-@id	file.close	berkas.tutup
+@id	file.close	Tutup
 	Close All	Tutup semua
 	Save	Simpan
 	Save As…	Simpan sebagai…
@@ -513,7 +513,7 @@
 	Zig Zag…	Zig Zag…
 	Pathfinder	Pathfinder
 	Add	Tambah
-@id	pathfinder.add	pathfinder.tambah
+@id	pathfinder.add	Satukan
 	Intersect	Iris
 	Exclude	Kecualikan
 	Subtract	Kurangi
@@ -3389,6 +3389,10 @@ theme	Appearance	Tampilan
 	Font List	Daftar font
 	Show Similar Fonts	Tampilkan font serupa
 	Clear Similar Fonts	Hapus font serupa
+	Fonts used in this document	Font yang digunakan dalam dokumen ini
+	This document uses no available fonts	Dokumen ini tidak menggunakan font yang tersedia
+	Recently Added	Baru ditambahkan
+	Fonts added in the last 30 days	Font yang ditambahkan dalam 30 hari terakhir
 	Fonts in Document	Font dalam dokumen
 	Refresh Font List	Segarkan daftar font
 	Replace Font	Ganti font
@@ -6492,6 +6496,7 @@ anchor	Points:	Titik:
 	Open a document to check it for issues.	Buka dokumen untuk memeriksa masalahnya.
 	Empty Text	Teks kosong
 	Unpainted Objects	Objek tanpa warna
+	Empty Text Paths	Jalur teks kosong
 	Zero-Opacity Objects	Objek dengan opasitas nol
 	Duplicate Objects	Objek duplikat
 	Off-Artboard Art	Karya di luar artboard

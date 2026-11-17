@@ -621,7 +621,7 @@ digits	Malayalam	말라얄람어
 	Feather…	페더…
 	SVG Filters	SVG 필터
 	Apply SVG Filter…	SVG 필터 적용…
-	Warp	왜곡
+	Warp	뒤틀기
 	Arc…	호…
 	Arc Lower…	아래쪽 호…
 	Arc Upper…	위쪽 호…
@@ -768,7 +768,7 @@ digits	Malayalam	말라얄람어
 	Keep Tools Beside the Canvas	캔버스 옆에 도구 배치
 	Actions	액션
 	Asset Export	에셋 내보내기
-	Attributes	속성
+	Attributes	특성
 	Brushes	브러시
 	Color	색상
 	Color Guide	색상 가이드
@@ -1859,6 +1859,10 @@ antiAlias	Sharp	날카롭게
 	Font List	글꼴 목록
 	Show Similar Fonts	유사한 글꼴 표시
 	Clear Similar Fonts	유사한 글꼴 지우기
+	Fonts used in this document	이 문서에서 사용된 글꼴
+	This document uses no available fonts	이 문서는 사용 가능한 글꼴을 사용하지 않습니다
+	Recently Added	최근 추가됨
+	Fonts added in the last 30 days	최근 30일 동안 추가된 글꼴
 	Font Preview Size	글꼴 미리 보기 크기
 	Font:	글꼴:
 	Fonts	글꼴
@@ -4703,6 +4707,9 @@ theme	Appearance	외관
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
+@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
+@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
 @msg	no saved presets	저장된 프리셋이 없습니다
@@ -5837,6 +5844,24 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
+@msg	an SVG filter has no event attributes such as {_1}	SVG 필터에는 {_1} 같은 이벤트 속성이 없습니다
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 필터의 이미지는 PNG, JPEG, GIF 또는 WebP data: URL입니다
+@msg	the SVG filter isn't valid XML: {e}	SVG 필터가 올바른 XML이 아닙니다: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence의 numOctaves는 최대 {MAX_OCTAVES}입니다
+@msg	{what} is at most {max}	{what}은(는) 최대 {max}입니다
+@msg	feConvolveMatrix's order	feConvolveMatrix의 order
+@msg	feMorphology's radius	feMorphology의 radius
+@msg	a blur's stdDeviation	흐림 효과의 stdDeviation
+@msg	the SVG filter has no primitives	SVG 필터에 프리미티브가 없습니다
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 필터의 프리미티브는 최대 {MAX_PRIMITIVES}개입니다
+@msg	the SVG filter is too large once its attributes are written out	속성을 모두 쓰면 SVG 필터가 너무 커집니다
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 필터의 이미지는 모두 합쳐 최대 {MAX_IMAGE_PIXELS}픽셀입니다
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG 필터를 그릴 수 없습니다: 프리미티브와 그 입력을 확인하세요
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 필터의 요소는 최대 {MAX_DEPTH}단계까지 중첩됩니다
+@msg	an SVG filter is at most {_1} KB	SVG 필터는 최대 {_1}KB입니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
@@ -6735,6 +6760,7 @@ anchor	Points:	포인트:
 	Open a document to check it for issues.	문서를 열면 문제를 점검할 수 있습니다.
 	Empty Text	빈 텍스트
 	Unpainted Objects	칠하지 않은 오브젝트
+	Empty Text Paths	빈 텍스트 패스
 	Zero-Opacity Objects	불투명도 0% 오브젝트
 	Duplicate Objects	중복 오브젝트
 	Off-Artboard Art	아트보드 밖의 아트워크

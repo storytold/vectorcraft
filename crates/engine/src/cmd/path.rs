@@ -1874,19 +1874,84 @@ fn cut_at_anchors(s: &mut Session, _: &Value) -> Result<Value> {
         }
         cut.finish(d)?;
         // Each cut leaves one of its two coincident anchors selected, so a drag pulls the ends apart.
-        sel.clear();
-        for (id, a) in picked {
-            sel.add(id);
-            sel.anchors.entry(id).or_default().insert(a);
-        }
+        select_cut_ends(sel, &picked);
         Ok(all)
     })?;
     Ok(super::draw2::ids_json(&ids))
 }
 
+/// Replaces the selection with the anchors in `picked`: each id once, in the order it first
+/// appears, with every anchor listed for it. An empty `picked` clears the selection.
+fn select_cut_ends(sel: &mut Selection, picked: &[(NodeId, (usize, usize))]) {
+    sel.set(picked.iter().map(|(id, _)| *id));
+    for (id, a) in picked {
+        sel.anchors.entry(*id).or_default().insert(*a);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `select_cut_ends` by clearing the selection and adding each id in turn, kept as the
+    /// reference the one-call version must match.
+    fn select_cut_ends_one_by_one(sel: &mut Selection, picked: &[(NodeId, (usize, usize))]) {
+        sel.clear();
+        for (id, a) in picked {
+            sel.add(*id);
+            sel.anchors.entry(*id).or_default().insert(*a);
+        }
+    }
+
+    /// A selection with every field set, the art made since the last deselect included.
+    fn busy_selection() -> Selection {
+        Selection {
+            objects: vec![NodeId(90), NodeId(91)],
+            anchors: [(NodeId(90), [(0, 3)].into())].into(),
+            segments: [(NodeId(91), [(0, 1)].into())].into(),
+            key: Some(NodeId(90)),
+            target: Some(NodeId(91)),
+            slices: vec![NodeId(92)],
+            guides: vec![NodeId(93)],
+            key_guide: Some(NodeId(93)),
+            key_anchor: Some((NodeId(90), (0, 3))),
+            symbol_part: Some(vectorcraft_doc::SymbolPart { instance: NodeId(94), path: vec![0, 2] }),
+            on_path_member: Some(NodeId(95)),
+            new_art: Arc::new([NodeId(90), NodeId(97)].into()),
+        }
+    }
+
+    /// The cut ends of open paths, of an opened closed path, of a path of several subpaths (one id
+    /// with several anchors, first seen before other ids), long lists and an empty one give the
+    /// same selection, every field, as clearing it and adding each id in turn.
+    #[test]
+    fn selecting_cut_ends_matches_adding_them_one_by_one() {
+        let n = NodeId;
+        let mut cases: Vec<Vec<(NodeId, (usize, usize))>> = vec![
+            vec![],
+            vec![(n(1), (0, 0)), (n(2), (0, 0))],
+            vec![(n(5), (0, 0))],
+            vec![(n(7), (0, 0)), (n(3), (1, 0)), (n(8), (0, 0)), (n(3), (2, 0)), (n(7), (0, 0)), (n(3), (0, 0))],
+        ];
+        let mut rng = Lcg(11);
+        for len in [50, 2_000] {
+            cases.push((0..len).map(|_| (n(rng.below(300) + 1), (rng.below(4) as usize, 0))).collect());
+        }
+        for picked in &cases {
+            for start in [Selection::default(), busy_selection()] {
+                let (mut ours, mut theirs) = (start.clone(), start.clone());
+                select_cut_ends(&mut ours, picked);
+                select_cut_ends_one_by_one(&mut theirs, picked);
+                assert_eq!(ours, theirs, "{picked:?}");
+                assert_eq!(ours.new_art, start.new_art);
+            }
+        }
+        let mut sel = busy_selection();
+        select_cut_ends(&mut sel, &cases[3]);
+        assert_eq!(sel.objects, [n(7), n(3), n(8)]);
+        assert_eq!(sel.anchors[&n(3)].iter().collect::<Vec<_>>(), [&(0, 0), &(1, 0), &(2, 0)]);
+        assert_eq!((sel.anchors.len(), sel.key, sel.target, sel.symbol_part.is_some()), (3, None, None, false));
+    }
 
     /// `merge_coincident` removing each merged anchor from the vector straight away, kept as the
     /// reference the one-pass version must match.
