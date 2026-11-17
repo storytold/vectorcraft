@@ -1072,7 +1072,9 @@ given and the swatch already has keeps its model, as does a stop color that `pai
 gradient already has; a stop that names a swatch takes the swatch's color as it is, and `swatch.new` or `swatch.edit`
 with `mode` converts a color into that mode only. RGB documents keep colors as given. Harmonies, Edit
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
-`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
+`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. An entry of `swatch.new {colors}` or
+`swatch.newGroup {colors}` may be `{swatch, tint}`: a tint of a global or spot color below 100% becomes a tint swatch
+("Name 40%") linked to it, as the Color Guide panel saves the tints of a spot color base. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
 Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
 (shades, cool or muted on the left, tints, warm or vivid on the right). With `limitTo` (a swatch library id or name,
 or `"document"` for the document's swatches) every colour snaps to the library's nearest colour (ΔE 2000), as the
