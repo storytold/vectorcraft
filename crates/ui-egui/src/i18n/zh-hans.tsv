@@ -1943,7 +1943,8 @@ file-filter	Templates	模板
 	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 从标尺拖动创建画板参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
-	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)
+	Lossless	无失真
+	Lossy	有失真
 	Lossy:	有损：
 	Low	低
 	lowercase	小写
@@ -3165,6 +3166,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
 	Type to search commands, tools, panels and effects	输入以搜索命令、工具、面板和效果
+	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
 	Section Symbol	章节符号
@@ -9536,6 +9538,7 @@ breakText	Glyphs	字形
 @msg	Too many Revolve faces for visibility evaluation	回转的面过多，无法进行可见性计算
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 最多从色板交换文件中读取 {ASE_MAX_ENTRIES} 个颜色和组，而此库有 {entries} 个
 @msg	WebP encoding failed: {e}	WebP 编码失败：{e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 编码失败：图像太大，无法生成有失真 WebP：请降低分辨率或选择无失真
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必须是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList

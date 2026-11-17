@@ -641,7 +641,7 @@ fn export_selection_reports_the_encoders_warnings() {
     assert_eq!(plain["format"], "svg");
     assert!(warnings(&plain).is_empty(), "{plain}");
     for (format, options, says) in [
-        ("webp", json!({"lossless": false}), "lossless"),
+        ("webp", json!({"interlaced": true}), "interlaced"),
         ("svg", json!({"profile": "tiny12"}), "blend"),
         ("pdf", json!({"createLayers": true, "compatibility": "1.4"}), "layers"),
     ] {
