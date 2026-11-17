@@ -1807,8 +1807,6 @@
 @msg	unknown panel	უცნობი პანელი
 @msg	unknown panel `{panel}`	უცნობი პანელი `{panel}`
 @msg	unknown parameter `{key}`	უცნობი პარამეტრი `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	უცნობი პარამეტრი `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	უცნობი პარამეტრი `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	უცნობი pieLegend `{v}` (none, standard ან wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	უცნობი piePosition `{v}` (even, ratio ან stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	უცნობი pieSort `{v}` (none, all ან first)
@@ -1941,7 +1939,6 @@
 @msg	{name} is not a CMYK profile	{name} CMYK პროფილი არ არის
 @msg	{name} is not an RGB profile	{name} RGB პროფილი არ არის
 @msg	{name} must be a number	{name} რიცხვი უნდა იყოს
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} უნდა იყოს {lo}–{hi}{unit} (მიღებულია {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC ან ზომა არ ემთხვევა
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: Affinity-ის ამ ფაილიდან მხოლოდ ჩაშენებული წინასწარი ხედის წაკითხვა მოხერხდა; გაფრთხილებასთან ერთად მის სანახავად გამოიყენეთ ფაილი › გახსნა, ან განთავსებამდე Affinity-დან გააკეთეთ SVG-ის ან PDF-ის ექსპორტი
 @msg	{name}: {e}	{name}: {e}
@@ -7813,6 +7810,19 @@ font-technology	Variable	ცვლადი
 	Transform Objects	ობიექტების გარდაქმნა
 @msg	unknown parameter `{key}`; did you mean `{near}`?	უცნობი პარამეტრი `{key}`; იქნებ `{near}` იგულისხმეთ?
 @msg	unknown parameter `{key}`; the command takes no parameters	უცნობი პარამეტრი `{key}`; ბრძანება პარამეტრებს არ იღებს
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	უცნობი პარამეტრი `{key}`; `{object}` იღებს: {keys}
+@msg	unknown parameter `{key}`; {why_not}	უცნობი პარამეტრი `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	არცერთი ფორმატი არ იღებს მას (იხილეთ document.formats)
+@msg	no save format takes it (see file.formatOptions)	არცერთი შენახვის ფორმატი არ იღებს მას (იხილეთ file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF არ იღებს მას (იხილეთ document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS არ იღებს მას (იხილეთ document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF არ იღებს მას (იხილეთ document.formats)
+@msg	{name} must be {range} (got {v})	{name} უნდა იყოს {range} (მიღებულია {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	პირველად ნაცდმა გრაფიკულმა პროცესორმა ფანჯარა ვერ აჩვენა, ამიტომ VectorCraft ხელახლა გაეშვა: {summary} (პარამეტრები › წარმადობა › გრაფიკული პროცესორი › ავტომატური იყენებს იმას, რომელიც თქვენს ეკრანს მართავს)
+@msg	Sent “{title}” to {to}	“{title}” გაგზავნილია: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” გაგზავნილია: {to}. ბეჭდვის რიგის პასუხი: {note}
+@msg	the default printer	ნაგულისხმევი პრინტერი
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	რასტრული ეფექტები ობიექტზე {object}: მოთხოვნილია {requested} ppi, მიღწეულია {achieved} ppi 64 მილიონი პიქსელის ლიმიტის გამო
 @msg	unknown parameter `{key}`; the command takes: {keys}	უცნობი პარამეტრი `{key}`; ბრძანება იღებს: {keys}
 @msg	the params must be an object, not {got}	პარამეტრები უნდა იყოს ობიექტი და არა {got}
 @msg	unknown parameter `{path}`; the object takes no keys	უცნობი პარამეტრი `{path}`; ობიექტი გასაღებებს არ იღებს
