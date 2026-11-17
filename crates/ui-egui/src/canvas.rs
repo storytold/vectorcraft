@@ -248,6 +248,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The meshes of the tools' shared paths. Likewise, a frame that does not draw the tools'
     // overlays drops them.
     let mut shared_paths = std::mem::take(&mut app.canvas.shared_paths);
+    let sampler_cancelled = crate::panels::image_trace::refresh_ignore_sampler(app);
     // A release ends the Image Trace panel's eye-button hold, also when the panel is no longer
     // drawn, so a later press elsewhere does not show the source image.
     if app.ui.trace_hold_source.is_some() && !ui.input(|i| i.pointer.any_down()) {
@@ -295,7 +296,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         scroll_bars(app, ui, rect, outer, &t);
     }
     let resp = ui.interact(rect, egui::Id::unique("canvas"), Sense::click_and_drag());
-    canvas_input(app, ui, &resp, rect);
+    input_after_sampler_refresh(app, ui, &resp, rect, sampler_cancelled);
     let v = *app.view().unwrap_or(&View::default());
     let xf = Xf::at(rect, &v, app.canvas_ui_zoom);
     // While the view pans, zooms or turns under the pointer, the art under it isn't hit-tested.
@@ -458,6 +459,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     artboard_name_editor(app, ui, &xf);
     if resp.hovered() {
         canvas_cursor(app, ui, view_info, hover_still);
+    }
+}
+
+/// A press arriving with an invalidated sampler is consumed, not given to its restored tool.
+fn input_after_sampler_refresh(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, rect: egui::Rect, cancelled: bool) {
+    if !cancelled || !ui.input(|i| i.pointer.any_pressed()) {
+        canvas_input(app, ui, resp, rect);
     }
 }
 
@@ -634,8 +642,8 @@ fn cache_key(
         rich_black: app.session.prefs.black_on_screen == "rich",
         // A tool's drag on the canvas, during an interaction (not a dialog's preview).
         dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
-        // The Image Trace panel's eye button, while it is held.
-        trace_source: app.ui.trace_hold_source.clone(),
+        // The sampler keeps its bound original visible between clicks, independently of the eye.
+        trace_source: crate::panels::image_trace::ignore_sampler_source(app, st.uid).or_else(|| app.ui.trace_hold_source.clone()),
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
         backdrop: backdrop(app, st, app.outline_view()),

@@ -467,6 +467,7 @@ impl VectorcraftApp {
         }
         self.ui.flyout = None;
         switched?;
+        crate::panels::image_trace::cancel_ignore_sampler(self, false);
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {

@@ -232,6 +232,155 @@ fn hold_source(app: &mut VectorcraftApp, ctx: &egui::Context, down: bool) {
     }
 }
 
+/// The retained original image of a live trace, or the selected placed image itself.
+fn source_image(n: &Node) -> Option<&vectorcraft_doc::ImageObject> {
+    let source = if is_trace(n) { n.children()?.first()?.as_ref() } else { n };
+    match &source.kind {
+        NodeKind::Image(image) => Some(image),
+        _ => None,
+    }
+}
+
+fn sampler_binding(s: &crate::state::TraceIgnoreSampler) -> Value {
+    json!({ "doc": s.doc, "target": s.target.0, "revision": s.revision })
+}
+
+fn sampler_valid(app: &VectorcraftApp, s: &crate::state::TraceIgnoreSampler) -> bool {
+    let Some(doc) = app.session.active() else { return false };
+    doc.uid == s.doc
+        && doc.revision == s.revision
+        && target_key(app) == Some((s.doc, s.target))
+        && doc.doc.node(s.target).and_then(source_image).is_some_and(|image| doc.doc.images.contains_key(&image.key))
+}
+
+fn sampler_tool_active(app: &VectorcraftApp, s: &crate::state::TraceIgnoreSampler) -> bool {
+    app.session.tool_id() == "eyedropper" && app.session.tool_options()["imageTraceIgnoreColor"] == sampler_binding(s)
+}
+
+/// Clear only this temporary mode. An explicit tool choice keeps the tool the user chose.
+pub(crate) fn cancel_ignore_sampler(app: &mut VectorcraftApp, restore: bool) {
+    let Some(s) = app.ui.trace_ignore_sampler.take() else { return };
+    if sampler_tool_active(app, &s) {
+        app.session.set_tool_option("imageTraceIgnoreColor", &Value::Null);
+        app.session.set_tool_option("stop", &Value::Null);
+    }
+    if restore && app.session.tool_id() == "eyedropper" {
+        app.return_to_tool(&s.back);
+    }
+    if let Some(ctx) = &app.ui_ctx {
+        ctx.request_repaint();
+    }
+}
+
+/// Also runs when the panel is closed: document changes and tool changes end the source preview.
+pub(crate) fn refresh_ignore_sampler(app: &mut VectorcraftApp) -> bool {
+    let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return false };
+    if !sampler_valid(app, s) {
+        cancel_ignore_sampler(app, true);
+    } else if !sampler_tool_active(app, s) {
+        cancel_ignore_sampler(app, false);
+    } else {
+        return false;
+    }
+    true
+}
+
+/// A stale sampler's click must not become a paint/selection click in the restored tool.
+pub(crate) fn discard_stale_ignore_click(app: &mut VectorcraftApp) -> bool {
+    let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return false };
+    if sampler_valid(app, s) && sampler_tool_active(app, s) {
+        return false;
+    }
+    let restore = app.session.tool_id() == "eyedropper";
+    cancel_ignore_sampler(app, restore);
+    true
+}
+
+/// Render the bound live trace's original without changing its stored View or the eye's hold.
+pub(crate) fn ignore_sampler_source(app: &VectorcraftApp, doc: u64) -> Option<Arc<Vec<NodeId>>> {
+    let s = app.ui.trace_ignore_sampler.as_ref()?;
+    (s.doc == doc && sampler_valid(app, s) && sampler_tool_active(app, s) && target(app).0).then(|| Arc::new(vec![s.target]))
+}
+
+fn start_ignore_sampler(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    if app.ui.trace_ignore_sampler.is_some() {
+        cancel_ignore_sampler(app, true);
+        return;
+    }
+    let Some((doc, target)) = target_key(app) else { return };
+    let Some(revision) = app.session.active().map(|d| d.revision) else { return };
+    let s = crate::state::TraceIgnoreSampler { doc, target, revision, back: app.session.tool_id().to_string() };
+    if !sampler_valid(app, &s) {
+        return;
+    }
+    if let Err(e) = app.try_select_tool("eyedropper") {
+        app.status(e);
+        return;
+    }
+    if !sampler_valid(app, &s) {
+        app.return_to_tool(&s.back);
+        return;
+    }
+    app.session.set_tool_option("imageTraceIgnoreColor", &sampler_binding(&s));
+    app.session.set_tool_option("stop", &json!(s.back.as_str()));
+    // Bind the reply to this panel's state, also when it is drawn without the full app frame.
+    app.ui_ctx = Some(ctx.clone());
+    app.ui.trace_ignore_sampler = Some(s);
+    if let Some(ctx) = &app.ui_ctx {
+        ctx.request_repaint();
+    }
+}
+
+/// Match Image Trace's input bytes, not the current canvas result or the working-space colour.
+fn sampled_ignore_color(app: &VectorcraftApp, s: &crate::state::TraceIgnoreSampler, p: &Value) -> Option<String> {
+    let point = vectorcraft_geom::Point::new(p["point"][0].as_f64()?, p["point"][1].as_f64()?);
+    if !point.x.is_finite() || !point.y.is_finite() {
+        return None;
+    }
+    let doc = &app.session.active()?.doc;
+    let image = source_image(doc.node(s.target)?)?;
+    if image.xf.determinant().abs() < 1e-12 {
+        return None;
+    }
+    let pixel = image.xf.inverse() * point;
+    let [r, g, b, alpha] = doc.images.get(&image.key)?.sample_object(pixel.x, pixel.y, (image.width, image.height), 1)?;
+    (alpha != 0).then(|| format!("#{r:02x}{g:02x}{b:02x}"))
+}
+
+/// Handle the one-shot tool's reply after it has consumed its transient binding.
+pub(crate) fn apply_ignore_color_sample(app: &mut VectorcraftApp, p: &Value) {
+    let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return };
+    if p["binding"] != sampler_binding(s) {
+        return;
+    }
+    let valid = sampler_valid(app, s);
+    let s = s.clone();
+    cancel_ignore_sampler(app, false);
+    if !valid || p["cancel"] == true {
+        return;
+    }
+    let Some(color) = sampled_ignore_color(app, &s, p) else { return };
+    // The canvas UI establishes this context before a real panel click can arm the sampler.
+    let Some(ctx) = app.ui_ctx.clone() else { return };
+    let all = presets(app, &ctx);
+    let mut st: TraceUi = pstate(&ctx, "image-trace");
+    let (is_trace, _, stored) = target(app);
+    follow_preset_changes(app, &mut st, &all);
+    let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
+    sync_with_object(&mut st, stored, Some((s.doc, s.target)), &all, &changes);
+    st.params["ignoreColor"] = json!(color);
+    st.preset = "Custom".into();
+    let preview = app.ui.image_trace_preview;
+    if is_trace || !preview {
+        st.preview_off = !preview;
+    }
+    if is_trace && preview {
+        trace(app, &ctx, &mut st);
+    }
+    set_pstate(&ctx, "image-trace", st);
+    ctx.request_repaint();
+}
+
 /// The selected Image Trace object's View row (Control bar, Properties).
 pub(crate) fn view_row(app: &mut VectorcraftApp, ui: &mut Ui, current: TraceView, width: f32) {
     widgets::dim_label(ui, tl!("View:"));
@@ -807,16 +956,35 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.horizontal(|ui| {
             let on = st.params["ignoreWhite"].as_bool().unwrap_or(false);
             if widgets::check(ui, tl!("Ignore Color"), on, true) {
+                if on {
+                    cancel_ignore_sampler(app, true);
+                }
                 st.params["ignoreWhite"] = json!(!on);
                 st.preset = "Custom".into();
                 retrace = true;
             }
             if on {
                 let mut rgb = ignore_color(&st.params);
-                if ui.color_edit_button_srgb(&mut rgb).changed() {
+                let picker = ui.color_edit_button_srgb(&mut rgb);
+                if picker.clicked() {
+                    cancel_ignore_sampler(app, true);
+                }
+                if picker.changed() {
                     st.params["ignoreColor"] = json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2]));
                     st.preset = "Custom".into();
                     retrace = true;
+                }
+                if widgets::icon_button_enabled(
+                    ui,
+                    "pipette",
+                    tl!("Eyedropper: click the source image to sample the ignored color"),
+                    app.ui.trace_ignore_sampler.is_some(),
+                    is_trace || is_image,
+                    22.0,
+                )
+                .clicked()
+                {
+                    start_ignore_sampler(app, ui.ctx());
                 }
             }
         });

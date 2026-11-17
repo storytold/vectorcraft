@@ -16,6 +16,9 @@
 //!
 //! Brush Options' Key Color eyedropper sets `brushKeyColor` and `stop`: the next click samples into
 //! the open dialog (`brushKeyColor` UI request) and switches back.
+//!
+//! Image Trace's Ignore Color eyedropper passes its bound document point to the panel, which
+//! samples the original image pixels; this tool changes neither paint nor selection.
 
 use std::collections::HashSet;
 
@@ -28,7 +31,7 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use super::paint_owner;
 use crate::params::color_json;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Default)]
 pub struct EyedropperTool {
@@ -38,6 +41,8 @@ pub struct EyedropperTool {
     text_selection: crate::text::TypeTool,
     /// Brush Options › Key Color (Hue Shift): sample into the dialog, then [`Self::stop`].
     brush_key_color: bool,
+    /// Image Trace > Ignore Color: the panel's opaque document/object/revision binding.
+    image_trace_ignore_color: Option<Value>,
 }
 
 /// The colour of `paint` at `p` (gradients are sampled along their vector, radial ones honouring
@@ -462,6 +467,13 @@ impl Tool for EyedropperTool {
         if ev.kind != PointerKind::Down {
             return vec![];
         }
+        if let Some(binding) = self.image_trace_ignore_color.take() {
+            let back = self.stop.take().unwrap_or_else(|| "selection".to_string());
+            return vec![
+                Action::Dialog("imageTraceIgnoreColor".into(), json!({ "binding": binding, "point": [ev.pos.x, ev.pos.y] })),
+                Action::SwitchTool(back),
+            ];
+        }
         let opts = sample_options(cx);
         if self.brush_key_color {
             let Some(c) = sample_color_at(cx, ev.pos) else { return vec![] };
@@ -496,6 +508,23 @@ impl Tool for EyedropperTool {
         out
     }
 
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape {
+            return vec![];
+        }
+        let Some(binding) = self.image_trace_ignore_color.take() else { return vec![] };
+        let back = self.stop.take().unwrap_or_else(|| "selection".to_string());
+        vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({ "binding": binding, "cancel": true })), Action::SwitchTool(back)]
+    }
+
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        self.image_trace_ignore_color.is_some() && key == ToolKey::Escape
+    }
+
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
+        self.image_trace_ignore_color.is_some()
+    }
+
     /// Expose a transient text range alongside gradient-stop and brush-key sampling state.
     fn options(&self) -> Value {
         let selected = self.text_selection.options();
@@ -503,6 +532,9 @@ impl Tool for EyedropperTool {
         if let Some(o) = options.as_object_mut() {
             o.insert("stop".into(), json!(self.stop));
             o.insert("brushKeyColor".into(), json!(self.brush_key_color));
+            if let Some(binding) = &self.image_trace_ignore_color {
+                o.insert("imageTraceIgnoreColor".into(), binding.clone());
+            }
         }
         options
     }
@@ -512,6 +544,7 @@ impl Tool for EyedropperTool {
         match key {
             "stop" => self.stop = value.as_str().map(str::to_string),
             "brushKeyColor" => self.brush_key_color = value.as_bool().unwrap_or(false),
+            "imageTraceIgnoreColor" => self.image_trace_ignore_color = (!value.is_null()).then(|| value.clone()),
             "textSelection" => self.text_selection.set_option(key, value),
             _ => {}
         }
@@ -634,6 +667,85 @@ mod tests {
             vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&Color::WHITE) })), Action::SwitchTool("selection".into())]
         );
         assert_eq!(t.options(), json!({ "stop": null, "brushKeyColor": false }));
+    }
+
+    /// The panel samples the bound original raster, even on empty canvas or with modifiers held.
+    #[test]
+    fn image_trace_sampling_forwards_its_binding_and_document_point_once() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let binding = json!({"doc": 7, "target": id.0, "revision": 11});
+        for mods in [Mods::default(), Mods { alt: true, ..Default::default() }, Mods { alt: true, shift: true, ..Default::default() }] {
+            let mut t = EyedropperTool::default();
+            t.set_option("stop", &json!("gradient"));
+            t.set_option("imageTraceIgnoreColor", &binding);
+            assert_eq!(t.options()["imageTraceIgnoreColor"], binding);
+            assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Move, -25.5, 400.25)).is_empty());
+            assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, -25.5, 400.25)).is_empty());
+            assert_eq!(
+                t.pointer(&cx, &PointerEvent::new(PointerKind::Down, -25.5, 400.25).with_mods(mods)),
+                vec![
+                    Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "point": [-25.5, 400.25]})),
+                    Action::SwitchTool("gradient".into()),
+                ]
+            );
+            assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+            assert!(!t.claims_key(&cx, ToolKey::Escape));
+            assert!(!t.ends_on_escape(&cx));
+            assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+        }
+    }
+
+    /// Escape's UI request is claimed only while this one-shot target is armed.
+    #[test]
+    fn image_trace_escape_cancels_its_binding_and_restores_the_tool_once() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let binding = json!({"doc": 7, "target": id.0, "revision": 11});
+        let mut t = EyedropperTool::default();
+        assert!(!t.claims_key(&cx, ToolKey::Escape));
+        assert!(!t.ends_on_escape(&cx));
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+        t.set_option("stop", &json!("selection"));
+        t.set_option("imageTraceIgnoreColor", &binding);
+        assert!(t.claims_key(&cx, ToolKey::Escape));
+        assert!(t.ends_on_escape(&cx));
+        assert!(!t.claims_key(&cx, ToolKey::Enter));
+        assert!(t.key(&cx, ToolKey::Enter, Mods::default()).is_empty());
+        assert_eq!(t.options()["imageTraceIgnoreColor"], binding);
+        assert_eq!(
+            t.key(&cx, ToolKey::Escape, Mods::default()),
+            vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "cancel": true})), Action::SwitchTool("selection".into())]
+        );
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+        assert!(!t.claims_key(&cx, ToolKey::Escape));
+        assert!(!t.ends_on_escape(&cx));
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+    }
+
+    /// A cleared Image Trace request leaves the existing brush/stop options and keys alone.
+    #[test]
+    fn clearing_image_trace_sampling_preserves_existing_brush_and_stop_options() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let mut t = EyedropperTool::default();
+        t.set_option("brushKeyColor", &json!(true));
+        t.set_option("stop", &json!("selection"));
+        let original = t.options();
+        t.set_option("imageTraceIgnoreColor", &json!({"doc": 7, "target": 8, "revision": 11}));
+        t.set_option("imageTraceIgnoreColor", &Value::Null);
+        assert_eq!(t.options(), original);
+        assert!(!t.claims_key(&cx, ToolKey::Escape));
+        assert!(!t.ends_on_escape(&cx));
+        assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+        assert_eq!(t.options(), original);
+        assert_eq!(
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)),
+            vec![Action::Dialog("brushKeyColor".into(), json!({"color": color_json(&Color::WHITE)})), Action::SwitchTool("selection".into())]
+        );
     }
 
     /// The hex of the colour a `paint.sampleColor` action samples.
