@@ -27,7 +27,11 @@ impl TextObject {
     /// Character attributes as presented by controls (stored runs stay local for layout
     /// and rich-text clipboard operations). Explicit vertical character scale stays separate.
     pub fn effective_char_style(&self, style: &CharStyle) -> Option<CharStyle> {
-        let scale = self.style_scale()?;
+        Self::scaled_char_style(style, self.style_scale()?)
+    }
+
+    /// `style` with `scale` taken into its attributes ([`Self::effective_char_style`]).
+    fn scaled_char_style(style: &CharStyle, scale: TextStyleScale) -> Option<CharStyle> {
         let mut style = style.clone();
         style.size *= scale.points;
         style.leading = style.leading.map(|v| v * scale.points);
@@ -57,19 +61,27 @@ impl TextObject {
     /// scale from `xf`, so panels show document-point sizes without a separate transform factor.
     /// Returns `false` when there is nothing to bake (identity scale or an unrepresentable
     /// transform).
+    ///
+    /// Type on a path bakes only the uniform part of the scale (the vertical one) and keeps any
+    /// stretch in `xf`: its brackets and glyphs sit at fractions of the path's length, which a
+    /// non-uniform scale of the path would move, and a uniform one keeps.
     pub fn scale_text_attributes(&mut self) -> bool {
-        let Some(scale) = self.style_scale() else { return false };
-        if (scale.points - 1.0).abs() <= 1e-12 && (scale.horizontal - 1.0).abs() <= 1e-12 {
+        let Some(mut scale) = self.style_scale() else { return false };
+        let [a, b, c, d, _, _] = self.xf.as_coeffs();
+        let (mut sx, sy) = (a.hypot(b), c.hypot(d));
+        if sx <= 1e-12 || sy <= 1e-12 {
             return false;
         }
-        let [a, b, c, d, _, _] = self.xf.as_coeffs();
-        let (sx, sy) = (a.hypot(b), c.hypot(d));
-        if sx <= 1e-12 || sy <= 1e-12 {
+        if matches!(self.kind, TextKind::OnPath { .. }) {
+            scale.horizontal = 1.0;
+            sx = sy;
+        }
+        if (scale.points - 1.0).abs() <= 1e-12 && (scale.horizontal - 1.0).abs() <= 1e-12 {
             return false;
         }
         let mut baked = Vec::with_capacity(self.runs.len());
         for run in &self.runs {
-            let Some(eff) = self.effective_char_style(&run.style) else { return false };
+            let Some(eff) = Self::scaled_char_style(&run.style, scale) else { return false };
             baked.push(eff);
         }
         for (run, style) in self.runs.iter_mut().zip(baked) {
@@ -78,6 +90,14 @@ impl TextObject {
         // Character strokes are drawn in text space: widen them by the vertical scale we remove.
         self.scale_char_strokes(1.0 / sy);
         self.xf *= Affine::scale_non_uniform(1.0 / sx, 1.0 / sy);
+        // An area's frame and a path type's path are drawn through `xf` too: give them the scale
+        // `xf` loses, so the frame (and so the line breaks) and the path stay where they were.
+        let grow = Affine::scale_non_uniform(sx, sy);
+        match &mut self.kind {
+            TextKind::Area { frame } => frame.transform(grow),
+            TextKind::OnPath { path, .. } => path.transform(grow),
+            TextKind::Point => {}
+        }
         self.cached_bounds = None;
         self.cached_baselines.clear();
         self.cached_ink = None;

@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: deterministically places every ring along the path, including the first for small seed values, keeping their count and sizes)} → {id}",
             has_doc,
             flare
         ),
@@ -565,7 +565,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("shape.flare", format!("`{key}` must be a whole number of at least 0, not {v}"))),
     };
-    // The generator's state is odd (never 0).
+    // Xorshift64. Both streams start from a nonzero state.
     let random = |mut state: u64| {
         move || {
             state ^= state << 13;
@@ -580,7 +580,13 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         Some(r) if r >= 1 << 53 => return Err(bad("shape.flare", format!("`ringSeed` must be below 2^53, not {r}"))),
         r => r,
     };
-    let mut ring_at = ring_seed.map(|r| random((r << 1) | 1));
+    let mut ring_at = ring_seed.map(|r| {
+        // SplitMix64 initializes the ring-position stream.
+        let mut z = r.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        random(z ^ (z >> 31))
+    });
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
