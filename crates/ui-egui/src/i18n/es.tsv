@@ -8087,3 +8087,8 @@ breakText	Glyphs	Glifos
 @msg	A fold line is on a non-printing layer.	Una línea de plegado está en una capa que no se imprime.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, bisagras: {hinges}, errores: {errors}, advertencias: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Paint	Pintura
+	Flat Sweep	Barrido plano
+	Dry Drag	Arrastre seco
+	Loaded Stroke	Trazo cargado
+	Fan Sweep	Barrido en abanico

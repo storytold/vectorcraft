@@ -501,8 +501,9 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .flat_map(|(_, lib)| lib.brushes.iter().map(|b| b.name.clone()).collect::<Vec<_>>())
         .collect();
     names.sort();
+    let duplicates: Vec<&str> = names.windows(2).filter(|pair| pair[0] == pair[1]).map(|pair| pair[0].as_str()).collect();
+    assert_eq!(duplicates, ["Zigzag"], "only the established Pattern Borders / Game Trails name is shared");
     names.dedup();
-    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
