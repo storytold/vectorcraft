@@ -2,7 +2,8 @@
 //!
 //! Flare: drag sets the center and its size and turns the rays as the pointer moves up or down
 //! (Shift holds their turn, ↑/↓ add or remove rays and Ctrl/Cmd keeps the center's size while the
-//! drag sizes the halo; click without dragging opens the Flare Tool Options), then a click sets the
+//! drag sizes the halo; click without dragging opens the Flare Tool Options, and Alt-click (Option
+//! on macOS) draws a flare there with them at once), then a click sets the
 //! end point of the rings (↑/↓ add or remove rings and ~ places them anew); Space held during
 //! either drag moves the flare. The rest comes
 //! from the tool's options (the Flare Tool Options, which last). Reshape: a click on a selected
@@ -59,6 +60,9 @@ pub struct FlareTool {
     /// The pointer at the last press or drag, from which Space held moves the flare.
     last: Point,
     began: bool,
+    /// Whether Alt (Option on macOS) was held when the button went down for the center: a release
+    /// without a drag then draws a flare with the options at once.
+    alt_press: bool,
     /// Ray count changed with ↑/↓ during the center drag (None = the options' count).
     rays: Option<u64>,
     /// Ring count changed with ↑/↓ while the rings' end point is placed (None = the options' count).
@@ -89,6 +93,7 @@ impl Default for FlareTool {
             hover: Point::ZERO,
             last: Point::ZERO,
             began: false,
+            alt_press: false,
             rays: None,
             rings: None,
             ring_seed: None,
@@ -225,6 +230,20 @@ impl FlareTool {
     fn center_diameter(&self, dist: f64) -> f64 {
         self.held.map_or(2.0 * dist, |(d, ..)| d)
     }
+
+    /// Alt-click (Option-click on macOS) at `c`: one flare drawn with the options as they are, as one
+    /// command, so a refusal (a click beyond the plane's horizon) reaches the caller as an error.
+    /// While the perspective grid shows with an active plane, the flare goes on that plane with its
+    /// sizes in plane units from the click, as the Flare Tool Options opened by a click draw it.
+    fn click_flare(&self, cx: &ToolContext, c: Point) -> Vec<Action> {
+        let params = flare_params(&self.options(), c);
+        let grid = crate::distort::perspective::PerspectiveGrid::current(cx.doc);
+        if grid.visible && grid.plane != crate::distort::perspective::Plane::None {
+            vec![Action::Exec("perspective.draw".into(), json!({ "command": "shape.flare", "params": params, "at": [c.x, c.y] }))]
+        } else {
+            vec![Action::Exec("shape.flare".into(), params)]
+        }
+    }
 }
 
 impl Tool for FlareTool {
@@ -252,6 +271,7 @@ impl Tool for FlareTool {
                     self.held = None;
                     self.growth = None;
                     self.turn = 0.0;
+                    self.alt_press = ev.mods.alt;
                 }
                 self.last = ev.pos;
                 vec![]
@@ -298,6 +318,8 @@ impl Tool for FlareTool {
                     self.placed = Some((c, self.center_diameter(p.distance(c))));
                     self.held = None;
                     vec![]
+                } else if std::mem::take(&mut self.alt_press) {
+                    self.click_flare(cx, c)
                 } else {
                     vec![Action::Dialog("flare".into(), json!({ "x": c.x, "y": c.y }))]
                 }
@@ -852,6 +874,91 @@ mod tests {
         match a.iter().rev().find(|a| matches!(a, Action::Preview(..))) {
             Some(Action::Preview(c, v)) if c == "shape.flare" => v.clone(),
             other => panic!("no flare preview: {other:?}"),
+        }
+    }
+
+    /// Alt-click (Option-click on macOS): with Alt held when the button goes down, a release without
+    /// a drag draws one flare at the click with the options as they are, Rays and Rings off included,
+    /// and opens no dialog. A plain click, or Alt pressed only for the release, opens the Flare Tool
+    /// Options; an Alt drag draws the flare in two stages as any drag does; Escape drops the press.
+    #[test]
+    fn alt_click_draws_a_flare_with_the_options_at_once() {
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+        let (d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let cx = cx(&d, &s, &p);
+        let alt = Mods { alt: true, ..Default::default() };
+        let click = |t: &mut FlareTool, down: Mods, up: Mods| {
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 120.0, 140.0).with_mods(down));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 140.0).with_mods(up))
+        };
+        let mut t = FlareTool::default();
+        for (k, v) in [("diameter", json!(40)), ("rays", json!(7)), ("growth", json!(80)), ("ringsOn", json!(false))] {
+            t.set_option(k, &v);
+        }
+        let options = t.options();
+        let a = click(&mut t, alt, alt);
+        let c = Point::new(120.0, 140.0);
+        let v = flare_params(&options, c);
+        assert_eq!(a, vec![Action::Exec("shape.flare".into(), v.clone())]);
+        assert_eq!(
+            (v["cx"].as_f64(), v["cy"].as_f64(), v["diameter"].as_f64(), v["rays"].as_u64(), v["growth"].as_f64(), v["rings"].as_u64()),
+            (Some(120.0), Some(140.0), Some(40.0), Some(7), Some(80.0), Some(0))
+        );
+        assert_eq!(t.options(), options, "the click leaves the options as they are");
+        assert!(!t.busy());
+        // Alt let go before the release still counts; Alt pressed only for the release does not.
+        assert_eq!(click(&mut t, alt, Mods::default()), vec![Action::Exec("shape.flare".into(), v)]);
+        let dialog = vec![Action::Dialog("flare".into(), json!({ "x": 120.0, "y": 140.0 }))];
+        assert_eq!(click(&mut t, Mods::default(), alt), dialog);
+        assert_eq!(click(&mut t, Mods::default(), Mods::default()), dialog, "a plain click after an Alt-click opens the dialog");
+        // An Alt drag places the center and waits for the rings' end point, as any drag does.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0).with_mods(alt));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 140.0, 100.0).with_mods(alt)).first(), Some(&Action::Begin("Flare".into())));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 140.0, 100.0).with_mods(alt)), vec![]);
+        assert!(t.placed.is_some());
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 200.0).with_mods(alt));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 200.0).with_mods(alt));
+        assert_eq!(a.last(), Some(&Action::Commit));
+        assert_eq!((flare_preview(&a)["diameter"].as_f64(), flare_preview(&a)["x2"].as_f64()), (Some(80.0), Some(300.0)));
+        // Escape before the release drops the press: no flare and no dialog.
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 120.0, 140.0).with_mods(alt));
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![]);
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 140.0).with_mods(alt)), vec![]);
+    }
+
+    /// With the perspective grid showing and a plane active, an Alt-click draws the flare on that
+    /// plane from the click (`perspective.draw` with `at`), as the click-opened dialog does.
+    #[test]
+    fn alt_click_draws_on_the_active_perspective_plane() {
+        use crate::distort::perspective::{PerspectiveGrid, Plane};
+        use crate::testutil::*;
+        use vectorcraft_doc::Selection;
+        let (mut d, _) = doc_with_rect();
+        let s = Selection::default();
+        let p = paint();
+        let alt = Mods { alt: true, ..Default::default() };
+        let c = Point::new(300.0, 380.0);
+        let mut t = FlareTool::default();
+        PerspectiveGrid { visible: true, plane: Plane::Left, ..PerspectiveGrid::current(&d) }.store(&mut d);
+        let mut alt_click = |d: &vectorcraft_doc::Document| {
+            let cx = cx(d, &s, &p);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, c.x, c.y).with_mods(alt));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, c.x, c.y).with_mods(alt))
+        };
+        let params = flare_params(&FlareTool::default().options(), c);
+        let on_plane = json!({ "command": "shape.flare", "params": params, "at": [c.x, c.y] });
+        assert_eq!(alt_click(&d), vec![Action::Exec("perspective.draw".into(), on_plane)]);
+        // With no active plane, or the grid hidden, the flare is drawn flat.
+        for g in [
+            PerspectiveGrid { plane: Plane::None, ..PerspectiveGrid::current(&d) },
+            PerspectiveGrid { visible: false, ..PerspectiveGrid::current(&d) },
+        ] {
+            let mut d = d.clone();
+            g.store(&mut d);
+            assert_eq!(alt_click(&d), vec![Action::Exec("shape.flare".into(), params.clone())]);
         }
     }
 

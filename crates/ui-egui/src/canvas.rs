@@ -42,7 +42,7 @@ pub use cursor::{HOVER_STILL_SECS, STILL_SECS, ViewKey};
 use cursor::{cursor_icon, hover_cursor, hover_wait, still_wait};
 use drag::drag_id;
 pub use drag::{apply_requests, dispatch, mods};
-pub(crate) use drag::{end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
+pub(crate) use drag::{art_out, end_art_move, end_document_drag, pose_on_page, release_art_in_window, release_over_panel};
 #[cfg(test)]
 use drag::{frame_moves, tool_drag_doc_id, tool_drag_moved, tool_frame_moves, tool_press_doc_id};
 pub use fill::Fill;
@@ -65,7 +65,7 @@ pub use overlays::SharedPaths;
 use overlays::selected_anchor;
 use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
-pub(crate) use panes::{consolidate, pane, tile, tiled_area};
+pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
@@ -423,6 +423,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
+        crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);

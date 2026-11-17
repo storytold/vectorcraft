@@ -286,3 +286,157 @@ fn the_control_channel_fills_and_confirms_the_dialog() {
     assert_eq!(app.session.active().unwrap().doc.print_setup.as_ref().unwrap()["copies"], 5);
     assert_eq!(jobs.borrow().len(), 1);
 }
+
+/// Frames of the dialog layer with the accessibility tree on.
+struct Screen {
+    ctx: egui::Context,
+    time: f64,
+}
+
+impl Screen {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        Self { ctx, time: 0.0 }
+    }
+
+    fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        self.time += 0.1;
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
+        let mut out = self.ctx.run_ui(input, |ui| super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The Scale link as screen readers find it: its node, whether it is on, and whether it is dimmed.
+    fn link(&mut self, app: &mut VectorcraftApp) -> (egui::accesskit::NodeId, Option<egui::accesskit::Toggled>, bool) {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let link =
+            nodes.iter().find(|(_, n)| n.label() == Some("Constrain Width and Height Proportions") && n.role() == egui::accesskit::Role::Button);
+        let (id, node) = link.expect("the Scale link");
+        (*id, node.toggled(), node.is_disabled())
+    }
+}
+
+/// Scale W and H of the open dialog, and its link.
+fn scale(app: &mut VectorcraftApp) -> (f64, f64, bool) {
+    let s = &dialog(app).fields["scale"];
+    (s["width"].as_f64().unwrap_or(f64::NAN), s["height"].as_f64().unwrap_or(f64::NAN), s["linked"] == true)
+}
+
+#[test]
+fn the_scale_link_keeps_scale_width_and_height_equal() {
+    use egui::accesskit::{Action, ActionRequest, Toggled, TreeId};
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    let mut screen = Screen::new();
+    // On for a new job, and dimmed with the fields until a scaling uses them.
+    let (link, on, dimmed) = screen.link(&mut app);
+    assert_eq!((on, dimmed), (Some(Toggled::True), true));
+    set(&mut app, "scaling", json!("custom"));
+    assert!(!screen.link(&mut app).2, "Custom scales by W and H");
+    // Linked, a new W sets H, and a new H sets W.
+    dialog(&mut app).fields["scale"]["width"] = json!(40);
+    screen.run(&mut app, vec![]);
+    assert_eq!(scale(&mut app), (40.0, 40.0, true));
+    dialog(&mut app).fields["scale"]["height"] = json!(250);
+    screen.run(&mut app, vec![]);
+    assert_eq!(scale(&mut app), (250.0, 250.0, true));
+    // A click turns it off: screen readers hear it off, and each field changes alone.
+    let request = |action| egui::Event::AccessKitActionRequest(ActionRequest { action, target_node: link, target_tree: TreeId::ROOT, data: None });
+    screen.run(&mut app, vec![request(Action::Click)]);
+    assert_eq!(screen.link(&mut app).1, Some(Toggled::False));
+    dialog(&mut app).fields["scale"]["width"] = json!(50);
+    screen.run(&mut app, vec![]);
+    assert_eq!(scale(&mut app), (50.0, 250.0, false));
+    // Space on the focused link turns it on and sets H to W; Enter turns it off again.
+    let key = |key| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    screen.run(&mut app, vec![request(Action::Focus)]);
+    screen.run(&mut app, vec![key(egui::Key::Space)]);
+    assert_eq!(scale(&mut app), (50.0, 50.0, true));
+    assert_eq!(screen.link(&mut app).1, Some(Toggled::True));
+    screen.run(&mut app, vec![request(Action::Focus)]);
+    screen.run(&mut app, vec![key(egui::Key::Enter)]);
+    assert_eq!(scale(&mut app), (50.0, 50.0, false));
+    // Done keeps the link with the document's settings, and the next Print opens with it.
+    dialog(&mut app).fields["scale"]["height"] = json!(75);
+    set(&mut app, "discard", json!(true));
+    super::confirm(&mut app).unwrap();
+    let saved = app.session.active().unwrap().doc.print_setup.clone().unwrap();
+    assert_eq!(saved["scale"], json!({"width": 50.0, "height": 75.0, "linked": false}));
+    app.run("file.print", json!({})).unwrap();
+    assert_eq!(scale(&mut app), (50.0, 75.0, false));
+}
+
+#[test]
+fn a_print_preset_keeps_the_scale_link() {
+    let (mut app, _) = app();
+    app.run("print.presets.save", json!({"name": "Apart", "settings": {"scaling": "custom", "scale": {"width": 30, "height": 90}}})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    assert_eq!(scale(&mut app), (100.0, 100.0, true));
+    // Choosing the preset loads its unlinked W and H as they are.
+    set(&mut app, "preset", json!("Apart"));
+    frame(&mut app);
+    assert_eq!(scale(&mut app), (30.0, 90.0, false));
+    // A scale set without the link and with W and H apart turns it off, as print.setup reads it.
+    set(&mut app, "preset", json!("[Default]"));
+    frame(&mut app);
+    assert_eq!(scale(&mut app), (100.0, 100.0, true));
+    set(&mut app, "scale", json!({"width": 20, "height": 60}));
+    frame(&mut app);
+    assert_eq!(scale(&mut app), (20.0, 60.0, false));
+    // `linked: null` keeps the link as it was, off here.
+    set(&mut app, "scale", json!({"width": 30, "height": 70, "linked": null}));
+    frame(&mut app);
+    assert_eq!(dialog(&mut app).fields["scale"], json!({"width": 30, "height": 70, "linked": false}));
+}
+
+#[test]
+fn a_scale_set_through_the_dialog_keeps_the_percentage_it_changes() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    // A new H with the link on, set before any frame: W follows it, and Done saves both.
+    set(&mut app, "scale", json!({"width": 100, "height": 250, "linked": true}));
+    set(&mut app, "discard", json!(true));
+    super::confirm(&mut app).unwrap();
+    let saved = app.session.active().unwrap().doc.print_setup.clone().unwrap();
+    assert_eq!(saved["scale"], json!({"width": 250.0, "height": 250.0, "linked": true}));
+    // A scale that gives only W keeps the link and H as they were, so H follows W.
+    app.run("file.print", json!({})).unwrap();
+    set(&mut app, "scale", json!({"width": 40}));
+    frame(&mut app);
+    assert_eq!(scale(&mut app), (40.0, 40.0, true));
+    // A new W and H apart with `linked: null` keep the link on: they stay as set, and confirming
+    // refuses them, as print.setup does, and saves nothing.
+    set(&mut app, "scale", json!({"width": 50, "height": 200, "linked": null}));
+    frame(&mut app);
+    frame(&mut app);
+    assert_eq!(scale(&mut app), (50.0, 200.0, true));
+    set(&mut app, "discard", json!(true));
+    assert!(super::confirm(&mut app).is_err());
+    let saved = app.session.active().unwrap().doc.print_setup.clone().unwrap();
+    assert_eq!(saved["scale"], json!({"width": 250.0, "height": 250.0, "linked": true}));
+}
+
+#[test]
+fn the_dimmed_scale_link_ignores_the_keyboard() {
+    use egui::accesskit::{Action, ActionRequest, TreeId};
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    let mut screen = Screen::new();
+    set(&mut app, "scaling", json!("custom"));
+    let (link, _, _) = screen.link(&mut app);
+    let focus =
+        egui::Event::AccessKitActionRequest(ActionRequest { action: Action::Focus, target_node: link, target_tree: TreeId::ROOT, data: None });
+    let space = egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    screen.run(&mut app, vec![focus]);
+    // Scaling None dims the link while it has the keyboard: Space leaves it as it was.
+    set(&mut app, "scaling", json!("none"));
+    screen.run(&mut app, vec![space]);
+    screen.run(&mut app, vec![]);
+    assert_eq!(scale(&mut app), (100.0, 100.0, true));
+}

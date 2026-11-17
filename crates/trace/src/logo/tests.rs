@@ -974,10 +974,12 @@ fn black_gray_white(gray: [u8; 3]) -> TraceParams {
 
 /// A black disc and a gray square on white, blurred by 1 to 3 pixels: the edge pixels around the
 /// disc as light as the gray read as blends of black and white, so the gray is one shape (the
-/// square) and no gray lines the disc, with the colors found or named. At a blur of 3 pixels, with
-/// the colors named, a gray of 128 is still one shape, a gray of 200 leaves 4 slivers of no area,
-/// and a light gray (230) leaves at most 8 slivers, touching the disc's edge at no more than 4 of
-/// 192 samples. (Without named colors, an image blurred by 3 pixels traces without its gray.)
+/// square) and no gray lines the disc, with the colors found or named. A light gray (230) blurred by
+/// 1.5 pixels leaves at most 4 slivers of up to 3 pixels, touching the disc's edge at no more than 4
+/// of 192 samples. At a blur of 3 pixels, with the colors named, a gray of 128 is still one shape, a
+/// gray of 200 leaves 4 slivers of no area, and a light gray leaves at most 8 slivers, touching the
+/// disc's edge at no more than 4 of 192 samples. (Without named colors, an image blurred by 3 pixels
+/// traces without its gray.)
 #[test]
 fn blurred_black_edges_beside_gray_leave_no_gray_slivers() {
     const INK: [u8; 3] = [4, 4, 3];
@@ -1013,6 +1015,10 @@ fn blurred_black_edges_beside_gray_leave_no_gray_slivers() {
                 grays.sort_unstable();
                 grays.pop();
                 match (gray[0], blur == 3.0) {
+                    (230, false) if blur == 1.5 => {
+                        assert!(grays.len() <= 4 && grays.iter().all(|&n| n <= 3), "{what}: slivers {grays:?}");
+                        assert!(rim <= 4, "{what}: {rim} of 192 samples along the disc's edge traced gray");
+                    }
                     (230, true) => {
                         assert!(grays.len() <= 8, "{what}: {} slivers; {paths:?}", grays.len());
                         assert!(rim <= 4, "{what}: {rim} of 192 samples along the disc's edge traced gray");
@@ -1031,15 +1037,26 @@ fn blurred_black_edges_beside_gray_leave_no_gray_slivers() {
     }
 }
 
-/// A soft-edged gray band 2 to 4 pixels wide lying along a black disc, blurred by 1.5 or 2 pixels,
-/// traces as black and white: its pixels are reached from the disc and from the white through
-/// pixels that keep getting darker and lighter, as across a blurred black-to-white edge. A band 8
-/// pixels wide keeps at least half of its gray. With sharp edges every band stays gray.
+/// A soft-edged gray band lying along a black disc traces as black and white, with at most one of
+/// every 16 samples traced gray, when it is 2 to 4 pixels wide and blurred by 1.5 or 2 pixels, 2 or
+/// 3 pixels wide and blurred by 3 pixels, or 2 pixels wide and blurred by 1 pixel: its pixels are
+/// reached from the disc and from the white through pixels that keep getting darker and lighter, as
+/// across a blurred black-to-white edge. A band 8 pixels wide keeps at least half of its gray at
+/// blurs of 1 to 3 pixels. The bands 3 and 4 pixels wide of the three grays, blurred by 1 pixel,
+/// keep about 60 of their 336 samples gray, and those 4 pixels wide, blurred by 3 pixels, about 39
+/// of 192. With sharp edges every band stays gray, and with edges blurred by 0.6 pixels a band 3 to
+/// 8 pixels wide keeps at least 4 of every 5 samples gray, and the bands 2 to 4 pixels wide of the
+/// three grays keep about 306 of their 432 samples gray: beside a sharp edge, a path that comes to a
+/// pixel of the gray stops there.
 #[test]
 fn a_soft_gray_band_along_black_traces_as_black_and_white() {
     const INK: [u8; 3] = [4, 4, 3];
+    // The samples traced gray over the three grays: of the bands 2 to 4 pixels wide blurred by 0.6
+    // pixels, of the bands 3 and 4 pixels wide blurred by 1 pixel, and of the bands 4 pixels wide
+    // blurred by 3 pixels.
+    let (mut nearly_sharp, mut blur_one, mut blur_three) = (0, 0, 0);
     for gray in [[230u8, 230, 230], [200, 200, 200], [128, 128, 128]] {
-        for blur in [0.0, 1.5, 2.0] {
+        for blur in [0.0, 0.6, 1.0, 1.5, 2.0, 3.0] {
             for wide in [2u8, 3, 4, 8] {
                 let img = render(120, 60, blur, |x, y| {
                     Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
@@ -1058,25 +1075,48 @@ fn a_soft_gray_band_along_black_traces_as_black_and_white() {
                     .count();
                 let all = 16 * usize::from(wide);
                 let what = format!("gray {}, blur {blur}, {wide} px band: {kept} of {all} samples traced gray", gray[0]);
+                let lost = if blur == 1.0 {
+                    wide <= 2
+                } else if blur == 3.0 {
+                    wide <= 3
+                } else {
+                    wide <= 4
+                };
                 if blur == 0.0 {
                     assert_eq!(kept, all, "{what}");
-                } else if wide <= 4 {
-                    assert_eq!(kept, 0, "{what}");
-                } else {
+                } else if blur == 0.6 {
+                    if wide >= 3 {
+                        assert!(5 * kept >= 4 * all, "{what}");
+                    }
+                    if wide <= 4 {
+                        nearly_sharp += kept;
+                    }
+                } else if lost {
+                    assert!(16 * kept <= all, "{what}");
+                } else if wide == 8 {
                     assert!(2 * kept >= all, "{what}");
+                } else if blur == 1.0 {
+                    blur_one += kept;
+                } else if blur == 3.0 {
+                    blur_three += kept;
                 }
             }
         }
     }
+    assert!((300..=312).contains(&nearly_sharp), "bands 2 to 4 px wide blurred by 0.6 px: {nearly_sharp} of 432 samples traced gray");
+    assert!((56..=64).contains(&blur_one), "bands 3 and 4 px wide blurred by 1 px: {blur_one} of 336 samples traced gray");
+    assert!((36..=42).contains(&blur_three), "bands 4 px wide blurred by 3 px: {blur_three} of 192 samples traced gray");
 }
 
 /// A soft-edged gray spoke two or three pixels wide running straight out of a black disc, blurred
-/// by 1 or 1.5 pixels, loses 3 or 4 of its 16 samples nearest the disc and keeps the rest.
+/// by 1 or 1.5 pixels, loses 3 or 4 of its 16 samples nearest the disc and keeps the rest. Blurred
+/// by 2 pixels, a spoke three pixels wide loses 2 or 3 of them, and one two pixels wide traces as
+/// black and white along its whole length.
 #[test]
 fn a_soft_gray_spoke_loses_a_few_pixels_where_it_meets_black() {
     const INK: [u8; 3] = [4, 4, 3];
     for gray in [[230u8, 230, 230], [128, 128, 128]] {
-        for blur in [1.0, 1.5] {
+        for blur in [1.0, 1.5, 2.0] {
             for wide in [2.0, 3.0] {
                 let img = render(120, 60, blur, |x, y| {
                     Some(if (x - 25.0).hypot(y - 28.0) <= 18.0 {
@@ -1092,7 +1132,12 @@ fn a_soft_gray_spoke_loses_a_few_pixels_where_it_meets_black() {
                 let near = (44..60).filter(|&x| top_color(&res, at(x)) == Some(gray)).count();
                 let far = (60..86).filter(|&x| top_color(&res, at(x)) == Some(gray)).count();
                 let what = format!("gray {}, blur {blur}, {wide} px spoke", gray[0]);
-                assert!((12..=13).contains(&near), "{what}: {near} of the 16 samples nearest the disc traced gray");
+                if blur == 2.0 && wide == 2.0 {
+                    assert_eq!(near + far, 0, "{what}: {near} and {far} samples traced gray");
+                    continue;
+                }
+                let kept = if blur == 2.0 { 13..=14 } else { 12..=13 };
+                assert!(kept.contains(&near), "{what}: {near} of the 16 samples nearest the disc traced gray");
                 assert_eq!(far, 26, "{what}: the rest of the spoke");
             }
         }
@@ -1100,8 +1145,8 @@ fn a_soft_gray_spoke_loses_a_few_pixels_where_it_meets_black() {
 }
 
 /// A soft-edged light gray stroke 2 pixels wide beside a black disc, blurred by 1.5 pixels: 2
-/// pixels from the disc it keeps less than half of its gray, 4 pixels away it loses a few pixels,
-/// and 6 or 8 pixels away it keeps all of it.
+/// pixels from the disc it keeps about 10 of its 34 samples gray, 4 pixels away about 25, and 6 or
+/// 8 pixels away all of them.
 #[test]
 fn a_soft_gray_stroke_near_black_loses_gray_by_its_distance() {
     const INK: [u8; 3] = [4, 4, 3];
@@ -1121,8 +1166,8 @@ fn a_soft_gray_stroke_near_black_loses_gray_by_its_distance() {
         let kept = (12..46).filter(|&y| top_color(&res, Point::new(x0 + 1.0, f64::from(y) + 0.5)) == Some(GRAY)).count();
         let what = format!("{gap} px from the disc: {kept} of 34 samples traced gray");
         match gap {
-            2 => assert!(2 * kept < 34, "{what}"),
-            4 => assert!((24..34).contains(&kept), "{what}"),
+            2 => assert!((7..=13).contains(&kept), "{what}"),
+            4 => assert!((22..=28).contains(&kept), "{what}"),
             _ => assert_eq!(kept, 34, "{what}"),
         }
     }
