@@ -225,7 +225,9 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
             .collect();
         let refs: Vec<&TextObject> = frames.iter().collect();
         let parts = vectorcraft_text::thread::distribute(vectorcraft_text::FontDb::global(), &refs, &story, &paras);
-        for (id, part) in live.iter().zip(parts) {
+        let texts: Vec<String> = parts.iter().map(|p| p.runs.iter().map(|r| r.text.as_str()).collect()).collect();
+        let leads = first_para_leads(&texts, &parts.iter().map(|p| p.continues).collect::<Vec<_>>());
+        for ((id, part), lead) in live.iter().zip(parts).zip(leads) {
             if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) {
                 let mut next = (**t).clone();
                 next.runs = part.runs;
@@ -241,6 +243,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     || part.list_count != t.list_count
                     || part.list_level_counts != t.list_level_counts
                     || continues != t.first_para_continues
+                    || lead != t.first_para_lead
                 {
                     t.runs = next.runs;
                     t.para = next.para;
@@ -250,6 +253,7 @@ pub(crate) fn reflow(before: &Document, doc: &mut Document) {
                     t.list_count = part.list_count;
                     t.list_level_counts = part.list_level_counts;
                     t.first_para_continues = continues;
+                    t.first_para_lead = lead;
                     refresh_bounds(t);
                 }
             }
@@ -384,23 +388,118 @@ pub(crate) fn mark_continued(doc: &mut Document) {
         let live: Vec<NodeId> = thread.into_iter().filter(|id| text_of(doc, *id).is_some()).collect();
         let frames: Vec<&TextObject> = live.iter().filter_map(|id| text_of(doc, *id)).collect();
         let marks = vectorcraft_text::thread::continued(&frames);
-        for (id, on) in live.iter().zip(marks) {
+        let texts: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
+        let leads = first_para_leads(&texts, &marks);
+        for ((id, on), lead) in live.iter().zip(marks).zip(leads) {
             if let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind)
-                && t.first_para_continues != on
+                && (t.first_para_continues != on || t.first_para_lead != lead)
             {
                 t.first_para_continues = on;
+                t.first_para_lead = lead;
                 refresh_bounds(t);
             }
         }
     }
 }
 
+/// [`TextObject::first_para_lead`] for each frame of a thread, from the frames' plain `texts` and
+/// whether each one's first paragraph `continues` from the frame before: the last character of
+/// that paragraph in the frames before that a repeat mark could stand for, or None. One pass over
+/// the frames: each frame's lead is carried forward to the next.
+fn first_para_leads(texts: &[String], continues: &[bool]) -> Vec<Option<char>> {
+    // The lead the next frame takes when its first paragraph continues from this one.
+    let mut carry = None;
+    texts
+        .iter()
+        .enumerate()
+        .map(|(k, text)| {
+            #[cfg(test)]
+            LEAD_SCANS.with(|c| c.set(c.get() + 1));
+            let lead = carry.filter(|_| continues.get(k) == Some(&true));
+            let tail = text.rsplit('\n').next().unwrap_or(text);
+            // A paragraph break in this frame ends the paragraph the lead came from.
+            carry = vectorcraft_text::repeat_base(tail).or(lead.filter(|_| tail.len() == text.len()));
+            lead
+        })
+        .collect()
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`story_of`] and [`ThreadIndex::of`] went through the document's
+    /// threads on this thread.
+    static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many times [`story_in`] went through a thread's frames on this thread.
+    static STORY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many frame texts [`first_para_leads`] went through on this thread.
+    static LEAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: how many times [`story_of`] and [`ThreadIndex::of`] have gone through the document's
+/// threads on this thread.
+#[cfg(test)]
+pub(crate) fn thread_scans() -> usize {
+    THREAD_SCANS.with(std::cell::Cell::get)
+}
+
+/// Tests: how many times [`story_in`] has gone through a thread's frames on this thread.
+#[cfg(test)]
+pub(crate) fn story_builds() -> usize {
+    STORY_BUILDS.with(std::cell::Cell::get)
+}
+
+/// Tests: how many frame texts [`first_para_leads`] has gone through on this thread.
+#[cfg(test)]
+pub(crate) fn lead_scans() -> usize {
+    LEAD_SCANS.with(std::cell::Cell::get)
+}
+
 /// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a
 /// path; empty when `id` is in no thread or the thread has fewer than two such frames.
 pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
+    #[cfg(test)]
+    THREAD_SCANS.with(|c| c.set(c.get() + 1));
     let Some(thread) = d.text_threads.iter().find(|t| t.contains(&id)) else { return vec![] };
+    story_in(d, thread, id)
+}
+
+/// [`story_of`] for `id` in `thread`, the first of the document's threads that lists it.
+pub(crate) fn story_in(d: &Document, thread: &[NodeId], id: NodeId) -> Vec<NodeId> {
+    #[cfg(test)]
+    STORY_BUILDS.with(|c| c.set(c.get() + 1));
     let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
     if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
+}
+
+/// A document's text threads looked up by frame, built in one pass over them, for a command that
+/// asks [`ThreadIndex::threaded`] of each of many objects.
+pub(crate) struct ThreadIndex<'a> {
+    doc: &'a Document,
+    /// Each object the threads list, with the index of the first thread that lists it.
+    first: std::collections::HashMap<NodeId, usize>,
+    /// Each thread's count of entries that are area type or type on a path.
+    live: Vec<usize>,
+}
+
+impl<'a> ThreadIndex<'a> {
+    pub(crate) fn of(doc: &'a Document) -> Self {
+        #[cfg(test)]
+        THREAD_SCANS.with(|c| c.set(c.get() + 1));
+        let mut first = std::collections::HashMap::new();
+        let mut live = Vec::with_capacity(doc.text_threads.len());
+        for (i, thread) in doc.text_threads.iter().enumerate() {
+            for id in thread {
+                first.entry(*id).or_insert(i);
+            }
+            live.push(thread.iter().filter(|id| text_of(doc, **id).is_some()).count());
+        }
+        Self { doc, first, live }
+    }
+
+    /// Whether `id` is a frame of a thread: [`story_of`] is not empty for it.
+    pub(crate) fn threaded(&self, id: NodeId) -> bool {
+        self.first.get(&id).and_then(|i| self.live.get(*i)).is_some_and(|n| *n >= 2) && text_of(self.doc, id).is_some()
+    }
 }
 
 /// `ids` followed by the other frames of the threads they are in, each once, in thread order.

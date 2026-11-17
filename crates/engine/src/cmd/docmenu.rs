@@ -6,10 +6,11 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, TextKind};
+use vectorcraft_doc::{CharStyle, Guide, Node, NodeId, NodeKind, SavedSelection, Selection, TextKind};
 use vectorcraft_geom::Vec2;
 
 use super::edit::selected_roots;
+use super::panelcmds::artboard_at;
 use super::pathops::Beside;
 use super::select::{first_selectable, is_selectable, selectable_ids, walk_selectable};
 use super::{
@@ -201,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Guide",
             [],
             None,
-            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
+            "{vertical: bool, pos: pt (x for vertical, y for horizontal), artboard?: index (0-based whole number; an artboard guide: it runs across that artboard only and moves, is copied and is deleted with it; default, or null, a canvas guide, across the whole canvas), layer?: id (the layer it is on, shown, hidden, locked and deleted with it; default the current layer)} → {index}",
             has_doc,
             guide_add
         ),
@@ -268,6 +269,33 @@ pub fn specs() -> Vec<CommandSpec> {
             "{title?, author?, authorTitle?, description?, keywords?: [string…]|\"a, b\" (each once), rating?: 0–5, copyrightStatus?: \"unknown\"|\"copyrighted\"|\"publicDomain\", copyrightNotice?, copyrightUrl?, created?, modified?, colorMode?, units?, artboards?, objects? (the last six only as read back; ignored)} set the File Info in one undo step (SVG with metadata, PDF and PNG exports carry it); no params → {title, author, authorTitle, description, keywords, rating, copyrightStatus, copyrightNotice, copyrightUrl, created, modified (ISO 8601 UTC or null; read-only), colorMode, units, artboards, objects}",
             has_doc,
             super::fileinfo::file_info
+        ),
+        cmd!(
+            "file.info.saveTemplate",
+            "Save Metadata Template…",
+            [],
+            None,
+            "{name?: save into the metadata templates folder as <name>.xmp (a name with characters file systems reject, a dot at either end, or a device name is an error (spaces at either end are dropped); the same name replaces that template), path?: save to this file instead (not both), fields?: {File Info fields as file.info takes them} save these instead of the document's (default: the document's File Info)} write the File Info as an XMP metadata template: title (only one of its own, not Untitled-N), author, authorTitle, description, keywords, rating (1–5), copyrightStatus, copyrightNotice and copyrightUrl, each where it has a value; the dates are left out → {name, path} (with name), {path} (with path), or {data: the XMP text} with neither",
+            has_doc,
+            super::fileinfo::save_template
+        ),
+        cmd!(
+            "file.info.applyTemplate",
+            "Import Metadata Template…",
+            [],
+            None,
+            "{path?: an XMP file, name?: a template of the metadata templates folder by the name or file file.info.templates lists, data?: XMP text (exactly one of the three; at most 8 MB), mode: \"replace\" (clear the author, authorTitle, description, keywords, rating, copyright status, notice and URL, then take the template's; the title stays unless the template has one) | \"keep\" (keep the File Info, and take each field the template has) | \"append\" (keep the File Info, add the template's keywords, and take its other fields only where the File Info has none: a title only over an Untitled-N one, a rating only over 0, a copyright status only over unknown), apply?: true (false: change nothing and return the merged File Info), base?: {File Info fields as file.info takes them} merged into instead of the document's} merge a metadata template into the File Info in one undo step, none when nothing changes; a template value file.info would refuse is left out; a missing file, a file larger than 8 MB or one that is not XMP is an error → the File Info as file.info reports it, with changed: true|false (with apply: false, the merged File Info without changed)",
+            has_doc,
+            super::fileinfo::apply_template
+        ),
+        cmd!(
+            query "file.info.templates",
+            "Metadata Templates",
+            [],
+            None,
+            "{create?: false (true: make the folder when it is missing)} the metadata templates in the metadata templates folder next to the preferences, sorted by name, at most 1,000 → {templates: [{name, file: the file name, path}], folder?: the folder (left out for a request that may not read it, in runs without preferences and on the web, where the list is empty)}",
+            super::always,
+            super::fileinfo::templates
         ),
     ]
 }
@@ -467,14 +495,15 @@ fn direction_handles(s: &mut Session, _: &Value) -> Result<Value> {
         }
     }
     let total: usize = items.iter().map(|x| x.1.len()).sum();
-    s.select(|_, sel| {
-        sel.clear();
-        for (id, refs) in items {
-            sel.add(id);
-            sel.anchors.insert(id, refs);
-        }
-    })?;
+    s.select(|_, sel| select_anchors(sel, items))?;
     Ok(json!({ "anchors": total }))
+}
+
+/// Replaces `sel` with the paths of `items` in order, each once, and direct-selects the anchors
+/// listed with each path. A path listed twice keeps its first place and its last anchor set.
+fn select_anchors(sel: &mut Selection, items: Vec<(NodeId, BTreeSet<(usize, usize)>)>) {
+    sel.set(items.iter().map(|(id, _)| *id));
+    sel.anchors.extend(items);
 }
 
 fn save_selection(s: &mut Session, p: &Value) -> Result<Value> {
@@ -767,15 +796,8 @@ fn clear_guides(s: &mut Session, _: &Value) -> Result<Value> {
 fn guide_add(s: &mut Session, p: &Value) -> Result<Value> {
     let pos = f64_req(p, "pos", "guide.add")?;
     let vertical = switch_or(p, "vertical", false, "guide.add")?;
-    let artboard = match p.get("artboard").filter(|v| !v.is_null()) {
-        Some(v) => {
-            let boards = &s.doc()?.doc.artboards;
-            let ab = v.as_u64().and_then(|i| boards.get(usize::try_from(i).ok()?)).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-            Some(ab.id)
-        }
-        None => None,
-    };
     let st = s.doc()?;
+    let artboard = artboard_at(&st.doc, p, "artboard", "guide.add")?.and_then(|i| st.doc.artboards.get(i)).map(|a| a.id);
     let layer = match id_param(p, "layer") {
         Some(l) if st.doc.node(l).is_some_and(Node::is_layer) => Some(l),
         Some(_) => return Err(bad("guide.add", "layer must name a layer or sublayer")),
@@ -1005,3 +1027,6 @@ fn close_all(s: &mut Session, _: &Value) -> Result<Value> {
     }
     Ok(json!({ "closed": n }))
 }
+
+#[cfg(test)]
+mod tests;

@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Rows",
             [],
             None,
-            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
+            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer, group or Intertwine group (on top of its contents). Layers go only in layers or at the top level, objects in layers, groups and Intertwine groups; an object placed beside a top-level layer goes inside it. An object placed in an Intertwine group becomes a member drawn in its row's order, with no arranged areas, and one placed in a group that is a member becomes part of that member; one that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused. A member moved out of its Intertwine group drops its arranged areas, and a group left with one member is replaced by that member, or becomes a plain group of it when the group has an opacity, blending, appearance, mask, lock or hidden state of its own (with no member, it is removed). A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
             has_doc,
             move_rows
         ),
@@ -119,7 +119,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers), deselecting every selected object left hidden or locked (the key object too)",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers; an Intertwine group takes and gives up members as layer.move does), deselecting every selected object left hidden or locked (the key object too)",
             has_doc,
             move_node
         ),
@@ -242,14 +242,15 @@ pub(crate) fn row_roots(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// Whether `parent` (None: the top level) can hold `n`: layers go at the top level or in layers,
-/// anything else in layers and groups.
+/// anything else in layers, groups and Intertwine groups (which also check what the object holds:
+/// [`super::intertwine::refused_in`]).
 pub(crate) fn accepts(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
     match parent {
         None => n.is_layer(),
         Some(p) => match d.node(p).map(|x| &x.kind) {
             Some(NodeKind::Layer { .. }) => true,
             // A ruler guide stays directly in a layer or sublayer.
-            Some(NodeKind::Group { .. }) => !n.is_layer() && !n.is_ruler_guide(),
+            Some(NodeKind::Group { .. } | NodeKind::Intertwine { .. }) => !n.is_layer() && !n.is_ruler_guide(),
             _ => false,
         },
     }
@@ -791,10 +792,17 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         let into = parent.and_then(|p| d.node(p)).map_or("the top level", |p| if p.is_layer() { "a layer" } else { p.kind_label() });
         return Err(bad(C, format!("{} can't go into {into}", n.display_name())));
     }
+    if let Some(what) = nodes.iter().find_map(|n| super::intertwine::refused_in(d, parent, n)) {
+        return Err(bad(C, format!("{what} can't be intertwined")));
+    }
     if parent.is_some_and(|p| locked_within(d, p)) {
         return Err(EngineError::Other("the layer or group is locked".into()));
     }
     let label = if copy { "Duplicate Rows" } else { "Move Rows" };
+    // Where each moved row comes from (a copy has a new id, so it comes from nowhere), and the
+    // Intertwine groups it leaves.
+    let from: std::collections::HashMap<NodeId, Option<NodeId>> = ids.iter().map(|i| (*i, d.parent_of(*i))).collect();
+    let left = if copy { vec![] } else { super::intertwine::groups_of(d, &ids) };
     let moved = s.edit(label, |d, sel| {
         let nodes = if copy {
             let mut nodes = vec![];
@@ -829,6 +837,8 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         if copy {
             super::typecmd::refresh_bounds_of(d, &out);
         }
+        let placed: Vec<(NodeId, Option<NodeId>)> = out.iter().map(|o| (*o, from.get(o).copied().flatten())).collect();
+        super::intertwine::settle_members(d, &placed, &left)?;
         sel.prune(d);
         sel.deselect_uneditable(d);
         Ok(out)
@@ -848,8 +858,15 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     if !accepts(d, parent, n) {
         return Err(bad(C, "layers go only at the top level or in layers, objects in layers and groups"));
     }
+    if let Some(what) = super::intertwine::refused_in(d, parent, n) {
+        return Err(bad(C, format!("{what} can't be intertwined")));
+    }
+    let from = d.parent_of(id);
+    let left = super::intertwine::groups_of(d, &[id]);
     s.edit("Reorder", |d, sel| {
         d.move_node(id, parent, index)?;
+        super::intertwine::settle_members(d, &[(id, from)], &left)?;
+        sel.prune(d);
         sel.deselect_uneditable(d);
         Ok(())
     })?;
@@ -994,18 +1011,51 @@ fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// Delete artboards `indices` (sorted) of `d` with their guides; at least one must be left.
-fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indices: &[usize]) -> Result<()> {
+/// Delete artboards `indices` (sorted, each once) of `d` with their guides; at least one must be
+/// left. The other artboards keep their order, no later artboard takes a deleted one's id, and
+/// `sel` forgets the deleted guides. One walk over the artboards and one over the ruler guides,
+/// however many go. Delete Artboard, Delete Empty Artboards, Cut Artboard and Artwork Cleanup's
+/// Empty Artboards.
+pub(crate) fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indices: &[usize]) -> Result<()> {
+    if indices.iter().any(|i| *i >= d.artboards.len()) {
+        return Err(EngineError::Other("no such artboard".into()));
+    }
     if indices.len() >= d.artboards.len() {
         return Err(EngineError::Other("a document needs at least one artboard".into()));
     }
-    // The last first, so the others keep their places; their guides go with them.
-    for &i in indices.iter().rev() {
-        let id = d.artboards.remove(i).id;
-        d.retire_artboard_id(id);
-        d.retain_guides(sel, |g| g.artboard != Some(id));
+    if indices.is_empty() {
+        return Ok(());
     }
+    let mut gone: HashSet<u32> = HashSet::with_capacity(indices.len());
+    let mut i = 0;
+    d.artboards.retain(|a| {
+        let keep = indices.binary_search(&i).is_err();
+        i += 1;
+        if !keep {
+            gone.insert(a.id);
+        }
+        keep
+    });
+    count_artboard_pass();
+    for &id in &gone {
+        d.retire_artboard_id(id);
+    }
+    d.retain_guides(sel, |g| !g.artboard.is_some_and(|a| gone.contains(&a)));
+    count_artboard_pass();
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many walks [`remove_artboards`] made over the artboards and the ruler guides on
+    /// this thread.
+    pub(crate) static ARTBOARD_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: count one walk over the artboards or the ruler guides.
+fn count_artboard_pass() {
+    #[cfg(test)]
+    ARTBOARD_PASSES.set(ARTBOARD_PASSES.get() + 1);
 }
 
 /// The artboards Delete Empty Artboards deletes: those with no artwork

@@ -560,6 +560,125 @@ fn reset_bounding_box_then_release_intertwine() {
     reset_then_release("object.intertwine.make", "object.intertwine.release");
 }
 
+/// A symbol of two rectangles, the first turned `inner` degrees before the symbol is made, placed
+/// as an instance that is then turned 20°.
+fn turned_instance(inner: f64) -> (Session, NodeId) {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 150.0, 220.0, 100.0, 50.0);
+    if inner != 0.0 {
+        sel(&mut s, &[a]);
+        s.execute("object.rotate", &json!({"angle": inner})).unwrap();
+    }
+    sel(&mut s, &[a, b]);
+    let inst = id_of(&s.execute("symbol.new", &json!({"name": "Pair"})).unwrap());
+    sel(&mut s, &[inst]);
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    assert!(near(angle(&s, inst), 20.0));
+    (s, inst)
+}
+
+/// Break Link and Expand with the parameters that turn instance `inst` into its art.
+fn expand_instance(s: &mut Session, command: &str, inst: NodeId) {
+    sel(s, &[inst]);
+    let params = if command == "symbol.breakLink" { json!({"ids": [inst.0]}) } else { json!({"object": true, "fill": false, "stroke": false}) };
+    s.execute(command, &params).unwrap();
+    assert!(s.doc().unwrap().doc.node(inst).is_none_or(|n| !matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })), "{command}");
+}
+
+/// The angles of the objects inside the document's only top-level object, that object included.
+fn art_angles(s: &Session) -> Vec<f64> {
+    let d = &s.doc().unwrap().doc;
+    let layer = d.layers.first().unwrap();
+    let top = layer.children().unwrap();
+    assert_eq!(top.len(), 1);
+    let mut out = vec![];
+    subtree_angles(&top[0], &mut out);
+    out
+}
+
+#[test]
+fn reset_bounding_box_then_expand_symbol_instance() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let (mut s, inst) = turned_instance(0.0);
+        assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+        assert_eq!(angle(&s, inst), 0.0);
+        expand_instance(&mut s, command, inst);
+        let angles = art_angles(&s);
+        assert!(angles.len() >= 2 && angles.iter().all(|a| near(*a, 0.0)), "{command}: {angles:?}");
+        s.execute("select.all", &json!({})).unwrap();
+        assert_eq!(selection_box(&s).angle, 0.0, "{command}");
+    }
+}
+
+#[test]
+fn expanding_a_turned_symbol_instance_keeps_its_angle() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let (mut s, inst) = turned_instance(0.0);
+        expand_instance(&mut s, command, inst);
+        let angles = art_angles(&s);
+        assert!(angles.len() >= 2 && angles.iter().all(|a| near(*a, 20.0)), "{command}: {angles:?}");
+    }
+}
+
+#[test]
+fn reset_bounding_box_then_expand_keeps_the_angles_inside_the_symbol() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let (mut s, inst) = turned_instance(30.0);
+        s.execute("object.resetBoundingBox", &json!({})).unwrap();
+        expand_instance(&mut s, command, inst);
+        // The turned rectangle keeps the 30° it had in the symbol; the rest stand square.
+        let mut angles = art_angles(&s);
+        angles.sort_by(f64::total_cmp);
+        assert!(near(*angles.last().unwrap(), 30.0) && angles[..angles.len() - 1].iter().all(|a| near(*a, 0.0)), "{command}: {angles:?}");
+    }
+}
+
+/// The group that an instance's opacity adds around the art of a one-object symbol stands as the
+/// instance's box does, turned or reset.
+#[test]
+fn expanding_a_faded_symbol_instance_gives_its_group_the_instance_box() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        for reset in [false, true] {
+            let mut s = session();
+            let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+            sel(&mut s, &[a]);
+            let inst = id_of(&s.execute("symbol.new", &json!({"name": "One"})).unwrap());
+            sel(&mut s, &[inst]);
+            s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+            s.execute("object.setProps", &json!({"ids": [inst.0], "opacity": 50})).unwrap();
+            if reset {
+                s.execute("object.resetBoundingBox", &json!({})).unwrap();
+            }
+            expand_instance(&mut s, command, inst);
+            let want = if reset { 0.0 } else { 20.0 };
+            let angles = art_angles(&s);
+            assert!(angles.len() == 2 && angles.iter().all(|a| near(*a, want)), "{command}, reset {reset}: {angles:?}");
+        }
+    }
+}
+
+/// A mirrored instance: turned 170° and then reflected, its box stands 180° from the box its
+/// transform gives in one step. The art takes the instance's box, and stands square after a reset.
+#[test]
+fn expanding_a_reflected_symbol_instance_keeps_its_box() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        for reset in [false, true] {
+            let (mut s, inst) = turned_instance(0.0);
+            s.execute("object.rotate", &json!({"angle": 150})).unwrap();
+            s.execute("object.reflect", &json!({"axis": "horizontal", "basis": "page"})).unwrap();
+            assert!(near(angle(&s, inst), -170.0), "{}", angle(&s, inst));
+            if reset {
+                s.execute("object.resetBoundingBox", &json!({})).unwrap();
+            }
+            let want = angle(&s, inst);
+            expand_instance(&mut s, command, inst);
+            let angles = art_angles(&s);
+            assert!(angles.len() >= 2 && angles.iter().all(|a| near(*a, want)), "{command}, reset {reset}: {angles:?}");
+        }
+    }
+}
+
 #[test]
 fn reset_bounding_box_then_release_linked_opacity_mask() {
     let mut s = session();
@@ -600,8 +719,162 @@ fn page_flips_keep_an_upright_box_upright() {
     s.execute("object.reflect", &json!({"axis": "horizontal"})).unwrap();
     assert_eq!(angle(&s, a), 0.0);
     s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    // A named axis is the turned box's own: the box keeps its angle.
     s.execute("object.reflect", &json!({"axis": "vertical"})).unwrap();
+    assert!(near(angle(&s, a), 30.0));
+    s.execute("object.reflect", &json!({"axis": "vertical", "basis": "page"})).unwrap();
     assert!(near(angle(&s, a), -30.0));
+}
+
+fn same_matrix(a: Affine, b: Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(x, y)| near(*x, y))
+}
+
+/// After a rotation, Scale and a named Reflect act along the turned bounding box until Reset
+/// Bounding Box; `basis: "page"` keeps the page's axes, and Transform Again repeats the matrix the
+/// transform applied on the page.
+#[test]
+fn scale_and_reflect_follow_the_turned_box() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let page = |s: &Session, ids: &[NodeId]| s.doc().unwrap().doc.bounds_of(ids, false).unwrap();
+    let c = Point::new(200.0, 200.0);
+    let frame = OrientedBox { angle: 45.0, rect: Rect::ZERO };
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100})).unwrap();
+    let b = selection_box(&s);
+    assert!(near(b.angle, 45.0) && near(angle(&s, a), 45.0), "{b:?}");
+    assert!(near(b.rect.width(), 200.0) && near(b.rect.height(), 50.0), "{b:?}");
+    assert!(b.center().distance(c) < 1e-6, "{b:?}");
+    let want = Affine::translate(c.to_vec2()) * frame.conjugate(Affine::scale_non_uniform(2.0, 1.0)) * Affine::translate(-c.to_vec2());
+    let Some(LastTransform::Matrix(m, _)) = s.doc().unwrap().last_transform.clone() else { panic!("no transform to repeat") };
+    assert!(same_matrix(m, want), "{m:?}");
+    // The recorded step names its basis, so a replay acts in the same frame.
+    let steps = s.journal_for_action(0);
+    assert!(steps.iter().any(|(id, p)| id == "object.scale" && p["basis"] == "box"), "{steps:?}");
+
+    // Reflected across the box's vertical axis through its left side: the box keeps its angle and
+    // size, and its centre moves a width to the left along the box.
+    let left = b.reference_point(3);
+    s.execute("object.reflect", &json!({"axis": "vertical", "origin": [left.x, left.y]})).unwrap();
+    let r = selection_box(&s);
+    let moved = c + (frame.to_doc() * Point::new(-200.0, 0.0)).to_vec2();
+    assert!(near(r.angle, 45.0) && near(r.rect.width(), 200.0) && near(r.rect.height(), 50.0), "{r:?}");
+    assert!(r.center().distance(moved) < 1e-6, "{r:?}");
+    // Across its horizontal axis through its centre: the box stays where it is.
+    s.execute("object.reflect", &json!({"axis": "horizontal"})).unwrap();
+    assert!(selection_box(&s).center().distance(moved) < 1e-6 && near(angle(&s, a), 45.0));
+
+    // Unknown bases are errors and change nothing.
+    let n = undo_len(&s);
+    assert!(s.execute("object.scale", &json!({"sx": 50, "basis": "turned"})).is_err());
+    assert!(s.execute("object.reflect", &json!({"axis": "vertical", "basis": 1})).is_err());
+    assert!(s.execute("object.reflect", &json!({"axis": 30, "basis": "turned"})).is_err());
+    assert_eq!(undo_len(&s), n);
+
+    // On the page's axes, the box no longer stands at 45°.
+    s.execute("object.scale", &json!({"sx": 50, "sy": 100, "basis": "page"})).unwrap();
+    assert!(!near(angle(&s, a), 45.0));
+    // Transform Again repeats the page matrix after Reset Bounding Box too.
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100})).unwrap();
+    let Some(LastTransform::Matrix(m, _)) = s.doc().unwrap().last_transform.clone() else { panic!("no transform to repeat") };
+    s.execute("object.resetBoundingBox", &json!({})).unwrap();
+    let before = s.doc().unwrap().doc.node(a).unwrap().clone();
+    s.execute("object.transformAgain", &json!({})).unwrap();
+    let mut want = before;
+    want.transform(m, false);
+    let (got, want) = (page(&s, &[a]), want.geometric_bounds_with(&s.doc().unwrap().doc.symbol_boxes()).unwrap());
+    assert!([got.x0 - want.x0, got.y0 - want.y0, got.x1 - want.x1, got.y1 - want.y1].iter().all(|d| d.abs() < 1e-6), "{got:?} {want:?}");
+}
+
+/// A saved step without `basis` was recorded before Scale and Reflect followed the turned box, so a
+/// replay of it acts along the page's axes, as it did then, and its new journal entry says so. A
+/// step recorded now names its basis and replays along the box. A call without `basis` that is not
+/// a replay acts along the box.
+#[test]
+fn saved_steps_without_a_basis_replay_on_the_page() {
+    // The turned rectangle after `run` runs on it: its page bounds and its box's angle.
+    let after = |run: &dyn Fn(&mut Session)| {
+        let mut s = session();
+        let a = turned_rect(&mut s);
+        run(&mut s);
+        let st = (s.doc().unwrap().doc.bounds_of(&[a], false).unwrap(), angle(&s, a));
+        (st, s.journal.last().unwrap().clone())
+    };
+    let same = |(r, a): (Rect, f64), (q, b): (Rect, f64)| [r.x0 - q.x0, r.y0 - q.y0, r.x1 - q.x1, r.y1 - q.y1, a - b].iter().all(|d| d.abs() < 1e-6);
+    for (id, p) in [("object.scale", json!({"sx": 200, "sy": 100})), ("object.reflect", json!({"axis": "vertical"}))] {
+        let mut on_page = p.clone();
+        on_page["basis"] = json!("page");
+        let (page, _) = after(&|s| {
+            s.execute(id, &on_page).unwrap();
+        });
+        let (old, (_, noted)) = after(&|s| {
+            s.replay(id, &p).unwrap();
+        });
+        assert!(same(old, page), "{id}: {old:?} {page:?}");
+        assert_eq!(noted["basis"], "page", "{id}");
+
+        let (boxed, (recorded_id, recorded)) = after(&|s| {
+            s.execute(id, &p).unwrap();
+        });
+        assert!(!same(boxed, page) && near(boxed.1, 45.0), "{id}: {boxed:?}");
+        assert_eq!(recorded["basis"], "box", "{id}");
+        let (replayed, _) = after(&|s| {
+            s.replay(&recorded_id, &recorded).unwrap();
+        });
+        assert!(same(replayed, boxed), "{id}: {replayed:?} {boxed:?}");
+    }
+}
+
+/// Once Reset Bounding Box squares the box, and for objects standing at different angles, Scale
+/// acts along the page's axes.
+#[test]
+fn scale_follows_the_page_after_a_reset_and_for_mixed_angles() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    s.execute("object.resetBoundingBox", &json!({})).unwrap();
+    let page = |s: &Session, ids: &[NodeId]| s.doc().unwrap().doc.bounds_of(ids, false).unwrap();
+    let w = page(&s, &[a]);
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100})).unwrap();
+    let r = page(&s, &[a]);
+    assert!(near(r.width(), 2.0 * w.width()) && near(r.height(), w.height()), "{w:?} {r:?}");
+    assert_eq!(angle(&s, a), 0.0);
+    // A turned rectangle with an upright one: the box is square to the page.
+    let b = turned_rect(&mut s);
+    let u = rect(&mut s, 400.0, 100.0, 50.0, 50.0);
+    sel(&mut s, &[b, u]);
+    let w = page(&s, &[b, u]);
+    s.execute("object.scale", &json!({"sx": 100, "sy": 200})).unwrap();
+    let r = page(&s, &[b, u]);
+    assert!(near(r.width(), w.width()) && near(r.height(), 2.0 * w.height()), "{w:?} {r:?}");
+}
+
+/// With anchors selected, Scale and a named Reflect move the anchors along the page's axes, but
+/// with Transform Objects off they move the whole objects' pattern tiles, along the turned box.
+#[test]
+fn pattern_only_transforms_of_selected_anchors_follow_the_turned_box() {
+    let c = Point::new(200.0, 200.0);
+    let frame = OrientedBox { angle: 45.0, rect: Rect::ZERO };
+    let about = |m: Affine| Affine::translate(c.to_vec2()) * m * Affine::translate(-c.to_vec2());
+    let last = |s: &Session| match s.doc().unwrap().last_transform.clone() {
+        Some(LastTransform::Matrix(m, _)) => m,
+        other => panic!("no matrix to repeat: {other:?}"),
+    };
+    let scale = Affine::scale_non_uniform(2.0, 1.0);
+    let flip = Affine::scale_non_uniform(-1.0, 1.0);
+    for (cmd, p, m) in [("object.scale", json!({"sx": 200, "sy": 100}), scale), ("object.reflect", json!({"axis": "vertical"}), flip)] {
+        for objects in [false, true] {
+            let mut s = session();
+            let a = turned_rect(&mut s);
+            s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+            let mut p = p.clone();
+            p["origin"] = json!([c.x, c.y]);
+            p["objects"] = json!(objects);
+            p["patterns"] = json!(true);
+            s.execute(cmd, &p).unwrap();
+            let want = if objects { about(m) } else { about(frame.conjugate(m)) };
+            assert!(same_matrix(last(&s), want), "{cmd} objects {objects}: {:?}", last(&s));
+        }
+    }
 }
 
 #[test]

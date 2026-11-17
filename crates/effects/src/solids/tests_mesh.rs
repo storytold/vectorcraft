@@ -208,3 +208,151 @@ fn a_gradient_takes_the_average_of_its_stops() {
     let pattern = Paint::Pattern { pattern: "x".into(), xf: vectorcraft_geom::Affine::IDENTITY };
     assert!(close(mesh_color(&pattern, 0.5), [0.5, 0.5, 0.5, 0.5]));
 }
+
+/// The meshes of Extrude & Bevel or Inflate `fx` on `shapes`, each built apart from the facets that
+/// decide which solids are drawn ([`built_solids`], then [`vectorcraft_three_d::extrude_mesh`] or
+/// [`vectorcraft_three_d::inflate_meshes`]), for comparing with [`meshes_for`].
+fn meshes_built_apart(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) -> Result<Vec<SolidMesh>, String> {
+    let p = crate::merged_params(&fx.id, &fx.params);
+    let view = view_options(&p);
+    let (parts, bounds) = solid_parts(shapes, union_bounds(shapes).unwrap());
+    let drawn = built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES).map(|r| r.map(|f| f.is_some()));
+    let mut inflated = (fx.id == INFLATE).then(|| {
+        let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
+        vectorcraft_three_d::inflate_meshes(&shapes, bounds, inflate_options(&p), view)
+    });
+    let extrude = if fx.id == CLASSIC_EXTRUDE { classic_extrude_options(&p) } else { extrude_options(&p) };
+    let mut out = vec![];
+    for ((item, opacity, area, rule, _, _), drawn) in parts.iter().zip(drawn) {
+        let item: &AppearanceItem = item;
+        if !drawn? {
+            if let Some(built) = inflated.as_mut() {
+                built.next();
+            }
+            continue;
+        }
+        let mesh = match inflated.as_mut() {
+            Some(built) => built.next().unwrap_or_else(|| Ok(Mesh::default())),
+            None => vectorcraft_three_d::extrude_mesh(area, *rule, bounds, extrude, view),
+        };
+        match mesh {
+            Ok(mesh) => {
+                let (paint, opacity, _) = paint_of(item, *opacity);
+                keep_mesh(&mut out, total, SolidMesh { mesh, color: mesh_color(&paint, opacity) }, limit)?;
+            }
+            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(out)
+}
+
+/// The bits of every number in `meshes`, for comparing two exports exactly.
+type MeshBits = Vec<([u32; 4], Vec<[u64; 3]>, Vec<[u64; 3]>, Vec<[u32; 3]>)>;
+
+fn mesh_bits(meshes: &[SolidMesh]) -> MeshBits {
+    meshes
+        .iter()
+        .map(|m| {
+            let (positions, normals) = (&m.mesh.positions, &m.mesh.normals);
+            (
+                m.color.map(f32::to_bits),
+                positions.iter().map(|p| p.map(f64::to_bits)).collect(),
+                normals.iter().map(|n| n.map(f64::to_bits)).collect(),
+                m.mesh.triangles.clone(),
+            )
+        })
+        .collect()
+}
+
+/// A five-pointed star about `(x, 150)` with curved edges, filled red and stroked black.
+fn star_node(id: u64, x: f64) -> Node {
+    let mut b = BezPath::new();
+    for k in 0..10 {
+        let (s, c) = (k as f64 * std::f64::consts::PI / 5.0).sin_cos();
+        let r = if k % 2 == 0 { 60.0 } else { 25.0 };
+        let p = (x + r * c, 150.0 + r * s);
+        if k == 0 { b.move_to(p) } else { b.curve_to((p.0 + 4.0, p.1), (p.0, p.1 + 4.0), p) }
+    }
+    b.close_path();
+    Node::path(NodeId(id), PathData::from_bezpath(&b), Appearance::basic(Paint::solid(RED), Paint::solid(Color::BLACK), 6.0))
+}
+
+/// The shapes `meshes_for` builds from: one node's, or each of several.
+fn shapes_of(nodes: &[&Node]) -> Vec<Profile> {
+    nodes
+        .iter()
+        .map(|n| Profile { path: profile(n).unwrap().0, rule: FillRule::NonZero, items: solid_paints(n), opacity: 1.0, scopes: vec![] })
+        .collect()
+}
+
+/// Building each Extrude & Bevel and Inflate solid once exports the same meshes, to the bit, as
+/// building its facets and its mesh apart, within and past the triangle budget.
+#[test]
+fn one_build_exports_the_meshes_built_apart() {
+    let mut second_stroke = square_node(3, 400.0);
+    if let Some(stroke) = second_stroke.appearance.items.get(1).cloned() {
+        second_stroke.appearance.items.push(stroke);
+    }
+    let (star, square, other) = (star_node(1, 100.0), square_node(2, 250.0), star_node(4, 600.0));
+    let cases = [
+        (EXTRUDE, json!({})),
+        (EXTRUDE, json!({ "bevel": "rounded", "bevelWidth": 6.0, "bevelHeight": 5.0, "twist": 60.0, "taper": 70.0 })),
+        (EXTRUDE, json!({ "bevel": "cove", "bevelInside": true, "bevelBothSides": true, "cap": false, "perspectiveAngle": 50.0 })),
+        (EXTRUDE, json!({ "depth": 0.0 })),
+        (CLASSIC_EXTRUDE, json!({ "bevel": "classic", "bevelHeight": 8.0 })),
+        (INFLATE, json!({})),
+        (INFLATE, json!({ "depth": 30.0, "bothSides": true, "volume": 80.0 })),
+        (INFLATE, json!({ "depth": 40.0, "twist": 360.0, "taper": 70.0, "cap": false })),
+        (INFLATE, json!({ "depth": 0.1, "twist": 0.1, "bothSides": true })),
+    ];
+    let sets: [Vec<&Node>; 3] = [vec![&star], vec![&second_stroke], vec![&star, &square, &other]];
+    for (id, params) in cases {
+        let effect = fx(id, params.clone());
+        for nodes in &sets {
+            let shapes = shapes_of(nodes);
+            let (mut once, mut apart) = (0, 0);
+            let built = meshes_for(&effect, &shapes, &mut once, MAX_MESH_TRIANGLES).unwrap_or_else(|e| panic!("{id} {params}: {e}"));
+            let reference = meshes_built_apart(&effect, &shapes, &mut apart, MAX_MESH_TRIANGLES).unwrap();
+            assert!(!reference.is_empty());
+            assert_eq!(mesh_bits(&built), mesh_bits(&reference), "{id} {params}");
+            assert_eq!(once, apart);
+            // Past the budget, at the same mesh, with the same count.
+            let limit = once - 1;
+            let (mut once, mut apart) = (0, 0);
+            let built = meshes_for(&effect, &shapes, &mut once, limit);
+            assert!(built.is_err(), "{id} {params}");
+            assert_eq!(built.err(), meshes_built_apart(&effect, &shapes, &mut apart, limit).err(), "{id} {params}");
+            assert_eq!(once, apart, "{id} {params}");
+        }
+    }
+}
+
+/// A stroke whose solid is past the limits is left out of the export and the fill's mesh exports,
+/// as when the facets and the mesh are built apart.
+#[test]
+fn a_stroke_past_the_limits_is_left_out_of_the_export() {
+    // 40,000 corners: within the 65,536 points of the fill's solid, but not the stroke's outline.
+    let points: Vec<Point> = (0..40_000)
+        .map(|k| {
+            let (s, c) = (k as f64 * std::f64::consts::TAU / 40_000.0).sin_cos();
+            let r = if k % 2 == 0 { 10_000.0 } else { 9_999.0 };
+            Point::new(20_000.0 + r * c, 20_000.0 + r * s)
+        })
+        .collect();
+    let path = PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    let n = Node::path(NodeId(1), path, Appearance::basic(Paint::solid(RED), Paint::solid(Color::BLACK), 2.0));
+    for id in [EXTRUDE, INFLATE] {
+        // Without caps: a cap of 40,000 corners takes more work to cut into triangles than an
+        // export allows.
+        let effect = fx(id, json!({ "cap": false }));
+        let shapes = shapes_of(&[&n]);
+        // The fill's mesh alone has more triangles than an export takes.
+        let (mut once, mut apart) = (0, 0);
+        let built = meshes_for(&effect, &shapes, &mut once, usize::MAX).unwrap_or_else(|e| panic!("{id}: {e}"));
+        assert_eq!(built.len(), 1, "{id}: the fill's mesh alone");
+        assert!(close(built[0].color, [0.8, 0.2, 0.1, 1.0]), "{id}");
+        let reference = meshes_built_apart(&effect, &shapes, &mut apart, usize::MAX).unwrap();
+        assert_eq!(mesh_bits(&built), mesh_bits(&reference), "{id}");
+    }
+}

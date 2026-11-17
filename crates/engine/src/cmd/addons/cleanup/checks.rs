@@ -10,7 +10,7 @@ use vectorcraft_geom::{PathData, Point, Rect};
 use vectorcraft_pathops::addons as po;
 
 use super::super::super::edit::outermost;
-use super::super::super::layer::empty_artboards;
+use super::super::super::layer::{empty_artboards, remove_artboards};
 use crate::Result;
 
 /// Sine of the turn below which an anchor on a straight run is collinear.
@@ -508,35 +508,6 @@ fn artboards(d: &mut Document, sel: &mut Selection, scope: &Scope) -> Result<Out
     if empty.is_empty() {
         return Ok(Outcome::default());
     }
-    // `empty` is in artboard order: one walk drops them and the others keep their order.
-    let mut gone: HashSet<u32> = HashSet::with_capacity(empty.len());
-    let mut i = 0;
-    d.artboards.retain(|a| {
-        let keep = empty.binary_search(&i).is_err();
-        i += 1;
-        if !keep {
-            gone.insert(a.id);
-        }
-        keep
-    });
-    count_artboard_pass();
-    for &id in &gone {
-        d.retire_artboard_id(id);
-    }
-    d.retain_guides(sel, |g| !g.artboard.is_some_and(|a| gone.contains(&a)));
-    count_artboard_pass();
+    remove_artboards(d, sel, &empty)?;
     Ok(Outcome { count: empty.len(), ids: vec![], artboards: empty })
-}
-
-#[cfg(test)]
-thread_local! {
-    /// Tests: how many walks [`artboards`] made over the artboards and the ruler guides on this
-    /// thread.
-    pub(super) static ARTBOARD_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// Tests: count one walk over the artboards or the ruler guides.
-fn count_artboard_pass() {
-    #[cfg(test)]
-    ARTBOARD_PASSES.set(ARTBOARD_PASSES.get() + 1);
 }

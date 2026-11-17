@@ -419,6 +419,56 @@ fn a_reflected_horizontal_dimension_keeps_its_line_on_the_reflected_side() {
     assert_eq!(text(&s, id), "100.00 pt");
 }
 
+/// An unlinked aligned dimension reflected on its own has its line on the reflected side of its
+/// points: a line 30 pt above a level pair is 30 pt below it after a flip top to bottom, and a
+/// half turn moves it below them as well, by turning it.
+#[test]
+fn a_reflected_aligned_dimension_keeps_its_line_on_the_reflected_side() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,200],"offset":-30}))["id"].as_u64().unwrap();
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 170.0), (200.0, 170.0)]);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,200]}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 230.0), (200.0, 230.0)]);
+    assert_eq!(text(&s, id), "100.00 pt");
+    // Reflected left to right, the points swap ends and the line stays below them.
+    run(&mut s, "object.reflect", json!({"axis":"vertical","origin":[150,0]}));
+    assert_eq!(path_ends(&s, id)[2], vec![(200.0, 230.0), (100.0, 230.0)]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 170.0), (200.0, 170.0)]);
+    // A half turn about the points' midpoint puts the line below them by turning it.
+    run(&mut s, "object.rotate", json!({"angle":180,"origin":[150,200]}));
+    let ends = path_ends(&s, id)[2].iter().map(|(x, y)| (x.round(), y.round())).collect::<Vec<_>>();
+    assert_eq!(ends, vec![(200.0, 230.0), (100.0, 230.0)]);
+}
+
+/// An unlinked aligned dimension of a diagonal pair reflected about a mirror line through its
+/// points has its line on the other side of them, and a scale by a negative factor reverses the
+/// side as a reflection does, while a scale by positive factors keeps it.
+#[test]
+fn an_aligned_dimension_reflected_about_an_angle_or_scaled_by_a_negative_factor_changes_sides() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,100],"offset":-30}))["id"].as_u64().unwrap();
+    let k = 30.0 / 2f64.sqrt();
+    let near = |got: &[(f64, f64)], want: [(f64, f64); 2]| got.iter().zip(want).all(|(g, w)| (g.0 - w.0).abs() < 1e-6 && (g.1 - w.1).abs() < 1e-6);
+    let ends = path_ends(&s, id)[2].clone();
+    assert!(near(&ends, [(100.0 - k, 200.0 - k), (200.0 - k, 100.0 - k)]), "{ends:?}");
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    // The mirror line at 45 degrees through (150, 150) holds both points.
+    run(&mut s, "object.reflect", json!({"axis":45,"origin":[150,150]}));
+    let ends = path_ends(&s, id)[2].clone();
+    assert!(near(&ends, [(100.0 + k, 200.0 + k), (200.0 + k, 100.0 + k)]), "{ends:?}");
+    run(&mut s, "edit.undo", json!({}));
+    let level = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,200],"offset":-30}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[level]}));
+    run(&mut s, "object.scale", json!({"sx":-200,"sy":100,"origin":[150,0]}));
+    assert_eq!(path_ends(&s, level)[2], vec![(250.0, 170.0), (50.0, 170.0)]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":200,"origin":[150,200]}));
+    assert_eq!(path_ends(&s, level)[2], vec![(50.0, 170.0), (250.0, 170.0)]);
+}
+
 /// The line of a linked horizontal dimension below both points stays below them when the art
 /// turns a half turn; a line between the points keeps its distance from the first point.
 #[test]
@@ -1721,8 +1771,9 @@ fn both_points_snap_onto_anchors_with_a_visible_indicator() {
 }
 
 /// Smart Guides for the Linear picks: hovering away from any line, the first point slides into
-/// line with another object's corner and its guides show before the click; the second slides onto
-/// the construction guide through the first. The dimension measures between the snapped points.
+/// line with another object's corner and its guides show before the click; the second slides into
+/// line with the other corner, with no construction guide through the first point pulling it
+/// sideways. The dimension measures between the snapped points.
 #[test]
 fn linear_picks_show_and_snap_to_smart_guides() {
     use vectorcraft_engine::tools::Overlay;
@@ -1738,18 +1789,148 @@ fn linear_picks_show_and_snap_to_smart_guides() {
     assert!(o.iter().any(|o| matches!(o, Overlay::Line { .. } | Overlay::Label { .. })), "its guides show before the click: {o:?}");
     ev(&mut s, PointerKind::Down, 250.0, 202.5);
     ev(&mut s, PointerKind::Up, 250.0, 202.5);
-    // Straight below the first point, 1.5 pt off: the rubber band ends on the vertical through it.
-    ev(&mut s, PointerKind::Move, 251.5, 260.0);
+    // Below the first point, 1.5 pt to its right and 2.5 pt off the bottom edge's level: the
+    // rubber band ends on that level, where the pointer is across it.
+    ev(&mut s, PointerKind::Move, 251.5, 262.5);
     let end = overlays(&mut s).into_iter().find_map(|o| if let Overlay::Line { b, dashed: true, .. } = o { Some(b) } else { None }).unwrap();
-    assert_eq!((end.x, end.y), (250.0, 260.0), "on the construction guide");
-    ev(&mut s, PointerKind::Down, 251.5, 260.0);
-    ev(&mut s, PointerKind::Up, 251.5, 260.0);
+    assert_eq!((end.x, end.y), (251.5, 260.0), "in line with the bottom edge, not on a vertical through the first point");
+    ev(&mut s, PointerKind::Down, 251.5, 262.5);
+    ev(&mut s, PointerKind::Up, 251.5, 262.5);
     ev(&mut s, PointerKind::Move, 220.0, 230.0);
     assert!(!overlays(&mut s).iter().any(|o| matches!(o, Overlay::Label { .. })), "placing: the guides are gone");
     ev(&mut s, PointerKind::Down, 220.0, 230.0);
     ev(&mut s, PointerKind::Up, 220.0, 230.0);
     let id = s.doc().unwrap().selection.objects[0].0;
-    assert_eq!(text(&s, id), "60.00 pt");
+    // Aligned from (250, 200) to (251.5, 260): √(1.5² + 60²).
+    assert_eq!(text(&s, id), "60.02 pt");
+}
+
+/// A shape with a curve at each top corner, for the tests of where Linear picks land.
+const CURVED_TOP: &str = "M130 358 C185 358 230 315 230 260 L425 260 C490 260 541 305 541 358 L541 440 L130 440 Z";
+
+/// Where the next Linear click lands (the last marker the overlays draw, and its size) and the
+/// labels shown, with the pointer at (`x`, `y`).
+fn linear_marker(s: &mut Session, view: ViewInfo, x: f64, y: f64) -> (Option<(vectorcraft_geom::Point, f32)>, Vec<String>) {
+    use vectorcraft_engine::tools::Overlay;
+    s.pointer(&PointerEvent::new(PointerKind::Move, x, y), view).unwrap();
+    let o = s.overlays(view);
+    let at = o.iter().filter_map(|o| if let Overlay::Anchor { p, size, .. } = o { Some((*p, *size)) } else { None }).next_back();
+    let labels = o.iter().filter_map(|o| if let Overlay::Label { text, .. } = o { Some(text.clone()) } else { None }).collect();
+    (at, labels)
+}
+
+/// A plain click at (`x`, `y`): the pointer moves there, then presses and releases.
+fn linear_click(s: &mut Session, view: ViewInfo, x: f64, y: f64) {
+    for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, x, y), view).unwrap();
+    }
+}
+
+/// Linear picks land on the anchors and paths of the art with an "anchor" or "path" label, and on
+/// the ends and lines of dimensions already drawn, from as far as on the art's anchors: zoomed in,
+/// a dimension started a few pixels from the end of another starts exactly at that end.
+#[test]
+fn linear_picks_land_on_anchors_paths_and_drawn_dimensions() {
+    let (plain, zoomed) = (ViewInfo::default(), ViewInfo { zoom: 8.0, ..ViewInfo::default() });
+    let mut s = session();
+    run(&mut s, "path.create", json!({"d": CURVED_TOP}));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let pt = vectorcraft_geom::Point::new;
+    let hover = |s: &mut Session, view: ViewInfo, x: f64, y: f64| {
+        let (at, labels) = linear_marker(s, view, x, y);
+        (at.map(|(p, _)| p), labels)
+    };
+    // Beside the end of the curve: on the anchor, labeled.
+    assert_eq!(hover(&mut s, plain, 231.0, 262.0), (Some(pt(230.0, 260.0)), vec!["anchor".to_string()]));
+    // Beside the curve: on its closest point, labeled.
+    let (at, labels) = hover(&mut s, plain, 200.0, 337.0);
+    assert!(at.is_some_and(|q| q.distance(pt(200.0, 337.0)) < 6.0 && q != pt(200.0, 337.0)), "{at:?}");
+    assert_eq!(labels, ["path"]);
+    // A first dimension from the bottom of the curve to its top, placed above the art.
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 230.0, 260.0);
+    linear_click(&mut s, plain, 180.0, 207.0);
+    let first = s.doc().unwrap().selection.objects[0].0;
+    assert_eq!((recipe(&s, first).a, recipe(&s, first).b), (pt(130.0, 358.0), pt(230.0, 260.0)));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", zoomed).unwrap();
+    // Zoomed in, 5.8 pixels from the end of its dimension line: on that end, marked as an anchor.
+    assert_eq!(linear_marker(&mut s, zoomed, 230.6, 207.4), (Some((pt(230.0, 207.0), 10.0)), vec!["anchor".to_string()]));
+    // 6.4 pixels beside its extension line: on the line.
+    let (at, labels) = hover(&mut s, zoomed, 230.8, 230.0);
+    assert!(at.is_some_and(|q| (q.x - 230.0).abs() < 1e-6 && (q.y - 230.0).abs() < 1e-6), "{at:?}");
+    assert_eq!(labels, ["path"]);
+    // The next dimension starts where the first one's line ends.
+    linear_click(&mut s, zoomed, 230.6, 207.4);
+    linear_click(&mut s, zoomed, 425.0, 260.0);
+    linear_click(&mut s, zoomed, 330.0, 207.0);
+    let second = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(second, first);
+    let d = recipe(&s, second);
+    assert!(near(d.a, pt(230.0, 207.0)) && near(d.b, pt(425.0, 260.0)), "{:?} {:?}", d.a, d.b);
+}
+
+/// An anchor of the art that a dimension already measures takes a point picked beside it, not the
+/// end of the extension line a few points off it. A locked dimension pulls no point, and with
+/// Smart Guides and Snap to Point off no dimension pulls a point and no label shows. A press on
+/// the end of a dimension's line over a segment of the art that moves a few pixels before the
+/// release picks that end, as a press on an anchor does.
+#[test]
+fn an_anchor_beside_a_drawn_dimension_takes_the_point() {
+    let (plain, zoomed) = (ViewInfo::default(), ViewInfo { zoom: 8.0, ..ViewInfo::default() });
+    let off = ViewInfo { smart_guides: false, snap_to_point: false, ..zoomed };
+    let mut s = session();
+    run(&mut s, "path.create", json!({"d": CURVED_TOP}));
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("dimension", plain).unwrap();
+    let pt = vectorcraft_geom::Point::new;
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 230.0, 260.0);
+    linear_click(&mut s, plain, 180.0, 207.0);
+    let first = s.doc().unwrap().selection.objects[0].0;
+    // Locked, the first dimension's line end does not pull a point 5.8 pixels away.
+    run(&mut s, "object.lock", json!({}));
+    let (at, _) = linear_marker(&mut s, zoomed, 230.6, 207.4);
+    assert!(at.is_none_or(|(p, _)| p != pt(230.0, 207.0)), "a locked dimension: {at:?}");
+    run(&mut s, "object.unlockAll", json!({}));
+    run(&mut s, "select.none", json!({}));
+    // 2.5 pixels above the curve's top anchor and 1.5 pixels below the end of the extension line
+    // that starts 4 points above it: on the anchor, linked to the art.
+    assert_eq!(linear_marker(&mut s, plain, 230.0, 257.5), (Some((pt(230.0, 260.0), 10.0)), vec!["anchor".to_string()]));
+    // Smart Guides and Snap to Point off: no pull to the dimension's line end, and no labels.
+    let (at, labels) = linear_marker(&mut s, off, 230.6, 207.4);
+    assert!(at.is_none_or(|(p, _)| p != pt(230.0, 207.0)) && labels.is_empty(), "{at:?} {labels:?}");
+    let (at, labels) = linear_marker(&mut s, off, 230.1, 260.1);
+    assert!(at.is_some_and(|(p, _)| p == pt(230.0, 260.0)) && labels.is_empty(), "{at:?} {labels:?}");
+    // Snap to Point on and Smart Guides off: the line end takes the point, and no label shows.
+    assert_eq!(linear_marker(&mut s, ViewInfo { snap_to_point: true, ..off }, 230.6, 207.4), (Some((pt(230.0, 207.0), 10.0)), vec![]));
+    // A second dimension whose line lies on the bottom edge, from x 425 to x 541.
+    linear_click(&mut s, plain, 425.0, 260.0);
+    linear_click(&mut s, plain, 541.0, 358.0);
+    linear_click(&mut s, plain, 480.0, 440.0);
+    let second = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(second, first);
+    run(&mut s, "select.none", json!({}));
+    // A press 1.4 pixels from its line's left end, on the bottom edge, moved 5 pixels: the end is
+    // picked, and no dimension of the edge is dragged out.
+    for (kind, x) in [(PointerKind::Move, 426.0), (PointerKind::Down, 426.0), (PointerKind::Drag, 431.0), (PointerKind::Up, 431.0)] {
+        s.pointer(&PointerEvent::new(kind, x, 441.0), plain).unwrap();
+    }
+    linear_click(&mut s, plain, 541.0, 440.0);
+    linear_click(&mut s, plain, 480.0, 470.0);
+    let third = s.doc().unwrap().selection.objects[0].0;
+    assert_ne!(third, second);
+    let d = recipe(&s, third);
+    assert!(near(d.a, pt(425.0, 440.0)) && near(d.b, pt(541.0, 440.0)), "{:?} {:?}", d.a, d.b);
+    // A dimension of the left edge whose line lies 4 points off it, where its extension lines
+    // start: zoomed in, the end of its line still takes a point 4.7 pixels away.
+    run(&mut s, "select.none", json!({}));
+    linear_click(&mut s, plain, 130.0, 358.0);
+    linear_click(&mut s, plain, 130.0, 440.0);
+    linear_click(&mut s, plain, 126.0, 400.0);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(linear_marker(&mut s, zoomed, 125.5, 358.3), (Some((pt(126.0, 358.0), 10.0)), vec!["anchor".to_string()]));
 }
 
 /// The page content streams of exported PDF `v`, inflated.

@@ -4,7 +4,7 @@ use super::entry::{
     UNNAMED_CHARACTERS_NOTE, max_objects,
 };
 use super::reshaped;
-use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, line_width, mean_scale, paints, round3, stroke_layer};
+use super::state::{Builder, Frame, FrameKind, GlyphRun, Saved, bounds, grouped, mean_scale, paints, round3, same_stroke, stroke_layer, type_stroke};
 use super::{
     Affine, Appearance, AppearanceItem, Arc, BezPath, BfString, BlendMode, CacheKey, Color, Colors, Families, FillLayer, FillRule, FunctionBudget,
     FunctionPaint, HashMap, HashSet, ImageBlob, ImageObject, Knockout, Look, MaskSpec, MaskType, Native, Node, NodeId, NodeKind, OpacityMask, Paint,
@@ -361,8 +361,9 @@ impl<'p> Builder<'p> {
                     Some(MaskSpec::Mask(m)) => (opacity, Some(m.clone())),
                     None => (opacity, None),
                 };
-                // Isolation only shows with blending inside; knockout with several objects.
-                let isolate = isolate && Node::children_blend(&children, &mut |c| c.blends_through());
+                // Isolation only shows with blending or overprinting inside; knockout with several
+                // objects.
+                let isolate = isolate && (Node::children_blend(&children, &mut |c| c.blends_through()) || children_overprint(&children));
                 let knockout = knockout && children.len() > 1;
                 let plain = opacity >= 0.999 && blend == BlendMode::Normal && mask.is_none() && !isolate && !knockout;
                 if children.is_empty() {
@@ -386,6 +387,21 @@ impl<'p> Builder<'p> {
                         let m = self.fresh_mask(m);
                         only = fold_stop_opacity(&only, &m).unwrap_or_else(|| only.with_mask(Some(Box::new(m))));
                     }
+                    Some(only)
+                } else if let [only] = children.as_slice()
+                    && matches!(only.kind, NodeKind::Group { clip: false, .. })
+                    && only.knockout == Knockout::On
+                    && only.opacity >= 0.999
+                    && only.blend == BlendMode::Normal
+                    && !only.isolate
+                    && only.extras().mask.is_none()
+                    && mask.is_none()
+                    && !knockout
+                {
+                    // A knockout group drawn in a form that carries its opacity, blend mode or
+                    // isolation: one knockout group with them.
+                    let mut only = (**only).clone();
+                    (only.opacity, only.blend, only.isolate) = (opacity, blend, isolate);
                     Some(only)
                 } else {
                     let mut g = Node::group(self.id(), children);
@@ -445,21 +461,35 @@ impl<'p> Builder<'p> {
         if let Some((t, opacity, facts)) = line.finish() {
             if checked && reshaped::reshapes(&t.plain_text()) && !reshaped::draws_as(&t, &facts.ink) {
                 outlined = true;
+                if self.mask.is_some() {
+                    self.flush_glyphs();
+                    self.flush_masked();
+                }
                 for g in glyphs {
-                    let same = self.glyphs.as_ref().is_some_and(|r| {
-                        r.paint == g.paint
-                            && r.opacity == g.opacity
-                            && r.overprint == g.overprint
-                            && r.stroke.is_some() == g.stroke.is_some()
-                            && r.stroke.as_ref().map(|s| s.line_width) == g.stroke.as_ref().map(|s| s.line_width)
-                            && (r.scale - g.scale).abs() < 1e-9
-                    });
+                    // Glyphs the file fills one by one composite where they overlap: only opaque
+                    // ones, drawn alike down to the stroke, and not under a soft mask (which
+                    // would be applied once to all of them), share a path.
+                    let same = g.opacity >= 0.999
+                        && self.mask.is_none()
+                        && self.glyphs.as_ref().is_some_and(|r| {
+                            r.paint == g.paint
+                                && r.opacity == g.opacity
+                                && r.overprint == g.overprint
+                                && same_stroke(r.stroke.as_ref(), g.stroke.as_ref())
+                                && (r.scale - g.scale).abs() < 1e-9
+                        });
                     match &mut self.glyphs {
                         Some(r) if same => r.path.extend(g.path.iter()),
                         _ => {
                             self.flush_glyphs();
                             self.glyphs = Some(g);
                         }
+                    }
+                    // Under a soft mask each glyph is masked on its own: the art queued for the
+                    // mask is drained at each glyph, or one group of them all takes it once.
+                    if self.mask.is_some() {
+                        self.flush_glyphs();
+                        self.flush_masked();
                     }
                 }
                 self.warn(RESHAPED_TEXT_NOTE);
@@ -718,8 +748,15 @@ impl<'p> Builder<'p> {
                 self.opaque.insert(mkey);
                 return None;
             };
-            let mut png = Vec::new();
-            image::GrayImage::from_raw(a.width, a.height, a.data)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+            let raw = craft_image_codecs::Image::from_raw(
+                a.width,
+                a.height,
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U8,
+                a.data,
+            )
+            .ok()?;
+            let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
             let blob = ImageBlob::new("image/png", png);
             let k = blob.content_key();
             self.images.insert(k.clone(), blob);
@@ -932,7 +969,7 @@ impl<'p> Builder<'p> {
             }
             None => (None, 1.0),
         };
-        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
         let look = Look {
             font: font_key,
             family: info.family,
@@ -954,7 +991,7 @@ impl<'p> Builder<'p> {
         self.flush_type3();
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
             && look.fill.is_none()
-            && line.stroke_last(font_key, at, s.clone(), overprint)
+            && line.stroke_filled(font_key, at, opacity, &text, s.clone(), overprint)
         {
             return true;
         }
@@ -1080,7 +1117,7 @@ impl<'p> Builder<'p> {
         };
         // What the glyph is drawn with as an outline, should its line be kept so.
         let drawn = paint.clone().map(|p| (p, stroke.cloned()));
-        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| (paint, line_width(p, scale)));
+        let stroke = stroke.zip(paint.clone()).map(|(p, paint)| type_stroke(paint, p, scale));
         let look = Look {
             font: key,
             family: info.family,
@@ -1116,9 +1153,13 @@ impl<'p> Builder<'p> {
         // A stroke over the glyph just filled (fill and stroke rendering).
         if let (Some(s), Some(line)) = (&look.stroke, &mut self.text)
             && look.fill.is_none()
-            && line.stroke_last(key, at, s.clone(), overprint)
+            && line.stroke_filled(key, at, opacity, &text, s.clone(), overprint)
         {
-            self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+            // Upright glyphs aren't kept as outlines (nor, below, are those filled only): a
+            // vertical line that came in as its outlines would lose the ones filled only.
+            if top.is_none() {
+                self.keep_glyph(o, m, drawn, opacity, scale, overprint);
+            }
             return true;
         }
         if !self.text.as_mut().is_some_and(place) {
@@ -1153,4 +1194,17 @@ fn visual_glyph_text(text: String) -> String {
     let Some((order, _)) = vectorcraft_text::logical_order(&text) else { return text };
     let chars: Vec<char> = text.chars().collect();
     order.iter().filter_map(|&i| chars.get(i)).collect()
+}
+
+/// Whether a visible fill or stroke among `children` overprints, characters' too, directly or
+/// through children that don't isolate. In an isolated group an overprinting object is drawn on
+/// the group's empty backdrop, so it covers the inks of the art below the group that it does not
+/// paint; without isolation it leaves them.
+fn children_overprint(children: &[Arc<Node>]) -> bool {
+    children.iter().any(|c| {
+        c.visible
+            && (c.appearance.items.iter().any(|i| i.visible() && i.overprint())
+                || matches!(&c.kind, NodeKind::Text(t) if t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke))
+                || (!c.isolate && c.children().is_some_and(|ch| children_overprint(ch))))
+    })
 }

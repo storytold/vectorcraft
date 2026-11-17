@@ -19,7 +19,41 @@ fn doc(mode: ColorMode, colorize: Option<Paint>) -> Document {
     d.swatches.push(Swatch { name: "Ink".into(), paint: Paint::solid(Color::cmyk(0.0, 1.0, 1.0, 0.0)), global: true, spot: true });
     let gray = image::GrayImage::from_raw(2, 1, vec![0, 255]).unwrap();
     let mut png = vec![];
-    gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = gray.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     d.images.insert("pic".into(), ImageBlob::png(png));
     let im = ImageObject { key: "pic".into(), width: 2, height: 1, xf: Affine::scale(20.0), link: None, placement: Default::default(), pixels: None };
     let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im)));
@@ -110,7 +144,41 @@ fn colorized_images_are_downsampled() {
     let mut d = Document::new(100.0, 100.0);
     let gray = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([((x + y) % 200) as u8]));
     let mut png = vec![];
-    gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = gray.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     d.images.insert("pic".into(), ImageBlob::png(png));
     // One inch wide: 600 ppi.
     let im = ImageObject {
@@ -131,6 +199,73 @@ fn colorized_images_are_downsampled() {
     let out = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
     let text = String::from_utf8_lossy(&out);
     assert!(text.contains("/Width 150") && !text.contains("/Width 600"), "resampled to 150 ppi");
+}
+
+/// The pieces of a colorized image under a mesh warp, placed at different widths, paint one
+/// colorized image and its one soft mask, with downsampling off and on.
+#[test]
+fn a_colorized_warped_image_is_written_once_for_all_its_pieces() {
+    for compression in [serde_json::json!({}), serde_json::json!({"gray": {"downsample": "bicubic", "ppi": 150}})] {
+        let mut d = Document::new(100.0, 100.0);
+        let gray = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([((x + y) % 200) as u8]));
+        let mut png = vec![];
+        {
+            let __dyn: image::DynamicImage = gray.into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| png.extend_from_slice(&__b))
+        }
+        .unwrap();
+        d.images.insert("pic".into(), ImageBlob::png(png));
+        let im = ImageObject {
+            key: "pic".into(),
+            width: 600,
+            height: 600,
+            xf: Affine::scale(72.0 / 600.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im.clone())));
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0))));
+        // 0.5 to 1.5 times as wide from left to right.
+        let stretch = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x * (0.5 + p.x / 144.0), p.y);
+        let warped = vectorcraft_doc::live::mesh_warp_image(&n, &im, &stretch, 4, false, false);
+        d.insert(d.default_layer(), 0, warped).unwrap();
+        let settings: PdfSettings = serde_json::from_value(serde_json::json!({ "compression": compression })).unwrap();
+        let out = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
+        let found = images(&out);
+        assert_eq!(found.len(), 2, "{compression}: the colorized image and its soft mask, not {found:?}");
+        assert!(found.contains(&("DeviceRGB".into(), vec![], true)), "{compression}: {found:?}");
+    }
 }
 
 /// Printed separations keep a colorized image's pixels on every plate and separate its color:
@@ -175,11 +310,10 @@ fn separations_print_a_color_masked_image_as_it_shows() {
     let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
     let mut d = doc(ColorMode::Cmyk, Some(spot));
     // The black pixel hidden.
-    let mut png = vec![];
-    image::GrayAlphaImage::from_raw(2, 1, vec![0, 0, 255, 255])
-        .unwrap()
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    let img =
+        craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, vec![0, 0, 255, 255])
+            .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     d.images.insert("shown".into(), ImageBlob::png(png));
     let id = d.layers[0].children().unwrap()[0].id;
     d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
@@ -210,11 +344,10 @@ fn separations_colorize_masked_pixels_whose_own_pixels_are_a_preview() {
     let mut d = doc(ColorMode::Cmyk, Some(spot));
     let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
     d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
-    let mut png = vec![];
-    image::GrayAlphaImage::from_raw(2, 1, vec![0, 0, 255, 255])
-        .unwrap()
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    let img =
+        craft_image_codecs::Image::from_raw(2, 1, craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, vec![0, 0, 255, 255])
+            .unwrap();
+    let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
     d.images.insert("shown".into(), ImageBlob::png(png));
     let id = d.layers[0].children().unwrap()[0].id;
     d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
@@ -309,7 +442,23 @@ fn imported_images(d: &Document) -> Vec<(Option<Paint>, Vec<u8>)> {
         l.walk(&mut |n| {
             if let NodeKind::Image(im) = &n.kind {
                 let blob = d.images.get(&im.key).unwrap();
-                let gray = image::load_from_memory(&blob.bytes).unwrap();
+                let gray = craft_image_codecs::decode(&blob.bytes)
+                    .map(|__cimg| {
+                        let (__w, __h) = __cimg.dimensions();
+                        match (__cimg.layout(), __cimg.sample_type()) {
+                            (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                                image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                            }
+                            _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                        }
+                    })
+                    .unwrap();
                 assert_eq!(gray.color(), image::ColorType::L8, "a grayscale image");
                 out.push((n.extras().colorize.as_deref().cloned(), gray.into_luma8().into_raw()));
             }
@@ -473,8 +622,9 @@ fn a_separation_image_drawn_twice_is_colorized_twice() {
 /// A one-component JPEG in a Separation space is read through its decoder.
 #[test]
 fn a_separation_jpeg_opens_colorized_by_its_ink() {
-    let mut jpeg = vec![];
-    jpeg_encoder::Encoder::new(&mut jpeg, 100).encode(&[0, 0, 255, 255, 0, 0, 255, 255], 8, 1, jpeg_encoder::ColorType::Luma).unwrap();
+    let img = craft_image_codecs::Image::from_u8(8, 1, craft_image_codecs::ChannelLayout::Gray, vec![0, 0, 255, 255, 0, 0, 255, 255]).unwrap();
+    let opts = craft_image_codecs::EncodeOptions { jpeg_quality: 100, embed_icc: false, embed_metadata: false, ..Default::default() };
+    let jpeg = craft_image_codecs::encode(&img, craft_image_codecs::Format::Jpeg, &opts).unwrap();
     let hex: String = jpeg.iter().map(|b| format!("{b:02X}")).collect();
     let d = separation_page(SPOT_RED, 8, 8, "/Filter [/ASCIIHexDecode /DCTDecode]", &hex, &[]);
     let images = imported_images(&d);

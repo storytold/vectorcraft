@@ -636,6 +636,114 @@ fn gradient_libraries_are_listed_and_gradient_swatches_rename_and_take_new_gradi
     assert_eq!(doc(&s).swatch("Red").unwrap().paint.color().map(|c| c.to_hex()), Some("#00ff00".into()));
 }
 
+/// A radial gradient from red to blue, with `extra` keys.
+fn radial_gradient(extra: Value) -> Value {
+    let mut g = json!({"kind": "radial", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
+    if let (Some(g), Some(extra)) = (g.as_object_mut(), extra.as_object()) {
+        g.extend(extra.clone());
+    }
+    g
+}
+
+/// The gradient swatch `name` keeps an aspect of 50%, holds no swatch link, and applies with that
+/// aspect, fitted to the object it is applied to.
+fn assert_swatch_applies_with_half_aspect(s: &mut Session, name: &str) {
+    let Paint::Gradient(sw) = &doc(s).swatch(name).unwrap().paint else { panic!("{name}: a gradient swatch") };
+    assert!(sw.geom.is_some_and(|g| (g.aspect - 0.5).abs() < 1e-9), "{name} keeps the aspect: {:?}", sw.geom);
+    assert_eq!(sw.swatch, None, "{name} holds no link to the swatch its gradient came from");
+    let r = run(s, "shape.rectangle", json!({"x": 100, "y": 0, "width": 100, "height": 60}));
+    let id = r["id"].as_u64().unwrap();
+    run(s, "paint.setFill", json!({"ids": [id], "swatch": name}));
+    let fill = doc(s).node(vectorcraft_doc::NodeId(id)).unwrap().appearance.fill_paint();
+    let Paint::Gradient(g) = fill else { panic!("{name}: a gradient fill") };
+    let geom = g.geom.unwrap();
+    assert!(
+        geom.start.distance(vectorcraft_geom::Point::new(150.0, 30.0)) < 1e-9 && (geom.aspect - 0.5).abs() < 1e-9,
+        "{name} fits the object with its aspect: {geom:?}"
+    );
+}
+
+/// An edited gradient with a vector and an aspect that replaces a gradient swatch keeps its aspect,
+/// as a new swatch made from it does.
+#[test]
+fn a_gradient_swatch_takes_an_edited_gradient_with_its_aspect() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Edited", "gradient": radial_gradient(json!({}))}));
+    let placed = radial_gradient(json!({"start": [25, 25], "end": [50, 25], "aspect": 50}));
+    run(&mut s, "swatch.edit", json!({"name": "Edited", "paint": {"gradient": placed}}));
+    assert_swatch_applies_with_half_aspect(&mut s, "Edited");
+}
+
+/// A gradient swatch Alt-dropped on another gradient swatch gives it its gradient with its aspect.
+#[test]
+fn a_gradient_swatch_takes_a_dropped_swatch_with_its_aspect() {
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Dropped", "gradient": radial_gradient(json!({}))}));
+    let placed = radial_gradient(json!({"start": [25, 25], "end": [50, 25], "aspect": 50}));
+    run(&mut s, "swatch.new", json!({"name": "Oval", "gradient": placed}));
+    run(&mut s, "swatch.edit", json!({"name": "Dropped", "paint": {"swatch": "Oval"}}));
+    assert_swatch_applies_with_half_aspect(&mut s, "Dropped");
+}
+
+/// A gradient given an aspect but no vector keeps the aspect in a new swatch and in a replacement,
+/// as `paint.setFill` keeps it on the object.
+#[test]
+fn a_gradient_without_a_vector_keeps_its_aspect_in_a_swatch() {
+    let mut s = session();
+    let oval = radial_gradient(json!({"aspect": 50}));
+    run(&mut s, "swatch.new", json!({"name": "New", "gradient": oval}));
+    assert_swatch_applies_with_half_aspect(&mut s, "New");
+    run(&mut s, "swatch.new", json!({"name": "Edited", "gradient": radial_gradient(json!({}))}));
+    run(&mut s, "swatch.edit", json!({"name": "Edited", "paint": {"gradient": oval}}));
+    assert_swatch_applies_with_half_aspect(&mut s, "Edited");
+    // Without an aspect the swatch stays unplaced.
+    run(&mut s, "swatch.new", json!({"name": "Round", "gradient": radial_gradient(json!({}))}));
+    let Paint::Gradient(round) = &doc(&s).swatch("Round").unwrap().paint else { panic!("a gradient swatch") };
+    assert_eq!(round.geom, None);
+}
+
+/// A pattern that replaces a pattern swatch is stored untransformed, as a new swatch stores it, so
+/// art the swatch is applied to keeps its own tile placement.
+#[test]
+fn a_pattern_swatch_takes_a_new_pattern_untransformed() {
+    let mut s = session();
+    for (name, color) in [("Dots", "#ff0000"), ("Bars", "#0000ff")] {
+        let r = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+        run(&mut s, "paint.setFill", json!({"ids": [r["id"]], "color": color}));
+        run(&mut s, "select.set", json!({"ids": [r["id"]]}));
+        run(&mut s, "object.pattern.make", json!({"name": name, "width": 20, "height": 20}));
+        run(&mut s, "object.pattern.done", json!({}));
+    }
+    // A pattern swatch holding a tile transform, as documents saved by older versions can.
+    let moved = vectorcraft_geom::Affine::new([2.0, 0.0, 0.0, 2.0, 15.0, 10.0]);
+    let st = s.doc_mut().unwrap();
+    let Some(Paint::Pattern { xf, .. }) = std::sync::Arc::make_mut(&mut st.doc).swatch_mut("Bars").map(|w| &mut w.paint) else {
+        panic!("the Bars pattern swatch")
+    };
+    *xf = moved;
+    run(&mut s, "swatch.edit", json!({"name": "Dots", "paint": {"swatch": "Bars"}}));
+    assert_eq!(doc(&s).swatch("Dots").unwrap().paint, vectorcraft_doc::pattern::pattern_paint("Bars"));
+}
+
+/// A pattern swatch takes a pattern given by name, as an Alt-drop of a pattern fill sends it, and
+/// an unknown pattern is an error that leaves the swatch as it was.
+#[test]
+fn a_pattern_swatch_takes_a_pattern_by_name() {
+    let mut s = session();
+    for (name, color) in [("Dots", "#ff0000"), ("Bars", "#0000ff")] {
+        let r = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
+        run(&mut s, "paint.setFill", json!({"ids": [r["id"]], "color": color}));
+        run(&mut s, "select.set", json!({"ids": [r["id"]]}));
+        run(&mut s, "object.pattern.make", json!({"name": name, "width": 20, "height": 20}));
+        run(&mut s, "object.pattern.done", json!({}));
+    }
+    run(&mut s, "swatch.edit", json!({"name": "Dots", "paint": {"pattern": "Bars"}}));
+    assert_eq!(doc(&s).swatch("Dots").unwrap().paint, vectorcraft_doc::pattern::pattern_paint("Bars"));
+    let before = doc(&s).swatch("Dots").unwrap().paint.clone();
+    assert!(s.execute("swatch.edit", &json!({"name": "Dots", "paint": {"pattern": "Nope"}})).is_err());
+    assert_eq!(doc(&s).swatch("Dots").unwrap().paint, before);
+}
+
 #[test]
 fn organic_fades_add_with_their_method_midpoints_and_opacities_in_rgb_and_cmyk() {
     let lib = vectorcraft_color::libraries::builtin_library("organic-fades").unwrap();

@@ -409,7 +409,7 @@ fn clicking_a_target_circle_targets_the_layer() {
 }
 
 #[test]
-fn dragging_a_target_circle_moves_or_copies_the_appearance_and_the_trash_clears_it() {
+fn dragging_a_target_circle_moves_or_copies_the_appearance() {
     let (mut app, layer, [a, b]) = two_rects();
     app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
     let ctx = egui::Context::default();
@@ -421,14 +421,49 @@ fn dragging_a_target_circle_moves_or_copies_the_appearance_and_the_trash_clears_
     // A plain drag onto the layer's circle moves it there.
     drag(&mut app, &ctx, c[1], c[0], false);
     assert!((opacity(&app, layer) - 0.3).abs() < 1e-6 && opacity(&app, b) == 1.0);
-    // Dropped on the trash, the layer's appearance is cleared (and nothing is deleted).
-    let st = app.session.active().unwrap();
-    let count = st.doc.node_count();
+}
+
+/// A target circle dropped on the trash reduces that item's own appearance to its topmost visible
+/// fill and stroke in one undo step, and deletes nothing; dropped again, it changes nothing and
+/// adds no undo step. A layer keeps only the rows it had, and its art is left as it is.
+#[test]
+fn dropping_a_target_circle_on_the_trash_reduces_it_to_basic_appearance() {
+    let (mut app, layer, [a, _]) = two_rects();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    // [Fill green, Stroke, Fill red, Stroke 5 pt], with an effect on the object.
+    run(&mut app, "appearance.addFill", json!({"ids": [a.0]}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 0, "color": "#00ff00"}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 2, "color": "#ff0000"}));
+    run(&mut app, "appearance.addStroke", json!({"ids": [a.0]}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 3, "weight": 5}));
+    run(&mut app, "effect.apply", json!({"ids": [a.0], "effect": "stylize.dropShadow", "item": null}));
+    let ctx = egui::Context::default();
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
     let trash = trash_pos(&mut app, &ctx);
+    let node = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().clone();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let (original, count, before) = (node(&app, a), app.session.active().unwrap().doc.node_count(), undo(&app));
+    // The bottom rectangle's circle (rows: the layer, the top rectangle, the bottom one).
+    drag(&mut app, &ctx, c[2], trash, false);
+    let n = node(&app, a);
+    assert!(n.appearance.is_basic(), "{:?}", n.appearance);
+    assert_eq!(n.appearance.items.len(), 2);
+    assert_eq!(n.appearance.fill().unwrap().paint.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(n.appearance.stroke().unwrap().width, 5.0);
+    assert_eq!((app.session.active().unwrap().doc.node_count(), undo(&app)), (count, before + 1));
+    // Dropped again, nothing changes and no undo step is made.
+    drag(&mut app, &ctx, c[2], trash, false);
+    assert_eq!((node(&app, a), undo(&app)), (n, before + 1));
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(node(&app, a), original, "one undo step restores the whole stack");
+    // The layer's own fill stays and its effect goes; the art on it keeps its appearance.
+    run(&mut app, "appearance.addFill", json!({"ids": [layer.0]}));
+    run(&mut app, "effect.apply", json!({"ids": [layer.0], "effect": "stylize.dropShadow", "item": null}));
     drag(&mut app, &ctx, c[0], trash, false);
-    let st = app.session.active().unwrap();
-    assert_eq!(st.doc.node(layer).unwrap().opacity, 1.0);
-    assert_eq!(st.doc.node_count(), count);
+    let l = node(&app, layer);
+    assert_eq!((l.appearance.items.len(), l.appearance.effects.len()), (1, 0), "{:?}", l.appearance);
+    assert!(l.appearance.fill().is_some());
+    assert_eq!(node(&app, a), original);
 }
 
 /// The trash button: the bottom bar's rightmost button.
@@ -987,6 +1022,48 @@ fn guide_rows_are_deleted_with_the_trash_and_delete() {
     assert!(kept(&app));
 }
 
+/// A plain click on another row lets go of the guide a guide row selected, keeping the selected
+/// art, so a guide can be dropped without Ctrl/Cmd-clicking its own row (#7340); a Ctrl/Cmd click
+/// on a row adds to the pick and keeps it.
+#[test]
+fn a_plain_row_click_lets_go_of_the_selected_guide() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let rect = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top down: Layer 1, its guide (no target circle), the rectangle.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    let guide_row = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+    let rect_row = egui::pos2(150.0, circles[1].y);
+    let guides = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides)
+    };
+    let art = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.clone();
+    // Guide, then the rectangle's row: the guide is let go and the rectangle's row highlighted.
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+    assert_eq!(guides(&app), [0]);
+    click_with(&mut app, &ctx, rect_row, egui::Modifiers::NONE);
+    assert!(guides(&app).is_empty(), "a plain row click drops the guide");
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), [rect]);
+    // Art and a guide selected together: a plain row click drops only the guide.
+    run(&mut app, "select.all", json!({}));
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::SHIFT);
+    assert_eq!((guides(&app), art(&app)), (vec![0], vec![rect]));
+    click_with(&mut app, &ctx, egui::pos2(150.0, circles[0].y), egui::Modifiers::NONE);
+    assert!(guides(&app).is_empty());
+    assert_eq!(art(&app), [rect], "the selected art stays");
+    // A Ctrl/Cmd click on a row adds that row to the highlight and keeps the guide.
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+    click_with(&mut app, &ctx, rect_row, egui::Modifiers::COMMAND);
+    assert_eq!(guides(&app), [0], "a Ctrl/Cmd row click keeps the guide");
+}
+
 /// The selection squares drawn: (big ones on rows whose object is selected, small ones on rows
 /// holding selected art).
 fn squares(app: &mut VectorcraftApp, ctx: &egui::Context) -> (usize, usize) {
@@ -1159,9 +1236,41 @@ fn kinds() -> (VectorcraftApp, HashMap<&'static str, NodeId>) {
     ids.insert("guide", guide);
     run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let placed = |app: &mut VectorcraftApp, p: serde_json::Value| NodeId(run(app, "file.place", p)["ids"][0].as_u64().unwrap());
     ids.insert("embedded", placed(&mut app, json!({"name": "pic.png", "dataBase64": vectorcraft_format::base64_encode(&png)})));
     // One file for every test that calls this, written by the first.
@@ -1382,6 +1491,129 @@ fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     assert_eq!(parent(&app, g), Some(sub));
     assert_eq!(app.session.active().unwrap().doc.node_count(), count + 2, "the group and its rectangle, copied");
     let _ = (layer, c);
+}
+
+/// One headless frame of the panel with `events` (Alt held when `alt`) → the cursor it asks for,
+/// and the cursor bitmap it hands the OS, if any.
+fn cursor_frame(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    alt: bool,
+) -> (egui::CursorIcon, Option<egui::CustomCursorImage>) {
+    let mut events = events;
+    events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    (out.platform_output.cursor_icon, out.platform_output.cursor_image)
+}
+
+/// #8217: a row dragged over the list shows the copy cursor while Alt is held, as the drop then
+/// copies, and the grabbing hand otherwise, following Alt as it goes down and up mid-drag. The copy
+/// cursor is the panels' add cursor (#8241): where the window shows glyphs as OS cursors (Windows,
+/// X11, which have no system copy cursor winit can show), the white arrow with a plus.
+#[test]
+fn alt_shows_the_copy_cursor_while_rows_are_dragged() {
+    let (mut app, _) = nested();
+    let ctx = egui::Context::default();
+    // Rows: Layer 1, Sub, g, b, a, c.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let (from, to) = (egui::pos2(150.0, circles[2].y), egui::pos2(150.0, circles[5].y));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+    frame(&mut app, &ctx, vec![button(from, true)], false);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(0.0, 6.0))], false);
+    let glyph = crate::cursors::add_cursor_is_a_glyph(&app).then(|| app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0)).flatten();
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)], false), (egui::CursorIcon::Grabbing, None), "a move");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], true), (egui::CursorIcon::Copy, glyph), "Alt held: the drop copies");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], false), (egui::CursorIcon::Grabbing, None), "Alt let go: a move again");
+    cursor_frame(&mut app, &ctx, vec![button(to, false)], false);
+    assert_ne!(cursor_frame(&mut app, &ctx, vec![], true).0, egui::CursorIcon::Copy, "no drag, no copy cursor");
+}
+
+/// The selected-art square copies with Alt as rows do; off the list (the trash, New Layer) Alt
+/// copies nothing, and guide rows keep their own cursor.
+#[test]
+fn drag_cursor_shows_a_copy_only_where_the_drop_copies() {
+    let (copy, grabbing) = (Some(egui::CursorIcon::Copy), Some(egui::CursorIcon::Grabbing));
+    for drag in [LayersDrag::Rows(vec![NodeId(1)]), LayersDrag::Art] {
+        assert_eq!(super::drag_cursor(&drag, true, true), copy);
+        assert_eq!(super::drag_cursor(&drag, false, true), grabbing);
+        assert_eq!(super::drag_cursor(&drag, true, false), grabbing, "off the list");
+    }
+    assert_eq!(super::drag_cursor(&LayersDrag::Guides(vec![0]), true, true), None);
+}
+
+/// An Intertwine group's row takes a dragged row inside it, as a group's does, and the object
+/// becomes a member; a row that can't be intertwined gets no inside box and goes beside it.
+#[test]
+fn dragging_a_row_into_an_intertwine_adds_a_member() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        NodeId(run(app, "shape.rectangle", json!({"x": x, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap())
+    };
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let (a, b) = (rect(&mut app, 0.0), rect(&mut app, 10.0));
+    run(&mut app, "select.set", json!({"ids": [a.0, b.0]}));
+    let g = NodeId(run(&mut app, "object.intertwine.make", json!({}))["id"].as_u64().unwrap());
+    let (d, e) = (rect(&mut app, 100.0), rect(&mut app, 110.0));
+    run(&mut app, "select.set", json!({"ids": [d.0, e.0]}));
+    let g2 = NodeId(run(&mut app, "object.intertwine.make", json!({}))["id"].as_u64().unwrap());
+    let c = rect(&mut app, 50.0);
+    run(&mut app, "select.none", json!({}));
+    let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+    let ids = |nodes: Option<&Vec<Arc<Node>>>| nodes.map(|c| c.iter().map(|n| n.id).collect::<Vec<_>>()).unwrap_or_default();
+    let layer = doc(&app).layers[0].id;
+    let ctx = egui::Context::default();
+    // Rows: Layer 1, c, the second Intertwine group, the first.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    // c onto the middle of the first Intertwine group's row: into it, on top.
+    drag(&mut app, &ctx, egui::pos2(150.0, circles[1].y), egui::pos2(150.0, circles[3].y + 3.0), false);
+    assert_eq!(ids(doc(&app).node(g).and_then(Node::children)), [a, b, c]);
+    // Rows: Layer 1, the second Intertwine group, the first (open on its moved row), c, b, a. The
+    // second just below the middle of the first's row: no nested Intertwine groups, so the row has
+    // no inside box and it goes below the group, beside it.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    drag(&mut app, &ctx, egui::pos2(150.0, circles[1].y), egui::pos2(150.0, circles[2].y + 3.0), false);
+    let now = doc(&app);
+    assert_eq!(ids(now.node(layer).and_then(Node::children)), [g2, g]);
+    assert_eq!(ids(now.node(g2).and_then(Node::children)), [d, e]);
+    assert_eq!(ids(now.node(g).and_then(Node::children)), [a, b, c]);
+    // Rows: Layer 1, the first (open), c, b, a, the second. Held over member b's row, the second
+    // shows no line or box, as it can't go beside a member either; over the first's own row it
+    // shows the line below it.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let accent = Tokens::get(&ctx).accent;
+    let from = egui::pos2(150.0, circles[5].y);
+    let marks_over = |app: &mut VectorcraftApp, to: egui::Pos2| {
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+        frame(app, &ctx, vec![button(from, true)], false);
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from + vec2(0.0, 6.0))], false);
+        frame(app, &ctx, vec![egui::Event::PointerMoved(to)], false);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        let marks = out
+            .shapes
+            .iter()
+            .filter(|c| match &c.shape {
+                egui::Shape::LineSegment { stroke, .. } => stroke.color == accent,
+                egui::Shape::Rect(r) => r.stroke.color == accent,
+                _ => false,
+            })
+            .count();
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+        frame(app, &ctx, vec![button(from, false)], false);
+        frame(app, &ctx, vec![], false);
+        marks
+    };
+    let beside_member = marks_over(&mut app, egui::pos2(150.0, circles[3].y + 3.0));
+    let beside_group = marks_over(&mut app, egui::pos2(150.0, circles[1].y + 3.0));
+    assert_eq!(beside_group, beside_member + 1);
+    assert_eq!(ids(doc(&app).node(g).and_then(Node::children)), [a, b, c]);
 }
 
 /// One headless frame of the panel on a short screen (300 × 260) with `events` (Alt held when
@@ -2439,4 +2671,196 @@ fn guide_rows_list_by_index_whatever_the_node_order() {
     let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
     assert_eq!(indexes, [2, 1, 0]);
+}
+
+/// Right-clicking a row that is not highlighted selects it.
+#[test]
+fn context_menu_right_click_selects_unselected_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.highlight", &json!({"ids": [], "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top-first: Layer 2, Layer 1. Neither is highlighted.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    assert!(rows_of(&app).is_empty());
+    // Secondary-click Layer 1's row (bottom row).
+    let pos = circles[1] - vec2(100.0, 0.0); // name area
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, true, egui::PointerButton::Secondary)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, false, egui::PointerButton::Secondary)], false);
+    // The row is now highlighted.
+    let highlighted = rows_of(&app);
+    let layer1 = app.session.active().unwrap().doc.layers[0].id;
+    assert!(highlighted.contains(&layer1), "right-click selected the unselected row");
+    assert!(crate::panels::has_row_keys(&ctx, super::ROW_KEYS), "secondary click claims row keys");
+}
+
+/// Right-clicking a row that IS highlighted preserves the multiselection.
+#[test]
+fn context_menu_right_click_preserves_multiselection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let ids: Vec<u64> = doc.layers.iter().map(|l| l.id.0).collect();
+    // Highlight all 3 layers.
+    app.session.execute("layer.highlight", &json!({"ids": ids, "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 3);
+    // Secondary-click the middle row.
+    let pos = circles[1] - vec2(100.0, 0.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, true, egui::PointerButton::Secondary)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, false, egui::PointerButton::Secondary)], false);
+    // All 3 must still be highlighted.
+    assert_eq!(rows_of(&app).len(), 3, "multiselection preserved after right-click on a highlighted row");
+}
+
+/// layer.delete removes the specified layer.
+#[test]
+fn context_menu_delete_dispatches_layer_delete() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let layer2_id = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let before = app.session.active().unwrap().doc.layers.len();
+    // Dispatch layer.delete with explicit ids (what the context menu item does).
+    app.session.execute("layer.delete", &json!({"ids": [layer2_id]})).unwrap();
+    let after = app.session.active().unwrap().doc.layers.len();
+    assert_eq!(after, before - 1, "layer.delete removes the layer");
+}
+
+/// layer.duplicate adds a copy.
+#[test]
+fn context_menu_duplicate_dispatches_layer_duplicate() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let layer_id = app.session.active().unwrap().doc.layers[0].id.0;
+    let before_layers = app.session.active().unwrap().doc.layers.len();
+    let before_undo = app.session.active().unwrap().history.undo.len();
+    app.session.execute("layer.duplicate", &json!({"ids": [layer_id]})).unwrap();
+    let after = &app.session.active().unwrap();
+    assert_eq!(after.doc.layers.len(), before_layers + 1, "layer.duplicate adds a layer");
+    assert_eq!(after.history.undo.len(), before_undo + 1, "one undo step");
+}
+
+/// layer.locate locates a specified object id without requiring a prior canvas selection.
+#[test]
+fn context_menu_locate_object_locates_by_id() {
+    let (mut app, _, [a, _]) = two_rects();
+    app.session.execute("select.none", &json!({})).unwrap();
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+    // Context menu passes the node's id directly to layer.locate.
+    let result = app.session.execute("layer.locate", &json!({"id": a.0}));
+    assert!(result.is_ok(), "layer.locate with id succeeds without selection: {:?}", result.err());
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), vec![a]);
+}
+
+/// In a 1-layer document, the Delete action in the context menu is disabled when targeting that layer.
+#[test]
+fn context_menu_delete_disabled_when_every_layer_targeted() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 1);
+    let layer_id = doc.layers[0].id;
+
+    // Targeting every layer disables delete.
+    let listed: std::collections::HashSet<NodeId> = [layer_id].into_iter().collect();
+    let del_enabled = !doc.layers.iter().all(|l| listed.contains(&l.id));
+    assert!(!del_enabled, "Delete must be disabled when every layer is targeted");
+
+    // Add a second layer: delete is now enabled for one layer.
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 2);
+    let del_enabled = !doc.layers.iter().all(|l| listed.contains(&l.id));
+    assert!(del_enabled, "Delete is enabled when at least one layer remains");
+}
+
+/// Others actions (Hide Others / Lock Others) retain all multiselected layers.
+#[test]
+fn context_menu_others_actions_preserve_multiselected_layers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 3);
+    let l1 = doc.layers[0].id.0;
+    let l2 = doc.layers[1].id.0;
+
+    // Hide Others with multiselection [l1, l2] hides only l3.
+    let (hide_cmd, hide_params, hide_enabled) = super::rows::multi_others_action(doc, &[l1, l2], true);
+    assert_eq!(hide_cmd, "layer.hideOthers");
+    assert!(hide_enabled);
+    assert_eq!(hide_params["ids"], json!([l1, l2]));
+
+    // Lock Others with multiselection [l1, l2] locks only l3.
+    let (lock_cmd, lock_params, lock_enabled) = super::rows::multi_others_action(doc, &[l1, l2], false);
+    assert_eq!(lock_cmd, "layer.lockOthers");
+    assert!(lock_enabled);
+    assert_eq!(lock_params["ids"], json!([l1, l2]));
+}
+
+/// Context menu Others action resolves an object row to its holding top-level layer.
+#[test]
+fn context_menu_others_actions_object_row_resolves_to_holding_layer() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    // Layer 1 (current) holding a rectangle.
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let rect_id = rect["id"].as_u64().unwrap();
+
+    // Create Layer 2 and hide it.
+    let l2 = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("layer.setProps", &json!({"ids": [l2], "visible": false})).unwrap();
+
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 2);
+
+    // Right-clicking the object in Layer 1: Layer 1 is visible, Layer 2 is hidden.
+    // There are no other visible layers, so the action should be Show All Layers, enabled.
+    let (hide_cmd, _hide_params, hide_enabled) = super::rows::multi_others_action(doc, &[rect_id], true);
+    assert_eq!(hide_cmd, "layer.showAll");
+    assert!(hide_enabled, "Show All Layers is enabled because Layer 2 is hidden");
+
+    // Now make Layer 2 visible, but lock it.
+    app.session.execute("layer.setProps", &json!({"ids": [l2], "visible": true, "locked": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    // Right-clicking the object in Layer 1: Layer 1 is unlocked, Layer 2 is locked.
+    // There are no other unlocked layers, so the action should be Unlock All Layers, enabled.
+    let (lock_cmd, _lock_params, lock_enabled) = super::rows::multi_others_action(doc, &[rect_id], false);
+    assert_eq!(lock_cmd, "layer.unlockAll");
+    assert!(lock_enabled, "Unlock All Layers is enabled because Layer 2 is locked");
+}
+
+/// Context menu Show/Unlock All Layers are enabled when sublayers are hidden or locked.
+#[test]
+fn context_menu_others_actions_sublayer_state_enables_all_commands() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 1);
+    let l1 = doc.layers[0].id.0;
+
+    // Create a sublayer in Layer 1.
+    let sub = app.session.execute("layer.newSublayer", &json!({"parent": l1})).unwrap()["id"].as_u64().unwrap();
+
+    // Case 1: Sublayer is hidden while top layer is visible.
+    app.session.execute("layer.setProps", &json!({"ids": [sub], "visible": false})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let (hide_cmd, _, hide_enabled) = super::rows::multi_others_action(doc, &[l1], true);
+    assert_eq!(hide_cmd, "layer.showAll");
+    assert!(hide_enabled, "hidden sublayer enables Show All Layers");
+
+    // Case 2: Sublayer is visible, but locked while top layer is unlocked.
+    app.session.execute("layer.setProps", &json!({"ids": [sub], "visible": true, "locked": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let (lock_cmd, _, lock_enabled) = super::rows::multi_others_action(doc, &[l1], false);
+    assert_eq!(lock_cmd, "layer.unlockAll");
+    assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
 }

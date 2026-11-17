@@ -69,6 +69,16 @@ pub(crate) fn document_brushes(st: &DocState) -> Rc<Vec<Shown>> {
     MEMO.with(|m| m.borrow_mut().get(&st.doc, st.revision, || vectorcraft_brush::library(&st.doc).iter().map(|b| Shown::of(&st.doc, b)).collect()))
 }
 
+/// The brushes of `shown` by name: of two with one name, the first, the one a stroke that names
+/// it draws with and `brush.get` gives.
+fn by_name(shown: &[Shown]) -> HashMap<&str, &Shown> {
+    let mut map = HashMap::new();
+    for b in shown {
+        map.entry(b.name.as_str()).or_insert(b);
+    }
+    map
+}
+
 /// The cache key of the stroke preview of brush definition `def` in `doc` (`art`: its art): the
 /// definition and every resource of `doc` the art uses ([`art_resources`]: patterns with their
 /// options, symbols, swatches and colour groups, gradients, images, styles…), so the preview
@@ -298,7 +308,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // definitions and preview keys are the document version's, worked out once.
     let doc = app.session.active().map(|d| d.doc.clone());
     let memo = app.session.active().map(document_brushes).unwrap_or_default();
-    let defs: HashMap<&str, &Shown> = memo.iter().map(|b| (b.name.as_str(), b)).collect();
+    let defs = by_name(&memo);
     let mut clicked: Option<(String, egui::Modifiers)> = None;
     let mut options: Option<String> = None;
     let mut moved: Option<Value> = None;

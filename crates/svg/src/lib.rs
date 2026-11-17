@@ -101,6 +101,7 @@
 //! rotation and style names).
 #![forbid(unsafe_code)]
 
+use craft_svg::tree::usvg;
 mod css;
 mod entities;
 mod export;
@@ -366,6 +367,14 @@ pub enum SvgError {
     /// nested-image expansion bombs, #3564).
     #[error("the SVG expands to more than {0} nested SVG images")]
     TooManyImages(usize),
+    /// The style values the reader would copy into the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, add up to more than this many megabytes.
+    #[error("the SVG's styles expand to more than {0} MB")]
+    StylesTooLarge(usize),
+    /// Matching the style sheets' selectors against the elements the SVG expands to, `<use>`
+    /// copies and SVG images included, takes more tests than the reader allows.
+    #[error("the SVG's style sheets take too long to match")]
+    StylesTooComplex,
 }
 
 /// Export a document as an SVG string (linked images are not returned: see [`export_full`]).
@@ -458,21 +467,17 @@ pub(crate) fn body_hash(parts: &[&str]) -> String {
 
 /// Does `bytes` start like gzip data (an SVGZ file)?
 pub fn is_svgz(bytes: &[u8]) -> bool {
-    bytes.starts_with(&[0x1f, 0x8b])
+    craft_svg::sniff::is_svgz(bytes)
 }
 
 /// Compress SVG text as SVGZ (gzip).
 pub fn compress(svg: &str) -> Vec<u8> {
-    compress_bytes(svg.as_bytes())
+    craft_svg::svgz::compress(svg.as_bytes())
 }
 
 /// Compress an SVG file (in any encoding, see [`Output::bytes`]) as SVGZ (gzip).
 pub fn compress_bytes(svg: &[u8]) -> Vec<u8> {
-    use std::io::Write as _;
-    let mut gz = flate2::write::GzEncoder::new(Vec::with_capacity(svg.len() / 4), flate2::Compression::default());
-    // Writing to a Vec cannot fail.
-    let _ = gz.write_all(svg);
-    gz.finish().unwrap_or_default()
+    craft_svg::svgz::compress(svg)
 }
 
 /// Most bytes an SVGZ file may unpack to (a guard against decompression bombs).
@@ -487,72 +492,25 @@ pub fn text_of(bytes: &[u8]) -> Result<std::borrow::Cow<'_, str>, SvgError> {
 /// [`text_of`], SVGZ bytes unpacking within what `unpacked`, the bytes SVGZ data unpacked to so
 /// far, leaves of [`MAX_SVGZ`]. What they unpack to is added to it, whether or not it decodes.
 pub(crate) fn text_within<'a>(bytes: &'a [u8], unpacked: &std::sync::atomic::AtomicU64) -> Result<std::borrow::Cow<'a, str>, SvgError> {
-    use std::io::Read as _;
     use std::sync::atomic::Ordering;
     if !is_svgz(bytes) {
-        return match decode(bytes)? {
-            Decoded::Utf8(skip) => std::str::from_utf8(bytes.get(skip..).unwrap_or_default()).map(Into::into).map_err(|_| not_utf8()),
-            Decoded::Text(t) => Ok(t.into()),
-        };
+        return craft_svg::svgz::decode(bytes).map_err(|_| not_utf8());
     }
-    let most = MAX_SVGZ.saturating_sub(unpacked.load(Ordering::Relaxed));
-    let mut raw = Vec::new();
-    let read = flate2::read::GzDecoder::new(bytes).take(most.saturating_add(1)).read_to_end(&mut raw);
-    // Read before a failure is kept: it was unpacked too.
-    unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
-    read.map_err(|e| SvgError::Parse(format!("not a valid SVGZ file: {e}")))?;
-    if raw.len() as u64 > most {
-        return Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20)));
-    }
-    match decode(&raw)? {
-        Decoded::Utf8(skip) => {
-            raw.drain(..skip);
-            String::from_utf8(raw).map(Into::into).map_err(|_| not_utf8())
+    let most = usize::try_from(MAX_SVGZ.saturating_sub(unpacked.load(Ordering::Relaxed))).unwrap_or(usize::MAX);
+    match craft_svg::svgz::inflate(bytes, most) {
+        Ok(raw) => {
+            unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
+            craft_svg::svgz::decode(&raw).map(|t| std::borrow::Cow::Owned(t.into_owned())).map_err(|_| not_utf8())
         }
-        Decoded::Text(t) => Ok(t.into()),
+        Err(craft_svg::svgz::Error::TooLarge(_)) => Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20))),
+        Err(craft_svg::svgz::Error::Corrupt(e)) => Err(SvgError::Parse(format!("not a valid SVGZ file: {e}"))),
+        Err(craft_svg::svgz::Error::Encoding) => Err(not_utf8()),
+        Err(e) => Err(SvgError::Parse(e.to_string())),
     }
 }
 
 fn not_utf8() -> SvgError {
     SvgError::Parse("SVG is not UTF-8, UTF-16 or ISO 8859-1".into())
-}
-
-/// How SVG bytes are read.
-enum Decoded {
-    /// UTF-8 after this many bytes (a byte order mark).
-    Utf8(usize),
-    /// Text decoded from another encoding.
-    Text(String),
-}
-
-/// The encoding of SVG bytes: a byte order mark (UTF-8 or UTF-16), else the XML declaration's
-/// (ISO 8859-1 by its names; anything else is read as UTF-8).
-fn decode(bytes: &[u8]) -> Result<Decoded, SvgError> {
-    let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| {
-        let (units, odd) = rest.as_chunks::<2>();
-        if !odd.is_empty() {
-            return Err(not_utf8());
-        }
-        char::decode_utf16(units.iter().map(|u| unit(*u))).collect::<Result<String, _>>().map(Decoded::Text).map_err(|_| not_utf8())
-    };
-    match bytes {
-        [0xef, 0xbb, 0xbf, ..] => Ok(Decoded::Utf8(3)),
-        [0xfe, 0xff, rest @ ..] => utf16(rest, u16::from_be_bytes),
-        [0xff, 0xfe, rest @ ..] => utf16(rest, u16::from_le_bytes),
-        _ if declared_latin1(bytes) => Ok(Decoded::Text(bytes.iter().map(|b| char::from(*b)).collect())),
-        _ => Ok(Decoded::Utf8(0)),
-    }
-}
-
-/// Does the XML declaration at the start of `bytes` name ISO 8859-1?
-fn declared_latin1(bytes: &[u8]) -> bool {
-    let head = bytes.get(..bytes.len().min(200)).unwrap_or_default();
-    let Some(decl) = head.strip_prefix(b"<?xml").and_then(|d| d.split(|b| *b == b'>').next()) else { return false };
-    let decl = String::from_utf8_lossy(decl).to_ascii_lowercase();
-    let Some(at) = decl.find("encoding") else { return false };
-    let value = decl.get(at + "encoding".len()..).unwrap_or("").trim_start().trim_start_matches('=').trim_start();
-    let name = value.trim_start_matches(['"', '\'']).split(['"', '\'', ' ', '?']).next().unwrap_or("");
-    matches!(name, "iso-8859-1" | "iso8859-1" | "iso_8859-1" | "latin1" | "latin-1" | "l1")
 }
 
 /// Import an SVG document.
@@ -576,7 +534,10 @@ pub fn svg_filters(svg: &str, room: usize, taken: impl Fn(&str) -> bool) -> Resu
 }
 
 pub use glyph::glyph_art;
-pub use import::{MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NODES};
+pub use import::{
+    MAX_DATA_URL_BYTES, MAX_ELEMENT_DEPTH, MAX_FOREIGN, MAX_FOREIGN_VALUE, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT,
+    MAX_NODES,
+};
 
 /// Import an SVG document reading the files it links to as `opts` says, also returning warnings.
 pub fn import_with(svg: &str, opts: &ImportOptions) -> Result<(Document, Vec<String>), SvgError> {
@@ -631,17 +592,8 @@ fn fnv1a_from(h: u64, bytes: &[u8]) -> u64 {
 
 /// Standard base64 (RFC 4648, with padding).
 pub fn base64_encode(data: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
-    for c in data.chunks(3) {
-        let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
-        let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;
-        out.push(T[(n >> 18) as usize & 63] as char);
-        out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if c.len() > 2 { T[n as usize & 63] as char } else { '=' });
-    }
-    out
+    // SVG data URLs need one unwrapped line, not MIME's folded base64_lines variant.
+    craft_mime::transfer::base64(data)
 }
 
 /// Escape text for XML content and attribute values.
@@ -741,6 +693,19 @@ mod tests {
         assert_eq!(base64_encode(b"fo"), "Zm8=");
         assert_eq!(base64_encode(b"foo"), "Zm9v");
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn base64_binary_payload_stays_standard_padded_and_unwrapped() {
+        let data: Vec<u8> = (0..=255).collect();
+        assert_eq!(
+            base64_encode(&data),
+            "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w=="
+        );
+        assert_eq!(base64_encode(&[0xfb, 0xff, 0xff]), "+///");
+        assert_eq!(base64_encode(&[0xfb]), "+w==");
+        assert_eq!(base64_encode(&[0xfb, 0xff]), "+/8=");
+        assert_eq!(base64_encode(&[0; 60]), "A".repeat(80));
     }
 
     #[test]

@@ -145,9 +145,9 @@ impl ImageBlob {
     /// This blob after its pixels are decoded once, within [`crate::MAX_RASTER_ALLOC`], to check
     /// that they can be read; with `proxy`, it also gets the preview [`Self::with_proxy`] makes,
     /// made from that decode. `None` when the pixels can't be read, as with a file cut short that
-    /// has a header but not all its pixels. An image whose pixels would take more than the
-    /// allowance as RGBA is not decoded, and one whose decode needs more than the allowance stops
-    /// decoding; either is returned as it is.
+    /// has a header but not all its pixels, or one the decoder refuses as a decompression bomb.
+    /// An image whose pixels would take more than the allowance as RGBA is not decoded and is
+    /// returned as it is.
     pub fn checked_with_proxy(self, proxy: bool) -> Option<Self> {
         self.checked_with_pixels(proxy).map(|(blob, _)| blob)
     }
@@ -155,22 +155,12 @@ impl ImageBlob {
     /// [`Self::checked_with_proxy`], with the pixels it decoded: `None` beside the blob when it
     /// decoded none (an image past the allowance).
     pub fn checked_with_pixels(mut self, proxy: bool) -> Option<(Self, Option<image::DynamicImage>)> {
-        let max = crate::MAX_RASTER_ALLOC;
-        let reader = || image::ImageReader::new(Cursor::new(self.bytes.as_slice())).with_guessed_format().ok();
-        let (w, h) = reader()?.into_dimensions().ok()?;
-        if u64::from(w) * u64::from(h) > max / 4 {
-            return Some((self, None));
-        }
-        let mut r = reader()?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(max);
-        r.limits(limits);
-        let img = match r.decode() {
-            Ok(img) => img,
-            Err(image::ImageError::Limits(_)) => return Some((self, None)),
+        let img = match crate::decode::decode_within(&self.bytes, crate::MAX_RASTER_ALLOC) {
+            Ok(Some((img, _))) => img,
+            Ok(None) => return Some((self, None)),
             Err(_) => return None,
         };
-        if proxy && self.proxy.is_none() && w.max(h) > PROXY_SIZE {
+        if proxy && self.proxy.is_none() && img.width().max(img.height()) > PROXY_SIZE {
             self.proxy = proxy_of(&img).map(Arc::new);
         }
         Some((self, Some(img)))
@@ -210,26 +200,22 @@ pub fn missing_placeholder() -> Option<Vec<u8>> {
 /// `bytes` decoded and shrunk to fit [`PROXY_SIZE`] as a PNG; `None` when small enough already or
 /// undecodable.
 fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
-    let (w, h) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()?;
+    let format = craft_image_codecs::detect(bytes)?;
+    let (w, h, _) = crate::decode::decoded_layout(bytes, format)?;
     if w.max(h) <= PROXY_SIZE {
         return None;
     }
-    // The proxy decodes within the project's raster cap, counted as RGBA like every other
-    // decode path (#3597): the header alone decides whether the pixels could ever fit, and the
-    // decoder gets the same budget instead of image's own default.
-    if u64::from(w) * u64::from(h) > crate::MAX_RASTER_ALLOC / 4 {
-        return None;
-    }
-    let mut reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(crate::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    proxy_of(&reader.decode().ok()?)
+    // The proxy decodes within the project's raster cap, counted as the file's samples and as
+    // RGBA like every other decode path (#3597, #1717): the header alone decides whether the
+    // pixels could ever fit, and the decoder gets the same budget.
+    let (img, _) = crate::decode::decode_within(bytes, crate::MAX_RASTER_ALLOC).ok()??;
+    proxy_of(&img)
 }
 
 /// Decoded image `img` shrunk to fit [`PROXY_SIZE`] as a PNG.
 fn proxy_of(img: &image::DynamicImage) -> Option<Vec<u8>> {
-    let small = img.thumbnail(PROXY_SIZE, PROXY_SIZE);
+    let (w, h) = crate::resample::fit_size(img.width(), img.height(), PROXY_SIZE, PROXY_SIZE);
+    let small = crate::resample::averaged(img, w, h);
     let mut png = Vec::new();
     small.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some(png)
@@ -248,14 +234,15 @@ fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 
 impl Document {
     /// Visit every image object: in the layers, then in symbol definitions and pattern swatches,
-    /// opacity-mask art included.
+    /// then in [`Document::mounted_art`], opacity-mask art included.
     pub fn visit_images<'a>(&'a self, mut f: impl FnMut(&'a Node, &'a ImageObject)) {
         let roots = self
             .layers
             .iter()
             .chain(self.symbols.iter().map(|s| &s.art))
             .chain(self.graph_designs.iter().map(|g| &g.art))
-            .chain(self.patterns.iter().flat_map(|p| &p.art));
+            .chain(self.patterns.iter().flat_map(|p| &p.art))
+            .chain(self.mounted_art.iter().map(|(n, _)| n));
         for root in roots {
             walk_all(root, &mut |n| {
                 if let NodeKind::Image(im) = &n.kind {
@@ -384,7 +371,8 @@ impl Align {
 
 impl Document {
     /// Rewrite linked file locations in both raster images and placed VectorCraft documents,
-    /// including those inside symbols, patterns and opacity masks. Used to make packages portable.
+    /// including those inside symbols, patterns, opacity masks and [`Document::mounted_art`]. Used to
+    /// make packages portable.
     pub fn update_links(&mut self, mut f: impl FnMut(&mut LinkInfo)) {
         fn walk(n: &mut Arc<Node>, f: &mut dyn FnMut(&mut LinkInfo)) {
             let n = Arc::make_mut(n);
@@ -409,7 +397,8 @@ impl Document {
             .iter_mut()
             .chain(self.symbols.iter_mut().map(|s| &mut s.art))
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
         for root in roots {
             walk(root, &mut f);
         }
@@ -471,7 +460,8 @@ impl Document {
             .iter_mut()
             .chain(self.symbols.iter_mut().map(|s| &mut s.art))
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
         for root in roots {
             update(root, &pick, &mut f);
         }
@@ -727,5 +717,53 @@ mod tests {
         image(&mut d, "b", None);
         image(&mut d, "c", None);
         assert_eq!(d.linked_only_images().into_iter().collect::<Vec<_>>(), ["a"]);
+    }
+
+    /// The preview of an image with clear pixels keeps the color of its opaque ones: the clear
+    /// black beside them does not darken them, whichever way the preview is made.
+    #[test]
+    fn a_preview_keeps_the_color_beside_clear_pixels() {
+        let mut full = vec![];
+        image::RgbaImage::from_fn(1024, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+            .write_to(&mut Cursor::new(&mut full), image::ImageFormat::Png)
+            .unwrap();
+        for blob in [ImageBlob::png(full.clone()).with_proxy(), ImageBlob::png(full.clone()).checked_with_proxy(true).unwrap()] {
+            let p = image::load_from_memory(blob.proxy.as_ref().unwrap()).unwrap().into_rgba8();
+            assert_eq!(p.dimensions(), (PROXY_SIZE, 1));
+            assert!(p.pixels().all(|q| q.0 == [200, 30, 30, 128]), "{:?}", p.get_pixel(0, 0));
+        }
+    }
+
+    /// A PNG that says it is `w` × `h` 1-bit grey pixels (header and a stub IDAT, no rows).
+    fn png_header_1bit(w: u32, h: u32) -> Vec<u8> {
+        let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        let push = |out: &mut Vec<u8>, chunk: &[u8]| {
+            out.extend((chunk.len() as u32 - 4).to_be_bytes());
+            out.extend(chunk);
+            out.extend(crc32(chunk).to_be_bytes());
+        };
+        let mut ihdr = b"IHDR".to_vec();
+        ihdr.extend(w.to_be_bytes());
+        ihdr.extend(h.to_be_bytes());
+        ihdr.extend([1, 0, 0, 0, 0]);
+        push(&mut out, &ihdr);
+        push(&mut out, b"IDAT\x78\x9c");
+        push(&mut out, b"IEND");
+        out
+    }
+
+    /// A header-only 23,170 × 23,170 1-bit gray PNG is within the 2 GiB RGBA allowance, so Place
+    /// decodes it and must refuse it (no pixel rows). 23,171 × 23,170 is past the allowance and is
+    /// kept unread, not refused. craft-image-codecs reports the cut-short file as LimitExceeded
+    /// (its decompression-bomb guard); that is still "pixels can't be read", not "past the allowance".
+    #[test]
+    fn a_gray_header_within_the_allowance_is_unreadable() {
+        let within = png_header_1bit(23_170, 23_170);
+        let over = png_header_1bit(23_171, 23_170);
+        assert!(crate::decode::decode_within(&within, crate::MAX_RASTER_ALLOC).is_err(), "header-only within the allowance");
+        assert!(matches!(crate::decode::decode_within(&over, crate::MAX_RASTER_ALLOC), Ok(None)), "past the allowance is not decoded");
+        assert!(ImageBlob::new("image/png", within).checked_with_pixels(false).is_none(), "Place refuses the file");
+        let (_, pixels) = ImageBlob::new("image/png", over).checked_with_pixels(false).expect("past the allowance is kept unread");
+        assert!(pixels.is_none());
     }
 }

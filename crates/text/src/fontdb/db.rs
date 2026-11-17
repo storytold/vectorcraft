@@ -16,7 +16,7 @@ use super::scan::{file_face_names, is_font_file};
 #[cfg(test)]
 use super::traits::faces_published;
 #[cfg(not(target_arch = "wasm32"))]
-use super::traits::{Alias, FaceStyle};
+use super::traits::{Alias, FaceStyle, regular_rank};
 use super::{Arc, AtomicU64, FontDb, FontPaths, HashMap, Mutex, Ordering, Path, PathBuf, RwLock, StringId};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{ScanStamp, modified};
@@ -74,7 +74,7 @@ impl FontDb {
             stamp: Mutex::new(None),
             instances: Mutex::new(Instances::default()),
             composites: RwLock::new(HashMap::new()),
-            composite_loans: Mutex::new(HashMap::new()),
+            custom_classes: Mutex::new(HashMap::new()),
         }
     }
 
@@ -127,9 +127,11 @@ impl FontDb {
     }
 
     /// A number that changes whenever the available fonts do (fonts added, system fonts
-    /// rescanned): lists built from [`FontDb::family_list`] are current while it doesn't.
+    /// rescanned): lists built from [`FontDb::family_list`] are current while it doesn't. While a
+    /// guard of this thread lends composite fonts other than the ones the database holds
+    /// ([`FontDb::lend_composite_fonts`]), it is a number of its own for those definitions.
     pub fn generation(&self) -> u64 {
-        self.generation.load(Ordering::Relaxed)
+        self.lent_generation(self.generation.load(Ordering::Relaxed))
     }
 
     /// A number no other database made in this process has: with [`FontDb::generation`], it tells
@@ -417,6 +419,8 @@ impl FontDb {
             if !named && !is_font_file(&p) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
+            // The file's creation time, once for all its faces (a collection holds several).
+            let created = std::fs::metadata(&p).and_then(|m| m.created()).ok();
             for FaceStyle { family, native_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
                 for (k, a) in Alias::of(&family, &style, &keys) {
                     aliases.entry(k).or_default().push(a);
@@ -428,6 +432,9 @@ impl FontDb {
                 let entry = catalog.entry(family.to_ascii_lowercase()).or_default();
                 let kind = entry.traits.get_or_insert(traits);
                 kind.variable |= traits.variable;
+                if regular_rank(&traits.likeness) < regular_rank(&kind.likeness) {
+                    kind.likeness = traits.likeness;
+                }
                 if entry.name.is_empty() {
                     entry.name = family;
                 }
@@ -435,7 +442,7 @@ impl FontDb {
                     entry.native = native_family;
                 }
                 let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
-                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });
+                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic, created });
                 n += 1;
             }
         }

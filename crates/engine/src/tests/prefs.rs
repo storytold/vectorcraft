@@ -693,7 +693,6 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
         ("blobBrush", Cursor::BlobBrush),
         ("shaper", Cursor::Shaper),
         ("pencil", Cursor::PencilNew),
-        ("smooth", Cursor::Smooth),
         ("pathEraser", Cursor::PathEraser),
         ("join", Cursor::Join),
         ("eraser", Cursor::Eraser),
@@ -735,6 +734,27 @@ fn use_precise_cursors_swaps_the_tools_own_pointers_for_a_crosshair() {
     s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": false})).unwrap();
     for (tool, c) in own {
         assert_eq!(cursor(&mut s, tool), c, "{tool} off again");
+    }
+}
+
+/// With no selected path, the Smooth tool shows Not Allowed, and Use Precise Cursors leaves it so; with a
+/// selected path, it shows its own pointer, or a crosshair with the preference on.
+#[test]
+fn use_precise_cursors_keeps_the_smooth_tools_not_allowed_pointer() {
+    use vectorcraft_tools::{Cursor, Mods};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let at = vectorcraft_geom::Point::new(300.0, 300.0);
+    s.select_tool("smooth", ViewInfo::default()).unwrap();
+    for precise in [false, true] {
+        s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
+        assert_eq!(s.cursor(at, Mods::default(), ViewInfo::default()), Cursor::NotAllowed, "precise {precise}");
+    }
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    for (precise, c) in [(false, Cursor::Smooth), (true, Cursor::Crosshair)] {
+        s.execute("prefs.set", &json!({"key": "usePreciseCursors", "value": precise})).unwrap();
+        assert_eq!(s.cursor(at, Mods::default(), ViewInfo::default()), c, "precise {precise}");
     }
 }
 
@@ -1956,6 +1976,26 @@ fn highlight_alternate_glyphs_preference_is_off_by_default() {
     assert!(s.prefs.highlight_alternate_glyphs);
     set_pref(&mut s, "highlightAlternateGlyphs", json!(false));
     assert!(!s.prefs.highlight_alternate_glyphs);
+}
+
+/// Preferences › Type › Show Character Alternates: on by default, listed in the Type category,
+/// saved with the other preferences, and a value that is not true or false is refused.
+#[test]
+fn show_character_alternates_preference_is_on_by_default_and_saved() {
+    let mut s = Session::new();
+    assert!(s.prefs.show_character_alternates, "on by default");
+    let spec = crate::cmd::prefscmds::PREF_SPECS.iter().find(|p| p.key == "showCharacterAlternates").expect("listed");
+    assert_eq!((spec.category, spec.label), ("Type", "Show Character Alternates"));
+    assert_eq!(s.execute("prefs.get", &json!({"key": "showCharacterAlternates"})).unwrap(), json!(true));
+    set_pref(&mut s, "showCharacterAlternates", json!(false));
+    assert!(!s.prefs.show_character_alternates);
+    assert!(s.execute("prefs.set", &json!({"key": "showCharacterAlternates", "value": "yes"})).is_err(), "not a boolean");
+    assert!(!s.prefs.show_character_alternates, "a refused value changes nothing");
+    let saved: Prefs = serde_json::from_value(serde_json::to_value(&s.prefs).unwrap()).unwrap();
+    assert!(!saved.show_character_alternates);
+    // Preferences saved before the key existed read it as on.
+    let old: Prefs = serde_json::from_value(json!({"highlightAlternateGlyphs": true})).unwrap();
+    assert!(old.show_character_alternates);
 }
 
 /// Preferences › Type › Highlight Substituted Fonts: on by default, listed in the Type category,

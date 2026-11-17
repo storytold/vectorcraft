@@ -110,6 +110,10 @@ wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 # wayland-protocols' `unstable` set) made on the window's own connection. MIT, already in the build
 # through winit and rfd.
 wayland-backend = { version = "0.3", features = ["client_system"] }
+# The Wayland clipboard's pipes (src/clipboard.rs): `poll` and the nonblocking flag give up a read
+# or send when the other app moves no data for a while. Apache-2.0 WITH LLVM-exception OR
+# Apache-2.0 OR MIT, already in the build through the workspace.
+rustix = { workspace = true, features = ["std", "event", "fs"] }
 
 # The save dialog's file type (src/portal_save.rs, #2679): the desktop portal over D-Bus, on the
 # systems where rfd shows the portal's dialog. MIT, already in the build through accesskit. Pinned

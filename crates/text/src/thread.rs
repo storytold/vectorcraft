@@ -279,10 +279,13 @@ impl<'a> Rest<'a> {
 ///
 /// Type on a path is measured the same way when its line starts at the start bracket whatever text
 /// follows: no Dynamic Text, Optical Margin Alignment or Roman Hanging Punctuation, the first
-/// paragraph aligned Left, Justify Left or Auto, and no right-to-left text (`no_rtl`, and the first
-/// paragraph's direction not right to left) unless the type is vertical. Each glyph's step along the
-/// path then depends only on the glyphs before it, so when the first glyph that does not fit comes
-/// before the last paragraph break measured, the path holds the same bytes with the whole rest.
+/// paragraph aligned Left, Justify Left, Justify All or Auto, and no right-to-left text (`no_rtl`, and
+/// the first paragraph's direction not right to left) unless the type is vertical. Each glyph's step
+/// along the path then depends only on the glyphs before it, so when the first glyph that does not
+/// fit comes before the last paragraph break measured, the path holds the same bytes with the whole
+/// rest. A line aligned to the center or the right, or Auto right to left, starts where the width of
+/// all its glyphs puts it, and a glyph's advance can be negative (negative tracking), so a shorter
+/// text can start further along than the whole rest does; such type is measured with the whole rest.
 ///
 /// Other type, and a rest that ends first, is measured with the whole rest.
 fn fit_rest(db: &FontDb, probe: impl Fn(Vec<TextRun>) -> TextObject, frame: &TextObject, rest: Rest<'_>, mut want: usize, no_rtl: bool) -> usize {
@@ -313,7 +316,7 @@ fn path_starts_at_bracket(head: &TextObject, no_rtl: bool) -> bool {
     !head.dynamic_text
         && !head.optical_margin
         && !para.roman_hanging
-        && matches!(para.justify, Justify::Auto | Justify::Left | Justify::JustifyLeft)
+        && matches!(para.justify, Justify::Auto | Justify::Left | Justify::JustifyLeft | Justify::JustifyAll)
         && (head.vertical || (no_rtl && para.direction != Some(ParaDirection::RightToLeft)))
 }
 

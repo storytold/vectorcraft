@@ -55,7 +55,7 @@ impl Renderer {
     /// objects) hit for them. Other art is placed again in every frame, and so is art that holds
     /// symbol instances, type with inline graphics, images, placed documents or raster effects
     /// ([`depends_on_document`]), and art that the cache has no room for. Art that holds type is
-    /// placed again when the fonts change.
+    /// placed again when the fonts or the hyphenation exceptions change.
     pub(super) fn placed_art(&mut self, art: &Arc<Node>, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> (Arc<Node>, bool) {
         let kept_kind = matches!(art.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || vectorcraft_doc::live::is_live(art);
         // An instance with appearance changes of its own isn't kept: the key doesn't tell them apart.
@@ -67,7 +67,7 @@ impl Renderer {
         let key = (Arc::as_ptr(art) as usize, xf.as_coeffs().map(f64::to_bits), scale_strokes, stain);
         if let Some(e) = self.placed_arts.get(&key, self.stamp)
             && std::ptr::eq(e.art.as_ptr(), Arc::as_ptr(art))
-            && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
+            && e.fonts.is_none_or(|g| g == vectorcraft_text::layout_inputs())
             && e.slice.is_none()
         {
             return match &e.placed {
@@ -106,7 +106,7 @@ impl Renderer {
         if keeps
             && let Some(e) = self.placed_arts.get(&key, self.stamp)
             && std::ptr::eq(e.art.as_ptr(), Arc::as_ptr(art))
-            && e.fonts.is_none_or(|g| g == vectorcraft_text::FontDb::global().generation())
+            && e.fonts.is_none_or(|g| g == vectorcraft_text::layout_inputs())
             && e.slice.as_ref() == Some(map)
         {
             match e.placed.clone() {
@@ -134,7 +134,7 @@ impl Renderer {
     fn keep_placed(&mut self, key: PlacedKey, art: &Arc<Node>, placed: &Arc<Node>, slice: Option<vectorcraft_doc::NineSliceMap>) -> bool {
         let kept = (!depends_on_document(art)).then(|| placed.clone());
         let keeps = kept.is_some();
-        let fonts = (keeps && holds_type(art)).then(|| vectorcraft_text::FontDb::global().generation());
+        let fonts = (keeps && holds_type(art)).then(vectorcraft_text::layout_inputs);
         // The bytes count the key and the entry, the art's allocation that the weak reference
         // keeps, and the kept art.
         let bytes = size_of::<(PlacedKey, PlacedEntry, Node)>() + kept.as_deref().map_or(0, lru::node_bytes);
@@ -150,7 +150,7 @@ impl Renderer {
         if !matches!(&a.kind, NodeKind::Text(own) if std::ptr::eq(&**own, t)) {
             return (Arc::new(text_geom(t)), false);
         }
-        let fonts = vectorcraft_text::FontDb::global().generation();
+        let fonts = vectorcraft_text::layout_inputs();
         if fonts != self.text_fonts {
             self.texts.clear();
             self.text_ids.clear();
