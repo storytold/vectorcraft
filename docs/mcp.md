@@ -769,6 +769,17 @@ Constrain Angle's negative. `shape.arc` takes `rotation` in degrees clockwise on
 reference point `x`, `y`; the arc's bounding box turns with it. Without `rotation`, or at 0° or a whole turn, the arc is
 upright, and a `rotation` that is not a number is an error that adds nothing.
 
+A Spiral tool drag sends `shape.spiral` with the spiral's outer end at the pointer: `radius` is the pointer's distance
+from the center `cx`, `cy` and `rotation` its direction in degrees clockwise on the page from the x axis, left out when
+it is 0, so dragging around the center turns the spiral. A pointer less than 0.01 pt from the center keeps the last
+direction (none before the first). Shift and General › Constrain Angle do not change a dragged spiral's direction. The
+Spiral dialog's spiral, placed by a click, takes a `rotation` of the Constrain Angle's negative when the angle is other
+than 0° or a whole turn, so its outer end starts along the turned x axis, and its bounding box turns with it.
+`shape.spiral` takes `rotation` in degrees clockwise about `cx`, `cy`; without it, or at 0 or a whole turn, the outer
+end is at `cx + radius`, `cy` as before, and a `rotation` that is not a number is an error that adds nothing. The
+bounding box turns only when `rotation` is the Constrain Angle's negative, as for `shape.polygon` and `shape.star`, so a
+drag that points along the turned x axis makes the same spiral, with the same turned box, as the dialog.
+
 `shape.arc` checks `reference`, `baseAlong` and `slope` in both of its forms. `reference` is a whole number from 0 to 8
 (`4.0` is 4) and is 0 when left out; `baseAlong` is `x` or `y` in either case and is `x` when left out; `slope` is
 from −100 to 100 and is 50 when left out with `lengthX` and `lengthY`, or 100 with `x1`, `y1`, `x2`, `y2`. A
@@ -1660,7 +1671,8 @@ its noise). PDF exports write it the same way, except for a linear, radial, coni
 stops whose other stops are all paper white or written in CMYK or gray, that is not a dithered fill and whose curve
 does not have too many stops (a diamond as four such shadings). An export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a
 CMYK document unless the export converts colors to an RGB destination profile. PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK
-or gray inks as a DeviceN shading.
+or gray inks as a DeviceN shading. A legacy `.ai` file gets the colors between a Perceptual gradient's stops as stops
+of their own, in process colors (at most 256, with a warning).
 `hue-clockwise` and `hue-counterclockwise` (VectorCraft's own methods) mix a linear, radial, conic or diamond
 gradient's colors around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next.
 With `hue-clockwise` the hue angle falls (red, magenta, blue, cyan, green, yellow, red), which is clockwise on the
@@ -2076,7 +2088,10 @@ commands fail and change nothing, and `appearance.removeItem` removes nothing. A
 `artboard.reorder`, `graphicStyle.move`, `appearance.moveItem`, `appearance.duplicateItem` and `effect.move`) puts
 the item last. A text `start` or `end` is past the end of the text. `object.slice.divide` refuses such a `rows` or
 `columns`, `recolor.reduce` keeps each color in its own row for such a `colors`, and `layer.setProps` refuses such a
-`color`. `object.setBounds` reads a `reference` past 8 as 8, as `object.transformEach` does.
+`color`. `object.setBounds` reads a whole-number `reference` past 8 as 8, as `object.transformEach` does.
+For `object.setBounds`, `reference` accepts whole numbers of 0 or more, including floating-point representations
+such as `0.0`. Negative and fractional values are errors. An omitted or null `reference` uses the center point, 4.
+These rules apply to both whole objects and directly selected anchors.
 An index or place given as a value that is not a whole number of 0 or more, such as `"3"`, `2.5`, `-1` or `true`, is
 refused with `` `anchor` must be a whole number ``, naming the key: `anchor` of `path.setHandle`, `path.moveAnchor` and
 `text.setPathHandle`, `segment` of `path.insertAnchor`, `to` of `artboard.reorder`, `library.moveGroup` and
@@ -12531,8 +12546,9 @@ Commands:
 - `addon.pathtools.crossings {cut?, selfCrossings?, ids?}` adds anchors where the selected paths cross one another (and
   where each crosses itself, with `selfCrossings`), or with `cut` also cuts them there: a path of one subpath becomes a
   path per piece. Segments that meet at an anchor they share, or with only segments of no length between them, don't
-  cross there, and they cross where they meet again elsewhere. With `selfCrossings`, a curved segment that loops over
-  itself crosses itself. At most 10,000 segments at once.
+  cross there, and they cross where they meet again elsewhere. An open end of a path that lies within 0.001 pt of
+  another path crosses it there. With `selfCrossings`, a curved segment that loops over itself crosses itself. At most
+  10,000 segments at once.
 - `addon.pathtools.divideDashes {dash?, gap?, fit?, removeGaps?}` cuts the selected paths into separate open paths
   along the curve, each `dash` long (0.01 to 1,000,000 pt, 10 by default) with `gap` between them (0 to 1,000,000 pt,
   0 by default: the pieces touch), every piece keeping the path's appearance, as one undo step. The gap pieces are left
@@ -12614,7 +12630,7 @@ Commands:
   Every path that can be edited takes part, selected or not, compound path members included. Hidden and locked paths,
   guides and clipping paths are not trimmed and do not count as crossing, the members of a compound clipping path
   included; type, images and symbol instances take no part. In isolation mode only paths inside the isolated object
-  are trimmed, and paths outside it still count as crossing. A path that ends on another marks a place on the other. Paths that lie along each other do not cross there.
+  are trimmed, and paths outside it still count as crossing. A path that ends on another, or within 0.001 pt of it, marks a place on the other. Paths that lie along each other do not cross there.
   Crossings are found on the paths' own outlines, without strokes, brushes or effects. A closed path that loses a
   stretch becomes open. An open path that loses a middle stretch becomes two paths with its appearance, in its place in
   the stacking order. A path that nothing crosses is removed whole, a compound path that loses its last member is
