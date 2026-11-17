@@ -1265,6 +1265,203 @@ fn escape_in_the_release_frame_cancels_a_stop_drag() {
     assert_eq!(positions(&app), [30.0, 70.0]);
 }
 
+/// Press on the stop at `from` (points) and move to `to`, `below` px under the ruler, with
+/// `modifiers` held, without letting go → where the pointer is.
+fn hold_drag_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, from: f64, to: f64, below: f32, modifiers: egui::Modifiers) -> egui::Pos2 {
+    let labels = ruler_frame(ctx, app, vec![], false);
+    let [(zero, a), (next, b), ..] = &labels[..] else { panic!("ruler labels {labels:?}") };
+    assert_eq!(zero, "0");
+    let per = next.parse::<f64>().unwrap() * app.session.general_unit().points();
+    let x = |pt: f64| a.x - 2.0 + (pt / per) as f32 * (b.x - a.x);
+    let y = a.y + 15.0;
+    let held = egui::Event::ModifiersChanged(modifiers);
+    let press = egui::pos2(x(from), y);
+    let end = egui::pos2(x(to), y + below);
+    let button = egui::Event::PointerButton { pos: press, button: egui::PointerButton::Primary, pressed: true, modifiers };
+    ruler_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(press), button], false);
+    for f in [0.25, 0.5, 1.0] {
+        ruler_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(press.lerp(end, f))], false);
+    }
+    end
+}
+
+/// Let go at `at` with `modifiers` held, then draw one more frame.
+fn release_on_ruler(ctx: &egui::Context, app: &mut VectorcraftApp, at: egui::Pos2, modifiers: egui::Modifiers) {
+    let button = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+    ruler_frame(ctx, app, vec![egui::Event::ModifiersChanged(modifiers), button], false);
+    ruler_frame(ctx, app, vec![], false);
+}
+
+/// Area type at (10, 20), 300 by 100 pt, with stops at `stops` points, and the app.
+fn guide_app(stops: &[f64]) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb\tc", "area": {"width": 300, "height": 100}})).unwrap();
+    let stops: Vec<_> = stops.iter().map(|p| json!({"position": p})).collect();
+    app.run("text.tabs.set", json!({"stops": stops})).unwrap();
+    app
+}
+
+fn near(a: Point, b: Point) -> bool {
+    (a - b).hypot() < 0.01
+}
+
+/// While a stop is dragged on the ruler, a guide crosses the selected area type at the place the
+/// stop would land, measured from the frame's left edge, from the frame's top to its bottom. It
+/// follows the pointer, adds nothing to the document or its undo history, and is gone after the
+/// release, which moves the stop as before.
+#[test]
+fn dragging_a_stop_draws_a_guide_through_the_text() {
+    let mut app = guide_app(&[50.0]);
+    let ctx = egui::Context::default();
+    ruler_frame(&ctx, &mut app, vec![], false);
+    assert_eq!(stop_guide(&app, &ctx), None, "before the drag");
+    let frame = current(&app).unwrap().0.geometric_bounds().unwrap();
+    let (before, layers) = (app.session.active().unwrap().history.undo.len(), app.session.active().unwrap().doc.layers.clone());
+    let end = hold_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, 0.0, egui::Modifiers::NONE);
+    let (a, b) = stop_guide(&app, &ctx).expect("a guide during the drag");
+    assert!(near(a, Point::new(frame.x0 + 70.0, frame.y0)) && near(b, Point::new(frame.x0 + 70.0, frame.y1)), "{a:?} {b:?} in {frame:?}");
+    let doc = app.session.active().unwrap();
+    assert_eq!((doc.history.undo.len(), &doc.doc.layers), (before, &layers), "the guide is not part of the document");
+    // The guide follows the pointer while the button stays down.
+    let held = egui::Event::ModifiersChanged(egui::Modifiers::NONE);
+    ruler_frame(&ctx, &mut app, vec![held, egui::Event::PointerMoved(end - vec2(20.0, 0.0))], false);
+    let (moved, _) = stop_guide(&app, &ctx).unwrap();
+    assert!(moved.x < a.x - 1.0, "{moved:?} after {a:?}");
+    release_on_ruler(&ctx, &mut app, end, egui::Modifiers::NONE);
+    assert_eq!(stop_guide(&app, &ctx), None, "after the release");
+    assert_eq!(current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>(), [70.0]);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), before + 1);
+}
+
+/// When a text wrap object pushes the paragraph's lines right, the guide is measured from where the
+/// first line starts, as the layout measures the stops, and a first-line indent does not move it.
+#[test]
+fn the_stop_guide_starts_where_a_wrap_object_lets_the_line_start() {
+    let mut app = guide_app(&[50.0]);
+    let text = current(&app).unwrap().0.id.0;
+    app.run("text.setFormat", json!({"firstLineIndent": 12})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 60, "height": 200})).unwrap();
+    app.run("object.textWrap.make", json!({"offset": 0})).unwrap();
+    app.run("select.set", json!({"ids": [text]})).unwrap();
+    let ctx = egui::Context::default();
+    let end = hold_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, 0.0, egui::Modifiers::NONE);
+    let (a, b) = stop_guide(&app, &ctx).unwrap();
+    assert!((a.x - 130.0).abs() < 0.01 && (b.x - 130.0).abs() < 0.01, "70 pt right of the wrap object's edge at 60: {a:?} {b:?}");
+    release_on_ruler(&ctx, &mut app, end, egui::Modifiers::NONE);
+    // The tab after "a" ends at the stop: "b" starts 70 pt right of the wrap object's edge.
+    let NodeKind::Text(t) = &current(&app).unwrap().0.kind else { panic!("text") };
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let b_at = lay.glyphs.iter().find(|g| t.plain_text().get(g.byte..).is_some_and(|s| s.starts_with('b'))).unwrap().origin.x;
+    assert!(((t.xf * Point::new(b_at, 0.0)).x - 130.0).abs() < 0.01, "b at {b_at}");
+}
+
+/// In a Ctrl-drag (Command on macOS) the guide follows the stop under the pointer, also when the
+/// leftmost stop stops the drag at 0.
+#[test]
+fn a_command_drag_guide_follows_the_grabbed_stop() {
+    let mut app = guide_app(&[30.0, 50.0, 80.0]);
+    let ctx = egui::Context::default();
+    let x0 = current(&app).unwrap().0.geometric_bounds().unwrap().x0;
+    let end = hold_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, 0.0, egui::Modifiers::COMMAND);
+    let (a, _) = stop_guide(&app, &ctx).unwrap();
+    assert!((a.x - (x0 + 70.0)).abs() < 0.01, "{a:?}");
+    release_on_ruler(&ctx, &mut app, end, egui::Modifiers::COMMAND);
+    assert_eq!(current(&app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>(), [50.0, 70.0, 100.0]);
+    // The stop grabbed at 70 pt can move 50 pt left before the stop at 50 pt reaches 0.
+    let end = hold_drag_on_ruler(&ctx, &mut app, 70.0, 5.0, 0.0, egui::Modifiers::COMMAND);
+    let (a, _) = stop_guide(&app, &ctx).unwrap();
+    assert!((a.x - (x0 + 20.0)).abs() < 0.01, "{a:?}");
+    release_on_ruler(&ctx, &mut app, end, egui::Modifiers::COMMAND);
+    assert_eq!(stop_guide(&app, &ctx), None);
+}
+
+/// No guide shows while a release would delete the stop, after Escape, after a release the ruler
+/// did not see, or once the panel is no longer drawn.
+#[test]
+fn the_stop_guide_ends_with_the_drag() {
+    let mut app = guide_app(&[30.0, 50.0]);
+    let ctx = egui::Context::default();
+    let positions = |app: &VectorcraftApp| current(app).unwrap().1.iter().map(|s| s.position).collect::<Vec<_>>();
+    // Off the ruler, where a release deletes the stop.
+    let end = hold_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, 60.0, egui::Modifiers::NONE);
+    assert_eq!(stop_guide(&app, &ctx), None, "off the ruler");
+    release_on_ruler(&ctx, &mut app, end, egui::Modifiers::NONE);
+    assert_eq!(positions(&app), [30.0]);
+    // Escape during the drag.
+    let end = hold_drag_on_ruler(&ctx, &mut app, 30.0, 60.0, 0.0, egui::Modifiers::NONE);
+    assert!(stop_guide(&app, &ctx).is_some());
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    ruler_frame(&ctx, &mut app, vec![escape], false);
+    ruler_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(end + vec2(5.0, 0.0))], false);
+    assert_eq!(stop_guide(&app, &ctx), None, "after Escape");
+    release_on_ruler(&ctx, &mut app, end, egui::Modifiers::NONE);
+    assert_eq!(positions(&app), [30.0]);
+    // A drag whose release the ruler never got: the next frame without a button down ends it, so a
+    // later press elsewhere shows no guide and a later release moves nothing.
+    set_pstate(&ctx, "tabs-drag", Some(0usize));
+    ruler_frame(&ctx, &mut app, vec![], false);
+    assert_eq!(pstate::<Option<usize>>(&ctx, "tabs-drag"), None);
+    // A place in the panel right of its fields, above the ruler.
+    let ruler_y = ruler_frame(&ctx, &mut app, vec![], false)[0].1.y;
+    let away = egui::pos2(380.0, ruler_y - 30.0);
+    let press = egui::Event::PointerButton { pos: away, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE };
+    ruler_frame(&ctx, &mut app, vec![egui::Event::PointerMoved(away), press], false);
+    assert_eq!(stop_guide(&app, &ctx), None, "a press after a lost release");
+    release_on_ruler(&ctx, &mut app, away, egui::Modifiers::NONE);
+    assert_eq!(positions(&app), [30.0]);
+    // The panel closed during a drag.
+    hold_drag_on_ruler(&ctx, &mut app, 30.0, 60.0, 0.0, egui::Modifiers::NONE);
+    assert!(stop_guide(&app, &ctx).is_some());
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+        out.textures_delta.clear();
+    }
+    assert_eq!(stop_guide(&app, &ctx), None, "the panel is no longer drawn");
+}
+
+/// The guide turns with rotated area type, and runs through point type from the type's origin
+/// across its lines; in vertical type it runs across the columns.
+#[test]
+fn the_stop_guide_follows_rotated_point_and_vertical_type() {
+    let ctx = egui::Context::default();
+    // Rotated area type: the guide is the frame's edge moved 70 pt along the frame's top.
+    let mut app = guide_app(&[50.0]);
+    app.run("object.rotate", json!({"angle": 30})).unwrap();
+    let node = current(&app).unwrap().0;
+    let NodeKind::Text(t) = &node.kind else { panic!("text") };
+    let TextKind::Area { frame } = &t.kind else { panic!("area type") };
+    let local = frame.bounds().unwrap();
+    let end = hold_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, 0.0, egui::Modifiers::NONE);
+    let (a, b) = stop_guide(&app, &ctx).unwrap();
+    let (ea, eb) = (t.xf * Point::new(local.x0 + 70.0, local.y0), t.xf * Point::new(local.x0 + 70.0, local.y1));
+    assert!(near(a, ea) && near(b, eb), "{a:?} {b:?}, expected {ea:?} {eb:?}");
+    assert!((a.x - b.x).abs() > 10.0, "not upright: {a:?} {b:?}");
+    release_on_ruler(&ctx, &mut app, end, egui::Modifiers::NONE);
+    // Point type with its origin at (10, 20): the guide is upright at 10 + 70 and crosses the baseline.
+    for vertical in [false, true] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "vertical": vertical})).unwrap();
+        app.run("text.tabs.set", json!({"stops": [{"position": 50}]})).unwrap();
+        let ctx = egui::Context::default();
+        let end = hold_drag_on_ruler(&ctx, &mut app, 50.0, 70.0, 0.0, egui::Modifiers::NONE);
+        let (a, b) = stop_guide(&app, &ctx).unwrap_or_else(|| panic!("a guide, vertical {vertical}"));
+        let NodeKind::Text(t) = &current(&app).unwrap().0.kind else { panic!("text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let at = t.xf * lay.physical_point(Point::new(70.0, 0.0));
+        if vertical {
+            assert!((a.y - at.y).abs() < 0.01 && (b.y - at.y).abs() < 0.01, "across the column: {a:?} {b:?}, {at:?}");
+            assert!((a.x - b.x).abs() > 1.0, "{a:?} {b:?}");
+        } else {
+            assert!((a.x - 80.0).abs() < 0.01 && (b.x - 80.0).abs() < 0.01, "{a:?} {b:?}");
+            assert!(a.y < 19.0 && b.y > 20.0, "across the baseline: {a:?} {b:?}");
+        }
+        release_on_ruler(&ctx, &mut app, end, egui::Modifiers::NONE);
+        assert_eq!(stop_guide(&app, &ctx), None);
+    }
+}
+
 /// A stop placed by a click on the ruler or dragged on it lands on the nearest whole point, and
 /// the moved stop stays selected. A position typed in the X field keeps its hundredths of a point.
 #[test]

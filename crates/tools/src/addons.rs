@@ -1,6 +1,8 @@
 //! The tools of VectorCraft's built-in add-ons. They aren't in the toolbars as they ship: the All
 //! Tools drawer lists them (under their add-on's heading) so they can be added, and each add-on's
-//! submenu selects them. Tool gestures emit engine commands.
+//! submenu selects them. Tool gestures emit engine commands. The Trim at Crossings Tool is the
+//! exception: it is in the Scissors tool's group ([`crate::TOOL_GROUPS`]), where the toolbars and
+//! the All Tools drawer show it, as well as in Path Precision Tools' submenu.
 
 pub mod anchor_eraser;
 pub mod box3d;
@@ -18,7 +20,8 @@ pub mod trim;
 
 use crate::{Tool, ToolInfo};
 
-/// Path Precision Tools' tools, one flyout group.
+/// Path Precision Tools' tools, one flyout group. Its Trim at Crossings Tool ([`trim::ID`]) is in
+/// the Scissors tool's group instead.
 pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: anchor_eraser::ID, label: "Anchor Eraser Brush", shortcut: None, icon: "dc-remove-brush" },
     ToolInfo { id: extend_path::ID, label: "Extend Path Tool", shortcut: None, icon: "dc-arrow-extend" },
@@ -27,7 +30,6 @@ pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: corner_tool::ID, label: "Corner Tool", shortcut: None, icon: "dc-rounded-rect" },
     ToolInfo { id: slide_anchor::ID, label: "Slide Anchor Along Path", shortcut: None, icon: "dc-anchor" },
     ToolInfo { id: shared_edge::ID, label: "Shared Edge Merge Tool", shortcut: None, icon: "dc-join" },
-    ToolInfo { id: trim::ID, label: "Trim at Crossings Tool", shortcut: None, icon: "dc-pf-trim" },
 ];
 
 /// Smart Pen's tool, a flyout group of its own.
@@ -102,5 +104,22 @@ mod tests {
         assert_eq!(GROUPS.len(), HEADED.len());
         assert!(crate::catalog::all_tools().any(|t| t.id == extend_path::ID));
         assert!(create("pen").is_none() && heading("pen").is_none());
+    }
+
+    /// The Trim at Crossings Tool is the add-on tool in a built-in group: the Scissors tool's,
+    /// after the Knife, with no default shortcut, listed once, and still made by its add-on.
+    #[test]
+    fn trim_at_crossings_is_in_the_scissors_group_once() {
+        let groups: Vec<_> = crate::TOOL_GROUPS.iter().filter(|g| g.iter().any(|t| t.id == trim::ID)).collect();
+        assert_eq!(groups.len(), 1);
+        let ids: Vec<_> = groups[0].iter().map(|t| t.id).collect();
+        let knife = ids.iter().position(|id| *id == "knife").expect("the Knife's group");
+        assert!(ids.contains(&"scissors"));
+        assert_eq!(ids.get(knife + 1), Some(&trim::ID));
+        let info = crate::tool_info(trim::ID).expect("catalogued");
+        assert_eq!((info.label, info.shortcut, info.icon), ("Trim at Crossings Tool", None, "dc-pf-trim"));
+        assert_eq!(create(trim::ID).map(|tool| tool.id()), Some(trim::ID));
+        assert!(!GROUPS.iter().any(|g| g.iter().any(|t| t.id == trim::ID)), "not listed again under the add-on");
+        assert_eq!(crate::catalog::all_tools().filter(|t| t.id == trim::ID).count(), 1);
     }
 }

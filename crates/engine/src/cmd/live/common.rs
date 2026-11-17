@@ -1,7 +1,7 @@
 use super::mesh::whole;
 use super::{
     Arc, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, Document, EngineError, Node, NodeId, NodeKind, Result, Selection, Session, Value,
-    bad, check_numbers, has_selection, json, named_ids, selected_roots, str_param, switch_or,
+    bad, check_numbers, has_selection, json, named_ids, selected_roots, switch_or, text_param,
 };
 
 pub(super) fn ids_json(ids: &[NodeId]) -> Value {
@@ -128,8 +128,11 @@ pub(super) fn spacing_param(p: &Value, cmd: &str, current: BlendSpacing) -> Resu
     let smooth = switch_or(p, "smooth", false, cmd)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     let steps = |k: &str, n: f64| whole(n, k, cmd).map(|n| BlendSpacing::Steps(n as u32));
-    let mode = str_param(p, "spacing");
+    let mode = text_param(p, "spacing", cmd)?;
     let value = num("value");
+    if mode.is_none() && value.is_some() {
+        return Err(bad(cmd, "`value` needs `spacing` (steps|distance)"));
+    }
     let sp = match mode {
         Some("smooth") | Some("smoothColor") => BlendSpacing::SmoothColor,
         Some("steps") => match value {
@@ -157,11 +160,15 @@ pub(super) fn spacing_param(p: &Value, cmd: &str, current: BlendSpacing) -> Resu
     }
 }
 
-pub(super) fn orientation_param(p: &Value, current: BlendOrientation) -> BlendOrientation {
-    match str_param(p, "orientation") {
-        Some("path") | Some("alignToPath") => BlendOrientation::AlignToPath,
-        Some("page") | Some("alignToPage") => BlendOrientation::AlignToPage,
-        _ => current,
+/// `orientation`: `page` or `path`; missing or null keeps `current`, and any other value is an error.
+pub(super) fn orientation_param(p: &Value, cmd: &str, current: BlendOrientation) -> Result<BlendOrientation> {
+    match p.get("orientation").filter(|v| !v.is_null()) {
+        None => Ok(current),
+        Some(v) => match v.as_str() {
+            Some("path") | Some("alignToPath") => Ok(BlendOrientation::AlignToPath),
+            Some("page") | Some("alignToPage") => Ok(BlendOrientation::AlignToPage),
+            _ => Err(bad(cmd, "orientation must be page or path")),
+        },
     }
 }
 
