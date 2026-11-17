@@ -134,10 +134,11 @@ private editing data. VectorCraft:
   opacity mask of their own, of objects other than paths, compound paths and groups, of clipping groups, of more than
   62 key objects, with a hidden key object, holding another blend, of key objects with geometry or Pathfinder effects
   or a group's own fills and strokes, of key objects the editing copy would change (empty paths or subpaths, paths and
-  compound path members of several subpaths, several fills or strokes, strokes a plain line can't draw, dashes of more than 64 lengths, hidden fills or strokes, fills or strokes other than a color, in a Lab color or with
+  compound path members of several subpaths, several fills or strokes, strokes a plain line can't draw, dashes of
+  more than 64 lengths, hidden fills or strokes, fills or strokes other than a color, in a Lab color or with
   transparency or effects of their own, effects, opacity masks), where one key object has a fill or stroke of no paint
-  or a stroke of no width and another has one that draws, whose spine has more than one part, whose step count
-  is close to where rounding changes it, or that VectorCraft's reader wouldn't open with their settings or as they
+  or a stroke of no width and another has one that draws, whose spine has more than one part, whose step count is
+  close to where rounding changes it, or that VectorCraft's reader wouldn't open with their settings or as they
   are drawn, are written as their steps with a warning, as are blends inside objects with geometry or Pathfinder
   effects or a group's own fills and strokes, blends in opacity masks, pattern tiles, symbols and art cut to a
   clipping object or nested eight levels deep in art written in place of other objects (symbol instances, live

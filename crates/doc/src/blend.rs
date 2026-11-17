@@ -3599,4 +3599,46 @@ mod tests {
         let (keys, spec) = blend_parts(&outer).unwrap();
         assert_eq!(blend_steps(keys, spec), vec![99]);
     }
+
+    /// A count is settled when moving the lengths by 0.01 pt and the colors by 0.001 can't change
+    /// it: Specified Steps always; Specified Distance unless the spine's length is a half step from
+    /// where its count changes; Smooth Color unless the colors differ by too little to count, the
+    /// color difference or the keys' reach sits where its count changes, or keys of the same color
+    /// are at most four times 0.01 pt wide.
+    #[test]
+    fn steps_settle_unless_rounding_can_change_their_count() {
+        let (length, color) = (0.01, 0.001);
+        let settled = |a: Node, b: Node, spacing: BlendSpacing| {
+            let spec = BlendSpec { spacing, ..Default::default() };
+            blend_steps_settled(&[Arc::new(a), Arc::new(b)], &spec, length, color)
+        };
+        let filled = |x: f64, size: f64, c: Color| smooth_key((x, 0.0), (size, size), Paint::solid(c), Paint::None, 0.0);
+        let gray = |x: f64| filled(x, 10.0, Color::rgb(0.5, 0.5, 0.5));
+
+        // The keys' centers are 100 pt apart: 100 / 25 is 4, and 100 / (100 / 3.5) is 3.5.
+        assert!(settled(gray(0.0), gray(100.0), BlendSpacing::Steps(3)));
+        assert!(settled(gray(0.0), gray(100.0), BlendSpacing::Distance(25.0)));
+        assert!(!settled(gray(0.0), gray(100.0), BlendSpacing::Distance(100.0 / 3.5)));
+
+        // Smooth Color between colors that differ: by a 2,000th of a step, by 51 steps of 255
+        // (settled) and by 51.5 (where the count changes).
+        let red = |x: f64, r: f32| filled(x, 10.0, Color::rgb(r, 0.0, 0.0));
+        assert!(!settled(red(0.0, 0.0), red(100.0, 0.0005), BlendSpacing::SmoothColor));
+        assert!(settled(red(0.0, 0.0), red(100.0, 51.0 / 255.0), BlendSpacing::SmoothColor));
+        assert!(!settled(red(0.0, 0.0), red(100.0, 51.5 / 255.0), BlendSpacing::SmoothColor));
+        // Black to white is counted by the keys' reach, eight steps a point: 10 pt is settled,
+        // 10.0625 pt (80.5 steps) is not.
+        let near = |size: f64| settled(filled(0.0, size, Color::BLACK), filled(5.0, size, Color::WHITE), BlendSpacing::SmoothColor);
+        assert!(near(10.0));
+        assert!(!near(10.0625));
+        // Keys without bounds are counted by their colors alone.
+        let bare = |r: f32| Node::path(NodeId(1), PathData::default(), Appearance::basic(Paint::solid(Color::rgb(r, 0.0, 0.0)), Paint::None, 0.0));
+        assert!(settled(bare(0.0), bare(51.0 / 255.0), BlendSpacing::SmoothColor));
+        assert!(!settled(bare(0.0), bare(51.5 / 255.0), BlendSpacing::SmoothColor));
+        // Keys of the same color are counted by distance in key sizes; keys 0.04 pt wide or less
+        // are never settled.
+        assert!(settled(gray(0.0), gray(100.0), BlendSpacing::SmoothColor));
+        assert!(!settled(filled(0.0, 0.04, Color::rgb(0.5, 0.5, 0.5)), filled(100.0, 0.04, Color::rgb(0.5, 0.5, 0.5)), BlendSpacing::SmoothColor));
+        assert!(settled(filled(0.0, 0.05, Color::rgb(0.5, 0.5, 0.5)), filled(100.0, 0.05, Color::rgb(0.5, 0.5, 0.5)), BlendSpacing::SmoothColor));
+    }
 }

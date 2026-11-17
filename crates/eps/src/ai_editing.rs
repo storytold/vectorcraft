@@ -150,7 +150,7 @@
 //! - Blends, as the reader reads them (`blend.rs`): the blend's key objects and spine as a group on
 //!   `%_` lines, each key's `/ArtDictionary` naming it a key and its id and the spine's naming it the
 //!   spine (written when the blend has a spine of its own); its steps drawn, a group;
-//!   `(Adobe Path Blends) 1 0 n XP` and the blend's record of its spacing, orientation and keys as hex
+//!   the blend plugin's `1 0 n XP` line and the blend's record of its spacing, orientation and keys as hex
 //!   on `%` lines; its name and transparency as a group's after its end (`writer::blends`). A blend is
 //!   written live only when the reader reads it back with its settings.
 //!

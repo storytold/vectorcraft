@@ -13356,13 +13356,63 @@ fn a_blends_steps_set_their_own_state() {
     }
 }
 
+/// A live blend's key objects keep their text wrap options on the hidden lines and the blend keeps
+/// its own after its record; the steps, drawn art, carry none.
+#[test]
+fn a_live_blends_steps_carry_no_text_wrap_options() {
+    let mut doc = Document::new(300.0, 100.0);
+    let layer = doc.layers[0].id;
+    let keys = vec![
+        Arc::new(wrapped((*key_square(&mut doc, 20.0, 20.0, 20.0, Color::rgb(1.0, 0.0, 0.0))).clone(), 2.0, true)),
+        Arc::new(wrapped((*key_square(&mut doc, 120.0, 20.0, 20.0, Color::rgb(0.0, 0.0, 1.0))).clone(), 3.0, false)),
+    ];
+    let n = wrapped(blend_of(&mut doc, keys, BlendSpec { spacing: BlendSpacing::Steps(3), ..BlendSpec::default() }), 8.0, false);
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BLENDS), "{:?}", out.warnings);
+    let text = program(&doc);
+    let hidden_end = text.find("%_U\n%_9 () XW\n").unwrap();
+    let record = text.find("(Adobe Path Blends) 1 0 ").unwrap(); // brand-ok: the plugin name the files use
+    assert_eq!(text[..hidden_end].matches("(AI11TextWrapOffset)").count(), 2, "the keys' own: {text}");
+    assert!(!text[hidden_end..record].contains("AI11TextWrap"), "the steps: {}", &text[hidden_end..record]);
+    assert_eq!(text[record..].matches("(AI11TextWrapOffset)").count(), 1, "the blend's own: {text}");
+    let back = read_back(&doc);
+    let [blend] = blends_in(&back).try_into().unwrap();
+    assert_eq!(blend.extras().wrap, Some(vectorcraft_doc::TextWrap { offset: 8.0, invert: false }));
+    let NodeKind::Blend { children, .. } = &blend.kind else { panic!() };
+    same_wraps(&wraps(children), &[(None, 2.0, true), (None, 3.0, false)]);
+}
+
+/// A Specified Distance that a 32-bit float doesn't hold exactly (10 mm in points) is written
+/// live, and comes back as the float's shortest decimal, laying out the same steps.
+#[test]
+fn a_blend_spaced_in_millimeters_is_written_live() {
+    let mut doc = Document::new(300.0, 100.0);
+    let layer = doc.layers[0].id;
+    let keys =
+        vec![key_square(&mut doc, 20.0, 20.0, 20.0, Color::rgb(1.0, 0.0, 0.0)), key_square(&mut doc, 220.0, 20.0, 20.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mm = 72.0 / 25.4 * 10.0;
+    let n = blend_of(&mut doc, keys, BlendSpec { spacing: BlendSpacing::Distance(mm), ..BlendSpec::default() });
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BLENDS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let [blend] = blends_in(&back).try_into().unwrap();
+    let NodeKind::Blend { children, spec } = &blend.kind else { panic!() };
+    assert_eq!(spec.spacing, BlendSpacing::Distance((mm as f32).to_string().parse().unwrap()));
+    let [ours] = blends_in(&doc).try_into().unwrap();
+    let NodeKind::Blend { children: keys, spec: want } = &ours.kind else { panic!() };
+    let steps = |k: &[Arc<Node>], s: &BlendSpec| vectorcraft_doc::blend::blend_expand(k, s);
+    assert_same_objects(&steps(children, spec), &steps(keys, want), "10 mm");
+}
+
 /// The lines of the layers, `%AI5_BeginLayer` to the end.
 fn layer_lines(program: &str) -> Vec<&str> {
     program.lines().skip_while(|l| !l.starts_with("%AI5_BeginLayer")).collect()
 }
 
 /// A document with blends is written as the same bytes again, and what the reader reads back is
-/// written with the same layers.
+/// written with the same layers, every blend live both times.
 #[test]
 fn blends_write_the_same_bytes_again() {
     let doc = blends_document();
@@ -13370,6 +13420,10 @@ fn blends_write_the_same_bytes_again() {
     assert_eq!(first.program, export_ai_editing(&doc, &opts()).unwrap().program);
     let again = String::from_utf8(export_ai_editing(&read_back(&doc), &opts()).unwrap().program).unwrap();
     let first = String::from_utf8(first.program).unwrap();
+    // Every blend is written live both times.
+    for text in [&first, &again] {
+        assert_eq!(text.matches("(Adobe Path Blends) 1 0 ").count(), 7); // brand-ok: the plugin name the files use
+    }
     let (again, first) = (layer_lines(&again), layer_lines(&first));
     let differ = again.iter().zip(&first).enumerate().find(|(_, (a, b))| a != b);
     assert_eq!(differ, None, "the first line that differs");

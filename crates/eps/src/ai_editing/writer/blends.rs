@@ -5,8 +5,9 @@
 //! `/ArtDictionary` naming it a key (`ShapeBlendPathType` `K`) and its id (`ShapeBlendPathID`, a
 //! letter or digit), and its spine as an unpainted path named the spine (`S`), written only when the
 //! blend has a spine of its own; then its steps drawn, a group on plain lines; then `0 Ae`,
-//! `(Adobe Path Blends) 1 0 n XP` and the blend's record, `n` bytes as hex on `%` lines; then the
-//! blend's name in an `/ArtDictionary` and its transparency, as a group's after its end. The record
+//! the `XP` line of the blend plugin ([`BLEND_PLUGIN`], `1 0 n XP`) and the blend's record, `n` bytes
+//! as hex on `%` lines; then the blend's name in an `/ArtDictionary` and its transparency, as a
+//! group's after its end. The record
 //! is `DCBA` and little-endian 32-bit words: 1, the spacing (0 Smooth Color, 1 Specified Steps, 2
 //! Specified Distance); 2, the distance as a float (Specified Steps: the spine's length shared out
 //! between the steps; Smooth Color: 4); 4, the steps between the first two keys; 5, the orientation
@@ -111,6 +112,20 @@ impl Writer<'_> {
             }
             Some(_) => BlendSpec { spine: Some(blend_spine(keys, spec)?.0), ..spec.clone() },
         };
+        // The record holds Specified Distance as a 32-bit float, which the reader reads back as its
+        // shortest decimal (10 mm comes back as 28.346457 pt): the blend is compared with that
+        // distance, and kept live only when it lays out as many steps with it.
+        let written = match written.spacing {
+            BlendSpacing::Distance(d) => {
+                let read: f64 = (d as f32).to_string().parse().ok().filter(|r: &f64| r.is_finite() && *r > 0.0)?;
+                let stored = BlendSpec { spacing: BlendSpacing::Distance(read), ..written.clone() };
+                if blend_steps(keys, &stored) != blend_steps(keys, &written) {
+                    return None;
+                }
+                stored
+            }
+            _ => written,
+        };
         // As many objects as the reader lays out for one blend, twice within what its budget has left,
         // counted before the steps are drawn.
         let objects = blend_steps(keys, &written).into_iter().fold(keys.len(), usize::saturating_add);
@@ -214,10 +229,13 @@ impl Writer<'_> {
         self.state(n.locked, !n.visible);
         let steps = self.open_group("u");
         if steps {
+            // The steps are drawn art: copies of the keys carry no text wrap options of their own.
             self.nest += 1;
+            self.drawn += 1;
             for s in &b.steps {
                 self.node(s);
             }
+            self.drawn -= 1;
             self.nest -= 1;
             self.state(n.locked, !n.visible);
             self.line("U");
