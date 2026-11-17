@@ -2067,7 +2067,8 @@ file-filter	Templates	Шаблони
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
-	Lossless (lossy WebP isn't available yet)	Без втрат (WebP із втратами поки недоступний)
+	Lossless	Без втрат
+	Lossy	Із втратами
 	Lossy:	Із втратами:
 	Low	Низька
 	lowercase	малі
@@ -3338,6 +3339,7 @@ digits	Malayalam	Малаялам
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
 	Clear Recent Commands	Очистити список нещодавніх команд
+	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
 	Section Symbol	Символ параграфа
@@ -7359,6 +7361,7 @@ breakText	Glyphs	Гліфи
 @msg	Too many Revolve faces for visibility evaluation	Забагато граней обертання для обчислення видимості
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читає з файлу обміну зразками не більше {ASE_MAX_ENTRIES} кольорів і груп, а в цій бібліотеці їх {entries}
 @msg	WebP encoding failed: {e}	Не вдалося закодувати WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Не вдалося закодувати WebP: зображення завелике для WebP із втратами: зменште роздільність або виберіть «Без втрат»
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList

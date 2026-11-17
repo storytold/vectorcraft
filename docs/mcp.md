@@ -1274,6 +1274,12 @@ pixels per point, and the file stores the resolution that results, as with `ppi`
 either one wins over `ppi` and `scale`. A value that is not a positive number is refused. Export for Screens rows keep
 their own size (`scale: "512w"`).
 
+WebP is lossless by default (`lossless: true`). `{"format": "webp", "lossless": false, "quality": 60}` writes a lossy
+WebP file: `quality` runs from 0 to 100 (default 90, VectorCraft's own value), and a higher value keeps more detail in
+a larger file. A lossy file keeps the alpha exactly when some pixels are not opaque. A WebP `quality` above 100, or one
+that is not a whole number, is refused; a lossless file ignores `quality`. Export for Screens takes both in a WebP row
+or in `settings.webp`.
+
 `shape.ellipse` (and `draw_shape` with `shape: "ellipse"`) takes `anchors`, the number of smooth anchors (default 4).
 Without it, or at 4, it draws a live ellipse. Any other count from 2 to 1000 draws a closed plain path with that many
 anchors spaced evenly by angle, clockwise from the left one and fitted to `width` × `height`. The Ellipse dialog (a
@@ -3255,7 +3261,7 @@ own layout rules.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
+Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
 the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
