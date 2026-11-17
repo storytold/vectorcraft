@@ -66,8 +66,8 @@ use overlays::selected_anchor;
 use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
 pub use panes::Panes;
 pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
+pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
-pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
 #[cfg(test)]
 pub(crate) use task_bar::chip_paints;
@@ -423,6 +423,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
+        crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);

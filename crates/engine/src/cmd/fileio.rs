@@ -39,7 +39,7 @@ pub mod jxlread;
 mod legacy_ai;
 mod load;
 mod mesh3d;
-pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, png_clip, size_note};
+pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, image_clip, size_note};
 mod heifread;
 mod hpgl;
 mod jp2read;
@@ -87,8 +87,10 @@ pub use load::{
 };
 pub(crate) use load::{check_files_not_lossy_overwrite, check_not_lossy_overwrite, lossy_source};
 pub use load::{losses_summary, overwrite_losses};
-pub use mesh3d::{DEFAULT_FORMAT_3D, FORMATS_3D, format_3d_label};
-pub(crate) use mesh3d::{mesh_file_names, mesh_files};
+#[cfg(test)]
+pub(crate) use mesh3d::MAX_TEXTURE_PIXELS;
+pub use mesh3d::{DEFAULT_FORMAT_3D, FORMATS_3D, draws_textures, format_3d_label};
+pub(crate) use mesh3d::{TEXTURE_SIZE, TEXTURE_SIZES, image_maps, mesh_file_names, mesh_files, textures};
 pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, render as render_file_name};
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;

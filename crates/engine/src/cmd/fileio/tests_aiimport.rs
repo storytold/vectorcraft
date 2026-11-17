@@ -799,7 +799,7 @@ fn unread_pdf_part(e: &str) -> String {
 
 /// #4366: a `.ai`, or a PDF saved with the editing data, whose PDF part can't be read opens from
 /// its editing data, with a first note saying why. Pages picked, layers off or the editing data
-/// off keep the error, and so does editing data that can't be read.
+/// off keep the error. Editing data that can't be read keeps it too, followed by why.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     let mut s = Session::new();
@@ -817,8 +817,23 @@ fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     }
     for (name, file) in refused_files(b"%AI12_CompressedData not zlib", ai::page_pdf()) {
         let plain = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
-        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), plain, "{name}");
+        let both = format!("{plain}; its editing data couldn't be read either (its zlib compression is damaged)");
+        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), both, "{name}");
+        for p in [json!({"pages": "1"}), json!({"layers": false})] {
+            assert_eq!(open(&mut s, name, &file, p.clone()).unwrap_err().to_string(), plain, "{name}: {p}");
+        }
     }
+}
+
+/// #4366: editing data stored in a form the reader doesn't take, beside a PDF part that can't be
+/// read, is named in the error.
+#[test]
+fn the_error_says_why_the_editing_data_couldnt_be_read() {
+    let mut s = Session::new();
+    let file = ai::ai_with_private_streams(&compressed(&ai::sample_data()), ai::page_pdf(), REFUSED_CONTENT, "/Filter /Bogus ");
+    let plain = open(&mut s, "art.ai", &file, json!({"editingData": false})).unwrap_err().to_string();
+    let e = open(&mut s, "art.ai", &file, json!({})).unwrap_err().to_string();
+    assert_eq!(e, format!("{plain}; its editing data couldn't be read either (it is stored in a form that isn't read)"));
 }
 
 /// A file saved in units of 10 points (`/UserUnit 10`, as in
