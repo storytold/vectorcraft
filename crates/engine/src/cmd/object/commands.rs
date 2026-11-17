@@ -245,7 +245,15 @@ pub fn specs() -> Vec<CommandSpec> {
             crate::cmd::maskedit::outside_mask_editing,
             isolate
         ),
-        cmd!("object.exitIsolation", "Exit Isolation Mode", [], None, "{}", has_doc, exit_isolation),
+        cmd!(
+            "object.exitIsolation",
+            "Exit Isolation Mode",
+            [],
+            None,
+            "{} leave isolation mode; leaving an isolated Live Paint group adds the paths, compound paths and groups of them drawn in it (shown and unlocked with everything in them) to the group as livePaint.merge does, in one undo step, and leaves type, images and other objects in it as they are; object.isolate on a level outside the group does the same",
+            has_doc,
+            exit_isolation
+        ),
         cmd!(
             "object.setProps",
             "Object Properties",
@@ -287,7 +295,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Bounds",
             [],
             None,
-            "{x?, y?, width?, height?, reference?: 0..8 (9-point grid; a number past 8 is read as 8), proportional?, strokes?, corners?, copy?: bool, patterns?: bool (Transform Patterns), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move)} (Transform panel; width/height and the reference point follow the bounding box, rotated with rotated objects; x, y are page coordinates; with Use Preview Bounds the values measure the visual bounds; with the typeGlyphBounds preference, each point type object selected as an object (not inside a selected group) is measured by its glyphs' ink (underline and strikethrough included), which the scale gives the size asked for; strokes/corners as object.scale; with anchor points selected (Direct Selection) and no copy, the values are the box around those points, square to the page, and only they move or scale, as with object.move (#1824))",
+            "{x?, y?, width?, height?, reference?: whole number >= 0 (9-point grid 0..8; 0.0 equals 0; a whole number past 8 is read as 8; omitted/null: center, 4), proportional?, strokes?, corners?, copy?: bool, patterns?: bool (Transform Patterns), typeAreas?: bool (area type: the frame is reshaped and the text reflows at its size), objects?: bool (Transform Objects, as object.move)} (Transform panel; width/height and the reference point follow the bounding box, rotated with rotated objects; x, y are page coordinates; with Use Preview Bounds the values measure the visual bounds; with the typeGlyphBounds preference, each point type object selected as an object (not inside a selected group) is measured by its glyphs' ink (underline and strikethrough included), which the scale gives the size asked for; strokes/corners as object.scale; with anchor points selected (Direct Selection) and no copy, the values are the box around those points, square to the page, and only they move or scale, as with object.move (#1824))",
             has_selection,
             set_bounds
         ),
