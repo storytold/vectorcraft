@@ -357,6 +357,10 @@ fn the_margin_under_a_pinned_footer_hides_a_list_scrolled_behind_it() {
     let top =
         h.shapes.iter().rfind(|c| c.clip_rect.contains(at) && c.shape.visual_bounding_rect().contains(at) && !outline(&c.shape)).map(|c| &c.shape);
     assert!(matches!(top, Some(egui::Shape::Rect(r)) if r.fill == panel), "the margin under the footer shows {top:?}, not the panel's background");
+    // A click there lands on the margin, not on the tile scrolled behind it.
+    let fill = h.app.session.paint.fill.color().map(|c| c.to_hex());
+    h.click(at);
+    assert_eq!(h.app.session.paint.fill.color().map(|c| c.to_hex()), fill, "a click in the margin applied the swatch behind it");
 }
 
 #[test]
