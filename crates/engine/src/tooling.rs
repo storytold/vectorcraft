@@ -173,12 +173,21 @@ impl Session {
         let text_selection = ((id == "eyedropper" && is_type(self.tool.id())) || (self.tool.id() == "eyedropper" && is_type(id)))
             .then(|| self.tool.options())
             .filter(|o| o.get("editing").is_some_and(|v| !v.is_null()) && o.get("start") != o.get("end"));
+        // The gradient mesh points the Mesh tool, Direct Selection or the Lasso picked stay picked
+        // for the Eyedropper, which samples into them (#8090), and for the tool after it.
+        let mesh_points = (id == "eyedropper" || self.tool.id() == "eyedropper")
+            .then(|| self.tool.options().get("meshPoints").cloned())
+            .flatten()
+            .filter(|v| v.as_array().is_some_and(|a| !a.is_empty()));
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         self.apply_actions(acts)?;
         self.keep_tool_settings();
         self.tool = self.make_tool(id);
         if let Some(selection) = text_selection {
             self.tool.set_option("textSelection", &selection);
+        }
+        if let Some(points) = mesh_points {
+            self.tool.set_option("meshPoints", &points);
         }
         if vectorcraft_tools::catalog::is_selection_tool(id) {
             self.last_selection_tool = Some(self.tool.id());
@@ -258,7 +267,13 @@ impl Session {
         // The lending tool does not see the press: it counts as a press elsewhere for the clicks a
         // double-click or triple-click compares.
         self.tool.press_elsewhere();
-        let lent = self.make_tool(id);
+        let mut lent = self.make_tool(id);
+        // The gradient mesh points the Eyedropper holds are the lent tool's picks, which a Shift
+        // click adds to (#8090).
+        if self.tool.id() == "eyedropper" {
+            let points = self.tool.options().get("meshPoints").cloned().unwrap_or_else(|| Value::Array(vec![]));
+            lent.set_option("meshPoints", &points);
+        }
         self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         Ok((PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }, settled))
@@ -269,10 +284,17 @@ impl Session {
     /// Cmd+click that takes the type being edited out of the selection ends its edit (#3779).
     pub(crate) fn give_back_tool(&mut self, view: ViewInfo) -> Result<()> {
         let Some(lender) = self.lender.take() else { return Ok(()) };
+        // The points the lent tool left picked go back to the Eyedropper, none when it unpicked
+        // them all (#8090). Group Selection picks no mesh points, so the Eyedropper keeps its own.
+        let mesh_points =
+            (lender.id() == "eyedropper" && self.tool.id() != "groupSelection").then(|| self.tool.options().get("meshPoints").cloned()).flatten();
         let acts = self.with_tool_cx(view, |t, cx| t.deactivate(cx));
         let r = self.apply_actions(acts);
         self.keep_tool_settings();
         self.tool = lender;
+        if let Some(points) = mesh_points {
+            self.tool.set_option("meshPoints", &points);
+        }
         // A gesture that left the selection as it found it (a Shift marquee over nothing) picked
         // nothing: the selection keeps what it was, the Pen's last anchor or an earlier pick.
         let left = self.active().map(|d| (d.uid, d.selection.clone()));
