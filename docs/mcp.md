@@ -1349,7 +1349,7 @@ the image at, and all paint that one image.
 A 16-bit PNG that is not resampled, recompressed or converted keeps its 16 bits a sample in PDF 1.5 and later files,
 and is written at 8 bits in PDF 1.3 and 1.4 files.
 CMYK images stay CMYK (DeviceCMYK, or ICC-based with the CMYK profile when colours are tagged, as in PDF/X-3 and
-PDF/X-4, where an image in the output intent's profile is DeviceCMYK): a CMYK JPEG neither resampled nor recompressed is written unchanged, and the others' ink amounts are
+PDF/X-4, where an image in the output intent's profile is DeviceCMYK): a CMYK JPEG neither resampled nor recompressed is written unchanged except that its `ICC_PROFILE` segments are removed when `output.profiles` is `none` (except in PDF/A, and in PDF/X-3 and PDF/X-4 files that do not write CMYK colors as DeviceCMYK) and in PDF/X-3 and PDF/X-4 when they are the CMYK output intent's profile and CMYK colors are DeviceCMYK, and the others' ink amounts are
 resampled and compressed again (CMYK JPEG or ZIP). `output.conversion` converts them like CMYK colours: `destination`
 to another CMYK profile or to RGB, `preserveNumbers` (and PDF/X-1a) keeps their numbers in a CMYK destination.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
@@ -1462,7 +1462,7 @@ Imported colours keep their model:
 DeviceCMYK and CMYK ICC colours stay CMYK (a file painted mostly in CMYK opens as a CMYK document), DeviceGray is Gray,
 and Separation and DeviceN inks become spot swatches the art links to at its tint (gradient stops too). CMYK images
 (DeviceCMYK, or ICC-based with four components) keep their ink amounts: a CMYK JPEG as it is, any other as a CMYK TIFF
-(masked CMYK images, and ones with 1, 2 or 4 bits per sample, open in RGB with a warning). In a file with a CMYK
+(masked CMYK images keep their inks, the mask coming in as an opacity mask; ones with 1, 2 or 4 bits per sample open in RGB with a warning). In a file with a CMYK
 `/GTS_PDFX` output intent, a DeviceCMYK image carries the output intent's profile, except where it is drawn with a
 `/DefaultCMYK` in the resources in scope. Placing a CMYK TIFF keeps it CMYK too.
 `colorMode: "rgb" | "cmyk"` opens any file in that mode instead, its colours converted as `file.documentColorMode` does
