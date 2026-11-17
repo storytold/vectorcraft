@@ -145,8 +145,9 @@ private editing data. VectorCraft:
   type with inline graphics, ruby, gradient or pattern paint or an appearance or opacity mask of its own, other patterns, other clipping objects and live
   objects (placed documents included) are written as plain filled and stroked paths, and freeform gradients, gradients along
   or across a stroke and gradients without stops, with more than 256 stops or without extent as their average
-  color, each with a warning. Gradients that dither or mix their colors perceptually are written as classic
-  gradients, and gradient stops linked to global process colors as their colors, each with a warning. The opacity
+  color, each with a warning. Gradients that dither are written without dither's noise, Perceptual gradients and
+  gradients mixed around the hue wheel as classic gradients of the stops on their curve in process colors (at most
+  256), and gradient stops linked to global process colors as their colors, each with a warning. The opacity
   and blending mode of single fills and strokes, opacity masks on layers, the placement of pattern swatches that
   move, turn or scale their pattern, and the effects of objects written without an art style, other than geometry
   effects, are left out.

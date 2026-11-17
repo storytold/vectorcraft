@@ -1351,6 +1351,10 @@ font-technology	Variable	Variables
 	Font List	Liste des polices
 	Show Similar Fonts	Afficher les polices similaires
 	Clear Similar Fonts	Effacer les polices similaires
+	Fonts used in this document	Polices utilisées dans ce document
+	This document uses no available fonts	Ce document n’utilise aucune police disponible
+	Recently Added	Ajoutées récemment
+	Fonts added in the last 30 days	Polices ajoutées au cours des 30 derniers jours
 	Font Preview Size	Taille de l’aperçu des polices
 	Font Size	Taille de police
 	Variable Font	Police variable
@@ -2534,8 +2538,8 @@ font-technology	Variable	Variables
 	Outline Text	Vectoriser le texte
 	Outlines and Rules	Contours et filets
 	Output	Sortie
-	Output All Blacks Accurately	Rendre tous les noirs avec précision
-	Output All Blacks as Rich Black	Rendre tous les noirs en noir intense
+	Output All Blacks Accurately	Reproduire tous les noirs avec précision
+	Output All Blacks as Rich Black	Reproduire tous les noirs en noir intense
 	Output Black	Noir de sortie
 	Output condition:	Condition de sortie :
 	Output Intent	Mode de sortie
@@ -3266,7 +3270,7 @@ digits	Malayalam	Malayalam
 	Screen	Superposition
 	Screen (72 ppi)	Écran (72 ppp)
 	Screen Mode	Mode d’affichage
-	Screens	Écrans
+	Screens	Trames
 	Scribble…	Gribouillage…
 	Script / Brush	Manuscrite / Pinceau
 	Scripts	Scripts
@@ -4885,6 +4889,9 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no active document	aucun document actif
 @msg	no active perspective plane	aucun plan de perspective actif
 @msg	no anchor points selected	aucun point d’ancrage sélectionné
+@msg	`points` must be three [x, y] pairs of numbers	`points` doit contenir trois paires de nombres [x, y]
+@msg	direct-select three anchor points, or give `points`	sélectionnez trois points d’ancrage avec l’outil Sélection directe, ou indiquez `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	aucun cercle ne passe par ces points : deux sont identiques ou les trois sont alignés
 @msg	no app to open files here	aucune application pour ouvrir des fichiers ici
 @msg	no artboard	aucun plan de travail
 @msg	no artboard {i} (0-based; the document has {_1})	aucun plan de travail {i} (numérotation à partir de 0 ; le document en a {_1})
@@ -5581,7 +5588,7 @@ effect	Soft	Doux
 	On Both Sides	Des deux côtés
 	Short	Courte
 	Full Width	Toute la largeur
-	Distort	Déformation
+	Distort	Distorsion
 	Diffuse Glow…	Lueur diffuse…
 	Glass…	Verre…
 	Ocean Ripple…	Océan…
@@ -5798,6 +5805,24 @@ lighting	Light	Lumière
 @msg	Revolve requires a shape with at least two anchors	Révolution nécessite une forme comportant au moins deux points d’ancrage
 @msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} sur un groupe nécessite des tracés, tracés transparents, textes, groupes, groupes de découpe, dégradés de formes et occurrences de symbole : libérez ou développez d’abord ces éléments : {what}.
 @msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} sur un groupe accepte au plus {MAX_MEMBERS} objets
+@msg	the <filter> element needs an id, the filter's name	l’élément <filter> doit avoir un id, le nom du filtre
+@msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG compte au plus {MAX_NAME} caractères
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> n’est pas un élément de filtre SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtre SVG n’a pas d’attributs d’événement tels que {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	les images d’un filtre SVG sont des URL data: PNG, JPEG, GIF ou WebP
+@msg	the SVG filter isn't valid XML: {e}	le filtre SVG n’est pas du XML valide : {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence vaut au plus {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} vaut au plus {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation d’un flou
+@msg	the SVG filter has no primitives	le filtre SVG n’a aucune primitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtre SVG a au plus {MAX_PRIMITIVES} primitives
+@msg	the SVG filter is too large once its attributes are written out	le filtre SVG est trop volumineux une fois ses attributs écrits
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	les images d’un filtre SVG comptent au plus {MAX_IMAGE_PIXELS} pixels au total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	le filtre SVG ne peut pas être dessiné : vérifiez ses primitives et leurs entrées
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	les éléments d’un filtre SVG s’imbriquent sur au plus {MAX_DEPTH} niveaux
+@msg	an SVG filter is at most {_1} KB	un filtre SVG fait au plus {_1} Ko
 @msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Un effet 3D sur un groupe ou un calque s’applique au groupe lui-même, pas à son fond ni à son contour
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d’un groupe ne dessine rien à exporter
@@ -7117,6 +7142,7 @@ anchor	Points:	Points :
 	Open a document to check it for issues.	Ouvrez un document pour y rechercher des problèmes.
 	Empty Text	Texte vide
 	Unpainted Objects	Objets sans fond ni contour
+	Empty Text Paths	Tracés de texte vides
 	Zero-Opacity Objects	Objets à opacité nulle
 	Duplicate Objects	Objets en double
 	Off-Artboard Art	Illustration hors des plans de travail

@@ -1346,6 +1346,10 @@ file-filter	Templates	Vorlagen
 	Font List	Schriftliste
 	Show Similar Fonts	Ähnliche Schriften anzeigen
 	Clear Similar Fonts	Ähnliche Schriften zurücksetzen
+	Fonts used in this document	In diesem Dokument verwendete Schriften
+	This document uses no available fonts	Dieses Dokument verwendet keine verfügbaren Schriften
+	Recently Added	Kürzlich hinzugefügt
+	Fonts added in the last 30 days	In den letzten 30 Tagen hinzugefügte Schriften
 	Font Preview Size	Größe der Schriftvorschau
 	Font Size	Schriftgrad
 	Variable Font	Variable Schrift
@@ -4817,6 +4821,9 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no active document	kein aktives Dokument
 @msg	no active perspective plane	keine aktive Perspektivebene
 @msg	no anchor points selected	keine Ankerpunkte ausgewählt
+@msg	`points` must be three [x, y] pairs of numbers	`points` muss aus drei Zahlenpaaren [x, y] bestehen
+@msg	direct-select three anchor points, or give `points`	wählen Sie drei Ankerpunkte direkt aus oder geben Sie `points` an
+@msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche
 @msg	no artboard {i} (0-based; the document has {_1})	keine Zeichenfläche {i} (Zählung ab 0; das Dokument hat {_1})
@@ -5805,6 +5812,24 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
+@msg	the <filter> element needs an id, the filter's name	das <filter>-Element braucht eine id, den Namen des Filters
+@msg	an SVG filter's id is at most {MAX_NAME} characters	die id eines SVG-Filters hat höchstens {MAX_NAME} Zeichen
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> ist kein Element eines SVG-Filters
+@msg	an SVG filter has no event attributes such as {_1}	ein SVG-Filter hat keine Ereignisattribute wie {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	die Bilder eines SVG-Filters sind data:-URLs im Format PNG, JPEG, GIF oder WebP
+@msg	the SVG filter isn't valid XML: {e}	der SVG-Filter ist kein gültiges XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves von feTurbulence ist höchstens {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} ist höchstens {max}
+@msg	feConvolveMatrix's order	order von feConvolveMatrix
+@msg	feMorphology's radius	radius von feMorphology
+@msg	a blur's stdDeviation	stdDeviation einer Weichzeichnung
+@msg	the SVG filter has no primitives	der SVG-Filter hat keine Filterprimitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	ein SVG-Filter hat höchstens {MAX_PRIMITIVES} Filterprimitive
+@msg	the SVG filter is too large once its attributes are written out	der SVG-Filter ist zu groß, sobald seine Attribute ausgeschrieben sind
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	die Bilder eines SVG-Filters haben insgesamt höchstens {MAX_IMAGE_PIXELS} Pixel
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	der SVG-Filter kann nicht gezeichnet werden: Prüfen Sie seine Filterprimitive und deren Eingaben
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	die Elemente eines SVG-Filters sind höchstens {MAX_DEPTH} Ebenen tief verschachtelt
+@msg	an SVG filter is at most {_1} KB	ein SVG-Filter ist höchstens {_1} KB groß
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` muss ein Objekt sein, das nur `mode` mit dem Wert shaded oder wireframe enthält
 @msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
@@ -6709,6 +6734,7 @@ anchor	Points:	Punkte:
 	Open a document to check it for issues.	Öffnen Sie ein Dokument, um es auf Probleme zu prüfen.
 	Empty Text	Leerer Text
 	Unpainted Objects	Objekte ohne Farbe
+	Empty Text Paths	Leere Textpfade
 	Zero-Opacity Objects	Objekte mit 0 % Deckkraft
 	Duplicate Objects	Doppelte Objekte
 	Off-Artboard Art	Bildmaterial außerhalb der Zeichenflächen
