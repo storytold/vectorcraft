@@ -139,7 +139,7 @@ pub enum Cursor {
     PathEraser,
     /// The Join tool.
     Join,
-    /// The Knife tool.
+    /// The Knife tool and the Trim at Crossings Tool.
     Knife,
     /// The Shaper tool.
     Shaper,
@@ -339,7 +339,6 @@ impl Cursor {
             | Cursor::Smooth
             | Cursor::PathEraser
             | Cursor::Join
-            | Cursor::Knife
             | Cursor::Shaper
             | Cursor::Measure
             | Cursor::ObjectsOnPath

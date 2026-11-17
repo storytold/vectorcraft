@@ -96,8 +96,9 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         return art.visual_bounds_with(symbols).map(|r| with_raster_reach(symbols, n, r));
     }
     // Copies that each carry the raster effects listed before their Transform effect reach as far
-    // as each copy's raster effects paint, and the raster effects after it spread them all.
-    if effects::outer_effects(n).len() < n.appearance.effects.len()
+    // as each copy's raster effects paint, and the raster effects after it spread them all,
+    // as do copies whose fills and strokes each carry their own raster effects.
+    if (effects::outer_effects(n).len() < n.appearance.effects.len() || effects::has_copied_row_raster(n))
         && let Some(art) = effects::reshape(Some(symbols.document()), n, None)
     {
         return cull_bounds(symbols, &art);
@@ -688,6 +689,16 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
+            // Copies that each carry the raster effects listed before their Transform effect reach
+            // as far as each copy's raster effects paint, and the raster effects after it spread
+            // them all: the art and each copy in it are groups with those raster effects, measured
+            // with their reach ([`effects::has_container_appearance`]).
+            if effects::outer_effects(n).len() < n.appearance.effects.len()
+                && let Some(r) = &reshaped
+            {
+                let a = live_content_reach(symbols, n);
+                return cull_bounds_in(symbols, r, after_reshape, false).map(|b| b.inflate(a, a));
+            }
             let b = match &reshaped {
                 Some(r) if has_instance_row_effects(n) => instance_piece_bounds(symbols, r),
                 Some(r) if matches!(n.kind, NodeKind::Text(_)) || (matches!(n.kind, NodeKind::Image(_)) && !r.clips()) => {
@@ -780,9 +791,11 @@ pub(crate) fn three_d_art_bounds(symbols: &SymbolBoxes, art: &Node) -> Option<Re
     pieces(symbols, &art)
 }
 
-/// `b`, the bounds of what `n` draws, grown by how far `n`'s own raster effects paint past it.
+/// `b`, the bounds of what `n` draws, grown by how far `n`'s own raster effects paint past it: those
+/// around its whole art ([`effects::outer_effects`]), as the copies of a Transform effect that carry
+/// the ones listed before it are measured in `b`.
 pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) -> Rect {
-    let o = outset(symbols, &n.appearance.effects, b);
+    let o = outset(symbols, effects::outer_effects(n), b);
     b.inflate(o, o)
 }
 

@@ -781,7 +781,7 @@ fn a_groups_transform_moves_its_members_shadows() {
 }
 
 /// A group's Transform effect that makes copies or moves at random leaves its members' shadows as
-/// they are, as it leaves the shadows listed before it in its own effects.
+/// they are.
 #[test]
 fn a_groups_copying_transform_leaves_its_members_shadows() {
     for params in [json!({"scaleH": 200, "scaleV": 200, "copies": 1}), json!({"scaleH": 200, "scaleV": 200, "random": true})] {
@@ -790,6 +790,204 @@ fn a_groups_copying_transform_leaves_its_members_shadows() {
         let drawn = shadows_in(&art);
         assert!(!drawn.is_empty() && near(&drawn, &vec![(10.0, 10.0); drawn.len()]), "{params}: {drawn:?}");
     }
+}
+
+/// A layer of `members` with `effects` of its own.
+fn layer(id: u64, members: Vec<Node>, effects: Vec<Effect>) -> Node {
+    let mut l = Node::layer(NodeId(id), "Layer", vectorcraft_doc::LayerColor::Preset(0));
+    if let Some(ch) = l.children_mut() {
+        *ch = members.into_iter().map(std::sync::Arc::new).collect();
+    }
+    l.appearance.effects = effects;
+    l
+}
+
+/// The offset and blur of the Drop Shadow that each member of `art` draws of its own, in order.
+fn copy_shadows(art: &Node) -> Vec<(f64, f64, f64)> {
+    art.children().into_iter().flatten().map(|c| drawn_shadow(&c.appearance.effects)).collect()
+}
+
+fn close_all(a: &[(f64, f64, f64)], b: &[(f64, f64, f64)]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| close(*x, *y))
+}
+
+/// A group's or layer's Transform effect that makes copies gives each copy the shadow listed
+/// before it, moved, turned, reflected and scaled with that copy, the last copy lowest: drawn and
+/// baked. Each copy is a group holding all the members, which carry no shadow of their own, and
+/// the art paints none around all the copies. With Scale Strokes & Effects on, the shadow is not
+/// scaled a second time. A layer's art stays a layer.
+#[test]
+fn each_copy_of_a_groups_or_layers_transform_effect_carries_the_shadow_listed_before_it() {
+    let cases = [
+        (json!({"moveH": 100, "copies": 2}), vec![(10.0, 0.0, 4.0); 3]),
+        // A turn of 90° counterclockwise on screen takes an offset to the right to one upward.
+        (json!({"rotate": 90, "copies": 2}), vec![(-10.0, 0.0, 4.0), (0.0, -10.0, 4.0), (10.0, 0.0, 4.0)]),
+        (json!({"reflectX": true, "moveH": 100, "copies": 1}), vec![(-10.0, 0.0, 4.0), (10.0, 0.0, 4.0)]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1}), vec![(20.0, 0.0, 8.0), (10.0, 0.0, 4.0)]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1, "strokes": true}), vec![(20.0, 0.0, 8.0), (10.0, 0.0, 4.0)]),
+    ];
+    for (params, want) in cases {
+        let offsets: Vec<(f64, f64)> = want.iter().map(|w| (w.0, w.1)).collect();
+        for container in ["group", "layer"] {
+            let members = vec![square(101, vec![]), square(102, vec![])];
+            let effects = vec![shadow(10.0, 0.0, 4.0), transform(params.clone())];
+            let n = if container == "group" { group(100, members, effects) } else { layer(100, members, effects) };
+            assert!(crate::outer_effects(&n).iter().all(|e| e.id != "stylize.dropShadow"), "{params}: {container}");
+            let art = crate::evaluate_container(None, &n).unwrap();
+            assert_eq!(matches!(art.kind, vectorcraft_doc::NodeKind::Layer { .. }), container == "layer", "{params}: {container}");
+            assert!(raster_effects(&art.appearance.effects).is_empty(), "{params}: {container} {:?}", art.appearance.effects);
+            let drawn = copy_shadows(&art);
+            assert!(close_all(&drawn, &want), "{params}: {container} {drawn:?}");
+            assert_eq!(shadows_in(&art).len(), want.len(), "{params}: {container}: the members draw none");
+            for c in art.children().into_iter().flatten() {
+                assert!(matches!(c.kind, vectorcraft_doc::NodeKind::Group { .. }) && paths_in(c) == 2, "{params}: {container} {c:?}");
+            }
+            let b = baked(n);
+            assert!(near(&shadows_in(&b), &offsets), "{params}: {container} baked {:?}", shadows_in(&b));
+        }
+    }
+}
+
+/// A group's copying Transform effect leaves its members' own shadows on each copy as they are,
+/// and a shadow listed after it paints once around all the copies. A clip group's copies each clip
+/// and carry the shadow, and the art clips nothing. A Transform effect that makes no copies, or has
+/// Transform Objects off, leaves the group's shadows on the group.
+#[test]
+fn a_groups_copying_transform_leaves_member_and_later_shadows_where_they_paint() {
+    let g = group(
+        110,
+        vec![square(111, vec![shadow(5.0, 5.0, 0.0)]), square(112, vec![])],
+        vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1})), shadow(0.0, 5.0, 0.0)],
+    );
+    assert_eq!(crate::outer_effects(&g).len(), 2);
+    let art = crate::evaluate_container(None, &g).unwrap();
+    assert!(near(&shadows_in(&art), &[(0.0, 5.0), (0.0, -10.0), (5.0, 5.0), (10.0, 0.0), (5.0, 5.0)]), "{:?}", shadows_in(&art));
+
+    let mut clip = square(121, vec![]);
+    if let vectorcraft_doc::NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut g = group(120, vec![clip, square(122, vec![])], vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1}))]);
+    if let vectorcraft_doc::NodeKind::Group { clip, .. } = &mut g.kind {
+        *clip = true;
+    }
+    let art = crate::evaluate_container(None, &g).unwrap();
+    assert!(!art.clips());
+    assert!(art.children().into_iter().flatten().all(|c| c.clips()), "{art:?}");
+    assert!(close_all(&copy_shadows(&art), &[(10.0, 0.0, 0.0), (10.0, 0.0, 0.0)]), "{:?}", copy_shadows(&art));
+
+    for params in [json!({"rotate": 90}), json!({"rotate": 90, "copies": 1, "objects": false})] {
+        let g = group(130, vec![square(131, vec![]), square(132, vec![])], vec![shadow(10.0, 0.0, 0.0), transform(params.clone())]);
+        assert_eq!(crate::outer_effects(&g).len(), 2, "{params}");
+        let art = crate::evaluate_container(None, &g).unwrap();
+        assert_eq!(raster_effects(&art.appearance.effects).len(), 1, "{params}: the group keeps its shadow");
+    }
+}
+
+/// Copies of a group that stop at the effect budget each keep their shadow: no copy goes without
+/// one, and no shadow is left without its copy.
+#[test]
+fn a_groups_copies_past_the_budget_each_keep_their_shadow() {
+    let g = group(140, vec![path_node(141, wavy(30_000), vec![])], vec![shadow(1.0, 0.5, 0.0), transform(json!({"moveV": 50, "copies": 1000}))]);
+    let art = crate::evaluate_container(None, &g).unwrap();
+    let paths = paths_in(&art);
+    assert!(paths > 1 && paths < 1001, "{paths}");
+    assert_eq!(shadows_in(&art).len(), paths);
+}
+
+/// A layer's ruler guides stay once above the copies of its Transform effect, and carry no shadow.
+#[test]
+fn a_layers_guides_stay_once_above_copies_that_carry_its_shadow() {
+    let guide = Node::new(NodeId(152), vectorcraft_doc::NodeKind::RulerGuide { vertical: true, pos: 3.0, artboard: None });
+    let l = layer(150, vec![square(151, vec![]), guide], vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 2}))]);
+    let art = crate::evaluate_container(None, &l).unwrap();
+    let ch = art.children().unwrap();
+    assert_eq!(ch.len(), 4, "three copies, then the guide");
+    assert!(ch[3].is_ruler_guide() && ch.iter().filter(|c| c.is_ruler_guide()).count() == 1);
+    assert_eq!(shadows_in(&art).len(), 3);
+}
+
+/// The bounds of every node with `id` under `art`, in order.
+fn bounds_of(art: &Node, id: u64) -> Vec<Rect> {
+    let mut out = vec![];
+    art.walk(&mut |m| {
+        if m.id == NodeId(id)
+            && let Some(b) = m.geometric_bounds()
+        {
+            out.push(b);
+        }
+    });
+    out
+}
+
+fn rects_near(a: &[Rect], b: &[Rect]) -> bool {
+    let near = |p: f64, q: f64| (p - q).abs() < 1e-6;
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| near(p.x0, q.x0) && near(p.y0, q.y0) && near(p.x1, q.x1) && near(p.y1, q.y1))
+}
+
+/// A group with a fill of its own and only a shadow before its copying Transform effect applies
+/// its members' own effects before it copies them, as a group without a fill does: a member's own
+/// move is turned with each copy.
+#[test]
+fn a_painted_groups_copies_take_their_members_own_effects_first() {
+    let members = || vec![square(171, vec![transform(json!({"moveH": 40}))]), square(172, vec![])];
+    let effects = || vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1}))];
+    let plain = crate::evaluate_container(None, &group(170, members(), effects())).unwrap();
+    let mut painted = group(170, members(), effects());
+    *painted.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+    painted.appearance.effects = effects();
+    let art = crate::evaluate_container(None, &painted).unwrap();
+    let (want, got) = (bounds_of(&plain, 171), bounds_of(&art, 171));
+    assert!(!want.is_empty());
+    assert!(rects_near(&got, &want), "{got:?} {want:?}");
+}
+
+/// A layer's copies are made about the bounds of its visible members, as the layer measures them:
+/// a hidden member does not move the center that a reflected copy turns about.
+#[test]
+fn a_layers_copies_leave_its_hidden_members_out_of_their_reference() {
+    let mut hidden = path_node(182, shapes::rectangle(Rect::new(1000.0, 0.0, 1050.0, 50.0)), vec![]);
+    hidden.visible = false;
+    let l = layer(180, vec![square(181, vec![]), hidden], vec![shadow(10.0, 0.0, 0.0), transform(json!({"reflectX": true, "copies": 1}))]);
+    let art = crate::evaluate_container(None, &l).unwrap();
+    let got = bounds_of(&art, 181);
+    assert!(rects_near(&got, &[Rect::new(0.0, 0.0, 50.0, 50.0); 2]), "{got:?}");
+}
+
+/// A shadow carried by the copies of an earlier copying Transform effect of a group turns with each
+/// copy of a later one, drawn and baked.
+#[test]
+fn a_groups_later_copying_transform_turns_the_shadows_of_earlier_copies() {
+    let g = || {
+        group(
+            190,
+            vec![square(191, vec![])],
+            vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1})), transform(json!({"rotate": 90, "copies": 1}))],
+        )
+    };
+    let want = [(0.0, -10.0), (0.0, -10.0), (10.0, 0.0), (10.0, 0.0)];
+    let art = crate::evaluate_container(None, &g()).unwrap();
+    assert!(near(&shadows_in(&art), &want), "{:?}", shadows_in(&art));
+    let b = baked(g());
+    assert!(near(&shadows_in(&b), &want), "baked {:?}", shadows_in(&b));
+}
+
+/// A group holding type whose Transform effect only moves its copies, baked for export, gives each
+/// copy the shadow listed before that effect, as the canvas draws it, rather than keeping the type
+/// as type under one shadow around all the copies. Built without fonts, type lays out no glyphs
+/// and the test is skipped.
+#[test]
+fn a_baked_group_with_type_keeps_a_shadow_on_each_copy() {
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let words = Node::new(NodeId(161), vectorcraft_doc::NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+    if !crate::outline_text(&words).is_some_and(|o| paths_in(&o) > 0) {
+        eprintln!("skipped: built without fonts (enable vectorcraft-text's bundled-fonts to run it)");
+        return;
+    }
+    let g = group(160, vec![words, square(162, vec![])], vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 150, "copies": 1}))]);
+    let b = baked(g);
+    assert!(near(&shadows_in(&b), &[(10.0, 0.0), (10.0, 0.0)]), "{:?}", shadows_in(&b));
 }
 
 /// The Transform effects inside a group apply before the group's: a member's own turn of 90°
@@ -816,8 +1014,8 @@ fn a_groups_transform_applies_after_its_members_own() {
 }
 
 /// An object's Transform effect transforms the raster effects of its fills and strokes with the
-/// art, whatever its options: drawn, drawn through the art an option makes, and baked. One that
-/// makes copies leaves them.
+/// art, whatever its options: drawn, drawn through the art an option makes, and baked. For one that
+/// makes copies, see [`each_copy_of_an_objects_transform_carries_its_fills_or_strokes_shadow`].
 #[test]
 fn an_objects_transform_moves_its_fills_shadows() {
     let cases = [
@@ -825,7 +1023,6 @@ fn an_objects_transform_moves_its_fills_shadows() {
         (json!({"scaleH": 200, "scaleV": 100, "strokes": true}), (20.0, 10.0)),
         (json!({"rotate": 90, "patterns": true}), (10.0, -10.0)),
         (json!({"rotate": 90, "strokes": true}), (10.0, -10.0)),
-        (json!({"scaleH": 200, "scaleV": 200, "copies": 1}), (10.0, 10.0)),
     ];
     for (params, want) in cases {
         let mut n = fill_square(40, vec![shadow(10.0, 10.0, 0.0)]);
@@ -1215,4 +1412,301 @@ fn copies_past_the_budget_each_keep_their_shadow() {
     let paths = paths_in(&art);
     assert!(paths > 1 && paths < 1001, "{paths}");
     assert_eq!(shadows_in(&art).len(), paths);
+}
+
+/// `n` with only its fill (or only a 4 pt blue stroke, with `stroke`), whose own effects are
+/// `effects`.
+fn one_row(mut n: Node, stroke: bool, effects: Vec<Effect>) -> Node {
+    let mut item = if stroke {
+        vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0))
+    } else {
+        n.appearance.items.remove(0)
+    };
+    *item.effects_mut() = effects;
+    n.appearance.items = vec![item];
+    n
+}
+
+/// A case of [`copying_cases`]: the params, each copy's offset and each copy's blur.
+type CopyingCase = (Value, Vec<(f64, f64)>, Vec<f64>);
+
+/// The cases of a Transform effect that makes copies with a drop shadow (10, 0) and a blur of 4
+/// before it: the params, each copy's offset and each copy's blur, the last copy first.
+fn copying_cases() -> Vec<CopyingCase> {
+    vec![
+        (json!({"moveH": 100, "copies": 2}), vec![(10.0, 0.0), (10.0, 0.0), (10.0, 0.0)], vec![4.0, 4.0, 4.0]),
+        // A turn of 90° counterclockwise on screen takes an offset to the right to one upward.
+        (json!({"rotate": 90, "copies": 2}), vec![(-10.0, 0.0), (0.0, -10.0), (10.0, 0.0)], vec![4.0, 4.0, 4.0]),
+        (json!({"reflectX": true, "moveH": 100, "copies": 1}), vec![(-10.0, 0.0), (10.0, 0.0)], vec![4.0, 4.0]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1}), vec![(20.0, 0.0), (10.0, 0.0)], vec![8.0, 4.0]),
+        // Scale Strokes & Effects does not scale the shadow a second time, nor leave it unturned.
+        (
+            json!({"scaleH": 200, "scaleV": 200, "rotate": 90, "moveH": 100, "copies": 1, "strokes": true}),
+            vec![(0.0, -20.0), (10.0, 0.0)],
+            vec![8.0, 4.0],
+        ),
+        (
+            json!({"scaleH": 200, "scaleV": 200, "rotate": 90, "moveH": 100, "copies": 1, "patterns": true}),
+            vec![(0.0, -20.0), (10.0, 0.0)],
+            vec![8.0, 4.0],
+        ),
+    ]
+}
+
+/// Check that `n` is drawn, expanded and baked as `want.len()` paths, each with one shadow at the
+/// offset and blur `want` and `blurs` give it, the last copy first.
+fn assert_copies_carry(n: &Node, want: &[(f64, f64)], blurs: &[f64], what: &str) {
+    assert!(crate::has_transform_art(n), "{what}");
+    for (how, art) in
+        [("drawn", crate::reshape(None, n, None).unwrap()), ("expanded", expand_outlined(None, n, None).unwrap()), ("baked", baked(n.clone()))]
+    {
+        assert_eq!(paths_in(&art), want.len(), "{what}: {how} {art:?}");
+        let drawn = shadows_in(&art);
+        assert!(near(&drawn, want), "{what}: {how} {drawn:?}");
+        let b = shadow_blurs_in(&art);
+        assert!(b.len() == blurs.len() && b.iter().zip(blurs).all(|(x, y)| (x - y).abs() < 1e-9), "{what}: {how} blurs {b:?}");
+    }
+}
+
+/// A fill's or stroke's own Transform effect that makes copies gives each copy the shadow listed
+/// before it in that fill's or stroke's effects, moved, turned, reflected and scaled with that copy,
+/// the last copy lowest: drawn, expanded and baked. The original keeps the shadow as it is.
+#[test]
+fn each_copy_of_a_fills_or_strokes_own_transform_carries_the_shadow_before_it() {
+    for stroke in [false, true] {
+        for (params, want, blurs) in copying_cases() {
+            let n = one_row(square(95, vec![]), stroke, vec![shadow(10.0, 0.0, 4.0), transform(params.clone())]);
+            assert_copies_carry(&n, &want, &blurs, &format!("stroke {stroke}: {params}"));
+        }
+        // A Transform effect that makes copies before the shadow: its copies make one piece, which
+        // the Transform effect after the shadow copies, each copy with its own shadow.
+        let effects =
+            vec![transform(json!({"moveV": 100, "copies": 1})), shadow(10.0, 0.0, 4.0), transform(json!({"rotate": 90, "moveH": 200, "copies": 1}))];
+        let n = one_row(square(95, vec![]), stroke, effects);
+        assert!(crate::has_transform_art(&n), "stroke {stroke}");
+        for (how, art) in
+            [("drawn", crate::reshape(None, &n, None).unwrap()), ("expanded", expand_outlined(None, &n, None).unwrap()), ("baked", baked(n.clone()))]
+        {
+            let drawn = shadows_in(&art);
+            assert!(near(&drawn, &[(0.0, -10.0), (10.0, 0.0)]), "stroke {stroke}: two copying Transform effects, {how} {drawn:?}");
+        }
+    }
+}
+
+/// A Transform effect that makes copies, listed after a fill's or stroke's first Transform effect
+/// with Transform Patterns on, gives each copy the shadow listed before it, as the first one's
+/// copies do, with or without options of its own: drawn, expanded and baked.
+#[test]
+fn each_copy_of_a_later_copying_transform_carries_the_shadow_before_it() {
+    for stroke in [false, true] {
+        for (params, want, blurs) in copying_cases() {
+            let effects = vec![transform(json!({"patterns": true})), shadow(10.0, 0.0, 4.0), transform(params.clone())];
+            let n = one_row(square(102, vec![]), stroke, effects);
+            assert_copies_carry(&n, &want, &blurs, &format!("stroke {stroke}: {params}"));
+        }
+    }
+}
+
+/// A fill's or stroke's shadow under its object's Transform effect that makes copies is carried by
+/// each copy, moved, turned, reflected and scaled with it: for a single fill, a single stroke, and
+/// a fill and a stroke that paint each copy below the one before. Drawn, expanded and baked.
+#[test]
+fn each_copy_of_an_objects_transform_carries_its_fills_or_strokes_shadow() {
+    for (params, want, blurs) in copying_cases() {
+        for stroke in [false, true] {
+            let mut n = one_row(square(96, vec![]), stroke, vec![shadow(10.0, 0.0, 4.0)]);
+            n.appearance.effects = vec![transform(params.clone())];
+            assert_copies_carry(&n, &want, &blurs, &format!("stroke {stroke}: {params}"));
+        }
+        // Both a fill and a stroke: only the fill has the shadow.
+        let mut n = square(97, vec![transform(params.clone())]);
+        if let Some(vectorcraft_doc::AppearanceItem::Stroke(s)) = n.appearance.items.get_mut(1) {
+            s.paint = Paint::solid(Color::BLACK);
+            s.width = 2.0;
+        }
+        *n.appearance.items[0].effects_mut() = vec![shadow(10.0, 0.0, 4.0)];
+        assert!(crate::has_transform_art(&n), "{params}");
+        for (how, art) in
+            [("drawn", crate::reshape(None, &n, None).unwrap()), ("expanded", expand_outlined(None, &n, None).unwrap()), ("baked", baked(n.clone()))]
+        {
+            let drawn = shadows_in(&art);
+            assert!(near(&drawn, &want), "layered {params}: {how} {drawn:?}");
+        }
+    }
+}
+
+/// A shadow listed after a fill's own Transform effect that makes copies paints once around all of
+/// them, and one listed before it on each copy. A Transform effect that makes no copies, or has
+/// Transform Objects off, draws the fill as before, without art.
+#[test]
+fn a_fills_shadow_after_its_own_copying_transform_paints_once_around_the_copies() {
+    let effects = vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1})), shadow(0.0, 5.0, 0.0)];
+    let n = one_row(square(98, vec![]), false, effects);
+    for (how, art) in
+        [("drawn", crate::reshape(None, &n, None).unwrap()), ("expanded", expand_outlined(None, &n, None).unwrap()), ("baked", baked(n.clone()))]
+    {
+        assert!(near(&shadows_in(&art), &[(0.0, 5.0), (0.0, -10.0), (10.0, 0.0)]), "{how}: {:?}", shadows_in(&art));
+        assert_eq!(paths_in(&art), 2, "{how}");
+    }
+    for params in [json!({"rotate": 90}), json!({"rotate": 90, "copies": 1, "objects": false})] {
+        let n = one_row(square(99, vec![]), false, vec![shadow(10.0, 0.0, 0.0), transform(params.clone())]);
+        assert!(!crate::has_transform_art(&n), "{params}");
+        assert!(!crate::has_copied_row_raster(&n), "{params}");
+    }
+    // A shadow between two Transform effects that make copies paints on what the second one
+    // copies, so the fill is drawn as before, without art.
+    let copies = transform(json!({"rotate": 90, "copies": 1}));
+    let n = one_row(square(99, vec![]), false, vec![shadow(10.0, 0.0, 0.0), copies.clone(), shadow(0.0, 5.0, 0.0), copies]);
+    assert!(!crate::has_copied_row_raster(&n));
+    assert!(!crate::has_transform_art(&n));
+}
+
+/// Copies of a fill's own Transform effect that stop at the effect budget each keep their shadow,
+/// and so do those of an object's Transform effect for its fill's shadow.
+#[test]
+fn row_copies_past_the_budget_each_keep_their_shadow() {
+    let copies = transform(json!({"moveV": 50, "copies": 1000}));
+    let own = one_row(path_node(100, wavy(30_000), vec![]), false, vec![shadow(1.0, 0.5, 0.0), copies.clone()]);
+    let mut owner = one_row(path_node(101, wavy(30_000), vec![]), false, vec![shadow(1.0, 0.5, 0.0)]);
+    owner.appearance.effects = vec![copies];
+    for n in [own, owner] {
+        let art = crate::reshape(None, &n, None).unwrap();
+        let paths = paths_in(&art);
+        assert!(paths > 1 && paths < 1001, "{paths}");
+        assert_eq!(shadows_in(&art).len(), paths);
+    }
+}
+
+/// Black 40 pt "IIII" with its baseline at (5, 60) and `effects`.
+fn type_node(id: u64, effects: Vec<Effect>) -> Node {
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let mut n = Node::new(NodeId(id), vectorcraft_doc::NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+    n.appearance.effects = effects;
+    n
+}
+
+/// An instance at (50, 50) with `effects` of a symbol, and the symbol's art: a black 20 pt square
+/// centered on its origin.
+fn instance(id: u64, effects: Vec<Effect>) -> (Node, Node) {
+    let art = Node::path(
+        NodeId(900),
+        shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    let mut n = Node::new(NodeId(id), vectorcraft_doc::NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::translate((50.0, 50.0)) });
+    n.appearance.effects = effects;
+    (n, art)
+}
+
+/// Type, an image and a symbol instance with a Transform effect that makes copies give each copy
+/// the shadow listed before it, turned and scaled with that copy, the last copy lowest: drawn and
+/// expanded. The object paints none around all of them, and a shadow listed after the Transform
+/// effect still paints once around them. Built without fonts, type lays out no glyphs and only the
+/// image and the instance are checked.
+#[test]
+fn each_copy_of_type_an_image_or_a_symbol_instance_carries_the_shadow_listed_before_it() {
+    let fonts = crate::outline_text(&type_node(95, vec![])).is_some_and(|o| paths_in(&o) > 0);
+    if !fonts {
+        eprintln!("type skipped: built without fonts (enable vectorcraft-text's bundled-fonts to run it)");
+    }
+    let objects = |effects: Vec<Effect>| {
+        let (inst, art) = instance(96, effects.clone());
+        let mut out = vec![("image", image(97, effects.clone()), None), ("instance", inst, Some(art))];
+        if fonts {
+            out.push(("type", type_node(95, effects), None));
+        }
+        out
+    };
+    let cases = [
+        (json!({"rotate": 90, "copies": 2}), vec![(-10.0, 0.0), (0.0, -10.0), (10.0, 0.0)], vec![4.0, 4.0, 4.0]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1}), vec![(20.0, 0.0), (10.0, 0.0)], vec![8.0, 4.0]),
+    ];
+    for (params, want, blurs) in cases {
+        for (kind, n, symbol) in objects(vec![shadow(10.0, 0.0, 4.0), transform(params.clone())]) {
+            assert!(crate::outer_effects(&n).iter().all(|e| e.id != "stylize.dropShadow"), "{kind} {params}");
+            let symbol = symbol.as_ref();
+            for (how, drawn) in [("drawn", crate::reshape(None, &n, symbol)), ("expanded", expand_outlined(None, &n, symbol))] {
+                let drawn = drawn.unwrap_or_else(|| panic!("{kind} {params}: {how}"));
+                assert_eq!(drawn.children().map_or(0, Vec::len), want.len(), "{kind} {params}: {how} copies");
+                assert!(drawn.appearance.effects.is_empty(), "{kind} {params}: {how} {:?}", drawn.appearance.effects);
+                assert!(near(&shadows_in(&drawn), &want), "{kind} {params}: {how} {:?}", shadows_in(&drawn));
+                let b = shadow_blurs_in(&drawn);
+                assert!(b.len() == blurs.len() && b.iter().zip(&blurs).all(|(x, y)| (x - y).abs() < 1e-9), "{kind} {params}: {how} blurs {b:?}");
+            }
+        }
+    }
+    let effects = vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1})), shadow(0.0, 5.0, 0.0)];
+    for (kind, n, symbol) in objects(effects) {
+        assert_eq!(crate::outer_effects(&n).len(), 2, "{kind}");
+        let drawn = crate::reshape(None, &n, symbol.as_ref()).unwrap();
+        assert!(near(&shadows_in(&drawn), &[(0.0, 5.0), (0.0, -10.0), (10.0, 0.0)]), "{kind}: {:?}", shadows_in(&drawn));
+    }
+}
+
+/// Type whose Transform effect only moves its copies, baked for export, gives each copy the shadow
+/// listed before that effect, as the canvas draws it, rather than staying type under one shadow.
+#[test]
+fn baked_type_whose_transform_moves_its_copies_keeps_a_shadow_on_each() {
+    if !crate::outline_text(&type_node(99, vec![])).is_some_and(|o| paths_in(&o) > 0) {
+        eprintln!("skipped: built without fonts (enable vectorcraft-text's bundled-fonts to run it)");
+        return;
+    }
+    let n = type_node(99, vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 150, "copies": 1}))]);
+    let drawn = baked(n);
+    assert!(near(&shadows_in(&drawn), &[(10.0, 0.0), (10.0, 0.0)]), "{:?}", shadows_in(&drawn));
+}
+
+/// Type with a fill whose own geometry effects reshape it keeps one set of raster effects around
+/// all the copies.
+#[test]
+fn type_with_a_reshaped_fill_keeps_one_shadow_around_its_copies() {
+    let effects = vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1}))];
+    let mut filled = type_node(98, effects.clone());
+    filled.appearance.items.push(vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer {
+        effects: vec![fx("path.offsetPath", json!({"offset": 2}))],
+        ..vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))
+    }));
+    assert_eq!(crate::outer_effects(&filled).len(), 2);
+}
+
+/// Type whose own fill's Transform effect makes copies is drawn as its outlines, and each copy
+/// carries the shadow listed before that Transform effect, as a path's copies do: for the fill's
+/// first Transform effect and for one listed after a Transform effect with Transform Patterns on.
+/// Drawn, expanded and baked.
+#[test]
+fn type_carries_its_fills_shadow_on_each_copy() {
+    let filled = |mut n: Node, effects: Vec<Effect>| {
+        n.appearance.items.push(vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer {
+            effects,
+            ..vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))
+        }));
+        n
+    };
+    let copying = vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1}))];
+    if !crate::outline_text(&type_node(95, vec![])).is_some_and(|o| paths_in(&o) > 0) {
+        eprintln!("type skipped: built without fonts (enable vectorcraft-text's bundled-fonts to run it)");
+        return;
+    }
+    let later = vec![transform(json!({"patterns": true})), shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1}))];
+    for (what, effects) in [("first", copying), ("later", later)] {
+        let n = filled(type_node(95, vec![]), effects);
+        for (how, art) in
+            [("drawn", crate::reshape(None, &n, None)), ("expanded", expand_outlined(None, &n, None)), ("baked", Some(baked(n.clone())))]
+        {
+            let art = art.unwrap_or_else(|| panic!("{what}: {how}"));
+            assert!(near(&shadows_in(&art), &[(10.0, 0.0), (10.0, 0.0)]), "{what}: {how} {:?}", shadows_in(&art));
+            // The two shadows are on two objects 100 pt apart: the type and its copy.
+            let mut lefts = vec![];
+            art.walk(&mut |m| {
+                let lists = std::iter::once(&m.appearance.effects).chain(m.appearance.items.iter().map(|i| i.effects()));
+                let shadows = lists.map(|l| l.iter().filter(|e| e.id == "stylize.dropShadow").count()).sum::<usize>();
+                if let Some(b) = m.geometric_bounds() {
+                    lefts.extend(std::iter::repeat_n(b.x0, shadows));
+                }
+            });
+            lefts.sort_by(f64::total_cmp);
+            assert!(lefts.len() == 2 && (lefts[1] - lefts[0] - 100.0).abs() < 1e-6, "{what}: {how} {lefts:?}");
+        }
+    }
 }

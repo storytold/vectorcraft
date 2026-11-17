@@ -884,6 +884,7 @@
 	Auto Color	Automaattinen väri
 	Automatic	Automaattinen
 	Isolate Selected Group	Eristä valittu ryhmä
+	Isolate Selected Path	Eristä valittu polku
 	Exit Isolation Mode	Poistu eristystilasta
 	Make Clipping Mask	Luo leikkausmaski
 	Release Clipping Mask	Vapauta leikkausmaski
@@ -1302,7 +1303,7 @@ lighting	Light	Valo
 	Name* @ 66.67% (RGB/Preview)	Nimi* @ 66.67% (RGB/esikatselu)
 	No Document	Ei asiakirjaa
 	Press 	Paina 
-	Search commands and tools	Hae komentoja ja työkaluja
+	Search commands, tools, panels and effects	Hae komentoja, työkaluja, paneeleita ja tehosteita
 	Style:	Tyyli:
 	Switch workspace	Vaihda työtilaa
 	Show all open documents	Näytä kaikki avoimet asiakirjat
@@ -1415,6 +1416,8 @@ lighting	Light	Valo
 	Lasso Tool	Lassotyökalu
 	Enclosing Lasso Tool	Sulkeva lassotyökalu
 	Enclosing Lasso	Sulkeva lasso
+	Polygonal Lasso Tool	Monikulmiolassotyökalu
+	Polygonal Lasso	Monikulmiolasso
 	Lasso	Lasso
 	Line Cut Tool	Viivaleikkaustyökalu
 	Line Graph Tool	Viivakaaviotyökalu
@@ -1502,6 +1505,10 @@ lighting	Light	Valo
 	Play Current Selection	Toista nykyinen valinta
 	Save Actions…	Tallenna toiminnot…
 	Load Actions…	Lataa toiminnot…
+	Reset Actions	Palauta toiminnot
+	Replace the current actions with the default set?	Korvataanko nykyiset toiminnot oletussarjalla?
+	Append adds the default set after the current sets instead.	Lisää-painike lisää sen sijaan oletussarjan nykyisten sarjojen perään.
+	Append	Lisää
 	Reflect Horizontal	Peilaa vaakasuunnassa
 	Rotate 90° CW	Kierrä 90° myötäpäivään
 	Set 1	Sarja 1
@@ -1722,6 +1729,10 @@ digits	Malayalam	Malajalam
 	Em Box	Em-laatikko
 	x-Height	x-korkeus
 	ICF Box	ICF-laatikko
+	Show Sample	Näytä näyte
+	Hide Sample	Piilota näyte
+	Max Ascent/Descent	Suurin korkeus/syvyys
+	Max Ascender	Suurin yläpidennys
 	Copy Color Value (Hex)	Kopioi väriarvo (heksa)
 	Create New Swatch…	Luo uusi värimalli…
 	Name 40%	Nimi 40%
@@ -2950,6 +2961,11 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Näytä liukuva väriympyrä
 	Show segmented color wheel	Näytä segmentoitu väriympyrä
 	Show color bars	Näytä väripalkit
+	Show brightness and hue on wheel	Näytä kirkkaus ja sävy ympyrässä
+	Show saturation and hue on wheel	Näytä kylläisyys ja sävy ympyrässä
+	Add Color Tool	Lisää väri -työkalu
+	Remove Color Tool	Poista väri -työkalu
+	Remove Color	Poista väri
 	Find the selected colors in the artwork	Etsi valitut värit kuvituksesta
 	Harmony Rules	Harmoniasäännöt
 	Keep this row's colors (exclude)	Säilytä tämän rivin värit (jätä pois)
@@ -3636,6 +3652,8 @@ theme	Appearance	Ulkoasu
 	Find Font Files	Etsi fonttitiedostoja
 	Add Font Files	Lisää fonttitiedostoja
 	Font List	Fonttiluettelo
+	Show Similar Fonts	Näytä samankaltaiset fontit
+	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti
@@ -3671,6 +3689,7 @@ theme	Appearance	Ulkoasu
 	Connect Data Points	Yhdistä arvopisteet
 	Edge-to-Edge Lines	Viivat reunasta reunaan
 	Draw Filled Lines	Piirrä täytetyt viivat
+	Line Width	Viivan leveys
 	Tick Values	Asteikon arvot
 	Override Calculated Values	Ohita lasketut arvot
 	Divisions	Jaot
@@ -4394,7 +4413,13 @@ font-technology	Variable	Muuttuvat
 	Saved {path}	Tallennettu {path}
 	Saving	Tallennetaan
 	Saving {}	Tallennetaan {}
-	Search commands and tools…	Hae komentoja ja työkaluja…
+	Search commands, tools, panels and effects…	Hae komentoja, työkaluja, paneeleita ja tehosteita…
+	No commands match	Mikään komento ei vastaa hakua
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} tulos|{n} tulosta
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
+	Recent Commands	Viimeisimmät komennot
+	No recent commands	Ei viimeisimpiä komentoja
 	Dashed Line	Katkoviiva
 	Panel menu	Paneelivalikko
 	Unembed…	Poista upotus…
@@ -4700,6 +4725,44 @@ imageTrace	Outline	Ääriviiva
 @msg	$.evalFile requires a file path	$.evalFile vaatii tiedostopolun
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: aikakatkaisun on oltava äärellinen määrä millisekunteja, 0 tai enemmän
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: ottaa tiedostopolun ja aikakatkaisun
+@msg	assignment to a constant binding	sijoitus vakiosidontaan
+@msg	invalid array length	virheellinen taulukon pituus
+@msg	array literal too long	taulukkoliteraali on liian pitkä
+@msg	the value is not a function	arvo ei ole funktio
+@msg	apply was called on a value that is not a function	apply kutsuttiin arvolle, joka ei ole funktio
+@msg	the argument list is not an object	argumenttiluettelo ei ole objekti
+@msg	too many arguments	liikaa argumentteja
+@msg	the value is not a constructor	arvo ei ole konstruktori
+@msg	cannot convert the object to a primitive value	objektia ei voi muuntaa primitiiviarvoksi
+@msg	cannot convert undefined or null to an object	arvoja undefined tai null ei voi muuntaa objektiksi
+@msg	the right side of 'in' is not an object	operaattorin 'in' oikea puoli ei ole objekti
+@msg	the right side of 'instanceof' is not a function	operaattorin 'instanceof' oikea puoli ei ole funktio
+@msg	the function's prototype is not an object	funktion prototyyppi ei ole objekti
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} ei ole määritelty
+@msg	cannot read property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi lukea
+@msg	cannot set property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi asettaa
+@msg	cannot read a property of {base}	arvon {base} ominaisuutta ei voi lukea
+@msg	cannot set a property of {base}	arvon {base} ominaisuutta ei voi asettaa
+@msg	cannot define property '{key}': {why}	ominaisuutta '{key}' ei voi määrittää: {why}
+@msg	cannot assign to property '{key}': {why}	ominaisuuteen '{key}' ei voi sijoittaa: {why}
+@msg	cannot delete property '{key}'	ominaisuutta '{key}' ei voi poistaa
+@msg	cannot declare function {ident}	funktiota {ident} ei voi esitellä
+@msg	invalid assignment target	virheellinen sijoituksen kohde
+@msg	the array's length is read-only	taulukon pituus on vain luku
+@msg	the property cannot be redefined	ominaisuutta ei voi määrittää uudelleen
+@msg	the object is not extensible	objektia ei voi laajentaa
+@msg	the length cannot be redefined	pituutta ei voi määrittää uudelleen
+@msg	it is read-only	se on vain luku
+@msg	an element cannot be deleted	alkiota ei voi poistaa
+@msg	it has only a getter	sillä on vain getter
+@msg	the value is a primitive	arvo on primitiivi
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, rivi {line}, sarake {column}: {e} (heitetty)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: rivi {line}, sarake {column}: {e} (heitetty)
 @msg	{name}: {e} (thrown)	{name}: {e} (heitetty)
@@ -4816,6 +4879,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
 @msg	Downloaded {what}	Ladattiin {what}
 @msg	Expand Appearance: the selection has a basic appearance	Laajenna ulkoasu: valinnalla on perusulkoasu
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	joitakin rasteritehosteita ei muunnettu kuviksi: ne veisivät yli 1 024 kuvaa tai yhteensä 256 megapikseliä
 @msg	Expand: no brush strokes selected	Laajenna: sivellinviivoja ei ole valittu
 @msg	Expand: no gradient fills	Laajenna: ei liukuväritäyttöjä
 @msg	Expand: nothing to expand	Laajenna: ei laajennettavaa
@@ -6073,6 +6137,25 @@ mark-style	Japanese	Japanilainen
 @msg	a 3D effect on a group's fill or stroke draws nothing	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ryhmän täytön tai viivan 3D-tehoste ei piirrä mitään vietävää
 @msg	The 3D object is too complex to export	3D-objekti on liian monimutkainen vietäväksi
+@msg	give one <filter> element	anna yksi <filter>-elementti
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementti tarvitsee id:n, suotimen nimen
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG-suotimen id on enintään {MAX_NAME} merkkiä
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> ei ole SVG-suotimen elementti
+@msg	an SVG filter has no event attributes such as {_1}	SVG-suotimessa ei ole tapahtumamääritteitä, kuten {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG-suotimen kuvat ovat PNG-, JPEG-, GIF- tai WebP-muotoisia data:-URL-osoitteita
+@msg	the SVG filter isn't valid XML: {e}	SVG-suodin ei ole kelvollista XML:ää: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulencen numOctaves on enintään {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} on enintään {max}
+@msg	feConvolveMatrix's order	feConvolveMatrixin order
+@msg	feMorphology's radius	feMorphologyn radius
+@msg	a blur's stdDeviation	sumennuksen stdDeviation
+@msg	the SVG filter has no primitives	SVG-suotimessa ei ole primitiivejä
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG-suotimessa on enintään {MAX_PRIMITIVES} primitiiviä
+@msg	the SVG filter is too large once its attributes are written out	SVG-suodin on liian suuri, kun sen määritteet kirjoitetaan auki
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG-suotimen kuvissa on yhteensä enintään {MAX_IMAGE_PIXELS} pikseliä
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-suodinta ei voi piirtää: tarkista sen primitiivit ja niiden syötteet
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG-suotimen elementit ovat sisäkkäin enintään {MAX_DEPTH} tason syvyydellä
+@msg	an SVG filter is at most {_1} KB	SVG-suodin on enintään {_1} kt
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektilla ei ole 3D-tehostetta (Pursota ja viistä, Pyöräytä, Täytä ilmalla tai Kierrä)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` on oltava objekti, jossa on vain `mode` arvolla shaded tai wireframe
 @msg	its 3D effect builds no solid	sen 3D-tehoste ei muodosta kappaletta
@@ -6205,7 +6288,7 @@ mark-style	Japanese	Japanilainen
 	By Object	Objektin mukaan
 	Check an artboard to save.	Valitse tallennettava piirtoalusta.
 	Clear All	Tyhjennä kaikki
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset jättävät leikkauspintansa auki.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset sulkevat myös leikkauspintansa.
 	Color Panel Options	Väri-paneelin asetukset
 	Color blindness – Tritanopia-type	Värisokeus – tritanopia
 	Create Dimension	Luo mitta
@@ -6459,6 +6542,7 @@ mark-style	Japanese	Japanilainen
 	Single Word Justification:	Yksittäisen sanan tasaus:
 	Full Justify	Täysi tasaus
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimi ei saa ylittää haluttua arvoa eikä haluttu arvo maksimia
 	Justification	Tasaus
 	Add filters from the list above	Lisää suodattimia yllä olevasta luettelosta
 	Add to Stack	Lisää pinoon
@@ -7461,9 +7545,43 @@ breakText	Glyphs	Merkit
 	Remove Gaps	Poista välit
 @msg	that makes too many pieces (at most 100000): make the dashes longer	siitä tulee liian monta osaa (enintään 100000): pidennä viivoja
 @msg	select paths, or segments, to divide	valitse jaettavat polut tai segmentit
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Yhteiset tangentit…
+	Common Tangents	Yhteiset tangentit
+	Tangents	Tangentit
+	Centerline	Keskilinja
+	External	Ulkoiset
+	Internal	Sisäiset
+@msg	select two closed paths	valitse kaksi suljettua polkua
+@msg	a selected path is open	valittu polku on avoin
+@msg	a selected path is not convex	valittu polku ei ole kupera
+@msg	a selected path has no area	valitulla polulla ei ole pinta-alaa
+@msg	a selected path has more than 10000 segments	valitussa polussa on yli 10000 segmenttiä
+@msg	the two paths have the same outline	kahdella polulla on sama ääriviiva
+@msg	One path lies inside the other, so they have no common tangents	Toinen polku on toisen sisällä, joten niillä ei ole yhteisiä tangentteja
+@msg	The paths overlap, so they have no internal tangents	Polut ovat päällekkäin, joten niillä ei ole sisäisiä tangentteja
+@msg	One path lies inside the other, so they have no internal tangents	Toinen polku on toisen sisällä, joten niillä ei ole sisäisiä tangentteja
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Laajenna viivat poluiksi
 @msg	select paths with dashed strokes to expand	valitse laajennettavat polut, joissa on katkoviiva
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Sivuava ympyrä…
+	Tangent Circle	Sivuava ympyrä
+	Circle:	Ympyrä:
+@msg	`ids` names an object twice	`ids` mainitsee saman objektin kahdesti
+@msg	select two or three paths or compound paths	valitse kaksi tai kolme polkua tai yhdistelmäpolkua
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` on oltava 0.01–1000000 pt
+@msg	two shapes need a `radius`	kaksi muotoa tarvitsee arvon `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	kolme muotoa määrää säteen itse: jätä `radius` pois
+@msg	`circle` must be from 0 to 64	`circle` on oltava 0–64
+@msg	a shape has no outline	muodolla ei ole ääriviivaa
+@msg	the shapes are too complex: at most 2000 segments in all	muodot ovat liian monimutkaisia: enintään 2000 segmenttiä yhteensä
+@msg	these shapes take too long to search	haku kestää liian kauan näille muodoille
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	yli 64 ympyrää sivuaa näitä muotoja: ne saattavat sivuta niitä koko käyrän matkalta
+@msg	no circle touches these shapes	mikään ympyrä ei sivua näitä muotoja
+@msg	`circle` is past the last circle found ({found})	`circle` on viimeisen löydetyn ympyrän jälkeen ({found})
+@msg	object {value} is not a path or compound path	objekti {value} ei ole polku eikä yhdistelmäpolku
+@msg	these shapes are too small to measure	nämä muodot ovat liian pieniä mitattaviksi
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Asiakirjatyökalut
 	Save a Timestamped Copy	Tallenna kopio aikaleimalla
@@ -7485,6 +7603,11 @@ breakText	Glyphs	Merkit
 	Malayalam	Malajalam
 	Odia	Orija
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepali
+	Assamese	Assami
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ja uudemmat (versio {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Vie kaikki avoimet asiakirjat PDF-muodossa
@@ -7518,7 +7641,7 @@ breakText	Glyphs	Merkit
 @msg	stroke cannot be set on a symbol instance	stroke-arvoa ei voi asettaa symbolin ilmentymälle
 @msg	fill on a symbol instance must be a solid color or none	symbolin ilmentymän fill-arvon on oltava tasainen väri tai none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key}-arvoa ei voi asettaa kuvalle, jolla ei ole tehostetta Muunna muodoksi tai Muunna objekti ääriviivoiksi
-@msg	pass newName, registration, exportType, nineSlice and/or type	anna newName, registration, exportType, nineSlice ja/tai type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	anna newName, registration, exportType, nineSlice, type ja/tai alignToPixelGrid
 	Text Flow	Tekstin kulku
 	By Rows	Riveittäin
 	By Columns	Sarakkeittain
@@ -7762,6 +7885,8 @@ breakText	Glyphs	Merkit
 @msg	No bridge of this width fits across the selected art	Näin leveä silta ei mahdu valitun grafiikan poikki
 @msg	Some islands could not be joined to the area around the art	Joitakin saarekkeita ei voitu yhdistää grafiikkaa ympäröivään alueeseen
 @msg	`width` must be from {lo} to {hi} pt	`width`-arvon on oltava {lo}–{hi} pt
+@msg	`angle` must be from -180 to 180 degrees	`angle`-arvon on oltava -180–180 astetta
+@msg	`roundness` must be from 1 to 100%	`roundness`-arvon on oltava 1–100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` on oltava kokonaisluku 1–{MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Karsintakehys ja -viivat…
 	Weed Box and Lines	Karsintakehys ja -viivat
@@ -7913,4 +8038,24 @@ breakText	Glyphs	Merkit
 	No objects are selected.	Objekteja ei ole valittu.
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
+	Check	Tarkista
+	Check Fold Lines	Tarkista taittoviivat
+@msg	No cut lines are in the selection.	Valinnassa ei ole leikkausviivoja.
+@msg	No cut lines are in the document.	Asiakirjassa ei ole leikkausviivoja.
+@msg	The cut lines do not enclose an area.	Leikkausviivat eivät rajaa aluetta.
+@msg	A cut line ends without meeting another cut line.	Leikkausviiva päättyy kohtaamatta toista leikkausviivaa.
+@msg	A gap between cut lines was closed.	Leikkausviivojen välinen rako suljettiin.
+@msg	The fold lines are too complex to check.	Taittoviivat ovat liian monimutkaisia tarkistettaviksi.
+@msg	A cut line and a crease lie on top of each other.	Leikkausviiva ja nuuttausviiva ovat päällekkäin.
+@msg	No cut lines are among the given objects.	Annetuissa objekteissa ei ole leikkausviivoja.
+@msg	Two fold lines lie on top of each other.	Kaksi taittoviivaa on päällekkäin.
+@msg	A crease ends inside a panel.	Nuuttausviiva päättyy paneelin sisään.
+@msg	A crease does not divide two panels.	Nuuttausviiva ei jaa kahta paneelia.
+@msg	A crease lies outside the cut outline, wholly or in part.	Nuuttausviiva on kokonaan tai osittain leikkausääriviivan ulkopuolella.
+@msg	The pieces of a hinge are not on one straight line.	Saranan osat eivät ole yhdellä suoralla.
+@msg	A gap between cut lines is too narrow to tell apart.	Leikkausviivojen välinen rako on liian kapea erotettavaksi.
+@msg	A cut-out area holds other fold lines or another blank.	Leikattu alue sisältää muita taittoviivoja tai toisen aihion.
+@msg	A panel is not joined to the rest by a crease.	Paneelia ei ole liitetty muihin millään nuuttausviivalla.
+@msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, saranat: {hinges}, virheet: {errors}, varoitukset: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"

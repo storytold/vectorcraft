@@ -43,6 +43,10 @@ font-technology	Variable	가변
 	Cap Height	대문자 높이
 	x-Height	x 높이
 	ICF Box	ICF 박스
+	Show Sample	샘플 표시
+	Hide Sample	샘플 숨기기
+	Max Ascent/Descent	최대 어센트/디센트
+	Max Ascender	최대 어센더
 	Proportional Metrics	비례 메트릭
 	H or V Style	가로 또는 세로 스타일
 	Roman Italics	로마자 이탤릭
@@ -617,7 +621,7 @@ digits	Malayalam	말라얄람어
 	Feather…	페더…
 	SVG Filters	SVG 필터
 	Apply SVG Filter…	SVG 필터 적용…
-	Warp	왜곡
+	Warp	뒤틀기
 	Arc…	호…
 	Arc Lower…	아래쪽 호…
 	Arc Upper…	위쪽 호…
@@ -764,7 +768,7 @@ digits	Malayalam	말라얄람어
 	Keep Tools Beside the Canvas	캔버스 옆에 도구 배치
 	Actions	액션
 	Asset Export	에셋 내보내기
-	Attributes	속성
+	Attributes	특성
 	Brushes	브러시
 	Color	색상
 	Color Guide	색상 가이드
@@ -939,6 +943,7 @@ digits	Malayalam	말라얄람어
 	Auto Color	자동 색상
 	Automatic	자동
 	Isolate Selected Group	선택한 그룹 격리
+	Isolate Selected Path	선택한 패스 격리
 	Isolate Selected Object	선택한 개체 격리
 	Exit Isolation Mode	격리 모드 종료
 	Make Clipping Mask	클리핑 마스크 만들기
@@ -1853,6 +1858,8 @@ antiAlias	Sharp	날카롭게
 	Folder	폴더
 	Folder Name:	폴더 이름:
 	Font List	글꼴 목록
+	Show Similar Fonts	유사한 글꼴 표시
+	Clear Similar Fonts	유사한 글꼴 지우기
 	Font Preview Size	글꼴 미리 보기 크기
 	Font:	글꼴:
 	Fonts	글꼴
@@ -1944,6 +1951,11 @@ antiAlias	Sharp	날카롭게
 	Show smooth color wheel	부드러운 색상환 표시
 	Show segmented color wheel	분할 색상환 표시
 	Show color bars	색상 막대 표시
+	Show brightness and hue on wheel	색상환에 밝기 및 색조 표시
+	Show saturation and hue on wheel	색상환에 채도 및 색조 표시
+	Add Color Tool	색상 추가 도구
+	Remove Color Tool	색상 제거 도구
+	Remove Color	색상 제거
 	Find the selected colors in the artwork	선택한 색상을 아트웍에서 찾기
 	Height	높이
 	Height:	높이:
@@ -2215,6 +2227,8 @@ antiAlias	Sharp	날카롭게
 	Lasso Tool	올가미 도구
 	Enclosing Lasso Tool	둘러싸기 올가미 도구
 	Enclosing Lasso	둘러싸기 올가미
+	Polygonal Lasso Tool	다각형 올가미 도구
+	Polygonal Lasso	다각형 올가미
 	Last Effect: {name}	마지막 효과: {name}
 	Last Page	마지막 페이지
 	Layer Options…	레이어 옵션…
@@ -2764,6 +2778,10 @@ diagnostics	ui	UI
 	Play Current Selection	현재 선택 항목 재생
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
+	Reset Actions	액션 재설정
+	Replace the current actions with the default set?	현재 액션을 기본 세트로 바꾸시겠습니까?
+	Append adds the default set after the current sets instead.	추가를 누르면 대신 기본 세트를 현재 세트 뒤에 추가합니다.
+	Append	추가
 	Plug-in Info	플러그인 정보
 	Plug-in…	플러그인…
 	Points	포인트
@@ -3183,8 +3201,14 @@ mark-style	Japanese	일본식
 	Filter Layers Panel Rows	레이어 패널 행 필터링
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom`은 변경된 설정을 나타냅니다. 프리셋을 다른 이름으로 저장하세요
 @msg	`{key}` must be an array of these names: {_1}	`{key}`은(는) 다음 이름의 배열이어야 합니다: {_1}
-	Search commands and tools	명령 및 도구 검색
-	Search commands and tools…	명령 및 도구 검색…
+	Search commands, tools, panels and effects	명령, 도구, 패널 및 효과 검색
+	Search commands, tools, panels and effects…	명령, 도구, 패널 및 효과 검색…
+	No commands match	일치하는 명령이 없습니다
+	{pos} of {total}: {name}	{total}개 중 {pos}번째: {name}
+@plural	{n} result|{n} results	결과 {n}개
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
+	Recent Commands	최근 명령
+	No recent commands	최근 명령 없음
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
 	Select All Assets	모든 에셋 선택
@@ -3905,6 +3929,7 @@ file-filter	Templates	템플릿
 	Connect Data Points	데이터 요소 연결
 	Edge-to-Edge Lines	가장자리 간 선
 	Draw Filled Lines	채워진 선 그리기
+	Line Width	선 너비
 	Tick Values	눈금 값
 	Override Calculated Values	계산된 값 재정의
 	Divisions	구간
@@ -4545,6 +4570,7 @@ theme	Appearance	외관
 @msg	no history to clear	지울 히스토리가 없습니다
 @msg	no history state {v}	히스토리 상태 {v}이(가) 없습니다
 @msg	Expand Appearance: the selection has a basic appearance	모양새 확장: 선택 항목은 기본 모양새입니다
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	일부 래스터 효과는 이미지로 만들지 않았습니다: 이미지 1,024개 또는 총 256메가픽셀을 넘기 때문입니다
 @msg	select (or target) objects whose appearance isn't basic	모양새가 기본이 아닌 개체를 선택(또는 대상 지정)하세요
 @msg	{C}: no effect at index {from}	{C}: 인덱스 {from}에 효과가 없습니다
 @msg	Expand: no gradient fills	확장: 그레이디언트 칠이 없습니다
@@ -5213,6 +5239,31 @@ theme	Appearance	외관
 @msg	$.evalFile requires a file path	$.evalFile에는 파일 경로가 필요합니다
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: 시간 제한은 0 이상의 유한한 밀리초 수여야 합니다
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: 파일 경로와 시간 제한을 받습니다
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident}이(가) 정의되지 않았습니다
+@msg	cannot read property '{key}' of {base}	{base}의 속성 '{key}'을(를) 읽을 수 없습니다
+@msg	cannot set property '{key}' of {base}	{base}의 속성 '{key}'을(를) 설정할 수 없습니다
+@msg	cannot read a property of {base}	{base}의 속성을 읽을 수 없습니다
+@msg	cannot set a property of {base}	{base}의 속성을 설정할 수 없습니다
+@msg	cannot define property '{key}': {why}	속성 '{key}'을(를) 정의할 수 없습니다: {why}
+@msg	cannot assign to property '{key}': {why}	속성 '{key}'에 대입할 수 없습니다: {why}
+@msg	cannot delete property '{key}'	속성 '{key}'을(를) 삭제할 수 없습니다
+@msg	cannot declare function {ident}	함수 {ident}을(를) 선언할 수 없습니다
+@msg	invalid assignment target	대입 대상이 잘못되었습니다
+@msg	the array's length is read-only	배열의 길이는 읽기 전용입니다
+@msg	the property cannot be redefined	속성을 다시 정의할 수 없습니다
+@msg	the object is not extensible	객체를 확장할 수 없습니다
+@msg	the length cannot be redefined	길이를 다시 정의할 수 없습니다
+@msg	it is read-only	읽기 전용입니다
+@msg	an element cannot be deleted	요소를 삭제할 수 없습니다
+@msg	it has only a getter	getter만 있습니다
+@msg	the value is a primitive	값이 원시 값입니다
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}의 {line}행 {column}열: {e} (발생)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}행 {column}열: {e} (발생)
 @msg	{name}: {e} (thrown)	{name}: {e} (발생)
@@ -5755,6 +5806,24 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
+@msg	an SVG filter has no event attributes such as {_1}	SVG 필터에는 {_1} 같은 이벤트 속성이 없습니다
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 필터의 이미지는 PNG, JPEG, GIF 또는 WebP data: URL입니다
+@msg	the SVG filter isn't valid XML: {e}	SVG 필터가 올바른 XML이 아닙니다: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence의 numOctaves는 최대 {MAX_OCTAVES}입니다
+@msg	{what} is at most {max}	{what}은(는) 최대 {max}입니다
+@msg	feConvolveMatrix's order	feConvolveMatrix의 order
+@msg	feMorphology's radius	feMorphology의 radius
+@msg	a blur's stdDeviation	흐림 효과의 stdDeviation
+@msg	the SVG filter has no primitives	SVG 필터에 프리미티브가 없습니다
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 필터의 프리미티브는 최대 {MAX_PRIMITIVES}개입니다
+@msg	the SVG filter is too large once its attributes are written out	속성을 모두 쓰면 SVG 필터가 너무 커집니다
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 필터의 이미지는 모두 합쳐 최대 {MAX_IMAGE_PIXELS}픽셀입니다
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG 필터를 그릴 수 없습니다: 프리미티브와 그 입력을 확인하세요
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 필터의 요소는 최대 {MAX_DEPTH}단계까지 중첩됩니다
+@msg	an SVG filter is at most {_1} KB	SVG 필터는 최대 {_1}KB입니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`는 값이 shaded 또는 wireframe인 `mode`만 있는 객체여야 합니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
@@ -5910,7 +5979,7 @@ lighting	Light	광원
 @msg	Unknown dimension style	알 수 없는 치수 스타일
 @msg	Unknown unit	알 수 없는 단위
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면이 열린 상태로 유지됩니다.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	열린 프로파일의 원형 끝을 닫습니다. 부분 회전에서는 절단 측면도 닫힙니다.
 	Distance	거리
 @msg	span must be "object" or "selection", got {v}	span은 "object" 또는 "selection"이어야 합니다. {v}은(는) 사용할 수 없습니다
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection"은 `gradient`를 배치합니다. 견본은 배치할 수 없습니다
@@ -6064,6 +6133,7 @@ lighting	Light	광원
 	Single Word Justification:	단일 단어 정렬:
 	Full Justify	강제 양쪽 정렬
 	Minimum must not exceed Desired, nor Desired Maximum.	최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 최소값은 희망값을, 희망값은 최대값을 넘을 수 없습니다
 	Minimum	최소
 	Justification	양끝 맞춤
 	Add filters from the list above	위 목록에서 필터 추가
@@ -7007,9 +7077,43 @@ breakText	Glyphs	글리프
 	Remove Gaps	간격 제거
 @msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
 @msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	공통 접선…
+	Common Tangents	공통 접선
+	Tangents	접선
+	Centerline	중심선
+	External	외부
+	Internal	내부
+@msg	select two closed paths	닫힌 패스 2개를 선택하십시오
+@msg	a selected path is open	선택한 패스가 열려 있습니다
+@msg	a selected path is not convex	선택한 패스가 볼록하지 않습니다
+@msg	a selected path has no area	선택한 패스에 면적이 없습니다
+@msg	a selected path has more than 10000 segments	선택한 패스의 세그먼트가 10000개를 넘습니다
+@msg	the two paths have the same outline	두 패스의 윤곽선이 같습니다
+@msg	One path lies inside the other, so they have no common tangents	한 패스가 다른 패스 안에 있어 공통 접선이 없습니다
+@msg	The paths overlap, so they have no internal tangents	패스가 겹쳐 있어 내부 접선이 없습니다
+@msg	One path lies inside the other, so they have no internal tangents	한 패스가 다른 패스 안에 있어 내부 접선이 없습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	접원…
+	Tangent Circle	접원
+	Circle:	원:
+@msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
+@msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius`은(는) 0.01에서 1000000 pt 사이여야 합니다
+@msg	two shapes need a `radius`	모양 두 개에는 `radius`이(가) 필요합니다
+@msg	three shapes set the radius themselves: leave `radius` out	모양 세 개는 반지름을 스스로 정하므로 `radius`을(를) 빼세요
+@msg	`circle` must be from 0 to 64	`circle`은(는) 0에서 64 사이여야 합니다
+@msg	a shape has no outline	윤곽선이 없는 모양이 있습니다
+@msg	the shapes are too complex: at most 2000 segments in all	모양이 너무 복잡합니다: 세그먼트는 모두 합쳐 최대 2000개입니다
+@msg	these shapes take too long to search	이 모양들을 찾는 데 시간이 너무 오래 걸립니다
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	이 모양들에 닿는 원이 64개를 넘습니다: 곡선 전체를 따라 닿아 있을 수 있습니다
+@msg	no circle touches these shapes	이 모양들에 닿는 원이 없습니다
+@msg	`circle` is past the last circle found ({found})	`circle`이(가) 찾은 마지막 원을 넘었습니다({found})
+@msg	object {value} is not a path or compound path	오브젝트 {value}은(는) 패스나 컴파운드 패스가 아닙니다
+@msg	these shapes are too small to measure	이 모양들은 너무 작아서 측정할 수 없습니다
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	문서 도구
 	Save a Timestamped Copy	날짜와 시간이 붙은 사본 저장
@@ -7031,6 +7135,11 @@ breakText	Glyphs	글리프
 	Malayalam	말라얄람어
 	Odia	오리야어
 	Urdu	우르두어
+	Sanskrit	산스크리트어
+	Nepali	네팔어
+	Assamese	아삼어
+	Konkani	코카니어
+	Sindhi	신디어
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 이상 (버전 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	열린 모든 문서를 PDF로 내보내기
@@ -7064,7 +7173,7 @@ breakText	Glyphs	글리프
 @msg	stroke cannot be set on a symbol instance	심볼 인스턴스에는 stroke를 설정할 수 없습니다
 @msg	fill on a symbol instance must be a solid color or none	심볼 인스턴스의 fill은 단색 또는 none이어야 합니다
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	모양으로 변환 또는 개체 윤곽선화 효과가 없는 이미지에는 {key}을(를) 설정할 수 없습니다
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice 및/또는 type을 지정하세요
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type 및/또는 alignToPixelGrid을 지정하세요
 	Text Flow	텍스트 흐름
 	By Rows	행 방향
 	By Columns	열 방향
@@ -7290,6 +7399,8 @@ breakText	Glyphs	글리프
 @msg	No bridge of this width fits across the selected art	이 너비의 브리지가 선택한 아트워크에 들어가지 않습니다
 @msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
 @msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
+@msg	`angle` must be from -180 to 180 degrees	`angle`는 -180도에서 180도 사이여야 합니다
+@msg	`roundness` must be from 1 to 100%	`roundness`는 1%에서 100% 사이여야 합니다
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다
 	Weed Box and Lines…	위딩 상자 및 선…
 	Weed Box and Lines	위딩 상자 및 선
@@ -8664,7 +8775,9 @@ breakText	Glyphs	글리프
 @msg	position must be normal, superscript or subscript	position은 normal, superscript 또는 subscript여야 합니다
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position은 topLeft, topRight, bottomLeft 또는 bottomRight여야 합니다
 @msg	positions must be between 0 and 100000 pt	positions는 0에서 100000 pt 사이여야 합니다
+@msg	ppi can't be more than {max} for this image	이 이미지의 ppi는 {max}보다 클 수 없습니다
 @msg	ppi must be a positive number, not {ppi}	ppi는 양수여야 합니다: {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim은 이미지의 픽셀을 그대로 유지합니다: ppi를 지정하지 마세요
 @msg	ppi must be between 1 and 2400	ppi는 1에서 2400 사이여야 합니다
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`은(는) transforms|bounds|fileDimensions|fit|fill이 아닙니다
 @msg	preserveShape must be clippingMask|transparency	preserveShape는 clippingMask|transparency여야 합니다
@@ -9259,3 +9372,23 @@ breakText	Glyphs	글리프
 	No objects are selected.	선택한 개체가 없습니다.
 	Open a document to mark its fold lines.	접는 선을 지정하려면 문서를 여세요.
 	Remove Fold Line Role	선 종류 제거
+	Check	검사
+	Check Fold Lines	접는 선 검사
+@msg	No cut lines are in the selection.	선택 영역에 재단선이 없습니다.
+@msg	No cut lines are in the document.	문서에 재단선이 없습니다.
+@msg	The cut lines do not enclose an area.	재단선이 영역을 둘러싸지 않습니다.
+@msg	A cut line ends without meeting another cut line.	재단선이 다른 재단선과 만나지 않고 끝납니다.
+@msg	A gap between cut lines was closed.	재단선 사이의 틈을 닫았습니다.
+@msg	The fold lines are too complex to check.	접는 선이 너무 복잡해서 검사할 수 없습니다.
+@msg	A cut line and a crease lie on top of each other.	재단선과 오시선이 겹쳐 있습니다.
+@msg	No cut lines are among the given objects.	지정한 개체에 재단선이 없습니다.
+@msg	Two fold lines lie on top of each other.	접는 선 두 개가 겹쳐 있습니다.
+@msg	A crease ends inside a panel.	오시선이 패널 안에서 끝납니다.
+@msg	A crease does not divide two panels.	오시선이 두 패널을 나누지 않습니다.
+@msg	A crease lies outside the cut outline, wholly or in part.	오시선의 전체 또는 일부가 재단 윤곽선 밖에 있습니다.
+@msg	The pieces of a hinge are not on one straight line.	힌지의 조각들이 한 직선 위에 있지 않습니다.
+@msg	A gap between cut lines is too narrow to tell apart.	재단선 사이의 틈이 너무 좁아 구별할 수 없습니다.
+@msg	A cut-out area holds other fold lines or another blank.	잘라 낸 영역에 다른 접는 선이나 다른 전개도가 있습니다.
+@msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
+@msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}

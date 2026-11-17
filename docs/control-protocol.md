@@ -290,8 +290,19 @@ luminosity}`, percent from -100 to 100, 0 by default). The dialog sends a non-ze
 colors; colors opened alone are saved as a group with the change. `display` sets how the Edit tab shows the new
 colors: `smooth` (the smooth wheel, also when unset; each opening starts there), `segmented` (a wheel of solid patches,
 24 hues by 5 saturations, whose markers move as freely) or `bars` (a solid bar per recolored color in row order; a click
-selects its row for the sliders and a drag moves the row without changing a color). Setting
-`colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
+selects its row for the sliders and a drag moves the row without changing a color). `wheelTool` turns on a wheel tool
+on either wheel: `add` (the Add Color tool) adds a click as a new color, the hue and saturation clicked at the base
+color's brightness (the patch's color on the segmented wheel), in a new row with no current colors (`from: []`) and
+`added: true` that becomes the selected row; `remove` (the Remove Color tool) removes the color of the marker clicked.
+`wheelAxes: "hueBrightness"` makes both wheels show hue and brightness: brightness runs from black at the center to
+full at the edge, the wheel is drawn at the base color's saturation, a marker drag sets hue and brightness, the slider
+under the wheel sets saturation, and Add Color adds the hue and brightness clicked at the base color's saturation.
+`hueSaturation`, unset (each opening) or any other value shows hue and saturation; switching changes no color. A color bar's
+right-click menu has Remove Color too. The base color can't be removed. A removed color's row is dropped, unless it
+has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
+group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
+one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
+Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
 or the options button while a group is selected, opens it.
@@ -867,8 +878,8 @@ writes the HTML page to a temporary folder and opens it in the default browser (
 PSD Options: Export As… with the PSD format (`file.exportAs {format: "psd"}`, then the save dialog) opens `psdOptions`:
 the raster rows of PNG Options (`ppi`, `background`, `antiAlias`), then `colorModel` (`rgb`, `cmyk`, `gray`; a CMYK
 document starts on `cmyk`), `layers` (true: Write Layers; false: Flat Image, whose background list starts at White),
-`maxEditability` and `hiddenLayers` (with layers) and `embedIcc`. `ui.dialog.set` the fields and `ui.dialog.confirm`
-writes the file(s) with `document.export`.
+`preserveText`, `maxEditability` and `hiddenLayers` (with layers) and `embedIcc`. `ui.dialog.set` the fields and
+`ui.dialog.confirm` writes the file(s) with `document.export`; with Flat Image it leaves `preserveText` out.
 
 Print: File → Print… (`file.print` with no params, Ctrl/Cmd+P) opens the `print` dialog on the document's print
 settings. Its fields are the `print.setup` settings (`copies`, `artboards`, `range`, `media`, `orientation`,

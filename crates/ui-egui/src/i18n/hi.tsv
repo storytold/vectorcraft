@@ -821,6 +821,7 @@ antiAlias	Sharp	शार्प
 	Chrome…	क्रोम…
 	Circle	वृत्त
 	Circle (open)	सर्किल (ओपन)
+	Circle:	वृत्त:
 	Classic	क्लासिक
 	Classic Defaults	क्लासिक डिफ़ॉल्ट
 	Clean Up	क्लीन अप
@@ -880,7 +881,7 @@ antiAlias	Sharp	शार्प
 	Close Path:	बंद पाथ:
 	Close Path…	बंद पाथ…
 	Close paths when ends are within:	जब समाप्त होता है तो बंद पाथ भीतर होते हैं:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड खुली रहती हैं।
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	खुली प्रोफ़ाइल के गोल सिरे बंद करें। आंशिक स्वीप की कटी हुई साइड भी बंद होती हैं।
 	Closed	बंद
 	Closing bracket with no opening one	बंद करने वाला ब्रैकेट, जिसका कोई खोलने वाला ब्रैकेट नहीं है
 	Clumped	गुच्छेदार
@@ -2004,6 +2005,8 @@ antiAlias	Sharp	शार्प
 	Font Family, Style & Size	फ़ॉन्ट परिवार, स्टाइल और आकार
 	Font Family:	फ़ॉन्ट परिवार:
 	Font List	फ़ॉन्ट सूची
+	Show Similar Fonts	समान फ़ॉन्ट दिखाएँ
+	Clear Similar Fonts	समान फ़ॉन्ट साफ़ करें
 	Font Preview Size	फ़ॉन्ट प्रीव्यू साइज़
 	Font Size	फ़ॉन्ट साइज़
 	Font Size:	फ़ॉन्ट साइज़:
@@ -2158,6 +2161,7 @@ antiAlias	Sharp	शार्प
 	Connect Data Points	डेटा पॉइंट जोड़ें
 	Edge-to-Edge Lines	किनारे से किनारे तक रेखाएँ
 	Draw Filled Lines	भरी हुई रेखाएँ बनाएँ
+	Line Width	रेखा की चौड़ाई
 	Tick Values	टिक मान
 	Override Calculated Values	परिकलित मानों को बदलें
 	Divisions	विभाजन
@@ -2374,6 +2378,10 @@ antiAlias	Sharp	शार्प
 	ICC Profile	ICC प्रोफ़ाइल
 	ICF Bottom/Left	ICF बॉटम/लेफ्ट
 	ICF Box	ICF बॉक्स
+	Show Sample	नमूना दिखाएँ
+	Hide Sample	नमूना छिपाएँ
+	Max Ascent/Descent	अधिकतम एसेंट/डिसेंट
+	Max Ascender	अधिकतम एसेंडर
 	ICF Top/Right	ICF ऊपर/दाएँ
 	Identify Objects By	ऑब्जेक्ट्स की पहचान करके
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	अगर ड्रॉइंग टैबलेट के पेन से ड्रॉ नहीं हो रहा, तो X11 (XWayland) ऑप्शन चुनें।
@@ -2500,6 +2508,7 @@ antiAlias	Sharp	शार्प
 	Isolate Blending	ब्लेंडिंग अलग करें
 	Isolate Group	अलग समूह
 	Isolate Selected Group	सिलेक्टेड समूह अलग करें
+	Isolate Selected Path	सिलेक्टेड पाथ अलग करें
 	Isolate Selected Object	सिलेक्टेड ऑब्जेक्ट को अलग करें
 	Isometric Bottom	आइसोमेट्रिक बॉटम
 	Isometric Left	आइसोमेट्रिक लेफ्ट
@@ -2748,6 +2757,10 @@ antiAlias	Sharp	शार्प
 	Live Shape	लाइव आकार
 	Live Shape Properties	लाइव शेप प्रॉपर्टीज़
 	Load Actions…	एक्शन्स लोड करें…
+	Reset Actions	एक्शन्स रीसेट करें
+	Replace the current actions with the default set?	मौजूदा एक्शन्स को डिफ़ॉल्ट सेट से बदलें?
+	Append adds the default set after the current sets instead.	जोड़ें इसके बजाय डिफ़ॉल्ट सेट को मौजूदा सेट के बाद जोड़ता है।
+	Append	जोड़ें
 	Load Color Profile…	लोड कलर प्रोफ़ाइल…
 	Load EPS into Clipboard	ईपीएस को क्लिपबोर्ड में लोड करें
 	Load Image into Clipboard	क्लिपबोर्ड में इमेज लोड करें
@@ -3674,6 +3687,8 @@ antiAlias	Sharp	शार्प
 	Polygon	बहुभुज
 	Polygon Properties:	बहुभुज प्रॉपर्टीज़:
 	Polygon Tool	पॉलीगोन टूल
+	Polygonal Lasso	बहुभुज लैस्सो
+	Polygonal Lasso Tool	बहुभुज लैस्सो टूल
 	Portrait	पोर्ट्रेट
 	Portrait (flipped)	पोर्ट्रेट (फ्लिप)
 	Portuguese	पुर्तगाली
@@ -4452,8 +4467,14 @@ antiAlias	Sharp	शार्प
 	Search	खोजें
 	Search All	सभी खोजें
 	Search artboards	खोज आर्टबोर्ड
-	Search commands and tools	खोज आदेश और टूल
-	Search commands and tools…	आदेश और टूल खोजें…
+	Search commands, tools, panels and effects	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें
+	Search commands, tools, panels and effects…	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें…
+	No commands match	कोई आदेश मेल नहीं खाता
+	{pos} of {total}: {name}	{total} में से {pos}: {name}
+@plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
+	Recent Commands	हाल के आदेश
+	No recent commands	कोई हाल का आदेश नहीं
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
@@ -4675,6 +4696,11 @@ antiAlias	Sharp	शार्प
 	Show Center Mark	शो सेंटर मार्क
 	Show Code	कोड दिखाएं
 	Show color bars	रंग सलाखों दिखाएँ
+	Show brightness and hue on wheel	व्हील पर ब्राइटनेस और ह्यू दिखाएँ
+	Show saturation and hue on wheel	व्हील पर सैचुरेशन और ह्यू दिखाएँ
+	Add Color Tool	रंग जोड़ें टूल
+	Remove Color Tool	रंग हटाएँ टूल
+	Remove Color	रंग हटाएँ
 	Find the selected colors in the artwork	चयनित रंगों को आर्टवर्क में खोजें
 	Show Color Groups	रंग समूह दिखाएँ
 	Show Color Swatches	रंग स्वॉचेस दिखाएँ
@@ -5142,6 +5168,8 @@ antiAlias	Sharp	शार्प
 	Tag (open)	टैग (ओपन)
 	Tail:	पूंछ:
 	Tamil	तमिल
+	Tangent Circle	स्पर्शी वृत्त
+	Tangent Circle…	स्पर्शी वृत्त…
 	Taper	टेपर
 	Target	लक्ष्य
 	Target Contents	लक्ष्य सामग्री
@@ -5510,6 +5538,11 @@ antiAlias	Sharp	शार्प
 	Update Modified Links	अद्यतन संशोधित लिंक
 	Update Selection	अद्यतन सिलेक्शन
 	UPPERCASE	अपरकैस
+	Sanskrit	संस्कृत
+	Nepali	नेपाली
+	Assamese	असमिया
+	Konkani	कोंकणी
+	Sindhi	सिंधी
 	Urdu	उर्दू
 	URL:	यूआरएल:
 	Use 	उपयोग 
@@ -6810,6 +6843,44 @@ antiAlias	Sharp	शार्प
 @msg	$.evalFile requires a file path	$.evalFile के लिए फ़ाइल पाथ आवश्यक है
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: टाइमआउट मिलीसेकंड की एक सीमित संख्या होनी चाहिए, 0 या अधिक
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: एक फ़ाइल पाथ और एक टाइमआउट लेता है
+@msg	assignment to a constant binding	स्थिर बाइंडिंग को मान दिया गया
+@msg	invalid array length	ऐरे की लंबाई अमान्य है
+@msg	array literal too long	ऐरे लिटरल बहुत लंबा है
+@msg	the value is not a function	मान कोई फ़ंक्शन नहीं है
+@msg	apply was called on a value that is not a function	apply को ऐसे मान पर कॉल किया गया जो फ़ंक्शन नहीं है
+@msg	the argument list is not an object	आर्गुमेंट सूची कोई ऑब्जेक्ट नहीं है
+@msg	too many arguments	बहुत अधिक आर्गुमेंट
+@msg	the value is not a constructor	मान कोई कंस्ट्रक्टर नहीं है
+@msg	cannot convert the object to a primitive value	ऑब्जेक्ट को प्रिमिटिव मान में नहीं बदला जा सकता
+@msg	cannot convert undefined or null to an object	undefined या null को ऑब्जेक्ट में नहीं बदला जा सकता
+@msg	the right side of 'in' is not an object	'in' का दायाँ पक्ष कोई ऑब्जेक्ट नहीं है
+@msg	the right side of 'instanceof' is not a function	'instanceof' का दायाँ पक्ष कोई फ़ंक्शन नहीं है
+@msg	the function's prototype is not an object	फ़ंक्शन का प्रोटोटाइप कोई ऑब्जेक्ट नहीं है
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} परिभाषित नहीं है
+@msg	cannot read property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' पढ़ी नहीं जा सकती
+@msg	cannot set property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' सेट नहीं की जा सकती
+@msg	cannot read a property of {base}	{base} की कोई प्रॉपर्टी पढ़ी नहीं जा सकती
+@msg	cannot set a property of {base}	{base} की कोई प्रॉपर्टी सेट नहीं की जा सकती
+@msg	cannot define property '{key}': {why}	प्रॉपर्टी '{key}' परिभाषित नहीं की जा सकती: {why}
+@msg	cannot assign to property '{key}': {why}	प्रॉपर्टी '{key}' को मान नहीं दिया जा सकता: {why}
+@msg	cannot delete property '{key}'	प्रॉपर्टी '{key}' हटाई नहीं जा सकती
+@msg	cannot declare function {ident}	फ़ंक्शन {ident} घोषित नहीं किया जा सकता
+@msg	invalid assignment target	मान देने का लक्ष्य अमान्य है
+@msg	the array's length is read-only	ऐरे की लंबाई केवल-पठन है
+@msg	the property cannot be redefined	प्रॉपर्टी को फिर से परिभाषित नहीं किया जा सकता
+@msg	the object is not extensible	ऑब्जेक्ट विस्तार योग्य नहीं है
+@msg	the length cannot be redefined	लंबाई को फिर से परिभाषित नहीं किया जा सकता
+@msg	it is read-only	यह केवल-पठन है
+@msg	an element cannot be deleted	कोई तत्व हटाया नहीं जा सकता
+@msg	it has only a getter	इसमें केवल getter है
+@msg	the value is a primitive	मान प्रिमिटिव है
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file} की लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: लाइन {line}, कॉलम {column}: {e} (थ्रो किया गया)
 @msg	{name}: {e} (thrown)	{name}: {e} (थ्रो किया गया)
@@ -7021,6 +7092,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	every search thread stopped on an internal error (please report this bug)	प्रत्येक खोज धागा एक आंतरिक त्रुटि पर बंद कर दिया (कृपया इस बग की रिपोर्ट करें)
 @msg	exit isolation mode first	पहले अलगाव मोड से बाहर निकलें
 @msg	Expand Appearance: the selection has a basic appearance	उपस्थिति का विस्तार: सिलेक्शन में एक बुनियादी उपस्थिति है
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	कुछ रास्टर इफ़ेक्ट इमेज में नहीं बदले गए: उनके लिए 1,024 से अधिक इमेज या कुल 256 मेगापिक्सेल लगते
 @msg	Expand: no brush strokes selected	विस्तार: सिलेक्टेड कोई ब्रश स्ट्रोक नहीं
 @msg	Expand: no gradient fills	एक्सपैंड: कोई ग्रेडिएंट फ़िल नहीं
 @msg	Expand: nothing to expand	विस्तार: विस्तार करने के लिए कुछ नहीं
@@ -7868,7 +7940,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	parameters must be an object	parameters एक ऑब्जेक्ट होना चाहिए
 @msg	params must be an object	params एक ऑब्जेक्ट होना चाहिए
 @msg	part of the program isn't valid PostScript text	कार्यक्रम का हिस्सा मान्य नहीं है PostScript टेक्स्ट
-@msg	pass newName, registration, exportType, nineSlice and/or type	newName, registration, exportType, nineSlice और/या type दें
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	newName, registration, exportType, nineSlice, type और/या alignToPixelGrid दें
 @msg	passwords can have up to {MAX_PASSWORD} bytes	पासवर्ड {MAX_PASSWORD} बाइट्स तक हो सकता है
 @msg	paste unavailable	पेस्ट करें अनुपलब्ध
 @msg	Pasting	चिपकाना
@@ -7921,7 +7993,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	position must be normal, superscript or subscript	position normal, superscript या subscript होना चाहिए
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position को topLeft, topRight, bottomLeft या bottomRight होना चाहिए
 @msg	positions must be between 0 and 100000 pt	positions 0 और 100000 pt के बीच होनी चाहिए
+@msg	ppi can't be more than {max} for this image	इस छवि के लिए ppi {max} से अधिक नहीं हो सकता
 @msg	ppi must be a positive number, not {ppi}	ppi एक धनात्मक संख्या होनी चाहिए, {ppi} नहीं
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim छवि के पिक्सेल जैसे हैं वैसे ही रखता है: ppi न दें
 @msg	ppi must be between 1 and 2400	ppi 1 और 2400 के बीच होना चाहिए
 @msg	precision must be from 0.001 to 10 pt	precision 0.001 से 10 pt तक होनी चाहिए
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`, transforms|bounds|fileDimensions|fit|fill में से नहीं है
@@ -8088,8 +8162,38 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	select paths to join	जोड़ने के लिए पाथ सिलेक्ट करें
 @msg	select paths with dashed strokes to expand	विस्तृत करने के लिए डैश स्ट्रोक के साथ पाथ सिलेक्ट करें
 @msg	select paths, or segments, to divide	विभाजित करने के लिए पाथ, या खंड चुनें
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	उभयनिष्ठ स्पर्शरेखाएँ…
+	Common Tangents	उभयनिष्ठ स्पर्शरेखाएँ
+	Tangents	स्पर्शरेखाएँ
+	Centerline	केंद्र रेखा
+	External	बाहरी
+	Internal	आंतरिक
+@msg	select two closed paths	दो बंद पाथ चुनें
+@msg	a selected path is open	चुना गया एक पाथ खुला है
+@msg	a selected path is not convex	चुना गया एक पाथ उत्तल नहीं है
+@msg	a selected path has no area	चुने गए एक पाथ का कोई क्षेत्रफल नहीं है
+@msg	a selected path has more than 10000 segments	चुने गए एक पाथ में 10000 से अधिक खंड हैं
+@msg	the two paths have the same outline	दोनों पाथ की रूपरेखा एक जैसी है
+@msg	One path lies inside the other, so they have no common tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई उभयनिष्ठ स्पर्शरेखा नहीं है
+@msg	The paths overlap, so they have no internal tangents	पाथ एक-दूसरे पर चढ़े हुए हैं, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
+@msg	One path lies inside the other, so they have no internal tangents	एक पाथ दूसरे के अंदर है, इसलिए उनकी कोई आंतरिक स्पर्शरेखा नहीं है
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
+@msg	select two or three paths or compound paths	दो या तीन पाथ या यौगिक पाथ सिलेक्ट करें
+@msg	`ids` names an object twice	`ids` एक ऑब्जेक्ट को दो बार बताता है
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` 0.01 से 1000000 pt तक होना चाहिए
+@msg	two shapes need a `radius`	दो आकृतियों के लिए `radius` चाहिए
+@msg	three shapes set the radius themselves: leave `radius` out	तीन आकृतियाँ त्रिज्या खुद तय करती हैं: `radius` न दें
+@msg	`circle` must be from 0 to 64	`circle` 0 से 64 तक होना चाहिए
+@msg	a shape has no outline	एक आकृति की कोई आउटलाइन नहीं है
+@msg	the shapes are too complex: at most 2000 segments in all	आकृतियाँ बहुत जटिल हैं: कुल मिलाकर अधिकतम 2000 सेगमेंट
+@msg	these shapes take too long to search	इन आकृतियों की खोज में बहुत ज़्यादा समय लगता है
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	इन आकृतियों को 64 से ज़्यादा वृत्त छूते हैं: शायद वे पूरे वक्र के साथ छूते हैं
+@msg	no circle touches these shapes	कोई भी वृत्त इन आकृतियों को नहीं छूता
+@msg	`circle` is past the last circle found ({found})	`circle` मिले हुए आखिरी वृत्त से आगे है ({found})
+@msg	object {value} is not a path or compound path	ऑब्जेक्ट {value} पाथ या यौगिक पाथ नहीं है
+@msg	these shapes are too small to measure	ये आकृतियाँ मापने के लिए बहुत छोटी हैं
 @msg	select rows or objects to collect	इकट्ठा करने के लिए पंक्तियों या ऑब्जेक्ट्स सिलेक्ट करें
 @msg	select segments, or paths, to add points to	पॉइंट्स जोड़ने के लिए सेगमेंट या पाथ सिलेक्ट करें
 @msg	select some type first	पहले कुछ टाइप सिलेक्ट करें
@@ -8212,6 +8316,25 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट कुछ नहीं बनाता
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ग्रुप के फ़िल या स्ट्रोक पर 3D इफ़ेक्ट एक्सपोर्ट करने लायक कुछ नहीं बनाता
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
+@msg	give one <filter> element	एक <filter> एलिमेंट दें
+@msg	the <filter> element needs an id, the filter's name	<filter> एलिमेंट को एक id चाहिए, जो फ़िल्टर का नाम है
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG फ़िल्टर की id अधिकतम {MAX_NAME} वर्णों की होती है
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> SVG फ़िल्टर का एलिमेंट नहीं है
+@msg	an SVG filter has no event attributes such as {_1}	SVG फ़िल्टर में {_1} जैसे इवेंट एट्रिब्यूट नहीं होते
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG फ़िल्टर की इमेज PNG, JPEG, GIF या WebP data: URL होती हैं
+@msg	the SVG filter isn't valid XML: {e}	SVG फ़िल्टर मान्य XML नहीं है: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence का numOctaves अधिकतम {MAX_OCTAVES} होता है
+@msg	{what} is at most {max}	{what} अधिकतम {max} होता है
+@msg	feConvolveMatrix's order	feConvolveMatrix का order
+@msg	feMorphology's radius	feMorphology का radius
+@msg	a blur's stdDeviation	ब्लर का stdDeviation
+@msg	the SVG filter has no primitives	SVG फ़िल्टर में कोई प्रिमिटिव नहीं है
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG फ़िल्टर में अधिकतम {MAX_PRIMITIVES} प्रिमिटिव होते हैं
+@msg	the SVG filter is too large once its attributes are written out	एट्रिब्यूट लिखे जाने के बाद SVG फ़िल्टर बहुत बड़ा हो जाता है
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG फ़िल्टर की इमेज में कुल मिलाकर अधिकतम {MAX_IMAGE_PIXELS} पिक्सेल होते हैं
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG फ़िल्टर बनाया नहीं जा सकता: उसके प्रिमिटिव और उनके इनपुट जाँचें
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG फ़िल्टर के एलिमेंट अधिकतम {MAX_DEPTH} स्तर तक नेस्ट होते हैं
+@msg	an SVG filter is at most {_1} KB	SVG फ़िल्टर अधिकतम {_1} KB का होता है
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ऑब्जेक्ट पर कोई 3D इफ़ेक्ट नहीं है (एक्सट्रूडेड और बेवेल, रिवॉल्व, फुलाएँ या घुमाव)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` केवल `mode` वाला ऑब्जेक्ट होना चाहिए, जिसका मान shaded या wireframe हो
 @msg	its 3D effect builds no solid	इसका 3D इफ़ेक्ट कोई ठोस नहीं बनाता
@@ -9107,6 +9230,8 @@ theme	Appearance	अपीयरेंस
 @msg	No bridge of this width fits across the selected art	इस चौड़ाई का कोई ब्रिज चुने गए आर्टवर्क के पार नहीं आता
 @msg	Some islands could not be joined to the area around the art	कुछ आइलैंड आर्टवर्क के आसपास के क्षेत्र से नहीं जोड़े जा सके
 @msg	`width` must be from {lo} to {hi} pt	`width` {lo} से {hi} pt तक होना चाहिए
+@msg	`angle` must be from -180 to 180 degrees	`angle` -180 से 180 डिग्री तक होना चाहिए
+@msg	`roundness` must be from 1 to 100%	`roundness` 1 से 100% तक होना चाहिए
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 1 से {MAX_BRIDGES_PER_ISLAND} तक पूरी संख्या होना चाहिए
 	Weed Box and Lines…	वीड बॉक्स और लाइनें…
 	Weed Box and Lines	वीड बॉक्स और लाइनें
@@ -9257,3 +9382,23 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Check	चेक करें
+	Check Fold Lines	फ़ोल्ड लाइनें चेक करें
+@msg	No cut lines are in the selection.	सिलेक्शन में कोई कट लाइन नहीं है।
+@msg	No cut lines are in the document.	डॉक्यूमेंट में कोई कट लाइन नहीं है।
+@msg	The cut lines do not enclose an area.	कट लाइनें कोई एरिया नहीं घेरतीं।
+@msg	A cut line ends without meeting another cut line.	एक कट लाइन किसी दूसरी कट लाइन से मिले बिना खत्म हो जाती है।
+@msg	A gap between cut lines was closed.	कट लाइनों के बीच का गैप बंद कर दिया गया।
+@msg	The fold lines are too complex to check.	फ़ोल्ड लाइनें चेक करने के लिए बहुत जटिल हैं।
+@msg	A cut line and a crease lie on top of each other.	एक कट लाइन और एक क्रीज़ लाइन एक-दूसरे के ऊपर हैं।
+@msg	No cut lines are among the given objects.	दिए गए ऑब्जेक्ट में कोई कट लाइन नहीं है।
+@msg	Two fold lines lie on top of each other.	दो फ़ोल्ड लाइनें एक-दूसरे के ऊपर हैं।
+@msg	A crease ends inside a panel.	एक क्रीज़ लाइन किसी पैनल के अंदर खत्म होती है।
+@msg	A crease does not divide two panels.	एक क्रीज़ लाइन दो पैनलों को अलग नहीं करती।
+@msg	A crease lies outside the cut outline, wholly or in part.	एक क्रीज़ लाइन पूरी तरह या आंशिक रूप से कट आउटलाइन के बाहर है।
+@msg	The pieces of a hinge are not on one straight line.	एक हिंज के हिस्से एक सीधी लाइन पर नहीं हैं।
+@msg	A gap between cut lines is too narrow to tell apart.	कट लाइनों के बीच का गैप पहचानने के लिए बहुत पतला है।
+@msg	A cut-out area holds other fold lines or another blank.	एक कट-आउट एरिया में दूसरी फ़ोल्ड लाइनें या दूसरा ब्लैंक है।
+@msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
+@msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}

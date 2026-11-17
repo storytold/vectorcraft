@@ -1339,6 +1339,8 @@ file-filter	Templates	Vorlagen
 	Font Family & Style	Schriftfamilie und -schnitt
 	Font Family, Style & Size	Schriftfamilie, -schnitt und -grad
 	Font List	Schriftliste
+	Show Similar Fonts	Ähnliche Schriften anzeigen
+	Clear Similar Fonts	Ähnliche Schriften zurücksetzen
 	Font Preview Size	Größe der Schriftvorschau
 	Font Size	Schriftgrad
 	Variable Font	Variable Schrift
@@ -1454,6 +1456,7 @@ file-filter	Templates	Vorlagen
 	Connect Data Points	Datenpunkte verbinden
 	Edge-to-Edge Lines	Linien von Kante zu Kante
 	Draw Filled Lines	Gefüllte Linien zeichnen
+	Line Width	Linienbreite
 	Tick Values	Teilstrichwerte
 	Override Calculated Values	Berechnete Werte überschreiben
 	Divisions	Teilungen
@@ -1552,6 +1555,11 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Show brightness and hue on wheel	Helligkeit und Farbton im Farbkreis anzeigen
+	Show saturation and hue on wheel	Sättigung und Farbton im Farbkreis anzeigen
+	Add Color Tool	Farbe-hinzufügen-Werkzeug
+	Remove Color Tool	Farbe-entfernen-Werkzeug
+	Remove Color	Farbe entfernen
 	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
@@ -1900,6 +1908,8 @@ file-filter	Templates	Vorlagen
 	Lasso Tool	Lasso-Werkzeug
 	Enclosing Lasso Tool	Umschließendes Lasso-Werkzeug
 	Enclosing Lasso	Umschließendes Lasso
+	Polygonal Lasso Tool	Polygon-Lasso-Werkzeug
+	Polygonal Lasso	Polygon-Lasso
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
@@ -2610,6 +2620,10 @@ diagnostics	ui	Oberfläche
 	Play Current Selection	Aktuelle Auswahl abspielen
 	Save Actions…	Aktionen speichern…
 	Load Actions…	Aktionen laden…
+	Reset Actions	Aktionen zurücksetzen
+	Replace the current actions with the default set?	Aktuelle Aktionen durch den Standardsatz ersetzen?
+	Append adds the default set after the current sets instead.	Mit „Anhängen“ wird der Standardsatz stattdessen nach den aktuellen Sätzen hinzugefügt.
+	Append	Anhängen
 	Plug-in Info	Plug-in-Informationen
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -3239,8 +3253,14 @@ digits	Malayalam	Malayalam
 	Filter Layers Panel Rows	Zeilen im Ebenenbedienfeld filtern
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` steht für geänderte Einstellungen: Speichern Sie die Vorgabe unter einem anderen Namen
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
-	Search commands and tools	Befehle und Werkzeuge suchen
-	Search commands and tools…	Befehle und Werkzeuge suchen…
+	Search commands, tools, panels and effects	Befehle, Werkzeuge, Bedienfelder und Effekte suchen
+	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
+	No commands match	Keine passenden Befehle
+	{pos} of {total}: {name}	{pos} von {total}: {name}
+@plural	{n} result|{n} results	{n} Ergebnis|{n} Ergebnisse
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} von {n} Ergebnis. Tippen Sie weiter, um sie einzugrenzen.|{shown} von {n} Ergebnissen. Tippen Sie weiter, um sie einzugrenzen.
+	Recent Commands	Zuletzt verwendete Befehle
+	No recent commands	Keine zuletzt verwendeten Befehle
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
 	Section Symbol	Paragrafenzeichen
@@ -4214,6 +4234,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 legt Abstand und Ausrichtung fest
 	:	:
 	Isolate Selected Group	Ausgewählte Gruppe isolieren
+	Isolate Selected Path	Ausgewählten Pfad isolieren
 	Isolate Selected Object	Ausgewähltes Objekt isolieren
 	Release Clipping Mask	Schnittmaske zurückwandeln
 	Make Compound Path	Zusammengesetzten Pfad erstellen
@@ -4389,6 +4410,31 @@ theme	Appearance	Erscheinungsbild
 @msg	$.evalFile requires a file path	$.evalFile erfordert einen Dateipfad
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: Die Zeitüberschreitung muss eine endliche Anzahl von Millisekunden sein, 0 oder mehr
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: nimmt einen Dateipfad und eine Zeitüberschreitung
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} ist nicht definiert
+@msg	cannot read property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gelesen werden
+@msg	cannot set property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gesetzt werden
+@msg	cannot read a property of {base}	eine Eigenschaft von {base} kann nicht gelesen werden
+@msg	cannot set a property of {base}	eine Eigenschaft von {base} kann nicht gesetzt werden
+@msg	cannot define property '{key}': {why}	die Eigenschaft '{key}' kann nicht definiert werden: {why}
+@msg	cannot assign to property '{key}': {why}	der Eigenschaft '{key}' kann nichts zugewiesen werden: {why}
+@msg	cannot delete property '{key}'	die Eigenschaft '{key}' kann nicht gelöscht werden
+@msg	cannot declare function {ident}	die Funktion {ident} kann nicht deklariert werden
+@msg	invalid assignment target	ungültiges Zuweisungsziel
+@msg	the array's length is read-only	die Länge des Arrays ist schreibgeschützt
+@msg	the property cannot be redefined	die Eigenschaft kann nicht neu definiert werden
+@msg	the object is not extensible	das Objekt ist nicht erweiterbar
+@msg	the length cannot be redefined	die Länge kann nicht neu definiert werden
+@msg	it is read-only	sie ist schreibgeschützt
+@msg	an element cannot be deleted	ein Element kann nicht gelöscht werden
+@msg	it has only a getter	sie hat nur einen Getter
+@msg	the value is a primitive	der Wert ist ein primitiver Wert
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: Zeile {line}, Spalte {column} in {file}: {e} (ausgelöst)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: Zeile {line}, Spalte {column}: {e} (ausgelöst)
 @msg	{name}: {e} (thrown)	{name}: {e} (ausgelöst)
@@ -4494,6 +4540,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
 @msg	Downloaded {what}	{what} heruntergeladen
 @msg	Expand Appearance: the selection has a basic appearance	Aussehen umwandeln: Die Auswahl hat ein einfaches Aussehen
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	einige Rastereffekte wurden nicht in Bilder umgewandelt: Sie würden mehr als 1.024 Bilder oder insgesamt 256 Megapixel benötigen
 @msg	Expand: no brush strokes selected	Umwandeln: keine Pinselkonturen ausgewählt
 @msg	Expand: no gradient fills	Umwandeln: keine Verlaufsflächen
 @msg	Expand: nothing to expand	Umwandeln: nichts umzuwandeln
@@ -5331,6 +5378,10 @@ liquify-list-end	{0}, {1}	{0} und {1}
 	Cap Height	Versalhöhe
 	x-Height	x-Höhe
 	ICF Box	ICF-Rahmen
+	Show Sample	Muster einblenden
+	Hide Sample	Muster ausblenden
+	Max Ascent/Descent	Max. Höhe/Tiefe
+	Max Ascender	Max. Oberlänge
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` ist der Schrittverweis {r}, den nur `run` und `command_batch` auflösen
 @msg	`ids` must be an array of object ids, not {v}	`ids` muss ein Array von Objekt-IDs sein, nicht {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` muss ein Array von Farben sein, nicht {v}
@@ -5749,6 +5800,24 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
+@msg	the <filter> element needs an id, the filter's name	das <filter>-Element braucht eine id, den Namen des Filters
+@msg	an SVG filter's id is at most {MAX_NAME} characters	die id eines SVG-Filters hat höchstens {MAX_NAME} Zeichen
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> ist kein Element eines SVG-Filters
+@msg	an SVG filter has no event attributes such as {_1}	ein SVG-Filter hat keine Ereignisattribute wie {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	die Bilder eines SVG-Filters sind data:-URLs im Format PNG, JPEG, GIF oder WebP
+@msg	the SVG filter isn't valid XML: {e}	der SVG-Filter ist kein gültiges XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves von feTurbulence ist höchstens {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} ist höchstens {max}
+@msg	feConvolveMatrix's order	order von feConvolveMatrix
+@msg	feMorphology's radius	radius von feMorphology
+@msg	a blur's stdDeviation	stdDeviation einer Weichzeichnung
+@msg	the SVG filter has no primitives	der SVG-Filter hat keine Filterprimitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	ein SVG-Filter hat höchstens {MAX_PRIMITIVES} Filterprimitive
+@msg	the SVG filter is too large once its attributes are written out	der SVG-Filter ist zu groß, sobald seine Attribute ausgeschrieben sind
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	die Bilder eines SVG-Filters haben insgesamt höchstens {MAX_IMAGE_PIXELS} Pixel
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	der SVG-Filter kann nicht gezeichnet werden: Prüfen Sie seine Filterprimitive und deren Eingaben
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	die Elemente eines SVG-Filters sind höchstens {MAX_DEPTH} Ebenen tief verschachtelt
+@msg	an SVG filter is at most {_1} KB	ein SVG-Filter ist höchstens {_1} KB groß
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` muss ein Objekt sein, das nur `mode` mit dem Wert shaded oder wireframe enthält
 @msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
@@ -5911,7 +5980,7 @@ effect	Soft	Weich
 @msg	Unknown dimension style	Unbekannter Bemaßungsstil
 @msg	Unknown unit	Unbekannte Einheit
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung bleiben die Schnittseiten offen.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Schließt die kreisförmigen Enden offener Profile. Bei einer Teildrehung werden auch die Schnittseiten geschlossen.
 	Distance	Abstand
 @msg	span must be "object" or "selection", got {v}	span muss "object" oder "selection" sein, nicht {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" platziert einen `gradient`, kein Farbfeld
@@ -6064,6 +6133,7 @@ effect	Soft	Weich
 	Single Word Justification:	Ausrichtung einzelner Wörter:
 	Full Justify	Blocksatz
 	Minimum must not exceed Desired, nor Desired Maximum.	Das Minimum darf den optimalen Wert nicht übersteigen, der optimale Wert nicht das Maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Das Minimum darf den optimalen Wert nicht übersteigen, der optimale Wert nicht das Maximum
 	Minimum	Minimum
 	Justification	Abstände
 	Add filters from the list above	Filter aus der Liste oben hinzufügen
@@ -7007,9 +7077,43 @@ breakText	Glyphs	Glyphen
 	Remove Gaps	Lücken entfernen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	das ergibt zu viele Teile (höchstens 100000): machen Sie die Striche länger
 @msg	select paths, or segments, to divide	wählen Sie Pfade oder Segmente zum Aufteilen aus
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Gemeinsame Tangenten…
+	Common Tangents	Gemeinsame Tangenten
+	Tangents	Tangenten
+	Centerline	Mittellinie
+	External	Äußere
+	Internal	Innere
+@msg	select two closed paths	wählen Sie zwei geschlossene Pfade aus
+@msg	a selected path is open	ein ausgewählter Pfad ist offen
+@msg	a selected path is not convex	ein ausgewählter Pfad ist nicht konvex
+@msg	a selected path has no area	ein ausgewählter Pfad hat keine Fläche
+@msg	a selected path has more than 10000 segments	ein ausgewählter Pfad hat mehr als 10000 Segmente
+@msg	the two paths have the same outline	die beiden Pfade haben denselben Umriss
+@msg	One path lies inside the other, so they have no common tangents	Ein Pfad liegt im anderen, daher haben sie keine gemeinsamen Tangenten
+@msg	The paths overlap, so they have no internal tangents	Die Pfade überlappen sich, daher haben sie keine inneren Tangenten
+@msg	One path lies inside the other, so they have no internal tangents	Ein Pfad liegt im anderen, daher haben sie keine inneren Tangenten
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Striche in Pfade umwandeln
 @msg	select paths with dashed strokes to expand	wählen Sie Pfade mit gestrichelter Kontur zum Umwandeln aus
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Tangentialkreis…
+	Tangent Circle	Tangentialkreis
+	Circle:	Kreis:
+@msg	`ids` names an object twice	`ids` nennt ein Objekt zweimal
+@msg	select two or three paths or compound paths	wählen Sie zwei oder drei Pfade oder zusammengesetzte Pfade aus
+@msg	`radius` must be from 0.01 to 1000000 pt	`radius` muss von 0.01 bis 1000000 pt sein
+@msg	two shapes need a `radius`	zwei Formen brauchen einen `radius`
+@msg	three shapes set the radius themselves: leave `radius` out	drei Formen legen den Radius selbst fest: lassen Sie `radius` weg
+@msg	`circle` must be from 0 to 64	`circle` muss von 0 bis 64 sein
+@msg	a shape has no outline	eine Form hat keinen Umriss
+@msg	the shapes are too complex: at most 2000 segments in all	die Formen sind zu komplex: höchstens 2000 Segmente insgesamt
+@msg	these shapes take too long to search	diese Formen brauchen zu lange für die Suche
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	mehr als 64 Kreise berühren diese Formen: sie berühren sie womöglich entlang einer ganzen Kurve
+@msg	no circle touches these shapes	kein Kreis berührt diese Formen
+@msg	`circle` is past the last circle found ({found})	`circle` liegt hinter dem letzten gefundenen Kreis ({found})
+@msg	object {value} is not a path or compound path	Objekt {value} ist kein Pfad oder zusammengesetzter Pfad
+@msg	these shapes are too small to measure	diese Formen sind zu klein zum Messen
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentwerkzeuge
 	Save a Timestamped Copy	Kopie mit Zeitstempel speichern
@@ -7031,6 +7135,11 @@ breakText	Glyphs	Glyphen
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepalesisch
+	Assamese	Assamesisch
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} und neuer (Version {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Alle geöffneten Dokumente als PDF exportieren
@@ -7064,7 +7173,7 @@ breakText	Glyphs	Glyphen
 @msg	stroke cannot be set on a symbol instance	stroke kann nicht für eine Symbolinstanz gesetzt werden
 @msg	fill on a symbol instance must be a solid color or none	fill einer Symbolinstanz muss eine Vollfarbe oder none sein
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	{key} kann nicht für ein Bild ohne den Effekt „In Form umwandeln“ oder „Objekt in Pfade umwandeln“ gesetzt werden
-@msg	pass newName, registration, exportType, nineSlice and/or type	geben Sie newName, registration, exportType, nineSlice und/oder type an
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	geben Sie newName, registration, exportType, nineSlice, type und/oder alignToPixelGrid an
 	Text Flow	Textfluss
 	By Rows	Nach Zeilen
 	By Columns	Nach Spalten
@@ -7290,6 +7399,8 @@ breakText	Glyphs	Glyphen
 @msg	No bridge of this width fits across the selected art	Kein Steg dieser Breite passt über das ausgewählte Bildmaterial
 @msg	Some islands could not be joined to the area around the art	Einige Inseln konnten nicht mit der Fläche um das Bildmaterial verbunden werden
 @msg	`width` must be from {lo} to {hi} pt	`width` muss zwischen {lo} und {hi} pt liegen
+@msg	`angle` must be from -180 to 180 degrees	`angle` muss zwischen -180 und 180 Grad liegen
+@msg	`roundness` must be from 1 to 100%	`roundness` muss zwischen 1 und 100 % liegen
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` muss eine ganze Zahl von 1 bis {MAX_BRIDGES_PER_ISLAND} sein
 	Weed Box and Lines…	Entgitterrahmen und -linien…
 	Weed Box and Lines	Entgitterrahmen und -linien
@@ -8648,7 +8759,9 @@ breakText	Glyphs	Glyphen
 @msg	position must be normal, superscript or subscript	position muss normal, superscript oder subscript sein
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position muss topLeft, topRight, bottomLeft oder bottomRight sein
 @msg	positions must be between 0 and 100000 pt	positions müssen zwischen 0 und 100000 pt liegen
+@msg	ppi can't be more than {max} for this image	ppi darf für dieses Bild nicht mehr als {max} sein
 @msg	ppi must be a positive number, not {ppi}	ppi muss eine positive Zahl sein, nicht {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim lässt die Pixel des Bildes unverändert: Lassen Sie ppi weg
 @msg	ppi must be between 1 and 2400	ppi muss zwischen 1 und 2400 liegen
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` ist nicht transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape muss clippingMask|transparency sein
@@ -9262,3 +9375,23 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Check	Prüfen
+	Check Fold Lines	Faltlinien prüfen
+@msg	No cut lines are in the selection.	Die Auswahl enthält keine Schnittlinien.
+@msg	No cut lines are in the document.	Das Dokument enthält keine Schnittlinien.
+@msg	The cut lines do not enclose an area.	Die Schnittlinien umschließen keine Fläche.
+@msg	A cut line ends without meeting another cut line.	Eine Schnittlinie endet, ohne auf eine andere Schnittlinie zu treffen.
+@msg	A gap between cut lines was closed.	Eine Lücke zwischen Schnittlinien wurde geschlossen.
+@msg	The fold lines are too complex to check.	Die Faltlinien sind zu komplex für die Prüfung.
+@msg	A cut line and a crease lie on top of each other.	Eine Schnittlinie und eine Rilllinie liegen übereinander.
+@msg	No cut lines are among the given objects.	Die angegebenen Objekte enthalten keine Schnittlinien.
+@msg	Two fold lines lie on top of each other.	Zwei Faltlinien liegen übereinander.
+@msg	A crease ends inside a panel.	Eine Rilllinie endet innerhalb eines Felds.
+@msg	A crease does not divide two panels.	Eine Rilllinie trennt keine zwei Felder.
+@msg	A crease lies outside the cut outline, wholly or in part.	Eine Rilllinie liegt ganz oder teilweise außerhalb der Schnittkontur.
+@msg	The pieces of a hinge are not on one straight line.	Die Teile eines Scharniers liegen nicht auf einer geraden Linie.
+@msg	A gap between cut lines is too narrow to tell apart.	Eine Lücke zwischen Schnittlinien ist zu schmal, um sie zu unterscheiden.
+@msg	A cut-out area holds other fold lines or another blank.	Ein ausgeschnittener Bereich enthält weitere Faltlinien oder einen anderen Zuschnitt.
+@msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
+@msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}
