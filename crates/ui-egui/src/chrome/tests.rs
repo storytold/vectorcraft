@@ -1914,6 +1914,45 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
 }
 
+/// With a sublayer isolated, the back arrow goes up one layer at a time and then leaves isolation
+/// mode. The top-level layer's crumb leaves isolation mode from any depth, and a parent sublayer's
+/// crumb isolates that sublayer.
+#[test]
+fn isolation_bar_back_button_steps_up_through_sublayers() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let top = app.session.active().unwrap().doc.layers[0].id;
+    let mid = NodeId(app.run("layer.newSublayer", json!({"parent": top.0, "name": "Sublayer B"})).unwrap()["id"].as_u64().unwrap());
+    let deep = NodeId(app.run("layer.newSublayer", json!({"parent": mid.0, "name": "Sublayer C"})).unwrap()["id"].as_u64().unwrap());
+    app.run("layer.setCurrent", json!({"id": deep.0})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    let ctx = isolation_bar_context();
+    let click = |app: &mut crate::VectorcraftApp, pos: egui::Pos2| isolation_bar_gesture(app, &ctx, pos, pos);
+    let back = egui::pos2(15.0, 12.0);
+    let isolation = |app: &crate::VectorcraftApp| app.session.active().unwrap().isolation;
+
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    let steps = app.session.doc().unwrap().history.undo.len();
+    click(&mut app, back);
+    assert_eq!(isolation(&app), Some(mid), "back from the deepest sublayer");
+    click(&mut app, back);
+    assert_eq!(isolation(&app), Some(top), "back from the middle sublayer");
+    click(&mut app, back);
+    assert_eq!(isolation(&app), None, "back from the top-level layer");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "no undo step");
+
+    // "Layer 1" is the first crumb, at x 30 to about 75.
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    click(&mut app, egui::pos2(40.0, 12.0));
+    assert_eq!(isolation(&app), None, "the top-level layer's crumb");
+
+    // "Sublayer B" is the second crumb, from about x 95.
+    app.run("object.isolate", json!({"id": deep.0})).unwrap();
+    click(&mut app, egui::pos2(115.0, 12.0));
+    assert_eq!(isolation(&app), Some(mid), "the parent sublayer's crumb");
+}
+
 /// Headless frames of the isolation bar over a 1200 × 700 canvas for one pointer gesture: a press
 /// at `from`, a move to `to` and a release there. `from == to` is a click.
 fn isolation_bar_gesture(app: &mut crate::VectorcraftApp, ctx: &egui::Context, from: egui::Pos2, to: egui::Pos2) {
