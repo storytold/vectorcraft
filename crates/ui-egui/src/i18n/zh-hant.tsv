@@ -9568,3 +9568,8 @@ breakText	Glyphs	字符
 @msg	A fold line is on a non-printing layer.	一條摺線位於不列印的圖層上。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，鉸鏈：{hinges}，錯誤：{errors}，警告：{warnings}
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Image Brush	影像筆刷
+	Soft Bloom	柔和花朵
+	Halftone Field	半色調區域
+	Solar Grain	太陽顆粒
+	Color Flecks	彩色斑點

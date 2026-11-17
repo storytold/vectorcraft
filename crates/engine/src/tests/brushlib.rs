@@ -116,7 +116,8 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "game-trails",
             "energy-beams",
             "dry-media",
-            "tech-circuit"
+            "tech-circuit",
+            "image-brush"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
@@ -160,6 +161,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
+        ("image-brush", "scatter"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
@@ -188,6 +190,40 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
     }
     assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
+}
+
+#[test]
+fn image_brush_stamps_draw_and_carry_their_pixels_when_added_and_saved() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "image-brush").unwrap();
+    let names = ["Soft Bloom", "Halftone Field", "Solar Grain", "Color Flecks"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    assert_eq!(lib.doc.images.len(), 4);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 40, "x2": 190, "y2": 40}))["id"].as_u64().unwrap();
+    for b in &lib.brushes {
+        let BrushKind::Scatter(sc) = &b.kind else { panic!("{} is not a scatter brush", b.name) };
+        let NodeKind::Image(image) = &sc.art.kind else { panic!("{} has no image stamp", b.name) };
+        assert!(lib.doc.images.get(&image.key).is_some_and(|blob| blob.bytes.starts_with(b"\x89PNG\r\n\x1a\n")));
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &black_stroke());
+        assert!(pieces.len() >= 3 && pieces.iter().all(|p| matches!(p.kind, NodeKind::Image(_))), "{}", b.name);
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "image-brush", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert!(doc(&s).images.contains_key(&image.key), "{} pixels were not copied", b.name);
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    let mut saved_brushes = vectorcraft_brush::library(&reopened);
+    for brush in &mut saved_brushes {
+        if let BrushKind::Scatter(sc) = &mut brush.kind {
+            sc.art.id = NodeId(0); // Loaded image art is given a fresh document node ID.
+        }
+    }
+    assert_eq!(saved_brushes, lib.brushes);
+    assert_eq!(reopened.images, lib.doc.images);
 }
 
 /// Every path of brush art `n`: (anchors, opacity).
