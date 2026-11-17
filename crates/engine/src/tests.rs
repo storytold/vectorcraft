@@ -24,6 +24,7 @@ mod build;
 mod cancel;
 mod caret_kerning;
 mod charstroke;
+mod circle_through;
 pub(super) mod clip;
 mod clipboard;
 mod clipflavours;

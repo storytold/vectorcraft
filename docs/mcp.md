@@ -661,15 +661,16 @@ and answers true when the fields show in percent.
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
 portal's [PickColor](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Screenshot.html)
-on Linux, and the EyeDropper API in browsers that have it. `inspect_ui` reports `screenSampler: true` while it
-waits. The picked sRGB color is converted into the working RGB space and becomes the fill or the stroke of the
-active proxy in one undo step; `stroke: true` picks the stroke, and `picker: true` sends the color to the open
-Color Picker. A cancel leaves the colors as they were. On Linux, a session without a portal that has PickColor
+on Linux, a still copy of every monitor under a crosshair on Windows, and the EyeDropper API in browsers that have
+it. `inspect_ui` reports `screenSampler: true` while it waits. The picked sRGB color is converted into the working
+RGB space and becomes the fill or the stroke of the active proxy in one undo step; `stroke: true` picks the stroke,
+and `picker: true` sends the color to the open Color Picker. A cancel leaves the colors as they were. On Windows,
+Escape, a click of another mouse button or switching to another window cancels, and a screen that can't be copied shows "the screen
+color sampler failed" in the status bar and ends the wait. On Linux, a session without a portal that has PickColor
 shows "this system has no screen color sampler" in the status bar, a portal that does not return from the call
 within 25 seconds (VectorCraft's own limit) or leaves the bus before it answers shows "the screen color sampler
 did not answer", and a portal that ends the request in another way shows "the screen color sampler failed"; each
-ends the wait, so the sampler can be shown again. Windows, the BSDs and headless sessions have no screen color
-sampler.
+ends the wait, so the sampler can be shown again. The BSDs and headless sessions have no screen color sampler.
 
 | Tool | Arguments | Notes |
 |---|---|---|
@@ -1071,7 +1072,9 @@ given and the swatch already has keeps its model, as does a stop color that `pai
 gradient already has; a stop that names a swatch takes the swatch's color as it is, and `swatch.new` or `swatch.edit`
 with `mode` converts a color into that mode only. RGB documents keep colors as given. Harmonies, Edit
 Colors blends, inversions and Recolor Artwork keep each colour's model (a blend between models takes the document's).
-`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
+`swatch.new {colors: [...]}` saves several colours as swatches in one undo step. An entry of `swatch.new {colors}` or
+`swatch.newGroup {colors}` may be `{swatch, tint}`: a tint of a global or spot color below 100% becomes a tint swatch
+("Name 40%") linked to it, as the Color Guide panel saves the tints of a spot color base. `color.harmony {color, rule, steps?, variation?, amount?}` answers what the Color
 Guide panel shows: the harmony rule's colours, base first, and per colour its row of `2·steps+1` variations
 (shades, cool or muted on the left, tints, warm or vivid on the right). With `limitTo` (a swatch library id or name,
 or `"document"` for the document's swatches) every colour snaps to the library's nearest colour (ΔE 2000), as the
@@ -1259,6 +1262,10 @@ exporter plug-in's parameters. Other formats are written at once. OK writes the 
 OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). Any
 option skips the options dialog, but without `path` the save panel still picks the file. To write without a
 dialog, pass `path`. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
+In the Save PDF dialog, `ui.dialogReset {}` (Cancel while Alt, or Option on macOS, is held) puts every option back to
+the chosen preset's settings, clears the passwords, and leaves the dialog open with its preset, path, artboard range and
+section; `answer_dialog {action: "cancel"}` still closes it without saving. If the chosen saved preset was deleted
+while the dialog is open, `ui.dialogReset` returns an error naming it and leaves every field, passwords included, as it is.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -1272,6 +1279,12 @@ snapped to pixels) and, for PNG, `interlaced`. `width` or `height` sets the size
 pixels per point, and the file stores the resolution that results, as with `ppi`. `width` wins over `height`, and
 either one wins over `ppi` and `scale`. A value that is not a positive number is refused. Export for Screens rows keep
 their own size (`scale: "512w"`).
+
+WebP is lossless by default (`lossless: true`). `{"format": "webp", "lossless": false, "quality": 60}` writes a lossy
+WebP file: `quality` runs from 0 to 100 (default 90, VectorCraft's own value), and a higher value keeps more detail in
+a larger file. A lossy file keeps the alpha exactly when some pixels are not opaque. A WebP `quality` above 100, or one
+that is not a whole number, is refused; a lossless file ignores `quality`. Export for Screens takes both in a WebP row
+or in `settings.webp`.
 
 `shape.ellipse` (and `draw_shape` with `shape: "ellipse"`) takes `anchors`, the number of smooth anchors (default 4).
 Without it, or at 4, it draws a live ellipse. Any other count from 2 to 1000 draws a closed plain path with that many
@@ -3245,7 +3258,7 @@ own layout rules.
 
 ## Learn panel
 
-Window › Learn and the Explore tutorials button beside the search icon at the right end of the app bar show and hide
+Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
 the Learn panel. Its For you tab holds a Get started section with a Quick skill guide card; choosing the card opens
 the Skills tab. The Skills tab lists VectorCraft's own skills, each with a progress ring and the count of its tutorials
 finished of all its tutorials. Choosing a skill lists its tutorials, choosing a tutorial shows its numbered steps, and
@@ -4313,7 +4326,10 @@ style is applied to gets them at the same place relative to its own bounds.
 (each on top of the ones before it) with the first one's transparency; `graphicStyle.move {name, to}` reorders the
 list (what dragging a style in the panel does). `graphicStyle.duplicate {name}` adds a copy of the style at the end
 of the list, named `<name> copy` (`<name> copy 2` and so on when that is taken), with no object linked to it; the
-panel menu's Duplicate Graphic Style and a style dropped on the panel's New Graphic Style button run it. Override Character Color (`graphicStyle.setOptions
+panel menu's Duplicate Graphic Style and a style dropped on the panel's New Graphic Style button run it.
+`graphicStyle.delete {name}` or `{names}` deletes styles in one undo step; objects linked to them keep their look and
+are no longer linked. The panel's Delete Graphic Style button and menu item, and a style dropped on the button, run it
+after asking; Alt held on the button, or on the drop, deletes without asking. Override Character Color (`graphicStyle.setOptions
 {overrideCharColor}`, the preference `overrideCharColor`, on by default) makes a style applied to type replace its
 characters' fill and stroke with the style's fills and strokes; off, the characters keep their colour under them.
 
@@ -6132,6 +6148,29 @@ slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` w
 Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
 slider back to the Auto-Smooth level.
 
+## Circle through three points
+
+`shape.circleThroughPoints {points?: [[x, y], [x, y], [x, y]]}` draws the circle whose edge passes through three
+points, as a live ellipse with the current paint, and selects it. Without `points`, it uses the three selected anchor
+points, from one path or several: anchor points selected with Direct Selection, or all the anchor points of a path
+selected whole, such as a triangle. The ends of selected segments do not count. The result is `{id, cx, cy, radius}`,
+and one undo removes the circle. The circle is not pixel-aligned, even while the document's
+[Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on, so it stays through the points. The command
+returns an error and draws nothing when two points are the same or the three lie on one line (twice the triangle's area
+at most 10⁻¹⁰ of its longest side squared), when `points` is not three pairs of numbers, and when `points` is left out
+and the selection does not hold exactly three anchor points of paths.
+
+With the Ellipse tool, the first two Shift-clicks place points, and the third draws the circle through the three with
+this command. After two points the tool previews the circle through them and the pointer as a dashed outline. Once a
+point is placed, a Shift-click on the selection's handles, center point or shape widgets places a point too. Escape, a
+click without Shift, a drag, a press without Shift on the selection or a shape widget, and an edit, Undo or Redo made
+outside the tool remove the points placed so far. A Shift-drag still draws a circle from corner to corner. While the
+perspective grid shows with an active plane, a Shift-click opens the size dialog, as a click does.
+
+```json
+{"name":"run_command","arguments":{"command":"shape.circleThroughPoints","params":{"points":[[0,0],[80,0],[0,60]]}}}
+```
+
 ## Editing a path with the Curvature tool
 
 The Curvature tool edits any selected path, whatever drew it, keeping its shape except where edited (#798). Each edit
@@ -7521,7 +7560,7 @@ nothing. Opening a document reads a DCS file and its plates again even with the 
 keeps the saved preview of other linked EPS files. These rules are VectorCraft's own: the screen, composite print and exports show the image as its plates
 mixed into CMYK (each ink amount times the ink's CMYK values, plates combined as `1 − (1 − a)(1 − b)`); Separations
 Preview and `file.print` separations show each plate on its own ink, and a spot plate prints as the document's swatch
-of its ink (else its CMYK values) with `spotsToProcess`. Separations Preview shows a reduced image's plates as the
+of its ink (else its CMYK values) with `spotsToProcess` or that ink's own `convertToProcess`. Separations Preview shows a reduced image's plates as the
 mean of the plate pixels each shown pixel covers. A file may name 64 plates, a plate file may be 1 GB, and the plates together may hold 512 MB of
 ink amounts; a plate that can't be read is an error naming the plate, and nothing is placed. The plates go on the first
 plate's pixel grid, grown to hold every plate where it prints; a plate of another size or position is resampled onto
@@ -7565,11 +7604,25 @@ is placed as one). Off, each
 file is placed with the options last confirmed for its format. The default, and the options a file is placed with
 when the checkbox is off, are VectorCraft's own choices.
 
+A Shift-click with the loaded place cursor opens the current file's import options before it is placed, however the
+cursor was loaded (the Place dialog with Show Import Options on or off, or `file.place.queue`); OK places the file at
+the click, and the cursor goes on to the next file. The help page
+([Place multiple files](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf))
+describes a Shift-click on the file shown in the cursor as the way to change its import options. The rest are
+VectorCraft's own rules: with Show Import Options on, the Shift-click opens one dialog, not two; the dialog opens even
+when the cursor was loaded with `text`, `dxf`, `page`, `crop`, `layers`, `hiddenLayers` or `importSlices`, and a file
+whose format has no import options dialog in VectorCraft (a PNG image, a one-page PDF, a PSD file that is linked or
+has one layer and no slices) is placed as a click places it, with the options the cursor was loaded with; Cancel
+leaves the file unplaced, as for a click with Show Import Options on; a Shift-drag places at the dragged size, as a
+drag does. Over MCP the Shift-click is a `pointer_gesture` with `mods: {shift: true}`; the place tool's `file.place`
+then carries `showImportOptions: true`. Headless, where no dialog can open, it places the file as a click does.
+
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/photo.jpg","at":[300,200]}}}
 {"name":"run_command","arguments":{"command":"file.place","params":{"name":"logo.svg","dataBase64":"PHN2Zy…","rect":[0,0,100,100]}}}
 {"name":"run_command","arguments":{"command":"file.place.queue","params":{"paths":["/tmp/a.png","/tmp/b.pdf"]}}}
 {"name":"pointer_gesture","arguments":{"events":[{"kind":"down","x":40,"y":40},{"kind":"up","x":40,"y":40}]}}
+{"name":"pointer_gesture","arguments":{"mods":{"shift":true},"events":[{"kind":"down","x":40,"y":40},{"kind":"up","x":40,"y":40}]}}
 ```
 
 ## Copy and paste between documents
@@ -8117,7 +8170,8 @@ preview with a warning when it is gone or changed.
 `links.list` and `links.info` give them `document: true`, the file's `format` (`VectorCraft`, `PDF`,
 `PDF-compatible .ai`, `EPS`, `PostScript`) and the artboard's or page's `pageWidth` and `pageHeight` (pt). A relinked
 PDF shows the same page and box of the new file. File › Package copies a placed PDF, `.ai` or EPS file as it is. For a `.ai` file read from
-its editing data, Package also copies the files its art places into the same folder. That file finds them by name,
+its editing data, or an EPS file read from the native document it carries, Package also copies the files its art
+places into the same folder. That file finds them by name,
 and Package warns when one is copied under another name: the copy then shows the file of that name, or its preview.
 Saving the file in the app updates the open documents that place it. `links.embed` (the Links panel's Break Link)
 turns one into the editable copy placing without link gives, its symbols, patterns, swatches and images joining
@@ -8592,7 +8646,9 @@ picked as the printer, File → Print saves the PDF instead (see Printing). Head
 `{pages, path | dataBase64, bytes, warnings}`; `print.preview {settings?}`
 answers what it would print without writing it: `{pages (copies included), sheets: [{artboard, tile?, ink?, width,
 height, orientation, scale}] (one copy, in order), tiles: [{artboard, columns, rows, printed, tiles}] (document
-space), inks: [{name, spot, print, frequency, angle}], warnings, settings}`. `print.setup {settings?}` saves the
+space), inks: [{name, spot, print, frequency, angle}] (the plates), documentInks: [{name, spot, print, frequency,
+angle, convertToProcess?}] (every ink of the document, the spot inks printing as process included), warnings,
+settings}`. `print.setup {settings?}` saves the
 settings with the document (one undo step, kept in the native file as `print_setup`); both other commands start from
 the saved settings, or from a print preset's with `preset` (see Print presets), with `settings` over them (`null` keeps
 a value). `list_commands` with filter `print.setup`
@@ -8603,7 +8659,16 @@ documents every field:
   `orientation`, `autoRotate` (on by default: the paper turns to each artboard), `transverse`; `printLayers:
   visiblePrintable|visible|all` (template layers never print); `placement: {origin, x, y}` places the printed area
   (artboard, bleed and marks) on the imageable area (the paper inside `margin`); `scaling: none|fit|custom|tileFull|
-  tileImageable` with `scale: {width, height}` (%), `overlap` and `tileRange` (tiles numbered across then down).
+  tileImageable` with `scale: {width, height, linked}` (1–1000 %), `overlap` and `tileRange` (tiles numbered across
+  then down).
+- `scale.linked` keeps the custom scale's width and height equal, as the link by Custom's width and height does on
+  [the help page](https://helpx.adobe.com/illustrator/desktop/save-and-export/export-files-to-different-formats/print-documents-in-illustrator.html),
+  where turning it off scales the two apart. The rest is VectorCraft's own rule. New settings have it on, and a saved
+  `scale` without `linked` reads it as false, so settings and presets saved before it print as they did. While it is
+  on, a request that gives one percentage sets the other, turning it on sets the height to the width, and a width and
+  height that differ are an error. A request that gives a different width and height without `linked` turns it off;
+  `linked: null` keeps the saved link, as `null` does for every setting. The Print dialog shows it as the link button after Scale W and H, dimmed with them unless Scaling is Custom or a
+  tiling choice.
 - Copies per sheet: with `copiesPerSheet: true` (off by default; not with tiling) each sheet holds as many copies of
   the artboard as fit the imageable area, each with its bleed and marks, across then down, `gutter` pt apart (0–720,
   default 0). The copies are not turned, and the placement places the whole grid. An artboard that doesn't fit prints
@@ -8612,10 +8677,31 @@ documents every field:
   them all.
 - `marks` and `bleed` as `document.exportPdf` takes them (the bleed is the document's unless `useDocument: false`),
   drawn around the artboard at the paper's scale; the page information adds the tile and the ink with its screen.
-- `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, inks: [{name,
-  print, frequency, angle}]}`: separations print one page per ink in the grey of its coverage (images too;
-  overprinting fills and strokes don't knock out), Registration on every plate; emulsion down mirrors the page and a
-  negative inverts it.
+- `output: {mode: composite|separations, emulsion: up|down, image: positive|negative, spotsToProcess, overprintBlack,
+  inks: [{name, print, frequency, angle, convertToProcess}]}`: separations print one page per ink in the gray of its
+  coverage (images too; overprinting fills, strokes and characters don't knock out), Registration on every plate;
+  emulsion down mirrors the page and a negative inverts it.
+- `output.inks[].convertToProcess` (default false) prints one spot ink as process inks: it gets no plate of its own,
+  and its color prints on the Cyan, Magenta, Yellow and Black plates, while other spot inks keep their plates. The
+  Print dialog's Document Ink Options list shows an icon before each spot ink's name, and a click on it switches that
+  ink between spot and process output, as
+  [the help page](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes for single
+  spot colors. The rest is VectorCraft's own rule. `spotsToProcess` converts every spot ink whatever each one's
+  own setting says, and the dialog then dims the icons; turning it off again applies each ink's own setting. A
+  converted ink's `print`, `frequency` and `angle` are kept for when it prints as a spot ink again, and its Print
+  checkbox and fields are dimmed: `print: false` does not leave its color out of the process plates. Process inks and
+  Registration have no icon, and `convertToProcess` on a process ink is ignored with a setting note.
+- `output.overprintBlack` (default false) makes black ink overprint in separations, as the Output step of
+  [Print color separations](https://helpx.adobe.com/illustrator/using/printing-color-separations.html) describes:
+  black art leaves the inks under it on the other plates. Which paints count as black is VectorCraft's own rule: a
+  fill, stroke or character paint of solid 100% process K or 100% gray, or a gradient whose every stop is (every
+  color point of a freeform gradient), each to within half a percent (99.5% K counts, and so does 0.4% cyan beside
+  it). Rich black, RGB and Lab black, tints below 99.5% and colors linked to a spot swatch or to Registration are not
+  marked, and paints already set to overprint keep that setting. A symbol instance's art is judged with the paints the
+  instance prints it in, its own fill and stroke changes and its fill's stain included. An instance that print leaves
+  unplaced, because placing its art would take the printed art past 16,000,000 objects or draw it deeper than 128
+  levels, is judged by its symbol's own art instead. Only the printed copy is marked: the document and its own overprint settings do not change. Composite
+  output ignores the option, and the Print dialog's Overprint Black checkbox is disabled unless Mode is Separations.
 - `graphics: {autoFlatness, flatness, fonts}` and `color: {intent, preserveNumbers}` (the intent colours separate
   with; without preserveNumbers CMYK colours are separated again).
 
@@ -8732,8 +8818,12 @@ and is missing from the picture" once for all such images.
 
 `document.open` and `file.place` read `.emf` and `.wmf` (placeable or not) into one artboard, the picture's frame, and
 one layer: paths with their fills and strokes (pens become strokes with caps, joins and dashes), clipping groups,
-images and point type in the font the file names. An EMF that draws with EMF+ records is read from them. Hatched and
-pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
+images and point type in the font the file names. Type keeps the file's character advances as tracking, with pair
+kerning off. On a single left to right line, an advance that tracking can't give (wider than its range, or a tab)
+starts a new point type object at the position the advance gives, and an underline or strikethrough is filled across the space between and on to the end
+of the last character's advance. Type on more than one line is placed a line at a time: each line is aligned by its own advances and
+split as a single line is. An EMF that
+draws with EMF+ records is read from them. Hatched and pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
 `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard for `edit.paste`; the app
 pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
 (the Windows desktop service doesn't read metafiles yet).
@@ -8899,10 +8989,32 @@ file size), `seconds` to download at `kbps` (default 56.6), the size, and for pa
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
 previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
 
+Optimize to File Size (the dialog's button under Preset) is `webExport.optimizeToFileSize {desiredK, startWith?,
+use?, slice?, …settings}`. It searches for settings whose files fit in `desiredK` K (1 K is 1024 bytes; above 0, at
+most 1048576) and returns them without writing a file or changing the remembered settings: `{targetBytes, achieved,
+bytes, format, settings, trials, images, warnings}`. `startWith: current` (the default) keeps the format and takes the
+highest JPEG quality (1 to the current quality) or the most GIF/PNG-8 colors (2 to the current count) that fit,
+measured by encoding. A lower value can give a larger file, so the search measures up to 6 values spread over the
+range, from the top down, and then narrows the step above the first one that fits. When no value measured fits, GIF
+tries lossy 100 with the most colors that fit. PNG-24 has no
+setting to lower. `startWith: auto` takes GIF for art with transparent pixels or at most 256 colors and JPEG
+otherwise. With `transparency: false` it counts the colors the pixels have once blended over the matte, as the file
+is written. For opaque art it tries the other format when the first one cannot reach the size. `use: allSlices` (the
+default) measures the image, or the image slices' files together; `eachSlice` measures the largest slice file;
+`currentSlice` measures `slice` (a number from `slice.list`), else the selected image slice, else the first. The
+slices share one setting, so every `use` changes the setting of all of them. The search encodes at most 32 trial
+settings. When none fits, `achieved` is false and `settings` are the smallest trial. A `desiredK` that is missing,
+not a number, 0 or less or above 1048576 is an error, as are an unknown `startWith` or `use` and a `slice` that is
+not a slice number or comes with another `use`. In the dialog, the desired size starts at the size of what Total of All
+Slices measures with the current settings, rounded up to 0.001 K.
+
 Presets: `webExport.presets.list` (built-in ones, then saved ones), `webExport.presets.save {name, newName?, …settings}`,
 `webExport.presets.delete {name}`; any name works as `preset` in the other commands (its settings, then the keys
 given). `webExport.settings {…}` remembers the settings the dialog opens on (`{}` reads them, `reset: true` restores the
-defaults); presets and remembered settings are preferences.
+defaults); presets and remembered settings are preferences. While Alt (Option on macOS) is held, the dialog's Cancel
+button reads Reset. Reset puts the remembered settings (the defaults when none are remembered) back on the document's
+active artboard, drops a pending `preset`, keeps the view, zoom, connection speed and `path`, remembers and writes
+nothing, and keeps the dialog open; `ui.dialogReset` does the same.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"gif","colors":32,"dither":"none"}}}
@@ -11375,7 +11487,10 @@ desktop app. The Flare tool's are its Flare Tool Options (dialog `flareOptions`)
 (Option on macOS) is held, the dialog's Cancel button reads Reset. Reset puts every option back to the tool's default,
 leaves a click's `x` and `y` unchanged and keeps the dialog open; `ui.dialogReset` does the same. OK keeps the options
 (`tool.setOption {tool: "flare", values}`) and the next flare dragged out uses them; a click with the tool opens the
-same dialog, and its OK also draws a flare there. While the center is dragged out, each drag update in which the
+same dialog, and its OK also draws a flare there. An Alt-click (Option-click on macOS; Alt held when the button goes
+down, with no drag) opens no dialog: it draws a flare there at once with the options as they are, in one undo step,
+through `shape.flare`, or through `perspective.draw` with `at` on the active perspective plane as the dialog's OK does,
+and leaves the options unchanged. While the center is dragged out, each drag update in which the
 pointer's document y grows adds one degree per document point to `shape.flare`'s `rotation` (it turns
 only the rays), decreasing y subtracts the same rate, and unchanged y leaves it. This application rate is independent of event frequency; Shift held keeps
 the turn as it is. Space held keeps the turn as well. Once the center drag has passed its starting distance, and in the
@@ -11824,6 +11939,17 @@ so its point at `t` moves by (dx, dy), turning a straight spine into a curve (`p
 {"name":"run_command","arguments":{"command":"object.blend.spine.addAnchor","params":{"id":40,"x":150,"y":100}}}
 {"name":"run_command","arguments":{"command":"object.blend.spine.moveAnchor","params":{"id":40,"anchor":1,"x":150,"y":20}}}
 ```
+
+`object.blend.options {id?, spacing?, value?, steps?, distance?, orientation?, smooth?, easingType?, ramp?, colorShift?}`
+sets the options of every selected blend, or of the blend `id` alone. Each blend takes only the options given and
+keeps its own value for the others, so a call with `colorShift` alone leaves each blend's spacing, orientation, type
+and ramp as they were. `spacing` without `value`, `steps` or `distance` keeps the count of a blend already in that
+mode, and a blend in another mode takes 5 steps or 10 pt. A hidden or locked `id`, an `id` that is not a blend, a
+value out of range, a `spacing` that is not a string, an `orientation` other than `page` or `path`, and `value`
+without `spacing` are errors that change
+nothing, and a call that changes no blend records no undo step. With no blend selected and no `id`, the call sets the
+spacing and orientation new blends start with. The Blend panel's Ramp and Shift sliders run it on the selected blends:
+a drag previews and its release records one undo step. Blend Options sends only the spacing or orientation set in the dialog.
 
 `object.blend.setEasing {id?, easingType?, ramp?, colorShift?}` sets one blend's easing and color shift (the
 first selected blend without `id`) and returns `{id, easingType, ramp, colorShift, changed}`; omitted values are kept.

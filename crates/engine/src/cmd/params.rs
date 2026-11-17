@@ -649,6 +649,7 @@ pub const UNCHECKED: &[&str] = &[
     "transparency.setOpacityMask",
     "transparency.unlinkOpacityMask",
     "type.pathOptions",
+    "webExport.optimizeToFileSize",
     "webExport.presets.save",
     "webExport.settings",
 ];
