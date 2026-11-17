@@ -45,7 +45,8 @@ pub(super) use images::PAYLOAD;
 pub(super) use images::{IMAGE_DEPTH, IMAGES, LINKS_EMBEDDED};
 #[cfg(test)]
 pub(super) use paints::{
-    GRADIENT_DITHER, GRADIENT_HUE, GRADIENT_PERCEPTUAL, GRADIENT_SHAPES, GRADIENTS, STOP_LINKS, SWATCH_PLACEMENT, free_gradient_name,
+    GRADIENT_COMPARISONS, GRADIENT_DITHER, GRADIENT_HUE, GRADIENT_PERCEPTUAL, GRADIENT_SHAPES, GRADIENTS, SCANNED_DEFINITIONS, STOP_LINKS,
+    SWATCH_PLACEMENT, free_gradient_name,
 };
 #[cfg(test)]
 pub(super) use symbols::{MISSING_SYMBOL, SYMBOL_ART, SYMBOL_COUNT, SYMBOL_OPTIONS};
@@ -200,11 +201,11 @@ pub(super) struct Writer<'a> {
     /// pattern's definition, the pattern's space turned y up.
     canvas: Affine,
     /// The gradient definitions, in the order they are first used.
-    gradients: Vec<paints::GradientDef>,
+    gradients: paints::GradientDefs,
     /// The number the next new gradient definition's name tries first (1 is `Gradient`).
     next_gradient: u64,
     /// The pattern definitions written, each after those its art uses.
-    patterns: Vec<paints::PatternOut>,
+    patterns: paints::PatternDefs,
     /// The patterns whose definitions are being written.
     defining: Vec<String>,
     /// Writing the palette: the definitions it adds are for its swatches only.
@@ -357,9 +358,9 @@ impl<'a> Writer<'a> {
             grad_space: to_art,
             tile_grad_space: Affine::translate((-origin.0, origin.1)),
             canvas: Affine::new([1.0, 0.0, 0.0, -1.0, origin.0, origin.1]) * to_art,
-            gradients: vec![],
+            gradients: paints::GradientDefs::default(),
             next_gradient: 1,
-            patterns: vec![],
+            patterns: paints::PatternDefs::default(),
             defining: vec![],
             in_palette: false,
             canvas_origin: origin,
