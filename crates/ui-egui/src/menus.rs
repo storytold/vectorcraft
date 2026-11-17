@@ -61,6 +61,8 @@ pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]
 use bar::{menu_body, pointer_reaches_title};
 pub use context::{context_items, context_menu_body, ruler_menu_body, ruler_unit_items};
+#[cfg(test)]
+use entries::flatten;
 pub use entries::{
     InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, plays_in_app, pretty_shortcut, shown_label,
     shown_shortcut,

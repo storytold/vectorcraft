@@ -193,6 +193,40 @@ fn discover_command_results_follow_their_menu_label() {
     assert_eq!(back["results"][index]["label"], "Hide Grid");
 }
 
+/// A menu entry's shown path translates the menus' own names and keeps a Scripts folder's name, as
+/// the menus draw it; Help shows that path.
+#[test]
+fn menu_entry_shown_paths_keep_script_folder_names() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_ne!(crate::i18n::tr(de, "File"), "File");
+    let script = json!({"path": "File/a.jsx"});
+    let folder = vec![Item::Cmd("a", crate::scripts_menu::COMMAND, script)];
+    let items = vec![Item::Sub("Scripts", vec![Item::Sub("File", folder), Item::Cmd("Other Script…", "ui.runScript", Value::Null)])];
+    let mut out = vec![];
+    crate::i18n::set_current(de);
+    flatten(&app, vec!["File".into()], vec![crate::i18n::t("File").into()], &items, &mut out);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let script = out.iter().find(|e| e.command.as_deref() == Some(crate::scripts_menu::COMMAND)).unwrap();
+    assert_eq!(script.path, ["File", "Scripts", "File"]);
+    assert_eq!(script.shown_path, [crate::i18n::tr(de, "File"), crate::i18n::tr(de, "Scripts"), "File"]);
+}
+
+/// Outside macOS the window's menu bar has no VectorCraft menu, so Help lists no command under it.
+#[test]
+fn discover_leaves_out_menus_the_window_does_not_show() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let app_menu: Vec<String> =
+        menu_entries(&app).into_iter().filter(|e| e.path.first().is_some_and(|t| t == "VectorCraft")).filter_map(|e| e.command).collect();
+    assert!(!app_menu.is_empty());
+    for id in app_menu {
+        let found = app.run("help.discover.search", json!({"query": id})).unwrap();
+        let listed = found["results"].as_array().unwrap().iter().any(|hit| hit["path"][0] == "VectorCraft");
+        assert_eq!(listed, cfg!(target_os = "macos"), "{id}: {found}");
+    }
+}
+
 /// Help finds a command by the label its menu shows in the UI language, also where the menu names
 /// an effect by its own id (Effect › Pathfinder › Add reads Réunion in French).
 #[test]
