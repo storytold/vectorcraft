@@ -129,9 +129,10 @@ fn rasterize_before_a_transform_keeps_its_options() {
     assert_eq!(crate::rasterize_stage(&effects), Some(vec![1]));
 }
 
-/// The Transform effects after the last Rasterize effect move its image when, from the first of
-/// them on, every visible effect is a Transform effect that moves the art once. Hidden ones, and
-/// ones with Transform Objects off, leave the image where it is.
+/// The Transform effects after the last Rasterize effect move or copy its image when, from the
+/// first of them on, every visible effect is a Transform effect that does not move at random and at
+/// most one of them makes copies. Hidden ones, and ones with Transform Objects off, leave the image
+/// where it is.
 #[test]
 fn rasterize_following_ignores_hidden_and_objects_off() {
     let rasterize = || fx(crate::RASTERIZE, json!({}));
@@ -150,9 +151,16 @@ fn rasterize_following_ignores_hidden_and_objects_off() {
         // the image back.
         (vec![rasterize(), roughen.clone(), shadow.clone(), scale()], Some(vec![3])),
         (vec![rasterize(), scale(), roughen], None),
-        (vec![rasterize(), scale(), shadow], None),
-        (vec![rasterize(), transform(json!({"scaleH": 200, "copies": 2}))], None),
+        (vec![rasterize(), scale(), shadow.clone()], None),
+        // Each copy carries the image, even of a Transform effect that only copies in place.
+        (vec![rasterize(), transform(json!({"scaleH": 200, "copies": 2}))], Some(vec![1])),
+        (vec![rasterize(), transform(json!({"copies": 2}))], Some(vec![1])),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2})), scale()], Some(vec![1, 2])),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2, "objects": false}))], None),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2})), transform(json!({"moveV": 10, "copies": 3}))], None),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2})), shadow], None),
         (vec![rasterize(), transform(json!({"scaleH": 200, "random": true}))], None),
+        (vec![rasterize(), transform(json!({"scaleH": 200, "copies": 2, "random": true}))], None),
         // The Transform effect before the Rasterize effect moves the art.
         (vec![scale(), rasterize()], None),
         (vec![scale(), rasterize(), rasterize(), scale()], Some(vec![3])),
@@ -173,16 +181,62 @@ fn rasterize_following_ignores_hidden_and_objects_off() {
 fn the_image_moves_by_each_transform_about_the_art_it_takes() {
     let staged = shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0));
     let effects = [fx(crate::RASTERIZE, json!({})), transform(json!({"scaleH": 200, "scaleV": 200})), transform(json!({"moveH": 5}))];
-    let map = crate::stage_map(&effects, &[1, 2], &staged).unwrap();
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    assert_eq!(maps.len(), 1);
     // Twice the size about the center (20, 20), then 5 pt to the right.
     let want = Affine::translate((5.0, 0.0)) * Affine::translate((20.0, 20.0)) * Affine::scale(2.0) * Affine::translate((-20.0, -20.0));
-    assert!(map.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "{map:?}");
+    assert!(same_map(maps[0], want), "{maps:?}");
     // The second Transform effect turns about the center of what the first one made.
     let effects = [fx(crate::RASTERIZE, json!({})), transform(json!({"moveH": 100})), transform(json!({"rotate": 90}))];
-    let map = crate::stage_map(&effects, &[1, 2], &staged).unwrap();
-    let c = map * Point::new(20.0, 20.0);
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    let c = maps[0] * Point::new(20.0, 20.0);
     assert!((c.x - 120.0).abs() < 1e-9 && (c.y - 20.0).abs() < 1e-9, "{c:?}");
-    assert_eq!(crate::stage_map(&effects, &[1, 2], &PathData::default()), None);
+    assert_eq!(crate::stage_maps(&effects, &[1, 2], &PathData::default()), None);
+}
+
+/// Is `a` `b`, each coefficient within 1e-9?
+fn same_map(a: Affine, b: Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9)
+}
+
+/// Are `maps` `want`, in order?
+fn same_maps(maps: &[Affine], want: &[Affine]) -> bool {
+    maps.len() == want.len() && maps.iter().zip(want).all(|(m, w)| same_map(*m, *w))
+}
+
+/// A Transform effect with copies places the image once for the original and once for each copy,
+/// copy `k` through its map `k` times about the art before it, the last copy lowest and the
+/// original on top. A Transform effect after it moves every placement, about the bounds of all the
+/// copies.
+#[test]
+fn each_copy_carries_the_image() {
+    let staged = shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0));
+    let rasterize = fx(crate::RASTERIZE, json!({}));
+    let effects = [rasterize.clone(), transform(json!({"moveH": 100, "copies": 2}))];
+    let maps = crate::stage_maps(&effects, &[1], &staged).unwrap();
+    let want = [Affine::translate((200.0, 0.0)), Affine::translate((100.0, 0.0)), Affine::IDENTITY];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // Turned 90° about the center (20, 20) each time: copy 2 turns 180°.
+    let effects = [rasterize.clone(), transform(json!({"rotate": 90, "copies": 2}))];
+    let maps = crate::stage_maps(&effects, &[1], &staged).unwrap();
+    let turn = |deg: f64| Affine::translate((20.0, 20.0)) * Affine::rotate(-deg.to_radians()) * Affine::translate((-20.0, -20.0));
+    let want = [turn(180.0), turn(90.0), Affine::IDENTITY];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // A scale after the copies doubles every placement about the center of all three, (120, 20).
+    let effects = [rasterize.clone(), transform(json!({"moveH": 100, "copies": 2})), transform(json!({"scaleH": 200, "scaleV": 200}))];
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    let scale = Affine::translate((120.0, 20.0)) * Affine::scale(2.0) * Affine::translate((-120.0, -20.0));
+    let want = [scale * Affine::translate((200.0, 0.0)), scale * Affine::translate((100.0, 0.0)), scale];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // A move before the copies moves the art they copy.
+    let effects = [rasterize.clone(), transform(json!({"moveV": 5})), transform(json!({"moveH": 100, "copies": 1}))];
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    let want = [Affine::translate((100.0, 5.0)), Affine::translate((0.0, 5.0))];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // Copies stop where the geometry pass stops them: none past its reach of 1e9 pt.
+    let effects = [rasterize, transform(json!({"moveH": 1.0e7, "copies": 1000}))];
+    let maps = crate::stage_maps(&effects, &[1], &staged).unwrap();
+    assert_eq!(maps.len(), 100, "{}", maps.len());
 }
 
 /// An SVG filter keeps its options: it paints in its own user space.

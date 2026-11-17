@@ -605,6 +605,7 @@ font-technology	Variable	Вариативные
 	Consolidate All Windows	Объединить все окна
 	Constrain Angle	Ограничить угол
 	Constrain Width and Height Proportions	Сохранять пропорции ширины и высоты
+	Copy Width to Height	Копировать ширину в высоту
 	Construction Guides	Направляющие построения
 	Contextual Alternates	Контекстные альтернативы
 	Contextual Task Bar	Контекстная панель задач
@@ -615,6 +616,8 @@ font-technology	Variable	Вариативные
 	Control	Control
 	Convert	Преобразовать
 	Convert All Spot Colors to Process	Преобразовать все плашечные цвета в составные
+	Convert {name} to process	Преобразовать {name} в составной цвет
+	Keep {name} as spot	Оставить {name} плашечным цветом
 	Convert All Strokes to Outlines	Преобразовать все обводки в контуры
 	Convert All Text to Outlines	Преобразовать весь текст в контуры
 	Convert Anchor Point	Преобразовать опорную точку
@@ -690,6 +693,9 @@ font-technology	Variable	Вариативные
 	Create from Selection	Создать из выделения
 	Create From:	Создать из:
 	Create Gradient Mesh…	Создать градиентную сетку…
+	Flat	Плоский
+	To Center	К центру
+	To Edge	К краю
 	Create Graph	Создать диаграмму
 	Create New Layer	Создать новый слой
 	Create New Sublayer	Создать новый подслой
@@ -1365,6 +1371,10 @@ file-filter	Templates	Шаблоны
 	Font List	Список шрифтов
 	Show Similar Fonts	Показать похожие шрифты
 	Clear Similar Fonts	Сбросить похожие шрифты
+	Fonts used in this document	Шрифты, используемые в этом документе
+	This document uses no available fonts	В этом документе не используются доступные шрифты
+	Recently Added	Недавно добавленные
+	Fonts added in the last 30 days	Шрифты, добавленные за последние 30 дней
 	Font Preview Size	Размер предварительного просмотра шрифта
 	Font Size	Размер шрифта
 	Variable Font	Вариативный шрифт
@@ -2060,7 +2070,8 @@ file-filter	Templates	Шаблоны
 	Lock Others	Заблокировать остальные
 	Lock Slices	Заблокировать фрагменты
 	Lock Station Point	Заблокировать точку стояния
-	Lossless (lossy WebP isn't available yet)	Без потерь (WebP с потерями пока недоступен)
+	Lossless	Без потерь
+	Lossy	С потерями
 	Lossy:	С потерями:
 	Low	Низкая
 	lowercase	строчные
@@ -2742,6 +2753,18 @@ diagnostics	ui	интерфейс
 	Preview:	Просмотр:
 	Preview All Layers	Просмотреть все слои
 	Preview in Browser	Просмотреть в браузере
+	Optimize to File Size…	Оптимизировать по размеру файла…
+	Optimize to File Size	Оптимизировать по размеру файла
+	Desired File Size:	Желаемый размер файла:
+	Start With:	Начать с:
+	Use:	Использовать:
+	Current Settings	Текущие настройки
+	Auto Select GIF/JPEG	Автовыбор GIF/JPEG
+	Total of All Slices	Сумма всех фрагментов
+	Each Slice	Каждый фрагмент
+	Current Slice	Текущий фрагмент
+	{size}, within {target}	{size}, в пределах {target}
+	No setting tried fits in {target}; the smallest is {size}	Ни одна опробованная настройка не укладывается в {target}; наименьший размер {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Просмотр в браузере требует настольного приложения (web-версия скачивает файлы)
 	Preview Mode	Режим просмотра
 	Preview the document as it is now	Просмотреть документ в текущем виде
@@ -3090,12 +3113,85 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивный
 	Restore	Восстановить
 	Restore every preference to its default (applied on OK)	Восстановить все настройки по умолчанию (применяется при нажатии ОК)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Показывает на холсте панель команд для выделения или инструмента; она скрывается во время перетаскивания и в режиме презентации.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Насколько клавиша со стрелкой сдвигает выделение; с Shift она сдвигает его в десять раз дальше.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Угол осей, вдоль которых сдвигают клавиши со стрелками и к которым Shift привязывает рисование и перемещение.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Радиус угла, с которым рисует инструмент «Скруглённый прямоугольник»; изменение радиуса во время рисования меняет и это значение.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Насколько «Вставить» сдвигает копию вправо и вниз, когда положение не задано, например из скрипта; «Вставить» в приложении помещает её в центр вида.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Не даёт инструменту «Перо» удалять опорную точку, по которой вы щёлкаете на выделенном контуре, или добавлять точку там, где вы щёлкаете по его сегменту.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Инструменты рисования показывают указатель-перекрестие вместо своего значка; Caps Lock делает то же самое, пока он включён.
+	Shows a tip when the pointer rests on a button or field that has one.	Показывает подсказку, когда указатель задерживается на кнопке или поле, у которых она есть.
+	Shows a warning before a script you choose runs.	Показывает предупреждение перед запуском выбранного вами скрипта.
+	Smooths the edges of artwork on the canvas.	Сглаживает края графики на холсте.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Выделение › То же › Цвет заливки», «Цвет обводки» и «Заливка и обводка» находят только тот же оттенок глобального или плашечного образца, а не любой его оттенок.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показывает начальный экран, когда нет открытых документов; если выключено, окно остаётся пустым, пока вы не нажмёте «Домой».
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Измеряет объекты с обводками и эффектами, меняющими форму, для размера, положения и выравнивания; тени, свечения и размытия не учитываются.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	При масштабе 100 % один дюйм документа занимает 96 экранных пунктов вместо 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Двойной щелчок по группе, контуру или изображению инструментом «Выделение» открывает их в режиме изоляции.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки и обводки узором трансформируются вместе с графикой, если трансформирование или меню панели «Трансформировать» не задаёт иное.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Радиусы динамических углов масштабируются вместе с графикой, если масштабирование не задаёт иное.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Толщина обводок, штрихи и расстояния эффектов масштабируются вместе с графикой, если масштабирование не задаёт иное.
+	The mouse wheel zooms the canvas instead of scrolling it.	Колесо мыши масштабирует холст, а не прокручивает его.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
+	Dragging sideways on a numeric field's label changes the field's value.	Перетаскивание по подписи числового поля в сторону меняет значение поля.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест поворота двумя пальцами на трекпаде поворачивает вид холста.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Пока вы удерживаете клавишу инструмента, он остаётся выбранным, а после отпускания снова выбирается предыдущий инструмент.
+	Shows the bounding box while you move the selection or draw a shape.	Показывает ограничивающую рамку, пока вы перемещаете выделение или рисуете фигуру.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	«Создать метки подрезки» рисует метки в японском стиле вместо западных.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Новые объекты получают только заливку и обводку выделения; если выключено, они получают всё оформление выделенного объекта.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Изменение ширины или высоты на панели «Трансформировать», панели «Свойства» или панели управления пропорционально меняет другой размер.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Свойства динамического прямоугольника показывают одно поле «Радиус угла» для всех четырёх углов; если выключено, у каждого угла своё поле.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Что трансформируют изменения на панели «Трансформировать»: объект, плитки его узора или и то и другое; «По умолчанию» следует «Трансформировать плитки узора».
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Когда выделен один экземпляр символа, панель «Трансформировать» использует точку регистрации символа как опорную точку.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Затемняет холст вне монтажных областей, пока активен инструмент «Монтажная область».
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Когда включено «Затемнять область вне монтажной области», область вне монтажных областей остаётся тёмной, пока вы перетаскиваете инструментом «Монтажная область».
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Насколько близко, в пикселях, указатель должен быть к объекту, опорной точке или маркеру, чтобы щелчок выделил его.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Выделяет ли рамка инструмента «Выделение» затронутые объекты или только целиком попавшие внутрь; «Направление перетаскивания» выделяет попавшие внутрь при перетаскивании вправо. E меняет правило во время перетаскивания.
+	A click selects a filled object only on its path, not inside its fill.	Щелчок выделяет объект с заливкой только по его контуру, а не внутри заливки.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Насколько близко, в пикселях, точка должна подойти к опорной точке или направляющей линейки, чтобы «Привязать к точке» привязало её; при включённых умных направляющих действует их допуск привязки.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	С инструментом «Выделение» Cmd/Ctrl+щелчок выделяет объект под выделенным в точке указателя; каждый следующий щелчок уходит на один объект глубже.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	«Увеличить» и «Уменьшить» переносят центр выделения в середину вида.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Заблокированные и скрытые объекты внутри монтажной области перемещаются, масштабируются и копируются вместе с ней, как и остальные объекты.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Размер опорных точек и концов маркеров направления на холсте; более крупные опорные точки можно захватить и с большего расстояния.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Рисует концы маркеров направления сплошными точками, полыми точками или более крупными сплошными точками.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	С инструментом «Прямое выделение» опорная точка под указателем подсвечивается.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Показывает маркеры направления, когда выделено больше одной опорной точки; если выключено, они видны только при одной выделенной опорной точке.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Угловые виджеты скрываются на углах больше этого числа градусов.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Инструмент «Перо» показывает, прежде чем вы щёлкнете, следующий сегмент от последней опорной точки до указателя.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Инструмент «Кривизна» показывает кривую до указателя, прежде чем вы поставите следующую точку.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Единица новых документов встроенных размеров, кроме размеров в пикселях, и открытых файлов без записанной единицы; если выбрать её здесь и нажать ОК, она станет и единицей активного документа.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Толщина обводки, штрихи и зазоры показываются в этой единице, и введённые для них числа читаются в ней.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Размеры текста, интерлиньяж и смещение базовой линии показываются в этой единице, и введённые для них числа читаются в ней.
 	The unit for East Asian type measurements, which no field uses yet.	Единица для размеров восточноазиатского текста, которую пока не использует ни одно поле.
 	When on, a number typed without a unit into a field in picas is read in points.	Если включено, число, введённое без единицы в поле в пиках, читается в пунктах.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имена объектов показываются как XML ID в «Слоях», «Переменных» и «Параметрах слоя».
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Привязывает рисование, перемещение и масштабирование к делениям сетки, даже когда сетка скрыта; пока параметр включен, «Привязать к пикселю» не действует.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Цвет невыделенных направляющих; монтажная область с «Меткой направляющих» рисует свои направляющие цветом метки.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Рисует направляющие сплошными линиями или точками, включая направляющие, которые уже есть в документе.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Если параметр включен, направляющие заблокированы при запуске VectorCraft; изменение параметра сразу блокирует или разблокирует их, а «Просмотр › Направляющие › Заблокировать направляющие» по-прежнему меняет блокировку.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Если параметр включен, Cmd/Ctrl, удерживаемая в начале перетаскивания с линейки, создает направляющую только на активной монтажной области, а с инструментом «Монтажная область» направляющую на весь холст.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Цвет сетки; линии между основными линиями сетки рисуются более бледным оттенком этого цвета.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Рисует сетку линиями или точками вдоль основных линий сетки на каждом делении.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Расстояние между основными линиями сетки во всех открытых документах и в новых; документ VectorCraft открывается с сеткой, с которой он был сохранен.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	На сколько частей делится каждый основной квадрат сетки; «Привязать к сетке» привязывает к этим частям, даже когда масштаб скрывает их линии.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Рисует сетку за графикой; если параметр выключен, сетка рисуется поверх нее.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	В «Просмотре пикселей» при масштабе 600 % и больше активный вид показывает поверх графики линию по краю каждого пикселя документа.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Цвет края плитки и пунктирных границ образца, которые видны во время редактирования узора.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Привязывает рисование, перемещение и трансформирование к ближайшим объектам и показывает направляющие и метки; просмотр пикселей их отключает, а «Привязать к сетке» вместо них привязывает к сетке.
+	The color of Smart Guide lines and labels.	Цвет линий и меток умных направляющих.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Показывает линию вдоль края или центра, с которым выравниваются объекты; когда параметр выключен, они выравниваются без линии, а «Привязать к глифу» не действует.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	При инструменте выделения обводит невыделенный объект под указателем цветом его слоя, пока вы не перетаскиваете.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Показывает размер или угол рядом с указателем, пока вы масштабируете, поворачиваете, наклоняете или отражаете объекты.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Во время рисования точки привязываются к линиям под выбранными углами, проходящим через точку начала сегмента или фигуры.
+	The set of angles the construction guides follow while Construction Guides is on.	Набор углов, по которым идут направляющие построения, пока включены «Направляющие построения».
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Называет то, к чему привязывается точка: опорную точку, контур или выравнивание; когда параметр выключен, точки привязываются так же, но без названий.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Показывает рядом с указателем расстояния, углы и смещение объектов во время рисования или перемещения.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Привязывает перемещённые или изменённые в размере объекты к такому же промежутку, как между ближайшими объектами, и отмечает равные промежутки.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Когда что-то выделено, удержание Alt/Option над другим объектом или монтажной областью показывает расстояния между ним и выделением.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Выделение, перетащенное обратно в пределы допуска привязки от места начала перетаскивания, возвращается точно туда; копия не возвращается.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Насколько близко на экране указатель или перетаскиваемая точка должны подойти к объекту, чтобы умные направляющие привязали их; расстояние одинаково при любом масштабе.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Привязывает конец отрезка или окружность, нарисованную от центра, так, чтобы она касалась ближайшей кривой.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Привязывает конец отрезка так, чтобы он встречал ближайший прямой сегмент под прямым углом.
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значения по умолчанию применяются, когда вы нажимаете ОК в окне «Настройки». Отмена там сохраняет текущие настройки.
 	Restore Recovered Documents	Восстановить восстановленные документы
@@ -3330,6 +3426,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
+	Search commands	Поиск команд
 	Search Commands…	Поиск команд…
 	Secondary	Вторичный
 	Section Symbol	Символ параграфа
@@ -4696,6 +4793,11 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	PDF writer error: {0}	ошибка записи PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Упаковано файлов: {n} в {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Просмотр в браузере требует настольного приложения (web-версия скачивает файлы)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	укажите `desiredK`, желаемый размер файла в K (1024 байта): число больше 0 и не больше 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` принимает значения `current` или `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` принимает значения `allSlices`, `eachSlice` или `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` задаёт номер фрагмента из `slice.list`, вместе с `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Оптимизировать по размеру файла: нет изображения для измерения
 @msg	Release Guides: no guides	Освобождение направляющих: нет направляющих
 @msg	Release: no layer to put the rectangle in	Освобождение: нет слоя для помещения прямоугольника
 @msg	Replace Spine: select a blend and a path	Замена остова: выделите переход и контур
@@ -4941,6 +5043,9 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no active document	нет активного документа
 @msg	no active perspective plane	нет активной плоскости перспективы
 @msg	no anchor points selected	опорные точки не выделены
+@msg	`points` must be three [x, y] pairs of numbers	`points` должен содержать три пары чисел [x, y]
+@msg	direct-select three anchor points, or give `points`	выделите прямым выделением три опорные точки или задайте `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
 @msg	no app to open files here	здесь нет приложения для открытия файлов
 @msg	no artboard	нет монтажной области
 @msg	no artboard {i} (0-based; the document has {_1})	нет монтажной области {i} (счёт с 0; в документе {_1})
@@ -5906,6 +6011,19 @@ lighting	Light	Свет
 	Transform Objects	Трансформировать объекты
 @msg	unknown parameter `{key}`; did you mean `{near}`?	неизвестный параметр `{key}`; возможно, имелся в виду `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	неизвестный параметр `{key}`; у команды нет параметров
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	неизвестный параметр `{key}`; `{object}` принимает: {keys}
+@msg	unknown parameter `{key}`; {why_not}	неизвестный параметр `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	ни один формат его не принимает (см. document.formats)
+@msg	no save format takes it (see file.formatOptions)	ни один формат сохранения его не принимает (см. file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF его не принимает (см. document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS его не принимает (см. document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF его не принимает (см. document.formats)
+@msg	{name} must be {range} (got {v})	{name} должен быть {range} (получено {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Графический процессор, выбранный первым, не смог показать окно, поэтому VectorCraft запустился снова на {summary} (Настройки › Производительность › Графический процессор › Автоматически использует тот, к которому подключён дисплей)
+@msg	Sent “{title}” to {to}	“{title}” отправлено: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” отправлено: {to}. Ответ очереди печати: {note}
+@msg	the default printer	принтер по умолчанию
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растровые эффекты объекта {object}: запрошено {requested} ppi, получено {achieved} ppi из-за ограничения в 64 миллиона пикселей
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 @msg	the params must be an object, not {got}	параметры должны быть объектом, а не {got}
 @msg	unknown parameter `{path}`; the object takes no keys	неизвестный параметр `{path}`; объект не принимает ключей
@@ -7124,6 +7242,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Откройте документ, чтобы проверить его на проблемы.
 	Empty Text	Пустой текст
 	Unpainted Objects	Объекты без заливки и обводки
+	Empty Text Paths	Пустые текстовые контуры
 	Zero-Opacity Objects	Объекты с нулевой непрозрачностью
 	Duplicate Objects	Дублирующиеся объекты
 	Off-Artboard Art	Графика за пределами монтажных областей
@@ -7910,6 +8029,10 @@ shape	Open	Открытый
 @msg	Some islands could not be joined to the area around the art	Некоторые островки не удалось соединить с областью вокруг графики
 @msg	`width` must be from {lo} to {hi} pt	`width` должно быть от {lo} до {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle` должно быть от -180 до 180 градусов
+@msg	`roundness` must be from 0 to 100%	`roundness` должно быть от 0 до 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` должно быть от 0.01 до 100 pt
+@msg	style must be "pencil" or "brush"	style должен быть "pencil" или "brush"
+@msg	extend end must be "start" or "end"	конец extend должен быть "start" или "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` должно быть от 1 до 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` должно быть целым числом от 1 до {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Рамка и линии выборки…
@@ -9584,8 +9707,6 @@ shape	Open	Открытый
 @msg	unknown panel	неизвестная панель
 @msg	unknown panel `{panel}`	неизвестная панель `{panel}`
 @msg	unknown parameter `{key}`	неизвестный параметр `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	неизвестный параметр `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	неизвестный параметр `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	неизвестное значение pieLegend `{v}` (none, standard или wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	неизвестное значение piePosition `{v}` (even, ratio или stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	неизвестное значение pieSort `{v}` (none, all или first)
@@ -9715,7 +9836,6 @@ shape	Open	Открытый
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} встроен, его нельзя удалить
 @msg	{name} must be a number	{name} должно быть числом
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} должно быть {lo}–{hi}{unit} (получено {v})
 @msg	{name}: CRC or size mismatch	{name}: несовпадение CRC или размера
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: удалось прочитать только встроенный предпросмотр этого файла Affinity; используйте «Файл › Открыть», чтобы увидеть его с предупреждением, или перед помещением экспортируйте SVG или PDF из Affinity
 @msg	{name}: {e}	{name}: {e}
@@ -9781,6 +9901,7 @@ shape	Open	Открытый
 @msg	Too many Revolve faces for visibility evaluation	Слишком много граней вращения для расчёта видимости
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читает из файла обмена образцами не более {ASE_MAX_ENTRIES} цветов и групп, а в этой библиотеке их {entries}
 @msg	WebP encoding failed: {e}	Ошибка кодирования WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Ошибка кодирования WebP: изображение слишком велико для WebP с потерями: уменьшите разрешение или выберите «Без потерь»
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` принимает значения smallThumb, mediumThumb, largeThumb, smallList или largeList

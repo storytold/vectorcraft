@@ -566,6 +566,7 @@ font-technology	Variable	Μεταβλητές
 	Consolidate All Windows	Συγχώνευση όλων των παραθύρων
 	Constrain Angle	Περιορισμός γωνίας
 	Constrain Width and Height Proportions	Διατήρηση αναλογιών πλάτους και ύψους
+	Copy Width to Height	Αντιγραφή πλάτους στο ύψος
 	Construction Guides	Οδηγοί κατασκευής
 	Contextual Alternates	Εναλλακτικοί χαρακτήρες βάσει συμφραζομένων
 	Contextual Task Bar	Γραμμή εργασιών βάσει περιβάλλοντος
@@ -576,6 +577,8 @@ font-technology	Variable	Μεταβλητές
 	Control	Έλεγχος
 	Convert	Μετατροπή
 	Convert All Spot Colors to Process	Μετατροπή όλων των πλακάτων χρωμάτων σε χρώματα τετραχρωμίας
+	Convert {name} to process	Μετατροπή του {name} σε χρώμα τετραχρωμίας
+	Keep {name} as spot	Διατήρηση του {name} ως πλακάτου χρώματος
 	Convert All Strokes to Outlines	Μετατροπή όλων των περιγραμμάτων σε διαδρομές
 	Convert All Text to Outlines	Μετατροπή όλου του κειμένου σε περιγράμματα
 	Convert Anchor Point	Μετατροπή σημείου αγκύρωσης
@@ -651,6 +654,9 @@ font-technology	Variable	Μεταβλητές
 	Create from Selection	Δημιουργία από επιλογή
 	Create From:	Δημιουργία από:
 	Create Gradient Mesh…	Δημιουργία πλέγματος ντεγκραντέ…
+	Flat	Επίπεδο
+	To Center	Προς το κέντρο
+	To Edge	Προς την ακμή
 	Create Graph	Δημιουργία γραφήματος
 	Create New Layer	Δημιουργία νέου επιπέδου
 	Create New Sublayer	Δημιουργία νέου υποεπιπέδου
@@ -1275,6 +1281,10 @@ font-technology	Variable	Μεταβλητές
 	Font List	Λίστα γραμματοσειρών
 	Show Similar Fonts	Εμφάνιση παρόμοιων γραμματοσειρών
 	Clear Similar Fonts	Απαλοιφή παρόμοιων γραμματοσειρών
+	Fonts used in this document	Γραμματοσειρές που χρησιμοποιούνται σε αυτό το έγγραφο
+	This document uses no available fonts	Αυτό το έγγραφο δεν χρησιμοποιεί διαθέσιμες γραμματοσειρές
+	Recently Added	Πρόσφατες προσθήκες
+	Fonts added in the last 30 days	Γραμματοσειρές που προστέθηκαν τις τελευταίες 30 ημέρες
 	Font Preview Size	Μέγεθος προεπισκόπησης γραμματοσειράς
 	Font Size	Μέγεθος γραμματοσειράς
 	Variable Font	Μεταβλητή γραμματοσειρά
@@ -2654,6 +2664,11 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	PDF writer error: {0}	Σφάλμα εγγραφής PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Συσκευάστηκε {n} αρχείο στον φάκελο {folder} ({note})|Συσκευάστηκαν {n} αρχεία στον φάκελο {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση σε πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (η έκδοση ιστού πραγματοποιεί λήψη αρχείων)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	δώστε `desiredK`, το επιθυμητό μέγεθος αρχείου σε K (1024 byte): αριθμό πάνω από 0 και το πολύ 1048576
+@msg	`startWith` is `current` or `auto`	το `startWith` είναι `current` ή `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	το `use` είναι `allSlices`, `eachSlice` ή `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	το `slice` είναι αριθμός τομής από το `slice.list`, με `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Βελτιστοποίηση σε μέγεθος αρχείου: δεν υπάρχει εικόνα για μέτρηση
 @msg	Release Guides: no guides	Αποδέσμευση οδηγών: δεν υπάρχουν οδηγοί
 @msg	Release: no layer to put the rectangle in	Αποδέσμευση: δεν υπάρχει επίπεδο για να τοποθετηθεί το ορθογώνιο
 @msg	Replace Spine: select a blend and a path	Αντικατάσταση κεντρικής καμπύλης: επιλέξτε ανάμειξη και διαδρομή
@@ -3101,7 +3116,8 @@ theme	Appearance	Εμφάνιση
 	Lock Grid	Κλείδωμα πλέγματος
 	Lock Others	Κλείδωμα υπόλοιπων
 	Lock Station Point	Κλείδωμα σταθερού σημείου
-	Lossless (lossy WebP isn't available yet)	Χωρίς απώλειες (το WebP με απώλειες δεν υποστηρίζεται ακόμη)
+	Lossless	Χωρίς απώλειες
+	Lossy	Με απώλειες
 	Lossy:	Με απώλειες:
 	lowercase	πεζά
 	LZW Compression	Συμπίεση LZW
@@ -3562,6 +3578,18 @@ theme	Appearance	Εμφάνιση
 	Presets you save with the Save Preset button appear here.	Οι προεπιλογές που αποθηκεύετε με το κουμπί Αποθήκευση προεπιλογής εμφανίζονται εδώ.
 	Preview All Layers	Προεπισκόπηση όλων των επιπέδων
 	Preview in Browser	Προεπισκόπηση στο πρόγραμμα περιήγησης
+	Optimize to File Size…	Βελτιστοποίηση σε μέγεθος αρχείου…
+	Optimize to File Size	Βελτιστοποίηση σε μέγεθος αρχείου
+	Desired File Size:	Επιθυμητό μέγεθος αρχείου:
+	Start With:	Έναρξη με:
+	Use:	Χρήση:
+	Current Settings	Τρέχουσες ρυθμίσεις
+	Auto Select GIF/JPEG	Αυτόματη επιλογή GIF/JPEG
+	Total of All Slices	Σύνολο όλων των τομών
+	Each Slice	Κάθε τομή
+	Current Slice	Τρέχουσα τομή
+	{size}, within {target}	{size}, εντός {target}
+	No setting tried fits in {target}; the smallest is {size}	Καμία ρύθμιση που δοκιμάστηκε δεν χωρά σε {target}· η μικρότερη είναι {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Η προεπισκόπηση στο πρόγραμμα περιήγησης απαιτεί την εφαρμογή υπολογιστή (στο web πραγματοποιείται λήψη αρχείων)
 	Preview Mode	Λειτουργία προεπισκόπησης
 	Preview the document as it is now	Προεπισκόπηση του εγγράφου στην τρέχουσα κατάστασή του
@@ -3835,12 +3863,85 @@ digits	Malayalam	Μαλαγιάλαμ
 	Reshape Type Area	Αναδιαμόρφωση περιοχής κειμένου
 	Responsive	Αποκρινόμενο
 	Restore every preference to its default (applied on OK)	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους (εφαρμογή με το Εντάξει)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Εμφανίζει στον καμβά μια γραμμή εντολών για την επιλογή ή το εργαλείο· κρύβεται όσο σύρετε και στη λειτουργία παρουσίασης.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Πόσο μετακινεί την επιλογή ένα πλήκτρο βέλους· με το Shift τη μετακινεί δέκα φορές περισσότερο.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Η γωνία των αξόνων κατά μήκος των οποίων μετακινούν τα πλήκτρα βέλους και στους οποίους το Shift περιορίζει τη σχεδίαση και τη μετακίνηση.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Η ακτίνα γωνίας με την οποία σχεδιάζει το εργαλείο Στρογγυλεμένο ορθογώνιο· η αλλαγή της ακτίνας κατά τη σχεδίαση αλλάζει και αυτή την τιμή.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Πόσο δεξιά και κάτω μετακινεί η Επικόλληση το αντίγραφο όταν δεν δίνεται θέση, όπως από ένα σενάριο· η Επικόλληση στην εφαρμογή το τοποθετεί στο κέντρο της προβολής.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Εμποδίζει το εργαλείο Πένα να διαγράφει το σημείο αγκύρωσης που κάνετε κλικ σε επιλεγμένη διαδρομή ή να προσθέτει ένα όπου κάνετε κλικ στο τμήμα της.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Τα εργαλεία σχεδίασης εμφανίζουν δείκτη σταυρονήματος αντί για το εικονίδιό τους· το Caps Lock κάνει το ίδιο όσο είναι ενεργό.
+	Shows a tip when the pointer rests on a button or field that has one.	Εμφανίζει μια συμβουλή όταν ο δείκτης σταματά πάνω σε κουμπί ή πεδίο που έχει.
+	Shows a warning before a script you choose runs.	Εμφανίζει μια προειδοποίηση πριν εκτελεστεί ένα σενάριο που επιλέγετε.
+	Smooths the edges of artwork on the canvas.	Εξομαλύνει τα άκρα του γραφικού στον καμβά.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Τα Επιλογή › Ίδιο › Χρώμα γεμίσματος, Χρώμα περιγράμματος και Γέμισμα και περίγραμμα βρίσκουν μόνο την ίδια απόχρωση ενός καθολικού ή σημειακού δείγματος, όχι οποιαδήποτε απόχρωσή του.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Εμφανίζει την αρχική οθόνη όταν δεν είναι ανοιχτό κανένα έγγραφο· όταν είναι ανενεργό, το παράθυρο μένει κενό μέχρι να κάνετε κλικ στην Αρχική οθόνη.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Μετρά τα αντικείμενα μαζί με τα περιγράμματα και τα εφέ που αλλάζουν το σχήμα τους για μέγεθος, θέση και στοίχιση· οι σκιές, οι λάμψεις και οι θολώσεις δεν μετρώνται.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Σε ζουμ 100%, μία ίντσα του εγγράφου καταλαμβάνει 96 στιγμές οθόνης αντί για 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Το διπλό κλικ σε ομάδα, διαδρομή ή εικόνα με το εργαλείο Επιλογή την ανοίγει σε λειτουργία απομόνωσης.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Τα γεμίσματα και τα περιγράμματα μοτίβου μετασχηματίζονται μαζί με το γραφικό, εκτός αν ένας μετασχηματισμός ή το μενού του πλαισίου Μετασχηματισμός επιλέξει κάτι άλλο.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Οι ακτίνες των δυναμικών γωνιών κλιμακώνονται μαζί με το γραφικό, εκτός αν η κλιμάκωση επιλέξει κάτι άλλο.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Τα πάχη περιγράμματος, οι παύλες και οι αποστάσεις των εφέ κλιμακώνονται μαζί με το γραφικό, εκτός αν η κλιμάκωση επιλέξει κάτι άλλο.
+	The mouse wheel zooms the canvas instead of scrolling it.	Ο τροχός του ποντικιού κάνει ζουμ στον καμβά αντί να τον κυλά.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Ο τροχός του ποντικιού με πατημένο το Cmd/Ctrl κυλά τον καμβά οριζόντια.
+	Dragging sideways on a numeric field's label changes the field's value.	Η μεταφορά προς τα πλάγια πάνω στην ετικέτα ενός αριθμητικού πεδίου αλλάζει την τιμή του πεδίου.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Μια κίνηση περιστροφής με δύο δάχτυλα σε επιφάνεια αφής περιστρέφει την προβολή του καμβά.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Όσο κρατάτε πατημένη τη συντόμευση ενός εργαλείου, το εργαλείο είναι επιλεγμένο, και μετά επιλέγεται ξανά το προηγούμενο εργαλείο.
+	Shows the bounding box while you move the selection or draw a shape.	Εμφανίζει το πλαίσιο οριοθέτησης όσο μετακινείτε την επιλογή ή σχεδιάζετε ένα σχήμα.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Η Δημιουργία σημαδιών ξακρίσματος σχεδιάζει σημάδια ιαπωνικού τύπου αντί για ρωμαϊκά.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Τα νέα γραφικά παίρνουν μόνο το γέμισμα και το περίγραμμα της επιλογής· όταν είναι ανενεργό, παίρνουν όλη την εμφάνιση του επιλεγμένου αντικειμένου.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Η αλλαγή του πλάτους ή του ύψους στο πλαίσιο Μετασχηματισμός, στο πλαίσιο Ιδιότητες ή στη γραμμή Έλεγχος αλλάζει αναλογικά και το άλλο.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Οι ιδιότητες ενός δυναμικού ορθογωνίου εμφανίζουν ένα πεδίο Ακτίνα γωνίας και για τις τέσσερις γωνίες· όταν είναι ανενεργό, κάθε γωνία έχει δικό της πεδίο.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Τι μετασχηματίζουν οι αλλαγές στο πλαίσιο Μετασχηματισμός: το αντικείμενο, τα πλακίδια του μοτίβου του ή και τα δύο· η Προεπιλογή ακολουθεί τον Μετασχηματισμό πλακιδίων μοτίβου.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Όταν είναι επιλεγμένη μία παρουσία συμβόλου, το πλαίσιο Μετασχηματισμός χρησιμοποιεί το σημείο καταχώρισης του συμβόλου ως σημείο αναφοράς.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Σκουραίνει τον καμβά έξω από τους πίνακες σχεδίασης όσο είναι ενεργό το εργαλείο Πίνακας σχεδίασης.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Όταν είναι ενεργή η Σκίαση περιοχής εκτός πίνακα σχεδίασης, η περιοχή έξω από τους πίνακες σχεδίασης μένει σκοτεινή όσο σύρετε με το εργαλείο Πίνακας σχεδίασης.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Πόσο κοντά, σε εικονοστοιχεία, πρέπει να είναι ο δείκτης σε αντικείμενο, σημείο αγκύρωσης ή λαβή για να το επιλέξει ένα κλικ.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Αν το πλαίσιο του εργαλείου Επιλογή επιλέγει τα αντικείμενα που αγγίζει ή μόνο όσα είναι πλήρως μέσα· η Κατεύθυνση σύρσης επιλέγει όσα είναι μέσα όταν σύρετε δεξιά. Το E αντιστρέφει τον κανόνα κατά τη σύρση.
+	A click selects a filled object only on its path, not inside its fill.	Ένα κλικ επιλέγει ένα γεμάτο αντικείμενο μόνο πάνω στη διαδρομή του, όχι μέσα στο γέμισμα.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Πόσο κοντά, σε εικονοστοιχεία, πρέπει να φτάσει ένα σημείο σε σημείο αγκύρωσης ή οδηγό χάρακα για να το προσκολλήσει η Προσκόλληση σε σημείο· με τους έξυπνους οδηγούς ενεργούς ισχύει η δική τους ανοχή προσκόλλησης.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Με το εργαλείο Επιλογή, το Cmd/Ctrl-κλικ επιλέγει το αντικείμενο κάτω από το επιλεγμένο στο σημείο του δείκτη· κάθε επόμενο κλικ πηγαίνει ένα αντικείμενο βαθύτερα.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Η Μεγέθυνση και η Σμίκρυνση φέρνουν το κέντρο της επιλογής στη μέση της προβολής.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Τα κλειδωμένα και κρυφά γραφικά μέσα σε έναν πίνακα σχεδίασης μετακινούνται, κλιμακώνονται και αντιγράφονται μαζί του, όπως τα υπόλοιπα γραφικά.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Το μέγεθος των σημείων αγκύρωσης και των άκρων των λαβών κατεύθυνσης στον καμβά· μεγαλύτερα σημεία αγκύρωσης πιάνονται και από πιο μακριά.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Σχεδιάζει τα άκρα των λαβών κατεύθυνσης ως γεμάτες κουκκίδες, κούφιες κουκκίδες ή μεγαλύτερες γεμάτες κουκκίδες.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Με το εργαλείο Άμεση επιλογή, το σημείο αγκύρωσης κάτω από τον δείκτη επισημαίνεται.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Εμφανίζει τις λαβές κατεύθυνσης όταν είναι επιλεγμένα περισσότερα από ένα σημεία αγκύρωσης· όταν είναι ανενεργό, εμφανίζονται μόνο με ένα επιλεγμένο σημείο αγκύρωσης.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Τα χειριστήρια γωνιών κρύβονται σε γωνίες μεγαλύτερες από αυτές τις μοίρες.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Το εργαλείο Πένα δείχνει το επόμενο τμήμα από το τελευταίο σημείο αγκύρωσης ως τον δείκτη πριν κάνετε κλικ.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Το εργαλείο Καμπυλότητα δείχνει την καμπύλη ως τον δείκτη πριν τοποθετήσετε το επόμενο σημείο.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Η μονάδα για τα νέα έγγραφα από ενσωματωμένα μεγέθη, εκτός από μεγέθη σε εικονοστοιχεία, και για τα ανοιγμένα αρχεία χωρίς καταγεγραμμένη μονάδα· αν την επιλέξετε εδώ και πατήσετε Εντάξει, γίνεται και μονάδα του ενεργού εγγράφου.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Τα πάχη περιγράμματος, οι παύλες και τα διάκενα εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Τα μεγέθη κειμένου, το διάστιχο και η μετατόπιση γραμμής βάσης εμφανίζονται σε αυτή τη μονάδα και οι αριθμοί που πληκτρολογούνται γι’ αυτά διαβάζονται σε αυτή.
 	The unit for East Asian type measurements, which no field uses yet.	Η μονάδα για τις μετρήσεις κειμένου Ανατολικής Ασίας, την οποία δεν χρησιμοποιεί ακόμη κανένα πεδίο.
 	When on, a number typed without a unit into a field in picas is read in points.	Όταν είναι ενεργό, ένας αριθμός που πληκτρολογείται χωρίς μονάδα σε πεδίο σε πίκες διαβάζεται σε σημεία.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Με το Αναγνωριστικό XML, τα ονόματα αντικειμένων εμφανίζονται ως αναγνωριστικά XML στα Επίπεδα, στις Μεταβλητές και στις Επιλογές επιπέδου.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Προσκολλά τη σχεδίαση, τη μετακίνηση και την κλιμάκωση στις υποδιαιρέσεις του πλέγματος, ακόμη και όταν το πλέγμα είναι κρυφό· όσο είναι ενεργό, η Προσκόλληση σε εικονοστοιχείο δεν ισχύει.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Το χρώμα των οδηγών που δεν είναι επιλεγμένοι· ένας πίνακας σχεδίασης με Ετικέτα οδηγών σχεδιάζει τους δικούς του οδηγούς στο χρώμα της ετικέτας.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Σχεδιάζει τους οδηγούς ως συνεχείς γραμμές ή ως κουκκίδες, μαζί με τους οδηγούς που υπάρχουν ήδη στο έγγραφο.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Όταν είναι ενεργό, οι οδηγοί κλειδώνονται κατά την εκκίνηση του VectorCraft· η αλλαγή της επιλογής τους κλειδώνει ή τους ξεκλειδώνει αμέσως, και το Προβολή › Οδηγοί › Κλείδωμα οδηγών αλλάζει ακόμη το κλείδωμα.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Όταν είναι ενεργό, το Cmd/Ctrl πατημένο στην αρχή μιας μεταφοράς από χάρακα δημιουργεί οδηγό μόνο στον ενεργό πίνακα σχεδίασης, ή οδηγό σε όλο τον καμβά με το εργαλείο πίνακα σχεδίασης.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Το χρώμα του πλέγματος· οι γραμμές ανάμεσα στις κύριες γραμμές πλέγματος σχεδιάζονται σε πιο αχνή απόχρωσή του.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Σχεδιάζει το πλέγμα ως γραμμές ή ως κουκκίδες κατά μήκος των κύριων γραμμών πλέγματος σε κάθε υποδιαίρεση.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Η απόσταση ανάμεσα στις κύριες γραμμές πλέγματος σε κάθε ανοιχτό έγγραφο και στα νέα· ένα έγγραφο VectorCraft ανοίγει με το πλέγμα με το οποίο αποθηκεύτηκε.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Σε πόσα μέρη χωρίζεται κάθε κύριο τετράγωνο του πλέγματος· η Προσκόλληση στο πλέγμα προσκολλά σε αυτά τα μέρη, ακόμη κι όταν το ζουμ κρύβει τις γραμμές τους.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Σχεδιάζει το πλέγμα πίσω από το έργο· όταν είναι ανενεργό, το πλέγμα σχεδιάζεται από πάνω του.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Στην Προεπισκόπηση εικονοστοιχείων με ζουμ 600% ή περισσότερο, η ενεργή προβολή δείχνει πάνω από το έργο μια γραμμή στην άκρη κάθε εικονοστοιχείου του εγγράφου.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Το χρώμα της ακμής του πλακιδίου και των διακεκομμένων ορίων του δείγματος χρώματος που εμφανίζονται όσο επεξεργάζεστε ένα μοτίβο.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Προσκολλά τη σχεδίαση, τη μετακίνηση και τον μετασχηματισμό σε κοντινά γραφικά και εμφανίζει οδηγούς και ετικέτες· η Προεπισκόπηση εικονοστοιχείων τούς απενεργοποιεί, και η Προσκόλληση στο πλέγμα προσκολλά στο πλέγμα αντί γι’ αυτούς.
+	The color of Smart Guide lines and labels.	Το χρώμα των γραμμών και των ετικετών των έξυπνων οδηγών.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Εμφανίζει μια γραμμή κατά μήκος της ακμής ή του κέντρου με το οποίο ευθυγραμμίζονται τα γραφικά· όταν είναι ανενεργό, ευθυγραμμίζονται χωρίς τη γραμμή, και η Προσκόλληση σε γλυφή δεν ισχύει.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Με ένα εργαλείο επιλογής, περιγράφει το μη επιλεγμένο αντικείμενο κάτω από τον δείκτη με το χρώμα του επιπέδου του, όσο δεν σύρετε.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Εμφανίζει το μέγεθος ή τη γωνία δίπλα στον δείκτη όσο αλλάζετε κλίμακα, περιστρέφετε, εφαρμόζετε διάτμηση ή κατοπτρίζετε γραφικά.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Όσο σχεδιάζετε, τα σημεία προσκολλώνται σε γραμμές στις επιλεγμένες γωνίες μέσω του σημείου από το οποίο ξεκινά το τμήμα ή το σχήμα.
+	The set of angles the construction guides follow while Construction Guides is on.	Το σύνολο γωνιών που ακολουθούν οι οδηγοί κατασκευής όσο οι Οδηγοί κατασκευής είναι ενεργοί.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Ονομάζει σε τι προσκολλάται ένα σημείο, όπως σημείο αγκύρωσης, διαδρομή ή στοίχιση· όταν είναι ανενεργό, τα σημεία προσκολλώνται με τον ίδιο τρόπο χωρίς τα ονόματα.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Εμφανίζει δίπλα στον δείκτη αποστάσεις, γωνίες και πόσο μετακινήθηκαν τα γραφικά όσο σχεδιάζετε ή μετακινείτε.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Προσκολλά γραφικά που μετακινούνται ή αλλάζουν μέγεθος στο ίδιο κενό με αυτό ανάμεσα σε κοντινά αντικείμενα και σημειώνει τα ίσα κενά.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Με κάτι επιλεγμένο, κρατώντας πατημένο το Alt/Option πάνω από άλλο αντικείμενο ή πίνακα σχεδίασης εμφανίζονται οι αποστάσεις ανάμεσα σε αυτό και την επιλογή.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Μια επιλογή που σύρεται πίσω εντός της ανοχής προσκόλλησης από το σημείο όπου ξεκίνησε η μεταφορά επιστρέφει ακριβώς εκεί· ένα αντίγραφο όχι.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Πόσο κοντά στην οθόνη πρέπει να φτάσει ο δείκτης ή ένα σημείο που σύρεται σε γραφικά για να προσκολληθούν οι έξυπνοι οδηγοί· η απόσταση είναι ίδια σε κάθε ζουμ.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ή έναν κύκλο που σχεδιάζεται από το κέντρο του ώστε να αγγίζει μια κοντινή καμπύλη.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ώστε να συναντά ένα κοντινό ευθύ τμήμα σε ορθή γωνία.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
@@ -3962,6 +4063,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές
 	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
+	Search commands	Αναζήτηση εντολών
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον
 	Section Symbol	Σύμβολο ενότητας
@@ -4871,6 +4973,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no active document	δεν υπάρχει ενεργό έγγραφο
 @msg	no active perspective plane	δεν υπάρχει ενεργό επίπεδο προοπτικής
 @msg	no anchor points selected	δεν έχουν επιλεγεί σημεία αγκύρωσης
+@msg	`points` must be three [x, y] pairs of numbers	το `points` πρέπει να είναι τρία ζεύγη αριθμών [x, y]
+@msg	direct-select three anchor points, or give `points`	επιλέξτε άμεσα τρία σημεία αγκύρωσης ή δώστε `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης
 @msg	no artboard {i} (0-based; the document has {_1})	δεν υπάρχει πίνακας σχεδίασης {i} (αρίθμηση από 0· το έγγραφο περιέχει {_1})
@@ -5681,6 +5786,19 @@ digits	Malayalam	Μαλαγιάλαμ
 	Transform Objects	Μετασχηματισμός αντικειμένων
 @msg	unknown parameter `{key}`; did you mean `{near}`?	άγνωστη παράμετρος `{key}`· μήπως εννοείτε `{near}`;
 @msg	unknown parameter `{key}`; the command takes no parameters	άγνωστη παράμετρος `{key}`· η εντολή δεν δέχεται παραμέτρους
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	άγνωστη παράμετρος `{key}`· το `{object}` δέχεται: {keys}
+@msg	unknown parameter `{key}`; {why_not}	άγνωστη παράμετρος `{key}`· {why_not}
+@msg	no format takes it (see document.formats)	καμία μορφή δεν τη δέχεται (δείτε document.formats)
+@msg	no save format takes it (see file.formatOptions)	καμία μορφή αποθήκευσης δεν τη δέχεται (δείτε file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	το PDF δεν τη δέχεται (δείτε document.formats)
+@msg	EPS doesn't take it (see document.formats)	το EPS δεν τη δέχεται (δείτε document.formats)
+@msg	DXF doesn't take it (see document.formats)	το DXF δεν τη δέχεται (δείτε document.formats)
+@msg	{name} must be {range} (got {v})	το {name} πρέπει να είναι {range} (δόθηκε {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Ο αρχικός επεξεργαστής γραφικών δεν μπόρεσε να εμφανίσει το παράθυρο και το VectorCraft επανεκκίνησε στον {summary} (Ρυθμίσεις › Επιδόσεις › Επεξεργαστής γραφικών › Αυτόματο: χρησιμοποιεί αυτόν που οδηγεί την οθόνη σας)
+@msg	Sent “{title}” to {to}	Το “{title}” στάλθηκε: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Το “{title}” στάλθηκε: {to}. Απάντηση της ουράς εκτύπωσης: {note}
+@msg	the default printer	προεπιλεγμένος εκτυπωτής
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	εφέ ράστερ στο αντικείμενο {object}: ζητήθηκαν {requested} ppi, επιτεύχθηκαν {achieved} ppi λόγω του ορίου των 64 εκατομμυρίων pixel
 @msg	unknown parameter `{key}`; the command takes: {keys}	άγνωστη παράμετρος `{key}`· η εντολή δέχεται: {keys}
 @msg	the params must be an object, not {got}	οι παράμετροι πρέπει να είναι αντικείμενο, όχι {got}
 @msg	unknown parameter `{path}`; the object takes no keys	άγνωστη παράμετρος `{path}`· το αντικείμενο δεν δέχεται κλειδιά
@@ -7116,6 +7234,7 @@ anchor	Points:	Σημεία:
 	Open a document to check it for issues.	Ανοίξτε ένα έγγραφο για να το ελέγξετε για προβλήματα.
 	Empty Text	Κενό κείμενο
 	Unpainted Objects	Αντικείμενα χωρίς χρώμα
+	Empty Text Paths	Κενές διαδρομές κειμένου
 	Zero-Opacity Objects	Αντικείμενα με μηδενική αδιαφάνεια
 	Duplicate Objects	Διπλότυπα αντικείμενα
 	Off-Artboard Art	Γραφικά εκτός πινάκων σχεδίασης
@@ -7804,6 +7923,11 @@ breakText	Glyphs	Γλύφοι
 @msg	Some islands could not be joined to the area around the art	Ορισμένες νησίδες δεν ήταν δυνατό να συνδεθούν με την περιοχή γύρω από το γραφικό
 @msg	`width` must be from {lo} to {hi} pt	Το `width` πρέπει να είναι από {lo} έως {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	Το `angle` πρέπει να είναι από -180 έως 180 μοίρες
+@msg	`roundness` must be from 0 to 100%	Το `roundness` πρέπει να είναι από 0 έως 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	Το `fidelity` πρέπει να είναι από 0.01 έως 100 pt
+@msg	style must be "pencil" or "brush"	Το style πρέπει να είναι "pencil" ή "brush"
+@msg	extend end must be "start" or "end"	Το άκρο του extend πρέπει να είναι "start" ή "end"
+@msg	connect end must be "start" or "end"	Το άκρο του connect πρέπει να είναι "start" ή "end"
 @msg	`roundness` must be from 1 to 100%	Το `roundness` πρέπει να είναι από 1 έως 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	Το `count` πρέπει να είναι ακέραιος από 1 έως {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Πλαίσιο και γραμμές αφαίρεσης περισσευμάτων…
@@ -7865,6 +7989,7 @@ breakText	Glyphs	Γλύφοι
 @msg	Too many Revolve faces for visibility evaluation	Πάρα πολλές έδρες περιστροφής για τον έλεγχο ορατότητας
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	Το VectorCraft διαβάζει το πολύ {ASE_MAX_ENTRIES} χρώματα και ομάδες από ένα αρχείο ανταλλαγής δειγμάτων, και αυτή η βιβλιοθήκη έχει {entries}
 @msg	WebP encoding failed: {e}	Η κωδικοποίηση WebP απέτυχε: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Η κωδικοποίηση WebP απέτυχε: η εικόνα είναι πολύ μεγάλη για WebP με απώλειες: μειώστε την ανάλυση ή επιλέξτε Χωρίς απώλειες
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	Το `index` πρέπει να είναι ακέραιος αριθμός
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	Το `view` είναι smallThumb, mediumThumb, largeThumb, smallList ή largeList
