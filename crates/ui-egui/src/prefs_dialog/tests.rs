@@ -1798,13 +1798,13 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     assert_eq!(preferences_window(&ctx).size(), size);
 }
 
-/// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices and
-/// Hyphenation categories show, the Smart Guides box included, has exactly one sentence, and no key
-/// has two.
+/// Every setting the General, Selection & Anchor Display, Guides & Grid, Smart Guides, Slices,
+/// Hyphenation and Plug-ins & Scratch Disks categories show, the Smart Guides box included, has
+/// exactly one sentence, and no key has two.
 #[test]
-fn every_general_selection_guides_smart_guides_slices_and_hyphenation_setting_has_one_description() {
+fn every_general_selection_guides_smart_guides_slices_hyphenation_and_plugins_setting_has_one_description() {
     let mut bad = vec![];
-    let categories = ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides", "Slices", "Hyphenation"];
+    let categories = ["General", "Selection & Anchor Display", "Guides & Grid", "Smart Guides", "Slices", "Hyphenation", "Plug-ins & Scratch Disks"];
     for s in settings().filter(|s| categories.contains(&s.category)) {
         match descriptions::DESCRIPTIONS.iter().filter(|(k, _)| *k == s.key).count() {
             1 => {}
@@ -2118,6 +2118,58 @@ fn keyboard_focus_on_a_hyphenation_row_shows_its_description() {
     assert!(described.iter().any(|d| d == language), "the focused menu carries the sentence: {described:?}");
     let described = tab_to(exceptions).expect("Tab goes on to the Exceptions row and its sentence shows");
     assert!(described.iter().any(|d| d == exceptions), "the focused field carries the sentence: {described:?}");
+}
+
+/// The pointer over each row of Plug-ins & Scratch Disks, Additional Plug-ins Folder, Primary and
+/// Secondary, shows that row's sentence and neither of the others.
+#[test]
+fn hovering_a_plugins_and_scratch_disks_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Plug-ins & Scratch Disks"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    let (texts, _) = description_frame(&mut a, &ctx, vec![]);
+    let row = |texts: &[(String, egui::Rect)], label: &str| {
+        texts.iter().find(|(t, _)| t.starts_with(label)).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"))
+    };
+    let rows = [("Additional Plug-ins Folder:", "pluginsFolder"), ("Primary:", "scratchPrimary"), ("Secondary:", "scratchSecondary")];
+    let sentences: Vec<_> = rows.iter().map(|(_, key)| descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"))).collect();
+    for (i, (label, _)) in rows.iter().enumerate() {
+        description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(row(&texts, label))]);
+        let (after, _) = description_frame(&mut a, &ctx, vec![]);
+        for (j, sentence) in sentences.iter().enumerate() {
+            assert_eq!(painted(&after, sentence), i == j, "pointer over `{label}`, sentence {j}: {after:?}");
+        }
+    }
+}
+
+/// Tab from the search field reaches the Additional Plug-ins Folder field, then Primary, then
+/// Secondary: the line shows each one's sentence in turn, and a screen reader gets it as the focused
+/// field's description.
+#[test]
+fn keyboard_focus_on_a_plugins_and_scratch_disks_row_shows_its_description() {
+    let mut a = app();
+    open(&mut a, Some("Plug-ins & Scratch Disks"));
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    description_frame(&mut a, &ctx, vec![]);
+    description_frame(&mut a, &ctx, vec![]);
+    let mut tab_to = |sentence: &str| {
+        for _ in 0..40 {
+            let (texts, described) = description_frame(&mut a, &ctx, key_press(egui::Key::Tab, egui::Modifiers::NONE));
+            if painted(&texts, sentence) {
+                return Some(described);
+            }
+        }
+        None
+    };
+    for key in ["pluginsFolder", "scratchPrimary", "scratchSecondary"] {
+        let sentence = descriptions::description(key).unwrap_or_else(|| panic!("`{key}` has a sentence"));
+        let described = tab_to(sentence).unwrap_or_else(|| panic!("Tab reaches the `{key}` field and its sentence shows"));
+        assert!(described.iter().any(|d| d == sentence), "the focused `{key}` field carries the sentence: {described:?}");
+    }
 }
 
 /// A sentence shown when the dialog closed does not come back when it opens again with the

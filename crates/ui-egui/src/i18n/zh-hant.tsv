@@ -4344,6 +4344,9 @@ digits	Malayalam	馬來亞拉姆數字
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	當文件設定的語言為英文：美國時，新文字使用此語言；文件中已有的文字保留自己的語言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在開啟使用連字號的段落中，清單中的單字只在其中輸入的連字號處斷開，沒有連字號則不斷開，與語言和大小寫無關。
+	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此資料夾中的 .wasm 增效模組會在啟動時以及在此指定新資料夾並按一下「確定」時載入，安全模式除外；網頁版不會載入它們。
+	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
+	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二個暫存磁碟選擇：Startup、None 或資料夾路徑；VectorCraft 會儲存它，但尚未使用暫存磁碟。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件

@@ -172,6 +172,13 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "hyphenationExceptions",
         "In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.",
     ),
+    // Plug-ins & Scratch Disks
+    (
+        "pluginsFolder",
+        "On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.",
+    ),
+    ("scratchPrimary", "The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
+    ("scratchSecondary", "The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
