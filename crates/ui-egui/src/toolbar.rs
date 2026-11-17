@@ -33,7 +33,7 @@ const STRIP_BUTTON: egui::Vec2 = vec2(32.0, PITCH);
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
 pub const BASIC: &[(&str, &[&[&str]])] = &[
-    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "magicWand"]]),
+    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "magicWand"]]),
     (
         "Shapes",
         &[
