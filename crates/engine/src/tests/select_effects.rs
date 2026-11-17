@@ -393,10 +393,10 @@ fn a_group_selection_marquee_leaves_out_a_drop_shadow() {
     run(&mut s, "select.none", json!({}));
     let sel = marquee(&mut s, "groupSelection", (85.0, 40.0), (95.0, 60.0));
     assert!(sel.objects.is_empty() && sel.anchors.is_empty(), "{sel:?}");
-    // Over the shadow and B's upper left corner: that anchor of B.
+    // Over the shadow and B's upper left corner: B whole, and not A (#8047).
     let sel = marquee(&mut s, "groupSelection", (90.0, 5.0), (105.0, 30.0));
     assert_eq!(sel.objects, [b]);
-    assert_eq!(picked_points(&s, b), [Point::new(100.0, 20.0)]);
+    assert!(sel.partial(b).is_none(), "{sel:?}");
     // With E, a marquee around B that crosses A's shadow selects B whole, and not A.
     run(&mut s, "select.none", json!({}));
     let v = ViewInfo::default();
