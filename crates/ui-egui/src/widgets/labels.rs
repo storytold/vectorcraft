@@ -144,6 +144,14 @@ pub fn field_label(ui: &mut Ui, text: impl Into<egui::WidgetText>) -> Response {
     resp
 }
 
+/// A field's label (`text` as given) that a click follows to a panel ([`scrub::panel_label`]):
+/// before a numeric field it scrubs the field and names it.
+pub fn field_panel_label(ui: &mut Ui, text: egui::RichText) -> Response {
+    let resp = scrub::panel_label(ui, text);
+    remember_next_label(ui, resp.id);
+    resp
+}
+
 /// [`dim_label`] for a name that is user or file data (a swatch, style, artboard or font name):
 /// shown as it is, never translated.
 pub fn dim_name(ui: &mut Ui, text: &str) -> Response {
