@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 craft-eps = { workspace = true }
+craft-ps = { workspace = true }
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }
 vectorcraft-doc = { workspace = true }

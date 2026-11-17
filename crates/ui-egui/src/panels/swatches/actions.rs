@@ -1,6 +1,9 @@
 use super::dnd::{group_of, selection};
 use super::libraries::SwatchLibraries;
-use super::{Kind, LibraryKind, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate, set_pstate, widgets};
+use super::{
+    Kind, LibraryKind, PanelDrag, Response, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate, set_pstate,
+    widgets,
+};
 
 /// The selected swatches and groups that can be deleted (all but None and Registration).
 pub(super) fn deletable(sel: &[String]) -> Vec<String> {
@@ -84,12 +87,50 @@ pub(super) fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
         if widgets::icon_button(ui, "dc-new-item", tl!("New Swatch"), false, 24.0).clicked() {
             new_swatch(app, sel, ui.input(|i| i.modifiers));
         }
-        // Alt-click deletes without asking.
+        // Alt-click deletes without asking. Swatches or color groups dragged from the list can be
+        // dropped on it, also with nothing selected: the button is enabled while they are held.
         let del = deletable(sel);
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Swatch"), false, !del.is_empty(), 24.0).clicked() {
+        let dragged = dragged_deletable(app, ui.ctx());
+        let trash = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Swatch"), false, !del.is_empty() || !dragged.is_empty(), 24.0);
+        if trash.clicked() && !del.is_empty() {
             delete(app, del, ui.input(|i| i.modifiers.alt));
         }
+        drop_on_delete(app, ui, &trash, dragged);
     });
+}
+
+/// The panel state key of the document (`uid`) the swatches being dragged from the list belong to.
+pub(super) const DRAG_DOC: &str = "swatch-drag-doc";
+
+/// The swatches and color groups of the active document being dragged from the list that Delete
+/// Swatch can delete: neither None nor Registration, and still in the document. Empty for any other
+/// drag, and for a drag started in another document.
+fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
+    if pstate::<Option<u64>>(ctx, DRAG_DOC) != Some(st.uid) {
+        return vec![];
+    }
+    match egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref() {
+        Some(PanelDrag::Paint { rows: Some(r), .. }) => deletable(&r.names).into_iter().filter(|n| st.doc.swatch_name_taken(n)).collect(),
+        _ => vec![],
+    }
+}
+
+/// Swatches or color groups (`names`) dragged onto Delete Swatch (`button`): the button is
+/// outlined while they are held over it, and the release of the primary button asks to delete them
+/// as a plain click does ([`delete`]); Alt does not skip the question. The release of another
+/// button ends the drag, and other drags are left to their own targets.
+fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: Vec<String>) {
+    if names.is_empty() || button.dnd_hover_payload::<PanelDrag>().is_none() {
+        return;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return;
+    }
+    if button.dnd_release_payload::<PanelDrag>().is_some() {
+        delete(app, names, false);
+    }
 }
 
 /// The colour group the selection points at: the last selected group, or the group of the last

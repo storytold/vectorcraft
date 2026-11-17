@@ -406,6 +406,26 @@ pub(super) fn sibling_with(d: &mut Document, id: NodeId, pd: PathData) -> Result
     Ok(n)
 }
 
+/// Set every stroke of node `id`, and every stroke of the compound path it is a member of (whose
+/// strokes its members show), to Center alignment. Every other stroke and fill setting stays as it
+/// is, and an appearance whose strokes are all centered stays shared with its other copies.
+pub(in super::super) fn center_strokes(d: &mut Document, id: NodeId) {
+    use vectorcraft_doc::{AppearanceItem, StrokeAlign};
+    let parent = d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
+    for n in [Some(id), parent].into_iter().flatten() {
+        let Some(n) = d.node_mut(n) else { continue };
+        let off = |it: &AppearanceItem| matches!(it, AppearanceItem::Stroke(st) if st.align != StrokeAlign::Center);
+        if !n.appearance.items.iter().any(off) {
+            continue;
+        }
+        for it in &mut n.appearance.items {
+            if let AppearanceItem::Stroke(st) = it {
+                st.align = StrokeAlign::Center;
+            }
+        }
+    }
+}
+
 /// Replace path or compound path `id` with `pieces` (first keeps the id, the rest go right above
 /// it; none removes it). `cut` removes the path or puts the other pieces above it. Returns ids.
 pub(in super::super) fn replace_with_pieces(d: &mut Document, cut: &mut Beside, id: NodeId, pieces: Vec<PathData>) -> Result<Vec<NodeId>> {
