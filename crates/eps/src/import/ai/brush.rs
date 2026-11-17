@@ -799,14 +799,16 @@ impl BrushesRead {
         Self { drafts, by_name, bending }
     }
 
-    /// Does the reader read every stroke of art style `style` in `section` (the text between
-    /// `%AI9_BeginArtStyles` and its end) that names a brush with that brush on it, at the brush's
-    /// own settings? A style the reader doesn't read, or that names a brush no object gives, or an
-    /// Art brush in a style with effects, isn't read so.
-    pub(crate) fn style_reads(&self, section: &[u8], style: &str) -> bool {
+    /// Does the reader read every stroke of art style `parsed` ([`crate::import::parse_art_style`])
+    /// that names a brush with that brush on it, at the brush's own settings? A style the reader
+    /// doesn't read, or that names a brush no object gives, or an Art brush in a style with effects,
+    /// isn't read so.
+    pub(crate) fn style_reads(&self, parsed: &crate::import::ParsedStyle) -> bool {
         use super::style::StyleItem;
-        let styles = super::style::art_styles(section);
-        let Some(st) = styles.get(style).filter(|st| st.plain) else { return false };
+        let st = &parsed.style;
+        if !st.plain {
+            return false;
+        }
         st.items.iter().all(|item| match item {
             StyleItem::Stroke { brush: Some((name, settings)), .. } => {
                 let Some(draft) = self.by_name.get(name).and_then(|i| self.drafts.get(*i)) else { return false };

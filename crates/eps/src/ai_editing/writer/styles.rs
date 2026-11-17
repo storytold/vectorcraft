@@ -2,9 +2,9 @@
 //! object itself on `%_` lines and `1 (style) XW`; the styles they name and the Graphic Styles
 //! panel's styles in `%AI9_BeginArtStyles`, and the panel's order in `%AI9_BeginArtStyleList` (see
 //! [`crate::ai_editing`] for the form). Each style is read back before it is written
-//! ([`crate::import::read_art_style`]: the `.ai` reader's style parser and its reading of a graphic
+//! ([`crate::import::read_parsed_style`]: the `.ai` reader's style parser and its reading of a graphic
 //! style, with the object's own gradient): one that reads back differently is not written, and the
-//! object is written as its drawn look alone.
+//! object is written as its drawn look alone. Each style text is parsed once per save ([`Parsed`]).
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -126,7 +126,7 @@ fn candidate(n: &Node) -> bool {
 
 /// Is `n` an image, embedded or linked, without an opacity mask whose appearance is one Warp, with
 /// no fills or strokes that paint and no effects on them: an image the reader reads with its Warp
-/// live ([`crate::import::read_art_style`]'s `image_warp`)?
+/// live ([`crate::import::read_parsed_style`]'s `image_warp`)?
 fn warped_image(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Image(_))
         && n.extras().mask.is_none()
@@ -162,8 +162,8 @@ fn plain_member(n: &Node) -> bool {
 pub(in crate::ai_editing) struct Styles {
     /// Every style, in the order written: its name and text.
     known: Vec<(String, String)>,
-    /// The panel's styles written, by the graphic style's id.
-    panel: HashMap<u32, String>,
+    /// The panel's styles written, by the graphic style's id: each one's place in [`Self::known`].
+    panel: HashMap<u32, usize>,
     /// The panel's styles written, in its order.
     listed: Vec<String>,
     /// The names styles have, and the name of each object style by its text.
@@ -172,6 +172,35 @@ pub(in crate::ai_editing) struct Styles {
     next_anon: u64,
     /// How many objects were written with the graphic style they are linked to.
     pub(super) links_written: usize,
+    /// Every style text checked so far, as the reader parses it.
+    pub(super) parsed: Parsed,
+}
+
+/// Style texts as the reader parses them ([`crate::import::parse_art_style`]), each parsed once
+/// however many styles and objects are checked with it; a text the reader doesn't parse is kept
+/// as `None`.
+#[derive(Default)]
+pub(super) struct Parsed(HashMap<String, Option<crate::import::ParsedStyle>>);
+
+#[cfg(test)]
+thread_local! {
+    /// While set on this thread, [`Parsed`] keeps nothing: every check parses its style text again.
+    pub(in crate::ai_editing) static REPARSE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+impl Parsed {
+    /// Style text `text` as the reader parses it (`None` when it doesn't).
+    pub(super) fn get(&mut self, text: &str) -> Option<&crate::import::ParsedStyle> {
+        #[cfg(test)]
+        if REPARSE.get() {
+            self.0.remove(text);
+        }
+        if !self.0.contains_key(text) {
+            let parsed = crate::import::parse_art_style(known_style("x", text).as_bytes(), "x");
+            self.0.insert(text.to_owned(), parsed);
+        }
+        self.0.get(text).and_then(Option::as_ref)
+    }
 }
 
 impl Styles {
@@ -652,7 +681,7 @@ impl Writer<'_> {
                 continue;
             }
             let xy = Xy { blend: g.blend, opacity: g.opacity.clamp(0.0, 1.0), isolate: g.isolate, knockout: g.knockout, shape: false };
-            let text = self.style_text(&g.appearance, xy, None).filter(|t| panel_reads(g, t));
+            let text = self.style_text(&g.appearance, xy, None).filter(|t| panel_reads(g, t, &mut self.styles.parsed));
             let Some(text) = text else {
                 self.warn(PANEL_STYLES);
                 continue;
@@ -669,7 +698,7 @@ impl Writer<'_> {
                 continue;
             }
             if g.id != 0 {
-                self.styles.panel.insert(g.id, g.name.clone());
+                self.styles.panel.insert(g.id, self.styles.known.len());
             }
             self.styles.listed.push(g.name.clone());
             self.styles.known.push((g.name.clone(), text));
@@ -701,14 +730,13 @@ impl Writer<'_> {
         }
         let doc = self.doc;
         if let Some(id) = orig.extras().graphic_style
-            && let Some(name) = self.styles.panel.get(&id).cloned()
+            && let Some((name, text)) = self.styles.panel.get(&id).and_then(|i| self.styles.known.get(*i))
             && let Some(g) = doc.graphic_style_by_id(id)
             && g.transparency_matches(orig)
             && g.appearance_on(orig).approx_eq(&orig.appearance)
-            && let Some(text) = self.styles.known.iter().find(|(n, _)| *n == name).map(|(_, t)| t.clone())
-            && object_reads(orig, &text)
+            && object_reads(orig, text, &mut self.styles.parsed)
         {
-            return Some(name);
+            return Some(name.clone());
         }
         let brushed = brushed(orig);
         if (orig.appearance.effects.is_empty() && !brushed) || !(own_style_holds(&orig.appearance) || warped_image(orig)) {
@@ -720,7 +748,7 @@ impl Writer<'_> {
         let rule = object_rule(orig);
         let text = self
             .style_text(&orig.appearance, Xy::of(orig), path.as_ref().map(|p| (p, rule)))
-            .filter(|t| object_reads(orig, t) && (!brushed || self.brushed_style_reads(t)));
+            .filter(|t| object_reads(orig, t, &mut self.styles.parsed) && (!brushed || self.brushed_style_reads(t)));
         let Some(text) = text else {
             if let Some(mark) = saved.0 {
                 self.gradient_rollback(mark);
@@ -784,7 +812,12 @@ impl Writer<'_> {
         if !self.take_objects(1 + own) {
             return;
         }
-        let linked = orig.extras().graphic_style.and_then(|id| self.styles.panel.get(&id)).is_some_and(|p| p == name);
+        let linked = orig
+            .extras()
+            .graphic_style
+            .and_then(|id| self.styles.panel.get(&id))
+            .and_then(|i| self.styles.known.get(*i))
+            .is_some_and(|(p, _)| p == name);
         if linked {
             self.styles.links_written += 1;
         } else if brushed(orig) {
@@ -937,13 +970,12 @@ fn own_style_holds(ap: &Appearance) -> bool {
 }
 
 /// Does the reader read graphic style `g` from style text `text` as it is? It leaves out a graphic
-/// style with a brush on a stroke that paints.
-fn panel_reads(g: &GraphicStyle, text: &str) -> bool {
+/// style with a brush on a stroke that paints. `parsed` holds the texts already parsed.
+fn panel_reads(g: &GraphicStyle, text: &str, parsed: &mut Parsed) -> bool {
     if g.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && !s.paint.is_none())) {
         return false;
     }
-    let section = known_style("x", text);
-    let Some(read) = crate::import::read_art_style(section.as_bytes(), "x", None) else { return false };
+    let Some(read) = parsed.get(text).and_then(|st| crate::import::read_parsed_style(st, None)) else { return false };
     // The opacity within the written number's precision.
     read.transparency.is_some_and(|t| (t.0 - g.opacity).abs() <= 1e-4 && (t.1, t.2, t.3) == (g.blend, g.isolate, g.knockout))
         && same_appearance(&read.appearance, &g.appearance)
@@ -952,19 +984,20 @@ fn panel_reads(g: &GraphicStyle, text: &str) -> bool {
 /// Does the reader read object `n` written with style text `text` as it is: a path or compound
 /// path with a style it reads on any object, filled by the non-zero rule when the style fills it,
 /// or a group with no fills or strokes of its own, with effects that move the outline only where the
-/// reader reads them ([`crate::import::style_moves_with`]), or an image ([`warped_image`]) with a
+/// reader reads them ([`crate::import::parsed_moves_with`]), or an image ([`warped_image`]) with a
 /// style of one Warp? The reader takes such an image's Warp where it draws as its drawn look.
-fn object_reads(n: &Node, text: &str) -> bool {
-    let section = known_style("x", text);
+/// `parsed` holds the texts already parsed.
+fn object_reads(n: &Node, text: &str, parsed: &mut Parsed) -> bool {
+    let Some(st) = parsed.get(text) else { return false };
     let own = n.appearance.fill().map(|f| &f.paint).filter(|p| matches!(p, Paint::Gradient(_)));
-    let Some(mut read) = crate::import::read_art_style(section.as_bytes(), "x", own) else { return false };
+    let Some(mut read) = crate::import::read_parsed_style(st, own) else { return false };
     let group = matches!(n.kind, NodeKind::Group { .. });
     let image = matches!(n.kind, NodeKind::Image(_));
     if (image && !(read.image_warp && warped_image(n)))
         || (!image && !read.simple)
         || (group && !read.appearance.items.is_empty())
         || (!group && read.pathfinder)
-        || !crate::import::style_moves_with(section.as_bytes(), "x", n)
+        || !crate::import::parsed_moves_with(st, n)
     {
         return false;
     }
