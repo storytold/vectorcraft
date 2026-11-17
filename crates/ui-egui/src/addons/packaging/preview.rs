@@ -64,7 +64,7 @@ pub struct Settings {
     pub pan: [f64; 2],
     /// The field of view in degrees; 0 for none.
     pub perspective: f64,
-    /// The board's inside color: `#rrggbb` or the name of a swatch.
+    /// The board's inside color: `#rrggbb`, the name of a swatch, or empty for white.
     pub inside: String,
     /// Draw the fold lines on the print.
     pub show_fold_lines: bool,
@@ -82,7 +82,7 @@ impl Default for Settings {
             zoom: 1.0,
             pan: [0.0; 2],
             perspective: 0.0,
-            inside: "#ffffff".into(),
+            inside: String::new(),
             show_fold_lines: false,
             base: None,
         }
@@ -183,9 +183,12 @@ thread_local! {
     static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
 }
 
-/// The board's inside color (straight RGBA) for `inside`: a swatch of `d` with a plain color, or else
-/// `#rrggbb`; `None` for anything else.
+/// The board's inside color (straight RGBA) for `inside`: white when it is empty, a swatch of `d`
+/// with a plain color, or else `#rrggbb`; `None` for anything else.
 fn inside_color(d: &vectorcraft_engine::doc::Document, inside: &str) -> Option<[u8; 4]> {
+    if inside.is_empty() {
+        return Some([255; 4]);
+    }
     match d.swatch(inside).map(|s| &s.paint) {
         Some(vectorcraft_color::Paint::Solid { color, .. }) => Some(color.to_rgba8(1.0)),
         _ if inside.starts_with('#') => vectorcraft_color::Color::from_hex(inside).map(|c| c.to_rgba8(1.0)),
@@ -347,12 +350,14 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
     match p.get("inside") {
         None | Some(Value::Null) => {}
         Some(v) => {
-            let inside = v.as_str().unwrap_or_default();
-            let known = app.session.active().and_then(|st| inside_color(&st.doc, inside)).is_some()
-                || (inside.starts_with('#') && vectorcraft_color::Color::from_hex(inside).is_some());
-            if !known {
-                return Err(format!("`inside` must be #rrggbb or the name of a swatch with a plain color, not {v}"));
-            }
+            let inside = v.as_str().filter(|inside| {
+                inside.is_empty()
+                    || app.session.active().and_then(|st| inside_color(&st.doc, inside)).is_some()
+                    || (inside.starts_with('#') && vectorcraft_color::Color::from_hex(inside).is_some())
+            });
+            let Some(inside) = inside else {
+                return Err(format!("`inside` must be #rrggbb, the name of a swatch with a plain color, or empty for white, not {v}"));
+            };
             set.inside = inside.to_string();
         }
     }
@@ -413,10 +418,10 @@ fn toolbar(app: &VectorcraftApp, ui: &mut Ui, set: &mut Settings) {
         });
         let mut names: Vec<&str> = vec![tl!("White")];
         names.extend(swatches.iter().map(String::as_str));
-        let shown = if set.inside == "#ffffff" { tl!("White") } else { set.inside.as_str() };
+        let shown = if set.inside.is_empty() { tl!("White") } else { set.inside.as_str() };
         ui.label(tl!("Inside"));
         if let Some(i) = widgets::dropdown_names_named(ui, "fold-preview-inside", Some(tl!("Inside")), shown, &names, 110.0) {
-            set.inside = swatches.get(i.wrapping_sub(1)).cloned().unwrap_or_else(|| "#ffffff".into());
+            set.inside = swatches.get(i.wrapping_sub(1)).cloned().unwrap_or_default();
         }
         if widgets::check(ui, tl!("Show Fold Lines"), set.show_fold_lines, true) {
             set.show_fold_lines = !set.show_fold_lines;

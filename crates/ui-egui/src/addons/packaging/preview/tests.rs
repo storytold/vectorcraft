@@ -132,6 +132,13 @@ fn ui_fold_preview_sets_the_window_and_refuses_bad_values() {
     assert_eq!(inside_color(doc, "#brand"), Some([0, 0, 255, 255]));
     assert_eq!(inside_color(doc, "#00ff00"), Some([0, 0, 255, 255]));
     assert_eq!(inside_color(doc, "#ff0000"), Some([255, 0, 0, 255]));
+    // White, the default, stays white beside a swatch named #ffffff.
+    app.run("swatch.new", json!({"name": "#ffffff", "color": "#0000ff"})).unwrap();
+    let doc = &app.session.active().expect("a document").doc;
+    assert_eq!(inside_color(doc, &Settings::default().inside), Some([255; 4]));
+    assert_eq!(inside_color(doc, "#ffffff"), Some([0, 0, 255, 255]));
+    app.run("ui.foldPreview", json!({"inside": ""})).unwrap();
+    assert_eq!(app.ui.fold_preview.inside, "");
 }
 
 #[test]
