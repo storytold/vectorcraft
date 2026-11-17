@@ -3653,6 +3653,10 @@ theme	Appearance	Ulkoasu
 	Font List	Fonttiluettelo
 	Show Similar Fonts	Näytä samankaltaiset fontit
 	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
+	Fonts used in this document	Tässä asiakirjassa käytetyt fontit
+	This document uses no available fonts	Tämä asiakirja ei käytä saatavilla olevia fontteja
+	Recently Added	Äskettäin lisätyt
+	Fonts added in the last 30 days	Viimeisten 30 päivän aikana lisätyt fontit
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti

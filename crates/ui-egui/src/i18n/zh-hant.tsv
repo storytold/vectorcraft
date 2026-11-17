@@ -1338,6 +1338,10 @@ file-filter	Templates	範本
 	Font List	字體清單
 	Show Similar Fonts	顯示相似字體
 	Clear Similar Fonts	清除相似字體
+	Fonts used in this document	此文件中使用的字體
+	This document uses no available fonts	此文件未使用任何可用字體
+	Recently Added	最近新增
+	Fonts added in the last 30 days	最近 30 天內新增的字體
 	Font Preview Size	字體預覽大小
 	Font Size	字體大小
 	Variable Font	可變字體

@@ -1365,6 +1365,10 @@ file-filter	Templates	Шаблоны
 	Font List	Список шрифтов
 	Show Similar Fonts	Показать похожие шрифты
 	Clear Similar Fonts	Сбросить похожие шрифты
+	Fonts used in this document	Шрифты, используемые в этом документе
+	This document uses no available fonts	В этом документе не используются доступные шрифты
+	Recently Added	Недавно добавленные
+	Fonts added in the last 30 days	Шрифты, добавленные за последние 30 дней
 	Font Preview Size	Размер предварительного просмотра шрифта
 	Font Size	Размер шрифта
 	Variable Font	Вариативный шрифт

@@ -1680,6 +1680,10 @@ file-filter	Templates	Sablonok
 	Font List	Betűtípuslista
 	Show Similar Fonts	Hasonló betűtípusok megjelenítése
 	Clear Similar Fonts	Hasonló betűtípusok törlése
+	Fonts used in this document	A dokumentumban használt betűtípusok
+	This document uses no available fonts	A dokumentum nem használ elérhető betűtípust
+	Recently Added	Nemrég hozzáadott
+	Fonts added in the last 30 days	Az elmúlt 30 napban hozzáadott betűtípusok
 	Font Preview Size	Betűtípus-előnézet mérete
 	Font Size	Betűméret
 	Variable Font	Változó betűtípus

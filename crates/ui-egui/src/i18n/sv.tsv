@@ -1308,6 +1308,10 @@ font-technology	Variable	Variabla
 	Font List	Typsnittslista
 	Show Similar Fonts	Visa liknande typsnitt
 	Clear Similar Fonts	Rensa liknande typsnitt
+	Fonts used in this document	Typsnitt som används i det här dokumentet
+	This document uses no available fonts	Det här dokumentet använder inga tillgängliga typsnitt
+	Recently Added	Nyligen tillagda
+	Fonts added in the last 30 days	Typsnitt som lagts till de senaste 30 dagarna
 	Font Preview Size	Storlek på typsnittsförhandsgranskning
 	Font Size	Teckenstorlek
 	Variable Font	Variabelt typsnitt

@@ -1345,6 +1345,10 @@ font-technology	Variable	Variables
 	Font List	Liste des polices
 	Show Similar Fonts	Afficher les polices similaires
 	Clear Similar Fonts	Effacer les polices similaires
+	Fonts used in this document	Polices utilisées dans ce document
+	This document uses no available fonts	Ce document n’utilise aucune police disponible
+	Recently Added	Ajoutées récemment
+	Fonts added in the last 30 days	Polices ajoutées au cours des 30 derniers jours
 	Font Preview Size	Taille de l’aperçu des polices
 	Font Size	Taille de police
 	Variable Font	Police variable
