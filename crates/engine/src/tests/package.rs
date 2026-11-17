@@ -768,6 +768,38 @@ fn package_copies_a_linked_eps_file_as_it_is() {
 }
 
 #[test]
+fn package_copies_the_files_a_linked_eps_files_native_document_places_beside_it() {
+    let dir = Folder::new("package-placed-eps-links");
+    let pic = dir.file("pics/photo.png");
+    write(&pic, &png(600, 300, RED));
+    let mut art = session();
+    place(&mut art, &pic);
+    std::fs::create_dir_all(dir.0.join("art")).unwrap();
+    let src = dir.file("art/seal.eps");
+    run(&mut art, "document.export", json!({"path": src, "format": "eps"}));
+    let mut s = session();
+    let placed = run(&mut s, "file.place", json!({"path": src}));
+    assert_eq!(placed["linked"], true, "{placed}");
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    let r = run(&mut s, "file.package", json!({"folder": dir.file("out")}));
+    assert_eq!((r["links"].as_u64(), r["missingLinks"].clone(), r["warnings"].clone()), (Some(2), json!([]), json!([])), "{r}");
+    let root = dir.0.join("out/poster Folder");
+    assert_eq!(std::fs::read(root.join("Links/photo.png")).unwrap(), png(600, 300, RED));
+    // The copy of the EPS file finds the picture beside it, not its preview.
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    std::fs::remove_dir_all(dir.0.join("pics")).unwrap();
+    let copy = root.join("Links/seal.eps").to_string_lossy().into_owned();
+    let shows_the_file = || {
+        let bytes = std::fs::read(&copy).unwrap();
+        let a = cmd::place::document::document_art("seal.eps", &bytes, Some(&copy), 1, false, vectorcraft_doc::PageBox::Crop, "t").unwrap();
+        a.doc.images.values().any(|b| !b.is_proxy())
+    };
+    assert!(shows_the_file());
+    std::fs::remove_file(root.join("Links/photo.png")).unwrap();
+    assert!(!shows_the_file(), "the preview only");
+}
+
+#[test]
 fn package_copies_a_linked_postscript_ai_file_the_document_holds_after_it_is_gone() {
     let dir = Folder::new("package-placed-ps-ai");
     let ai = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 50\n%%EndComments\n0 0 1 setrgbcolor\nnewpath 0 0 moveto 100 0 lineto 100 50 lineto 0 50 lineto closepath fill\nshowpage\n%%EOF\n";

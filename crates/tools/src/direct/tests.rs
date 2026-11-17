@@ -246,6 +246,137 @@ fn shift_click_picks_several_spine_points_which_drag_together() {
     assert!(matches!(a.last(), Some(Action::Preview(_, v)) if v["anchor"] == 0 && v.get("with").is_none()), "{a:?}");
 }
 
+/// [`blend_doc`] with a spine through (110, 310), (160, 310) and (210, 310).
+fn blend_doc_with_three_spine_points() -> (vectorcraft_doc::Document, NodeId) {
+    let (mut d, g, _) = blend_doc();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    let Some(NodeKind::Blend { spec, .. }) = d.node_mut(g).map(|n| &mut n.kind) else { panic!("blend") };
+    (spec.spine, spec.key_anchors) = (Some(PathData::single(sp)), vec![0, 2]);
+    (d, g)
+}
+
+/// A marquee drawn with Direct Selection from `from` to `to`, released.
+fn spine_marquee(t: &mut DirectSelectionTool, cx: &ToolContext, from: (f64, f64), to: (f64, f64), mods: Mods) -> Vec<Action> {
+    assert_eq!(t.pointer(cx, &PointerEvent::new(PointerKind::Down, from.0, from.1).with_mods(mods)), vec![]);
+    t.pointer(cx, &PointerEvent::new(PointerKind::Drag, to.0, to.1).with_mods(mods));
+    assert!(t.overlays(cx).iter().any(|o| matches!(o, Overlay::Marquee(_))), "a marquee");
+    t.pointer(cx, &PointerEvent::new(PointerKind::Up, to.0, to.1).with_mods(mods))
+}
+
+/// A Direct Selection marquee picks the points of a selected blend's spine inside it, which then
+/// drag together, and keeps the blend selected; a marquee around none of them drops the picks.
+#[test]
+fn marquee_picks_selected_blend_spine_points_which_drag_together() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let filled = |t: &DirectSelectionTool| t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Anchor { filled: true, .. })).count();
+    let mut t = DirectSelectionTool::new(false);
+    // Around (160, 310) and (210, 310), the second on the rect's edge.
+    let a = spine_marquee(&mut t, &cx, (230.0, 330.0), (160.0, 290.0), Mods::default());
+    assert!(
+        matches!(a.first(), Some(Action::Exec(c, v)) if c == "select.anchorsMany" && v["mode"] == "set" && v["items"].as_array().is_some_and(|i| i.iter().any(|i| i["id"] == g.0))),
+        "the blend stays selected: {a:?}"
+    );
+    assert_eq!(filled(&t), 2, "both picked points show");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 210.0, 310.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 210.0, 330.0));
+    assert_eq!(
+        a.last(),
+        Some(&Action::Preview("object.blend.spine.moveAnchor".into(), json!({"id": g.0, "anchor": 2, "x": 210.0, "y": 330.0, "with": [1]})))
+    );
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 210.0, 330.0)), vec![Action::Commit]);
+    // A marquee around none of the points drops them.
+    spine_marquee(&mut t, &cx, (300.0, 330.0), (240.0, 290.0), Mods::default());
+    assert_eq!((t.spine, filled(&t)), (None, 0));
+}
+
+/// With Shift, a Direct Selection marquee toggles the spine points inside it: a picked one leaves,
+/// another joins, and those outside it keep their state; the blend is not toggled away.
+#[test]
+fn shift_marquee_toggles_selected_blend_spine_points() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    let a = spine_marquee(&mut t, &cx, (230.0, 330.0), (150.0, 290.0), shift);
+    assert!(
+        matches!(a.first(), Some(Action::Exec(c, v)) if c == "select.anchorsMany" && v["items"].as_array().is_some_and(|i| !i.iter().any(|i| i["id"] == g.0))),
+        "the blend is not toggled: {a:?}"
+    );
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![]));
+    spine_marquee(&mut t, &cx, (130.0, 330.0), (90.0, 290.0), shift);
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![0]));
+    // A Shift-marquee around none of them keeps them, and keeps the blend selected when it
+    // touches the blend's art.
+    spine_marquee(&mut t, &cx, (300.0, 330.0), (240.0, 290.0), shift);
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![0]));
+    let a = spine_marquee(&mut t, &cx, (230.0, 330.0), (205.0, 315.0), shift);
+    assert!(
+        matches!(a.first(), Some(Action::Exec(c, v)) if c == "select.anchorsMany" && v["items"].as_array().is_some_and(|i| !i.iter().any(|i| i["id"] == g.0))),
+        "the blend is not toggled: {a:?}"
+    );
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![0]));
+}
+
+/// A Direct Selection marquee does not pick the spine points of a blend that is not selected, or
+/// of a selected blend that is locked or hidden.
+#[test]
+fn marquee_skips_unselected_locked_and_hidden_blend_spines() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let p = paint();
+    let mut s = Selection::default();
+    let none = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    spine_marquee(&mut t, &none, (230.0, 330.0), (150.0, 290.0), Mods::default());
+    assert_eq!(t.spine, None, "not selected");
+    s.set([g]);
+    for lock in [true, false] {
+        let mut d = d.clone();
+        let Some(n) = d.node_mut(g) else { panic!("blend") };
+        if lock {
+            n.locked = true;
+        } else {
+            n.visible = false;
+        }
+        let c = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(false);
+        spine_marquee(&mut t, &c, (230.0, 330.0), (150.0, 290.0), Mods::default());
+        assert_eq!(t.spine, None, "locked: {lock}");
+    }
+    // The same marquee on the selected blend picks them.
+    let c = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    spine_marquee(&mut t, &c, (230.0, 330.0), (150.0, 290.0), Mods::default());
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 2)), vec![1]));
+}
+
+/// Escape during a Direct Selection marquee cancels it and keeps the spine points picked before.
+#[test]
+fn escape_cancels_a_marquee_and_keeps_the_picked_spine_points() {
+    let (d, g) = blend_doc_with_three_spine_points();
+    let mut s = Selection::default();
+    s.set([g]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.0, 310.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 330.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 290.0));
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 290.0)), vec![]);
+    assert_eq!((t.spine, t.spine_more.clone()), (Some((g, 1)), vec![]));
+    assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Anchor { filled: true, .. })), "the picked point shows");
+}
+
 /// #1111: the Anchor Point tool bends a selected blend's straight spine; Direct Selection
 /// reshapes a curved spine segment and leaves a straight one alone, as it does a path's.
 #[test]
@@ -465,10 +596,7 @@ fn a_marquee_selects_frame_anchors_of_area_type() {
     let mut g = DirectSelectionTool::new(true);
     g.pointer(&cx1, &ev(PointerKind::Down, 400.0, 280.0));
     g.pointer(&cx1, &ev(PointerKind::Drag, 440.0, 360.0));
-    assert_eq!(
-        g.pointer(&cx1, &ev(PointerKind::Up, 440.0, 360.0)),
-        vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": text.0, "anchors": []}], "mode": "set"}))]
-    );
+    assert_eq!(g.pointer(&cx1, &ev(PointerKind::Up, 440.0, 360.0)), vec![Action::Exec("select.set".into(), json!({"ids": [text.0]}))]);
 }
 
 /// A click without a drag on one of several selected frame anchors selects it alone, as a click on
@@ -1233,8 +1361,9 @@ fn marquee_selects_type_it_touches() {
     assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": rect.0, "anchors": [[0, 1]]}], "mode": "set"}))]);
 }
 
-/// A marquee across a member of an Intertwine group selects the member's anchors, as in a
-/// plain group, and not the Intertwine group whole.
+/// A Direct Selection marquee across a member of an Intertwine group selects the member's anchors,
+/// as in a plain group, and not the Intertwine group whole; a Group Selection marquee selects the
+/// member whole.
 #[test]
 fn marquee_selects_the_anchors_of_intertwine_members() {
     let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
@@ -1258,11 +1387,17 @@ fn marquee_selects_the_anchors_of_intertwine_members() {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0));
         let actions = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0));
         let items = json!([{"id": a.0, "anchors": [[0, 1]]}]);
-        assert_eq!(actions, vec![Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))], "group: {group}");
+        let want = if group {
+            Action::Exec("select.set".into(), json!({"ids": [a.0]}))
+        } else {
+            Action::Exec("select.anchorsMany".into(), json!({"items": items, "mode": "set"}))
+        };
+        assert_eq!(actions, vec![want], "group: {group}");
     }
 }
 
-/// Shift-drag a marquee: the anchors inside toggle (#483), with Group Selection too.
+/// Shift-drag a marquee: the anchors inside toggle (#483); with Group Selection, the objects it
+/// touches toggle whole.
 #[test]
 fn shift_marquee_toggles_anchors() {
     let (d, id) = doc_with_rect();
@@ -1275,8 +1410,44 @@ fn shift_marquee_toggles_anchors() {
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 50.0).with_mods(shift));
         t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 150.0).with_mods(shift));
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 150.0).with_mods(shift));
-        assert_eq!(a, vec![Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "toggle"}))]);
+        let want = if group {
+            Action::Exec("select.toggle".into(), json!({"ids": [id.0]}))
+        } else {
+            Action::Exec("select.anchorsMany".into(), json!({"items": [{"id": id.0, "anchors": [[0, 1]]}], "mode": "toggle"}))
+        };
+        assert_eq!(a, vec![want], "group: {group}");
     }
+}
+
+/// #8047: a Group Selection marquee across part of two members of a group selects both members
+/// whole, not the anchors inside it and not the group, and leaves the member it misses.
+#[test]
+fn a_group_selection_marquee_selects_the_members_it_touches_whole() {
+    let mut d = vectorcraft_doc::Document::new(600.0, 400.0);
+    let l = d.layers[0].id;
+    let (g, a, b, c) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let path = |id, x: f64| {
+        vectorcraft_doc::Node::path(
+            id,
+            vectorcraft_geom::shapes::rectangle(Rect::new(x, 120.0, x + 100.0, 240.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        )
+    };
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(g, vec![])).unwrap();
+    for (i, (id, x)) in [(a, 100.0), (b, 250.0), (c, 400.0)].into_iter().enumerate() {
+        d.insert(Some(g), i, path(id, x)).unwrap();
+    }
+    let (s, p) = (Selection::default(), paint());
+    let cx = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(true);
+    // From (150, 95) to (300, 265): the right side of A and the left side of B.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 95.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 300.0, 265.0));
+    let up = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 265.0));
+    let Some(Action::Exec(cmd, params)) = up.first() else { panic!("{up:?}") };
+    assert_eq!(cmd, "select.set");
+    let ids: BTreeSet<String> = params["ids"].as_array().unwrap().iter().map(|v| v.to_string()).collect();
+    assert_eq!(ids, [json!(a.0), json!(b.0)].iter().map(|v| v.to_string()).collect());
 }
 
 /// #4890: Alt held at the press makes a Direct Selection marquee Group Selection's for the drag:

@@ -16,7 +16,7 @@ pub(crate) const MAX_NODES: usize = 4_000_000;
 
 /// The most objects all the blends of one import may lay out to be checked (each twice) and made
 /// live; past it, blends keep their drawn steps.
-pub(super) const BLEND_BUDGET: usize = 50_000;
+pub(crate) const BLEND_BUDGET: usize = 50_000;
 
 /// Most points in one path.
 pub(super) const MAX_POINTS: usize = 4_000_000;
