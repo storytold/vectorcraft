@@ -1,5 +1,6 @@
 //! The SVG writer.
 
+use craft_svg::tree::usvg;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -19,6 +20,8 @@ use crate::{
     EDITING_NS, Encoding, ExportOptions, ImageMode, LinkedImage, ObjectIds, Output, Profile, Styling, base64_encode, body_hash, fmt_num, fnv1a,
     xml_escape,
 };
+
+use craft_svg::write::SvgWriter;
 
 use crate::css::{self, Props, blend_css, css_string, font_descriptor};
 
@@ -155,30 +158,36 @@ fn write(doc: &Document, opts: &ExportOptions, native: Option<&[u8]>, id_prefix:
         opts.encoding
     };
     let nl = if opts.minify { "" } else { "\n" };
-    let mut out = String::new();
+    let mut svg = SvgWriter::fragment();
     // A file in neither UTF-8 nor UTF-16 must name its encoding.
     if !opts.minify || encoding == Encoding::Latin1 {
-        out.push_str(&format!("<?xml version=\"1.0\" encoding=\"{}\"?>{nl}", encoding.xml_name()));
+        svg.decl(encoding.xml_name(), nl);
     }
     if opts.styling == Styling::StyleEntities && !w.classes.is_empty() {
-        out.push_str("<!DOCTYPE svg [");
-        for (i, c) in w.classes.iter().enumerate() {
-            out.push_str(&format!("{nl}{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)));
-        }
-        out.push_str(&format!("{nl}]>{nl}"));
+        let entities = w
+            .classes
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!("{}<!ENTITY st{} \"{}\">", w.indent(1), i + 1, entity_value(c)))
+            .collect::<Vec<_>>()
+            .join(nl);
+        svg.doctype_internal("svg", &entities, nl);
     }
     let (ww, hh) = (w.num(rect.width()), w.num(rect.height()));
-    out.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
+    let mut root = svg.root().attr("xmlns:xlink", "http://www.w3.org/1999/xlink");
     for (ns, prefix) in &w.foreign_ns {
-        out.push_str(&format!(" xmlns:{prefix}=\"{}\"", xml_attr_escape(ns)));
+        root = root.attr(&format!("xmlns:{prefix}"), ns);
     }
     if w.tiny() {
-        out.push_str(" version=\"1.2\" baseProfile=\"tiny\"");
+        root = root.attr("version", "1.2").attr("baseProfile", "tiny");
     }
     if !opts.responsive {
-        out.push_str(&format!(" width=\"{ww}\" height=\"{hh}\""));
+        // Unitless width/height stay in this one branch so #7105 (physical unit suffixes) can rebase here.
+        root = root.attr("width", &ww).attr("height", &hh);
     }
-    out.push_str(&format!(" viewBox=\"0 0 {ww} {hh}\">{nl}"));
+    root.attr("viewBox", format_args!("0 0 {ww} {hh}")).open();
+    let mut out = svg.as_str().to_string();
+    out.push_str(nl);
     let css = opts.styling == Styling::InternalCss && !w.classes.is_empty();
     let fonts = w.font_faces();
     if !w.defs.is_empty() || css || !fonts.is_empty() {

@@ -231,7 +231,9 @@ fn assign_harness(mut app: VectorcraftApp, open: Value) -> egui_kittest::Harness
     app.run("ui.recolorDialog", open).unwrap();
     set(&mut app, "method", json!("exact"));
     let mut fonts = false;
-    let mut h = egui_kittest::Harness::builder().with_size(vec2(900.0, 800.0)).build_ui_state(
+    let builder = egui_kittest::Harness::builder().with_size(vec2(900.0, 800.0));
+    let builder = if std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR").is_some() { builder.wgpu() } else { builder };
+    let mut h = builder.build_ui_state(
         move |ui, app: &mut VectorcraftApp| {
             if !std::mem::replace(&mut fonts, true) {
                 crate::theme::install_fonts(ui.ctx());
@@ -1059,6 +1061,159 @@ fn a_segmented_wheel_marker_moves_freely() {
     assert!((new_hsb(h.state())[red][2] - 0.25).abs() < 0.02, "the Brightness slider: {:?}", new_hsb(h.state()));
 }
 
+/// The segmented hue and brightness wheel's patches: 24 hues by 5 brightness steps, at the
+/// saturation asked; the innermost ring is the darkest.
+#[test]
+fn the_segmented_brightness_wheel_has_24_hues_by_5_brightnesses() {
+    let bright = crate::widgets::WheelAxes::HueBrightness;
+    let seg = |h, v, s| crate::widgets::segment_color_on(bright, h, v, s).to_hsb();
+    let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
+    assert!(near(seg(7.0, 0.95, 1.0), [0.0, 1.0, 0.9]), "{:?}", seg(7.0, 0.95, 1.0));
+    assert!(near(seg(8.0, 0.0, 0.5), [15.0, 0.5, 0.1]), "{:?}", seg(8.0, 0.0, 0.5));
+    assert!(near(seg(120.0, 0.5, 0.25), [120.0, 0.25, 0.5]), "{:?}", seg(120.0, 0.5, 0.25));
+    let mut patches = std::collections::BTreeSet::new();
+    for h in 0..360 {
+        for v in 0..=100 {
+            patches.insert(ColorKey::of(&crate::widgets::segment_color_on(bright, h as f32, v as f32 / 100.0, 1.0)).to_string());
+        }
+    }
+    assert_eq!(patches.len(), 24 * 5);
+}
+
+/// The button under the wheel tools switches the wheel to hue and brightness: its name says what a
+/// click shows next, the slider under the wheel becomes a Saturation slider, and switching changes
+/// no color, previews nothing and records no undo step. The choice holds for the segmented wheel and
+/// across the color bars, where the button is off; the next opening shows hue and saturation again.
+#[test]
+fn the_brightness_and_hue_wheel_swaps_the_wheel_axis_and_the_slider() {
+    let mut h = edit_harness(&["#ff0000", "#0000ff", "#00ff00"]);
+    let (rows, height) = (field(h.state(), "rows"), dialog_height(&h));
+    let doc = h.state().session.doc().unwrap().doc.clone();
+    let undo = h.state().session.doc().unwrap().history.undo.len();
+    let slider = |h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str| h.query_by_role_and_label(egui::accesskit::Role::Slider, name).is_some();
+    assert_eq!(field(h.state(), "wheelAxes"), Value::Null, "hue and saturation first");
+    assert!(slider(&h, "Brightness") && !slider(&h, "Saturation"));
+    click_button(&mut h, "Show brightness and hue on wheel");
+    assert_eq!(field(h.state(), "wheelAxes"), json!("hueBrightness"));
+    assert!(slider(&h, "Saturation") && !slider(&h, "Brightness"), "the slider edits the component the wheel leaves out");
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Show saturation and hue on wheel").is_some(), "the button names the way back");
+    assert_eq!(field(h.state(), "rows"), rows, "switching changes no color");
+    assert_eq!(h.state().session.doc().unwrap().doc, doc, "nor the art");
+    assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo);
+    show_display(&mut h, "Show segmented color wheel");
+    assert_eq!(field(h.state(), "wheelAxes"), json!("hueBrightness"), "the segmented wheel keeps the choice");
+    assert!(slider(&h, "Saturation"));
+    show_display(&mut h, "Show color bars");
+    let button = h.get_by_role_and_label(egui::accesskit::Role::Button, "Show saturation and hue on wheel");
+    assert!(button.accesskit_node().is_disabled(), "the button is for the wheels");
+    assert_eq!(dialog_height(&h), height, "the button keeps the dialog's height");
+    show_display(&mut h, "Show smooth color wheel");
+    assert!(slider(&h, "Saturation"), "the bars keep the choice");
+    click_button(&mut h, "Show saturation and hue on wheel");
+    assert_eq!(field(h.state(), "wheelAxes"), json!("hueSaturation"));
+    assert!(slider(&h, "Brightness") && !slider(&h, "Saturation"));
+    assert_eq!(field(h.state(), "rows"), rows);
+    assert_eq!(dialog_height(&h), height);
+    set(h.state_mut(), "wheelAxes", json!("sideways"));
+    h.run_steps(3);
+    assert!(slider(&h, "Brightness"), "an unknown value shows hue and saturation");
+    set(h.state_mut(), "wheelAxes", json!("hueBrightness"));
+    h.run_steps(3);
+    let app = h.state_mut();
+    dialogs::cancel(app);
+    app.run("select.all", json!({})).unwrap();
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    assert_eq!(field(app, "wheelAxes"), Value::Null, "a new opening shows hue and saturation");
+}
+
+/// On the hue and brightness wheel a marker sits at its color's brightness, and a drag sets hue and
+/// brightness and keeps saturation; linked colors turn and darken with it. The art previews the
+/// drag, Cancel restores it and OK keeps it as one undo step. The Saturation slider sets the
+/// selected color's saturation and keeps its brightness.
+#[test]
+fn a_marker_on_the_brightness_wheel_sets_hue_and_brightness() {
+    for confirm in [false, true] {
+        let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+        set(h.state_mut(), "__sel", json!([0]));
+        h.run_steps(4);
+        let before = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        click_button(&mut h, "Show brightness and hue on wheel");
+        let start = new_hsb(h.state());
+        let [hue, s, v] = start[0];
+        // Around by 30° and in to 40% brightness, a few points at a time from the marker.
+        let from = wheel_at(&h, hue, v);
+        h.hover_at(from);
+        h.run_steps(1);
+        h.drag_at(from);
+        h.run_steps(1);
+        let c = widget_of_size(&h, vec2(220.0, 220.0)).center();
+        let to = |k: f32| {
+            let a = (hue + 30.0 * k).to_radians();
+            c + vec2(a.cos(), -a.sin()) * 100.0 * (v + (0.4 - v) * k)
+        };
+        let end = to(1.0);
+        for k in 1..=10 {
+            let p = to(k as f32 / 10.0);
+            h.hover_at(p);
+            h.run_steps(1);
+        }
+        h.drop_at(end);
+        h.run_steps(2);
+        let moved = new_hsb(h.state());
+        let gap = |a: f32, b: f32| (a - b).rem_euclid(360.0).min((b - a).rem_euclid(360.0));
+        assert!(gap(moved[0][0], hue + 30.0) < 1.0, "hue: {start:?} -> {moved:?}");
+        assert!((moved[0][2] - 0.4).abs() < 0.02, "brightness: {start:?} -> {moved:?}");
+        assert!((moved[0][1] - s).abs() < 0.02, "saturation stays: {start:?} -> {moved:?}");
+        assert!(gap(moved[1][0], start[1][0] + 30.0) < 1.5, "linked, it turns: {start:?} -> {moved:?}");
+        assert!((moved[1][2] - (start[1][2] - (v - 0.4))).abs() < 0.02, "and darkens alike: {start:?} -> {moved:?}");
+        click_slider(&mut h, "Saturation", 0.25);
+        let slid = new_hsb(h.state());
+        assert!((slid[0][1] - 0.25).abs() < 0.02, "the Saturation slider: {slid:?}");
+        assert!((slid[0][2] - 0.4).abs() < 0.02, "keeps the brightness: {slid:?}");
+        let after = h.state().session.doc().unwrap().doc.clone();
+        assert_ne!(after, before, "the art previews the edit");
+        h.get_by_label(if confirm { "OK" } else { "Cancel" }).click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none());
+        if confirm {
+            assert_eq!(h.state().session.doc().unwrap().doc, after);
+            assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+            h.state_mut().run("edit.undo", json!({})).unwrap();
+        } else {
+            assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "Cancel records no undo step");
+        }
+        assert_eq!(h.state().session.doc().unwrap().doc, before);
+    }
+}
+
+/// On the hue and brightness wheels the Add Color tool adds the hue and brightness clicked at the
+/// base color's saturation, the patch's color on the segmented wheel.
+#[test]
+fn the_add_color_tool_on_the_brightness_wheel_adds_the_brightness_clicked() {
+    let mut h = edit_harness(&["rgb 200 100 100", "rgb 100 200 200"]);
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(4);
+    let s = new_hsb(h.state())[0][1];
+    click_button(&mut h, "Show brightness and hue on wheel");
+    click_button(&mut h, "Add Color Tool");
+    let at = wheel_at(&h, 120.0, 0.5);
+    h.input_mut().events.extend(press(at, 1));
+    h.run_steps(3);
+    let [hue, sat, b] = new_hsb(h.state())[2];
+    assert!((hue - 120.0).abs() < 1.0 && (sat - s).abs() < 0.01 && (b - 0.5).abs() < 0.01, "{:?}", [hue, sat, b]);
+    assert_eq!(field(h.state(), "__sel"), json!([2]));
+    // The new color is now the base color; select the first one again.
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(3);
+    show_display(&mut h, "Show segmented color wheel");
+    let patch = wheel_at(&h, 187.0, 0.95);
+    h.input_mut().events.extend(press(patch, 1));
+    h.run_steps(3);
+    let [hue, sat, b] = *new_hsb(h.state()).last().unwrap();
+    assert!((hue - 180.0).abs() < 1.0 && (sat - s).abs() < 0.01 && (b - 0.9).abs() < 0.01, "the patch's color: {:?}", [hue, sat, b]);
+}
+
 /// The rows as `(current colors, new color)` pairs, sorted.
 fn row_pairs(app: &VectorcraftApp) -> Vec<String> {
     let mut v: Vec<String> = field(app, "rows").as_array().unwrap().iter().map(|r| format!("{} {}", r["from"], r["to"])).collect();
@@ -1173,7 +1328,8 @@ fn color_bars_scroll_and_show_when_nothing_is_recolored() {
     let _ = h.get_by_label("No colors to recolor (preserved colors are left out).");
 }
 
-/// Where the Edit tab's wheel draws a marker for hue `hue` and saturation `s`.
+/// Where the Edit tab's wheel draws a marker for hue `hue` and saturation `s` (or brightness, on
+/// the hue and brightness wheel).
 fn wheel_at(h: &egui_kittest::Harness<'_, VectorcraftApp>, hue: f32, s: f32) -> Pos2 {
     let c = widget_of_size(h, vec2(220.0, 220.0)).center();
     c + vec2(hue.to_radians().cos(), -hue.to_radians().sin()) * 100.0 * s
@@ -1338,4 +1494,94 @@ fn a_color_bars_menu_removes_its_color() {
     assert_eq!((&now[1]["from"], &now[1]["to"]), (&rows[1]["from"], &Value::Null), "{now}");
     assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Color 2").is_none(), "its bar goes");
     assert_eq!(field(h.state(), "__sel"), json!([0]));
+}
+
+// Optional local visual QA; these captures are not committed assets.
+fn capture_recolor(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, name: &str) {
+    if let Some(dir) = std::env::var_os("VECTORCRAFT_RECOLOR_CAPTURE_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        h.render().unwrap().save(dir.join(format!("{name}.png"))).unwrap();
+    }
+}
+
+/// Secondary-click the actual New chip; the menu must dispatch through its UI callbacks.
+fn row_context_menu(h: &mut egui_kittest::Harness<'_, VectorcraftApp>, row: usize) {
+    let pos = h.ctx.read_response(egui::Id::unique(("recolor-new", row))).expect("New chip").rect.center();
+    h.event(Event::PointerMoved(pos));
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.event(Event::PointerButton { pos, button: PointerButton::Secondary, pressed, modifiers: Modifiers::NONE });
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+}
+
+#[test]
+fn row_context_menu_pick_from_swatches_and_limit_to_library() {
+    use egui::accesskit::Role;
+
+    for empty_new in [false, true] {
+        let mut app = app();
+        art(&mut app, &["#ff0000", "#0000ff"]);
+        // A known, single-color palette makes it impossible to pass without snapping the rows.
+        let doc = &app.session.doc().unwrap().doc;
+        let names: Vec<_> = doc
+            .swatches
+            .iter()
+            .filter(|s| !s.is_reserved())
+            .map(|s| s.name.clone())
+            .chain(doc.swatch_groups.iter().map(|g| g.name.clone()))
+            .collect();
+        app.run("swatch.delete", json!({"names": names})).unwrap();
+        app.run("swatch.new", json!({"name": "Only Yellow", "color": "#ffff00"})).unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let mut h = assign_harness(app, json!({}));
+        let row = 1;
+        if empty_new {
+            let mut rows = field(h.state(), "rows");
+            rows[row]["to"] = Value::Null;
+            set(h.state_mut(), "rows", rows);
+            h.run_steps(2);
+        }
+        let before = field(h.state(), "rows");
+        let expected = if empty_new { before[row]["from"][0].clone() } else { before[row]["to"].clone() };
+        row_context_menu(&mut h, row);
+        assert_eq!(field(h.state(), "__sel"), json!([row]), "right-click selects the targeted row");
+        capture_recolor(&mut h, "assign-row-menu");
+        h.get_by_label("   Pick from Swatches").click();
+        h.run_steps(3);
+        let picker = h.state().ui.dialog.as_ref().expect("picker opened by menu");
+        assert_eq!(picker.kind, "colorPicker");
+        assert!(picker.bool("swatches"));
+        assert_eq!(picker.fields["__recolorRow"], json!(row));
+        assert_eq!(picker.fields.get("color").and_then(vectorcraft_engine::cmd::color_value), vectorcraft_engine::cmd::color_value(&expected));
+        capture_recolor(&mut h, "picker-swatches");
+        h.get_by_role_and_label(Role::Button, "Cancel").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "rows"), before, "picker Cancel preserves all rows");
+
+        row_context_menu(&mut h, row);
+        h.get_by_label("Limit to Library").click();
+        h.run_steps(3);
+        capture_recolor(&mut h, "assign-library-menu");
+        h.get_by_label("   Document Swatches").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "limitTo"), json!("document"));
+        let snapped = field(h.state(), "rows");
+        for (i, r) in snapped.as_array().unwrap().iter().enumerate() {
+            assert_eq!(r["to"], "rgb 255 255 0", "row {i} snaps to the palette");
+        }
+        assert_ne!(snapped, before, "the menu changes row colors");
+        row_context_menu(&mut h, row);
+        h.get_by_label("Limit to Library").click();
+        h.run_steps(3);
+        h.get_by_label("   None").click();
+        h.run_steps(3);
+        assert_eq!(field(h.state(), "limitTo"), json!(""));
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "menu actions remain previews");
+        h.get_by_role_and_label(Role::Button, "Cancel").click();
+        h.run_steps(2);
+        assert_eq!(colors(h.state_mut()), 2, "Recolor Cancel restores the original artwork");
+    }
 }

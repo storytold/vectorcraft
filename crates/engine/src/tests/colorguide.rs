@@ -95,3 +95,50 @@ fn new_swatch_saves_several_colours_in_one_step() {
     assert!(s.execute("swatch.new", &json!({"colors": []})).is_err());
     assert!(s.execute("swatch.new", &json!({"colors": ["nope"]})).is_err());
 }
+
+/// The tint swatch a swatch named `name` is: (base, tint 0..1); none for any other swatch.
+fn tint_of(s: &Session, name: &str) -> Option<(String, f32)> {
+    s.doc().unwrap().doc.swatch(name)?.tint_of().map(|(b, t)| (b.to_string(), t))
+}
+
+/// `{swatch, tint}` entries of `swatch.new {colors}` and `swatch.newGroup {colors}` make tint
+/// swatches linked to their spot color, beside plain colors, in one undo step; the tints follow an
+/// edit of the spot color; a bad entry saves nothing.
+#[test]
+fn colors_entries_naming_a_spot_color_save_tint_swatches() {
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#0066cc", "spot": true})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("swatch.new", &json!({"colors": [{"swatch": "Ink", "tint": 60}, "#112233", {"swatch": "Ink", "tint": 30}]})).unwrap();
+    let names = hexes(&r["names"]);
+    assert_eq!(names, ["Ink 60%", "R=17 G=34 B=51", "Ink 30%"]);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let (base, tint) = tint_of(&s, "Ink 60%").expect("a tint swatch");
+    assert_eq!(base, "Ink");
+    assert!((tint - 0.6).abs() < 1e-6, "{tint}");
+    assert!(tint_of(&s, "R=17 G=34 B=51").is_none());
+    let r = s.execute("swatch.newGroup", &json!({"name": "Guide", "colors": [{"swatch": "Ink", "tint": 45}, "#445566", {"swatch": "Ink"}]})).unwrap();
+    let members = hexes(&r["swatches"]);
+    assert_eq!(members[0], "Ink 45%");
+    assert_eq!(tint_of(&s, "Ink 45%").map(|(b, _)| b).as_deref(), Some("Ink"));
+    assert!(members[1..].iter().all(|m| tint_of(&s, m).is_none()), "a color and the full spot color are process copies: {members:?}");
+    let d = &s.doc().unwrap().doc;
+    let full = d.swatch(&members[2]).unwrap();
+    assert!(!full.spot && !full.global, "{full:?}");
+    // The tint swatches follow an edit of the spot color.
+    s.execute("swatch.edit", &json!({"name": "Ink", "color": "#cc0000"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let ink = d.global_color("Ink").unwrap();
+    for name in ["Ink 60%", "Ink 45%"] {
+        let w = d.swatch(name).unwrap();
+        let t = w.tint_of().unwrap().1;
+        assert_eq!(w.paint.color().map(|c| c.to_hex()), Some(ink.tinted(t).to_hex()), "{name}");
+    }
+    // A missing swatch, a tint of a process color or a tint that is not a number saves nothing.
+    let count = s.doc().unwrap().doc.swatches_iter().count();
+    for bad in [json!({"swatch": "Nope", "tint": 50}), json!({"swatch": "R=17 G=34 B=51", "tint": 50}), json!({"swatch": "Ink", "tint": "half"})] {
+        assert!(s.execute("swatch.new", &json!({"colors": ["#010203", bad]})).is_err(), "{bad}");
+        assert!(s.execute("swatch.newGroup", &json!({"colors": ["#010203", bad]})).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().doc.swatches_iter().count(), count);
+}

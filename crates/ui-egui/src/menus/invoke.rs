@@ -195,6 +195,11 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
+    // Check Fold Lines shows its summary and lists its issues in the Fold Lines panel.
+    if id == crate::addons::packaging::CHECK {
+        crate::addons::packaging::check(app, p);
+        return;
+    }
     // A Paste the user gives decodes a bitmap off the UI thread ([`crate::placing::adopt_for_paste`]).
     app.placing.for_user = id.starts_with("edit.paste");
     let r = app.run(id, p);

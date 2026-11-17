@@ -409,7 +409,7 @@ fn clicking_a_target_circle_targets_the_layer() {
 }
 
 #[test]
-fn dragging_a_target_circle_moves_or_copies_the_appearance_and_the_trash_clears_it() {
+fn dragging_a_target_circle_moves_or_copies_the_appearance() {
     let (mut app, layer, [a, b]) = two_rects();
     app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
     let ctx = egui::Context::default();
@@ -421,14 +421,49 @@ fn dragging_a_target_circle_moves_or_copies_the_appearance_and_the_trash_clears_
     // A plain drag onto the layer's circle moves it there.
     drag(&mut app, &ctx, c[1], c[0], false);
     assert!((opacity(&app, layer) - 0.3).abs() < 1e-6 && opacity(&app, b) == 1.0);
-    // Dropped on the trash, the layer's appearance is cleared (and nothing is deleted).
-    let st = app.session.active().unwrap();
-    let count = st.doc.node_count();
+}
+
+/// A target circle dropped on the trash reduces that item's own appearance to its topmost visible
+/// fill and stroke in one undo step, and deletes nothing; dropped again, it changes nothing and
+/// adds no undo step. A layer keeps only the rows it had, and its art is left as it is.
+#[test]
+fn dropping_a_target_circle_on_the_trash_reduces_it_to_basic_appearance() {
+    let (mut app, layer, [a, _]) = two_rects();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    // [Fill green, Stroke, Fill red, Stroke 5 pt], with an effect on the object.
+    run(&mut app, "appearance.addFill", json!({"ids": [a.0]}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 0, "color": "#00ff00"}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 2, "color": "#ff0000"}));
+    run(&mut app, "appearance.addStroke", json!({"ids": [a.0]}));
+    run(&mut app, "appearance.setItem", json!({"ids": [a.0], "index": 3, "weight": 5}));
+    run(&mut app, "effect.apply", json!({"ids": [a.0], "effect": "stylize.dropShadow", "item": null}));
+    let ctx = egui::Context::default();
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
     let trash = trash_pos(&mut app, &ctx);
+    let node = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().clone();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let (original, count, before) = (node(&app, a), app.session.active().unwrap().doc.node_count(), undo(&app));
+    // The bottom rectangle's circle (rows: the layer, the top rectangle, the bottom one).
+    drag(&mut app, &ctx, c[2], trash, false);
+    let n = node(&app, a);
+    assert!(n.appearance.is_basic(), "{:?}", n.appearance);
+    assert_eq!(n.appearance.items.len(), 2);
+    assert_eq!(n.appearance.fill().unwrap().paint.color().unwrap().to_hex(), "#ff0000");
+    assert_eq!(n.appearance.stroke().unwrap().width, 5.0);
+    assert_eq!((app.session.active().unwrap().doc.node_count(), undo(&app)), (count, before + 1));
+    // Dropped again, nothing changes and no undo step is made.
+    drag(&mut app, &ctx, c[2], trash, false);
+    assert_eq!((node(&app, a), undo(&app)), (n, before + 1));
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(node(&app, a), original, "one undo step restores the whole stack");
+    // The layer's own fill stays and its effect goes; the art on it keeps its appearance.
+    run(&mut app, "appearance.addFill", json!({"ids": [layer.0]}));
+    run(&mut app, "effect.apply", json!({"ids": [layer.0], "effect": "stylize.dropShadow", "item": null}));
     drag(&mut app, &ctx, c[0], trash, false);
-    let st = app.session.active().unwrap();
-    assert_eq!(st.doc.node(layer).unwrap().opacity, 1.0);
-    assert_eq!(st.doc.node_count(), count);
+    let l = node(&app, layer);
+    assert_eq!((l.appearance.items.len(), l.appearance.effects.len()), (1, 0), "{:?}", l.appearance);
+    assert!(l.appearance.fill().is_some());
+    assert_eq!(node(&app, a), original);
 }
 
 /// The trash button: the bottom bar's rightmost button.
@@ -1201,9 +1236,41 @@ fn kinds() -> (VectorcraftApp, HashMap<&'static str, NodeId>) {
     ids.insert("guide", guide);
     run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let placed = |app: &mut VectorcraftApp, p: serde_json::Value| NodeId(run(app, "file.place", p)["ids"][0].as_u64().unwrap());
     ids.insert("embedded", placed(&mut app, json!({"name": "pic.png", "dataBase64": vectorcraft_format::base64_encode(&png)})));
     // One file for every test that calls this, written by the first.
@@ -1424,6 +1491,129 @@ fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     assert_eq!(parent(&app, g), Some(sub));
     assert_eq!(app.session.active().unwrap().doc.node_count(), count + 2, "the group and its rectangle, copied");
     let _ = (layer, c);
+}
+
+/// One headless frame of the panel with `events` (Alt held when `alt`) → the cursor it asks for,
+/// and the cursor bitmap it hands the OS, if any.
+fn cursor_frame(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    alt: bool,
+) -> (egui::CursorIcon, Option<egui::CustomCursorImage>) {
+    let mut events = events;
+    events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    (out.platform_output.cursor_icon, out.platform_output.cursor_image)
+}
+
+/// #8217: a row dragged over the list shows the copy cursor while Alt is held, as the drop then
+/// copies, and the grabbing hand otherwise, following Alt as it goes down and up mid-drag. The copy
+/// cursor is the panels' add cursor (#8241): where the window shows glyphs as OS cursors (Windows,
+/// X11, which have no system copy cursor winit can show), the white arrow with a plus.
+#[test]
+fn alt_shows_the_copy_cursor_while_rows_are_dragged() {
+    let (mut app, _) = nested();
+    let ctx = egui::Context::default();
+    // Rows: Layer 1, Sub, g, b, a, c.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let (from, to) = (egui::pos2(150.0, circles[2].y), egui::pos2(150.0, circles[5].y));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+    frame(&mut app, &ctx, vec![button(from, true)], false);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(0.0, 6.0))], false);
+    let glyph = crate::cursors::add_cursor_is_a_glyph(&app).then(|| app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0)).flatten();
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)], false), (egui::CursorIcon::Grabbing, None), "a move");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], true), (egui::CursorIcon::Copy, glyph), "Alt held: the drop copies");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], false), (egui::CursorIcon::Grabbing, None), "Alt let go: a move again");
+    cursor_frame(&mut app, &ctx, vec![button(to, false)], false);
+    assert_ne!(cursor_frame(&mut app, &ctx, vec![], true).0, egui::CursorIcon::Copy, "no drag, no copy cursor");
+}
+
+/// The selected-art square copies with Alt as rows do; off the list (the trash, New Layer) Alt
+/// copies nothing, and guide rows keep their own cursor.
+#[test]
+fn drag_cursor_shows_a_copy_only_where_the_drop_copies() {
+    let (copy, grabbing) = (Some(egui::CursorIcon::Copy), Some(egui::CursorIcon::Grabbing));
+    for drag in [LayersDrag::Rows(vec![NodeId(1)]), LayersDrag::Art] {
+        assert_eq!(super::drag_cursor(&drag, true, true), copy);
+        assert_eq!(super::drag_cursor(&drag, false, true), grabbing);
+        assert_eq!(super::drag_cursor(&drag, true, false), grabbing, "off the list");
+    }
+    assert_eq!(super::drag_cursor(&LayersDrag::Guides(vec![0]), true, true), None);
+}
+
+/// An Intertwine group's row takes a dragged row inside it, as a group's does, and the object
+/// becomes a member; a row that can't be intertwined gets no inside box and goes beside it.
+#[test]
+fn dragging_a_row_into_an_intertwine_adds_a_member() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let rect = |app: &mut VectorcraftApp, x: f64| {
+        NodeId(run(app, "shape.rectangle", json!({"x": x, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap())
+    };
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let (a, b) = (rect(&mut app, 0.0), rect(&mut app, 10.0));
+    run(&mut app, "select.set", json!({"ids": [a.0, b.0]}));
+    let g = NodeId(run(&mut app, "object.intertwine.make", json!({}))["id"].as_u64().unwrap());
+    let (d, e) = (rect(&mut app, 100.0), rect(&mut app, 110.0));
+    run(&mut app, "select.set", json!({"ids": [d.0, e.0]}));
+    let g2 = NodeId(run(&mut app, "object.intertwine.make", json!({}))["id"].as_u64().unwrap());
+    let c = rect(&mut app, 50.0);
+    run(&mut app, "select.none", json!({}));
+    let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+    let ids = |nodes: Option<&Vec<Arc<Node>>>| nodes.map(|c| c.iter().map(|n| n.id).collect::<Vec<_>>()).unwrap_or_default();
+    let layer = doc(&app).layers[0].id;
+    let ctx = egui::Context::default();
+    // Rows: Layer 1, c, the second Intertwine group, the first.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    // c onto the middle of the first Intertwine group's row: into it, on top.
+    drag(&mut app, &ctx, egui::pos2(150.0, circles[1].y), egui::pos2(150.0, circles[3].y + 3.0), false);
+    assert_eq!(ids(doc(&app).node(g).and_then(Node::children)), [a, b, c]);
+    // Rows: Layer 1, the second Intertwine group, the first (open on its moved row), c, b, a. The
+    // second just below the middle of the first's row: no nested Intertwine groups, so the row has
+    // no inside box and it goes below the group, beside it.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    drag(&mut app, &ctx, egui::pos2(150.0, circles[1].y), egui::pos2(150.0, circles[2].y + 3.0), false);
+    let now = doc(&app);
+    assert_eq!(ids(now.node(layer).and_then(Node::children)), [g2, g]);
+    assert_eq!(ids(now.node(g2).and_then(Node::children)), [d, e]);
+    assert_eq!(ids(now.node(g).and_then(Node::children)), [a, b, c]);
+    // Rows: Layer 1, the first (open), c, b, a, the second. Held over member b's row, the second
+    // shows no line or box, as it can't go beside a member either; over the first's own row it
+    // shows the line below it.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let accent = Tokens::get(&ctx).accent;
+    let from = egui::pos2(150.0, circles[5].y);
+    let marks_over = |app: &mut VectorcraftApp, to: egui::Pos2| {
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+        frame(app, &ctx, vec![button(from, true)], false);
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from + vec2(0.0, 6.0))], false);
+        frame(app, &ctx, vec![egui::Event::PointerMoved(to)], false);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        let marks = out
+            .shapes
+            .iter()
+            .filter(|c| match &c.shape {
+                egui::Shape::LineSegment { stroke, .. } => stroke.color == accent,
+                egui::Shape::Rect(r) => r.stroke.color == accent,
+                _ => false,
+            })
+            .count();
+        frame(app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+        frame(app, &ctx, vec![button(from, false)], false);
+        frame(app, &ctx, vec![], false);
+        marks
+    };
+    let beside_member = marks_over(&mut app, egui::pos2(150.0, circles[3].y + 3.0));
+    let beside_group = marks_over(&mut app, egui::pos2(150.0, circles[1].y + 3.0));
+    assert_eq!(beside_group, beside_member + 1);
+    assert_eq!(ids(doc(&app).node(g).and_then(Node::children)), [a, b, c]);
 }
 
 /// One headless frame of the panel on a short screen (300 × 260) with `events` (Alt held when

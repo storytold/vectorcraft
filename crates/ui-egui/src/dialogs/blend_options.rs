@@ -36,6 +36,8 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let target = fields["target"].clone();
     let Some(o) = fields.as_object_mut() else { return Err("no blend options".into()) };
     o.retain(|k, _| matches!(k.as_str(), "spacing" | "steps" | "distance" | "orientation"));
+    let opened = Value::Object(o.clone());
+    o.insert("__opened".into(), opened);
     o.insert("__target".into(), target);
     o.insert("preview".into(), json!(true));
     app.ui.dialog = Some(Dialog::new(KIND, fields));
@@ -47,13 +49,33 @@ fn on_blend(d: &Dialog) -> bool {
     d.str("__target") == "blend"
 }
 
-/// `object.blend.options` parameters from the fields.
+/// The field set when the spacing or its count is picked or typed in the dialog: OK then applies
+/// it to every selected blend, even when it matches the first blend's.
+const SET_SPACING: &str = "__setSpacing";
+
+/// The field set when an orientation button is clicked, as [`SET_SPACING`] for the orientation.
+const SET_ORIENTATION: &str = "__setOrientation";
+
+/// `object.blend.options` parameters from the fields set in the dialog or differing from the
+/// values it opened with, so each selected blend keeps its own values for the rest.
 fn params(d: &Dialog) -> Value {
-    let mut p = json!({"spacing": d.str("spacing"), "orientation": d.str("orientation")});
-    match d.str("spacing").as_str() {
-        "steps" => p["steps"] = json!(d.f64("steps", 5.0).round().clamp(1.0, 1000.0)),
-        "distance" => p["distance"] = json!(d.f64("distance", 10.0)),
-        _ => {}
+    let opened = |k: &str| d.fields.get("__opened").and_then(|o| o.get(k)).cloned().unwrap_or(Value::Null);
+    let mode = d.str("spacing");
+    let count = match mode.as_str() {
+        "steps" => Some(("steps", d.f64("steps", 5.0).round().clamp(1.0, 1000.0))),
+        "distance" => Some(("distance", d.f64("distance", 10.0))),
+        _ => None,
+    };
+    let mut p = json!({});
+    if d.bool(SET_SPACING) || opened("spacing") != json!(mode) || count.is_some_and(|(k, v)| opened(k).as_f64() != Some(v)) {
+        p["spacing"] = json!(mode);
+        if let Some((k, v)) = count {
+            p[k] = json!(v);
+        }
+    }
+    let orientation = d.str("orientation");
+    if d.bool(SET_ORIENTATION) || opened("orientation") != json!(orientation) {
+        p["orientation"] = json!(orientation);
     }
     p
 }
@@ -66,11 +88,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     widgets::label_row(ui, tl!("Spacing:"), LABEL_W, |ui| {
         if let Some((value, _)) = widgets::dropdown(ui, "blend-spacing", shown, &labels, 150.0).and_then(|i| SPACING.get(i)) {
             d.fields.insert("spacing".into(), json!(value));
+            d.fields.insert(SET_SPACING.into(), json!(true));
         }
         ui.add_space(6.0);
         match mode.as_str() {
             "distance" => {
-                form::length(ui, d, "distance", unit, 72.0);
+                if form::length(ui, d, "distance", unit, 72.0) {
+                    d.fields.insert(SET_SPACING.into(), json!(true));
+                }
             }
             // Smooth Color picks the count itself: the field shows the steps, disabled.
             m => {
@@ -78,6 +103,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 ui.add_enabled_ui(m == "steps", |ui| {
                     if let Some(n) = widgets::range_field(ui, "blend-steps", steps, 1.0..=1000.0, "", 0, 72.0) {
                         d.fields.insert("steps".into(), json!(n));
+                        d.fields.insert(SET_SPACING.into(), json!(true));
                     }
                 });
             }
@@ -89,6 +115,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         for (value, along, tip) in [("page", false, tl!("Align to Page")), ("path", true, tl!("Align to Path"))] {
             if orientation_button(ui, along, path == along, tip) {
                 d.fields.insert("orientation".into(), json!(value));
+                d.fields.insert(SET_ORIENTATION.into(), json!(true));
             }
         }
     });
@@ -191,6 +218,52 @@ mod tests {
         assert!(app.ui.dialog.is_none());
         assert_eq!(spec(&app, id).spacing, BlendSpacing::Distance(25.0));
         assert_eq!(app.session.doc().unwrap().history.undo.len(), depth + 1);
+    }
+
+    #[test]
+    fn on_several_blends_ok_sets_only_the_fields_changed() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        let blend = |app: &mut VectorcraftApp, y: f64, options: Value| {
+            let ids: Vec<Value> =
+                [0.0, 200.0].map(|x| app.run("shape.rectangle", json!({"x": x, "y": y, "width": 20, "height": 20})).unwrap()["id"].clone()).into();
+            app.run("select.set", json!({ "ids": ids })).unwrap();
+            app.run("object.blend.make", options).unwrap()["id"].as_u64().unwrap()
+        };
+        let a = blend(&mut app, 0.0, json!({"spacing": "steps", "steps": 3}));
+        let b = blend(&mut app, 100.0, json!({"spacing": "distance", "distance": 12, "orientation": "path"}));
+        let both = |app: &VectorcraftApp| {
+            let (sa, sb) = (spec(app, a), spec(app, b));
+            ((sa.spacing, sa.orientation), (sb.spacing, sb.orientation))
+        };
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        // The dialog shows the first blend's options; changing only the orientation leaves each
+        // blend's spacing as it was.
+        app.run("ui.blendOptions", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("orientation".into(), json!("path"));
+        frame(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        let path = BlendOrientation::AlignToPath;
+        assert_eq!(both(&app), ((BlendSpacing::Steps(3), path), (BlendSpacing::Distance(12.0), path)));
+        // Changing only the step count gives both blends that count and keeps their orientation.
+        app.run("object.blend.options", json!({"id": b, "orientation": "page"})).unwrap();
+        app.run("ui.blendOptions", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("steps".into(), json!(8));
+        frame(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(both(&app), ((BlendSpacing::Steps(8), path), (BlendSpacing::Steps(8), BlendOrientation::AlignToPage)));
+        // Clicking the orientation the first blend already has applies it to every selected blend.
+        app.run("ui.blendOptions", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert(SET_ORIENTATION.into(), json!(true));
+        frame(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(both(&app), ((BlendSpacing::Steps(8), path), (BlendSpacing::Steps(8), path)));
+        // OK without changes changes nothing and records no undo step.
+        let depth = app.session.doc().unwrap().history.undo.len();
+        app.run("ui.blendOptions", json!({})).unwrap();
+        frame(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), depth);
     }
 
     #[test]
