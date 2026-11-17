@@ -601,6 +601,7 @@ font-technology	Variable	Варіативні
 	Consolidate All Windows	Об’єднати всі вікна
 	Constrain Angle	Обмежити кут
 	Constrain Width and Height Proportions	Зберігати пропорції ширини та висоти
+	Copy Width to Height	Копіювати ширину у висоту
 	Construction Guides	Напрямні побудови
 	Contextual Alternates	Контекстні альтернативи
 	Contextual Task Bar	Контекстна панель завдань
@@ -2067,7 +2068,8 @@ file-filter	Templates	Шаблони
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
-	Lossless (lossy WebP isn't available yet)	Без втрат (WebP із втратами поки недоступний)
+	Lossless	Без втрат
+	Lossy	Із втратами
 	Lossy:	Із втратами:
 	Low	Низька
 	lowercase	малі
@@ -3116,7 +3118,7 @@ digits	Malayalam	Малаялам
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радіуси динамічних кутів масштабуються разом із графікою, якщо масштабування не задає іншого.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Товщина обведень, штрихи та відстані ефектів масштабуються разом із графікою, якщо масштабування не задає іншого.
 	The mouse wheel zooms the canvas instead of scrolling it.	Колесо миші масштабує полотно, а не прокручує його.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Поки «Масштабувати колесом миші» вимкнено, колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
@@ -3395,6 +3397,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
+	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
 	Section Symbol	Символ параграфа
@@ -7416,6 +7419,7 @@ breakText	Glyphs	Гліфи
 @msg	Too many Revolve faces for visibility evaluation	Забагато граней обертання для обчислення видимості
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читає з файлу обміну зразками не більше {ASE_MAX_ENTRIES} кольорів і груп, а в цій бібліотеці їх {entries}
 @msg	WebP encoding failed: {e}	Не вдалося закодувати WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Не вдалося закодувати WebP: зображення завелике для WebP із втратами: зменште роздільність або виберіть «Без втрат»
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList

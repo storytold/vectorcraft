@@ -592,6 +592,7 @@ font-technology	Variable	Променливи
 	Consolidate All Windows	Обединяване на всички прозорци
 	Constrain Angle	Заключване на ъгъла
 	Constrain Width and Height Proportions	Запазване на пропорциите на ширина и височина
+	Copy Width to Height	Копиране на ширината във височината
 	Construction Guides	Конструкционни водачи
 	Contextual Alternates	Контекстни алтернативи
 	Contextual Task Bar	Контекстна лента със задачи
@@ -1956,7 +1957,8 @@ font-technology	Variable	Променливи
 	Lock Others	Заключване на другите
 	Lock Slices	Заключване на фрагментите
 	Lock Station Point	Заключване на базовата точка
-	Lossless (lossy WebP isn't available yet)	Без загуба (загубеният WebP все още не е наличен)
+	Lossless	Без загуба
+	Lossy	Със загуба
 	Lossy:	С загуба:
 	Low	Ниско
 	lowercase	малки букви
@@ -2993,7 +2995,7 @@ digits	Malayalam	Малаялам
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радиусите на динамичните ъгли се мащабират заедно с графиката, освен ако мащабирането не избере друго.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Дебелините на щрихите, тиретата и разстоянията на ефектите се мащабират заедно с графиката, освен ако мащабирането не избере друго.
 	The mouse wheel zooms the canvas instead of scrolling it.	Колелцето на мишката мащабира платното, вместо да го превърта.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Докато „Мащабиране с колелцето на мишката“ е изключено, колелцето с натиснат Cmd/Ctrl превърта платното настрани.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колелцето на мишката с натиснат Cmd/Ctrl превърта платното настрани.
 	Dragging sideways on a numeric field's label changes the field's value.	Влаченето настрани върху етикета на числово поле променя стойността на полето.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
@@ -3258,6 +3260,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди
 	No recent commands	Няма последни команди
+	Search commands	Търсене на команди
 	Search Commands…	Търсене на команди…
 	Secondary	Вторичен
 	Section Symbol	Символ за раздел

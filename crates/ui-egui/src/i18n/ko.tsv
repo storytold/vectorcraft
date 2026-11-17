@@ -1359,6 +1359,7 @@ antiAlias	Sharp	날카롭게
 	Conflict {n} of {count}	충돌 {n}/{count}
 	Constrain Angle	각도 제한
 	Constrain Width and Height Proportions	너비와 높이 비율 고정
+	Copy Width to Height	너비를 높이로 복사
 	Construction Guides	작도 안내선
 	Contextual Alternates	문맥 대체 글자
 	Convert	변환
@@ -2320,7 +2321,8 @@ antiAlias	Sharp	날카롭게
 	Location	위치
 	Location:	위치:
 	Lock (⌘2)	잠금 (⌘2)
-	Lossless (lossy WebP isn't available yet)	무손실 (손실 WebP는 아직 지원되지 않음)
+	Lossless	무손실
+	Lossy	손실
 	Lossy:	손실 압축:
 	Luminosity	광도
 	Magic Wand Options	마술봉 옵션
@@ -3090,7 +3092,7 @@ mark-style	Japanese	일본식
 	Live corner radii scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 라이브 모퉁이 반지름이 아트웍과 함께 크기 조정됩니다.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 선 두께, 대시, 효과 거리가 아트웍과 함께 크기 조정됩니다.
 	The mouse wheel zooms the canvas instead of scrolling it.	마우스 휠로 캔버스를 스크롤하지 않고 확대/축소합니다.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	마우스 휠로 확대/축소가 꺼져 있는 동안 Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
 	Dragging sideways on a numeric field's label changes the field's value.	숫자 필드의 레이블을 옆으로 드래그하면 필드 값이 바뀝니다.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
@@ -3270,6 +3272,7 @@ mark-style	Japanese	일본식
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
 	Recent Commands	최근 명령
 	No recent commands	최근 명령 없음
+	Search commands	명령 검색
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
 	Select All Assets	모든 에셋 선택
@@ -7527,6 +7530,7 @@ breakText	Glyphs	글리프
 @msg	Too many Revolve faces for visibility evaluation	회전체의 면이 너무 많아 가시성을 계산할 수 없습니다
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft는 견본 교환 파일에서 색상과 그룹을 최대 {ASE_MAX_ENTRIES}개까지 읽는데, 이 라이브러리에는 {entries}개가 있습니다
 @msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 인코딩 실패: 이미지가 너무 커서 손실 WebP로 만들 수 없습니다: 해상도를 낮추거나 무손실을 선택하세요
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index`은(는) 정수여야 합니다

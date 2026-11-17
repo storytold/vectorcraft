@@ -587,6 +587,7 @@ font-technology	Variable	Değişken
 	Consolidate All Windows	Tüm Pencereleri Birleştir
 	Constrain Angle	Açıyı Sınırla
 	Constrain Width and Height Proportions	Genişlik ve Yükseklik Oranlarını Sınırla
+	Copy Width to Height	Genişliği Yüksekliğe Kopyala
 	Construction Guides	İnşaat Kılavuzları
 	Contextual Alternates	Bağlamsal Alternatifler
 	Contextual Task Bar	Bağlamsal Görev Çubuğu
@@ -1857,7 +1858,8 @@ font-technology	Variable	Değişken
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası
-	Lossless (lossy WebP isn't available yet)	Kayıpsız (kayıplı WebP henüz mevcut değil)
+	Lossless	Kayıpsız
+	Lossy	Kayıplı
 	Lossy:	Kayıplı:
 	Low	Düşük
 	lowercase	küçük harf
@@ -2850,7 +2852,7 @@ digits	Malayalam	Malayalam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Canlı köşe yarıçapları, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Kontur kalınlıkları, kesik çizgiler ve efekt mesafeleri, ölçekleme başka bir seçim yapmadıkça resimle birlikte ölçeklenir.
 	The mouse wheel zooms the canvas instead of scrolling it.	Fare tekerleği tuvali kaydırmak yerine yakınlaştırır.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Fare Tekerleği ile Yakınlaştırma kapalıyken, Cmd/Ctrl basılı tutulan fare tekerleği tuvali yana kaydırır.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl basılıyken fare tekerleği tuvali yana kaydırır.
 	Dragging sideways on a numeric field's label changes the field's value.	Sayısal bir alanın etiketi üzerinde yana sürüklemek alanın değerini değiştirir.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	İzleme dörtgeninde iki parmakla döndürme hareketi tuvalin görünümünü döndürür.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Bir aracın kısayol tuşunu basılı tutmak, tuşu bırakana kadar o aracı seçer, ardından önceki araç yeniden seçilir.
@@ -3150,6 +3152,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
+	Search commands	Komutları arayın
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
 	Section Symbol	Bölüm Sembolü
@@ -5346,6 +5349,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa derinliği {_1}: piksel başına 16, 24 veya 32 bit olmalıdır
 @msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	WebP encoding failed: {e}	WebP kodlaması başarısız oldu: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP kodlaması başarısız oldu: görüntü kayıplı WebP için çok büyük: çözünürlüğü düşürün veya Kayıpsız seçeneğini seçin
 @msg	the pixel buffer doesn't match the image size	piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	too many layers for PSD (at most 32767)	PSD için çok fazla katman (en fazla 32767)
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} piksel GIF için çok büyük (kenar başına en fazla 65535 piksel): çözünürlüğü düşürün

@@ -1258,6 +1258,7 @@ lighting	Light	Światło
 	Search commands, tools, panels and effects	Szukaj poleceń, narzędzi, paneli i efektów
 	Style:	Styl:
 	Switch workspace	Przełącz obszar roboczy
+	Search commands	Szukaj poleceń
 	Show all open documents	Pokaż wszystkie otwarte dokumenty
 	Use 	Użyj 
 	 the object to select  |  	 obiekt, aby go zaznaczyć  |  
@@ -2822,7 +2823,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Ukryj linijki wideo
 	Client-side (.html)	Po stronie klienta (.html)
 	Color Reduction:	Redukcja kolorów:
-	Lossless (lossy WebP isn't available yet)	Bezstratny (stratny WebP nie jest jeszcze dostępny)
+	Lossless	Bezstratny
+	Lossy	Stratny
 	Scans:	Skany:
 	Server-side (.map)	Po stronie serwera (.map)
 	{format} Options	Opcje: {format}
@@ -3867,6 +3869,7 @@ theme	Appearance	Wygląd
 	Command Click to Select Objects Behind	Kliknięcie z Command zaznacza obiekty pod spodem
 	Constrain Angle	Kąt ograniczenia
 	Constrain Width and Height Proportions	Zachowaj proporcje szerokości i wysokości
+	Copy Width to Height	Kopiuj szerokość do wysokości
 	Construction Guides	Linie konstrukcyjne
 	Curvature Tool	Narzędzie Krzywizna
 	Data Recovery	Odzyskiwanie danych
@@ -4374,7 +4377,7 @@ font-technology	Variable	Zmienne
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Promienie narożników dynamicznych skalują się razem z grafiką, chyba że skalowanie wybierze inaczej.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Grubości obrysów, kreski i odległości efektów skalują się razem z grafiką, chyba że skalowanie wybierze inaczej.
 	The mouse wheel zooms the canvas instead of scrolling it.	Kółko myszy powiększa obszar roboczy zamiast go przewijać.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Gdy Powiększaj kółkiem myszy jest wyłączone, kółko myszy z wciśniętym Cmd/Ctrl przewija obszar roboczy w poziomie.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kółko myszy z wciśniętym Cmd/Ctrl przewija obszar roboczy w poziomie.
 	Dragging sideways on a numeric field's label changes the field's value.	Przeciąganie w bok po etykiecie pola liczbowego zmienia wartość pola.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gest obrotu dwoma palcami na gładziku obraca widok obszaru roboczego.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Przytrzymanie skrótu narzędzia wybiera je do momentu puszczenia klawisza, a potem ponownie wybierane jest poprzednie narzędzie.
@@ -9607,6 +9610,7 @@ breakText	Glyphs	Glify
 @msg	Too many Revolve faces for visibility evaluation	Zbyt wiele ścian efektu Obrót do obliczenia widoczności
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft odczytuje z pliku wymiany próbek najwyżej {ASE_MAX_ENTRIES} kolorów i grup, a ta biblioteka ma ich {entries}
 @msg	WebP encoding failed: {e}	Kodowanie WebP nie powiodło się: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Kodowanie WebP nie powiodło się: obraz jest za duży dla stratnego WebP: zmniejsz rozdzielczość lub wybierz Bezstratny
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` ma wartość smallThumb, mediumThumb, largeThumb, smallList lub largeList

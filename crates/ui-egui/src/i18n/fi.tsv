@@ -1306,6 +1306,7 @@ lighting	Light	Valo
 	Search commands, tools, panels and effects	Hae komentoja, työkaluja, paneeleita ja tehosteita
 	Style:	Tyyli:
 	Switch workspace	Vaihda työtilaa
+	Search commands	Hae komentoja
 	Show all open documents	Näytä kaikki avoimet asiakirjat
 	Use 	Käytä 
 	 the object to select  |  	 objektia valitaksesi sen  |  
@@ -2853,7 +2854,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Piilota videoviivaimet
 	Client-side (.html)	Asiakaspuoli (.html)
 	Color Reduction:	Värien vähennys:
-	Lossless (lossy WebP isn't available yet)	Häviötön (häviöllinen WebP ei ole vielä käytettävissä)
+	Lossless	Häviötön
+	Lossy	Häviöllinen
 	Scans:	Läpikäynnit:
 	Server-side (.map)	Palvelinpuoli (.map)
 	{format} Options	{format}-asetukset
@@ -3928,6 +3930,7 @@ theme	Appearance	Ulkoasu
 	Command Click to Select Objects Behind	Valitse takana olevat objektit Komento-napsautuksella
 	Constrain Angle	Rajoita kulmaa
 	Constrain Width and Height Proportions	Säilytä leveyden ja korkeuden suhde
+	Copy Width to Height	Kopioi leveys korkeudeksi
 	Construction Guides	Rakenneapuviivat
 	Curvature Tool	Kaarevuustyökalu
 	Data Recovery	Tietojen palautus
@@ -4452,7 +4455,7 @@ font-technology	Variable	Muuttuvat
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynaamisten kulmien säteet skaalautuvat grafiikan mukana, ellei skaalaus valitse toisin.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Viivojen paksuudet, katkoviivat ja tehosteiden etäisyydet skaalautuvat grafiikan mukana, ellei skaalaus valitse toisin.
 	The mouse wheel zooms the canvas instead of scrolling it.	Hiiren rulla zoomaa piirtopintaa vierittämisen sijaan.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kun Zoomaa hiiren rullalla ei ole käytössä, hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
 	Dragging sideways on a numeric field's label changes the field's value.	Numerokentän nimiön vetäminen sivuttain muuttaa kentän arvoa.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
@@ -8012,6 +8015,7 @@ breakText	Glyphs	Merkit
 @msg	Too many Revolve faces for visibility evaluation	Pyöräytä-tehosteessa on liian monta tahkoa näkyvyyden arviointiin
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lukee värimallien vaihtotiedostosta enintään {ASE_MAX_ENTRIES} väriä ja ryhmää, ja tässä kirjastossa niitä on {entries}
 @msg	WebP encoding failed: {e}	WebP-koodaus epäonnistui: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-koodaus epäonnistui: kuva on liian suuri häviölliseen WebP-muotoon: pienennä tarkkuutta tai valitse Häviötön
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` on oltava kokonaisluku

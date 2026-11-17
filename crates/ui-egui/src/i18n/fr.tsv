@@ -608,6 +608,7 @@ font-technology	Variable	Variables
 	Consolidate All Windows	Regrouper toutes les fenêtres
 	Constrain Angle	Contraindre l’angle
 	Constrain Width and Height Proportions	Conserver les proportions de largeur et de hauteur
+	Copy Width to Height	Copier la largeur dans la hauteur
 	Construction Guides	Repères de construction
 	Contextual Alternates	Variantes contextuelles
 	Contextual Task Bar	Barre des tâches contextuelle
@@ -2027,7 +2028,8 @@ font-technology	Variable	Variables
 	Lock Others	Verrouiller les autres
 	Lock Slices	Verrouiller les tranches
 	Lock Station Point	Verrouiller le point d’observation
-	Lossless (lossy WebP isn't available yet)	Sans perte (le WebP avec perte n’est pas encore disponible)
+	Lossless	Sans perte
+	Lossy	Avec perte
 	Lossy:	Avec perte :
 	Low	Faible
 	lowercase	minuscules
@@ -3071,7 +3073,7 @@ digits	Malayalam	Malayalam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Les rayons d’angle dynamiques se mettent à l’échelle avec l’illustration, sauf si la mise à l’échelle en décide autrement.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Les épaisseurs de contour, les tirets et les distances des effets se mettent à l’échelle avec l’illustration, sauf si la mise à l’échelle en décide autrement.
 	The mouse wheel zooms the canvas instead of scrolling it.	La molette de la souris zoome sur la zone de travail au lieu de la faire défiler.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Tant que Zoom avec la molette de la souris est désactivé, la molette avec Cmd/Ctrl enfoncée fait défiler la zone de travail latéralement.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La molette de la souris avec Cmd/Ctrl enfoncée fait défiler la zone de travail latéralement.
 	Dragging sideways on a numeric field's label changes the field's value.	Faire glisser latéralement le libellé d’un champ numérique modifie la valeur du champ.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un geste de rotation à deux doigts sur un pavé tactile fait pivoter la vue de la zone de travail.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Maintenir le raccourci d’un outil choisit cet outil jusqu’à ce que vous le relâchiez, puis l’outil précédent est de nouveau choisi.
@@ -3348,6 +3350,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} sur {n} résultat. Continuez à taper pour les affiner.|{shown} sur {n} résultats. Continuez à taper pour les affiner.
 	Recent Commands	Commandes récentes
 	No recent commands	Aucune commande récente
+	Search commands	Chercher des commandes
 	Search Commands…	Rechercher des commandes…
 	Secondary	Secondaire
 	Section Symbol	Symbole de section
@@ -9740,6 +9743,7 @@ breakText	Glyphs	Glyphes
 @msg	Too many Revolve faces for visibility evaluation	Trop de faces de révolution pour évaluer la visibilité
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lit au plus {ASE_MAX_ENTRIES} couleurs et groupes d’un fichier d’échange de nuances, et cette bibliothèque en contient {entries}
 @msg	WebP encoding failed: {e}	Échec de l’encodage WebP : {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Échec de l’encodage WebP : l’image est trop grande pour le WebP avec perte : réduisez la résolution ou choisissez Sans perte
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}` : {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` vaut smallThumb, mediumThumb, largeThumb, smallList ou largeList

@@ -1231,6 +1231,7 @@ lighting	Light	Cahaya
 	Search commands, tools, panels and effects	Cari perintah, alat, panel, dan efek
 	Style:	Gaya:
 	Switch workspace	Ganti ruang kerja
+	Search commands	Cari perintah
 	Show all open documents	Tampilkan semua dokumen terbuka
 	Use 	Gunakan 
 	 the object to select  |  	 objek untuk memilihnya  |  
@@ -2634,7 +2635,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Sembunyikan penggaris video
 	Client-side (.html)	Sisi klien (.html)
 	Color Reduction:	Reduksi warna:
-	Lossless (lossy WebP isn't available yet)	Tanpa kehilangan (WebP lossy belum tersedia)
+	Lossless	Tanpa kehilangan
+	Lossy	Dengan kehilangan
 	Scans:	Pemindaian:
 	Server-side (.map)	Sisi server (.map)
 	{format} Options	Opsi {format}
@@ -3664,6 +3666,7 @@ theme	Appearance	Tampilan
 	Command Click to Select Objects Behind	Command-klik untuk memilih objek di belakang
 	Constrain Angle	Sudut kendala
 	Constrain Width and Height Proportions	Kendalikan proporsi lebar dan tinggi
+	Copy Width to Height	Salin lebar ke tinggi
 	Construction Guides	Panduan konstruksi
 	Curvature Tool	Alat kelengkungan
 	Data Recovery	Pemulihan data
@@ -4184,7 +4187,7 @@ font-technology	Variable	Variabel
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Radius sudut dinamis ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Ketebalan stroke, garis putus, dan jarak efek ikut diskalakan dengan karya seni, kecuali penskalaan memilih lain.
 	The mouse wheel zooms the canvas instead of scrolling it.	Roda mouse melakukan zum pada kanvas, bukan menggulirnya.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Selama Zum dengan roda mouse nonaktif, roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Roda mouse dengan Cmd/Ctrl ditahan menggulir kanvas ke samping.
 	Dragging sideways on a numeric field's label changes the field's value.	Menyeret ke samping pada label bidang angka mengubah nilai bidang itu.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gerakan putar dua jari pada trackpad memutar tampilan kanvas.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Menahan tombol pintasan alat memilih alat itu sampai Anda melepasnya, lalu alat sebelumnya dipilih lagi.
