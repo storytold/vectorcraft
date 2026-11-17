@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "craft-plotter"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=9101c4fc226f5f111b5a890a6c5c19bf3991fd76#9101c4fc226f5f111b5a890a6c5c19bf3991fd76"
+source = "git+https://github.com/storytold/craft-libs?rev=a7fb55eaf9a15c21e8ce0b13cf605dc54fd15f57#a7fb55eaf9a15c21e8ce0b13cf605dc54fd15f57"
 dependencies = [
  "thiserror 2.0.21",
 ]
