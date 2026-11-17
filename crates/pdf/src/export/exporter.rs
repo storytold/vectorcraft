@@ -62,6 +62,7 @@ impl<'a> Exporter<'a> {
             in_knockout_mask: false,
             mask_art_left_out: false,
             overprint: false,
+            darken_overprints: false,
             overprinted: false,
             invisible: false,
             inline_depth: 0,

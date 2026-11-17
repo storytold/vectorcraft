@@ -1290,6 +1290,10 @@ font-technology	Variable	Променливи
 	Font List	Списък с шрифтове
 	Show Similar Fonts	Показване на подобни шрифтове
 	Clear Similar Fonts	Изчистване на подобните шрифтове
+	Fonts used in this document	Шрифтове, използвани в този документ
+	This document uses no available fonts	Този документ не използва налични шрифтове
+	Recently Added	Наскоро добавени
+	Fonts added in the last 30 days	Шрифтове, добавени през последните 30 дни
 	Font Preview Size	Размер за преглед на шрифта
 	Font Size	Размер на шрифта
 	Variable Font	Променлив шрифт
@@ -6446,6 +6450,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Отворете документ, за да го проверите за проблеми.
 	Empty Text	Празен текст
 	Unpainted Objects	Обекти без цвят
+	Empty Text Paths	Празни текстови пътища
 	Zero-Opacity Objects	Обекти с нулева непрозрачност
 	Duplicate Objects	Дублирани обекти
 	Off-Artboard Art	Графика извън работните области

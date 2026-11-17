@@ -1214,6 +1214,10 @@ antiAlias	Sharp	Nítido
 	Font List	Lista de Fontes
 	Show Similar Fonts	Mostrar Fontes Semelhantes
 	Clear Similar Fonts	Limpar Fontes Semelhantes
+	Fonts used in this document	Fontes usadas neste documento
+	This document uses no available fonts	Este documento não usa nenhuma fonte disponível
+	Recently Added	Adicionadas recentemente
+	Fonts added in the last 30 days	Fontes adicionadas nos últimos 30 dias
 	Font Preview Size	Tamanho da Visualização da Fonte
 	Font Size	Tamanho da Fonte
 	Variable Font	Fonte Variável
@@ -4223,6 +4227,9 @@ axis	Both	Ambos
 @msg	no active document	nenhum documento ativo
 @msg	no active perspective plane	nenhum plano de perspectiva ativo
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
+@msg	`points` must be three [x, y] pairs of numbers	`points` deve ter três pares de números [x, y]
+@msg	direct-select three anchor points, or give `points`	selecione diretamente três pontos de ancoragem ou informe `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta
 @msg	no artboard {i} (0-based; the document has {_1})	nenhuma prancheta {i} (base 0; o documento tem {_1})
@@ -7048,6 +7055,7 @@ anchor	Points:	Pontos:
 	Open a document to check it for issues.	Abra um documento para verificar se há problemas.
 	Empty Text	Texto Vazio
 	Unpainted Objects	Objetos sem Pintura
+	Empty Text Paths	Caminhos de Texto Vazios
 	Zero-Opacity Objects	Objetos com Opacidade Zero
 	Duplicate Objects	Objetos Duplicados
 	Off-Artboard Art	Arte Fora das Pranchetas
