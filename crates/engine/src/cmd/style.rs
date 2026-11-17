@@ -53,7 +53,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             style_delete
         ),
-        cmd!("graphicStyle.duplicate", "Duplicate Graphic Style", ["Window", "Graphic Styles"], None, "{name} → {name}", has_doc, style_duplicate),
+        cmd!(
+            "graphicStyle.duplicate",
+            "Duplicate Graphic Style",
+            ["Window", "Graphic Styles"],
+            None,
+            "{name} a copy of the style at the end of the list, named `<name> copy` (`<name> copy 2`… when that is taken); no object is linked to it → {name}",
+            has_doc,
+            style_duplicate
+        ),
         cmd!(
             query "graphicStyle.list",
             "List Graphic Styles",
@@ -431,7 +439,7 @@ fn style_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
         let pos = style_index(d, &name)?;
         let nm = unique_name(&format!("{name} copy"), |n| d.graphic_style(n).is_some());
         let g = GraphicStyle { name: nm.clone(), id: d.next_graphic_style_id(), ..d.graphic_styles[pos].clone() };
-        d.graphic_styles.insert(pos + 1, g);
+        d.graphic_styles.push(g);
         Ok(nm)
     })?;
     Ok(json!({"name": new}))

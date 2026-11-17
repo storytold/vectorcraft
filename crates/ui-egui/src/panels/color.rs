@@ -712,7 +712,7 @@ pub(crate) fn show_sized(app: &mut VectorcraftApp, ui: &mut Ui, height: f32) {
     // Show Recent Colors draws the Recent Colors row; the Swatches panel's row does not read it.
     let mut recent = None;
     if app.ui.color_show_recent_colors {
-        recent = super::recent_colors_row(app, ui);
+        recent = super::recent_colors_row(app, ui, true);
         widgets::divider(ui);
     }
     // An edit of the active colour with its displayed components (`new`), or a colour clicked with
