@@ -128,7 +128,9 @@ fn add_draft_to_swatches(app: &mut VectorcraftApp, ctx: &egui::Context) {
 
 /// Paint the active proxy (Fill or Stroke) with the selected colour of the theme being made, in its
 /// own model: the selection and the new-art default take it in one paint command, so one undo
-/// step, and no step when the art already has it. The theme stays as it is.
+/// step, and no step when the art already has it. With characters selected with the Type tool,
+/// only those characters take it and the new-art default stays as it was, as with a swatch click.
+/// The theme stays as it is.
 fn set_active_color(app: &mut VectorcraftApp, d: &Draft) {
     if let Some(c) = d.colors.get(d.sel) {
         app.run(proxy_cmd(app, false), json!({ "color": color_json(c), "keepModel": true })).ok();
@@ -595,6 +597,49 @@ mod tests {
         click(&mut app, &ctx, SET_ACTIVE);
         assert_eq!(paints(&app, id).0.color(), Some(d.colors[2]));
         assert!(matches!(d.colors[2], Color::Rgb { .. }));
+    }
+
+    /// With characters selected with the Type tool, Set Active Color paints those characters as a
+    /// swatch click does: the type and the undo history come out as they do from `paint.setFill` with
+    /// the same color, and the new-art default stays as it was.
+    #[test]
+    fn set_active_color_paints_selected_characters_as_a_swatch_click_does() {
+        use vectorcraft_doc::{NodeId, NodeKind};
+        // The editing handshake of text_styles::tests::select_type_range.
+        let typed = || {
+            let mut app = app();
+            let id = NodeId(app.run("text.create", json!({"x": 10, "y": 50, "text": "ABcdef", "size": 18})).unwrap()["id"].as_u64().unwrap());
+            app.session.select_tool("type", Default::default()).unwrap();
+            app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+            app.session.set_tool_option("select", &json!({"start": 2, "end": 4}));
+            super::super::character::end_typing(&mut app);
+            assert_eq!(super::super::character::text_editing(&app), Some((id, 2, 4)));
+            (app, id)
+        };
+        let runs = |app: &VectorcraftApp, id: NodeId| match &app.session.doc().unwrap().doc.node(id).unwrap().kind {
+            NodeKind::Text(t) => t.runs.clone(),
+            _ => panic!("not type"),
+        };
+        let (mut by_button, id) = typed();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let d = five_colors(&ctx);
+        let undo = undo_len(&by_button);
+        let default = (by_button.session.paint.fill.clone(), by_button.session.paint.stroke.clone());
+        assert_ne!(default.0, vectorcraft_color::Paint::solid(d.colors[2]));
+        click(&mut by_button, &ctx, SET_ACTIVE);
+        let (mut by_command, _) = typed();
+        by_command.run("paint.setFill", json!({"color": color_json(&d.colors[2]), "keepModel": true})).unwrap();
+        let painted = runs(&by_button, id);
+        assert!(painted.iter().any(|r| r.style.fill == vectorcraft_color::Paint::solid(d.colors[2])), "the characters take the color");
+        assert!(painted.iter().any(|r| r.style.fill != vectorcraft_color::Paint::solid(d.colors[2])), "the other characters keep theirs");
+        assert_eq!(painted, runs(&by_command, id));
+        assert_eq!((&by_button.session.paint.fill, &by_button.session.paint.stroke), (&default.0, &default.1), "the default stays");
+        assert_eq!(
+            (&by_button.session.paint.fill, &by_button.session.paint.stroke),
+            (&by_command.session.paint.fill, &by_command.session.paint.stroke)
+        );
+        assert_eq!((undo_len(&by_button), undo_len(&by_command)), (undo + 1, undo + 1));
     }
 
     /// In a CMYK document the theme being made goes to Swatches with its colors in their own model.
