@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Artboard, ArtboardSide, Document, LAYER_COLORS, LayerColor, Node, NodeId, NodeKind, Scaling};
 use vectorcraft_geom::{Affine, Rect};
 
+use super::buildcmds::LivePaintMove;
 use super::{
     CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, checked_node, checked_nodes_param, cmd,
     color_value, f64_or, has_doc, has_selection, ids_param, index, object_param, ok, str_param, switch_or,
@@ -110,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Rows",
             [],
             None,
-            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
+            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer or group (on top of its contents). Layers go only in layers or at the top level, objects in layers and groups; an object placed beside a top-level layer goes inside it. A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. A row that goes into a Live Paint group from elsewhere joins its paths as livePaint.merge adds them, and the group is selected (paths, compound paths, groups of them and Live Paint groups; anything else is refused and nothing moves); a row that goes into or leaves a Live Paint group's paths makes the group's faces and edges again, keeping the paint of those that stay. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids} (a row that joined a Live Paint group is listed as the group)",
             has_doc,
             move_rows
         ),
@@ -119,7 +120,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reorder",
             [],
             None,
-            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers), deselecting every selected object left hidden or locked (the key object too)",
+            "{id, parent?: id (null = top level), index} put a row at `index` (0 = bottom) of `parent` (layers only at the top level or in layers), deselecting every selected object left hidden or locked (the key object too); a Live Paint group or its paths take a row as layer.move does",
             has_doc,
             move_node
         ),
@@ -794,7 +795,15 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     if parent.is_some_and(|p| locked_within(d, p)) {
         return Err(EngineError::Other("the layer or group is locked".into()));
     }
-    let label = if copy { "Duplicate Rows" } else { "Move Rows" };
+    // Rows that go into a Live Paint group join its paths, as Live Paint › Merge adds them.
+    let live_paint = LivePaintMove::plan(d, &ids, parent, copy)?;
+    let label = if live_paint.joins() {
+        "Merge Live Paint"
+    } else if copy {
+        "Duplicate Rows"
+    } else {
+        "Move Rows"
+    };
     let moved = s.edit(label, |d, sel| {
         let nodes = if copy {
             let mut nodes = vec![];
@@ -829,6 +838,7 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
         if copy {
             super::typecmd::refresh_bounds_of(d, &out);
         }
+        let out = live_paint.finish(d, sel, &out)?;
         sel.prune(d);
         sel.deselect_uneditable(d);
         Ok(out)
@@ -848,8 +858,11 @@ fn move_node(s: &mut Session, p: &Value) -> Result<Value> {
     if !accepts(d, parent, n) {
         return Err(bad(C, "layers go only at the top level or in layers, objects in layers and groups"));
     }
-    s.edit("Reorder", |d, sel| {
+    let live_paint = LivePaintMove::plan(d, &[id], parent, false)?;
+    let label = if live_paint.joins() { "Merge Live Paint" } else { "Reorder" };
+    s.edit(label, |d, sel| {
         d.move_node(id, parent, index)?;
+        live_paint.finish(d, sel, &[id])?;
         sel.deselect_uneditable(d);
         Ok(())
     })?;

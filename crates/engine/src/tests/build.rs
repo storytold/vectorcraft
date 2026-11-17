@@ -4978,6 +4978,149 @@ fn live_paint_isolation_adds_a_drawn_group_isolated_inside_it() {
     }
 }
 
+/// A line from left of the [`live`] group to its right face, so it cuts the two faces left of it.
+fn line_to_right_face(s: &mut Session, y: f64) -> NodeId {
+    let r = s.execute("path.create", &json!({"anchors": [{"x": -10, "y": y}, {"x": 105, "y": y}]})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+fn undo_label(s: &Session) -> Option<String> {
+    s.doc().unwrap().history.undo.last().map(|e| e.label.clone())
+}
+
+/// Paths dragged into a Live Paint group in the Layers panel join its paths as Live Paint › Merge
+/// adds them: they go among its sources and cut the faces they cross, a painted face they do not
+/// cross keeps its fill, and the drop is one "Merge Live Paint" undo step that selects the group.
+#[test]
+fn layers_drag_adds_paths_to_a_live_paint_group() {
+    use vectorcraft_tools::builder::{face_at, faces, sources};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [125, 50], "color": "#00ff00"})).unwrap();
+    let layer = s.doc().unwrap().doc.parent_of(g);
+    let (a, b) = (line_to_right_face(&mut s, 30.0), line_to_right_face(&mut s, 70.0));
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), layer);
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("layer.move", &json!({"ids": [a.0, b.0], "target": g.0, "place": "inside"})).unwrap();
+    assert_eq!(r["ids"], json!([g.0]), "the rows that joined are listed as the group");
+    let d = s.doc().unwrap();
+    assert_eq!(d.history.undo.len(), steps + 1, "both paths join in one undo step");
+    assert_eq!(undo_label(&s).as_deref(), Some("Merge Live Paint"));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+    let n = node(&s, g);
+    let src = sources(&n).unwrap();
+    assert_eq!(src.children().unwrap().len(), 4);
+    for id in [a, b] {
+        assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(src.id), "{id} joined the sources");
+    }
+    assert_eq!(faces(&n).len(), 7, "two lines cut each of the two faces they cross in three");
+    assert_eq!(face_at(&n, Point::new(125.0, 50.0)).unwrap().appearance.fill_paint(), green, "the face the lines do not cross keeps its fill");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+    for id in [a, b] {
+        assert_eq!(s.doc().unwrap().doc.parent_of(id), layer, "Undo puts {id} back where it was");
+    }
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 7);
+}
+
+/// An Alt-drag into a Live Paint group adds a copy and leaves the path where it was; a drop above
+/// one of the group's faces, and `node.move` into the group, add the path the same way.
+#[test]
+fn layers_drag_copy_and_drop_beside_a_part_add_to_a_live_paint_group() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    let layer = s.doc().unwrap().doc.parent_of(g);
+    let a = line_to_right_face(&mut s, 30.0);
+    s.execute("layer.move", &json!({"ids": [a.0], "target": g.0, "copy": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), layer, "the path itself stays");
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 5);
+    let src = sources(&n).unwrap().children().unwrap().clone();
+    assert_eq!(src.len(), 3);
+    assert!(src.iter().all(|c| c.id != a), "a copy joined");
+    let (face, other_face) = (faces(&n)[0].id, faces(&n)[1].id);
+    let b = line_to_right_face(&mut s, 70.0);
+    // A face dragged along is made again with the others, so only the group is listed.
+    let r = s.execute("layer.move", &json!({"ids": [b.0, other_face.0], "target": face.0, "place": "above"})).unwrap();
+    assert_eq!(r["ids"], json!([g.0]));
+    assert_eq!(s.doc().unwrap().layer_rows, vec![g]);
+    let n = node(&s, g);
+    assert_eq!(s.doc().unwrap().doc.parent_of(b), Some(sources(&n).unwrap().id), "a drop beside a face joins");
+    assert_eq!(faces(&n).len(), 7);
+    let c = line_to_right_face(&mut s, 50.0);
+    s.execute("node.move", &json!({"id": c.0, "parent": g.0, "index": 0})).unwrap();
+    assert_eq!(undo_label(&s).as_deref(), Some("Merge Live Paint"));
+    let n = node(&s, g);
+    assert_eq!(s.doc().unwrap().doc.parent_of(c), Some(sources(&n).unwrap().id), "node.move into the group joins");
+    assert_eq!(faces(&n).len(), 9);
+}
+
+/// Dragging type, or type with a path, into a Live Paint group is refused with Make's message and
+/// moves nothing, as Merge refuses it; a drop beside the group is an ordinary move.
+#[test]
+fn layers_drag_refuses_type_into_a_live_paint_group() {
+    use vectorcraft_tools::builder::faces;
+    let mut s = session();
+    let g = live(&mut s);
+    let layer = s.doc().unwrap().doc.parent_of(g);
+    let a = line_to_right_face(&mut s, 30.0);
+    let text = NodeId(s.execute("text.create", &json!({"x": 20, "y": 20, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    for p in [json!({"ids": [a.0, text.0], "target": g.0}), json!({"ids": [text.0], "target": g.0, "copy": true})] {
+        let err = s.execute("layer.move", &p).unwrap_err().to_string();
+        assert!(err.contains("Live Paint takes paths and compound paths"), "{err}");
+    }
+    assert!(s.execute("node.move", &json!({"id": text.0, "parent": g.0, "index": 0})).is_err());
+    assert!(s.doc().unwrap().doc == before.0, "nothing moved");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1);
+    s.execute("layer.move", &json!({"ids": [a.0, text.0], "target": g.0, "place": "above"})).unwrap();
+    assert_eq!(undo_label(&s).as_deref(), Some("Move Rows"));
+    assert_eq!(s.doc().unwrap().doc.parent_of(text), layer);
+    assert_eq!(faces(&node(&s, g)).len(), 3);
+}
+
+/// A path dragged out of a Live Paint group's sources leaves its faces and edges: the group makes
+/// them again from the paths left, and with none left it has no faces until a path joins it again.
+/// Reordering the sources, or the group's own faces, makes nothing again.
+#[test]
+fn layers_drag_out_of_a_live_paint_group_makes_its_faces_again() {
+    use vectorcraft_tools::builder::{faces, sources};
+    let mut s = session();
+    let g = live(&mut s);
+    let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+    let n = node(&s, g);
+    let src: Vec<NodeId> = sources(&n).unwrap().children().unwrap().iter().map(|c| c.id).collect();
+    let face_ids: Vec<NodeId> = faces(&n).iter().map(|f| f.id).collect();
+    s.execute("layer.move", &json!({"ids": [src[0].0], "target": src[1].0, "place": "above"})).unwrap();
+    s.execute("layer.move", &json!({"ids": [face_ids[0].0], "target": face_ids[2].0, "place": "above"})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(sources(&n).unwrap().children().unwrap().len(), 2, "a reorder keeps the sources");
+    let mut now: Vec<NodeId> = faces(&n).iter().map(|f| f.id).collect();
+    now.sort();
+    let mut was = face_ids.clone();
+    was.sort();
+    assert_eq!(now, was, "and the faces");
+    s.execute("layer.move", &json!({"ids": [src[0].0], "target": layer.0})).unwrap();
+    assert_eq!(undo_label(&s).as_deref(), Some("Move Rows"));
+    let n = node(&s, g);
+    assert_eq!(s.doc().unwrap().doc.parent_of(src[0]), Some(layer));
+    assert_eq!(sources(&n).unwrap().children().unwrap().len(), 1);
+    assert_eq!(faces(&n).len(), 1, "one rectangle left");
+    s.execute("node.move", &json!({"id": src[1].0, "parent": layer.0, "index": 0})).unwrap();
+    let n = node(&s, g);
+    assert!(vectorcraft_tools::builder::is_live_paint(&n), "the group stays a Live Paint group");
+    assert!(sources(&n).unwrap().children().unwrap().is_empty());
+    assert!(faces(&n).is_empty() && vectorcraft_tools::builder::edges(&n).is_empty());
+    s.execute("layer.move", &json!({"ids": [src[0].0], "target": g.0})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 1, "a path joins the empty group");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(faces(&node(&s, g)).len(), 1);
+}
+
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
 /// graphic style link, and return it as it then is.
 fn dress_live_group(s: &mut Session, g: NodeId) -> Node {

@@ -5374,7 +5374,13 @@ and `layerRows`, the rows highlighted in the panel.
   only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
   inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
-  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
+  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group. A row that
+  either command puts into a Live Paint group from elsewhere (inside it, or above or below one of its rows) joins the
+  group's paths as `livePaint.merge` adds them, in one "Merge Live Paint" undo step, and the group is selected and
+  listed in `layer.move`'s `ids` in its place; paths, compound paths, groups of them and Live Paint groups can join,
+  and with anything else among the rows nothing moves. A row that goes into or leaves a Live Paint group's paths (its
+  hidden sources group) makes the group's faces and edges again, keeping the paint of those that stay; when no path is
+  left, the group has no faces or edges until a path joins it again.
 - **Buttons**: `layer.new {name?, top?, below?, …options}` (above the current layer at its level; `top` with
   Ctrl/Cmd; `below`, directly below the current layer at its level, with Ctrl/Cmd+Alt),
   `layer.newSublayer {parent?, bottom?, name?, …options}` (on top of the parent's contents; `bottom`, under them but
