@@ -1359,6 +1359,7 @@ antiAlias	Sharp	날카롭게
 	Conflict {n} of {count}	충돌 {n}/{count}
 	Constrain Angle	각도 제한
 	Constrain Width and Height Proportions	너비와 높이 비율 고정
+	Copy Width to Height	너비를 높이로 복사
 	Construction Guides	작도 안내선
 	Contextual Alternates	문맥 대체 글자
 	Convert	변환
