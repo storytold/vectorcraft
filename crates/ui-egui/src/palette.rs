@@ -594,9 +594,10 @@ const MAX_SAVED_RECENT_COMMANDS: usize = 20;
 /// Puts `id` first in the Recent Commands ids `list`, removing its earlier place, and keeps the
 /// newest [`MAX_RECENT_COMMANDS`] ids that are `known`. An id that is not `known` now (a plug-in
 /// that is disabled or not loaded yet) keeps its place among them, so it shows again when its
-/// command comes back. The list never holds more than [`MAX_SAVED_RECENT_COMMANDS`] ids.
+/// command comes back. The palette's own toggle, saved before its picks were left out, is removed,
+/// so it takes none of those places. The list never holds more than [`MAX_SAVED_RECENT_COMMANDS`] ids.
 fn remember(list: &mut Vec<String>, id: &str, known: impl Fn(&str) -> bool) {
-    list.retain(|c| c != id);
+    list.retain(|c| c != id && c != PALETTE_TOGGLE);
     list.insert(0, id.to_string());
     let mut kept = 0;
     let end = list.iter().position(|c| {
@@ -1280,6 +1281,10 @@ mod tests {
             remember(&mut list, id, |_| true);
         }
         assert_eq!(list, ["j", "i", "h", "g", "f", "e", "d", "c"]);
+        // A palette toggle saved before its picks were left out takes none of the eight places.
+        let mut list: Vec<String> = [PALETTE_TOGGLE, "a", "b", "c", "d", "e", "f", "g"].map(str::to_string).into();
+        remember(&mut list, "h", |_| true);
+        assert_eq!(list, ["h", "a", "b", "c", "d", "e", "f", "g"]);
         let entries = build(Lang::EN);
         let many: Vec<String> = entries.iter().take(MAX_RECENT_COMMANDS + 2).map(|e| e.id.clone()).collect();
         assert_eq!(recent(&entries, &many).len(), MAX_RECENT_COMMANDS);

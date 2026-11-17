@@ -1896,13 +1896,16 @@ fn the_command_search_that_opens_while_enter_is_down_waits_for_a_new_press() {
     // The empty search lists the recent picks, so the last pick is the highlighted result.
     app.ui.recent_commands = vec!["paint.swap".into()];
     app.ui.palette_open = true;
+    let before = undo_len(&app);
     for repeat in 0..4 {
         held.press(&mut app);
         assert!(app.ui.palette_open, "repeat {repeat}: it stays open");
+        assert_eq!(undo_len(&app), before, "repeat {repeat}: nothing ran");
     }
     held.release(&mut app);
     held.press(&mut app);
     assert!(!app.ui.palette_open, "a new press runs the highlighted result");
+    assert_eq!(undo_len(&app), before + 1, "Swap Fill and Stroke ran on the rectangle: {}", app.ui.status);
 }
 
 /// Enter on a command search result whose menu item opens a dialog (Create Gradient Mesh…) opens
