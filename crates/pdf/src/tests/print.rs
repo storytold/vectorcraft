@@ -637,6 +637,91 @@ fn cmyk_and_a_spot_separate_into_five_plates() {
     assert_eq!(inks(&p[2]), [0.0, 40.0], "the gold's yellow");
 }
 
+/// A CMYK document with spot swatches Gold and Pine, and three 50 pt squares left to right: Gold
+/// at 50%, Pine at 100% and Registration.
+fn gold_and_pine() -> Document {
+    let mut d = doc(200.0, 100.0, &[]);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+    d.swatches.push(Swatch { name: "Pine".into(), paint: Paint::solid(Color::cmyk(0.8, 0.0, 0.3, 0.0)), global: true, spot: true });
+    let layer = d.default_layer().unwrap();
+    let linked = |color: Color, swatch: &str, tint: f32| Paint::Solid { color, swatch: Some(swatch.into()), tint };
+    let squares = [
+        (0.0, linked(Color::cmyk(0.0, 0.1, 0.4, 0.05), "Gold", 0.5)),
+        (60.0, linked(Color::cmyk(0.8, 0.0, 0.3, 0.0), "Pine", 1.0)),
+        (120.0, linked(Color::cmyk(1.0, 1.0, 1.0, 1.0), vectorcraft_color::swatch::REGISTRATION, 1.0)),
+    ];
+    for (x, p) in squares {
+        let id = d.alloc_id();
+        d.insert(Some(layer), 0, Node::path(id, shapes::rectangle(Rect::new(x, 0.0, x + 50.0, 50.0)), Appearance::basic(p, Paint::None, 0.0)))
+            .unwrap();
+    }
+    d
+}
+
+/// The ink of each 50 pt square on a plate, left to right, in percent.
+fn square_inks(page: &Page) -> Vec<f32> {
+    page.1
+        .iter()
+        .filter(|(b, _)| (b.width() - 50.0).abs() < 1.0 && (b.height() - 50.0).abs() < 1.0)
+        .map(|(_, p)| match p.color() {
+            Some(Color::Gray { k }) => (k * 100.0).round(),
+            c => panic!("{c:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn one_spot_ink_converts_to_process_and_the_others_keep_their_plates() {
+    let d = gold_and_pine();
+    // Gold prints as process even with its plate turned off: converting is not leaving it out.
+    let set = json!({"output": {"mode": "separations", "inks": [{"name": "Gold", "convertToProcess": true, "print": false, "frequency": 100}]}});
+    let pv = preview(&d, &settings(set.clone())).unwrap();
+    assert_eq!(pv.inks.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["Cyan", "Magenta", "Yellow", "Black", "Pine"]);
+    let all: Vec<(&str, bool)> = pv.document_inks.iter().map(|i| (i.name.as_str(), i.convert_to_process)).collect();
+    assert_eq!(all, [("Cyan", false), ("Magenta", false), ("Yellow", false), ("Black", false), ("Gold", true), ("Pine", false)]);
+    let gold = &pv.document_inks[4];
+    assert_eq!((gold.print, gold.frequency), (false, 100.0), "its plate options are kept");
+    assert!(pv.setting_notes.iter().all(|n| !n.contains("no ink named") && !n.contains("only spot inks")), "{:?}", pv.setting_notes);
+    let p = pages(&job(&d, set).bytes);
+    assert_eq!(p.len(), 5);
+    // (Gold, Pine, Registration) on Cyan, Magenta, Yellow, Black and Pine.
+    assert_eq!(
+        p.iter().map(square_inks).collect::<Vec<_>>(),
+        [[0.0, 0.0, 100.0], [10.0, 0.0, 100.0], [40.0, 0.0, 100.0], [5.0, 0.0, 100.0], [0.0, 100.0, 100.0]]
+    );
+}
+
+#[test]
+fn converting_every_spot_ink_overrides_and_keeps_each_inks_own_choice() {
+    let d = gold_and_pine();
+    let inks = json!([{"name": "Gold", "convertToProcess": false, "angle": 30}, {"name": "Pine", "convertToProcess": true}]);
+    let pv = preview(&d, &settings(json!({"output": {"mode": "separations", "spotsToProcess": true, "inks": inks}}))).unwrap();
+    assert_eq!(pv.inks.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["Cyan", "Magenta", "Yellow", "Black"]);
+    let spots: Vec<(&str, bool, f64)> = pv.document_inks[4..].iter().map(|i| (i.name.as_str(), i.convert_to_process, i.angle)).collect();
+    assert_eq!(spots, [("Gold", true, 30.0), ("Pine", true, 45.0)]);
+    // The options of the converted inks still name inks of the document.
+    assert!(pv.setting_notes.iter().all(|n| !n.contains("no ink named")), "{:?}", pv.setting_notes);
+    // Without the option, each ink's own choice applies again.
+    let pv = preview(&d, &settings(json!({"output": {"mode": "separations", "inks": inks}}))).unwrap();
+    assert_eq!(pv.inks.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["Cyan", "Magenta", "Yellow", "Black", "Gold"]);
+    // A process ink doesn't convert: it keeps its plate, and a note says so.
+    let pv = preview(&d, &settings(json!({"output": {"mode": "separations", "inks": [{"name": "Cyan", "convertToProcess": true}]}}))).unwrap();
+    assert_eq!(pv.inks.len(), 6);
+    assert!(pv.document_inks.iter().all(|i| !i.convert_to_process));
+    assert_eq!(pv.setting_notes, ["`Cyan` print as process inks already: only spot inks convert to process"]);
+}
+
+#[test]
+fn an_ink_option_without_convert_to_process_keeps_its_spot_plate() {
+    let set = settings(json!({"output": {"inks": [{"name": "Gold", "angle": 30}]}}));
+    assert!(!set.output.inks[0].convert_to_process);
+    let back = serde_json::to_value(&set.output.inks[0]).unwrap();
+    assert_eq!(back, json!({"name": "Gold", "print": true, "angle": 30.0}), "off is not written");
+    let on = InkSettings { convert_to_process: true, ..set.output.inks[0].clone() };
+    assert_eq!(serde_json::to_value(&on).unwrap()["convertToProcess"], json!(true));
+}
+
 /// A 200 × 100 pt CMYK document filled with cyan, with spot swatch `Ink` (100% K) and the objects
 /// `art` over the cyan.
 fn over_cyan(art: Vec<Node>) -> Document {
@@ -747,7 +832,7 @@ fn overprint_black_keeps_the_cyan_under_near_and_freeform_blacks_on_postscript_p
 #[test]
 fn an_overprinting_fill_keeps_its_faint_ink_on_pdf_plates() {
     // 0.4% cyan beside 100% K, set to overprint: a PDF plate draws it with Darken, a PostScript
-    // plate draws it as nothing (it has no blending modes).
+    // plate (it has no blending modes) draws it as nothing, since the color counts as black.
     let mut square = Node::path(
         vectorcraft_doc::NodeId(0),
         shapes::rectangle(Rect::new(10.0, 15.0, 30.0, 35.0)),
@@ -765,6 +850,79 @@ fn an_overprinting_fill_keeps_its_faint_ink_on_pdf_plates() {
         count
     };
     assert_eq!((fills(false), fills(true)), (2, 1), "the cyan plate as PDF, as PostScript");
+}
+
+#[test]
+fn overprinting_paints_keep_their_faint_ink_on_postscript_plates() {
+    // 0.4% cyan in a color that is not black, set to overprint, on a fill, a stroke, a character
+    // fill, a linear gradient's stop and a freeform gradient's point: the cyan plate draws it on
+    // PDF and PostScript plates alike. A magenta with no cyan at all draws as nothing.
+    let faint = Color::cmyk(0.004, 0.5, 0.0, 0.0);
+    let magenta = Color::cmyk(0.0, 0.5, 0.0, 0.0);
+    let square = |x: f64, fill: Paint, stroke: Paint| {
+        let mut n =
+            Node::path(vectorcraft_doc::NodeId(0), shapes::rectangle(Rect::new(x, 15.0, x + 20.0, 35.0)), Appearance::basic(fill, stroke, 2.0));
+        if let Some(f) = n.appearance.fill_mut() {
+            f.overprint = true;
+        }
+        if let Some(s) = n.appearance.stroke_mut() {
+            s.overprint = true;
+        }
+        n
+    };
+    let linear = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, faint), GradientStop::new(1.0, magenta)]));
+    let mut freeform =
+        GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, magenta), GradientStop::new(1.0, magenta)]));
+    let points = vec![FreeformPoint::new(kurbo::Point::new(105.0, 20.0), magenta), FreeformPoint::new(kurbo::Point::new(115.0, 30.0), faint)];
+    freeform.freeform = Some(Freeform { points, ..Default::default() });
+    let style = vectorcraft_doc::CharStyle { fill: Paint::solid(faint), overprint_fill: true, ..Default::default() };
+    let text = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 60.0), "Hi", style);
+    let d = over_cyan(vec![
+        square(10.0, Paint::solid(faint), Paint::None),
+        square(40.0, Paint::None, Paint::solid(faint)),
+        square(70.0, Paint::Gradient(Box::new(linear)), Paint::None),
+        square(100.0, Paint::Gradient(Box::new(freeform)), Paint::None),
+        square(130.0, Paint::solid(magenta), Paint::None),
+        Node::new(vectorcraft_doc::NodeId(0), NodeKind::Text(Box::new(text))),
+        // A black linked to the spot swatch at a 0.4% tint: 0.4% on the spot plate, none on the cyan.
+        square(160.0, Paint::Solid { color: Color::cmyk(0.0, 0.0, 0.0, 1.0), swatch: Some("Ink".into()), tint: 0.004 }, Paint::None),
+    ]);
+    let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript: true, ..Default::default() };
+    let p = plan(&d, &opts).unwrap();
+    let mut spot = vec![];
+    p.plates[4].walk(|n| {
+        spot.extend(n.appearance.fill().and_then(|f| f.paint.color()).map(|c| match c {
+            Color::Gray { k } => (k * 1000.0).round(),
+            c => panic!("{c:?}"),
+        }))
+    });
+    assert!(spot.contains(&4.0), "the PostScript spot plate draws the spot tint: {spot:?}");
+    // The fills, strokes and character fills the cyan plate draws, and the gray of the solid fills.
+    let drawn = |postscript: bool| {
+        let opts = PrintOptions { settings: settings(json!({"output": {"mode": "separations"}})), postscript, ..Default::default() };
+        let p = plan(&d, &opts).unwrap();
+        let (mut fills, mut strokes, mut chars, mut grays) = (0, 0, 0, vec![]);
+        p.plates[0].walk(|n| {
+            if let Some(f) = n.appearance.fill().filter(|f| !f.paint.is_none()) {
+                fills += 1;
+                if let Some(Color::Gray { k }) = f.paint.color() {
+                    grays.push((k * 1000.0).round());
+                }
+            }
+            strokes += usize::from(n.appearance.stroke().is_some_and(|s| !s.paint.is_none()));
+            if let NodeKind::Text(t) = &n.kind {
+                chars += t.runs.iter().filter(|r| !r.style.fill.is_none()).count();
+            }
+        });
+        (fills, strokes, chars, grays)
+    };
+    for postscript in [false, true] {
+        let (fills, strokes, chars, grays) = drawn(postscript);
+        let at = if postscript { "PostScript" } else { "PDF" };
+        assert_eq!((strokes, chars), (1, 1), "{at}: the stroke and the character fill");
+        assert_eq!(fills, 4, "{at}: the cyan, the faint fill and both gradients, not the magenta");
+        assert_eq!(grays, [1000.0, 4.0], "{at}: the cyan and the faint fill's 0.4%");
+    }
 }
 
 #[test]
@@ -915,6 +1073,8 @@ fn a_spot_gradient_stop_prints_its_process_plates() {
     assert_eq!(first(json!({"output": {"mode": "separations"}})), [25.0, 0.0, 40.0, 0.0, 50.0], "Cyan, Magenta, Yellow, Black, Gold");
     // Spots as process: the plates layered with the gold tint's process inks (0, 10, 40, 5).
     assert_eq!(first(json!({"output": {"mode": "separations", "spotsToProcess": true}})), [25.0, 10.0, 64.0, 5.0]);
+    // Gold converted on its own: the same.
+    assert_eq!(first(json!({"output": {"mode": "separations", "inks": [{"name": "Gold", "convertToProcess": true}]}})), [25.0, 10.0, 64.0, 5.0]);
 }
 
 #[test]
