@@ -7129,6 +7129,7 @@ anchor	Points:	Points :
 	Open a document to check it for issues.	Ouvrez un document pour y rechercher des problèmes.
 	Empty Text	Texte vide
 	Unpainted Objects	Objets sans fond ni contour
+	Empty Text Paths	Tracés de texte vides
 	Zero-Opacity Objects	Objets à opacité nulle
 	Duplicate Objects	Objets en double
 	Off-Artboard Art	Illustration hors des plans de travail

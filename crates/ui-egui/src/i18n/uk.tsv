@@ -6739,6 +6739,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Відкрийте документ, щоб перевірити його на проблеми.
 	Empty Text	Порожній текст
 	Unpainted Objects	Об’єкти без заливки й обведення
+	Empty Text Paths	Порожні текстові контури
 	Zero-Opacity Objects	Об’єкти з нульовою непрозорістю
 	Duplicate Objects	Дублікати об’єктів
 	Off-Artboard Art	Графіка поза монтажними областями

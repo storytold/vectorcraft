@@ -6780,6 +6780,7 @@ anchor	Points:	點：
 	Open a document to check it for issues.	開啟文件以檢查其中的問題。
 	Empty Text	空白文字
 	Unpainted Objects	未上色物件
+	Empty Text Paths	空白文字路徑
 	Zero-Opacity Objects	不透明度為零的物件
 	Duplicate Objects	重複物件
 	Off-Artboard Art	工作區域外的圖稿

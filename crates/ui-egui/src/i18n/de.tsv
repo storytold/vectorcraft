@@ -6721,6 +6721,7 @@ anchor	Points:	Punkte:
 	Open a document to check it for issues.	Öffnen Sie ein Dokument, um es auf Probleme zu prüfen.
 	Empty Text	Leerer Text
 	Unpainted Objects	Objekte ohne Farbe
+	Empty Text Paths	Leere Textpfade
 	Zero-Opacity Objects	Objekte mit 0 % Deckkraft
 	Duplicate Objects	Doppelte Objekte
 	Off-Artboard Art	Bildmaterial außerhalb der Zeichenflächen

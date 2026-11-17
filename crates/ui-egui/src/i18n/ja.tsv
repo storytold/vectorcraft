@@ -8636,6 +8636,7 @@ anchor	Points:	ポイント:
 	Open a document to check it for issues.	ドキュメントを開くと問題をチェックできます。
 	Empty Text	空のテキスト
 	Unpainted Objects	塗りも線もないオブジェクト
+	Empty Text Paths	空のテキストパス
 	Zero-Opacity Objects	不透明度 0% のオブジェクト
 	Duplicate Objects	重複したオブジェクト
 	Off-Artboard Art	アートボード外のアートワーク

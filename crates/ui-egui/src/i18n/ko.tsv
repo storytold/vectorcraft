@@ -6721,6 +6721,7 @@ anchor	Points:	포인트:
 	Open a document to check it for issues.	문서를 열면 문제를 점검할 수 있습니다.
 	Empty Text	빈 텍스트
 	Unpainted Objects	칠하지 않은 오브젝트
+	Empty Text Paths	빈 텍스트 패스
 	Zero-Opacity Objects	불투명도 0% 오브젝트
 	Duplicate Objects	중복 오브젝트
 	Off-Artboard Art	아트보드 밖의 아트워크
