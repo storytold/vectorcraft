@@ -4,6 +4,8 @@
 //! be edited, selected or not. What it removes is worked out by
 //! [`vectorcraft_tools::addons::trim::plan`], which the tool also uses to show it beforehand.
 
+use std::collections::HashSet;
+
 use serde_json::{Value, json};
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{Point, Rect};
@@ -100,20 +102,21 @@ fn trim(s: &mut Session, p: &Value) -> Result<Value> {
         compounds.dedup();
         let mut beside = Beside::replacing(d, &trimmed);
         let mut all = vec![];
+        // The selection is read through a set and changed once at the end, so a trim of many
+        // paths does not go through the selected objects once per path and per piece.
+        let mut selected_ids: HashSet<NodeId> = sel.objects.iter().copied().collect();
+        let mut joining: Vec<NodeId> = vec![];
+        let mut gone: Vec<NodeId> = vec![];
         for (id, pieces) in plan {
-            let selected = sel.contains(id);
+            let selected = selected_ids.contains(&id);
             sel.anchors.remove(&id);
             sel.segments.remove(&id);
             let made = replace_with_pieces(d, &mut beside, id, pieces)?;
             // The pieces of a selected path are selected; what was not selected stays so.
             if made.is_empty() {
-                sel.remove(id);
+                gone.push(id);
             } else if selected {
-                for n in &made {
-                    if !sel.contains(*n) {
-                        sel.add(*n);
-                    }
-                }
+                joining.extend(made.iter().copied().filter(|n| selected_ids.insert(*n)));
             }
             all.extend(made);
         }
@@ -121,8 +124,14 @@ fn trim(s: &mut Session, p: &Value) -> Result<Value> {
         for c in compounds {
             if d.node(c).is_some_and(|n| n.children().is_some_and(|ch| ch.is_empty())) {
                 d.remove(c)?;
-                sel.remove(c);
+                gone.push(c);
             }
+        }
+        sel.remove_all(gone);
+        if let Some((first, rest)) = joining.split_first() {
+            // `add` clears what any change to the object selection clears; the rest are new ids.
+            sel.add(*first);
+            sel.objects.extend_from_slice(rest);
         }
         Ok(all)
     })?;

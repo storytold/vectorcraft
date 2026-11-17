@@ -59,11 +59,11 @@ pub fn drawn_bounds(doc: &Document, n: &Node) -> Option<Rect> {
 }
 
 /// For a path or compound path whose own Rasterize effect is followed by Transform effects that
-/// move the art once ([`crate::effects::rasterize_stage`]): `n` with those Transform effects
-/// hidden, which the image is made of, and the map they move the image by. The canvas draws the
-/// image on its own pixel grid and moves it, and the room around the art, with the map. `None`
-/// for other objects.
-pub fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, vectorcraft_geom::Affine)> {
+/// move or copy the art ([`crate::effects::rasterize_stage`]): `n` with those Transform effects
+/// hidden, which the image is made of, and the maps they place the image by, the lowest first
+/// (one per copy, the original's last). The canvas draws the image on its own pixel grid and
+/// places it, and the room around the art, through each map. `None` for other objects.
+pub fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Vec<vectorcraft_geom::Affine>)> {
     fx::rasterize_stage(doc, n)
 }
 
