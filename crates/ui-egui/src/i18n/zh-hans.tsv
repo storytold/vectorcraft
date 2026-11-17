@@ -552,6 +552,7 @@ antiAlias	Sharp	锐利
 	Consolidate All Windows	合并所有窗口
 	Constrain Angle	约束角度
 	Constrain Width and Height Proportions	约束宽高比例
+	Copy Width to Height	将宽度复制到高度
 	Construction Guides	构造参考线
 	Contextual Alternates	上下文替代
 	Contextual Task Bar	上下文任务栏
@@ -1943,7 +1944,8 @@ file-filter	Templates	模板
 	Artboard Guides with Cmd/Ctrl + Ruler Drag	按住 Cmd/Ctrl 从标尺拖动创建画板参考线
 	Lock Slices	锁定切片
 	Lock Station Point	锁定基准点
-	Lossless (lossy WebP isn't available yet)	无失真 (尚未提供有失真的 WebP)
+	Lossless	无失真
+	Lossy	有失真
 	Lossy:	有损：
 	Low	低
 	lowercase	小写
@@ -2975,7 +2977,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Live corner radii scale with the art, unless the scale chooses otherwise.	实时转角半径随图稿一起缩放，除非缩放命令另有选择。
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	描边粗细、虚线和效果距离随图稿一起缩放，除非缩放命令另有选择。
 	The mouse wheel zooms the canvas instead of scrolling it.	鼠标滚轮缩放画布，而不是滚动画布。
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	使用鼠标滚轮缩放关闭时，按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
 	Dragging sideways on a numeric field's label changes the field's value.	在数值字段的标签上横向拖动可更改字段的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
@@ -3237,6 +3239,7 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
 	No recent commands	没有最近使用的命令
+	Search commands	搜索命令
 	Search Commands…	搜索命令…
 	Secondary	次要
 	Section Symbol	章节符号
@@ -9608,6 +9611,7 @@ breakText	Glyphs	字形
 @msg	Too many Revolve faces for visibility evaluation	回转的面过多，无法进行可见性计算
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 最多从色板交换文件中读取 {ASE_MAX_ENTRIES} 个颜色和组，而此库有 {entries} 个
 @msg	WebP encoding failed: {e}	WebP 编码失败：{e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 编码失败：图像太大，无法生成有失真 WebP：请降低分辨率或选择无失真
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必须是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList

@@ -594,6 +594,7 @@ font-technology	Variable	Variabla
 	Consolidate All Windows	Samla alla fönster
 	Constrain Angle	Begränsa vinkel
 	Constrain Width and Height Proportions	Behåll proportioner för bredd och höjd
+	Copy Width to Height	Kopiera bredd till höjd
 	Construction Guides	Konstruktionsstödlinjer
 	Contextual Alternates	Kontextuella alternativ
 	Contextual Task Bar	Kontextuellt aktivitetsfält
@@ -1972,7 +1973,8 @@ font-technology	Variable	Variabla
 	Lock Others	Lås övriga
 	Lock Slices	Lås skivor
 	Lock Station Point	Lås betraktarpunkt
-	Lossless (lossy WebP isn't available yet)	Förlustfri (förlustbehäftad WebP är inte tillgänglig än)
+	Lossless	Förlustfri
+	Lossy	Förlustbehäftad
 	Lossy:	Förlust:
 	Low	Låg
 	lowercase	gemener
@@ -3013,7 +3015,7 @@ digits	Malayalam	Malayalam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynamiska hörnradier skalas med grafiken, om inte skalningen väljer annat.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Konturtjocklekar, streck och effektavstånd skalas med grafiken, om inte skalningen väljer annat.
 	The mouse wheel zooms the canvas instead of scrolling it.	Mushjulet zoomar arbetsytan i stället för att rulla den.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Medan Zooma med mushjulet är av rullar mushjulet med Cmd/Ctrl nedtryckt arbetsytan i sidled.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mushjulet med Cmd/Ctrl nedtryckt rullar arbetsytan i sidled.
 	Dragging sideways on a numeric field's label changes the field's value.	Att dra i sidled på ett sifferfälts etikett ändrar fältets värde.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsgest med två fingrar på en styrplatta roterar arbetsytans vy.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	När du håller ned ett verktygs kortkommando är verktyget valt tills du släpper, och sedan väljs det föregående verktyget igen.
@@ -3293,6 +3295,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
+	Search commands	Sök kommandon
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär
 	Section Symbol	Paragraftecken
@@ -9452,6 +9455,7 @@ digits	Hindi	Hindi
 @msg	Too many Revolve faces for visibility evaluation	För många ytor i Rotera runt axel för synlighetsberäkningen
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft läser högst {ASE_MAX_ENTRIES} färger och grupper från en fil för färgruteutbyte, och det här biblioteket har {entries}
 @msg	WebP encoding failed: {e}	WebP-kodningen misslyckades: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-kodningen misslyckades: bilden är för stor för förlustbehäftad WebP: sänk upplösningen eller välj Förlustfri
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index` måste vara ett heltal
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` är smallThumb, mediumThumb, largeThumb, smallList eller largeList

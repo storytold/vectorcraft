@@ -1019,6 +1019,7 @@ antiAlias	Sharp	शार्प
 	Constrain	सीमित करें
 	Constrain Angle	कंस्ट्रेन एंगल
 	Constrain Width and Height Proportions	चौड़ाई और ऊंचाई का अनुपात बनाए रखें
+	Copy Width to Height	चौड़ाई को ऊंचाई में कॉपी करें
 	Construction Guides	निर्माण गाइड
 	Conté Crayon	कॉन्टे क्रेयॉन
 	Conté Crayon…	कॉन्टे क्रेयॉन…
@@ -2805,7 +2806,8 @@ antiAlias	Sharp	शार्प
 	Long Lines	लंबी रेखाएँ
 	Long Strokes	लंबे स्ट्रोक
 	Longest:	सबसे लंबे:
-	Lossless (lossy WebP isn't available yet)	लॉसलेस (लॉसी WebP अभी उपलब्ध नहीं है)
+	Lossless	लॉसलेस
+	Lossy	लॉसी
 	Lossy:	हानि:
 	Low	निम्न
 	Low Fidelity Photo	लो फिडेलिटी फोटो
@@ -4193,7 +4195,7 @@ antiAlias	Sharp	शार्प
 	Live corner radii scale with the art, unless the scale chooses otherwise.	लाइव कोनों की त्रिज्याएँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	स्ट्रोक की मोटाई, डैश और इफ़ेक्ट की दूरियाँ आर्टवर्क के साथ स्केल होती हैं, जब तक स्केलिंग कुछ और न चुने।
 	The mouse wheel zooms the canvas instead of scrolling it.	माउस व्हील कैनवास को स्क्रॉल करने की जगह ज़ूम करता है।
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	जब माउस व्हील के साथ ज़ूम बंद हो, तब Cmd/Ctrl दबाकर माउस व्हील घुमाने से कैनवास बगल की ओर स्क्रॉल होता है।
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl दबाकर माउस व्हील घुमाने से कैनवास बगल की ओर स्क्रॉल होता है।
 	Dragging sideways on a numeric field's label changes the field's value.	किसी संख्या वाले फ़ील्ड के लेबल पर बगल की ओर ड्रैग करने से फ़ील्ड का मान बदलता है।
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
@@ -4552,6 +4554,7 @@ antiAlias	Sharp	शार्प
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
 	No recent commands	कोई हाल का आदेश नहीं
+	Search commands	आदेश खोजें
 	Search Commands…	कमांड खोजें…
 	Search Fonts Folder	खोज फ़ॉन्ट फ़ोल्डर
 	Search images	इमेज खोजना
@@ -9370,6 +9373,7 @@ theme	Appearance	अपीयरेंस
 @msg	Too many Revolve faces for visibility evaluation	दृश्यता की गणना के लिए रिवॉल्व के फ़ेस बहुत अधिक हैं
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft स्वॉच एक्सचेंज फ़ाइल से अधिकतम {ASE_MAX_ENTRIES} रंग और ग्रुप पढ़ता है, और इस लाइब्रेरी में {entries} हैं
 @msg	WebP encoding failed: {e}	WebP एन्कोडिंग विफल: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP एन्कोडिंग विफल: छवि लॉसी WebP के लिए बहुत बड़ी है: रिज़ॉल्यूशन कम करें या लॉसलेस चुनें
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index` पूरी संख्या होनी चाहिए
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList या largeList होता है

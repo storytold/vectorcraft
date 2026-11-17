@@ -566,6 +566,7 @@ font-technology	Variable	Μεταβλητές
 	Consolidate All Windows	Συγχώνευση όλων των παραθύρων
 	Constrain Angle	Περιορισμός γωνίας
 	Constrain Width and Height Proportions	Διατήρηση αναλογιών πλάτους και ύψους
+	Copy Width to Height	Αντιγραφή πλάτους στο ύψος
 	Construction Guides	Οδηγοί κατασκευής
 	Contextual Alternates	Εναλλακτικοί χαρακτήρες βάσει συμφραζομένων
 	Contextual Task Bar	Γραμμή εργασιών βάσει περιβάλλοντος
@@ -3105,7 +3106,8 @@ theme	Appearance	Εμφάνιση
 	Lock Grid	Κλείδωμα πλέγματος
 	Lock Others	Κλείδωμα υπόλοιπων
 	Lock Station Point	Κλείδωμα σταθερού σημείου
-	Lossless (lossy WebP isn't available yet)	Χωρίς απώλειες (το WebP με απώλειες δεν υποστηρίζεται ακόμη)
+	Lossless	Χωρίς απώλειες
+	Lossy	Με απώλειες
 	Lossy:	Με απώλειες:
 	lowercase	πεζά
 	LZW Compression	Συμπίεση LZW
@@ -3858,7 +3860,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Οι ακτίνες των δυναμικών γωνιών κλιμακώνονται μαζί με το γραφικό, εκτός αν η κλιμάκωση επιλέξει κάτι άλλο.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Τα πάχη περιγράμματος, οι παύλες και οι αποστάσεις των εφέ κλιμακώνονται μαζί με το γραφικό, εκτός αν η κλιμάκωση επιλέξει κάτι άλλο.
 	The mouse wheel zooms the canvas instead of scrolling it.	Ο τροχός του ποντικιού κάνει ζουμ στον καμβά αντί να τον κυλά.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Όσο το Ζουμ με τον τροχό του ποντικιού είναι ανενεργό, ο τροχός με πατημένο το Cmd/Ctrl κυλά τον καμβά οριζόντια.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Ο τροχός του ποντικιού με πατημένο το Cmd/Ctrl κυλά τον καμβά οριζόντια.
 	Dragging sideways on a numeric field's label changes the field's value.	Η μεταφορά προς τα πλάγια πάνω στην ετικέτα ενός αριθμητικού πεδίου αλλάζει την τιμή του πεδίου.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Μια κίνηση περιστροφής με δύο δάχτυλα σε επιφάνεια αφής περιστρέφει την προβολή του καμβά.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Όσο κρατάτε πατημένη τη συντόμευση ενός εργαλείου, το εργαλείο είναι επιλεγμένο, και μετά επιλέγεται ξανά το προηγούμενο εργαλείο.
@@ -4039,6 +4041,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές
 	No recent commands	Δεν υπάρχουν πρόσφατες εντολές
+	Search commands	Αναζήτηση εντολών
 	Search Commands…	Αναζήτηση εντολών…
 	Secondary	Δευτερεύον
 	Section Symbol	Σύμβολο ενότητας
@@ -7946,6 +7949,7 @@ breakText	Glyphs	Γλύφοι
 @msg	Too many Revolve faces for visibility evaluation	Πάρα πολλές έδρες περιστροφής για τον έλεγχο ορατότητας
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	Το VectorCraft διαβάζει το πολύ {ASE_MAX_ENTRIES} χρώματα και ομάδες από ένα αρχείο ανταλλαγής δειγμάτων, και αυτή η βιβλιοθήκη έχει {entries}
 @msg	WebP encoding failed: {e}	Η κωδικοποίηση WebP απέτυχε: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Η κωδικοποίηση WebP απέτυχε: η εικόνα είναι πολύ μεγάλη για WebP με απώλειες: μειώστε την ανάλυση ή επιλέξτε Χωρίς απώλειες
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	Το `index` πρέπει να είναι ακέραιος αριθμός
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	Το `view` είναι smallThumb, mediumThumb, largeThumb, smallList ή largeList

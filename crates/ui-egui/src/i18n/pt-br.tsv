@@ -552,6 +552,7 @@ antiAlias	Sharp	Nítido
 	Consolidate All Windows	Consolidar Todas as Janelas
 	Constrain Angle	Ângulo de Restrição
 	Constrain Width and Height Proportions	Restringir Proporções de Largura e Altura
+	Copy Width to Height	Copiar Largura para Altura
 	Construction Guides	Guias de Construção
 	Contextual Alternates	Variantes Contextuais
 	Contextual Task Bar	Barra de Tarefas Contextual
@@ -1717,7 +1718,8 @@ antiAlias	Sharp	Nítido
 	Artboard Guides with Cmd/Ctrl + Ruler Drag	Guias de Prancheta com Cmd/Ctrl + Arrastar da Régua
 	Lock Slices	Bloquear Fatias
 	Lock Station Point	Bloquear Ponto de Estação
-	Lossless (lossy WebP isn't available yet)	Sem Perdas (WebP com perdas ainda não está disponível)
+	Lossless	Sem Perdas
+	Lossy	Com Perdas
 	Lossy:	Com Perdas:
 	Luminosity	Luminosidade
 	Magic Wand	Varinha Mágica
@@ -2575,7 +2577,7 @@ digits	Malayalam	Malaiala
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Os raios de canto dinâmicos mudam de escala com a arte, a menos que a escala escolha outra coisa.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Espessuras de traçado, traços e distâncias de efeitos mudam de escala com a arte, a menos que a escala escolha outra coisa.
 	The mouse wheel zooms the canvas instead of scrolling it.	A roda do mouse aplica zoom na tela em vez de rolá-la.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Enquanto Zoom com a Roda do Mouse está desativado, a roda do mouse com Cmd/Ctrl pressionado rola a tela para os lados.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	A roda do mouse com Cmd/Ctrl pressionado rola a tela para os lados.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrastar para os lados sobre o rótulo de um campo numérico muda o valor do campo.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Um gesto de rotação com dois dedos no trackpad gira a visualização da tela.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Manter pressionado o atalho de uma ferramenta a escolhe até você soltar, e então a ferramenta anterior é escolhida de novo.
@@ -2834,6 +2836,7 @@ digits	Malayalam	Malaiala
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Recent Commands	Comandos recentes
 	No recent commands	Nenhum comando recente
+	Search commands	Pesquisar comandos
 	Secondary	Secundária
 	Section Symbol	Símbolo de Seção
 	Select	Selecionar
@@ -7443,6 +7446,7 @@ breakText	Glyphs	Glifos
 @msg	Too many Revolve faces for visibility evaluation	Faces de Revolver demais para avaliar a visibilidade
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	O VectorCraft lê no máximo {ASE_MAX_ENTRIES} cores e grupos de um arquivo de intercâmbio de amostras, e esta biblioteca tem {entries}
 @msg	WebP encoding failed: {e}	Falha na codificação WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Falha na codificação WebP: a imagem é grande demais para WebP com perdas: reduza a resolução ou escolha Sem Perdas
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` é smallThumb, mediumThumb, largeThumb, smallList ou largeList

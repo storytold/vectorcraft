@@ -161,6 +161,7 @@
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	ტრეპინგი: ობიექტების {_1}-ზე მეტი წყვილი ტრეპინგისთვის საკმარისად ახლოს მდებარეობს, ან ზედმეტად ბევრ ობიექტს საერთო ჰორიზონტალური დიაპაზონი აქვს; ერთდროულად ნაკლებ ობიექტზე გამოიყენეთ ტრეპინგი
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft ფერის ნიმუშების გაცვლის ფაილიდან კითხულობს მაქსიმუმ {ASE_MAX_ENTRIES} ფერსა და ჯგუფს, ამ ბიბლიოთეკაში კი არის {entries}
 @msg	WebP encoding failed: {e}	WebP-ის კოდირება ვერ მოხერხდა: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-ის კოდირება ვერ მოხერხდა: სურათი ძალიან დიდია დანაკარგიანი WebP-ისთვის: შეამცირეთ გარჩევადობა ან აირჩიეთ უდანაკარგო
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	ნარჩენის მოსაცილებელი ჩარჩო და ხაზები: ნახატის გარეთ ნარჩენის მოსაცილებელი არცერთი ხაზი არ ეტევა, ნარჩენის ჩარჩო კი გამორთულია
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	\\ at end of pattern	\\ შაბლონის ბოლოს
@@ -3388,6 +3389,7 @@ lighting	Light	სინათლე
 	Search commands, tools, panels and effects	ბრძანებების, ხელსაწყოების, პანელებისა და ეფექტების ძიება
 	Style:	სტილი:
 	Switch workspace	სამუშაო სივრცის გადართვა
+	Search commands	ბრძანებების ძიება
 	Show all open documents	ყველა ღია დოკუმენტის ჩვენება
 	Use 	გამოიყენეთ 
 	 the object to select  |  	 ობიექტზე — მოსანიშნად  |  
@@ -4805,7 +4807,8 @@ digits	Malayalam	მალაიალამური
 	Hide Video Rulers	ვიდეოს სახაზავების დამალვა
 	Client-side (.html)	კლიენტის მხარე (.html)
 	Color Reduction:	ფერების შემცირება:
-	Lossless (lossy WebP isn't available yet)	უდანაკარგო (დანაკარგიანი WebP ჯერ მიუწვდომელია)
+	Lossless	უდანაკარგო
+	Lossy	დანაკარგიანი
 	Scans:	სკანირებები:
 	Server-side (.map)	სერვერის მხარე (.map)
 	{format} Options	{format}: პარამეტრები
@@ -5757,6 +5760,7 @@ theme	Appearance	იერსახე
 	Command Click to Select Objects Behind	Command-დაწკაპუნებით უკან მდებარე ობიექტების მონიშვნა
 	Constrain Angle	კუთხის შეზღუდვა
 	Constrain Width and Height Proportions	სიგანისა და სიმაღლის პროპორციების შენარჩუნება
+	Copy Width to Height	სიგანის კოპირება სიმაღლეში
 	Construction Guides	სამშენებლო დამხმარე ხაზები
 	Curvature Tool	მრუდის ხელსაწყო
 	Data Recovery	მონაცემების აღდგენა
@@ -6252,6 +6256,7 @@ font-technology	Variable	ცვლადი
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	კონტურის სისქე, შტრიხები და ეფექტების მანძილები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
 	The mouse wheel zooms the canvas instead of scrolling it.	მაუსის ბორბალი ტილოს გადახვევის ნაცვლად მასშტაბს ცვლის.
 	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	სანამ მაუსის ბორბლით მასშტაბირება გამორთულია, დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ხელსაწყოს მალსახმობი კლავიშის დაჭერით ხელსაწყო არჩეულია მის აშვებამდე, შემდეგ კი ისევ წინა ხელსაწყო აირჩევა.
