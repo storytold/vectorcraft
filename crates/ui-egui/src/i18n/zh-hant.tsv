@@ -7563,6 +7563,11 @@ breakText	Glyphs	字符
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
 @msg	`angle` must be from -180 to 180 degrees	`angle` 必須介於 -180 到 180 度之間
+@msg	`roundness` must be from 0 to 100%	`roundness` 必須介於 0 到 100% 之間
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` 必須介於 0.01 到 100 pt 之間
+@msg	style must be "pencil" or "brush"	style 必須為 "pencil" 或 "brush"
+@msg	extend end must be "start" or "end"	extend 的端點必須為 "start" 或 "end"
+@msg	connect end must be "start" or "end"	connect 的端點必須為 "start" 或 "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` 必須介於 1 到 100% 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
 	Weed Box and Lines…	除廢框與除廢線…
@@ -8453,7 +8458,6 @@ breakText	Glyphs	字符
 @msg	anchor `smooth` must be true or false	錨點的 `smooth` 必須是 true 或 false
 @msg	anchor `{key}` must be [x, y]	錨點的 `{key}` 必須是 [x, y]
 @msg	anchor `{key}` must be a number	錨點的 `{key}` 必須是數字
-@msg	angle and roundness must be finite	angle 和 roundness 必須是有限值
 @msg	angles must be a list as long as pins (degrees or null)	angles 必須是與 pins 等長的清單 (度數或 null)
 @msg	appearance must be flat|center|edge	appearance 必須是 flat|center|edge
 @msg	apply is "fill" or "stroke", not `{other}`	apply 是 "fill" 或 "stroke"，而非 `{other}`
