@@ -639,6 +639,23 @@ fn lossy_does_not_spread_a_shifted_color_into_another() {
     assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(20, 5).0, img.get_pixel(29, 5).0), ([190, 0, 0, 255], [200, 0, 0, 255], [200, 0, 0, 255]));
 }
 
+/// Lossy GIF compression moves no pixel into or out of a color shifted by hand: the colors next to
+/// a shifted one keep their own pixels, and the shifted color keeps all of its pixels.
+#[test]
+fn lossy_moves_no_pixel_into_or_out_of_a_shifted_color() {
+    let mut s = session(30.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#1414e6");
+    rect(&mut s, [10.0, 0.0, 20.0, 10.0], "#0000ff");
+    rect(&mut s, [20.0, 0.0, 30.0, 10.0], "#1414e6");
+    let p = json!({"format": "gif", "dither": "none", "lossy": 100, "colorTable": {"shifted": {"#0000ff": "#ff0000"}}});
+    let img = pixels(&one(&mut s, p));
+    let near_blue = [20, 20, 230, 255];
+    for x in 0..30 {
+        let want = if (10..20).contains(&x) { [255, 0, 0, 255] } else { near_blue };
+        assert_eq!(img.get_pixel(x, 5).0, want, "x = {x}");
+    }
+}
+
 #[test]
 fn presets_and_remembered_settings() {
     let mut s = two_colours();

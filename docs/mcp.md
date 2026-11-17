@@ -9056,7 +9056,8 @@ locked one is: the shifted and locked colors take the palette's slots first, shi
 least one slot is left for the reduction, so with `colors: 2` and transparent pixels none is kept and a color left out
 shifts nothing. As with a locked color, a kept source stays in the palette when the art no longer has it, and the
 pixels nearest to it are written in the new color. The preview marks it `shifted` and `locked`. A shift by hand wins over `webShift`, `webSnap` and
-`locked`; a color mapped to transparent stays transparent. Two colors may be shifted to the same color. A source the
+`locked`; a color mapped to transparent stays transparent. GIF `lossy` moves no pixel into or out of a shifted color.
+Two colors may be shifted to the same color. A source the
 table does not hold shifts nothing, and the shift stays with the settings for when it comes back; another reduction
 keeps it. The settings store the map in lowercase, drop a color shifted to itself or deleted, and drop the `webShift`
 of a color shifted by hand. More than 256 entries, a key or value that is not a color such as `#ff8800` (`#rrggbbaa`
