@@ -59,7 +59,10 @@ Formerly **DrawCraft** (renamed 2026-10-01): old `.drawcraft` files and `"format
 
 ## Start every session here
 1. Read [`ROADMAP.md`](ROADMAP.md) (stage, numbers by dimension, what's next) and the ranked work list in [`docs/gaps.md`](docs/gaps.md). Unless the user gives you a task, pick work from that list.
-2. `plan/` is an optional gitignored notebook. Behaviour notes may be in `plan/illustrator/*.md`. Do not ask for it and do not stop when it is absent. Orient, implement, test, verify, then record in the public docs.
+2. Read `plan/STATUS.md` (local session notes, may lag the ROADMAP), then the task in `plan/execution-plan.md` §3 and the relevant `plan/architecture.md` section. Behaviour reference: public documentation only (see Clean-room below); `plan/illustrator/*.md` holds notes from it.
+3. Follow the autonomous operation protocol (`plan/execution-plan.md` §7): orient → plan → implement + test → verify → record → commit. Don't stop to ask unless §7 lists the decision as the user's.
+
+`plan/` is gitignored (local only).
 
 ## Non-negotiables
 - **Clean-room: never use Adobe software (absolute rule, from the project owner).** Adobe's Terms of Use forbid reverse engineering, including observing a program's inputs and outputs to recreate it. So:
