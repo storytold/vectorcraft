@@ -1108,16 +1108,47 @@ fn each_run_hyphenates_in_its_own_language() {
     let saved_without_one = hyphens(None);
     assert!(saved_without_one > 0, "some words hyphenated");
     assert_eq!(hyphens(Some("en-GB")), saved_without_one);
-    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("fr")), 0, "French has no break points yet");
+    assert_eq!(hyphens(Some("ru")), 0, "English words in a Russian run are not hyphenated as English");
     assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
 
-    // both in one paragraph: the English run breaks and the German one doesn't
+    // both in one paragraph: the English run breaks and the French one doesn't
     let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
     t.para.hyphenate = true;
-    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("fr".into()));
     let l = layout(db(), &t);
     let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
     assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
+}
+
+/// A justified Russian paragraph in a narrow frame breaks its long words at the Russian rules'
+/// points with either composer, and not at all with Hyphenate off.
+#[test]
+fn a_russian_run_hyphenates_at_russian_break_points() {
+    let text = "Государственное законодательство регулирует достопримечательности.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let st = CharStyle { language: Some("ru-RU".into()), ..style(14.0) };
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let mut t = area(text, st.clone(), frame, Justify::JustifyLeft);
+        t.para.composer = composer;
+        t.para.hyphenate = true;
+        let l = layout(db(), &t);
+        let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+        assert!(!at.is_empty(), "{composer:?}: some words hyphenated");
+        for b in at {
+            // The word the hyphen splits, and where in it the line ends.
+            let start = text[..b].rfind(' ').map_or(0, |i| i + 1);
+            let end = text[b..].find([' ', '.']).map_or(text.len(), |i| b + i);
+            let word = &text[start..end];
+            let point = text[start..b].chars().count();
+            assert!(
+                hyphen::hyphen_points_for_language(word, &t.para.hyphenation, Some("ru")).contains(&point),
+                "{composer:?}: {word} broken after {point} letters"
+            );
+        }
+        t.para.hyphenate = false;
+        assert_eq!(layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count(), 0, "{composer:?}: Hyphenate off");
+    }
 }
 
 #[test]

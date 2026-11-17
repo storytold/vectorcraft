@@ -417,9 +417,13 @@ fn encode_carrying_at(
     }
     let (flat, flattened) = flatten_for(cmd, doc, set, p)?;
     vectorcraft_doc::cancel::check()?;
-    if flattened {
+    if let Some(o) = flattened {
         let kind = if set.standard.flattens() { set.standard.label() } else { set.compatibility.label() };
-        notes.push(Note::loss(format!("transparency is flattened into opaque art and images ({kind} files have none): see the flattener preset")));
+        let line_ppi = o.line_art_ppi.round() as u32;
+        let grad_ppi = o.gradient_ppi.round() as u32;
+        notes.push(Note::loss(format!(
+            "transparency is flattened into opaque art and images ({kind} files have none) at {line_ppi} ppi line art and text, {grad_ppi} ppi gradients and meshes: see the flattener preset"
+        )));
     }
     let r = super::super::rasterfx::export_pdf_with_report(flat.as_ref().unwrap_or(doc), &opts).map_err(|e| pdf_error(cmd, e))?;
     notes.extend(r.warnings.into_iter().map(Note::loss));
@@ -438,9 +442,9 @@ pub const DEFAULT_FLATTENER: &str = "High Resolution";
 /// discarded overprints are dropped. Layers the pages leave out (non-printing ones, unless asked
 /// for) are left out of the flattening, hidden. → the document to write (`None`: `doc` as it is)
 /// and whether its transparency was flattened.
-fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<(Option<Document>, bool)> {
+fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Result<(Option<Document>, Option<FlattenOptions>)> {
     if !set.pdf13() {
-        return Ok((None, false));
+        return Ok((None, None));
     }
     let printed = if set.include_non_printing || set.create_layers { None } else { without_non_printing(&doc.layers) };
     let shown = printed.map(|layers| {
@@ -456,8 +460,8 @@ fn flatten_for(cmd: &str, doc: &Document, set: &PdfSettings, p: &Value) -> Resul
     // its art: it is clipped to its regions (opaque inside them).
     o.clip_complex_regions = true;
     Ok(match flatten_document(shown.as_ref().unwrap_or(doc), &o)? {
-        Some(flat) => (Some(flat), true),
-        None => (shown, false),
+        Some(flat) => (Some(flat), Some(o)),
+        None => (shown, None),
     })
 }
 
