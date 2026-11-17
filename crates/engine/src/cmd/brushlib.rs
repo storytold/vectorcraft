@@ -174,6 +174,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
+    BuiltinBrushLibrary { id: "decorative", name: "Decorative", make: decorative },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
@@ -473,6 +474,47 @@ fn pattern_borders() -> BrushLibrary {
         border("Scallops", scallops, None, PatternFit::Stretch),
     ];
     built("Pattern Borders", Document::new(100.0, 100.0), brushes)
+}
+
+/// Decorative: repeating plant, flower and hanging ornaments drawn as original vector tiles.
+/// Every tile joins the next at x = 0 and 48 so open and closed paths stay continuous.
+fn decorative() -> BrushLibrary {
+    let stem = || black(shapes::rectangle(Rect::new(0.0, -0.65, 48.0, 0.65)));
+    let vine = group(vec![
+        stem(),
+        black(polygon(&[(8.0, -0.2), (12.0, -5.0), (24.0, -8.0), (20.0, -1.0)])),
+        black(polygon(&[(28.0, 0.2), (32.0, 5.0), (44.0, 8.0), (40.0, 1.0)])),
+    ]);
+    let mut blossoms = vec![stem()];
+    for x in [12.0, 36.0] {
+        for (dx, dy) in [(0.0, -4.0), (4.0, 0.0), (0.0, 4.0), (-4.0, 0.0)] {
+            blossoms.push(black(shapes::ellipse(Rect::new(x + dx - 2.5, dy - 2.5, x + dx + 2.5, dy + 2.5))));
+        }
+        blossoms.push(black(shapes::ellipse(Rect::new(x - 1.3, -1.3, x + 1.3, 1.3))));
+    }
+    let flowers = group(blossoms);
+    let pennants = group(vec![
+        black(shapes::rectangle(Rect::new(0.0, -5.2, 48.0, -4.2))),
+        black(polygon(&[(4.0, -4.2), (20.0, -4.2), (12.0, 10.0)])),
+        black(polygon(&[(28.0, -4.2), (44.0, -4.2), (36.0, 10.0)])),
+    ]);
+    let lanterns = group(vec![
+        black(shapes::rectangle(Rect::new(0.0, -5.0, 48.0, -4.0))),
+        black(shapes::rectangle(Rect::new(11.4, -4.0, 12.6, -1.0))),
+        black(shapes::ellipse(Rect::new(7.0, -1.0, 17.0, 9.0))),
+        black(shapes::rectangle(Rect::new(35.4, -4.0, 36.6, -1.0))),
+        black(shapes::ellipse(Rect::new(31.0, -1.0, 41.0, 9.0))),
+    ]);
+    built(
+        "Decorative",
+        Document::new(100.0, 100.0),
+        vec![
+            border("Leaf Vine", vine, None, PatternFit::Stretch),
+            border("Blossom Chain", flowers, None, PatternFit::Stretch),
+            border("Pennant Garland", pennants, None, PatternFit::Stretch),
+            border("Lantern String", lanterns, None, PatternFit::Stretch),
+        ],
+    )
 }
 
 fn scatter(name: &str, art: Node, s: Scatter) -> Brush {

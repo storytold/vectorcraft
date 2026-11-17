@@ -9758,3 +9758,7 @@ breakText	Glyphs	字形
 @msg	A fold line is on a non-printing layer.	一条折线位于不打印的图层上。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，铰链：{hinges}，错误：{errors}，警告：{warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Leaf Vine	叶藤
+	Blossom Chain	花链
+	Pennant Garland	旗帜花环
+	Lantern String	灯笼串

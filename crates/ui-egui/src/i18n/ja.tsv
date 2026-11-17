@@ -9617,3 +9617,7 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Leaf Vine	葉のつる
+	Blossom Chain	花の連なり
+	Pennant Garland	三角旗のガーランド
+	Lantern String	ランタンの連なり

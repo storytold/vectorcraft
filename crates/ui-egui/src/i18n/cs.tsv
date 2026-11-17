@@ -9917,3 +9917,7 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Leaf Vine	Listová liána
+	Blossom Chain	Květinový řetěz
+	Pennant Garland	Girlanda praporků
+	Lantern String	Řetěz luceren

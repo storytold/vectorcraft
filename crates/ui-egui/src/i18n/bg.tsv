@@ -7237,3 +7237,7 @@ breakText	Glyphs	Глифи
 @msg	A fold line is on a non-printing layer.	Линия на сгъване е на слой, който не се печата.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, панти: {hinges}, грешки: {errors}, предупреждения: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Leaf Vine	Листна лоза
+	Blossom Chain	Цветна верига
+	Pennant Garland	Гирлянд от знаменца
+	Lantern String	Низ от фенери

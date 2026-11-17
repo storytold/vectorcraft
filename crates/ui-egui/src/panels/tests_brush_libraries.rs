@@ -197,6 +197,7 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
             json!("calligraphic-nibs"),
             json!("bristle-brushes"),
             json!("pattern-borders"),
+            json!("decorative"),
             json!("scatter-shapes"),
             json!("game-trails"),
             json!("energy-beams"),
@@ -232,6 +233,17 @@ fn the_window_menu_and_the_brushes_panel_open_brush_libraries() {
     click(&mut app, &ctx, "Circuit Trace", Modifiers::NONE, 2.0);
     assert!(has(&app, "Circuit Trace") && !has(&app, "Bus Lines"));
     assert_eq!(undo_len(&app), undo + 1);
+    let r = app.run("window.brushLibrary", json!({"library": "Decorative"})).unwrap();
+    assert_eq!((r["open"].as_str(), r["count"].as_u64()), (Some("decorative"), Some(4)));
+    let path = app.run("shape.line", json!({"x1": 10, "y1": 100, "x2": 180, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Leaf Vine", Modifiers::NONE, 3.0);
+    assert!(has(&app, "Leaf Vine") && !has(&app, "Lantern String"));
+    assert_eq!(undo_len(&app), undo + 1);
+    assert_eq!(
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(),
+        Some("Leaf Vine")
+    );
     // Without brushes there is nothing to save.
     let all: Vec<String> = vectorcraft_brush::library(&app.session.doc().unwrap().doc).into_iter().map(|b| b.name).collect();
     app.run("brush.delete", json!({ "names": all })).unwrap();
