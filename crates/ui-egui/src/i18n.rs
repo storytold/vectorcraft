@@ -683,8 +683,10 @@ const MESSAGE_DEPTH: usize = 5;
 /// parts of them (file names, numbers, a reason with no entry, a JSON object or array such as
 /// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”`, `'…'` or backticks, such as a
 /// symbol's or a script property's name, and an `{ident}` placeholder's value, a script identifier),
-/// stay as they are. A part that starts with `{` is translated only when it is a whole message with
-/// an exact entry. A part that starts with `[` is translated when it has an exact entry, such as
+/// stay as they are. A `{to}` placeholder's value that is not quoted, a printer's name such as
+/// `Office Laser (Floor 2)`, is translated only when it has an exact entry, such as
+/// `the default printer`. A part that starts with `{` is translated only when it is a whole message
+/// with an exact entry. A part that starts with `[` is translated when it has an exact entry, such as
 /// `[x, y] (two numbers)`, or when it fits a template that starts with `[` and an index of digits,
 /// such as an effect's refusal ``[0] `id`: {why}``.
 pub fn message(lang: Lang, s: &str) -> String {
@@ -727,6 +729,7 @@ fn fill_message(lang: Lang, s: &str, found: Option<(&[String], catalog::Captures
             (Some((tool, _)), "_1") => (k, tool.clone()),
             (Some((_, kinds)), "_2") => (k, kinds.clone()),
             (_, "ident") => (k, v.to_string()),
+            (_, "to") if !quoted(v) => (k, exact_translation(lang.catalog(), v).unwrap_or_else(|| v.to_string())),
             _ => (k, nested(v)),
         })
         .collect();

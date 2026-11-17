@@ -506,3 +506,92 @@ fn arc_rotation_turns_it_and_must_be_a_number() {
         }
     }
 }
+
+/// The outer end of the spiral `id`.
+fn spiral_outer_end(s: &Session, id: NodeId) -> Point {
+    *path_points(s, id).last().unwrap()
+}
+
+/// A spiral dragged out turns about its center so that its outer end is at the pointer, in every
+/// direction and with a turned Constrain Angle too; its bounding box stays on the page, except
+/// along the turned x axis, where it is the click dialog's spiral with its turned box.
+#[test]
+fn a_dragged_spiral_turns_its_outer_end_to_the_pointer() {
+    let mut s = new_doc();
+    for deg in [0.0, 30.0] {
+        set_angle(&mut s, deg);
+        s.select_tool("spiral", ViewInfo::default()).unwrap();
+        for (x, y) in [(260.0, 200.0), (200.0, 260.0), (140.0, 200.0), (200.0, 140.0), (240.0, 170.0)] {
+            gesture(&mut s, Mods::default(), &[(Down, 200.0, 200.0), (Drag, 230.0, 230.0), (Drag, x, y), (Up, x, y)]);
+            let id = last_id(&s);
+            let end = spiral_outer_end(&s, id);
+            assert!(near(end, x, y), "{deg}°, to ({x}, {y}): {end:?}");
+            assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits(), "{deg}°, to ({x}, {y})");
+        }
+    }
+    let mut s = new_doc();
+    set_angle(&mut s, 90.0);
+    s.select_tool("spiral", ViewInfo::default()).unwrap();
+    gesture(&mut s, Mods::default(), &[(Down, 200.0, 200.0), (Drag, 230.0, 230.0), (Drag, 200.0, 150.0), (Up, 200.0, 150.0)]);
+    let id = last_id(&s);
+    assert_eq!(spiral_outer_end(&s, id), Point::new(200.0, 150.0));
+    assert_eq!(bbox_angle(&s, id), 90.0, "along the turned x axis");
+}
+
+/// A spiral placed by the click dialog starts along the turned x axis, about the click: at 90° its
+/// outer end is straight above the center, exactly, and its bounding box turns with it; at 0°, a
+/// whole turn and with a `rotation` given the dialog's params are unchanged.
+#[test]
+fn constrain_angle_turns_a_click_made_spiral() {
+    let mut s = new_doc();
+    let click = Point::new(200.0, 200.0);
+    let p = json!({"cx": 200.0, "cy": 200.0, "radius": 50.0, "decay": 80.0, "segments": 10, "clockwise": true});
+    assert_eq!(constrain_click(&s, "shape.spiral", p.clone(), click), p, "0°");
+    set_angle(&mut s, 360.0);
+    assert_eq!(constrain_click(&s, "shape.spiral", p.clone(), click), p, "a whole turn");
+    set_angle(&mut s, 90.0);
+    let mut given = p.clone();
+    given["rotation"] = json!(10.0);
+    assert_eq!(constrain_click(&s, "shape.spiral", given.clone(), click), given, "a given rotation");
+    let turned = constrain_click(&s, "shape.spiral", p.clone(), click);
+    assert_eq!(turned["rotation"], json!(-90.0));
+    let id = NodeId(s.execute("shape.spiral", &turned).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(spiral_outer_end(&s, id), Point::new(200.0, 150.0));
+    assert_eq!(bbox_angle(&s, id), 90.0);
+    set_angle(&mut s, 30.0);
+    let id = NodeId(s.execute("shape.spiral", &constrain_click(&s, "shape.spiral", p, click)).unwrap()["id"].as_u64().unwrap());
+    let r = 30f64.to_radians();
+    let end = spiral_outer_end(&s, id);
+    assert!(near(end, 200.0 + 50.0 * r.cos(), 200.0 - 50.0 * r.sin()), "{end:?}");
+    assert!(close(bbox_angle(&s, id), 30.0), "{}", bbox_angle(&s, id));
+}
+
+/// `shape.spiral` turns by an explicit `rotation` (clockwise) about its center; 0 and a whole
+/// turn draw it exactly as without one; a `rotation` that is not a number is refused and adds
+/// nothing.
+#[test]
+fn spiral_rotation_turns_it_and_must_be_a_number() {
+    let mut s = new_doc();
+    let base = json!({"cx": 100, "cy": 100, "radius": 40, "segments": 6});
+    let with = |r: Value| {
+        let mut p = base.clone();
+        p["rotation"] = r;
+        p
+    };
+    let plain = NodeId(s.execute("shape.spiral", &base).unwrap()["id"].as_u64().unwrap());
+    let plain = path_points(&s, plain);
+    assert_eq!(*plain.last().unwrap(), Point::new(140.0, 100.0), "upright: the outer end to the right");
+    for r in [json!(0), json!(360)] {
+        let id = NodeId(s.execute("shape.spiral", &with(r.clone())).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(path_points(&s, id), plain, "{r}");
+        assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits(), "{r}");
+    }
+    let id = NodeId(s.execute("shape.spiral", &with(json!(90))).unwrap()["id"].as_u64().unwrap());
+    assert_eq!(spiral_outer_end(&s, id), Point::new(100.0, 140.0), "a quarter turn clockwise");
+    assert_eq!(bbox_angle(&s, id).to_bits(), 0.0f64.to_bits(), "not the Constrain Angle's turn");
+    for bad in [json!("x"), Value::Null, json!(true)] {
+        let p = with(bad);
+        assert!(s.execute("shape.spiral", &p).is_err(), "{p}");
+        assert_eq!(last_id(&s), id, "nothing added for {p}");
+    }
+}
