@@ -3053,6 +3053,14 @@ whose order changed and the id of the object now on top in each. A move that cha
 overlap offers Bring to Front, Bring Forward, Send Backward and Send to Back, which run this command for the object
 nearest to the pointer.
 
+`layer.move` and `node.move` add objects to an Intertwine group: an object placed inside the group or beside one of its
+members becomes a member, drawn in its row's order, with no arranged areas; the other members keep theirs. An object
+placed in a group that is a member becomes part of that member and is drawn with it. An object that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused, as
+`object.intertwine.make` refuses it, in a group inside the group too, and nothing changes. A member moved out of the group (also by
+`object.arrange.sendToCurrentLayer`) drops its arranged areas. A group left with one member is replaced by that member, or
+becomes a plain group of that member when the group has an opacity, blending, appearance, opacity mask, lock or hidden
+state of its own. A group left with none is removed. Each of these happens in the move's undo step.
+
 ## Global Edit
 
 Select › Start Global Edit is `select.globalEdit {appearance?, size?, artboards?, includeCanvas?}`. With one path,
@@ -5370,8 +5378,9 @@ and `layerRows`, the rows highlighted in the panel.
   row highlighted, the trash button runs `edit.clear` on the selected guides and art, and guide rows dropped on the
   trash are deleted (`guide.remove {indexes}`).
 - **Dragging rows**: `layer.move {ids, target, place?: above|below|inside, copy?}` moves rows beside a row or into a
-  layer or group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves copies. Layers go
-  only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
+  layer, group or Intertwine group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves
+  copies. Layers go only in layers or at the top level and objects in layers, groups and Intertwine groups (see
+  Intertwine for the members an Intertwine group takes; an object placed beside a top-level layer goes
   inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
   form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
