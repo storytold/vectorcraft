@@ -607,3 +607,63 @@ fn pdf_1_3_takes_a_flattener_preset_in_advanced() {
     let saved = app.session.prefs.pdf_presets.iter().find(|p| p.name == "Old").unwrap();
     assert_eq!((saved.settings.compatibility, saved.settings.flattener_preset.as_str()), (Compatibility::Pdf13, "Low Resolution"));
 }
+
+#[test]
+fn save_pdf_flattens_transparent_document_without_modal_prompt() {
+    let (mut app, written, _) = app();
+    // Add transparent artwork to the document
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/transparent.pdf", "compatibility": "1.3"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, KIND);
+
+    // Clicking Save PDF goes ahead without stopping at a confirmation prompt
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "Save PDF closes without a modal prompt");
+    assert_eq!(written.borrow().len(), 1);
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
+}
+
+#[test]
+fn summary_warnings_include_flattener_resolutions_when_flattening_transparency() {
+    let (mut app, _, _) = app();
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
+    let p = params(app.ui.dialog.as_ref().unwrap());
+    let v = summary_of(&mut app, &egui::Context::default(), &p).unwrap();
+    let warnings = v["warnings"].as_array().unwrap();
+    assert!(
+        warnings.iter().any(|w| {
+            let s = w.as_str().unwrap();
+            s.contains("transparency is flattened into opaque art and images")
+                && s.contains("at 1200 ppi line art and text, 300 ppi gradients and meshes")
+        }),
+        "{warnings:?}"
+    );
+
+    // With a custom flattener override, the resolution in the warning reflects the options
+    set_field(&mut app, "flattener.lineArtPpi", json!(600));
+    set_field(&mut app, "flattener.gradientPpi", json!(200));
+    let p2 = params(app.ui.dialog.as_ref().unwrap());
+    let v2 = summary_of(&mut app, &egui::Context::default(), &p2).unwrap();
+    let warnings2 = v2["warnings"].as_array().unwrap();
+    assert!(
+        warnings2.iter().any(|w| {
+            let s = w.as_str().unwrap();
+            s.contains("at 600 ppi line art and text, 200 ppi gradients and meshes")
+        }),
+        "{warnings2:?}"
+    );
+}
+
+#[test]
+fn advanced_section_shows_raster_resolution_note() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.3"})).unwrap();
+    set_field(&mut app, "__section", json!("Advanced"));
+    set_field(&mut app, "flattener.lineArtPpi", json!(600));
+    set_field(&mut app, "flattener.gradientPpi", json!(200));
+    frame(&mut app);
+    assert!(app.ui.dialog.is_some());
+}
