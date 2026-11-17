@@ -171,6 +171,16 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // A polygon's Polygon Properties: its angle, radius or side length, Make Sides Equal.
     let (polygon_angle, polygon_radius, side) = (angle("polygonAngle")?, length("polygonRadius")?, length("sideLength")?);
     let equal = p.get("makeSidesEqual").and_then(Value::as_bool) == Some(true);
+    // A rectangle's Rectangle Angle and an ellipse's Ellipse Angle, as `polygonAngle` turns a polygon.
+    let (rectangle_angle, ellipse_angle) = (angle("rectangleAngle")?, angle("ellipseAngle")?);
+    // Whether a shape at `now` already stands at `a`: a turn the rounding of an earlier one left
+    // (89.999999999°, or 359.9999999999° against 0°) counts as no change.
+    let at_angle = |now: Option<f64>, a: f64| {
+        now.is_some_and(|n| {
+            let d = (n - a).rem_euclid(360.0);
+            d.min(360.0 - d) < 1e-9
+        })
+    };
     // An ellipse's pie becomes `pie_of(pie)`. An end of 0 is a full turn (Illustrator shows a whole
     // ellipse as 0° to 360°).
     let end_of = |a: f64| if a == 0.0 { 360.0 } else { a };
@@ -187,12 +197,15 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             Some(l @ LiveShape::Polygon { sides: now, .. })
                 if !(sides.is_none_or(|n| n.clamp(3, 1000) == u64::from(*now))
                     && (!equal || l.polygon_sides_equal())
-                    && polygon_angle.is_none_or(|a| l.polygon_angle() == Some(a))
+                    && polygon_angle.is_none_or(|a| at_angle(l.polygon_angle(), a))
                     && side.and_then(|len| l.polygon_radius_for_side(len)).or(polygon_radius).is_none_or(|r| l.polygon_radius() == Some(r))) =>
             {
                 return false;
             }
-            Some(LiveShape::Ellipse { pie, .. }) if pie_of(*pie) != *pie => return false,
+            Some(l @ LiveShape::Ellipse { pie, .. }) if pie_of(*pie) != *pie || ellipse_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => {
+                return false;
+            }
+            Some(l @ LiveShape::Rectangle { .. }) if rectangle_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => return false,
             _ => {}
         }
         if relative_radii.is_some_and(|on| live.as_deref().map(|l| l.radii_relative()) != Some(on)) {
@@ -236,9 +249,18 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 *path = l.to_path();
             }
-            if let Some(l @ LiveShape::Ellipse { .. }) = live.as_deref_mut()
-                && (pie_start.is_some() || pie_end.is_some() || invert)
+            if let Some(a) = rectangle_angle
+                && let Some(l @ LiveShape::Rectangle { .. }) = live.as_deref_mut()
             {
+                l.set_shape_angle(a);
+                *path = l.to_path();
+            }
+            if let Some(l @ LiveShape::Ellipse { .. }) = live.as_deref_mut()
+                && (pie_start.is_some() || pie_end.is_some() || invert || ellipse_angle.is_some())
+            {
+                if let Some(a) = ellipse_angle {
+                    l.set_shape_angle(a);
+                }
                 if let LiveShape::Ellipse { pie, .. } = l {
                     *pie = pie_of(*pie);
                 }
