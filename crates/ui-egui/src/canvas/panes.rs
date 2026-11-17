@@ -52,7 +52,9 @@ pub struct Panes {
 /// selection and screen mapping they were made for.
 struct Outlines {
     revision: u64,
-    doc: usize,
+    /// A weak reference to the document: while it exists, no other document can take the
+    /// allocation's address.
+    doc: std::sync::Weak<vectorcraft_doc::Document>,
     selection: Vec<vectorcraft_doc::NodeId>,
     affine: [f64; 6],
     shapes: Vec<egui::Shape>,
@@ -61,13 +63,8 @@ struct Outlines {
 impl Outlines {
     /// Whether these outlines show `st`'s selection through the screen mapping `affine`.
     fn shows(&self, st: &vectorcraft_engine::DocState, affine: &[f64; 6]) -> bool {
-        self.revision == st.revision && self.doc == doc_address(st) && self.affine == *affine && self.selection == st.selection.objects
+        self.revision == st.revision && self.doc.ptr_eq(&Arc::downgrade(&st.doc)) && self.affine == *affine && self.selection == st.selection.objects
     }
-}
-
-/// The address of `st`'s document, which tells two documents with the same revision apart.
-fn doc_address(st: &vectorcraft_engine::DocState) -> usize {
-    Arc::as_ptr(&st.doc) as usize
 }
 
 impl Panes {
@@ -514,7 +511,7 @@ fn selected_objects(panes: &mut Panes, slot: Slot, st: &vectorcraft_engine::DocS
     let affine = xf.affine().as_coeffs();
     if !panes.outlines.get(&slot).is_some_and(|o| o.shows(st, &affine)) {
         let shapes = outline_shapes(st, xf);
-        let kept = Outlines { revision: st.revision, doc: doc_address(st), selection: st.selection.objects.clone(), affine, shapes };
+        let kept = Outlines { revision: st.revision, doc: Arc::downgrade(&st.doc), selection: st.selection.objects.clone(), affine, shapes };
         panes.outlines.insert(slot, kept);
         panes.outlines_made += 1;
     }

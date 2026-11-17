@@ -587,6 +587,23 @@ fn in_first(app: &mut VectorcraftApp, cmd: &str, args: serde_json::Value) -> ser
 }
 
 #[test]
+fn kept_outlines_do_not_show_for_a_new_document_that_takes_a_freed_documents_address() {
+    let affine = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    let st = vectorcraft_engine::DocState::new(vectorcraft_doc::Document::new(400.0, 300.0), None);
+    let kept = Outlines { revision: st.revision, doc: Arc::downgrade(&st.doc), selection: vec![], affine, shapes: vec![] };
+    assert!(kept.shows(&st, &affine), "the outlines show the document they were made for");
+    let freed = Arc::as_ptr(&st.doc);
+    drop(st);
+    let mut reused = false;
+    for _ in 0..64 {
+        let other = vectorcraft_engine::DocState::new(vectorcraft_doc::Document::new(400.0, 300.0), None);
+        reused |= Arc::as_ptr(&other.doc) == freed;
+        assert!(!kept.shows(&other, &affine), "a different document with the same revision, selection and mapping is not the one shown");
+    }
+    assert!(!reused, "the weak reference keeps the freed document's address from being taken");
+}
+
+#[test]
 fn other_panes_keep_their_selected_outlines_until_the_document_selection_or_view_changes() {
     let mut app = app_with(2);
     app.run("document.activate", json!({"index": 1})).unwrap();
