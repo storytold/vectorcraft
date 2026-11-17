@@ -14,6 +14,7 @@ pub mod cmyk;
 pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
+pub mod decode;
 pub mod depth;
 pub mod dimension;
 pub mod graph;
@@ -28,6 +29,7 @@ pub mod shared;
 mod symbol_export_type;
 mod symbol_nine_slice;
 pub mod symbol_overrides;
+mod symbol_pixel_aligned;
 mod symbol_registration;
 pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
@@ -37,6 +39,7 @@ pub use symbol_nine_slice::{
     SymbolNineSlice, charge_symbol_art,
 };
 pub use symbol_overrides::SymbolOverride;
+pub use symbol_pixel_aligned::SYMBOL_PIXEL_ALIGNED;
 pub use symbol_registration::{SYMBOL_REGISTRATION, SymbolRegistration};
 pub mod links;
 pub mod live;
@@ -52,7 +55,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
+pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick, header_size};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod ppi;
@@ -94,8 +97,9 @@ pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
-    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES,
-    PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    ColumnDesign, ColumnType, DEFAULT_FILLED_LINE_WIDTH, FILLED_LINE_OUTLINE_WIDTH, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows,
+    LabelStyles, MAX_FILLED_LINE_WIDTH, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, MIN_FILLED_LINE_WIDTH, PiePosition, PieSort, SeriesPaint, TickLength,
+    ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
@@ -120,6 +124,7 @@ pub use style_libs::StyleLibrary;
 pub use text::FontHeightReference;
 pub use text::GlyphChoice;
 pub use text::GlyphForm;
+pub use text::PATH_LEAD_MAX;
 pub use text::WarichuAlign;
 pub use text::{
     AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
@@ -127,7 +132,7 @@ pub use text::{
     RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
     VerticalAlign, WrapShape,
 };
-pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
+pub use text::{CharClass, CompositeClass, CompositeFont, CompositePart, CompositeParts, CustomCharSet};
 pub use trace::TraceView;
 pub use variables::{DataSet, DataValue, Variable, VariableKind, Variables};
 pub use vectorcraft_color as color;

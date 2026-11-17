@@ -1,6 +1,7 @@
 //! Text Import Options: placing a text file asks how to read it (platform and character set) and
 //! what to clean up (line breaks inside paragraphs, blank lines between them, runs of spaces). OK
-//! places it as area type (`file.place` with `text`).
+//! places it as area type (`file.place` with `text`) and remembers the options: the next text file
+//! starts from them, and is placed with them when Show Import Options is off.
 //!
 //! Fields: `platform` (`windows` | `mac`), `characterSet` (`unicode` | `ansi`),
 //! `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces` (on or off), `spaces` (how many
@@ -27,9 +28,10 @@ pub fn is_text(p: &Value) -> bool {
     vectorcraft_engine::cmd::fileio::TEXT_EXTS.contains(&vectorcraft_engine::cmd::fileio::extension(name).as_str())
 }
 
-/// Ask how to place the text file `params` (`file.place` params) names.
+/// Ask how to place the text file `params` (`file.place` params) names, starting from the options
+/// confirmed last.
 pub fn open(app: &mut VectorcraftApp, params: &Value) -> Value {
-    let fields = json!({
+    let mut fields = json!({
         "platform": if cfg!(target_os = "macos") { "mac" } else { "windows" },
         "characterSet": "unicode",
         "removeLineReturns": false,
@@ -38,8 +40,29 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Value {
         "spaces": 3,
         "__params": params,
     });
+    let last = &app.ui.text_import;
+    for (k, wanted) in [("platform", ["windows", "mac"]), ("characterSet", ["unicode", "ansi"])] {
+        if let Some(v) = last.get(k).and_then(Value::as_str).filter(|v| wanted.contains(v)) {
+            fields[k] = json!(v);
+        }
+    }
+    for k in ["removeLineReturns", "removeParagraphReturns"] {
+        if let Some(v) = last.get(k).and_then(Value::as_bool) {
+            fields[k] = json!(v);
+        }
+    }
+    if let Some(n) = last.get("replaceSpaces").and_then(Value::as_u64).filter(|n| (2..=100).contains(n)) {
+        fields["replaceSpaces"] = json!(true);
+        fields["spaces"] = json!(n);
+    }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     json!({ "dialog": KIND })
+}
+
+/// The `text` options a text file is placed with when Show Import Options is off: those confirmed
+/// last, else `file.place`'s defaults.
+pub fn last_options(app: &VectorcraftApp) -> Value {
+    if app.ui.text_import.is_object() { app.ui.text_import.clone() } else { json!({}) }
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
@@ -87,10 +110,12 @@ fn options(d: &Dialog) -> Value {
     o
 }
 
-/// Places the file with the options; closes first, so an error shows in the status bar.
+/// Places the file with the options and remembers them for the next text file; closes first, so an
+/// error shows in the status bar.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut params = d.fields.get("__params").cloned().unwrap_or_else(|| json!({}));
     params["text"] = options(d);
+    app.ui.text_import = params["text"].clone();
     app.ui.dialog = None;
     crate::place::run_for_user(app, &params)
 }
@@ -139,5 +164,26 @@ mod tests {
         let NodeKind::Text(t) = &n.kind else { panic!("type") };
         assert_eq!(t.plain_text(), "one two\nthree", "one paragraph per block");
         assert_eq!(st.history.undo.len(), 1);
+    }
+
+    /// A text file dropped on a canvas is placed by the dialog's OK in the document it was dropped
+    /// on, even when another document became active meanwhile.
+    #[test]
+    fn a_dropped_text_files_ok_places_in_the_document_it_was_dropped_on() {
+        use crate::place::{DropAt, DropTarget};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        for _ in 0..2 {
+            app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        }
+        app.session.set_active(0);
+        let st = app.session.doc().unwrap();
+        let target = DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: true });
+        crate::place::drop_files(&mut app, vec![(target, ("notes.txt".into(), None, b"one".to_vec()))]);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+        app.session.set_active(1);
+        super::super::confirm(&mut app).unwrap();
+        let objects = |i: usize| app.session.documents()[i].doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>();
+        assert_eq!((objects(0), objects(1)), (1, 0), "placed in the document it was dropped on");
+        assert_eq!(app.session.active_index(), Some(0));
     }
 }

@@ -24,7 +24,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient",
             ["Window", "Gradient"],
             None,
-            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical, sweeps the stops once around the center, clockwise from the vector, with a seam where the last stop meets the first; diamond runs the stops from the center out to a square with a corner at the end of the vector; freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (how the colours between the stops mix: in display RGB, perceptually (OKLab) so the steps look even, or around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next, the hue angle falling with hue-clockwise (red, magenta, blue, cyan, green, yellow) and rising with hue-counterclockwise; two stops whose hues are less than half a color level apart keep that hue; a stop whose RGB numbers are less than half a color level apart is gray and takes the hue of the stop it mixes with, and black that stop's saturation too; these two methods are VectorCraft's own, and SVG and PDF exports draw their gradients as RGB images, CMYK and spot color stops included; SVG exports draw a Perceptual gradient as an image, and PDF exports do too unless it is linear, radial, conic or diamond, has spot color stops, every other stop is paper white or written in CMYK or gray (an export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile), it is not a dithered fill and its curve does not have too many stops: then PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading; freeform gradients mix their own way), spread?: pad|repeat|reflect (linear, radial, conic and diamond: what the gradient paints past the ends of its stops: pad carries the end colors on; repeat and reflect run the stops `repeats` times along the vector (around the circle, for a conic) and on past both ends, reflect mirroring every other run; an error on a freeform gradient), repeats?: 1..100 (a whole number: how many times repeat and reflect run the stops along the vector; VectorCraft's own limit; pad keeps it unused), stops?: [{offset 0..1, color? (needed without swatch; #rrggbbaa and #rgba are refused), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg counter-clockwise (0: the gradient runs left to right; radial, conic and diamond: the vector turns about the center), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep and is an error for the other kinds), reverse?: bool (the same ramp the other way round: the stops in reverse order, and a hue method turned the other way unless `method` is given too), dither?: bool (fills only: a linear, radial, conic or diamond gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient. On a path directly in a graph series, the graph also stores the gradient when it is on the topmost visible fill or stroke (docs/mcp.md); on a graph label's row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind, and on its characters their gradient without its placement, fitted to each label",
+            "{stroke?: bool (default: the targeted item's kind, else the active proxy), kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical, sweeps the stops once around the center, clockwise from the vector, with a seam where the last stop meets the first; diamond runs the stops from the center out to a square with a corner at the end of the vector; freeform places points on each object, coloured along the stops), mode?: points|lines (freeform: how the Gradient tool adds points), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (how the colours between the stops mix: in display RGB, perceptually (OKLab) so the steps look even, or around the hue wheel: hue, saturation and brightness each change evenly from one stop to the next, the hue angle falling with hue-clockwise (red, magenta, blue, cyan, green, yellow) and rising with hue-counterclockwise; two stops whose hues are less than half a color level apart keep that hue; a stop whose RGB numbers are less than half a color level apart is gray and takes the hue of the stop it mixes with, and black that stop's saturation too; these two methods are VectorCraft's own, and SVG and PDF exports draw their gradients as RGB images, CMYK and spot color stops included; SVG exports draw a Perceptual gradient as an image, and PDF exports do too unless it is linear, radial, conic or diamond, has spot color stops, every other stop is paper white or written in CMYK or gray (an export that converts colors to a CMYK destination profile writes RGB and Lab stops in CMYK, and so does a CMYK document unless the export converts colors to an RGB destination profile), it is not a dithered fill and its curve does not have too many stops: then PDF writes tints of one spot ink as a Separation shading in that ink, and spot inks mixed with other spot, CMYK or gray inks as a DeviceN shading; freeform gradients mix their own way), spread?: pad|repeat|reflect (linear, radial, conic and diamond: what the gradient paints past the ends of its stops: pad carries the end colors on; repeat and reflect run the stops `repeats` times along the vector (around the circle, for a conic) and on past both ends, reflect mirroring every other run; an error on a freeform gradient), repeats?: 1..100 (a whole number: how many times repeat and reflect run the stops along the vector; VectorCraft's own limit; pad keeps it unused), stops?: [{offset 0..1, color? (needed without swatch; #rrggbbaa and #rgba are refused), opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: colour swatch name (a global or spot colour or tint swatch links the stop, so swatch edits recolour it and a spot stop prints on its plate; a process colour just gives its colour), tint?: 0..100 (% of the linked swatch; default 100, or a tint swatch's own)}] (at least 2; a freeform gradient's points are recoloured along them), keepModel?: bool (as paint.setFill; a stop color the gradient already has keeps its model), angle?: deg counter-clockwise (0: the gradient runs left to right; radial, conic and diamond: the vector turns about the center), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep and is an error for the other kinds), reverse?: bool (the same ramp the other way round: the stops in reverse order, and a hue method turned the other way unless `method` is given too), dither?: bool (fills only: a linear, radial, conic or diamond gradient fill is drawn with fine noise that hides banding, and as pixels in SVG and PDF exports), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.setFill; without stroke, the kind of the row edited), ids?|id?, strokeMode?: within|along|across (strokes only: the gradient lies on the page and shows through the stroke, runs from the start of each subpath to its end, or runs from the stroke's left edge to its right all along it; with nothing selected, for the next object drawn; type characters' own strokes always paint within), target?: \"object\"|\"contents\"} edit the gradient in place (keeps its placement); solid/none paints become the default gradient. On a path directly in a graph series, the graph also stores the gradient when it is on the topmost visible fill or stroke (docs/mcp.md); on a graph label's row, or on a graph's axis line, tick mark or radar ring, the graph stores that object's topmost visible fill and stroke rows for every label or line of its kind (a line's gradient without its placement), and on its characters their gradient without its placement, fitted to each label",
             has_doc,
             edit_gradient
         ),
@@ -33,7 +33,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gradient Vector",
             [],
             None,
-            "{start?: [x,y], end?: [x,y] (document coordinates; both or neither: omitted, the vector stays), aspect?: % (radial, conic and diamond: the extent's height / width across the vector, a negative one mirroring a conic's sweep and an error for the other kinds; default: kept), focal?: [x,y] (document coordinates) | null (radial: the focal point, where the first stop sits, pulled inside the extent ellipse; null centres it; default: it keeps its place in the ellipse; an error on a conic or diamond gradient), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (alias: index; omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\", index?: appearance item index (as item)} set the gradient vector, aspect ratio and focal point (solid paints become the default gradient; type objects set it on their runs, in text space). On a path directly in a graph series, the graph also stores the gradient with its placement relative to the path's box when it is on the topmost visible fill or stroke, and every path of the series takes it at the same place on its own box (docs/mcp.md); on a graph label's row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind, and on its characters their gradient without the placement this command sets, fitted to each label",
+            "{start?: [x,y], end?: [x,y] (document coordinates; both or neither: omitted, the vector stays), aspect?: % (radial, conic and diamond: the extent's height / width across the vector, a negative one mirroring a conic's sweep and an error for the other kinds; default: kept), focal?: [x,y] (document coordinates) | null (radial: the focal point, where the first stop sits, pulled inside the extent ellipse; null centres it; default: it keeps its place in the ellipse; an error on a conic or diamond gradient), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (alias: index; omitted: the Appearance panel's active item when it is of the edited kind), aligned?: bool (as paint.editGradient), target?: \"object\"|\"contents\", index?: appearance item index (as item)} set the gradient vector, aspect ratio and focal point (solid paints become the default gradient; type objects set it on their runs, in text space). On a path directly in a graph series, the graph also stores the gradient with its placement relative to the path's box when it is on the topmost visible fill or stroke, and every path of the series takes it at the same place on its own box (docs/mcp.md); on a graph label's row, or on a graph's axis line, tick mark or radar ring, the graph stores that object's topmost visible fill and stroke rows for every label or line of its kind (a line's gradient without its placement), and on its characters their gradient without the placement this command sets, fitted to each label",
             has_doc,
             set_gradient_geom
         ),
@@ -531,6 +531,10 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["angle"], C)?;
     let item = item.of_kind(s, !stroke);
     let ids = item.targets(s, p)?;
+    // Objects were given or selected, even when all of them are graph design art left out below: the stroke mode is then
+    // not one for new art.
+    let selected = !ids.is_empty();
+    let ids = super::appearance::drop_design_art_rows(s, ids, item, !stroke, C)?;
     // How the gradient lies on a stroke (the panel's Stroke buttons).
     let mode = match str_param(p, "strokeMode") {
         None => None,
@@ -554,7 +558,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let for_default = match p.get("aspect").and_then(Value::as_f64) {
-        Some(a) if a < 0.0 && !ids.is_empty() && default_kind != Some(GradientKind::Conic) => {
+        Some(a) if a < 0.0 && selected && default_kind != Some(GradientKind::Conic) => {
             let mut q = p.clone();
             q["aspect"] = json!(-a);
             std::borrow::Cow::Owned(q)
@@ -564,7 +568,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     // A spread for selected gradients leaves a freeform default (which has no ends) as it is.
     let spreads = matches!(spread_param(p), Ok(Some(sp)) if !sp.is_pad());
     let for_default = match for_default {
-        q if spreads && !ids.is_empty() && default_kind == Some(GradientKind::Freeform) => {
+        q if spreads && selected && default_kind == Some(GradientKind::Freeform) => {
             let mut q = q.into_owned();
             if let Some(o) = q.as_object_mut() {
                 o.remove("spread");
@@ -575,8 +579,17 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let new_default = apply_gradient_edit_in_model(&default_paint, &with_stored_stops(&for_default, &default_paint, &stored), None, &|_| true, model)
         .map_err(|e| bad(C, e))?;
+    let of = super::appearance::reference_of(s, p, item, C)?;
+    // Only design art was given or selected: nothing changes, the defaults and the remembered paint included.
+    if selected && ids.is_empty() {
+        // An aligned `item` of the art alone is still checked: a row the art lacks, or that no other object has, is an error.
+        edit_items(s, &ids, item, of, C, "Gradient", !stroke, |_, _| Ok(()))?;
+        return Ok(json!({"ids": []}));
+    }
     let freeform = str_param(p, "kind").and_then(GradientKind::parse) == Some(GradientKind::Freeform);
-    edit_items(s, &ids, item, C, "Gradient", !stroke, |n, index| {
+    let shown_at = super::appearance::first_edited(s, item, of, &ids);
+    // The objects returned: with a design's art, those with a row equal to the art's.
+    let edited = edit_items(s, &ids, item, of, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {
@@ -605,16 +618,19 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     if let Some(m) = mode
-        && ids.is_empty()
+        && !selected
         && p.get("ids").is_none()
         && let Some(st) = s.new_art_stroke_mut()
     {
         st.gradient_mode = m;
     }
     // The last gradient is the one the first object now shows (the defaults' without objects).
-    let shown = match ids.first() {
-        Some(id) => s.doc()?.doc.node(*id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, C).ok().flatten())),
-        None => Some(new_default.clone()),
+    let shown = match shown_at {
+        Some((id, item)) => {
+            s.doc()?.doc.node(id).map(|n| super::paint::proxy_paint(n, stroke, item.resolve(&n.appearance, !stroke, C).ok().flatten()))
+        }
+        None if ids.is_empty() => Some(new_default.clone()),
+        None => None,
     };
     if let Some(shown) = shown {
         s.remember_paint(&shown);
@@ -624,7 +640,7 @@ fn edit_gradient(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         s.paint.fill = new_default;
     }
-    Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}))
+    Ok(json!({"ids": edited.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 
 /// A painted stroke on a type run without a weight gets 1 pt.
@@ -760,8 +776,11 @@ fn set_gradient_geom(s: &mut Session, p: &Value) -> Result<Value> {
     if targets.is_empty() {
         return Err(EngineError::Other("nothing selected".into()));
     }
+    let targets = super::appearance::drop_design_art_rows(s, targets, item, !stroke, C)?;
     let model = super::paint::new_color_model(s, &Value::Null);
-    edit_items(s, &targets, item, C, "Gradient", !stroke, |n, index| {
+    let of = super::appearance::reference_of(s, p, item, C)?;
+    // The objects returned: with a design's art, those with a row equal to the art's.
+    let targets = edit_items(s, &targets, item, of, C, "Gradient", !stroke, |n, index| {
         if index.is_none()
             && let NodeKind::Text(t) = &mut n.kind
         {

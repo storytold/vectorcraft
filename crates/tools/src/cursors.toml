@@ -75,6 +75,7 @@ group = "Selection"
 shown_when = [
     "The Group Selection tool: each click selects the next enclosing group.",
     "Direct Selection with Alt held (Alt makes it Group Selection for the next click).",
+    "Over a panel where a click or a drop adds something, such as the strip under the Gradient panel's ramp, where a click adds a stop, or the Layers panel's list while rows are Alt-dragged, where the drop adds copies (where the system has no copy cursor the app can show).",
 ]
 hotspot = "The arrow's tip."
 look = "ArrowHollow with a plus badge."
@@ -721,8 +722,12 @@ hotspot = "The tip."
 [[cursor]]
 id = "Knife"
 group = "Drawing and editing tools"
-shown_when = ["The Knife tool: a freehand drag cuts objects along the line."]
+shown_when = [
+    "The Knife tool: a freehand drag cuts objects along the line.",
+    "The Trim at Crossings Tool: a click removes the stretch of path under the pointer between its crossings, a drag removes every stretch its rectangle touches, and an Alt-drag removes every stretch its freehand line crosses.",
+]
 hotspot = "The blade's point."
+look = "A knife pointing down-left: a white blade with a straight back and a curved edge, and a black handle."
 
 [[cursor]]
 id = "Scissors"
@@ -747,7 +752,7 @@ hotspot = "The tip."
 [[cursor]]
 id = "Lasso"
 group = "Drawing and editing tools"
-shown_when = ["The Lasso tool: drag a loop round anchor points and segments to select them; Shift adds to the selection, Alt takes from it.", "The Enclosing Lasso tool: draw a loop to select fully enclosed objects; Shift adds, Alt subtracts."]
+shown_when = ["The Lasso tool: drag a loop round anchor points and segments to select them; Shift adds to the selection, Alt takes from it.", "The Enclosing Lasso tool: draw a loop to select fully enclosed objects; Shift adds, Alt subtracts.", "The Polygonal Lasso tool: click the corners of a loop around anchor points to select them; Shift or Alt at the first click adds or subtracts."]
 hotspot = "Where the loop is drawn from."
 
 [[cursor]]

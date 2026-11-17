@@ -51,6 +51,9 @@ pub struct CanvasCache {
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,
+    /// The meshes the tools' shared paths (a long Blob Brush or Eraser drag's settled outline) were
+    /// drawn with in the last frame. A frame that does not draw them drops them ([`canvas::show`]).
+    pub shared_paths: canvas::SharedPaths,
     /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds and
     /// Measure Type by Glyph Bounds).
     pub selection_box: Option<((u64, u64, vectorcraft_effects::preview::Measure), Option<vectorcraft_doc::OrientedBox>)>,
@@ -58,6 +61,9 @@ pub struct CanvasCache {
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// The Transform panel's Align to Pixel Grid state (on, off or mixed, and whether every
+    /// selected object can be aligned) for (document uid, revision).
+    pub pixel_aligned: Option<((u64, u64), Option<PixelAligned>)>,
     /// [`CacheKey::plugins`] by document uid, with the plug-in revision
     /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
     pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
@@ -104,6 +110,10 @@ pub type SliceCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_doc::SliceArea
 /// [`CanvasCache::live_paint_gaps`]: the gap lines of the selected Live Paint groups of (document
 /// uid, revision).
 pub type LivePaintGapsCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_tools::Overlay>>);
+
+/// [`CanvasCache::pixel_aligned`]: the selected objects' Align to Pixel Grid, on or off when they
+/// agree and `None` when they differ, with whether every one can be aligned.
+pub type PixelAligned = (Option<bool>, bool);
 
 /// [`CanvasCache::print_tiling`]: the print tiling of (document uid, revision).
 pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::TilingPage>>);
@@ -164,6 +174,17 @@ pub struct CacheKey {
     /// The display profile the frame is converted into ([`crate::display_profile::DisplayProfile::key`]),
     /// 0 for none.
     pub display: u64,
+    /// The paper under the art that translucent art is blended with before the conversion
+    /// ([`crate::display_profile::convert_over`]). None without a display profile, and in Outline.
+    pub backdrop: Option<std::sync::Arc<crate::display_profile::Backdrop>>,
+}
+
+impl CacheKey {
+    /// [`Self::backdrop`] with the zoom its grid's cells are measured at, as
+    /// [`crate::display_profile::convert_over`] takes it.
+    pub(crate) fn over(&self) -> Option<(&crate::display_profile::Backdrop, f64)> {
+        self.backdrop.as_deref().map(|b| (b, self.zoom))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]

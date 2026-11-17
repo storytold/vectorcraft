@@ -367,9 +367,14 @@ fn compound_shape_art_in(doc: Option<&Document>, n: &Node, hook: Option<OutlineH
 fn styled(src: &Node, path: PathData, outline: bool) -> Node {
     let mut appearance = Appearance { items: src.appearance.items.clone(), ..Default::default() };
     if outline {
-        let fill = src.appearance.fill_paint();
-        let paint = if fill.is_none() { src.appearance.stroke_paint() } else { fill };
-        appearance = Appearance { items: vec![AppearanceItem::Stroke(StrokeLayer::new(paint, 1.0))], ..Default::default() };
+        // The edges take the paint, opacity, blend mode and overprint of the top fill that paints,
+        // or of the top stroke that paints when no fill does.
+        let layer = top_painting_fill(&src.appearance).or_else(|| src.appearance.items.iter().rev().find(|i| paints(i)));
+        let mut stroke = StrokeLayer::new(layer.map_or(Paint::None, |i| i.paint().clone()), 1.0);
+        if let Some(i) = layer {
+            (stroke.opacity, stroke.blend, stroke.overprint) = (i.opacity(), i.blend(), i.overprint());
+        }
+        appearance = Appearance { items: vec![AppearanceItem::Stroke(stroke)], ..Default::default() };
     }
     let mut n = Node::path(src.id, path, appearance);
     n.opacity = src.opacity;
@@ -504,7 +509,8 @@ pub fn pathfinder_children(doc: Option<&Document>, group: &Node, hook: Option<Ou
                 .iter()
                 .filter_map(|l| {
                     let (path, rule) = geometry(l)?;
-                    Some((l.id, crate::trap::TrapSource { path, rule, fill: l.appearance.fill_paint() }))
+                    let fill = top_painting_fill(&l.appearance).map_or(Paint::None, |i| i.paint().clone());
+                    Some((l.id, crate::trap::TrapSource { path, rule, fill }))
                 })
                 .unzip();
             let made = crate::trap::traps(&srcs, &crate::trap::TrapOptions::from_params(&e.params));
@@ -580,7 +586,8 @@ fn mixing_rate(params: &Value) -> f64 {
 }
 
 fn fill_cmyk(src: &Node) -> Option<[f32; 4]> {
-    let paint = src.appearance.fill_paint();
+    // The top fill that paints: a hidden fill adds no color.
+    let paint = top_painting_fill(&src.appearance)?.paint().clone();
     let color = paint.color()?;
     let tinted = match paint {
         Paint::Solid { tint, .. } => color.tinted(tint),
@@ -635,6 +642,11 @@ fn soft_mix_styled(path: PathData, covering: &[usize], shapes: &[po::Shape], sou
 
 fn is_container(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
+}
+
+/// The top fill of `a` that paints: hidden fills and fills of no paint are skipped.
+fn top_painting_fill(a: &Appearance) -> Option<&AppearanceItem> {
+    a.items.iter().rev().find(|i| i.is_fill() && paints(i))
 }
 
 /// Does `item` paint anything?
@@ -742,45 +754,28 @@ fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], 
 }
 
 /// The members of a container that [`take_held_guides`] visits, by index, each with the same for
-/// its own members. A ruler guide's entry is empty; a container's is not.
+/// its own members. A ruler guide's entry is empty, whether its container is a layer or a group; a
+/// container's is not.
 #[derive(Default)]
 struct HeldGuides(Vec<(usize, HeldGuides)>);
 
-/// The members of `n` holding or leading to the ruler guides of sublayers, found by looking at each
-/// member at every depth once: the ruler guides (`is_guide`) of `n` when it is a layer, each
-/// sublayer holding one directly or in its sublayers, and each member of another kind with such a
-/// sublayer among its members or its groups' members. With them, whether `n` is a layer holding a
-/// ruler guide directly or in its sublayers. The other members of a layer holding none are not
-/// looked into, unless the layer is the one whose sublayers are gathered (`top`).
-fn held_guides(n: &Node, top: bool, is_guide: &impl Fn(&Node) -> bool) -> (bool, HeldGuides) {
-    let layer = n.is_layer();
-    let (mut holds, mut held, mut other) = (false, vec![], vec![]);
+/// The members of `n` that are ruler guides (`is_guide`), and those holding one at any depth, in
+/// order. Every member at every depth is looked at once: a sublayer or group with no guide of its
+/// own is still looked into, and a guide directly in a group counts as one in a layer does. A
+/// member holding no guide gets no entry.
+fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> HeldGuides {
+    let mut held = vec![];
     for (i, c) in n.children().into_iter().flatten().enumerate() {
         if is_guide(c) {
-            if layer {
-                holds = true;
-                held.push((i, HeldGuides::default()));
-            }
-        } else if c.is_layer() {
-            let (sub_holds, inner) = held_guides(c, false, is_guide);
-            if sub_holds {
-                holds = true;
-                held.push((i, inner));
-            }
-        } else {
-            other.push((i, c));
+            held.push((i, HeldGuides::default()));
+            continue;
+        }
+        let inner = held_guides(c, is_guide);
+        if !inner.0.is_empty() {
+            held.push((i, inner));
         }
     }
-    if !layer || holds || top {
-        for (i, c) in other {
-            let (_, inner) = held_guides(c, false, is_guide);
-            if !inner.0.is_empty() {
-                held.push((i, inner));
-            }
-        }
-        held.sort_unstable_by_key(|(i, _)| *i);
-    }
-    (layer && holds, HeldGuides(held))
+    HeldGuides(held)
 }
 
 /// Move the ruler guides of `n` and of its members that [`held_guides`] found (`held`) to `out`:
@@ -818,15 +813,14 @@ fn take_held_guides(n: &mut Node, held: HeldGuides, out: &mut Vec<Arc<Node>>, hi
     out.append(&mut deeper);
 }
 
-/// Move the ruler guides of the sublayers among the members of `n`, and among its groups'
-/// members, to `out`, in order: a sublayer's own guides, then those of its members. A guide taken
-/// from a hidden or locked sublayer, or from one inside such a sublayer or group, is hidden or
-/// locked itself. Each member at every depth is looked at once at most (`is_guide`), and only
-/// containers holding one are copied.
+/// Move the ruler guides of `n` and those held at any depth by the sublayers and groups among its
+/// members to `out`, in order: a container's own guides, then those of its members. A sublayer or
+/// group with no guide of its own still gives up those of its members. A guide taken from a hidden
+/// or locked sublayer or group, or from one inside such a container, is hidden or locked itself.
+/// Each member at every depth is looked at once (`is_guide`), and only containers holding a guide
+/// are copied.
 fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl Fn(&Node) -> bool) {
-    let (_, mut held) = held_guides(n, true, is_guide);
-    // The ruler guides of `n` itself stay where they are.
-    held.0.retain(|(_, inner)| !inner.0.is_empty());
+    let held = held_guides(n, is_guide);
     take_held_guides(n, held, out, false, false);
 }
 
@@ -838,10 +832,14 @@ fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl 
 /// transparency, opacity mask and raster effects stay. `None` when it has none of these. Live
 /// objects among the members are evaluated with the symbols of `doc` (see [`member_shapes`]), and
 /// a Pathfinder operation or compound shape takes the symbol instances among its members as their
-/// symbols' art from `doc`.
+/// symbols' art from `doc`. A Transform effect that makes copies with raster effects listed before
+/// it gives each copy those raster effects ([`copied_container`]).
 pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     if !is_container(n) {
         return None;
+    }
+    if let Some(t) = crate::reshape::copied_container_raster_at(n) {
+        return Some(copied_container(doc, n, t));
     }
     let pathfinder = has_pathfinder(n);
     let fx = crate::reshape::geometry_effects(n);
@@ -850,12 +848,15 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         return None;
     }
     let mut m = n.clone();
-    // A layer's ruler guides take no part: they go back above the evaluated art at the end.
-    let mut guides = m.children_mut().map(|ch| ch.split_off(Node::guide_run_start(ch))).unwrap_or_default();
-    // So do its sublayers' guides, which would otherwise go with the art the effects replace or
-    // copy: they stay on this layer, hidden and locked as their sublayers were.
-    if m.is_layer() && (pathfinder || !fx.is_empty()) {
+    // Its ruler guides take no part: they go back above the evaluated art at the end. With effects
+    // that replace or copy the art, so do its guides among the art and those in its sublayers and
+    // groups, which would otherwise go with that art: they stay on `n`, in order, hidden and
+    // locked as their containers were.
+    let mut guides = vec![];
+    if pathfinder || !fx.is_empty() {
         take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    } else if let Some(ch) = m.children_mut() {
+        guides = ch.split_off(Node::guide_run_start(ch));
     }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
@@ -868,7 +869,11 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     }
     if !fx.is_empty() {
         m = crate::reshape::outlined_members(doc, &m);
-        members_as_drawn(doc, &mut m);
+        {
+            // The members' raster effects then follow the group's own Transform effects as well.
+            let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
+            members_as_drawn(doc, &mut m);
+        }
         let carry = crate::reshape::reshape_leaves_carrying(&mut m, &fx, &n.appearance.effects, doc);
         // The group's own fills and strokes paint the members as a whole: their gradients follow
         // the effects as the members' do.
@@ -898,6 +903,63 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
         ch.extend(guides);
     }
     Some(m)
+}
+
+/// `n`, a group or layer whose own effects split at `t` ([`crate::reshape::copied_container_raster_at`]),
+/// as plain art: the effects before the Transform effect at `t` evaluated on its members as one
+/// piece ([`evaluate_container`]), with the raster effects among them, and that piece copied by the
+/// Transform effect, each copy a group of its own carrying those raster effects moved, turned,
+/// reflected and scaled with it ([`crate::reshape::copied_container_art`]). The art keeps the kind,
+/// transparency and opacity mask of `n` and the raster effects from `t` on, which paint once around
+/// all the copies; a clip group's or clipping layer's copies each clip, and the art itself does not.
+/// Its ruler guides, those in its sublayers and groups included, go once above the copies, hidden
+/// and locked as their containers were.
+fn copied_container(doc: Option<&Document>, n: &Node, t: usize) -> Node {
+    let mut m = n.clone();
+    let mut guides = vec![];
+    take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
+    let mut source = m.clone();
+    source.appearance.effects = n.appearance.effects.get(..t).unwrap_or_default().to_vec();
+    // With no geometry effect before the Transform effect, `evaluate_container` leaves the members'
+    // own effects live (it only paints the group's own fills and strokes): the members are drawn
+    // first, so their effects apply before the copies are made.
+    if crate::reshape::geometry_effects(&source).is_empty() {
+        source = crate::reshape::outlined_members(doc, &source);
+        // The members' raster effects follow the group's own Transform effects as well.
+        let _later = crate::raster::LaterGroups::enter(&n.appearance.effects);
+        members_as_drawn(doc, &mut source);
+    }
+    let mut piece = evaluate_container(doc, &source).unwrap_or_else(|| {
+        let mut p = source.clone();
+        p.appearance.effects = crate::raster::without_geometry(&p.appearance.effects);
+        p
+    });
+    // The piece is one copy: the transparency, opacity mask and guides stay on the art.
+    piece.name = None;
+    piece.visible = true;
+    piece.locked = false;
+    (piece.opacity, piece.blend, piece.isolate) = (1.0, Default::default(), false);
+    piece.extras_mut().mask = None;
+    // The copies are made about the piece's bounds, measured first: a layer leaves its hidden
+    // members out of them, and a group does not.
+    let bounds = piece.geometric_bounds();
+    // A layer's copies are groups in it.
+    if let NodeKind::Layer { children, clip, .. } = &mut piece.kind {
+        piece.kind = NodeKind::Group { children: std::mem::take(children), clip: *clip };
+    }
+    let (art, effects) = crate::reshape::copied_container_art(doc, n, t, piece, bounds);
+    let copies = art.children().cloned().unwrap_or_default();
+    if let NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } = &mut m.kind {
+        *children = copies;
+        *clip = false;
+    }
+    m.appearance.items.clear();
+    m.appearance.contents_index = None;
+    m.appearance.effects = effects;
+    if let Some(ch) = m.children_mut() {
+        ch.extend(guides);
+    }
+    m
 }
 
 /// Replace each visible member of `n` with geometry or Pathfinder effects of its own, at every

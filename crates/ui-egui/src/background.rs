@@ -56,6 +56,10 @@ pub struct Job {
     pub progress: Option<Arc<Progress>>,
     /// Continue in Background: the progress dialog no longer shows this job.
     pub hidden: bool,
+    /// [`crate::state::UiState::status_sets`] before the job set its status line.
+    sets: u64,
+    /// The status line the job set ("<label>…"); empty when it set none.
+    line: String,
     then: Then,
 }
 
@@ -167,13 +171,13 @@ pub fn run_with_progress(
         if let Some(tx) = app.background.worker() {
             match tx.send(Task { id, work, write, scope: ScopeHandle::capture() }) {
                 Ok(()) => {
+                    let (sets, status) = (app.ui.status_sets, if label.is_empty() { String::new() } else { format!("{label}…") });
                     let bg = &mut app.background;
                     bg.next_id += 1;
-                    bg.jobs.push(Job { id, label: label.clone(), doc, progress, hidden: false, then: Box::new(then) });
+                    bg.jobs.push(Job { id, label: label.clone(), doc, progress, hidden: false, sets, line: status.clone(), then: Box::new(then) });
                     if label.is_empty() {
                         return Ok(json!({ "background": true }));
                     }
-                    let status = format!("{label}…");
                     app.status(status.clone());
                     return Ok(json!({ "background": true, "status": status }));
                 }
@@ -250,9 +254,27 @@ fn finish(app: &mut VectorcraftApp, (id, r): Done) {
     apply(app, job, r);
 }
 
-/// Hand a job its result; a failure goes to the status bar (the call that started it returned).
+/// Does the status bar still show what a job left there? No line has been set since `sets`
+/// ([`crate::state::UiState::status_sets`] when the job started), or the one line set since is
+/// the job's own `line` ("<label>…"; empty for a job that set none) and it is still shown. A job's
+/// result goes to the status bar only then: a line set since (by another command or another job)
+/// stays, also when it has the same text as an earlier one.
+pub(crate) fn status_unchanged(app: &VectorcraftApp, sets: u64, line: &str) -> bool {
+    let now = app.ui.status_sets;
+    now == sets || (!line.is_empty() && now == sets.wrapping_add(1) && app.ui.status == line)
+}
+
+/// Hand a job its result; a failure goes to the status bar (the call that started it returned)
+/// while the status bar still shows the job's own line ([`status_unchanged`]) and the job's
+/// callback set no line of its own.
 fn apply(app: &mut VectorcraftApp, job: Job, r: Result<Value, String>) {
-    if let Err(e) = (job.then)(app, r) {
-        app.status(format!("{} failed: {e}", job.label));
+    let Job { label, sets, line, then, .. } = job;
+    let shown = status_unchanged(app, sets, &line);
+    let before = app.ui.status_sets;
+    if let Err(e) = then(app, r)
+        && shown
+        && app.ui.status_sets == before
+    {
+        app.status(format!("{label} failed: {e}"));
     }
 }

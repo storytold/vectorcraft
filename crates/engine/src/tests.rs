@@ -24,6 +24,7 @@ mod build;
 mod cancel;
 mod caret_kerning;
 mod charstroke;
+mod circle_through;
 pub(super) mod clip;
 mod clipboard;
 mod clipflavours;
@@ -86,6 +87,7 @@ mod inline;
 mod interactivity;
 mod intertwine;
 mod journal;
+mod keyanchor;
 mod keyguide;
 mod knockout;
 mod labspots;
@@ -121,6 +123,7 @@ mod panelcmds;
 mod paragraphs;
 mod params;
 mod path_menu_enabled;
+mod pathfinder_clip;
 mod pathops;
 mod pathtype;
 mod pattern;
@@ -195,6 +198,7 @@ mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbollib;
+mod tangent_line;
 mod targeting;
 mod textcombos;
 mod textedit;
@@ -1293,7 +1297,12 @@ fn a_transform_that_moves_nothing_records_no_undo_step() {
     for (id, p) in calls {
         assert_eq!(s.execute(id, &p).unwrap(), json!({"ids": [a.0]}), "{id} {p}");
         assert_eq!(history(&s), before, "{id} {p}");
-        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
+        // The journal adds the frame a scale acted in, so a replay acts in the same one.
+        let mut recorded = p;
+        if id == "object.scale" {
+            recorded["basis"] = json!("box");
+        }
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded));
     }
     assert_eq!(
         s.doc().unwrap().last_transform,
@@ -1539,6 +1548,7 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
         ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
+        ("shape.flare", with(&flare, "ringSeed", json!("7")), "ringSeed"),
         ("shape.spiral", with(&spiral, "decay", json!("80")), "decay"),
         ("shape.spiral", with(&spiral, "segments", json!("10")), "segments"),
     ]
@@ -2126,7 +2136,7 @@ mod pen_interactions {
                 gesture(&mut s, &[(400.0, 500.0)], Mods::default(), v);
                 let extended = path(&s, id);
                 assert_eq!(extended.anchor_count(), 3);
-                assert_eq!(extended.subpaths[0].anchors[..2], reversed.subpaths[0].anchors);
+                assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], reversed.subpaths[0].anchors);
                 assert!(!s.in_interaction() && !s.tool_busy());
                 assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
             }
@@ -2161,7 +2171,7 @@ mod pen_interactions {
         gesture(&mut s, &[(300.0, 400.0)], Mods::default(), v);
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], converted.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], converted.subpaths[0].anchors);
         assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
     }
 
@@ -2220,7 +2230,7 @@ mod pen_interactions {
         }
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], before.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], before.subpaths[0].anchors);
         let a = extended.subpaths[0].anchors[2];
         assert_eq!(a.p, Point::new(320.0, 450.0));
         assert_eq!(a.h_in, Point::new(290.0, 430.0), "Alt freezes the incoming handle and Space translates it");
@@ -3263,6 +3273,149 @@ fn flare_rotation_turns_only_the_rays() {
     }
 }
 
+/// `shape.flare`'s `ringSeed` places the rings along the path anew and keeps their count and
+/// sizes and the other parts; the same `ringSeed` draws the same flare, neighboring ones differ,
+/// and a seed that is not a whole number of at least 0 (for `ringSeed`, below 2^53) is refused.
+#[test]
+fn flare_ring_seed_moves_only_the_rings() {
+    let mut s = session();
+    let parts = |s: &mut Session, ring_seed: Option<u64>| {
+        let mut p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 6, "x2": 400, "y2": 300, "seed": 3});
+        if let Some(r) = ring_seed {
+            p["ringSeed"] = json!(r);
+        }
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().map(|c| (c.name.clone(), c.geometric_bounds().unwrap())).collect::<Vec<_>>()
+    };
+    let plain = parts(&mut s, None);
+    let placed = parts(&mut s, Some(11));
+    assert_eq!(placed, parts(&mut s, Some(11)));
+    assert_eq!(plain.len(), placed.len());
+    let mut moved = 0;
+    for ((name, a), (_, b)) in plain.iter().zip(&placed) {
+        if name.as_deref() == Some("Ring") {
+            assert!((a.width() - b.width()).abs() < 1e-9, "a ring keeps its size");
+            moved += usize::from(a.center().distance(b.center()) > 1e-6);
+        } else {
+            assert_eq!(a, b, "{name:?}");
+        }
+    }
+    assert_eq!(moved, 6, "every ring moves");
+    assert_ne!(parts(&mut s, Some(0)), parts(&mut s, Some(1)), "neighboring seeds place the rings differently");
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in [json!(-1), json!(2.5), json!(true), json!(1u64 << 53)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "ringSeed": bad})).is_err(), "{bad}");
+    }
+    for bad in [json!(-1), json!(2.5), json!(true)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "seed": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+/// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
+#[test]
+fn ellipse_with_four_anchors_is_the_live_ellipse() {
+    let mut s = session();
+    let draw = |s: &mut Session, extra: Option<u64>| {
+        let mut p = json!({"x": 40, "y": 30, "width": 120, "height": 80});
+        if let Some(n) = extra {
+            p["anchors"] = json!(n);
+        }
+        let id = NodeId(s.execute("shape.ellipse", &p).unwrap()["id"].as_u64().unwrap());
+        s.doc().unwrap().doc.node(id).unwrap().clone()
+    };
+    let (plain, four) = (draw(&mut s, None), draw(&mut s, Some(4)));
+    for n in [&plain, &four] {
+        assert!(matches!(n.live_shape(), Some(vectorcraft_doc::LiveShape::Ellipse { .. })), "{:?}", n.live_shape());
+        assert_eq!(n.path_data().unwrap().anchor_count(), 4);
+    }
+    assert_eq!(plain.path_data(), four.path_data());
+    assert_eq!(plain.live_shape(), four.live_shape());
+}
+
+/// Any other count draws a closed plain path of that many smooth anchors on the ellipse, its
+/// bounds the typed size, as one undo step.
+#[test]
+fn ellipse_anchors_draw_that_many_anchors_on_the_ellipse() {
+    let mut s = session();
+    let (x, y, w, h) = (40.0, 30.0, 120.0, 80.0);
+    let (c, rx, ry) = (Point::new(x + w / 2.0, y + h / 2.0), w / 2.0, h / 2.0);
+    for n in [2u64, 3, 5, 6, 8] {
+        let undo = s.doc().unwrap().history.undo.len();
+        let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": n})).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{n}: one undo step");
+        let node = s.doc().unwrap().doc.node(id).unwrap();
+        assert!(node.live_shape().is_none(), "{n}: a plain path");
+        let path = node.path_data().unwrap();
+        assert_eq!(path.subpaths.len(), 1);
+        let sp = &path.subpaths[0];
+        assert!(sp.closed, "{n}");
+        assert_eq!(sp.anchors.len() as u64, n);
+        for a in &sp.anchors {
+            assert_eq!(a.kind, vectorcraft_geom::AnchorKind::Smooth, "{n}");
+            let on = ((a.p.x - c.x) / rx).powi(2) + ((a.p.y - c.y) / ry).powi(2);
+            assert!((on - 1.0).abs() < 0.01, "{n}: {:?} is off the ellipse ({on})", a.p);
+        }
+        let b = path.bounds().unwrap();
+        for (got, want) in [(b.x0, x), (b.y0, y), (b.x1, x + w), (b.y1, y + h)] {
+            assert!((got - want).abs() < 1e-6, "{n}: bounds {b:?}");
+        }
+    }
+    // The first anchor is the left one, and they run clockwise on screen, as the live ellipse's do.
+    let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": 8})).unwrap()["id"].as_u64().unwrap());
+    let sp = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+    assert!(sp.anchors[0].p.distance(Point::new(x, c.y)) < 1e-6, "{:?}", sp.anchors[0].p);
+    assert!(sp.anchors[2].p.distance(Point::new(c.x, y)) < 1e-6, "{:?}", sp.anchors[2].p);
+}
+
+/// An `anchors` that is not a whole number from 2 to 1000 is refused, and nothing is drawn.
+#[test]
+fn ellipse_refuses_a_bad_anchor_count() {
+    let mut s = session();
+    let undo = s.doc().unwrap().history.undo.len();
+    let range = |got: &str| format!("`anchors` must be a whole number between 2 and 1000 (got {got})");
+    for (bad, want) in [
+        (json!(0), range("0")),
+        (json!(1), range("1")),
+        (json!(2.5), range("2.5")),
+        (json!(-3), range("-3")),
+        (json!(1001), range("1001")),
+        (json!("x"), "`anchors` must be a number, not \"x\"".to_string()),
+        (json!("6"), "`anchors` must be a number, not \"6\"".to_string()),
+        (json!(true), "`anchors` must be a number, not true".to_string()),
+    ] {
+        let e = s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50, "anchors": bad})).unwrap_err().to_string();
+        assert!(e.contains(&want), "{bad}: {e}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    assert!(s.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+}
+
+/// Through the session, Ctrl/Cmd in the Flare tool's center drag keeps the center's size while the
+/// drag sizes the halo, and the flare drawn keeps both.
+#[test]
+fn flare_tool_ctrl_keeps_the_center_while_the_drag_sizes_the_halo() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    s.select_tool("flare", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 240.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 500.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 500.0, 400.0), v).unwrap();
+    let st = s.doc().unwrap();
+    let g = st.doc.node(st.selection.objects[0]).unwrap();
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("flare is a group") };
+    let width = |name: &str| children.iter().find(|c| c.name.as_deref() == Some(name)).unwrap().geometric_bounds().unwrap().width();
+    // The center as the key found it (80); the halo as a 160-point center with 20 % growth would
+    // have it: 80 × 1.2 × 1.6 = 153.6 radius.
+    assert!((width("Center") - 80.0).abs() < 0.5, "{}", width("Center"));
+    assert!((width("Halo") - 2.0 * 153.6).abs() < 0.5, "{}", width("Halo"));
+}
+
 #[test]
 fn reshape_moves_the_grabbed_point_and_its_neighbourhood() {
     let mut s = session();
@@ -3310,7 +3463,7 @@ fn reshape_open_path(s: &mut Session, anchors: Value) -> NodeId {
 
 /// The anchors of the path's first subpath.
 fn reshape_anchors(s: &Session, id: NodeId) -> Vec<vectorcraft_geom::Anchor> {
-    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
 }
 
 /// The share of the drag an anchor takes at `u` of the way from an end to the grabbed point.
