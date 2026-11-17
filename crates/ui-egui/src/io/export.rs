@@ -15,7 +15,7 @@ pub(crate) const EXPORT_SELECTION: &str = "exportSelection";
 
 /// `params` without [`EXPORT_SELECTION`], and whether it asked for the selection. A selection
 /// export writes one page, the selection's crop, so the artboard choices are left out too.
-fn take_selection(params: &Value) -> Result<(bool, Value), String> {
+pub(crate) fn take_selection(params: &Value) -> Result<(bool, Value), String> {
     let mut p = params.clone();
     let Some(o) = p.as_object_mut() else { return Ok((false, p)) };
     match o.remove(EXPORT_SELECTION) {

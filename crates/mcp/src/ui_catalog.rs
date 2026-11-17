@@ -143,6 +143,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
+    (
+        "file.export.svg.browser",
+        "Show in Browser",
+        "",
+        "{svg?: {…SVG options}, exportSelection?} SVG Options' Show in Browser: write the SVG of one page (with exportSelection the selection's crop, else the first artboard the options choose) and its linked images to a new temporary folder and open it in the default browser (desktop; refused for control and MCP requests) → {path, warnings}",
+    ),
     ("file.export.png", "Export As PNG…", "", "{path?, …document.export options}; no path: pick the file, then PNG Options"),
     (
         "file.exportForScreens",

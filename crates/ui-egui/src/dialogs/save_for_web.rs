@@ -237,29 +237,41 @@ pub(crate) fn browser_preview(app: &mut VectorcraftApp, p: &Value) -> Result<Val
 #[cfg(not(target_arch = "wasm32"))]
 const PREVIEW_KEEP: std::time::Duration = std::time::Duration::from_secs(3600);
 
+/// The folder Save for Web's browser previews go to inside the system's temporary folder.
+const ROOT: &str = "VectorCraft Save for Web";
+
 /// The folder a browser preview goes to: a new one for each preview, in the system's temporary
-/// folder ([`preview_folder_in`]).
-#[cfg(not(target_arch = "wasm32"))]
+/// folder ([`temp_folder_under`]).
 fn temp_folder() -> Result<String, String> {
-    preview_folder_in(&std::env::temp_dir(), PREVIEW_KEEP)
+    temp_folder_under(ROOT)
 }
 
-/// The name of a folder that a preview made in the temporary folder, beside a `VectorCraft Save
-/// for Web` it couldn't use, before the process id and the count.
+/// A new folder for a browser preview in the system's temporary folder, under the folder named
+/// `root` ([`preview_folder_under`]).
 #[cfg(not(target_arch = "wasm32"))]
-const BESIDE: &str = "VectorCraft Save for Web ";
+pub(super) fn temp_folder_under(root: &str) -> Result<String, String> {
+    preview_folder_under(&std::env::temp_dir(), root, PREVIEW_KEEP)
+}
 
-/// A new folder for a browser preview in the temporary folder `tmp`: inside `VectorCraft Save for
-/// Web` ([`preview_folder`]), or, when that folder can't be used, directly in `tmp`, named
-/// [`BESIDE`] followed by the process id and a count. The log says why the shared folder wasn't
-/// used. Each preview first removes the folders of that name in `tmp` last changed `keep` or longer
-/// ago ([`remove_old`]).
-#[cfg(not(target_arch = "wasm32"))]
+/// A new folder for a Save for Web browser preview in the temporary folder `tmp`
+/// ([`preview_folder_under`] with `VectorCraft Save for Web`).
+#[cfg(all(test, not(target_arch = "wasm32")))]
 pub(super) fn preview_folder_in(tmp: &std::path::Path, keep: std::time::Duration) -> Result<String, String> {
-    remove_old(tmp, BESIDE, keep);
-    preview_folder(&tmp.join("VectorCraft Save for Web"), keep).or_else(|e| {
-        log::warn!("vectorcraft: Preview in Browser can't use {e}, so the preview goes to a new folder of its own");
-        new_folder(tmp, BESIDE)
+    preview_folder_under(tmp, ROOT, keep)
+}
+
+/// A new folder for a browser preview in the temporary folder `tmp`: inside the folder named `root`
+/// ([`preview_folder`]), or, when that folder can't be used, directly in `tmp`, named `root`, a
+/// space, the process id and a count. The log says why the shared folder wasn't used. Each preview
+/// first removes the folders of that name in `tmp` last changed `keep` or longer ago
+/// ([`remove_old`]). Previews under one `root` never remove the folders of another.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn preview_folder_under(tmp: &std::path::Path, root: &str, keep: std::time::Duration) -> Result<String, String> {
+    let beside = format!("{root} ");
+    remove_old(tmp, &beside, keep);
+    preview_folder(&tmp.join(root), keep).or_else(|e| {
+        log::warn!("vectorcraft: a browser preview can't use {e}, so the preview goes to a new folder of its own");
+        new_folder(tmp, &beside)
     })
 }
 
@@ -381,7 +393,7 @@ fn is_preview_name(name: &std::ffi::OsStr, prefix: &str) -> bool {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn temp_folder() -> Result<String, String> {
+pub(super) fn temp_folder_under(_: &str) -> Result<String, String> {
     Err("no file system here".into())
 }
 
