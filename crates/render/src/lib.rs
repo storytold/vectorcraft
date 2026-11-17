@@ -285,7 +285,7 @@ mod renderer;
 mod text_geom;
 mod threads;
 
-pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds, rasterize_stage};
+pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds, painted_bounds_with, rasterize_stage};
 pub use frame::FrameStats;
 use frame::{
     ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,
