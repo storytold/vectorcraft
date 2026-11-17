@@ -34,16 +34,16 @@ use vectorcraft_doc::{AppearanceItem, Node, NodeId, NodeKind};
 use vectorcraft_geom::{ParamCurve, PathData, Point, SubPath};
 
 /// The plugin that writes blends.
-pub(super) const PLUGIN: &str = "Adobe Path Blends"; // brand-ok: the plugin name the files use
+pub(crate) const PLUGIN: &str = "Adobe Path Blends"; // brand-ok: the plugin name the files use
 /// The most bytes of a blend's record read.
 pub(super) const MAX_RECORD: usize = 4096;
 /// The most keys read from one blend.
-const MAX_KEYS: usize = 64;
+pub(crate) const MAX_KEYS: usize = 64;
 /// The most steps between two keys (Blend Options' limit).
 const MAX_STEPS: usize = 1000;
 /// The most objects (keys and steps) one blend may lay out to be read live; more keep their
 /// drawn steps.
-pub(super) const MAX_BLEND_OBJECTS: usize = 5_000;
+pub(crate) const MAX_BLEND_OBJECTS: usize = 5_000;
 /// How far (pt) a step laid out here may be from where the file draws it.
 const PLACE_TOLERANCE: f64 = 0.5;
 /// How far a step's colour (each channel, 0 to 1) may be from the drawn one.
@@ -225,6 +225,38 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
         .or_else(|| as_drawn.iter().copied().min_by(|a, b| a.0.total_cmp(&b.0)))
         .or_else(|| fits.iter().min_by(|a, b| a.0.total_cmp(&b.0)))
         .map(|(_, spec, _)| NodeKind::Blend { children: keys, spec: Box::new(spec.clone()) })
+}
+
+/// What the reader makes of a blend written as the key objects `keys`, named by `ids` in their
+/// order, the spine `spine` (`None`: no spine part), the record `bytes` and the drawn steps `drawn`:
+/// the live blend's settings, or `None` where it keeps the drawn steps. Takes from `budget` as
+/// [`live_blend`] does.
+pub(crate) fn blend_reads(
+    keys: &[Arc<Node>],
+    ids: &[String],
+    spine: Option<&PathData>,
+    bytes: &[u8],
+    drawn: &[Node],
+    budget: &mut usize,
+) -> Option<BlendSpec> {
+    let record = record(bytes)?;
+    let mut roles = Roles::new();
+    let mut parts: Vec<Arc<Node>> = Vec::with_capacity(keys.len() + 1);
+    for (k, id) in keys.iter().zip(ids) {
+        roles.insert(k.id, ("K".to_string(), Some(id.clone())));
+        parts.push(k.clone());
+    }
+    if let Some(s) = spine {
+        let id = NodeId(u64::MAX);
+        roles.insert(id, ("S".to_string(), None));
+        parts.push(Arc::new(Node::path(id, s.clone(), Default::default())));
+    }
+    let edit = Node::new(NodeId(u64::MAX - 1), NodeKind::Group { children: parts, clip: false });
+    let drawn = Node::new(NodeId(u64::MAX - 2), NodeKind::Group { children: drawn.iter().cloned().map(Arc::new).collect(), clip: false });
+    match live_blend(&edit, &drawn, &record, &roles, budget)? {
+        NodeKind::Blend { spec, .. } => Some(*spec),
+        _ => None,
+    }
 }
 
 /// The anchor of `spine`'s first subpath each key's centre sits on (within a point), each a

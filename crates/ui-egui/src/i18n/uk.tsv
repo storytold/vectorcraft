@@ -199,6 +199,8 @@ antiAlias	Sharp	Різке
 	Crisp	Чітке
 	Strong	Сильне
 	Anti-aliasing:	Згладжування:
+	Art Optimized	Оптимізовано для графіки
+	Type Optimized	Оптимізовано для тексту
 	Any Kind	Будь-який тип
 	Font Technology	Технологія шрифту
 font-technology	Variable	Варіативні
@@ -687,6 +689,9 @@ font-technology	Variable	Варіативні
 	Create from Selection	Створити із виділення
 	Create From:	Створити з:
 	Create Gradient Mesh…	Створити градієнтну сітку…
+	Flat	Плаский
+	To Center	До центру
+	To Edge	До краю
 	Create Graph	Створити діаграму
 	Create New Layer	Створити новий шар
 	Create New Sublayer	Створити новий підшар

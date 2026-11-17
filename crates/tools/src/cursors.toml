@@ -75,6 +75,7 @@ group = "Selection"
 shown_when = [
     "The Group Selection tool: each click selects the next enclosing group.",
     "Direct Selection with Alt held (Alt makes it Group Selection for the next click).",
+    "Over a panel where a click or a drop adds something, such as the strip under the Gradient panel's ramp, where a click adds a stop, or the Layers panel's list while rows are Alt-dragged, where the drop adds copies (where the system has no copy cursor the app can show).",
 ]
 hotspot = "The arrow's tip."
 look = "ArrowHollow with a plus badge."

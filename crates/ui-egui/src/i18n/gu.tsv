@@ -236,6 +236,8 @@
 	Anti-aliased Artwork	એન્ટિ-એલિયાસ્ડ આર્ટવર્ક
 	Anti-aliasing Method	એન્ટિ-એલિયાસિંગ પદ્ધતિ
 	Anti-aliasing:	એન્ટિ-એલિયાસિંગ:
+	Art Optimized	આર્ટ માટે ઑપ્ટિમાઇઝ કરેલું
+	Type Optimized	ટેક્સ્ટ માટે ઑપ્ટિમાઇઝ કરેલું
 	Appearance	દેખાવ
 	Appearance Attribute	દેખાવ ગુણધર્મ
 	Appearance Item	દેખાવ આઇટમ
@@ -429,6 +431,10 @@
 	Break Text into Words	ટેક્સ્ટને શબ્દોમાં તોડો
 	Break Thread	થ્રેડ તોડો
 	Brick Offset:	ઈંટ ઑફસેટ:
+	Brick by Row	પંક્તિ પ્રમાણે ઈંટ
+	Brick by Column	કૉલમ પ્રમાણે ઈંટ
+	Hex by Column	કૉલમ પ્રમાણે ષટ્કોણ
+	Hex by Row	પંક્તિ પ્રમાણે ષટ્કોણ
 	Brightness	તેજ
 	Brightness/Contrast…	તેજ/કૉન્ટ્રાસ્ટ…
 	Brightness:	તેજ:
@@ -792,6 +798,9 @@
 	Create From:	આમાંથી બનાવો:
 	Create Gradient Mesh	ગ્રેડિયન્ટ મેશ બનાવો
 	Create Gradient Mesh…	ગ્રેડિયન્ટ મેશ બનાવો…
+	Flat	સપાટ
+	To Center	કેન્દ્ર તરફ
+	To Edge	કિનારી તરફ
 	Create Graph	ગ્રાફ બનાવો
 	Create New Layer	નવો લેયર બનાવો
 	Create New Library	નવી લાઇબ્રેરી બનાવો

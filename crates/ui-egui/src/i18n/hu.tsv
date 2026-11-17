@@ -893,6 +893,9 @@ font-technology	Variable	Változó
 	Create from Selection	Létrehozás a kijelölésből
 	Create From:	Létrehozás ebből:
 	Create Gradient Mesh…	Színátmenetes háló létrehozása…
+	Flat	Sík
+	To Center	A közép felé
+	To Edge	Az él felé
 	Create Graph	Diagram létrehozása
 	Create New Fields by	Új félképek létrehozása
 	Create New Layer	Új réteg létrehozása

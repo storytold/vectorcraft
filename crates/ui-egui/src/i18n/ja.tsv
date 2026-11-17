@@ -268,6 +268,9 @@ digits	Malayalam	マラヤーラム数字
 	Mask	マスク
 	Rasterize…	ラスタライズ…
 	Create Gradient Mesh…	グラデーションメッシュを作成…
+	Flat	フラット
+	To Center	中心へ
+	To Edge	エッジへ
 	Create Object Mosaic…	モザイクオブジェクトを作成…
 	Vector Halftone…	ベクターハーフトーン…
 	Create Trim Marks	トリムマークを作成
@@ -1120,6 +1123,8 @@ antiAlias	Sharp	シャープ
 	Crisp	くっきり
 	Strong	太め
 	Anti-aliasing:	アンチエイリアス:
+	Art Optimized	アートに最適化
+	Type Optimized	文字に最適化
 	Appearance Item	アピアランス項目
 	Appearance Panel	アピアランスパネル
 	Appearance of Black	ブラックのアピアランス
