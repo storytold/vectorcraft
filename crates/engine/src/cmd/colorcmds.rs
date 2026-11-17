@@ -141,7 +141,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Contrast",
             [],
             None,
-            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`)} the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the art below it inside the object, groups and layer around it, the object's rows below its row included (with `against` or `opacity` given, with the background); inside an object, group or layer that isolates its blending, the modes blend only with the art it holds; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio unless `opacity` is omitted and a group or layer around the object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over rows below it, since a given background stands for the art below each such level), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}",
+            "{color?: a color (#rrggbbaa and #rgba are refused; default the active Fill or Stroke proxy's color, or its selected gradient stop or freeform point, or a gradient mesh's first picked point; a picked object's solid color mixed towards the fill that stains its dynamic symbol instance), against?: a color or \"below\" (default: the color VectorCraft draws at the center of the selection's bounds with the selected objects hidden, as the canvas shows it without template layers and guides; a picked object of a dynamic symbol instance hides only itself and is measured at its own center; needs a selection), opacity?: 0..100 (default the opacity the proxy's color is drawn with: the object's opacity times that of its groups and layer (for a picked symbol object, also of its instance and the groups of the symbol's art around it), its fill's or stroke's row (not for type's character paint) and a stop's or point's own, a translucent group or layer drawing the art inside it, the art behind the object included, over what is outside it; 100 for a given `color`)} the WCAG 2 contrast ratio (https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio) of the color, drawn at that opacity over the background with the blend modes the proxy's color is drawn with (its row's, the object's and those of its groups and layer, innermost first, each blending the result with the art below it inside the object, groups and layer around it, the object's rows below its row included (with `against` or `opacity` given, with the background); inside an object, group or layer that isolates its blending, the modes blend only with the art it holds; Normal for a given `color`), against the background, in display sRGB: normal text needs 4.5:1 for AA and 7:1 for AAA, large text 3:1 and 4.5:1, and graphics 3:1 for AA; the unrounded ratio is compared → {ratio, against: \"#rrggbb\" (the background in working RGB, as `against` takes it; the sampled one rounded to 8 bits, so giving it back answers the same ratio unless `opacity` is omitted and a group or layer around the object is translucent, has a blend mode or isolates its blending, or the measured row is translucent or blends over rows below it, since a given background stands for the art below each such level), normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}",
             always,
             contrast
         ),
@@ -1209,7 +1209,8 @@ fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
         && la.iter().zip(&lb).all(|(x, y)| level(x, y))
 }
 
-/// The active proxy's color (its selected gradient stop or freeform point, else the first) and how
+/// The active proxy's color (its selected gradient stop or freeform point, else the first, or a
+/// gradient mesh's first picked point, each at its own opacity) and how
 /// it is drawn ([`Drawn`]). With `given_opacity`, the opacities of the selected objects are not
 /// compared, since the given opacity takes their place; with `below` (the background is sampled),
 /// objects in different translucent or blending groups or layers differ, since the art below each
@@ -1221,7 +1222,19 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
         return Err("the selected objects' colors differ: give `color`".into());
     }
     let (fill, stroke_paint) = s.proxy_paints();
-    let source = || s.proxy_source(stroke).map(|(n, item)| drawn_settings(s, &n, item, stroke)).transpose();
+    // The Fill proxy shows a gradient mesh's picked points, each drawn at its own opacity.
+    let points = if stroke { vec![] } else { s.fill_mesh_points() };
+    let source = || {
+        s.proxy_source(stroke)
+            .map(|(n, item)| {
+                let d = drawn_settings(s, &n, item, stroke)?;
+                Ok::<_, String>(match picked_opacities(&n, &points).first() {
+                    Some(o) => at(&d, *o),
+                    None => d,
+                })
+            })
+            .transpose()
+    };
     let drawing;
     // Selected objects that share a color but draw it differently have no one answer.
     if let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) {
@@ -1233,7 +1246,13 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
         let mut drawn = vec![];
         for n in st.selection.subjects().iter().filter_map(|id| st.doc.node(*id)) {
             for (n, item) in shown_sources(n, item, stroke).into_iter().filter(|(c, _)| shown(c.id)) {
-                drawn.push(drawn_settings(s, n, item, stroke)?);
+                let d = drawn_settings(s, n, item, stroke)?;
+                let picked = picked_opacities(n, &points);
+                if picked.is_empty() {
+                    drawn.push(d);
+                } else {
+                    drawn.extend(picked.into_iter().map(|o| at(&d, o)));
+                }
             }
         }
         drawing = match drawn.first() {
@@ -1246,24 +1265,37 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
     } else {
         drawing = source()?.unwrap_or_default();
     }
-    // A stop's or point's opacity applies where its paint is drawn: in its row, else in the object.
-    let at = |opacity: f32| match drawing.row {
-        Some((m, o)) => Drawn { row: Some((m, o * opacity)), ..drawing.clone() },
-        None => Drawn { opacity: drawing.opacity * opacity, ..drawing.clone() },
-    };
     let no_color = || "the active fill or stroke has no color: give `color`".to_string();
     match if stroke { stroke_paint } else { fill } {
         Paint::Solid { color, .. } => Ok((stained(s, color), drawing)),
         Paint::Gradient(g) if g.gradient.kind == vectorcraft_color::GradientKind::Freeform => {
             let f = g.freeform_on(vectorcraft_geom::Rect::new(0.0, 0.0, 1.0, 1.0));
             let i = s.selected_freeform_point().filter(|i| *i < f.points.len()).unwrap_or(0);
-            f.points.get(i).map(|pt| (pt.color, at(pt.opacity))).ok_or_else(no_color)
+            f.points.get(i).map(|pt| (pt.color, at(&drawing, pt.opacity))).ok_or_else(no_color)
         }
         Paint::Gradient(g) => {
             let i = s.selected_stop().unwrap_or(0).min(g.gradient.stops.len().saturating_sub(1));
-            g.gradient.stops.get(i).map(|st| (st.color, at(st.opacity))).ok_or_else(no_color)
+            g.gradient.stops.get(i).map(|st| (st.color, at(&drawing, st.opacity))).ok_or_else(no_color)
         }
         Paint::None | Paint::Pattern { .. } => Err(no_color()),
+    }
+}
+
+/// `drawing` with a stop's or point's `opacity`, which applies where its paint is drawn: in its
+/// row, else in the object.
+fn at(drawing: &Drawn, opacity: f32) -> Drawn {
+    match drawing.row {
+        Some((m, o)) => Drawn { row: Some((m, o * opacity)), ..drawing.clone() },
+        None => Drawn { opacity: drawing.opacity * opacity, ..drawing.clone() },
+    }
+}
+
+/// The opacities of the picked points of gradient mesh `n` ([`Session::fill_mesh_points`]), whose
+/// colors the Fill proxy shows for it: empty for another object or with no points picked.
+fn picked_opacities(n: &Node, points: &[(NodeId, Vec<usize>)]) -> Vec<f32> {
+    match (&n.kind, points.iter().find(|(id, _)| *id == n.id)) {
+        (NodeKind::Mesh(m), Some((_, v))) => v.iter().filter_map(|i| m.points.get(*i)).map(|q| q.opacity).collect(),
+        _ => vec![],
     }
 }
 

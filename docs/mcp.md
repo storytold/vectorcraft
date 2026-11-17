@@ -1091,8 +1091,8 @@ limit.
 ([definition](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)) of a color against a background, from 1 to 21, and
 whether it meets AA and AAA for normal text (4.5:1 and 7:1), large text (3:1 and 4.5:1) and graphics (3:1, AA only):
 `{ratio, against, normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}`. The results compare the unrounded
-ratio. `color` defaults to the active Fill or Stroke proxy's color (its selected gradient stop or freeform point; for
-a picked object of a dynamic symbol instance, its solid color mixed towards the fill that stains the instance), at
+ratio. `color` defaults to the active Fill or Stroke proxy's color (its selected gradient stop or freeform point, or
+the first picked point of a gradient mesh; for a picked object of a dynamic symbol instance, its solid color mixed towards the fill that stains the instance), at
 the opacity it is drawn with (the object's opacity times that of its groups and layer, and for a picked object of a
 dynamic symbol instance also of the instance and the groups of the symbol's art around it, of its fill or stroke row,
 which type's character paint does not use, and of a stop or point; a translucent group or layer draws the art inside

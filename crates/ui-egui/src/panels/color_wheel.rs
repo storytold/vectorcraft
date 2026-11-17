@@ -313,9 +313,22 @@ type BehindKey = (u64, u64, Vec<NodeId>, Option<Vec<u32>>, String, Under);
 /// What the contrast row's answer depends on: the background, the active proxy's paint (with nothing
 /// selected it is the default for new art, which no revision counts), the document, its revision,
 /// the selection and its picked symbol object, the proxy, the appearance item, the selected
-/// gradient stop and freeform point, the on-screen Appearance of Black and the color settings.
-pub(super) type RatioKey =
-    (String, String, Option<(u64, u64)>, Vec<NodeId>, Option<Vec<u32>>, bool, Option<usize>, Option<usize>, Option<usize>, String, Under);
+/// gradient stop and freeform point, the on-screen Appearance of Black, the color settings and the
+/// picked gradient mesh points, which the active tool keeps without a revision.
+pub(super) type RatioKey = (
+    String,
+    String,
+    Option<(u64, u64)>,
+    Vec<NodeId>,
+    Option<Vec<u32>>,
+    bool,
+    Option<usize>,
+    Option<usize>,
+    Option<usize>,
+    String,
+    Under,
+    Vec<(NodeId, Vec<usize>)>,
+);
 
 /// The active color settings and profiles generation, which change how a color displays without
 /// a document revision (Edit › Color Settings, a document's assigned profiles).
@@ -382,6 +395,7 @@ fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.session.selected_freeform_point(),
             app.session.prefs.black_on_screen.clone(),
             under(),
+            app.session.fill_mesh_points(),
         );
         match pstate::<Option<(RatioKey, Option<Value>)>>(ui.ctx(), RATIO) {
             Some((k, r)) if k == key => r,

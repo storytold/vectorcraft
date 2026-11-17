@@ -610,6 +610,45 @@ fn a_gradient_stop_counts_with_its_own_opacity() {
     assert!((ratio(&r) - gray).abs() < 1e-3, "the first stop, black at 50 %: {r}");
 }
 
+/// Picks the points of the selected gradient mesh inside the box from `a` to `b` with the Lasso tool.
+fn pick_points(s: &mut Session, a: (f64, f64), b: (f64, f64)) {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let v = ViewInfo::default();
+    s.select_tool("lasso", v).unwrap();
+    let pts = [(a.0, a.1), (b.0, a.1), (b.0, b.1), (a.0, b.1), (a.0, b.1)];
+    for (i, (x, y)) in pts.iter().enumerate() {
+        let kind = match i {
+            0 => PointerKind::Down,
+            4 => PointerKind::Up,
+            _ => PointerKind::Drag,
+        };
+        s.pointer(&PointerEvent::new(kind, *x, *y), v).unwrap();
+    }
+}
+
+#[test]
+fn a_picked_mesh_point_counts_with_its_own_opacity() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("object.mesh.create", &json!({"rows": 1, "cols": 1})).unwrap();
+    // The top-left point at 50 %, the top-right one opaque.
+    pick_points(&mut s, (40.0, 40.0), (60.0, 60.0));
+    assert_eq!(s.fill_mesh_points().first().map(|(_, v)| v.len()), Some(1), "one point is picked");
+    s.execute("transparency.set", &json!({"opacity": 50})).unwrap();
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    let gray = vectorcraft_color::wcag::contrast_ratio([0.5; 3], [1.0; 3]);
+    assert!((ratio(&r) - gray).abs() < 1e-3, "the picked point, black at 50 %: {r}");
+    pick_points(&mut s, (140.0, 40.0), (160.0, 60.0));
+    let r = s.execute("color.contrast", &json!({})).unwrap();
+    assert!((ratio(&r) - 21.0).abs() < 1e-3, "the opaque point: {r}");
+    // Both picked: one color at two opacities has no one answer, unless `opacity` is given.
+    pick_points(&mut s, (40.0, 40.0), (160.0, 60.0));
+    let both = s.execute("color.contrast", &json!({})).unwrap_err().to_string();
+    assert!(both.contains("differ"), "{both}");
+    assert!(s.execute("color.contrast", &json!({"opacity": 100})).is_ok());
+}
+
 #[test]
 fn below_needs_a_selection_and_bad_params_are_errors() {
     let mut s = session();

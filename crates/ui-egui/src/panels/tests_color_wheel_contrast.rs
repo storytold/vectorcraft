@@ -224,6 +224,38 @@ fn the_row_answers_as_color_contrast_does_inside_a_translucent_group() {
     assert!(shows(&h, &want), "the row shows {want}, not {given}");
 }
 
+/// Clicks the point of the selected gradient mesh at (`x`, `y`) with the Mesh tool, which picks it
+/// alone.
+fn pick_point(s: &mut Session, x: f64, y: f64) {
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+    let v = vectorcraft_engine::ViewInfo::default();
+    s.select_tool("mesh", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, x, y), v).unwrap();
+    }
+}
+
+/// The row asks again when the Mesh tool picks another point, which changes no document revision:
+/// here a black point at 50 % after an opaque black one.
+#[test]
+fn the_row_follows_the_picked_mesh_points() {
+    let mut app = app("#000000");
+    app.run("object.mesh.create", json!({"rows": 1, "cols": 1})).unwrap();
+    app.run("ui.colorWheel", json!({"contrastBackground": "#ffffff"})).unwrap();
+    pick_point(&mut app.session, 40.0, 40.0);
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+    pick_point(&mut app.session, 90.0, 40.0);
+    let mut h = harness(app);
+    assert!(shows(&h, "21.00:1"), "the opaque top-right point");
+    let revision = |h: &Harness<'static, VectorcraftApp>| h.state().session.active().map(|d| d.revision);
+    let before = revision(&h);
+    pick_point(&mut h.state_mut().session, 40.0, 40.0);
+    assert_eq!(revision(&h), before, "a pick is no document change");
+    h.run_steps(2);
+    let gray = wcag::ratio_text(wcag::contrast_ratio([0.5; 3], [1.0; 3]));
+    assert!(shows(&h, &gray), "the top-left point at 50 % shows {gray}");
+}
+
 #[test]
 fn ui_color_wheel_sets_the_keys_given_and_refuses_bad_values() {
     let mut app = app("#000000");
