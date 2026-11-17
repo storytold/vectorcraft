@@ -36,7 +36,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("scaleCorners", "Live corner radii scale with the art, unless the scale chooses otherwise."),
     ("scaleStrokes", "Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise."),
     ("zoomWithMouseWheel", "The mouse wheel zooms the canvas instead of scrolling it."),
-    ("ctrlWheelScrollsSideways", "While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways."),
+    ("ctrlWheelScrollsSideways", "The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways."),
     ("scrubNumericFields", "Dragging sideways on a numeric field's label changes the field's value."),
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),

@@ -705,6 +705,7 @@ font-technology	Variable	Biến thiên
 	Constrain	Giữ tỷ lệ
 	Constrain Angle	Ràng buộc góc
 	Constrain Width and Height Proportions	Ràng buộc tỷ lệ chiều rộng và chiều cao
+	Copy Width to Height	Sao chép chiều rộng sang chiều cao
 	Construction Guides	Đường căn xây dựng
 	Contextual Alternates	Ký tự thay thế theo ngữ cảnh
 	Contextual Task Bar	Thanh tác vụ theo ngữ cảnh
@@ -2376,7 +2377,8 @@ digits	Hindi	Hindi
 	Long Lines	Nét dài
 	Long Strokes	Nét vẽ dài
 	Longest:	Dài nhất:
-	Lossless (lossy WebP isn't available yet)	Không mất dữ liệu (WebP mất dữ liệu chưa hỗ trợ)
+	Lossless	Không mất dữ liệu
+	Lossy	Mất dữ liệu
 	Lossy:	Mất dữ liệu:
 	Low	Thấp
 	lowercase	chữ thường
@@ -3431,7 +3433,7 @@ mark-style	Japanese	Kiểu Nhật
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Bán kính góc động co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Độ dày nét, gạch đứt và khoảng cách hiệu ứng co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
 	The mouse wheel zooms the canvas instead of scrolling it.	Con lăn chuột thu phóng khung vẽ thay vì cuộn nó.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Khi Thu phóng bằng con lăn chuột đang tắt, con lăn chuột kèm giữ Cmd/Ctrl cuộn khung vẽ sang ngang.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Con lăn chuột kèm giữ Cmd/Ctrl cuộn khung vẽ sang ngang.
 	Dragging sideways on a numeric field's label changes the field's value.	Kéo sang ngang trên nhãn của một trường số sẽ thay đổi giá trị của trường.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
@@ -3735,6 +3737,7 @@ mark-style	Japanese	Kiểu Nhật
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
+	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
 	Searching…	Đang tìm kiếm…
@@ -7622,6 +7625,7 @@ breakText	Glyphs	Glyph
 @msg	Too many Revolve faces for visibility evaluation	Quá nhiều mặt Xoay tròn để tính toán phần nhìn thấy
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft đọc tối đa {ASE_MAX_ENTRIES} màu và nhóm từ một tệp trao đổi mẫu màu, còn thư viện này có {entries}
 @msg	WebP encoding failed: {e}	Mã hóa WebP thất bại: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Mã hóa WebP thất bại: ảnh quá lớn cho WebP có mất dữ liệu: hãy giảm độ phân giải hoặc chọn Không mất dữ liệu
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` phải là số nguyên

@@ -82,10 +82,8 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(2.0);
             // With the macOS menu bar the menus are at the top of the screen instead.
             let menus_end = if app.services.native_menu.is_some() { ui.cursor().min.x } else { menus::menu_bar(app, ui) };
-            // The right-side group fills the space after the menus from the right; when it runs
-            // short, Discord goes first (it is also under Help), then Explore tutorials (also
-            // Window › Learn), then the search icon (the palette stays under its shortcut), then
-            // the workspace switcher narrows.
+            // The right-side group fills the space after the menus from the right, in the order
+            // [`fit_right_group`] gives.
             let full = ui.max_rect();
             let right_edge = if captions_right > 0.0 { full.right() - captions_right - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
@@ -97,21 +95,22 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 let text = ui.painter().layout_no_wrap(label.text().to_string(), egui::FontId::proportional(12.0), t.warning);
                 text.size().x + 2.0 * ui.spacing().button_padding.x + 8.0 + ui.spacing().item_spacing.x
             });
-            let room = (right.width() - safe_w).max(0.0);
-            let switcher = safe.is_none() || room >= 64.0 + 8.0;
             // Built-in workspace names translate; the user's own stay as typed.
             let ws_name =
                 if crate::workspaces::is_builtin(&app.ui.workspace) { tl!(&app.ui.workspace).to_string() } else { app.ui.workspace.clone() };
             let ws = ui.painter().layout_no_wrap(ws_name, egui::FontId::proportional(12.0), t.text);
-            let ws_w = (ws.size().x + 36.0).clamp(112.0, 190.0);
-            let gap = ui.spacing().item_spacing.x;
-            // The search icon, as in PhotoCraft: shown while a minimal switcher fits beside it.
-            let icon = 28.0;
-            let search = switcher && room >= 64.0 + 8.0 + gap + icon;
-            let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
-            // Explore tutorials, beside the search icon, opens the Learn panel.
-            let learn = search && room >= ws_w + 8.0 + 2.0 * (gap + icon);
-            let discord = learn && room >= ws_w + 8.0 + 2.0 * (gap + icon) + 10.0 + gap + crate::community::discord_width(ui, false);
+            let shortcut = menus::shortcut_of("help.commandPalette").map(menus::shown_shortcut);
+            let field = SearchField::new(ui, &t, shortcut);
+            let fit = fit_right_group(&RightWidths {
+                room: (right.width() - safe_w).max(0.0),
+                safe_mode: safe.is_some(),
+                switcher: (ws.size().x + 36.0).clamp(112.0, 190.0),
+                field: field.width,
+                icon: BAR_ICON,
+                gap: ui.spacing().item_spacing.x,
+                community: crate::community::discord_width(ui, false),
+            });
+            let (switcher, ws_w, learn, discord) = (fit.switcher, fit.switcher_w, fit.learn, fit.community);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
@@ -131,19 +130,33 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                 ui.add_space(8.0);
             }
             // Search → command palette (its shortcut opens it too).
-            if search {
-                let tip = match menus::shortcut_of("help.commandPalette") {
-                    Some(sc) => format!("{}  ({})", tl!("Search commands, tools, panels and effects"), menus::shown_shortcut(sc)),
-                    None => tl!("Search commands, tools, panels and effects").to_string(),
-                };
-                if widgets::icon_button(ui, "search", &tip, app.ui.palette_open, icon).clicked() {
-                    app.ui.palette_open = !app.ui.palette_open;
-                    app.ui.palette_query.clear();
-                }
+            let with_shortcut = |text: &str| match &field.shortcut {
+                Some(sc) => format!("{text}  ({sc})"),
+                None => text.to_string(),
+            };
+            let tip = with_shortcut(tl!("Search commands, tools, panels and effects"));
+            let name = with_shortcut(tl!("Search commands"));
+            // The field and the icon toggle the palette as its shortcut does, and like the shortcut
+            // they do nothing while a dialog is open, so they are drawn disabled then.
+            let enabled = app.ui.dialog.is_none();
+            let open = app.ui.palette_open;
+            let clicked = ui
+                .add_enabled_ui(enabled, |ui| match fit.search {
+                    Search::Field => field.show(ui, &t, &name, &tip, open).clicked(),
+                    Search::Icon => {
+                        let (_, resp) = ui.allocate_exact_size(vec2(BAR_ICON, BAR_ICON), Sense::click());
+                        widgets::paint_icon_button_named(ui, resp, "search", &name, &tip, open).clicked()
+                    }
+                    Search::Hidden => false,
+                })
+                .inner;
+            if clicked && enabled {
+                app.ui.palette_open = !app.ui.palette_open;
+                app.ui.palette_query.clear();
             }
             if learn {
                 let shown = crate::panels::learn::visible(&app.ui);
-                if widgets::icon_button(ui, "graduation-cap", tl!("Explore tutorials"), shown, icon).clicked()
+                if widgets::icon_button(ui, "graduation-cap", tl!("Explore tutorials"), shown, BAR_ICON).clicked()
                     && let Err(e) = app.run("window.learn", json!({}))
                 {
                     app.ui.status = e;
@@ -165,6 +178,142 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if custom {
         titlebar::caption_buttons(app, ui, bar.response.rect);
+    }
+}
+
+/// The side of the app bar's square icon buttons (the search icon, Explore tutorials).
+const BAR_ICON: f32 = 28.0;
+/// The narrowest the workspace switcher gets.
+const MIN_SWITCHER: f32 = 64.0;
+
+/// How the app bar shows the search that opens the command palette.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Search {
+    /// A field with the magnifier, "Search commands" and the palette's shortcut.
+    Field,
+    /// The magnifier alone.
+    Icon,
+    /// Not in the bar; the palette stays under its shortcut and Help › Search Commands….
+    Hidden,
+}
+
+/// The widths [`fit_right_group`] fits into `room`, in points.
+#[derive(Clone, Copy, Debug)]
+struct RightWidths {
+    /// The room after the menus, less the Safe Mode label's.
+    room: f32,
+    /// Whether the bar shows the Safe Mode label.
+    safe_mode: bool,
+    /// The workspace switcher's full width.
+    switcher: f32,
+    /// The search field's width.
+    field: f32,
+    /// The side of a square icon button.
+    icon: f32,
+    /// The space between two controls.
+    gap: f32,
+    /// The community button's width.
+    community: f32,
+}
+
+/// What the right-hand group of the app bar shows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct RightGroup {
+    /// Whether the workspace switcher shows.
+    switcher: bool,
+    /// The workspace switcher's width.
+    switcher_w: f32,
+    /// How the search shows.
+    search: Search,
+    /// Whether Explore tutorials shows.
+    learn: bool,
+    /// Whether the community button shows.
+    community: bool,
+}
+
+/// The right-hand group for the room it has. As the room runs short, the community button goes first
+/// (it is also under Help), then Explore tutorials (also Window › Learn), then the search field becomes the
+/// search icon, then the workspace switcher narrows to [`MIN_SWITCHER`], then the icon goes. In Safe
+/// Mode the label's width is taken first, and the switcher (also under Window › Workspace) goes when
+/// a minimal one does not fit.
+fn fit_right_group(w: &RightWidths) -> RightGroup {
+    let room = w.room;
+    let switcher = !w.safe_mode || room >= MIN_SWITCHER + 8.0;
+    let icon = switcher && room >= MIN_SWITCHER + 8.0 + w.gap + w.icon;
+    let field = icon && room >= w.switcher + 8.0 + w.gap + w.field;
+    let search = if field {
+        Search::Field
+    } else if icon {
+        Search::Icon
+    } else {
+        Search::Hidden
+    };
+    let search_w = match search {
+        Search::Field => w.gap + w.field,
+        Search::Icon => w.gap + w.icon,
+        Search::Hidden => 0.0,
+    };
+    let switcher_w = w.switcher.min(room - 8.0 - search_w).max(MIN_SWITCHER);
+    let learn_end = switcher_w + 8.0 + search_w + w.gap + w.icon;
+    let learn = field && room >= learn_end;
+    let community = learn && room >= learn_end + 10.0 + w.gap + w.community;
+    RightGroup { switcher, switcher_w, search, learn, community }
+}
+
+/// The app bar's search field: a button drawn as a field. The command palette's popup holds the
+/// only text field.
+struct SearchField {
+    hint: Arc<egui::Galley>,
+    /// The palette's shortcut as the menus show it; none when the user cleared it.
+    shortcut: Option<String>,
+    key: Option<Arc<egui::Galley>>,
+    width: f32,
+}
+
+impl SearchField {
+    /// Space from the field's left edge to the hint text (the magnifier sits in it).
+    const TEXT_LEFT: f32 = 26.0;
+    /// The widest the field gets.
+    const MAX_WIDTH: f32 = 220.0;
+
+    fn new(ui: &Ui, t: &Tokens, shortcut: Option<String>) -> SearchField {
+        let hint = ui.painter().layout_no_wrap(tl!("Search commands").to_string(), egui::FontId::proportional(12.0), t.text_dim);
+        let text_w = Self::TEXT_LEFT + hint.size().x + 8.0;
+        // A shortcut that leaves no room for the hint in the widest field is left to the tooltip.
+        let key = shortcut
+            .as_ref()
+            .map(|s| ui.painter().layout_no_wrap(s.clone(), egui::FontId::proportional(11.0), t.text_dim))
+            .filter(|k| text_w + 12.0 + k.size().x <= Self::MAX_WIDTH);
+        let key_w = key.as_ref().map_or(0.0, |k| 12.0 + k.size().x);
+        let width = (text_w + key_w + 24.0).clamp(120.0, Self::MAX_WIDTH);
+        SearchField { hint, shortcut, key, width }
+    }
+
+    /// Draws the field. A click, or Enter or Space with the keyboard on it, clicks it. Screen
+    /// readers get a button called `name`, and hovering it shows `tip`.
+    fn show(self, ui: &mut Ui, t: &Tokens, name: &str, tip: &str, open: bool) -> egui::Response {
+        let (r, resp) = ui.allocate_exact_size(vec2(self.width, WIDGET_H), Sense::click());
+        let fill = if open {
+            t.tool_active
+        } else if resp.hovered() {
+            t.hover
+        } else {
+            t.input
+        };
+        let border = if resp.has_focus() { t.accent } else { t.input_border };
+        ui.painter().rect(r, CornerRadius::same(4), fill, Stroke::new(1.0, border), egui::StrokeKind::Inside);
+        icons::paint(ui, "search", egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(14.0, 14.0)), t.icon);
+        let mut text_right = r.right() - 8.0;
+        if let Some(key) = self.key {
+            let at = egui::pos2(text_right - key.size().x, r.center().y - key.size().y / 2.0);
+            text_right = at.x - 12.0;
+            ui.painter().with_clip_rect(r).galley(at, key, t.text_dim);
+        }
+        let clip = egui::Rect::from_min_max(r.min, egui::pos2(text_right.max(r.left()), r.bottom()));
+        let at = egui::pos2(r.left() + Self::TEXT_LEFT, r.center().y - self.hint.size().y / 2.0);
+        ui.painter().with_clip_rect(clip).galley(at, self.hint, t.text_dim);
+        resp.widget_info(|| widgets::icon_button_info(ui.is_enabled(), open, name));
+        resp.on_hover_text(tip)
     }
 }
 

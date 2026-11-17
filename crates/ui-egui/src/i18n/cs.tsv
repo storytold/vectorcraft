@@ -1328,6 +1328,7 @@ lighting	Light	Světlo
 	Search commands, tools, panels and effects	Hledat příkazy, nástroje, panely a efekty
 	Style:	Styl:
 	Switch workspace	Přepnout pracovní prostor
+	Search commands	Hledat příkazy
 	Show all open documents	Zobrazit všechny otevřené dokumenty
 	Use 	Příkazem 
 	 the object to select  |  	 na objekt jej vybere  |  
@@ -2909,7 +2910,8 @@ digits	Malayalam	Malajálamské
 	Hide Video Rulers	Skrýt video pravítka
 	Client-side (.html)	Na straně klienta (.html)
 	Color Reduction:	Redukce barev:
-	Lossless (lossy WebP isn't available yet)	Bezeztrátový (ztrátový WebP zatím není k dispozici)
+	Lossless	Bezeztrátový
+	Lossy	Ztrátový
 	Scans:	Průchody:
 	Server-side (.map)	Na straně serveru (.map)
 	{format} Options	Možnosti {format}
@@ -3990,6 +3992,7 @@ theme	Appearance	Motiv
 	Command Click to Select Objects Behind	Kliknutím s Cmd vybírat objekty vzadu
 	Constrain Angle	Úhel omezení
 	Constrain Width and Height Proportions	Zachovat proporce šířky a výšky
+	Copy Width to Height	Kopírovat šířku do výšky
 	Construction Guides	Konstrukční vodítka
 	Curvature Tool	Nástroj Zakřivení
 	Data Recovery	Obnovení dat
@@ -4533,7 +4536,7 @@ font-technology	Variable	Variabilní
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Poloměry živých rohů se mění s velikostí kresby, pokud změna velikosti nezvolí jinak.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Tloušťky tahů, čárky a vzdálenosti efektů se mění s velikostí kresby, pokud změna velikosti nezvolí jinak.
 	The mouse wheel zooms the canvas instead of scrolling it.	Kolečko myši plátno zvětšuje a zmenšuje místo posouvání.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Dokud je Zvětšovat kolečkem myši vypnuto, kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
 	Dragging sideways on a numeric field's label changes the field's value.	Tažení do stran po popisku číselného pole mění hodnotu pole.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
@@ -7861,6 +7864,7 @@ breakText	Glyphs	Glyfy
 @msg	Too many Revolve faces for visibility evaluation	Rotační těleso má příliš mnoho stěn pro výpočet viditelnosti
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft čte ze souboru pro výměnu vzorníku nejvýše {ASE_MAX_ENTRIES} barev a skupin a tato knihovna jich má {entries}
 @msg	WebP encoding failed: {e}	kódování WebP selhalo: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	kódování WebP selhalo: obrázek je pro ztrátový WebP příliš velký: snižte rozlišení nebo zvolte Bezeztrátový
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` je smallThumb, mediumThumb, largeThumb, smallList nebo largeList

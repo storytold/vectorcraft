@@ -1799,6 +1799,7 @@ lighting	Light	Licht
 	Search commands, tools, panels and effects	Opdrachten, gereedschappen, panelen en effecten zoeken
 	Style:	Stijl:
 	Switch workspace	Werkruimte wisselen
+	Search commands	Opdrachten zoeken
 	Show all open documents	Alle geopende documenten tonen
 	Use 	Gebruik 
 	 the object to select  |  	 op het object om te selecteren  |  
@@ -3251,7 +3252,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Videolinialen verbergen
 	Client-side (.html)	Client-side (.html)
 	Color Reduction:	Kleurreductie:
-	Lossless (lossy WebP isn't available yet)	Verliesvrij (WebP met verlies is nog niet beschikbaar)
+	Lossless	Verliesvrij
+	Lossy	Met verlies
 	Scans:	Scans:
 	Server-side (.map)	Server-side (.map)
 	{format} Options	Opties voor {format}
@@ -4281,6 +4283,7 @@ theme	Appearance	Vormgeving
 	Command Click to Select Objects Behind	Command-klik om objecten erachter te selecteren
 	Constrain Angle	Vastleghoek
 	Constrain Width and Height Proportions	Breedte- en hoogteverhouding vastleggen
+	Copy Width to Height	Breedte naar hoogte kopiëren
 	Construction Guides	Bouwhulplijnen
 	Curvature Tool	Krommingsgereedschap
 	Data Recovery	Gegevensherstel
@@ -4801,7 +4804,7 @@ font-technology	Variable	Variabel
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynamische hoekradii schalen mee met de illustratie, tenzij het schalen anders kiest.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Contourdiktes, streepjes en effectafstanden schalen mee met de illustratie, tenzij het schalen anders kiest.
 	The mouse wheel zooms the canvas instead of scrolling it.	Het muiswiel zoomt het canvas in plaats van het te schuiven.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Zolang Zoomen met muiswiel uit staat, schuift het muiswiel met Cmd/Ctrl ingedrukt het canvas zijwaarts.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
@@ -9783,6 +9786,7 @@ breakText	Glyphs	Glyphs
 @msg	Too many Revolve faces for visibility evaluation	Te veel vlakken van Draaien om de zichtbaarheid te bepalen
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft leest maximaal {ASE_MAX_ENTRIES} kleuren en groepen uit een uitwisselingsbestand voor stalen, en deze bibliotheek heeft er {entries}
 @msg	WebP encoding failed: {e}	WebP-codering mislukt: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-codering mislukt: de afbeelding is te groot voor WebP met verlies: verlaag de resolutie of kies Verliesvrij
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` moet een geheel getal zijn

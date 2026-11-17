@@ -1821,6 +1821,17 @@ fn every_general_setting_has_one_description() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// Cmd/Ctrl-wheel scrolls sideways with Zoom with Mouse Wheel on as well as off
+/// (`canvas::tests::zoom_with_mouse_wheel_preference`), so the sentence for Scroll Sideways with
+/// Cmd/Ctrl + Wheel does not make the sideways scroll depend on that setting.
+#[test]
+fn the_sideways_scroll_sentence_does_not_depend_on_zoom_with_mouse_wheel() {
+    let zoom = settings().find(|s| s.key == "zoomWithMouseWheel").expect("General has Zoom with Mouse Wheel").label;
+    let sideways = descriptions::description("ctrlWheelScrollsSideways").expect("Scroll Sideways with Cmd/Ctrl + Wheel has a sentence");
+    assert!(!sideways.contains(zoom.trim_end_matches(':')), "`{sideways}` names `{zoom}`");
+    assert!(sideways.contains("Cmd/Ctrl") && sideways.contains("sideways"), "`{sideways}` describes the sideways scroll");
+}
+
 /// The pointer over General's Contextual Task Bar row and over its Keyboard Increment row shows
 /// each row's sentence.
 #[test]
