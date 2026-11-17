@@ -74,11 +74,45 @@ fn stroke_subpath(pts: &[Point], tol: Option<f64>, closed: bool) -> SubPath {
     }
 }
 
+/// Bend the ends of `stroke` onto `a` (its start) and `b` (its end): each end moves all the way
+/// and the stroke behind it less and less, to not at all `reach` along it (Edit selected paths
+/// within), so a stroke that starts or ends near the path joins it smoothly instead of with a
+/// straight piece.
+fn bend_ends(stroke: &mut [Point], a: Option<Point>, b: Option<Point>, reach: f64) {
+    let bend = |pts: &mut dyn Iterator<Item = &mut Point>, to: Point| {
+        let mut pts = pts.peekable();
+        let Some(first) = pts.peek().map(|p| **p) else { return };
+        let shift = to - first;
+        let (mut along, mut prev) = (0.0, first);
+        for p in pts {
+            along += prev.distance(*p);
+            prev = *p;
+            let w = if reach > 0.0 {
+                1.0 - along / reach
+            } else if along == 0.0 {
+                1.0
+            } else {
+                0.0
+            };
+            if w <= 0.0 {
+                break;
+            }
+            *p += shift * w;
+        }
+    };
+    if let Some(a) = a {
+        bend(&mut stroke.iter_mut(), a);
+    }
+    if let Some(b) = b {
+        bend(&mut stroke.iter_mut().rev(), b);
+    }
+}
+
 /// Pencil's Edit Selected Paths in the middle of a path: a stroke from one point of a subpath of
 /// `pd` to another, each within `within` of it, replaces the section between them (the shorter
-/// way round a closed subpath) with the stroke fitted at `tol` (with no `tol`, unfitted). The
-/// subpath's index and its new shape; None when the stroke doesn't start and end on the same
-/// subpath, or meets it once.
+/// way round a closed subpath) with the stroke fitted at `tol` (with no `tol`, unfitted), its ends
+/// bent onto the path ([`bend_ends`]). The subpath's index and its new shape; None when the stroke
+/// doesn't start and end on the same subpath, or meets it once.
 fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -> Option<(usize, SubPath)> {
     use kurbo::ParamCurveArclen;
     let (first, last) = (*pts.first()?, *pts.last()?);
@@ -129,10 +163,8 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
     if reversed {
         stroke.reverse();
     }
-    let (Some(s0), Some(s1)) = (stroke.first_mut(), sp.anchors.get(start)) else { return None };
-    *s0 = s1.p;
-    let (Some(e0), Some(e1)) = (stroke.last_mut(), sp.anchors.get(end)) else { return None };
-    *e0 = e1.p;
+    let (Some(s1), Some(e1)) = (sp.anchors.get(start), sp.anchors.get(end)) else { return None };
+    bend_ends(&mut stroke, Some(s1.p), Some(e1.p), within);
     let fit = stroke_subpath(&stroke, tol, false).anchors.into_vec();
     let (Some(f0), Some(f1)) = (fit.first().copied(), fit.last().copied()) else { return None };
     let inner = fit.get(1..fit.len().saturating_sub(1)).unwrap_or_default();
@@ -208,6 +240,9 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
     // The undo step's name: a stroke painted with a brush is a Paintbrush stroke, whatever its style.
     let label = if brush || brush_name.is_some() { "Paintbrush" } else { "Pencil" };
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
+    // The Pencil's preview of a stroke that redraws a path draws it as a new path but leaves the
+    // selection as it is: the path being redrawn stays selected until the release redraws it.
+    let leave_selection = switch_or(p, "leaveSelection", false, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     if let Some(ext) = p.get("extend").filter(|v| !v.is_null()) {
         let id = object_param(ext, "id", C)?.ok_or_else(|| bad(C, "extend needs id"))?;
@@ -452,7 +487,7 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         }
     }
     let out = insert_look(s, label, path_kind(PathData::single(sp)), look, None, keep_selected)?;
-    if !keep_selected {
+    if !keep_selected && !leave_selection {
         // A new stroke with Keep selected off leaves nothing selected: Illustrator starts the stroke
         // by dropping the earlier selection, it does not keep it (#5752).
         s.select(|_, sel| sel.clear())?;
@@ -618,4 +653,22 @@ pub(super) fn blob(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(json!({ "id": keep.0 }))
+}
+
+#[cfg(test)]
+mod bend_tests {
+    use super::*;
+
+    /// The ends move onto their targets, the stroke behind them less and less, and nothing farther
+    /// along than `reach`.
+    #[test]
+    fn bend_ends_moves_the_ends_and_fades_out_along_the_reach() {
+        let mut pts: Vec<Point> = (0..=10).map(|i| Point::new(f64::from(i) * 10.0, 0.0)).collect();
+        bend_ends(&mut pts, Some(Point::new(0.0, 8.0)), Some(Point::new(100.0, -8.0)), 40.0);
+        assert_eq!(pts[0], Point::new(0.0, 8.0));
+        assert_eq!(pts[10], Point::new(100.0, -8.0));
+        assert!((pts[2].y - 8.0 * 0.5).abs() < 1e-9, "halfway along the reach, half the shift: {:?}", pts[2]);
+        assert!((pts[8].y + 8.0 * 0.5).abs() < 1e-9, "{:?}", pts[8]);
+        assert_eq!(pts[5], Point::new(50.0, 0.0), "the middle doesn't move");
+    }
 }
