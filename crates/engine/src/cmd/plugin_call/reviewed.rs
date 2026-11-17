@@ -591,6 +591,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "swatch.move",
     "swatch.new",
     "swatch.newGroup",
+    "swatch.renameGroup",
     "swatch.resetDefaults",
     "swatch.setSpot",
     "swatch.sortByKind",

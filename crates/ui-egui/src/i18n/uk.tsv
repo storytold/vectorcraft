@@ -4156,6 +4156,8 @@ effect	Points	Точки
 	Unembed…	Витягти…
 	Ungroup	Розгрупувати
 	Ungroup Color Group	Розгрупувати колірну групу
+	Color Group Options	Параметри колірної групи
+	Color Group Options…	Параметри колірної групи…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -4903,6 +4905,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	a freeform gradient keeps at least one point	довільний градієнт зберігає як мінімум одну точку
 @msg	a gradient needs at least two stops	градієнту потрібні як мінімум дві точки переходу
 @msg	a graphic style named `{to}` already exists	графічний стиль з ім’ям `{to}` вже існує
+@msg	a swatch or color group named `{name}` already exists	зразок або колірна група з ім’ям `{name}` вже існує
 @msg	a key object sits on that point	у цій точці розташований ключовий об’єкт
 @msg	a page is missing	сторінка відсутня
 @msg	a page out of range	сторінка поза діапазоном

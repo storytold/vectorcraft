@@ -212,6 +212,33 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     body(app, ui, TILE);
 }
 
+/// Command `id` ran with `params` and replied `reply`: a color group that `swatch.renameGroup`
+/// renamed stays selected in the panel under its new name, and Shift-click still extends the
+/// selection from it. The steps of a `command.batch` are followed in order.
+pub(crate) fn after_command(ctx: &egui::Context, id: &str, params: &Value, reply: &Value) {
+    match id {
+        "swatch.renameGroup" => {
+            let (Some(old), Some(new)) = (params["group"].as_str(), reply["name"].as_str()) else { return };
+            let mut sel: Vec<String> = pstate(ctx, "swatch-selected");
+            for n in sel.iter_mut().filter(|n| *n == old) {
+                *n = new.to_string();
+            }
+            set_pstate(ctx, "swatch-selected", sel);
+            if pstate::<String>(ctx, "swatch-anchor") == old {
+                set_pstate(ctx, "swatch-anchor", new.to_string());
+            }
+        }
+        "command.batch" => {
+            let steps = params["commands"].as_array().map(Vec::as_slice).unwrap_or_default();
+            let results = reply["results"].as_array().map(Vec::as_slice).unwrap_or_default();
+            for (step, r) in steps.iter().zip(results) {
+                after_command(ctx, step["command"].as_str().unwrap_or_default(), &step["params"], r);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Item actions target the clicked swatch, independently of the paint or other selected chips.
 fn item_context_menu(app: &mut VectorcraftApp, ui: &Ui, resp: &Response, e: &Entry) {
     if e.is_folder() {

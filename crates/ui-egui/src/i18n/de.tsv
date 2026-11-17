@@ -4064,6 +4064,8 @@ effect	Points	Punkte
 	Unembed…	Einbettung aufheben…
 	Ungroup	Gruppierung aufheben
 	Ungroup Color Group	Farbgruppe auflösen
+	Color Group Options	Farbgruppenoptionen
+	Color Group Options…	Farbgruppenoptionen…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -4785,6 +4787,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	a freeform gradient keeps at least one point	ein Freiformverlauf behält mindestens einen Punkt
 @msg	a gradient needs at least two stops	ein Verlauf braucht mindestens zwei Farbstopps
 @msg	a graphic style named `{to}` already exists	ein Grafikstil namens `{to}` ist bereits vorhanden
+@msg	a swatch or color group named `{name}` already exists	ein Farbfeld oder eine Farbgruppe namens `{name}` ist bereits vorhanden
 @msg	a key object sits on that point	auf diesem Punkt liegt ein Basisobjekt
 @msg	a page is missing	eine Seite fehlt
 @msg	a page out of range	eine Seite außerhalb des Bereichs

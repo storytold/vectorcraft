@@ -4163,6 +4163,8 @@ digits	Malayalam	Malayalam
 	Unembed…	Rimuovi incorporamento…
 	Ungroup	Separa
 	Ungroup Color Group	Separa gruppo colori
+	Color Group Options	Opzioni gruppo colori
+	Color Group Options…	Opzioni gruppo colori…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -4919,6 +4921,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	a freeform gradient keeps at least one point	una sfumatura a forma libera mantiene almeno un punto
 @msg	a gradient needs at least two stops	una sfumatura richiede almeno due cursori colore
 @msg	a graphic style named `{to}` already exists	esiste già uno stile grafico denominato `{to}`
+@msg	a swatch or color group named `{name}` already exists	esiste già un campione o un gruppo colori denominato `{name}`
 @msg	a key object sits on that point	su quel punto si trova un oggetto chiave
 @msg	a page is missing	manca una pagina
 @msg	a page out of range	una pagina fuori intervallo

@@ -2181,6 +2181,7 @@ file-filter	Templates	範本
 @msg	select a stroke with a variable width	請選取寬度可變的筆畫
 @msg	the selected stroke's profile is already listed as {_1}	所選筆畫的描述檔已列為 {_1}
 @msg	a graphic style named `{to}` already exists	名為 `{to}` 的繪圖樣式已存在
+@msg	a swatch or color group named `{name}` already exists	名為 `{name}` 的色票或顏色群組已存在
 @msg	no graphic style `{name}`	沒有繪圖樣式 `{name}`
 @msg	node {_1} is not text	節點 {_1} 不是文字
 @msg	node {_1} is on a locked artboard	節點 {_1} 位於已鎖定的工作區域上
@@ -5300,6 +5301,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Unembed…	取消嵌入…
 	Ungroup	解散群組
 	Ungroup Color Group	解散顏色群組
+	Color Group Options	顏色群組選項
+	Color Group Options…	顏色群組選項…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)

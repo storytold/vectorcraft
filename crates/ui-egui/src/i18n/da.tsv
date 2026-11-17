@@ -6677,6 +6677,8 @@ theme	Appearance	Udseende
 	Spot Colors (0)	Spotfarver (0)
 	Swatch Options	Indstillinger for farveprøve
 	Ungroup Color Group	Afgruppér farvegruppe
+	Color Group Options	Indstillinger for farvegruppe
+	Color Group Options…	Indstillinger for farvegruppe…
 	Copy to User Defined	Kopiér til brugerdefinerede
 	Swatch Library	Farveprøvebibliotek
 	Clear All Tabs	Ryd alle tabulatorer
@@ -7400,6 +7402,7 @@ imageTrace	Outline	Kontur
 @msg	a freeform gradient keeps at least one point	en freeform-gradient bevarer mindst ét punkt
 @msg	a gradient needs at least two stops	en gradient skal have mindst to stop
 @msg	a graphic style named `{to}` already exists	der findes allerede en grafikstil med navnet `{to}`
+@msg	a swatch or color group named `{name}` already exists	der findes allerede en farveprøve eller farvegruppe med navnet `{name}`
 @msg	a page is missing	en side mangler
 @msg	a page out of range	en side uden for området
 @msg	a page tree kid isn't a reference	et barn i sidetræet er ikke en reference

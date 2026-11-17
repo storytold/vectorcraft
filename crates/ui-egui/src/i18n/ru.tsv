@@ -4146,6 +4146,8 @@ digits	Malayalam	Малаялам
 	Unembed…	Извлечь…
 	Ungroup	Разгруппировать
 	Ungroup Color Group	Разгруппировать цветовую группу
+	Color Group Options	Параметры цветовой группы
+	Color Group Options…	Параметры цветовой группы…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -4913,6 +4915,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	a freeform gradient keeps at least one point	произвольный градиент сохраняет как минимум одну точку
 @msg	a gradient needs at least two stops	градиенту нужны как минимум две точки перехода
 @msg	a graphic style named `{to}` already exists	графический стиль с именем `{to}` уже существует
+@msg	a swatch or color group named `{name}` already exists	образец или цветовая группа с именем `{name}` уже существует
 @msg	a key object sits on that point	в этой точке находится ключевой объект
 @msg	a page is missing	страница отсутствует
 @msg	a page out of range	страница вне диапазона

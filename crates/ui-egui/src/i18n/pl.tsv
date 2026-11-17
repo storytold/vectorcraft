@@ -4128,6 +4128,8 @@ theme	Appearance	Wygląd
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
+	Color Group Options	Opcje grupy kolorów
+	Color Group Options…	Opcje grupy kolorów…
 	Copy to User Defined	Kopiuj do zdefiniowanych przez użytkownika
 	Swatch Library	Biblioteka próbek
 	Clear All Tabs	Usuń wszystkie tabulatory
@@ -5007,6 +5009,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a freeform gradient keeps at least one point	gradient dowolny musi mieć co najmniej jeden punkt
 @msg	a gradient needs at least two stops	gradient potrzebuje co najmniej dwóch punktów koloru
 @msg	a graphic style named `{to}` already exists	styl graficzny o nazwie `{to}` już istnieje
+@msg	a swatch or color group named `{name}` already exists	próbka lub grupa kolorów o nazwie `{name}` już istnieje
 @msg	a key object sits on that point	w tym punkcie leży obiekt kluczowy
 @msg	a page is missing	brak strony
 @msg	a page out of range	strona spoza zakresu

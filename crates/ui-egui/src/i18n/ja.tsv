@@ -3724,6 +3724,8 @@ mark-style	Japanese	日本式
 	Unembed	埋め込みを解除
 	Unembed…	埋め込みを解除…
 	Ungroup Color Group	カラーグループを解除
+	Color Group Options	カラーグループオプション
+	Color Group Options…	カラーグループオプション…
 	Uniform	縦横比を固定
 	Unite	合体
 	Units	単位
@@ -4955,6 +4957,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	select a stroke with a variable width	可変幅の線を選択してください
 @msg	the selected stroke's profile is already listed as {_1}	選択した線のプロファイルは、すでに {_1} として登録されています
 @msg	a graphic style named `{to}` already exists	`{to}` という名前のグラフィックスタイルはすでに存在します
+@msg	a swatch or color group named `{name}` already exists	`{name}` という名前のスウォッチまたはカラーグループはすでに存在します
 @msg	a key object sits on that point	そのポイントにはキーオブジェクトがあります
 @msg	no graphic style `{name}`	グラフィックスタイル `{name}` が見つかりません
 @msg	node {_1} is not text	ノード {_1} はテキストではありません

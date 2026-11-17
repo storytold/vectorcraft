@@ -5183,6 +5183,8 @@ digits	Malayalam	Malaiàlam
 	Unembed…	Desincrusta…
 	Ungroup	Desagrupa
 	Ungroup Color Group	Desagrupa el grup de colors
+	Color Group Options	Opcions del grup de colors
+	Color Group Options…	Opcions del grup de colors…
 	Unicode	Unicode
 	Unicode (UTF-16)	Unicode (UTF-16)
 	Unicode (UTF-8)	Unicode (UTF-8)
@@ -5637,6 +5639,9 @@ digits	Malayalam	Malaiàlam
 @msg	a freeform gradient keeps at least one point	un degradat de forma lliure conserva com a mínim un punt
 @msg	a gradient needs at least two stops	un degradat necessita com a mínim dues parades
 @msg	a graphic style named `{to}` already exists	ja existeix un estil gràfic anomenat `{to}`
+@msg	a swatch or color group named `{name}` already exists	ja existeix una mostra o un grup de colors anomenat `{name}`
+@msg	missing `group`	falta `group`
+@msg	no colour group `{group}`	no hi ha el grup de colors `{group}`
 @msg	a key object sits on that point	hi ha un objecte clau en aquest punt
 @msg	a layer couldn't be read	no s’ha pogut llegir una capa
 @msg	a linked image can't become a gradient mesh: embed it first	una imatge enllaçada no pot esdevenir una malla de degradat: incrusteu-la primer

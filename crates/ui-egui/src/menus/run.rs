@@ -760,6 +760,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             let names = p.get("swatches").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
             crate::dialogs::new_color_group::open(app, names.unwrap_or_default())
         }
+        "ui.colorGroupOptions" => crate::dialogs::color_group_options::open(app, p),
         "ui.colorPicker" => crate::dialogs::open_color_picker(app, p),
         "ui.sampleScreenColor" => crate::screen_color::start(app, p),
         "ui.graphicStyleOptions" => crate::dialogs::graphic_style_options::open(app, s("name").as_deref()),

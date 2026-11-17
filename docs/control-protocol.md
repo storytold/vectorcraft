@@ -147,7 +147,9 @@ those rows with `layer.delete` in the document the question was asked in. `layer
 New swatches and colour groups: `ui.newSwatch {spot?, global?, group?}` opens the `newSwatch` dialog prefilled from the active
 fill or stroke (fields as in `swatchOptions` plus `group`; a gradient or pattern only takes `name`) and
 `ui.newColorGroup {swatches?}` opens `newColorGroup` (fields `name`, `fromArtwork`, `toGlobal`, `includeTints`,
-`swatches`); `ui.dialog.confirm` runs `swatch.new` / `swatch.newGroup`.
+`swatches`); `ui.dialog.confirm` runs `swatch.new` / `swatch.newGroup`. `ui.colorGroupOptions {group}` opens
+`colorGroupOptions` (fields `name` and `__group`), whose `ui.dialog.confirm` runs `swatch.renameGroup`; a refused name
+keeps the dialog open.
 
 The Color Picker is a dialog too: `engine.execute {command: "ui.colorPicker", params: {stroke?, color?}}` opens it for the fill (or stroke) proxy; `ui.dialog.set {field: "hex", value: "00FF00"}` (or `color`, `channel`, `webOnly`, `swatches`) then `ui.dialog.confirm` applies the colour through `paint.setFill` / `paint.setStroke`.
 

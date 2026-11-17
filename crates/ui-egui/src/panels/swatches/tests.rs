@@ -1230,6 +1230,44 @@ fn click_menu_item(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
     menu_frame(app, ctx, vec![button(false)]);
 }
 
+/// The panel menu's Color Group Options… opens on the selected color group when that group is the
+/// whole selection; with nothing selected, a swatch alone, or a swatch or a second group beside the
+/// group, it opens nothing. After OK, and after `swatch.renameGroup` run on its own or in a batch,
+/// the group stays selected under its new name.
+#[test]
+fn color_group_options_opens_on_a_sole_selected_group() {
+    let mut app = app();
+    let ctx = context();
+    for sel in [vec![], vec!["Red"], vec!["Brights", "Red"], vec!["Brights", "Grays"]] {
+        set_pstate(&ctx, "swatch-selected", sel.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        click_menu_item(&mut app, &ctx, "Color Group Options…");
+        assert!(app.ui.dialog.is_none(), "{sel:?}");
+    }
+    set_pstate(&ctx, "swatch-selected", vec!["Grays".to_string()]);
+    click_menu_item(&mut app, &ctx, "Color Group Options…");
+    let d = app.ui.dialog.as_ref().expect("Color Group Options opens");
+    assert_eq!((d.kind.as_str(), d.str("__group").as_str()), (crate::dialogs::color_group_options::KIND, "Grays"));
+    // OK keeps the renamed group selected, so the item opens on it again.
+    app.ui_ctx = Some(ctx.clone());
+    set_pstate(&ctx, "swatch-anchor", "Grays".to_string());
+    app.ui.dialog.as_mut().unwrap().fields.insert("name".into(), json!("Neutrals"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(selected(&ctx), ["Neutrals"]);
+    assert_eq!(pstate::<String>(&ctx, "swatch-anchor"), "Neutrals", "Shift-click extends from the renamed group");
+    click_menu_item(&mut app, &ctx, "Color Group Options…");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__group")).as_deref(), Some("Neutrals"));
+    crate::dialogs::cancel(&mut app);
+    // The command run on its own, and as batch steps, keeps the selection the same way.
+    app.run("swatch.renameGroup", json!({"group": "Neutrals", "name": "Stone"})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Stone".to_string()], "Stone".to_string()));
+    let steps = json!([
+        {"command": "swatch.renameGroup", "params": {"group": "Stone", "name": "Slate"}},
+        {"command": "swatch.renameGroup", "params": {"group": "Slate", "name": "Ash"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!((selected(&ctx), pstate::<String>(&ctx, "swatch-anchor")), (vec!["Ash".to_string()], "Ash".to_string()));
+}
+
 /// The panel menu's Show Recent Colors hides and shows the panel's Recent Colors row (#6617):
 /// checked by default, applied colors still join the list while the row is hidden, and the Color
 /// panel keeps its own row and setting.

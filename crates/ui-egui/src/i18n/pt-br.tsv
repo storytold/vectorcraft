@@ -3361,6 +3361,8 @@ digits	Malayalam	Malaiala
 	Unembed…	Desincorporar…
 	Ungroup	Desagrupar
 	Ungroup Color Group	Desagrupar Grupo de Cores
+	Color Group Options	Opções de Grupo de Cores
+	Color Group Options…	Opções de Grupo de Cores…
 	Uniform	Uniforme
 	Unite	Unir
 	Units	Unidades
@@ -4202,6 +4204,7 @@ axis	Both	Ambos
 @msg	a freeform gradient keeps at least one point	um gradiente de forma livre mantém pelo menos um ponto
 @msg	a gradient needs at least two stops	um gradiente precisa de pelo menos duas paradas
 @msg	a graphic style named `{to}` already exists	já existe um estilo gráfico chamado `{to}`
+@msg	a swatch or color group named `{name}` already exists	já existe uma amostra ou um grupo de cores chamado `{name}`
 @msg	a key object sits on that point	há um objeto-chave nesse ponto
 @msg	a page is missing	falta uma página
 @msg	a page out of range	uma página fora do intervalo

@@ -5591,6 +5591,8 @@ antiAlias	Sharp	शार्प
 	Unembedded to {}	एम्बेड हटाकर {} में रखा गया
 	Ungroup	समूह तोड़ें
 	Ungroup Color Group	रंग समूह का ग्रूपिंग हटाएँ
+	Color Group Options	रंग समूह ऑप्शन्स
+	Color Group Options…	रंग समूह ऑप्शन्स…
 	Unicode	यूनिकोड
 	Unicode (UTF-16)	यूनिकोड (UTF-16)
 	Unicode (UTF-8)	यूनिकोड (UTF-8)
@@ -6580,6 +6582,7 @@ antiAlias	Sharp	शार्प
 @msg	a graph has at most {_1} series, so it transposes with at most that many categories	एक ग्राफ में सबसे {_1} श्रृंखला है, इसलिए यह उस कई श्रेणियों के साथ ट्रांसपोजित होता है।
 @msg	a graph's records don't end where they should: its art was read as it is	एक ग्राफ का रिकॉर्ड अंत नहीं है जहां उन्हें होना चाहिए: इसकी कला को पढ़ा गया क्योंकि यह है
 @msg	a graphic style named `{to}` already exists	`{to}` नामक एक ग्राफिक स्टाइल पहले से मौजूद है
+@msg	a swatch or color group named `{name}` already exists	`{name}` नामक एक स्वॉच या रंग समूह पहले से मौजूद है
 @msg	a group crosses a multi-layer mask	एक समूह एक बहुलेयर मास्क पार करता है
 @msg	a key object sits on that point	एक प्रमुख ऑब्जेक्ट उस बिंदु पर बैठती है
 @msg	a layer can't be merged into its own sublayer	एक लेयर को अपने खुद के सबलेयर में विलय नहीं किया जा सकता है

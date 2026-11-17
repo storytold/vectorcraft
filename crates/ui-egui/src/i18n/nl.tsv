@@ -4551,6 +4551,8 @@ theme	Appearance	Vormgeving
 	Spot Colors (0)	Spotkleuren (0)
 	Swatch Options	Kleurstaalopties
 	Ungroup Color Group	Kleurgroep opheffen
+	Color Group Options	Opties voor kleurgroep
+	Color Group Options…	Opties voor kleurgroep…
 	Copy to User Defined	Kopiëren naar Gebruikergedefinieerd
 	Swatch Library	Bibliotheek met kleurstalen
 	Clear All Tabs	Alle tabs wissen
@@ -5275,6 +5277,7 @@ imageTrace	Outline	Contour
 @msg	a freeform gradient keeps at least one point	een verloop met vrije vorm behoudt minstens één punt
 @msg	a gradient needs at least two stops	een verloop heeft minstens twee stops nodig
 @msg	a graphic style named `{to}` already exists	er bestaat al een grafische stijl met de naam `{to}`
+@msg	a swatch or color group named `{name}` already exists	er bestaat al een kleurstaal of kleurgroep met de naam `{name}`
 @msg	a page is missing	er ontbreekt een pagina
 @msg	a page out of range	een pagina buiten het bereik
 @msg	a page tree kid isn't a reference	een kind van de paginaboom is geen verwijzing
