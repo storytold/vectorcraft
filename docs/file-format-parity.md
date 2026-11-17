@@ -345,6 +345,15 @@ Gradient meshes in the editing data keep each point's own color where a patch's 
 | Affinity `.af`, `.afdesign`, `.afpub` | no | yes (beyond Illustrator) | no (#665) | 51 pinned files, [affinity-validation.md](affinity-validation.md) |
 | Clipboard: PDF, SVG, PNG, EMF, text | yes | yes | yes | copied files paste as art; cells copied from a spreadsheet (tab-separated text) paste as a table of point type over gridlines, at most 1000 rows, 256 columns and 20,000 cells (#5296) |
 
+Opaque CMYK PSD/PSB merged images preserve their 8-bit or 16-bit ink samples, CMYK ICC profile, resolution,
+and clipping path through placement, relinking, updating, and embedding (#8316). VectorCraft stores these images
+as CMYK TIFFs up to its native limit of 67,108,864 pixels and within its allocation allowance. Other CMYK composites
+use the RGB import path, subject to its allocation limit; importing individual layers keeps its existing behavior.
+Synthetic regressions in
+`tests_psdread.rs` cover native samples, compression, metadata, and linked-image operations. The
+[public PSD specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/index.html) defines
+the CMYK planes and profile and resolution resources.
+
 ## PDF form gradients
 
 PDF export's linear and radial gradients stay aligned inside transparency groups, opacity masks,

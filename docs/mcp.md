@@ -7602,6 +7602,12 @@ they can't be read, as with a PNG cut short by a download or a sync still runnin
 can't be read" and places nothing; `clipboard.importImage` fails the same way. A JPEG cut short is placed when its
 pixels still decode. Both keep the decoded pixels (except a CMYK JPEG's) in the image store the renderers share, so the first render
 that draws the image does not decode the file again.
+Opaque CMYK PSD/PSB merged images retain their 8-bit or 16-bit ink samples, CMYK ICC profile, resolution, and
+clipping path when placed, linked, relinked, updated, or embedded. `file.place.info`, `image.info`, and `links.info`
+report CMYK for these images. VectorCraft's native CMYK limit is 67,108,864 pixels. Composites with transparency,
+images beyond that limit, and native samples beyond the allocation allowance use the RGB import path, subject to
+its allocation limit. Importing individual layers with `layers: true` retains its existing behavior.
+
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
 with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
