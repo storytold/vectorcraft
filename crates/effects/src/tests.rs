@@ -1697,7 +1697,7 @@ fn twist_joins_its_pieces_smoothly() {
         let out = apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &line, bounds);
         let anchors = &out.subpaths[0].anchors;
         assert!(anchors.len() > 8, "{angle}°: {} anchors", anchors.len());
-        for a in &anchors[1..anchors.len() - 1] {
+        for a in anchors.iter().skip(1).take(anchors.len() - 2) {
             let (into, out) = (a.p - a.h_in, a.h_out - a.p);
             if into.hypot() < 1e-9 || out.hypot() < 1e-9 {
                 continue;
