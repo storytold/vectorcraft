@@ -51,6 +51,8 @@ const ROWS: &[Row] = &[
     (&["livePaintBucket"], None, &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight", "color", "width"]),
     (&["polygon"], None, &["sides"]),
     (&["star"], None, &["points"]),
+    // The Ellipse dialog's Anchors.
+    (&["ellipse"], None, &["anchors"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (

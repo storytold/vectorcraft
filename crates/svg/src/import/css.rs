@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 
 pub(super) type XNode<'a, 'i> = roxmltree::Node<'a, 'i>;
 

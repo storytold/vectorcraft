@@ -1037,6 +1037,40 @@ fn brush_freehand_direct_call_has_one_undo_step() {
     assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Paintbrush"), "a stroke with a brush is a Paintbrush step");
 }
 
+/// A `brush.freehand` call that continues a path by one point changes only the path's brush, and
+/// applies `keepSelected` as a longer continuation does: off, the path is deselected while the
+/// rest of the selection stays; on, the path is selected. A call that leaves the brush as it is
+/// changes neither the selection nor the undo history.
+#[test]
+fn brush_freehand_continued_by_one_point_follows_keep_selected() {
+    let mut s = session();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    let a = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    let extend = json!({"id": p.0, "end": "end"});
+
+    select(&mut s, &[p, a]);
+    let off = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots", "keepSelected": false});
+    assert_eq!(s.execute("brush.freehand", &off).unwrap()["id"], json!(p.0));
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [a], "Keep selected off: the path is deselected and the rest stays");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Charcoal"), "one Undo takes back the brush");
+    assert_eq!(selected(&s), [p, a], "Undo gives back the earlier selection");
+
+    select(&mut s, &[a]);
+    let on = json!({"points": [[120, 10]], "extend": extend, "brush": "Dots"});
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(brush_of(&s, p).as_deref(), Some("Dots"));
+    assert_eq!(selected(&s), [p], "Keep selected on: the continued path is selected");
+
+    select(&mut s, &[a]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("brush.freehand", &on).unwrap();
+    assert_eq!(selected(&s), [a], "the same brush again: the selection stays");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the same brush again: no undo step");
+}
+
 /// `brush.freehand` refuses a brush for a path with no stroke (a continued path, a redrawn one
 /// and a new filled pencil path while the stroke is None) instead of reporting it painted: the
 /// document, the selection and the undo history stay as they were. Without a brush the path is
@@ -2564,4 +2598,51 @@ fn symbol_sort_by_name_orders_the_symbols_in_one_undo_step() {
     let before = s.doc().unwrap().history.undo.len();
     s.execute("symbol.sortByName", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().history.undo.len(), before);
+}
+
+/// `cmd::current_symbol` answers what `symbol.list` answers as `current`, and what `rule` (the
+/// stored name while a symbol has it, else the first of all the names) answers:
+/// with no symbols, with no stored name, with a stored name that is not first, after the current
+/// symbol is deleted, with a stored name no symbol has and with a stored value that is not text.
+#[test]
+fn current_symbol_is_the_current_symbol_list_answers() {
+    fn rule(d: &Document) -> Option<String> {
+        let names: Vec<String> = d.symbols.iter().map(|s| s.name.clone()).collect();
+        let stored = d.unknown.get("currentSymbol").and_then(Value::as_str).filter(|n| d.symbols.iter().any(|s| s.name == *n)).map(str::to_string);
+        stored.or_else(|| names.into_iter().next())
+    }
+    fn check(s: &mut Session, want: Option<&str>, case: &str) {
+        let listed = s.execute("symbol.list", &json!({})).unwrap()["current"].clone();
+        let d = &s.doc().unwrap().doc;
+        let helper = crate::cmd::current_symbol(d);
+        assert_eq!(helper.as_deref(), want, "{case}");
+        assert_eq!(json!(helper), listed, "{case}: symbol.list");
+        assert_eq!(helper, rule(d), "{case}: the rule");
+    }
+    fn store(s: &mut Session, v: Value) {
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.insert("currentSymbol".into(), v);
+    }
+    let mut s = session();
+    check(&mut s, None, "no symbols");
+    store(&mut s, json!("Gone"));
+    check(&mut s, None, "no symbols and a stored name");
+    for (i, name) in ["A", "B", "C"].into_iter().enumerate() {
+        rect(&mut s, 20.0 * i as f64, 0.0, 10.0, 10.0);
+        s.execute("symbol.new", &json!({"name": name})).unwrap();
+    }
+    check(&mut s, Some("C"), "the newest symbol is current");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.remove("currentSymbol");
+    check(&mut s, Some("A"), "no stored name");
+    s.execute("symbol.setCurrent", &json!({"name": "B"})).unwrap();
+    check(&mut s, Some("B"), "a stored name that is not first");
+    s.execute("symbol.delete", &json!({"name": "B"})).unwrap();
+    check(&mut s, Some("A"), "the current symbol deleted");
+    store(&mut s, json!("Renamed"));
+    check(&mut s, Some("A"), "a stored name no symbol has");
+    store(&mut s, json!(3));
+    check(&mut s, Some("A"), "a stored number");
+    store(&mut s, json!(["C"]));
+    check(&mut s, Some("A"), "a stored list");
+    store(&mut s, json!("C"));
+    check(&mut s, Some("C"), "a stored name that is last");
 }

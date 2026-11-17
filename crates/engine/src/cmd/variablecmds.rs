@@ -11,6 +11,7 @@
 //! visibility, `@` for image, no prefix for text). `variable.loadLibrary` replaces the variables and data sets with the
 //! variables and data sets of a variable library, the XML file of the reference app's Save
 //! Variable Library, and `variable.saveLibrary` writes the variables and data sets as one.
+//! `variable.import` (the panel's Import…) runs one of the two readers by the file's extension.
 //! Agents reach every command through `run_command`, like all engine commands.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -865,6 +866,22 @@ fn dataset_step(s: &mut Session, cmd: &str, forward: bool) -> Result<Value> {
     apply_dataset(s, &name)
 }
 
+/// The Variables panel's Import…: a data source file read by its extension, a CSV, TSV or TXT
+/// file as `dataset.import` reads it and an XML file as `variable.loadLibrary` reads it. The
+/// result is that command's, with `format` set to `csv` or `xml`.
+fn variable_import(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.import";
+    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
+    let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    let (format, mut out) = match ext.as_deref() {
+        Some("csv" | "tsv" | "txt") => ("csv", dataset_import(s, &json!({"path": path}))?),
+        Some("xml") => ("xml", load_library(s, &json!({"path": path}))?),
+        _ => return Err(bad(C, "Import reads a data source file ending in .csv, .tsv, .txt or .xml")),
+    };
+    out["format"] = json!(format);
+    Ok(out)
+}
+
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -1056,6 +1073,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{path? | data? | dataBase64? | csv?} replace every dataset with the rows of a CSV, comma- or tab-separated, in UTF-16 (with a byte-order mark, or without one when at least half of its two-byte units hold a NUL byte and only one byte order reads a line break; any other file with NUL bytes is refused), UTF-8 or else Windows-1252 (header: one variable name per column, whatever its case; one row per dataset, named Data Set 1, 2… in file order). The document's variables and their bindings stay. A header that names no variable defines one, unbound: `#Name` defines a visibility variable, `@Name` defines an image variable, and a header without a prefix defines a text variable. A prefixed header whose name is a variable of another kind, and a `%` header that isn't a variable's exact name (graph data files), are refused, and so are two headers that name one variable and a header that would define a variable while the variables are locked. An import that leaves the variables and data sets as they were adds no undo step → {imported, names, defined, deletedDataSets}",
             has_doc,
             dataset_import
+        ),
+        cmd!(
+            "variable.import",
+            "Import…",
+            ["Window", "Variables"],
+            None,
+            "{path} import a data source file, chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
+            has_doc,
+            variable_import
         ),
         cmd!(
             query "dataset.export",
