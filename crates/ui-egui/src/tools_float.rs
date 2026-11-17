@@ -168,7 +168,8 @@ enum Dock {
 /// panels docked on the left, both left strips put Tools in the same place, and a drop on either
 /// docks it where `beside_canvas` puts it; with panels collapsed narrower than the window's strip,
 /// so does a drop in the column the two strips share. The canvas's strip lights up where both are
-/// under `at` and `beside_canvas` is on. Without `canvas_laid_out`, the canvas's strip is skipped.
+/// under `at` and `beside_canvas` is on; with no panels docked on the left, the window's strip lights
+/// up, where Tools docks. Without `canvas_laid_out`, the canvas's strip is skipped.
 fn drop_zone(ctx: &egui::Context, at: Pos2, beside_canvas: bool, canvas_laid_out: bool) -> Option<(Rect, Dock)> {
     let (canvas, window, right, area_left) = ctx.data(|d| {
         let canvas = d.get_temp::<Rect>(tools_zone_id()).filter(|_| canvas_laid_out);
@@ -177,9 +178,11 @@ fn drop_zone(ctx: &egui::Context, at: Pos2, beside_canvas: bool, canvas_laid_out
     let panels_left = matches!((canvas, area_left), (Some(c), Some(left)) if c.left() > left + 0.5);
     let shared = !panels_left || matches!((canvas, window), (Some(c), Some(w)) if c.x_range().contains(at.x) && w.x_range().contains(at.x));
     let follow = |beside: bool| Dock::Left((!shared).then_some(beside));
+    // With no panels docked on the left, Tools docks at the window's edge either way.
+    let shown = |hit: Rect| if panels_left { hit } else { window.unwrap_or(hit) };
     match (canvas.filter(|r| r.contains(at)), window.filter(|r| r.contains(at))) {
-        (Some(c), Some(w)) => return Some((if beside_canvas { c } else { w }, follow(beside_canvas))),
-        (Some(c), None) => return Some((c, follow(true))),
+        (Some(c), Some(w)) => return Some((shown(if beside_canvas { c } else { w }), follow(beside_canvas))),
+        (Some(c), None) => return Some((shown(c), follow(true))),
         (None, Some(w)) => return Some((w, follow(false))),
         (None, None) => {}
     }
@@ -187,6 +190,12 @@ fn drop_zone(ctx: &egui::Context, at: Pos2, beside_canvas: bool, canvas_laid_out
     // Read outside the data lock above: egui's context locks are not re-entrant.
     let at_edge = at.x >= ctx.content_rect().right() - crate::toolbar::WIDTH && r.y_range().contains(at.y);
     (r.contains(at) || at_edge).then_some((r, Dock::Right))
+}
+
+/// The strip that lights up with the pointer at `at` during a move.
+#[cfg(test)]
+pub(crate) fn drop_highlight(ctx: &egui::Context, at: Pos2, beside_canvas: bool) -> Option<Rect> {
+    drop_zone(ctx, at, beside_canvas, true).map(|(zone, _)| zone)
 }
 
 fn highlight(ctx: &egui::Context, zone: Rect) {

@@ -895,7 +895,10 @@ fn tools_dropped_beside_a_left_toolbar_lane_keep_the_setting() {
         settle(&mut h);
         let canvas_edge = h.ctx.data(|d| d.get_temp::<Rect>(crate::tools_float::tools_zone_id())).expect("the canvas-edge target");
         assert!(canvas_edge.left() > 30.0, "right of the toolbar lane: {canvas_edge:?}");
-        h.drag(pos2(620.0, 307.0), pos2(canvas_edge.right() - 4.0, canvas_edge.center().y));
+        let at = pos2(canvas_edge.right() - 4.0, canvas_edge.center().y);
+        let lit = crate::tools_float::drop_highlight(&h.ctx, at, beside).expect("a strip lights up");
+        assert!(lit.left() < 10.0, "the window's edge, where Tools docks, lights up: {lit:?}");
+        h.drag(pos2(620.0, 307.0), at);
         assert_eq!(h.app.ui.toolbar_pos, None, "set before: {beside}");
         assert_eq!(h.app.ui.tools_beside_canvas, beside, "the setting is unchanged");
         settle(&mut h);
@@ -921,8 +924,8 @@ fn tools_released_as_they_float_from_the_window_edge_keep_floating() {
     assert!(!h.app.ui.tools_beside_canvas);
 }
 
-/// A drop on the right edge, or a click on the title bar of Tools floating over the canvas's left
-/// edge, leaves the setting as it is.
+/// A drop on the right edge leaves the setting as it is, and so does a move of Tools floating over
+/// the canvas's left edge that ends within a few points of where it started.
 #[test]
 fn tools_docked_on_the_right_or_clicked_leave_the_setting() {
     for beside in [false, true] {
@@ -940,9 +943,15 @@ fn tools_docked_on_the_right_or_clicked_leave_the_setting() {
         let [x, y] = h.app.ui.toolbar_pos.unwrap();
         let title = pos2(x + 12.0, y + 7.0);
         assert!(canvas_edge.contains(title), "the title bar is over the canvas's edge: {title:?} {canvas_edge:?}");
-        h.click(title);
-        assert!(h.app.ui.toolbar_pos.is_some(), "a click docks nothing, set before: {beside}");
-        assert_eq!(h.app.ui.tools_beside_canvas, beside, "a click leaves the setting");
+        h.press_and_move(title, title + vec2(30.0, 0.0));
+        let moved = h.app.ui.toolbar_pos.map(|[px, _]| px - x);
+        assert!(moved.is_some_and(|dx| dx > 10.0), "the move started, set before: {beside}: {moved:?}");
+        let back = title + vec2(2.0, 0.0);
+        h.frame(vec![Event::PointerMoved(back)]);
+        h.frame(vec![button(back, false)]);
+        settle(&mut h);
+        assert!(h.app.ui.toolbar_pos.is_some(), "released where it started, Tools docks nowhere, set before: {beside}");
+        assert_eq!(h.app.ui.tools_beside_canvas, beside, "the setting is unchanged");
     }
 }
 
