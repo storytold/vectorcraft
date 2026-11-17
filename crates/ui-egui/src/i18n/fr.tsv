@@ -619,6 +619,8 @@ font-technology	Variable	Variables
 	Control	Contrôle
 	Convert	Convertir
 	Convert All Spot Colors to Process	Convertir tous les tons directs en couleurs quadrichromiques
+	Convert {name} to process	Convertir {name} en couleur quadrichromique
+	Keep {name} as spot	Conserver {name} en ton direct
 	Convert All Strokes to Outlines	Vectoriser tous les contours
 	Convert All Text to Outlines	Vectoriser tout le texte
 	Convert Anchor Point	Convertir le point d’ancrage
@@ -694,6 +696,9 @@ font-technology	Variable	Variables
 	Create from Selection	Créer à partir de la sélection
 	Create From:	Créer à partir de :
 	Create Gradient Mesh…	Créer un filet de dégradé…
+	Flat	Plat
+	To Center	Vers le centre
+	To Edge	Vers le bord
 	Create Graph	Créer un graphe
 	Create New Layer	Créer un calque
 	Create New Sublayer	Créer un sous-calque
@@ -2709,6 +2714,18 @@ font-technology	Variable	Variables
 	Preview:	Aperçu :
 	Preview All Layers	Aperçu de tous les calques
 	Preview in Browser	Aperçu dans le navigateur
+	Optimize to File Size…	Optimiser selon la taille du fichier…
+	Optimize to File Size	Optimiser selon la taille du fichier
+	Desired File Size:	Taille de fichier souhaitée :
+	Start With:	Commencer par :
+	Use:	Utiliser :
+	Current Settings	Réglages actuels
+	Auto Select GIF/JPEG	Sélection automatique GIF/JPEG
+	Total of All Slices	Total de toutes les tranches
+	Each Slice	Chaque tranche
+	Current Slice	Tranche active
+	{size}, within {target}	{size}, dans la limite de {target}
+	No setting tried fits in {target}; the smallest is {size}	Aucun réglage essayé ne tient dans {target}, le plus petit fait {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	L’aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
 	Preview Mode	Mode Aperçu
 	Preview the document as it is now	Afficher un aperçu du document dans son état actuel
@@ -3118,6 +3135,21 @@ digits	Malayalam	Malayalam
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Trace la grille derrière l’illustration. Désactivée, la grille est tracée par-dessus.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	En Aperçu en pixels, à partir d’un zoom de 600 %, la vue active affiche par-dessus l’illustration une ligne au bord de chaque pixel du document.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	La couleur du bord du carreau et des limites en pointillé de la nuance affichés pendant la modification d’un motif.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Aimante le dessin, le déplacement et la transformation aux illustrations proches et affiche repères et étiquettes. L’aperçu en pixels les désactive, et Magnétisme de la grille aimante à la grille à leur place.
+	The color of Smart Guide lines and labels.	La couleur des lignes et des étiquettes des repères commentés.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Affiche une ligne le long du bord ou du centre avec lequel l’illustration s’aligne. Si l’option est désactivée, l’illustration s’aligne toujours sans la ligne, et Magnétisme du glyphe ne s’applique pas.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Avec un outil de sélection, entoure l’objet non sélectionné sous le pointeur de la couleur de son calque tant que vous ne faites pas glisser.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Affiche la taille ou l’angle près du pointeur pendant la mise à l’échelle, la rotation, la déformation ou la symétrie d’une illustration.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Pendant le dessin, les points s’aimantent à des lignes aux angles choisis passant par le point de départ du segment ou de la forme.
+	The set of angles the construction guides follow while Construction Guides is on.	L’ensemble des angles que suivent les repères de construction lorsque Repères de construction est activé.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Nomme ce sur quoi un point s’aimante, comme un point d’ancrage, un tracé ou un alignement. Si l’option est désactivée, les points s’aimantent de la même façon, sans les noms.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Affiche près du pointeur les distances, les angles et le déplacement de l’illustration pendant le dessin ou le déplacement.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Aimante une illustration déplacée ou redimensionnée au même écart qu’entre les objets proches et marque les écarts égaux.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Avec une sélection, maintenir Alt/Option au-dessus d’un autre objet ou d’un plan de travail affiche les distances entre celui-ci et la sélection.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Une sélection ramenée à moins de la tolérance du magnétisme de son point de départ revient exactement à cet endroit. Une copie n’y revient pas.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	La distance à l’écran à laquelle le pointeur ou un point déplacé doit approcher une illustration pour que les repères commentés s’y aimantent. Elle est la même à tous les zooms.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Aimante l’extrémité d’un segment de droite, ou un cercle tracé depuis son centre, pour qu’il touche une courbe proche.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Aimante l’extrémité d’un segment de droite pour qu’il rencontre un segment droit proche à angle droit.
 	Reset all preferences to their defaults?	Rétablir toutes les préférences à leur valeur par défaut ?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Les valeurs par défaut sont appliquées lorsque vous cliquez sur OK dans Préférences. Annuler y conserve vos préférences actuelles.
 	Restore Recovered Documents	Restaurer les documents récupérés
@@ -4699,6 +4731,11 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	PDF writer error: {0}	Erreur du générateur PDF : {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} fichier assemblé dans {folder} ({note})|{n} fichiers assemblés dans {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Aperçu dans le navigateur nécessite l’application de bureau (la version web télécharge les fichiers à la place)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indiquez `desiredK`, la taille de fichier souhaitée en K (1024 octets), un nombre supérieur à 0 et au plus 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` vaut `current` ou `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` vaut `allSlices`, `eachSlice` ou `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` est un numéro de tranche de `slice.list`, avec `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimiser selon la taille du fichier, aucune image à mesurer
 @msg	Release Guides: no guides	Annuler les repères : aucun repère
 @msg	Release: no layer to put the rectangle in	Annuler : aucun calque où placer le rectangle
 @msg	Replace Spine: select a blend and a path	Remplacer la dorsale : sélectionnez un dégradé de formes et un tracé

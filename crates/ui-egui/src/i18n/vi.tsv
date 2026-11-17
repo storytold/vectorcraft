@@ -222,6 +222,8 @@ antiAlias	Sharp	Sắc nét
 	Crisp	Rõ nét
 	Strong	Đậm
 	Anti-aliasing:	Khử răng cưa:
+	Art Optimized	Tối ưu cho hình vẽ
+	Type Optimized	Tối ưu cho chữ
 	Any Kind	Bất kỳ loại
 	Font Technology	Công nghệ phông chữ
 font-technology	Variable	Biến thiên
@@ -715,6 +717,8 @@ font-technology	Variable	Biến thiên
 	Control	Điều khiển
 	Convert	Chuyển đổi
 	Convert All Spot Colors to Process	Chuyển tất cả màu đặc thành màu lai
+	Convert {name} to process	Chuyển {name} thành màu lai
+	Keep {name} as spot	Giữ {name} là màu đặc
 	Convert All Strokes to Outlines	Chuyển tất cả nét thành đường bao
 	Convert All Text to Outlines	Chuyển tất cả văn bản thành đường bao
 	Convert Anchor Point	Chuyển đổi điểm neo
@@ -794,6 +798,9 @@ font-technology	Variable	Biến thiên
 	Create from Selection	Tạo từ vùng chọn
 	Create From:	Tạo từ:
 	Create Gradient Mesh…	Tạo lưới chuyển sắc…
+	Flat	Phẳng
+	To Center	Về tâm
+	To Edge	Về cạnh
 	Create Graph	Tạo biểu đồ
 	Create New Fields by	Tạo trường mới bằng
 	Create New Layer	Tạo lớp mới
@@ -3073,6 +3080,18 @@ diagnostics	ui	giao diện
 	Preview:	Xem trước:
 	Preview All Layers	Xem trước tất cả lớp
 	Preview in Browser	Xem trước trong trình duyệt
+	Optimize to File Size…	Tối ưu theo kích thước tệp…
+	Optimize to File Size	Tối ưu theo kích thước tệp
+	Desired File Size:	Kích thước tệp mong muốn:
+	Start With:	Bắt đầu với:
+	Use:	Dùng:
+	Current Settings	Cài đặt hiện tại
+	Auto Select GIF/JPEG	Tự chọn GIF/JPEG
+	Total of All Slices	Tổng tất cả lát cắt
+	Each Slice	Mỗi lát cắt
+	Current Slice	Lát cắt hiện tại
+	{size}, within {target}	{size}, trong giới hạn {target}
+	No setting tried fits in {target}; the smallest is {size}	Không cài đặt nào đã thử vừa với {target}; nhỏ nhất là {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trong trình duyệt cần ứng dụng máy tính để bàn (web sẽ tải tệp xuống thay thế)
 	Preview Mode	Chế độ xem trước
 	Preview the document as it is now	Xem trước tài liệu như hiện tại
@@ -3478,6 +3497,21 @@ mark-style	Japanese	Kiểu Nhật
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Vẽ lưới phía sau tác phẩm; khi tắt, lưới được vẽ đè lên tác phẩm.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Trong Xem trước pixel ở mức thu phóng 600% trở lên, chế độ xem đang hoạt động hiện một đường tại cạnh của mỗi pixel tài liệu, đè lên tác phẩm.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Màu của cạnh ô và đường giới hạn mẫu màu nét đứt hiện ra khi bạn chỉnh sửa họa tiết.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Hút thao tác vẽ, di chuyển và biến đổi vào hình vẽ ở gần, đồng thời hiện đường căn và nhãn; Xem trước pixel tắt chúng, còn Hút vào lưới sẽ hút vào lưới thay cho chúng.
+	The color of Smart Guide lines and labels.	Màu của đường và nhãn của đường căn thông minh.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Hiện một đường dọc theo cạnh hoặc tâm mà hình vẽ thẳng hàng với; khi tắt, hình vẽ vẫn thẳng hàng mà không có đường, và Hút vào glyph không áp dụng.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Với công cụ chọn, viền đối tượng chưa chọn dưới con trỏ bằng màu lớp của nó khi bạn không kéo.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Hiện kích thước hoặc góc bên cạnh con trỏ khi bạn co giãn, xoay, làm nghiêng hoặc phản chiếu hình vẽ.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Khi bạn vẽ, các điểm hút vào những đường theo các góc đã chọn đi qua điểm bắt đầu của đoạn hoặc hình.
+	The set of angles the construction guides follow while Construction Guides is on.	Tập hợp các góc mà đường căn xây dựng đi theo khi Đường căn xây dựng đang bật.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Gọi tên thứ mà điểm hút vào, như điểm neo, đường dẫn hoặc căn chỉnh; khi tắt, các điểm vẫn hút như vậy nhưng không có tên.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Hiện khoảng cách, góc và mức hình vẽ đã di chuyển bên cạnh con trỏ khi bạn vẽ hoặc di chuyển.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Hút hình vẽ được di chuyển hoặc đổi kích thước vào khoảng cách bằng khoảng cách giữa các đối tượng ở gần, và đánh dấu các khoảng bằng nhau.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Khi đã chọn thứ gì đó, giữ Alt/Option trên một đối tượng khác hoặc một bảng vẽ sẽ hiện khoảng cách giữa nó và vùng chọn.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Vùng chọn được kéo trở lại trong phạm vi dung sai hút tính từ chỗ bắt đầu kéo sẽ trở về đúng chỗ đó; bản sao thì không.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Con trỏ hoặc điểm đang kéo phải đến gần hình vẽ trên màn hình bao nhiêu để đường căn thông minh hút vào; khoảng cách này như nhau ở mọi mức thu phóng.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hút đầu mút của đoạn thẳng, hoặc hình tròn vẽ từ tâm, để nó chạm vào một đường cong ở gần.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hút đầu mút của đoạn thẳng để nó gặp một đoạn thẳng ở gần theo góc vuông.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
@@ -5542,6 +5576,11 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	plug-in parameters: {0}	tham số plug-in: {0}
 @msg	plug-in trapped: {0}	plug-in bị kẹt: {0}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trên trình duyệt cần ứng dụng máy tính (web sẽ tải xuống tệp thay thế)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	hãy cho `desiredK`, kích thước tệp mong muốn tính bằng K (1024 byte): một số lớn hơn 0 và tối đa 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` là `current` hoặc `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` là `allSlices`, `eachSlice` hoặc `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` là số lát cắt từ `slice.list`, đi cùng `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Tối ưu theo kích thước tệp: không có ảnh để đo
 @msg	print settings are not an object	cài đặt in không phải là đối tượng
 @msg	printing isn't available here	in không khả dụng ở đây
 @msg	range `{s}` is empty	phạm vi `{s}` trống

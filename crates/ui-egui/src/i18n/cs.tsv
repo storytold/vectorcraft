@@ -224,6 +224,9 @@
 	Mask	Maska
 	Rasterize…	Rastrovat…
 	Create Gradient Mesh…	Vytvořit přechodovou síť…
+	Flat	Ploché
+	To Center	Ke středu
+	To Edge	K okraji
 	Create Object Mosaic…	Vytvořit mozaiku objektů…
 	Vector Halftone…	Vektorový polotón…
 	Create Trim Marks	Vytvořit značky ořezu
@@ -1191,6 +1194,18 @@ lighting	Light	Světlo
 	Placement Options…	Možnosti umístění…
 	Plug-in…	Zásuvný modul…
 	Preview in Browser	Náhled v prohlížeči
+	Optimize to File Size…	Optimalizovat na velikost souboru…
+	Optimize to File Size	Optimalizovat na velikost souboru
+	Desired File Size:	Požadovaná velikost souboru:
+	Start With:	Začít s:
+	Use:	Použít:
+	Current Settings	Aktuální nastavení
+	Auto Select GIF/JPEG	Automaticky vybrat GIF/JPEG
+	Total of All Slices	Součet všech řezů
+	Each Slice	Každý řez
+	Current Slice	Aktuální řez
+	{size}, within {target}	{size}, v rámci {target}
+	No setting tried fits in {target}; the smallest is {size}	Žádné vyzkoušené nastavení se nevejde do {target}; nejmenší má {size}
 	Printer Setup…	Nastavení tiskárny…
 	Printers	Tiskárny
 	Recent File	Nedávný soubor
@@ -2925,6 +2940,8 @@ digits	Malayalam	Malajálamské
 	Collate	Kompletovat
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitní barvy se na něj převádějí; separace podle něj separují, pokud je to profil CMYK.
 	Convert All Spot Colors to Process	Převést všechny přímé barvy na procesní
+	Convert {name} to process	Převést {name} na procesní
+	Keep {name} as spot	Ponechat {name} jako přímou barvu
 	Default Printer	Výchozí tiskárna
 	Document Ink Options	Možnosti inkoustů dokumentu
 	Download:	Stahování:
@@ -4581,6 +4598,21 @@ font-technology	Variable	Variabilní
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Kreslí mřížku za kresbou; je-li vypnuto, kreslí se mřížka přes ni.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	V náhledu obrazových bodů při zvětšení 600 % a více ukazuje aktivní zobrazení přes kresbu čáru na okraji každého obrazového bodu dokumentu.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Barva okraje dlaždice a přerušovaných hranic položky vzorníku, které se ukazují při úpravě vzorku.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Přichytává kreslení, přesouvání a transformace k blízké kresbě a ukazuje vodítka a popisky; Náhled obrazových bodů je vypíná a Přichytávat k mřížce místo nich přichytává k mřížce.
+	The color of Smart Guide lines and labels.	Barva čar a popisků chytrých vodítek.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Ukazuje čáru podél okraje nebo středu, ke kterému se kresba zarovnává; když je vypnuto, kresba se zarovnává i bez čáry a Přichytávat ke glyfům neplatí.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	S nástrojem pro výběr obtáhne nevybraný objekt pod ukazatelem barvou jeho vrstvy, dokud netáhnete.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Ukazuje u ukazatele velikost nebo úhel, když měníte velikost kresby nebo ji otáčíte, zkosujete či zrcadlíte.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Při kreslení se body přichytávají k čarám ve zvolených úhlech procházejícím bodem, kde začíná segment nebo tvar.
+	The set of angles the construction guides follow while Construction Guides is on.	Sada úhlů, které konstrukční vodítka sledují, když jsou Konstrukční vodítka zapnutá.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Pojmenuje, k čemu se bod přichytí, například kotevní bod, cestu nebo zarovnání; když je vypnuto, body se přichytávají stejně, jen bez názvů.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Ukazuje u ukazatele vzdálenosti, úhly a o kolik se kresba posunula, když kreslíte nebo přesouváte.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Přichytí přesunutou kresbu nebo kresbu se změněnou velikostí na stejnou mezeru jako mezi blízkými objekty a vyznačí stejné mezery.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Když je něco vybráno, podržení Alt/Option nad jiným objektem nebo pracovní plochou ukáže vzdálenosti mezi ním a výběrem.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Výběr přetažený zpět do tolerance přichytávání od místa, kde tažení začalo, se vrátí přesně na to místo; kopie ne.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blízko na obrazovce musí ukazatel nebo tažený bod přijít ke kresbě, aby se chytrá vodítka přichytila; vzdálenost je stejná při každém zvětšení.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Přichytí konec úsečky nebo kružnici kreslenou od středu tak, aby se dotýkala blízké křivky.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Přichytí konec úsečky tak, aby se s blízkým rovným segmentem setkal v pravém úhlu.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
@@ -5033,6 +5065,11 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	PDF writer error: {0}	chyba zápisu PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Zabalen {n} soubor do {folder} ({note})|Zabaleny {n} soubory do {folder} ({note})|Zabaleno {n} souborů do {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Náhled v prohlížeči vyžaduje desktopovou aplikaci (webová verze místo toho stahuje soubory)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	zadejte `desiredK`, požadovanou velikost souboru v K (1024 bajtů): číslo větší než 0 a nejvýše 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` je `current` nebo `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` je `allSlices`, `eachSlice` nebo `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` je číslo řezu ze `slice.list`, s `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimalizovat na velikost souboru: není žádný obraz k měření
 @msg	Release Guides: no guides	Uvolnit vodítka: žádná vodítka
 @msg	Release: no layer to put the rectangle in	Uvolnit: chybí vrstva, do které by šel obdélník umístit
 @msg	Replace Spine: select a blend and a path	Nahradit páteř: vyberte prolnutí a cestu

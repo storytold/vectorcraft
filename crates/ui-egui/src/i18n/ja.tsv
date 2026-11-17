@@ -268,6 +268,9 @@ digits	Malayalam	マラヤーラム数字
 	Mask	マスク
 	Rasterize…	ラスタライズ…
 	Create Gradient Mesh…	グラデーションメッシュを作成…
+	Flat	フラット
+	To Center	中心へ
+	To Edge	エッジへ
 	Create Object Mosaic…	モザイクオブジェクトを作成…
 	Vector Halftone…	ベクターハーフトーン…
 	Create Trim Marks	トリムマークを作成
@@ -1120,6 +1123,8 @@ antiAlias	Sharp	シャープ
 	Crisp	くっきり
 	Strong	太め
 	Anti-aliasing:	アンチエイリアス:
+	Art Optimized	アートに最適化
+	Type Optimized	文字に最適化
 	Appearance Item	アピアランス項目
 	Appearance Panel	アピアランスパネル
 	Appearance of Black	ブラックのアピアランス
@@ -1374,6 +1379,8 @@ antiAlias	Sharp	シャープ
 	Contextual Alternates	前後関係に依存する字形
 	Convert	変換
 	Convert All Spot Colors to Process	すべての特色をプロセスカラーに変換
+	Convert {name} to process	{name} をプロセスカラーに変換
+	Keep {name} as spot	{name} を特色のままにする
 	Convert All Strokes to Outlines	すべての線をアウトラインに変換
 	Convert All Text to Outlines	すべてのテキストをアウトラインに変換
 	Convert Anchor Point	アンカーポイントの切り替え
@@ -2833,6 +2840,18 @@ diagnostics	ui	UI
 	Preview All Layers	すべてのレイヤーをプレビュー
 	Preview Mode	プレビューモード
 	Preview in Browser	ブラウザーでプレビュー
+	Optimize to File Size…	ファイルサイズに合わせて最適化…
+	Optimize to File Size	ファイルサイズに合わせて最適化
+	Desired File Size:	目標ファイルサイズ:
+	Start With:	開始設定:
+	Use:	対象:
+	Current Settings	現在の設定
+	Auto Select GIF/JPEG	GIF/JPEG を自動選択
+	Total of All Slices	すべてのスライスの合計
+	Each Slice	各スライス
+	Current Slice	現在のスライス
+	{size}, within {target}	{size} ({target} 以内)
+	No setting tried fits in {target}; the smallest is {size}	試したどの設定も {target} に収まりません。最小は {size}
 	Preview the document as it is now	現在のドキュメントをプレビュー
 	Previous	前へ
 	Previous Library	前のライブラリ
@@ -3148,6 +3167,21 @@ mark-style	Japanese	日本式
 	Draws the grid behind the artwork; off, the grid is drawn over it.	グリッドをアートワークの背面に描きます。オフのときは前面に描きます。
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	ピクセルプレビューで 600% 以上にズームすると、アクティブな表示でアートワークの上に、ドキュメントの各ピクセルの境界に線が表示されます。
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	パターンの編集中に表示されるタイルの境界線と、破線のスウォッチの境界の色です。
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	描画、移動、変形を近くのアートにスナップし、ガイドとラベルを表示します。ピクセルプレビューではオフになり、グリッドにスナップがオンのときは代わりにグリッドにスナップします。
+	The color of Smart Guide lines and labels.	スマートガイドの線とラベルの色です。
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	アートが揃う端または中心に沿って線を表示します。オフでも線なしで揃い、グリフにスナップは適用されません。
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	選択ツールでドラッグしていないとき、ポインターの下にある未選択のオブジェクトをレイヤーの色で囲みます。
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	アートを拡大・縮小、回転、シアー、またはリフレクトしている間、ポインターの横にサイズまたは角度を表示します。
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	描画中、セグメントまたはシェイプの始点を通る、選択した角度の線にポイントがスナップします。
+	The set of angles the construction guides follow while Construction Guides is on.	作図ガイドがオンのときに作図ガイドが従う角度のセットです。
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	アンカー、パス、整列など、ポイントのスナップ先の名前を表示します。オフでも名前なしで同じようにスナップします。
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	描画中または移動中に、距離、角度、アートの移動量をポインターの横に表示します。
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	移動またはサイズ変更したアートを近くのオブジェクト間と同じ間隔にスナップし、等しい間隔を示します。
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	何かを選択した状態で、別のオブジェクトまたはアートボードの上で Alt/Option キーを押し続けると、それと選択範囲の間の距離を表示します。
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	ドラッグの開始位置からスナップ許容値の範囲内までドラッグして戻した選択範囲は、正確にその位置に戻ります。コピーは戻りません。
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	スマートガイドがスナップするために、ポインターやドラッグしたポイントが画面上でアートにどこまで近づく必要があるかです。この距離はどのズームでも同じです。
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	直線セグメントの端、または中心から描いた円を、近くの曲線に接するようにスナップします。
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
@@ -5206,6 +5240,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	1 hidden object	非表示のオブジェクト 1 個
 @msg	{n} hidden objects	非表示のオブジェクト {n} 個
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` に目標ファイルサイズを K (1024 バイト) 単位で指定してください: 0 より大きく 1048576 以下の数値
+@msg	`startWith` is `current` or `auto`	`startWith` は `current` または `auto` です
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` は `allSlices`、`eachSlice` または `currentSlice` です
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` は `slice.list` のスライス番号で、`use: currentSlice` と一緒に使います
+@msg	Optimize to File Size: there is no image to measure	ファイルサイズに合わせて最適化: 測定する画像がありません
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
 @msg	Saved {n} files beside {path}	{path} と同じ場所にファイルを {n} 個保存しました

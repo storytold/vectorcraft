@@ -815,7 +815,7 @@ fn ramp(app: &mut VectorcraftApp, ui: &mut Ui, g: &Gradient, is_grad: bool, w: f
     let add_resp = ui.interact(below, ui.scope_id().with("grad-add"), Sense::click());
     let bar_resp = ui.interact(bar, ui.scope_id().with("grad-bar"), Sense::click());
     if add_resp.hovered() && is_grad {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
+        crate::cursors::set_add_cursor(app, ui.ctx());
     }
     if !is_grad && (bar_resp.clicked() || add_resp.clicked()) {
         edit(app, json!({}), Live::Released);

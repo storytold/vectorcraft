@@ -897,6 +897,8 @@ antiAlias	Sharp	Nítid
 	Conté Crayon…	Llapis Conté…
 	Convert	Converteix
 	Convert All Spot Colors to Process	Converteix tots els colors directes a quadricromia
+	Convert {name} to process	Converteix {name} a quadricromia
+	Keep {name} as spot	Mantén {name} com a color directe
 	Convert All Strokes to Outlines	Converteix tots els traços en contorns
 	Convert All Text to Outlines	Converteix tot el text en contorns
 	Convert Anchor Point	Converteix el punt d’ancoratge
@@ -990,6 +992,9 @@ antiAlias	Sharp	Nítid
 	Create from Selection	Crea a partir de la selecció
 	Create From:	Crea a partir de:
 	Create Gradient Mesh…	Crea una malla de degradat…
+	Flat	Pla
+	To Center	Cap al centre
+	To Edge	Cap a la vora
 	Create Graph	Crea un gràfic
 	Create New Fields by	Crea camps nous mitjançant
 	Create New Layer	Crea una capa nova
@@ -3420,6 +3425,18 @@ digits	Malayalam	Malaiàlam
 	Preview (1 inch on the page)	Previsualització (1 polzada a la pàgina)
 	Preview All Layers	Previsualitza totes les capes
 	Preview in Browser	Previsualitza al navegador
+	Optimize to File Size…	Optimitza segons la mida del fitxer…
+	Optimize to File Size	Optimitza segons la mida del fitxer
+	Desired File Size:	Mida de fitxer desitjada:
+	Start With:	Comença amb:
+	Use:	Utilitza:
+	Current Settings	Configuració actual
+	Auto Select GIF/JPEG	Selecció automàtica GIF/JPEG
+	Total of All Slices	Total de tots els talls
+	Each Slice	Cada tall
+	Current Slice	Tall actual
+	{size}, within {target}	{size}, dins de {target}
+	No setting tried fits in {target}; the smallest is {size}	Cap configuració provada no cap a {target}; la més petita és {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	La previsualització al navegador necessita l’aplicació d’escriptori (al web, en canvi, es descarreguen els fitxers)
 	Preview Mode	Mode de previsualització
 	Preview the document as it is now	Previsualitza el document tal com és ara
@@ -3870,6 +3887,21 @@ digits	Malayalam	Malaiàlam
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Dibuixa la quadrícula darrere de l’obra; desactivat, la quadrícula es dibuixa a sobre.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	A la previsualització de píxels, amb un zoom del 600% o més, la vista activa mostra una línia a la vora de cada píxel del document sobre l’obra.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	El color de la vora del mosaic i dels límits discontinus de la mostra que es mostren mentre editeu un motiu.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Ajusta el dibuix, el desplaçament i la transformació a l’art proper i mostra guies i etiquetes; la previsualització de píxels les desactiva, i Ajusta a la quadrícula ajusta a la quadrícula en el seu lloc.
+	The color of Smart Guide lines and labels.	El color de les línies i les etiquetes de les guies intel·ligents.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Mostra una línia al llarg de la vora o el centre amb què s’alinea l’art; desactivada, l’art continua alineant-se sense la línia, i Ajusta al glif no s’aplica.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Amb una eina de selecció, contorneja l’objecte no seleccionat sota el punter amb el color de la seva capa mentre no arrossegueu.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Mostra la mida o l’angle al costat del punter mentre escaleu, gireu, inclineu o reflectiu l’art.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Mentre dibuixeu, els punts s’ajusten a línies amb els angles triats que passen pel punt on comença el segment o la forma.
+	The set of angles the construction guides follow while Construction Guides is on.	El conjunt d’angles que segueixen les guies de construcció mentre Guies de construcció està activat.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Indica a què s’ajusta un punt, com un punt d’ancoratge, un traçat o una alineació; desactivat, els punts s’ajusten igual sense els noms.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Mostra al costat del punter distàncies, angles i quant s’ha mogut l’art mentre dibuixeu o moveu.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Ajusta l’art moguda o redimensionada a la mateixa separació que hi ha entre objectes propers i marca les separacions iguals.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Amb alguna cosa seleccionada, mantenir premuda Alt/Option sobre un altre objecte o un tauler mostra les distàncies entre aquest i la selecció.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Una selecció arrossegada de tornada fins a la tolerància d’ajust del lloc on va començar l’arrossegament torna exactament a aquell lloc; una còpia no.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Com d’a prop a la pantalla han d’arribar el punter o un punt arrossegat a l’art perquè les guies intel·ligents s’hi ajustin; la distància és la mateixa a qualsevol zoom.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta l’extrem d’un segment de línia, o un cercle dibuixat des del centre, perquè toqui una corba propera.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta l’extrem d’un segment de línia perquè trobi un segment recte proper en angle recte.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats
@@ -6349,6 +6381,11 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	plug-in trapped: {0}	el complement ha quedat atrapat: {0}
 @msg	precision must be from 0.001 to 10 pt	precision ha de ser d’entre 0,001 i 10 pt
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	La previsualització al navegador necessita l’aplicació d’escriptori (a la web es baixen els fitxers)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, la mida de fitxer desitjada en K (1024 bytes): un nombre més gran que 0 i com a màxim 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` és `current` o `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` és `allSlices`, `eachSlice` o `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` és un número de tall de `slice.list`, amb `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimitza segons la mida del fitxer: no hi ha cap imatge per mesurar
 @msg	print settings are not an object	la configuració d’impressió no és un objecte
 @msg	printing isn't available here	la impressió no està disponible aquí
 @msg	range `{s}` is empty	el rang `{s}` és buit

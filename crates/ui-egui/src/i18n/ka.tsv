@@ -2383,6 +2383,9 @@
 	Mask	ნიღაბი
 	Rasterize…	რასტრირება…
 	Create Gradient Mesh…	გრადიენტული ბადის შექმნა…
+	Flat	ბრტყელი
+	To Center	ცენტრისკენ
+	To Edge	კიდისკენ
 	Create Object Mosaic…	ობიექტების მოზაიკის შექმნა…
 	Vector Halftone…	ვექტორული ნახევარტონი…
 	Create Trim Marks	ჭრის ნიშნების შექმნა
@@ -3259,6 +3262,18 @@ lighting	Light	სინათლე
 	Placement Options…	განთავსების პარამეტრები…
 	Plug-in…	პლაგინი…
 	Preview in Browser	ბრაუზერში ნახვა
+	Optimize to File Size…	ფაილის ზომაზე ოპტიმიზაცია…
+	Optimize to File Size	ფაილის ზომაზე ოპტიმიზაცია
+	Desired File Size:	სასურველი ფაილის ზომა:
+	Start With:	დაწყება:
+	Use:	გამოყენება:
+	Current Settings	მიმდინარე პარამეტრები
+	Auto Select GIF/JPEG	GIF/JPEG-ის ავტომატური არჩევა
+	Total of All Slices	ყველა ნაჭრის ჯამი
+	Each Slice	თითოეული ნაჭერი
+	Current Slice	მიმდინარე ნაჭერი
+	{size}, within {target}	{size}, {target}-ის ფარგლებში
+	No setting tried fits in {target}; the smallest is {size}	არცერთი ნაცადი პარამეტრი არ ეტევა {target}-ში; უმცირესია {size}
 	Printer Setup…	პრინტერის დაყენება…
 	Printers	პრინტერები
 	Recent File	ბოლოს გახსნილი ფაილი
@@ -4822,6 +4837,8 @@ digits	Malayalam	მალაიალამური
 	Collate	დაკომპლექტება
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	შედგენილი ფერები მასში გარდაიქმნება; სეპარაცია მისით ხდება, როცა ის CMYK პროფილია.
 	Convert All Spot Colors to Process	ყველა სპოტ-ფერის პროცესულად გარდაქმნა
+	Convert {name} to process	{name}-ის პროცესულად გარდაქმნა
+	Keep {name} as spot	{name}-ის სპოტ-ფერად დატოვება
 	Default Printer	ნაგულისხმევი პრინტერი
 	Document Ink Options	დოკუმენტის საღებავების პარამეტრები
 	Download:	ჩამოტვირთვა:
@@ -6255,6 +6272,7 @@ font-technology	Variable	ცვლადი
 	Live corner radii scale with the art, unless the scale chooses otherwise.	დინამიკური კუთხეების რადიუსები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	კონტურის სისქე, შტრიხები და ეფექტების მანძილები ნახატთან ერთად მასშტაბირდება, თუ მასშტაბირება სხვას არ აირჩევს.
 	The mouse wheel zooms the canvas instead of scrolling it.	მაუსის ბორბალი ტილოს გადახვევის ნაცვლად მასშტაბს ცვლის.
+	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	სანამ მაუსის ბორბლით მასშტაბირება გამორთულია, დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	დაჭერილი Cmd/Ctrl-ით მაუსის ბორბალი ტილოს გვერდულად გადაახვევს.
 	Dragging sideways on a numeric field's label changes the field's value.	რიცხვითი ველის წარწერაზე გვერდულად გადათრევა ველის მნიშვნელობას ცვლის.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ტრეკპადზე ორი თითით მობრუნების ჟესტი ტილოს ხედს აბრუნებს.
@@ -6300,6 +6318,21 @@ font-technology	Variable	ცვლადი
 	Draws the grid behind the artwork; off, the grid is drawn over it.	ბადეს ნამუშევრის უკან ხატავს; გამორთვისას ბადე მის ზემოთ იხატება.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	პიქსელების წინასწარ ნახვაში 600%-იან ან მეტ მასშტაბზე აქტიური ხედი ნამუშევრის ზემოთ დოკუმენტის თითოეული პიქსელის კიდეზე ხაზს აჩვენებს.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	ფილის კიდისა და ფერის ნიმუშის წყვეტილი საზღვრების ფერი, რომლებიც პატერნის რედაქტირებისას ჩანს.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	ხატვას, გადატანასა და გარდაქმნას ახლომდებარე გრაფიკაზე აბამს და აჩვენებს დამხმარე ხაზებსა და წარწერებს; პიქსელების წინასწარი ნახვა მათ თიშავს, ბადეზე მიბმა კი მათ ნაცვლად ბადეზე აბამს.
+	The color of Smart Guide lines and labels.	ჭკვიანი დამხმარე ხაზების ხაზებისა და წარწერების ფერი.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	აჩვენებს ხაზს იმ კიდის ან ცენტრის გასწვრივ, რომელსაც გრაფიკა უსწორდება; გამორთვისას გრაფიკა მაინც სწორდება ხაზის გარეშე, გლიფზე მიბმა კი არ მოქმედებს.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	მონიშვნის ხელსაწყოთი, სანამ არ ათრევთ, მაჩვენებლის ქვეშ მყოფ მოუნიშნავ ობიექტს მისი შრის ფერით შემოხაზავს.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	გრაფიკის მასშტაბირების, მობრუნების, დახრის ან არეკვლისას მაჩვენებლის გვერდით აჩვენებს ზომას ან კუთხეს.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	ხატვისას წერტილები ებმის არჩეული კუთხის ხაზებს, რომლებიც სეგმენტის ან ფიგურის საწყის წერტილზე გადის.
+	The set of angles the construction guides follow while Construction Guides is on.	კუთხეების ნაკრები, რომელსაც სამშენებლო დამხმარე ხაზები მიჰყვება, სანამ სამშენებლო დამხმარე ხაზები ჩართულია.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	ასახელებს, რას ებმის წერტილი, მაგალითად, საყრდენ წერტილს, ტრაექტორიას ან გასწორებას; გამორთვისას წერტილები ისევე ებმის, სახელების გარეშე.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	ხატვის ან გადატანისას მაჩვენებლის გვერდით აჩვენებს მანძილებს, კუთხეებს და რამდენით გადაადგილდა გრაფიკა.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	გადატანილ ან ზომაშეცვლილ გრაფიკას აბამს იმავე შუალედზე, რაც ახლომდებარე ობიექტებს შორისაა, და ნიშნავს თანაბარ შუალედებს.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	როცა რაიმე მონიშნულია, Alt/Option-ის დაჭერა სხვა ობიექტზე ან სამუშაო დაფაზე აჩვენებს მანძილებს მასა და მონიშნულს შორის.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	მონიშნული, რომელიც თრევის დაწყების ადგილიდან მიბმის დაშვების ფარგლებში დააბრუნეთ, ზუსტად იმ ადგილზე ბრუნდება; ასლი არა.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	რამდენად ახლოს უნდა მივიდეს ეკრანზე მაჩვენებელი ან გადათრეული წერტილი გრაფიკასთან, რომ ჭკვიანმა დამხმარე ხაზებმა მიაბან; მანძილი ყველა მასშტაბზე ერთნაირია.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	ხაზის სეგმენტის ბოლოს, ან ცენტრიდან დახატულ წრეწირს, ისე აბამს, რომ ახლომდებარე მრუდს შეეხოს.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	ხაზის სეგმენტის ბოლოს ისე აბამს, რომ ახლომდებარე სწორ სეგმენტს მართი კუთხით შეხვდეს.
 	Reset all preferences to their defaults?	დავაბრუნოთ ყველა პარამეტრი ნაგულისხმევ მნიშვნელობებზე?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	ნაგულისხმევი მნიშვნელობები გამოიყენება, როცა პარამეტრებში OK-ს დააჭერთ. იქ გაუქმება ინარჩუნებს თქვენს მიმდინარე პარამეტრებს.
 	Smaller ↔ Larger	უფრო პატარა ↔ უფრო დიდი
@@ -6571,6 +6604,11 @@ font-technology	Variable	ცვლადი
 @msg	PDF writer error: {0}	PDF-ის ჩამწერის შეცდომა: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	შეფუთულია ფაილი ({n}) საქაღალდეში {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	ბრაუზერში წინასწარ ნახვას დესკტოპის აპი სჭირდება (ვებში ფაილები ჩამოიტვირთება)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	მიუთითეთ `desiredK`, სასურველი ფაილის ზომა K-ში (1024 ბაიტი): 0-ზე მეტი და არაუმეტეს 1048576 რიცხვი
+@msg	`startWith` is `current` or `auto`	`startWith` არის `current` ან `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` არის `allSlices`, `eachSlice` ან `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` არის ნაჭრის ნომერი `slice.list`-დან, `use: currentSlice`-თან ერთად
+@msg	Optimize to File Size: there is no image to measure	ფაილის ზომაზე ოპტიმიზაცია: გასაზომი გამოსახულება არ არის
 @msg	Release Guides: no guides	დამხმარე ხაზების მოხსნა: დამხმარე ხაზები არ არის
 @msg	Release: no layer to put the rectangle in	მოხსნა: მართკუთხედის ჩასასმელი შრე არ არის
 @msg	Replace Spine: select a blend and a path	ხერხემლის ჩანაცვლება: მონიშნეთ გადასვლა და ტრაექტორია

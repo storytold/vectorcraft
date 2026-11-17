@@ -205,6 +205,8 @@ antiAlias	Sharp	Nitido
 	Crisp	Definito
 	Strong	Forte
 	Anti-aliasing:	Anti-aliasing:
+	Art Optimized	Ottimizzato per la grafica
+	Type Optimized	Ottimizzato per il testo
 	Any Kind	Qualsiasi tipo
 	Font Technology	Tecnologia font
 font-technology	Variable	Variabili
@@ -618,6 +620,8 @@ font-technology	Variable	Variabili
 	Control	Controllo
 	Convert	Converti
 	Convert All Spot Colors to Process	Converti tutti i colori spot in quadricromia
+	Convert {name} to process	Converti {name} in quadricromia
+	Keep {name} as spot	Mantieni {name} come colore spot
 	Convert All Strokes to Outlines	Converti tutte le tracce in contorni
 	Convert All Text to Outlines	Converti tutto il testo in contorni
 	Convert Anchor Point	Converti punto di ancoraggio
@@ -693,6 +697,9 @@ font-technology	Variable	Variabili
 	Create from Selection	Crea dalla selezione
 	Create From:	Crea da:
 	Create Gradient Mesh…	Crea trama sfumatura…
+	Flat	Piatto
+	To Center	Verso il centro
+	To Edge	Verso il bordo
 	Create Graph	Crea grafico
 	Create New Layer	Crea nuovo livello
 	Create New Sublayer	Crea nuovo sottolivello
@@ -2759,6 +2766,18 @@ diagnostics	ui	interfaccia
 	Preview:	Anteprima:
 	Preview All Layers	Anteprima di tutti i livelli
 	Preview in Browser	Anteprima nel browser
+	Optimize to File Size…	Ottimizza in base alle dimensioni del file…
+	Optimize to File Size	Ottimizza in base alle dimensioni del file
+	Desired File Size:	Dimensione file desiderata:
+	Start With:	Inizia con:
+	Use:	Usa:
+	Current Settings	Impostazioni correnti
+	Auto Select GIF/JPEG	Selezione automatica GIF/JPEG
+	Total of All Slices	Totale di tutte le sezioni
+	Each Slice	Ogni sezione
+	Current Slice	Sezione corrente
+	{size}, within {target}	{size}, entro {target}
+	No setting tried fits in {target}; the smallest is {size}	Nessuna impostazione provata rientra in {target}; la più piccola è {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (la versione web scarica invece i file)
 	Preview Mode	Modalità anteprima
 	Preview the document as it is now	Visualizza l'anteprima del documento nello stato attuale
@@ -3171,6 +3190,21 @@ digits	Malayalam	Malayalam
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Disegna la griglia dietro la grafica; se disattivato, la griglia è disegnata sopra.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	In Anteprima pixel con zoom del 600% o più, la vista attiva mostra sopra la grafica una linea sul bordo di ogni pixel del documento.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Il colore del bordo del tassello e dei limiti tratteggiati del campione mostrati mentre modifichi un motivo.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Aggancia disegno, spostamento e trasformazione alla grafica vicina e mostra guide ed etichette; l’anteprima pixel le disattiva, e Aggancia alla griglia aggancia invece alla griglia.
+	The color of Smart Guide lines and labels.	Il colore delle linee e delle etichette delle guide sensibili.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Mostra una linea lungo il bordo o il centro con cui la grafica si allinea; se disattivata, la grafica si allinea comunque senza la linea, e Aggancia a glifo non si applica.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Con uno strumento di selezione, contorna l’oggetto non selezionato sotto il puntatore con il colore del suo livello finché non trascini.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Mostra la dimensione o l’angolo accanto al puntatore mentre ridimensioni, ruoti, inclini o rifletti la grafica.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Mentre disegni, i punti si agganciano a linee con gli angoli scelti che passano per il punto da cui parte il segmento o la forma.
+	The set of angles the construction guides follow while Construction Guides is on.	L’insieme di angoli che seguono le guide di costruzione mentre Guide di costruzione è attivo.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Indica a cosa si aggancia un punto, come un punto di ancoraggio, un tracciato o un allineamento; se disattivato, i punti si agganciano allo stesso modo, senza i nomi.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Mostra accanto al puntatore distanze, angoli e di quanto si è spostata la grafica mentre disegni o sposti.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Aggancia la grafica spostata o ridimensionata alla stessa distanza che separa gli oggetti vicini e segna le distanze uguali.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Con qualcosa di selezionato, tenere premuto Alt/Option su un altro oggetto o una tavola da disegno mostra le distanze tra questo e la selezione.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Una selezione trascinata indietro entro la tolleranza di aggancio dal punto in cui è iniziato il trascinamento torna esattamente lì; una copia no.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Quanto vicino sullo schermo il puntatore o un punto trascinato deve arrivare alla grafica perché le guide sensibili vi si aggancino; la distanza è la stessa a ogni zoom.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Aggancia l’estremità di un segmento di linea, o un cerchio disegnato dal centro, in modo che tocchi una curva vicina.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Aggancia l’estremità di un segmento di linea in modo che incontri un segmento rettilineo vicino ad angolo retto.
 	Reset all preferences to their defaults?	Ripristinare tutte le preferenze ai valori predefiniti?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	I valori predefiniti vengono applicati quando fai clic su OK in Preferenze. Annulla lì mantiene le preferenze attuali.
 	Restore Recovered Documents	Ripristina documenti recuperati
@@ -4765,6 +4799,11 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	PDF writer error: {0}	Errore del generatore PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Pacchetto creato con {n} file in {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Anteprima nel browser richiede l'app desktop (sul web i file vengono invece scaricati)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, la dimensione del file desiderata in K (1024 byte): un numero maggiore di 0 e al massimo 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` è `current` o `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` è `allSlices`, `eachSlice` o `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` è un numero di sezione da `slice.list`, con `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Ottimizza in base alle dimensioni del file: non c'è nessuna immagine da misurare
 @msg	Release Guides: no guides	Rilascia guide: nessuna guida
 @msg	Release: no layer to put the rectangle in	Rilascia: nessun livello in cui inserire il rettangolo
 @msg	Replace Spine: select a blend and a path	Sostituisci dorsale: seleziona una fusione e un tracciato

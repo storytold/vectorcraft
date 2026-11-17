@@ -153,6 +153,8 @@ antiAlias	Sharp	锐利
 	Crisp	清晰
 	Strong	强
 	Anti-aliasing:	消除锯齿：
+	Art Optimized	图稿优化
+	Type Optimized	文字优化
 	Appearance	外观
 	Appearance Attribute	外观属性
 	Appearance Item	外观项目
@@ -563,6 +565,8 @@ antiAlias	Sharp	锐利
 	Control	控制栏
 	Convert	转换
 	Convert All Spot Colors to Process	将所有专色转换为印刷色
+	Convert {name} to process	将 {name} 转换为印刷色
+	Keep {name} as spot	将 {name} 保留为专色
 	Convert All Strokes to Outlines	将所有描边转换为轮廓
 	Convert All Text to Outlines	将所有文字转换为轮廓
 	Convert Anchor Point	转换锚点
@@ -637,6 +641,9 @@ antiAlias	Sharp	锐利
 	Create from Selection	从选区创建
 	Create From:	创建自：
 	Create Gradient Mesh…	创建渐变网格…
+	Flat	平面
+	To Center	向中心
+	To Edge	向边缘
 	Create Graph	创建图表
 	Create New Layer	创建新图层
 	Create New Sublayer	创建新子图层
@@ -2610,6 +2617,18 @@ diagnostics	ui	界面
 	Preview	预览
 	Preview:	预览：
 	Preview in Browser	在浏览器中预览
+	Optimize to File Size…	优化到文件大小…
+	Optimize to File Size	优化到文件大小
+	Desired File Size:	所需文件大小：
+	Start With:	起始设置：
+	Use:	使用：
+	Current Settings	当前设置
+	Auto Select GIF/JPEG	自动选择 GIF/JPEG
+	Total of All Slices	所有切片总计
+	Each Slice	每个切片
+	Current Slice	当前切片
+	{size}, within {target}	{size}，不超过 {target}
+	No setting tried fits in {target}; the smallest is {size}	尝试过的设置都无法小于 {target}；最小为 {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	在浏览器中预览需要桌面版应用程序 (网页版会改为下载文件)
 	Preview Mode	预览模式
 	Preview the document as it is now	按当前状态预览文档
@@ -3022,6 +3041,21 @@ digits	Malayalam	马拉雅拉姆数字
 	Draws the grid behind the artwork; off, the grid is drawn over it.	将网格绘制在图稿后面；关闭时网格绘制在图稿上面。
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	在像素预览中缩放到 600% 或以上时，当前视图会在图稿上方沿文档每个像素的边缘显示线条。
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	编辑图案时显示的拼贴边缘和虚线色板边界的颜色。
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	将绘制、移动和变换吸附到附近的图稿，并显示参考线和标签；像素预览会将其关闭，开启对齐网格时则改为对齐网格。
+	The color of Smart Guide lines and labels.	智能参考线的线条和标签颜色。
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	沿图稿对齐的边缘或中心显示一条线；关闭时图稿仍会对齐，只是不显示线条，且靠齐字符不起作用。
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	使用选择工具且未拖动时，用图层颜色勾勒指针下未选中的对象。
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	缩放、旋转、倾斜或镜像图稿时，在指针旁显示尺寸或角度。
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	绘制时，点会吸附到经过线段或形状起点、按所选角度延伸的线上。
+	The set of angles the construction guides follow while Construction Guides is on.	构造参考线开启时，构造参考线所遵循的角度组合。
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	显示点吸附到的对象名称，如锚点、路径或对齐；关闭时点仍以相同方式吸附，只是不显示名称。
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	绘制或移动时，在指针旁显示距离、角度和图稿移动的距离。
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	将移动或调整大小的图稿吸附到与附近对象之间相同的间距，并标出相等的间距。
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	选中对象后，在另一个对象或画板上按住 Alt/Option 会显示它与所选对象之间的距离。
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	拖回到距拖动起点吸附容差以内的所选对象会精确回到原处；副本不会。
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指针或拖动的点在屏幕上需离图稿多近，智能参考线才会吸附；该距离在任何缩放比例下都相同。
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	吸附线段的端点或从中心绘制的圆，使其与附近的曲线相切。
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
@@ -4887,6 +4921,11 @@ imageTrace	Outline	轮廓
 @msg	1 hidden object	1 个隐藏的对象
 @msg	{n} hidden objects	{n} 个隐藏的对象
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	“在浏览器中预览”需要桌面应用 (网页版会改为下载文件)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	请给出 `desiredK`，即以 K (1024 字节) 为单位的所需文件大小：大于 0 且不超过 1048576 的数字
+@msg	`startWith` is `current` or `auto`	`startWith` 为 `current` 或 `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` 为 `allSlices`、`eachSlice` 或 `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` 是 `slice.list` 中的切片编号，需配合 `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	优化到文件大小：没有可测量的图像
 @msg	no file system here	此处没有文件系统
 @msg	nothing to preview	没有可预览的内容
 @msg	Saved {n} files beside {path}	已在 {path} 旁保存 {n} 个文件

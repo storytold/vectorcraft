@@ -180,6 +180,8 @@ antiAlias	Sharp	Scharf
 	Crisp	Klar
 	Strong	Stark
 	Anti-aliasing:	Glättung:
+	Art Optimized	Für Grafik optimiert
+	Type Optimized	Für Text optimiert
 	Any Kind	Beliebige Art
 	Font Technology	Schrifttechnologie
 font-technology	Variable	Variabel
@@ -596,6 +598,8 @@ font-technology	Variable	Variabel
 	Control	Steuerung
 	Convert	Konvertieren
 	Convert All Spot Colors to Process	Alle Volltonfarben in Prozessfarben konvertieren
+	Convert {name} to process	{name} in Prozessfarbe konvertieren
+	Keep {name} as spot	{name} als Volltonfarbe beibehalten
 	Convert All Strokes to Outlines	Alle Konturen in Pfade umwandeln
 	Convert All Text to Outlines	Gesamten Text in Pfade umwandeln
 	Convert Anchor Point	Ankerpunkt umwandeln
@@ -671,6 +675,9 @@ font-technology	Variable	Variabel
 	Create from Selection	Aus Auswahl erstellen
 	Create From:	Erstellen aus:
 	Create Gradient Mesh…	Verlaufsgitter erstellen…
+	Flat	Flach
+	To Center	Zur Mitte
+	To Edge	Zum Rand
 	Create Graph	Diagramm erstellen
 	Create New Layer	Neue Ebene erstellen
 	Create New Sublayer	Neue Unterebene erstellen
@@ -2678,6 +2685,18 @@ diagnostics	ui	Oberfläche
 	Preview:	Vorschau:
 	Preview All Layers	Vorschau aller Ebenen
 	Preview in Browser	Vorschau im Browser
+	Optimize to File Size…	Auf Dateigröße optimieren…
+	Optimize to File Size	Auf Dateigröße optimieren
+	Desired File Size:	Gewünschte Dateigröße:
+	Start With:	Beginnen mit:
+	Use:	Verwenden:
+	Current Settings	Aktuelle Einstellungen
+	Auto Select GIF/JPEG	GIF/JPEG automatisch wählen
+	Total of All Slices	Summe aller Slices
+	Each Slice	Jedes Slice
+	Current Slice	Aktuelles Slice
+	{size}, within {target}	{size}, innerhalb von {target}
+	No setting tried fits in {target}; the smallest is {size}	Keine getestete Einstellung passt in {target}; die kleinste ist {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
 	Preview Mode	Vorschaumodus
 	Preview the document as it is now	Vorschau des Dokuments im aktuellen Zustand
@@ -3090,6 +3109,21 @@ digits	Malayalam	Malayalam
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Zeichnet das Raster hinter dem Bildmaterial; ist die Option aus, wird das Raster darüber gezeichnet.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	In der Pixelvorschau ab 600 % Zoom zeigt die aktive Ansicht über dem Bildmaterial eine Linie am Rand jedes Dokumentpixels.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Die Farbe der Kachelkante und der gestrichelten Farbfeldbegrenzung, die beim Bearbeiten eines Musters angezeigt werden.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Richtet Zeichnen, Verschieben und Transformieren an nahem Bildmaterial aus und zeigt Hilfslinien und Beschriftungen; die Pixelvorschau schaltet sie aus, und „Am Raster ausrichten“ richtet stattdessen am Raster aus.
+	The color of Smart Guide lines and labels.	Die Farbe der Linien und Beschriftungen intelligenter Hilfslinien.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Zeigt eine Linie an der Kante oder Mitte, an der Bildmaterial ausgerichtet ist; ist die Option aus, wird es ohne Linie ausgerichtet, und „An Glyphe ausrichten“ wirkt nicht.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Umrandet mit einem Auswahlwerkzeug das nicht ausgewählte Objekt unter dem Zeiger in seiner Ebenenfarbe, solange Sie nicht ziehen.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Zeigt beim Skalieren, Drehen, Verbiegen oder Spiegeln von Bildmaterial die Größe oder den Winkel neben dem Zeiger an.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Beim Zeichnen rasten Punkte an Linien in den gewählten Winkeln ein, die durch den Anfangspunkt des Segments oder der Form gehen.
+	The set of angles the construction guides follow while Construction Guides is on.	Die Winkel, denen die Konstruktionslinien folgen, solange „Konstruktionslinien“ an ist.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Benennt, woran ein Punkt einrastet, etwa einen Ankerpunkt, einen Pfad oder eine Ausrichtung; ist die Option aus, rasten Punkte gleich ein, nur ohne Namen.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Zeigt beim Zeichnen oder Verschieben neben dem Zeiger Abstände, Winkel und wie weit das Bildmaterial bewegt wurde.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Richtet verschobenes oder in der Größe geändertes Bildmaterial am gleichen Abstand wie zwischen nahen Objekten aus und markiert die gleichen Abstände.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Ist etwas ausgewählt, zeigt Alt/Option über einem anderen Objekt oder einer Zeichenfläche die Abstände zwischen diesem und der Auswahl.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Eine Auswahl, die bis auf die Einrasttoleranz an den Beginn des Ziehens zurückgezogen wird, kehrt genau dorthin zurück; eine Kopie nicht.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Wie nah der Zeiger oder ein gezogener Punkt auf dem Bildschirm an Bildmaterial kommen muss, damit intelligente Hilfslinien einrasten; der Abstand ist bei jedem Zoom gleich.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Richtet das Ende eines Liniensegments oder einen von der Mitte aus gezeichneten Kreis so aus, dass er eine nahe Kurve berührt.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Richtet das Ende eines Liniensegments so aus, dass es ein nahes gerades Segment im rechten Winkel trifft.
 	Reset all preferences to their defaults?	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Die Standardwerte werden angewendet, wenn Sie in den Voreinstellungen auf OK klicken. Abbrechen dort behält Ihre aktuellen Voreinstellungen.
 	Restore Recovered Documents	Wiederhergestellte Dokumente öffnen
@@ -4631,6 +4665,11 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	PDF writer error: {0}	Fehler beim Schreiben der PDF-Datei: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} Datei in {folder} verpackt ({note})|{n} Dateien in {folder} verpackt ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	„Vorschau im Browser“ erfordert die Desktop-App (im Web werden stattdessen Dateien heruntergeladen)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	Geben Sie `desiredK` an, die gewünschte Dateigröße in K (1024 Byte): eine Zahl über 0 und höchstens 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` ist `current` oder `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` ist `allSlices`, `eachSlice` oder `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` ist eine Slice-Nummer aus `slice.list`, mit `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Auf Dateigröße optimieren: Es gibt kein Bild zum Messen
 @msg	Release Guides: no guides	Hilfslinien zurückwandeln: keine Hilfslinien
 @msg	Release: no layer to put the rectangle in	Zurückwandeln: keine Ebene, die das Rechteck aufnehmen könnte
 @msg	Replace Spine: select a blend and a path	Achse ersetzen: Wählen Sie eine Angleichung und einen Pfad aus

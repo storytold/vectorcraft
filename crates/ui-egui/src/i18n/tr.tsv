@@ -597,6 +597,8 @@ font-technology	Variable	Değişken
 	Control	Kontrol
 	Convert	Dönüştür
 	Convert All Spot Colors to Process	Tüm Spot Renkleri Proses Renklere Dönüştür
+	Convert {name} to process	{name} Rengini Prosese Dönüştür
+	Keep {name} as spot	{name} Rengini Spot Olarak Koru
 	Convert All Strokes to Outlines	Tüm Konturları Anahatlara Dönüştür
 	Convert All Text to Outlines	Tüm Metni Ana Hatlara Dönüştür
 	Convert Anchor Point	Bağlantı Noktasını Dönüştür
@@ -672,6 +674,9 @@ font-technology	Variable	Değişken
 	Create from Selection	Seçimden Oluştur
 	Create From:	Şuradan Oluştur:
 	Create Gradient Mesh…	Degrade Kafes Oluştur…
+	Flat	Düz
+	To Center	Merkeze Doğru
+	To Edge	Kenara Doğru
 	Create Graph	Grafik Oluştur
 	Create New Layer	Yeni Katman Oluştur
 	Create New Sublayer	Yeni Alt Katman Oluştur
@@ -2493,6 +2498,18 @@ shape	Open	Açık
 	Preview:	Önizleme:
 	Preview All Layers	Tüm Katmanları Önizle
 	Preview in Browser	Tarayıcıda Önizleme
+	Optimize to File Size…	Dosya Boyutuna Göre Optimize Et…
+	Optimize to File Size	Dosya Boyutuna Göre Optimize Et
+	Desired File Size:	İstenen Dosya Boyutu:
+	Start With:	Başlangıç:
+	Use:	Kullan:
+	Current Settings	Geçerli Ayarlar
+	Auto Select GIF/JPEG	GIF/JPEG Otomatik Seç
+	Total of All Slices	Tüm Dilimlerin Toplamı
+	Each Slice	Her Dilim
+	Current Slice	Geçerli Dilim
+	{size}, within {target}	{size}, {target} sınırında
+	No setting tried fits in {target}; the smallest is {size}	Denenen hiçbir ayar {target} içine sığmıyor; en küçüğü {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
 	Preview Mode	Önizleme Modu
 	Preview the document as it is now	Belgeyi şu anki haliyle önizleyin
@@ -2897,6 +2914,21 @@ digits	Malayalam	Malayalam
 	Draws the grid behind the artwork; off, the grid is drawn over it.	Izgarayı resmin arkasına çizer; kapalıyken ızgara resmin üstüne çizilir.
 	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Piksel Önizlemesi'nde %600 veya daha fazla yakınlaştırmada etkin görünüm, resmin üstünde belgenin her pikselinin kenarında bir çizgi gösterir.
 	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Bir deseni düzenlerken gösterilen döşeme kenarının ve kesik çizgili renk örneği sınırlarının rengi.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Çizmeyi, taşımayı ve dönüştürmeyi yakındaki çizime yaslar, kılavuzları ve etiketleri gösterir; Piksel Önizlemesi bunları kapatır, Izgaraya Yasla ise onların yerine ızgaraya yaslar.
+	The color of Smart Guide lines and labels.	Akıllı Kılavuz çizgilerinin ve etiketlerinin rengi.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Çizimin hizalandığı kenar veya merkez boyunca bir çizgi gösterir; kapalıyken çizim çizgi olmadan da hizalanır ve Glif'e Yapış uygulanmaz.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Bir seçim aracıyla, siz sürüklemezken işaretçinin altındaki seçili olmayan nesnenin çevresini katmanının rengiyle çizer.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Çizimi ölçeklerken, döndürürken, eğerken veya yansıtırken işaretçinin yanında boyutu veya açıyı gösterir.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Siz çizerken noktalar, parçanın veya şeklin başladığı noktadan geçen seçili açılardaki çizgilere yaslanır.
+	The set of angles the construction guides follow while Construction Guides is on.	İnşaat Kılavuzları açıkken inşaat kılavuzlarının izlediği açı kümesi.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Bir noktanın neye yaslandığını adlandırır, örneğin bir bağlantı noktası, bir yol veya bir hizalama; kapalıyken noktalar adlar olmadan aynı şekilde yaslanır.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Siz çizerken veya taşırken işaretçinin yanında mesafeleri, açıları ve çizimin ne kadar taşındığını gösterir.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Taşınan veya yeniden boyutlandırılan çizimi yakındaki nesneler arasındakiyle aynı boşluğa yaslar ve eşit boşlukları işaretler.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Bir şey seçiliyken, başka bir nesnenin veya çalışma yüzeyinin üzerinde Alt/Option tuşunu basılı tutmak onunla seçim arasındaki mesafeleri gösterir.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Sürüklemenin başladığı yere yapışma toleransı içinde geri sürüklenen seçim tam olarak o yere döner; kopya dönmez.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Akıllı Kılavuzların yaslaması için işaretçinin veya sürüklenen noktanın ekranda çizime ne kadar yaklaşması gerektiği; mesafe her yakınlaştırmada aynıdır.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Bir çizgi parçasının ucunu veya merkezinden çizilen bir daireyi yakındaki bir eğriye değecek şekilde yaslar.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Bir çizgi parçasının ucunu yakındaki düz bir parçayla dik açıyla buluşacak şekilde yaslar.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
@@ -4476,6 +4508,11 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	PDF writer error: {0}	PDF yazıcı hatası: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} dosya {folder} klasörüne paketlendi ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` değerini verin, K cinsinden istenen dosya boyutu (1024 bayt): 0'dan büyük ve en çok 1048576 olan bir sayı
+@msg	`startWith` is `current` or `auto`	`startWith` değeri `current` veya `auto` olmalıdır
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` değeri `allSlices`, `eachSlice` veya `currentSlice` olmalıdır
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`, `slice.list` içindeki bir dilim numarasıdır ve `use: currentSlice` ile kullanılır
+@msg	Optimize to File Size: there is no image to measure	Dosya Boyutuna Göre Optimize Et: ölçülecek görüntü yok
 @msg	Release Guides: no guides	Sürüm Kılavuzları: kılavuz yok
 @msg	Release: no layer to put the rectangle in	Serbest bırakma: dikdörtgeni yerleştirecek katman yok
 @msg	Replace Spine: select a blend and a path	Omurgayı Değiştir: bir karışım ve yol seçin
