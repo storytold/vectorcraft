@@ -1065,6 +1065,9 @@ digits	Malayalam	말라얄람어
 	Additional Plug-ins Folder	추가 플러그인 폴더
 	Additional Fonts Folder	추가 글꼴 폴더
 	Adjust Adjoining Width Points	인접한 너비 점 조정
+	Incoming	들어오는 쪽
+	Outgoing	나가는 쪽
+	Single Width Only	한 너비만
 	Adjust Colors	색상 조정
 	Adjust Options:	조정 옵션:
 	Advanced Options	고급 옵션
@@ -5191,6 +5194,9 @@ theme	Appearance	외관
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}`은(는) 색상이 아닙니다(#rrggbb 또는 프리셋 이름)
 @msg	give the path `id` and the width point `index`	패스 `id`와 너비 점 `index`를 지정하세요
 @msg	no such width point	해당 너비 점이 없습니다
+@msg	`single` must be `incoming` or `outgoing`	`single`은 `incoming` 또는 `outgoing`이어야 합니다
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index`와 `outIndex`는 하나의 불연속 너비 점의 두 절반이어야 합니다
+@msg	a discontinuous width point keeps its place	불연속 너비 점은 위치를 유지합니다
 @msg	onto must name a panel floating in another group	onto는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	below and above must name a panel floating in another group	below와 above는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요

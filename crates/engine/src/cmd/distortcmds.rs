@@ -16,7 +16,7 @@ use vectorcraft_tools::distort::{PinSet, arap, collect_points, mesh_for, project
 use super::edit::{duplicate_in, outermost, refuse_symbol_part, selected_roots};
 use super::{
     CommandSpec, Result, Session, bad, check_numbers, check_switches, cmd, f64_or, f64_req, finite_numbers, has_doc, has_selection, matrix_param,
-    named_id, named_ids, number_or, object_param, ok, point_indices, point_param, str_param, switch_or, targets,
+    named_id, named_ids, number_or, object_param, ok, point_indices, point_param, str_param, switch_or, targets, text_param, u64_req,
 };
 use crate::EngineError;
 
@@ -35,7 +35,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Width Point",
             [],
             None,
-            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to edit or move, adjustAdjoining?: bool (the nearest points either side change their widths in proportion, using the sampled widths for a new point)} → {index}. Without index a point already at t is replaced; a point moved onto another one's t joins it as a discontinuous point (on the side it came from), so the width steps there. Creates a uniform profile first if needed",
+            "{id, t: 0..1 (fraction of the path length), left, right: side widths in pt, index?: width point to edit or move, adjustAdjoining?: bool (the nearest points either side change their widths in proportion, using the sampled widths for a new point), outIndex?, outLeft, outRight: the outgoing half of the discontinuous point whose incoming half is index, single?: \"incoming\" | \"outgoing\"} → {index}. Without index a point already at t is replaced; a point moved onto another one's t joins it as a discontinuous point (on the side it came from), so the width steps there. With outIndex both halves change in one step and keep their place (t must be theirs); adjustAdjoining then changes the nearest point before from the incoming half and the nearest point after from the outgoing half. single keeps only that half's widths, leaving one continuous point. Creates a uniform profile first if needed",
             has_doc,
             width_point_set
         ),
@@ -265,8 +265,9 @@ fn place(points: &mut Vec<(f64, f64, f64)>, mut pt: (f64, f64, f64), from_below:
 }
 
 /// Adjust Adjoining Width Points: point `i` changes from `old` to `new` widths, and the nearest
-/// points at other positions either side change in proportion (by the same amount from zero).
-fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f64), new: (f64, f64, f64)) {
+/// points at other positions on the sides `sides` names (before, after) change in proportion (by
+/// the same amount from zero).
+fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f64), new: (f64, f64, f64), sides: [bool; 2]) {
     let t = points[i].0;
     let scale = |v: f64, o: f64, n: f64| {
         let width = if o > 1e-9 {
@@ -284,8 +285,8 @@ fn adjust_adjoining(points: &mut [(f64, f64, f64)], i: usize, old: (f64, f64, f6
         };
         width.max(0.0)
     };
-    let before = (0..i).rev().find(|j| (points[*j].0 - t).abs() > SAME_T);
-    let after = (i + 1..points.len()).find(|j| (points[*j].0 - t).abs() > SAME_T);
+    let before = (0..i).rev().find(|j| (points[*j].0 - t).abs() > SAME_T).filter(|_| sides[0]);
+    let after = (i + 1..points.len()).find(|j| (points[*j].0 - t).abs() > SAME_T).filter(|_| sides[1]);
     for j in before.into_iter().chain(after) {
         let q = &mut points[j];
         (q.1, q.2) = (scale(q.1, old.1, new.1), scale(q.2, old.2, new.2));
@@ -303,6 +304,45 @@ fn same_points(a: Option<&WidthProfile>, b: Option<&WidthProfile>) -> bool {
     }
 }
 
+/// Set both halves of the discontinuous point whose incoming half is `i` and outgoing half `j` to
+/// the widths of `inc` and `out` (their places are ignored: the point keeps its place). With
+/// `single` (`true` for the outgoing half) only that half's widths remain, as one continuous point.
+/// With `adjust`, the nearest point before changes with the incoming half and the nearest point after
+/// with the outgoing half, once each. → the index of the point (its incoming half).
+fn set_pair(
+    points: &mut Vec<(f64, f64, f64)>,
+    (i, inc): (usize, (f64, f64, f64)),
+    (j, out): (usize, (f64, f64, f64)),
+    adjust: bool,
+    single: Option<bool>,
+) -> Result<usize> {
+    const C: &str = "stroke.widthPoint.set";
+    let at = points.get(i).map_or(f64::NAN, |q| q.0);
+    let halves: Vec<usize> = (0..points.len()).filter(|k| (points[*k].0 - at).abs() <= SAME_T).collect();
+    if halves != [i, j] {
+        return Err(bad(C, "`index` and `outIndex` must be the two halves of one discontinuous width point"));
+    }
+    let (old_in, old_out) = (points[i], points[j]);
+    if (old_in.0 - inc.0).abs() > SAME_T {
+        return Err(bad(C, "a discontinuous width point keeps its place"));
+    }
+    let (new_in, new_out) = match single {
+        None => ((old_in.0, inc.1, inc.2), (old_out.0, out.1, out.2)),
+        Some(false) => ((old_in.0, inc.1, inc.2), (old_in.0, inc.1, inc.2)),
+        Some(true) => ((old_in.0, out.1, out.2), (old_in.0, out.1, out.2)),
+    };
+    if adjust {
+        adjust_adjoining(points, i, old_in, new_in, [true, false]);
+        adjust_adjoining(points, j, old_out, new_out, [false, true]);
+    }
+    points[i] = new_in;
+    points[j] = new_out;
+    if single.is_some() {
+        points.remove(j);
+    }
+    Ok(i)
+}
+
 fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "stroke.widthPoint.set";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
@@ -312,6 +352,23 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "left/right must be non-negative widths"));
     }
     let adjust = switch_or(p, "adjustAdjoining", false, C)?;
+    let single = match text_param(p, "single", C)? {
+        None => None,
+        Some(side @ ("incoming" | "outgoing")) => Some(side == "outgoing"),
+        Some(_) => return Err(bad(C, "`single` must be `incoming` or `outgoing`")),
+    };
+    // The outgoing half of a discontinuous point: its index and side widths (points).
+    let out = match p.get("outIndex") {
+        None | Some(Value::Null) if single.is_none() => None,
+        _ => {
+            let j = usize::try_from(u64_req(p, "outIndex", C)?).map_err(|_| bad(C, "no such width point"))?;
+            let (l, r) = (f64_req(p, "outLeft", C)?, f64_req(p, "outRight", C)?);
+            if !(l.is_finite() && r.is_finite()) || l < 0.0 || r < 0.0 || l.max(r) > 1.0e5 {
+                return Err(bad(C, "left/right must be non-negative widths"));
+            }
+            Some((j, l, r))
+        }
+    };
     // When the profile comes out as it was, within a rounding error (1e-9), the document and its undo
     // history stay as they are.
     let mut pos = 0;
@@ -324,11 +381,19 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "width factors must be finite"));
         }
         let mut prof = st.profile.take().unwrap_or_else(uniform);
-        pos = match point_index(p, &prof, C)? {
-            Some(i) => {
+        pos = match (point_index(p, &prof, C)?, out) {
+            (None, Some(_)) => return Err(bad(C, "missing index")),
+            (Some(i), Some((j, l, r))) => {
+                let out = (t, l / half, r / half);
+                if !out.1.is_finite() || !out.2.is_finite() {
+                    return Err(bad(C, "width factors must be finite"));
+                }
+                set_pair(&mut prof.points, (i, pt), (j, out), adjust, single)?
+            }
+            (Some(i), None) => {
                 let old = prof.points[i];
                 if adjust {
-                    adjust_adjoining(&mut prof.points, i, old, pt);
+                    adjust_adjoining(&mut prof.points, i, old, pt, [true, true]);
                 }
                 if (old.0 - t).abs() <= SAME_T {
                     // Widths only: it keeps its place (and its side of a discontinuous point).
@@ -339,12 +404,12 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
                     place(&mut prof.points, pt, old.0 < t)
                 }
             }
-            None => {
+            (None, None) => {
                 let old = adjust.then(|| prof.at(t));
                 prof.points.retain(|q| (q.0 - t).abs() > SAME_T);
                 let i = place(&mut prof.points, pt, true);
                 if let Some((left, right)) = old {
-                    adjust_adjoining(&mut prof.points, i, (t, left, right), pt);
+                    adjust_adjoining(&mut prof.points, i, (t, left, right), pt, [true, true]);
                 }
                 i
             }

@@ -257,6 +257,9 @@
 	Additional Fonts Folder	अतिरिक्त फ़ॉन्ट फ़ोल्डर
 	Additional Plug-ins Folder	अतिरिक्त प्लग-इन फ़ोल्डर
 	Adjust Adjoining Width Points	सटे हुए चौड़ाई पॉइंट समायोजित करें
+	Incoming	आने वाली ओर
+	Outgoing	जाने वाली ओर
+	Single Width Only	केवल एक चौड़ाई
 	Adjust Color Balance…	कलर बैलेंस समायोजित करें…
 	Adjust Colors	रंग समायोजित करें
 	Adjust Options:	समायोजन ऑप्शन्स:
@@ -7831,6 +7834,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no such user library	ऐसी कोई उपयोगकर्ता लाइब्रेरी नहीं
 @msg	no such view	कोई ऐसा दृश्य नहीं
 @msg	no such width point	ऐसी कोई चौड़ाई बिंदु नहीं
+@msg	`single` must be `incoming` or `outgoing`	`single` का मान `incoming` या `outgoing` होना चाहिए
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` और `outIndex` एक ही असतत चौड़ाई बिंदु के दो हिस्से होने चाहिए
+@msg	a discontinuous width point keeps its place	असतत चौड़ाई बिंदु अपनी जगह पर रहता है
 @msg	no swatch `{keep}`	कोई स्वॉच `{keep}` नहीं
 @msg	no swatch `{n}`	कोई स्वॉच `{n}` नहीं
 @msg	no swatch `{n}` (swatches and colour groups move separately)	कोई स्वॉच `{n}` नहीं (स्वॉच और रंग समूह अलग-अलग मूव होते हैं)

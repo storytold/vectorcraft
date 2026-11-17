@@ -1075,6 +1075,9 @@ digits	Malayalam	マラヤーラム数字
 	Additional Plug-ins Folder	追加プラグインフォルダー
 	Additional Fonts Folder	追加フォントフォルダー
 	Adjust Adjoining Width Points	隣接する幅ポイントを調整
+	Incoming	入り側
+	Outgoing	出側
+	Single Width Only	1 つの幅のみ
 	Adjust Colors	カラーを調整
 	Adjust Options:	調整オプション:
 	Advanced Options	詳細オプション
@@ -5264,6 +5267,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` はカラーではありません (#rrggbb またはプリセット名で指定してください)
 @msg	give the path `id` and the width point `index`	パスの `id` と幅ポイントの `index` を指定してください
 @msg	no such width point	指定された幅ポイントが見つかりません
+@msg	`single` must be `incoming` or `outgoing`	`single` は `incoming` または `outgoing` にしてください
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` と `outIndex` は 1 つの不連続な幅ポイントの 2 つの半分である必要があります
+@msg	a discontinuous width point keeps its place	不連続な幅ポイントの位置は変わりません
 @msg	onto must name a panel floating in another group	onto には、別のグループでフローティングしているパネルを指定してください
 @msg	below and above must name a panel floating in another group	below と above には別のグループでフローティングしているパネルを指定してください
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください

@@ -140,6 +140,9 @@
 	Additional Plug-ins Folder	Папка дополнительных модулей
 	Additional Fonts Folder	Папка дополнительных шрифтов
 	Adjust Adjoining Width Points	Настроить смежные точки ширины
+	Incoming	Входящая
+	Outgoing	Исходящая
+	Single Width Only	Только одна ширина
 	Adjust Color Balance…	Настроить цветовой баланс…
 	Adjust Colors	Настроить цвета
 	Adjust Options:	Параметры настройки:
@@ -5146,6 +5149,9 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no such user library	такой пользовательской библиотеки нет
 @msg	no such view	такого вида нет
 @msg	no such width point	такой точки ширины нет
+@msg	`single` must be `incoming` or `outgoing`	`single` должен быть `incoming` или `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` и `outIndex` должны быть двумя половинами одной разрывной точки ширины
+@msg	a discontinuous width point keeps its place	разрывная точка ширины сохраняет своё место
 @msg	no swatch `{name}`	нет образца `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	нет библиотеки образцов `{l}` (см. swatch.library.list)
 @msg	no symbol instances selected	экземпляры символов не выделены

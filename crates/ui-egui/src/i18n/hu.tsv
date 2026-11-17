@@ -211,6 +211,9 @@
 	Additional Fonts Folder	További betűtípusok mappája
 	Additional Plug-ins Folder	További bővítmények mappája
 	Adjust Adjoining Width Points	Szomszédos szélességi pontok igazítása
+	Incoming	Bejövő
+	Outgoing	Kimenő
+	Single Width Only	Csak egy szélesség
 	Adjust Color Balance…	Színegyensúly beállítása…
 	Adjust Colors	Színek beállítása
 	Adjust Options:	Módosítandó:
@@ -5794,6 +5797,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no such user library	nincs ilyen felhasználói könyvtár
 @msg	no such view	nincs ilyen nézet
 @msg	no such width point	nincs ilyen szélességi pont
+@msg	`single` must be `incoming` or `outgoing`	a `single` értéke `incoming` vagy `outgoing` lehet
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	az `index` és az `outIndex` egyetlen szakadásos szélességi pont két fele kell legyen
+@msg	a discontinuous width point keeps its place	a szakadásos szélességi pont megtartja a helyét
 @msg	no swatch `{name}`	nincs ilyen színminta: `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	nincs ilyen színminta-könyvtár: `{l}` (lásd: swatch.library.list)
 @msg	no symbol instances selected	nincs kijelölt szimbólumpéldány

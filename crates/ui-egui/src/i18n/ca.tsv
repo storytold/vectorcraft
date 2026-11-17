@@ -223,6 +223,9 @@
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
 	Adjust Adjoining Width Points	Ajusta els punts d’amplada contigus
+	Incoming	Entrant
+	Outgoing	Sortint
+	Single Width Only	Només una amplada
 	Adjust Color Balance…	Ajusta l’equilibri de color…
 	Adjust Colors	Ajusta els colors
 	Adjust Options:	Opcions d’ajust:
@@ -6274,6 +6277,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such user library	no existeix aquesta biblioteca d’usuari
 @msg	no such view	no existeix aquesta vista
 @msg	no such width point	no existeix aquest punt d’amplada
+@msg	`single` must be `incoming` or `outgoing`	`single` ha de ser `incoming` o `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` han de ser les dues meitats d’un mateix punt d’amplada discontinu
+@msg	a discontinuous width point keeps its place	un punt d’amplada discontinu manté la seva posició
 @msg	no swatch `{name}`	no hi ha la mostra `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	no hi ha la biblioteca de mostres `{l}` (vegeu swatch.library.list)
 @msg	no symbol `{n}`	no hi ha el símbol `{n}`

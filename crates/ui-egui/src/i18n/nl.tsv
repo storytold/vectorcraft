@@ -3730,6 +3730,9 @@ antiAlias	Sharp	Scherp
 	Variable Options	Variabeleopties
 	Define a variable first	Definieer eerst een variabele
 	Adjust Adjoining Width Points	Aangrenzende breedtepunten aanpassen
+	Incoming	Inkomend
+	Outgoing	Uitgaand
+	Single Width Only	Slechts één breedte
 	Keep both sides the same width	Beide zijden dezelfde breedte houden
 	Side 1:	Zijde 1:
 	Side 2:	Zijde 2:
@@ -5468,6 +5471,9 @@ imageTrace	Outline	Contour
 @msg	no such user library	gebruikersbibliotheek bestaat niet
 @msg	no such view	weergave bestaat niet
 @msg	no such width point	breedtepunt bestaat niet
+@msg	`single` must be `incoming` or `outgoing`	`single` moet `incoming` of `outgoing` zijn
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` en `outIndex` moeten de twee helften van één onderbroken breedtepunt zijn
+@msg	a discontinuous width point keeps its place	een onderbroken breedtepunt behoudt zijn plaats
 @msg	no swatch `{name}`	geen staal `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	geen stalenbibliotheek `{l}` (zie swatch.library.list)
 @msg	no symbol instances selected	geen symboolinstanties geselecteerd

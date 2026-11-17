@@ -130,6 +130,9 @@
 	Additional Plug-ins Folder	Mapp för ytterligare plugins
 	Additional Fonts Folder	Mapp för ytterligare typsnitt
 	Adjust Adjoining Width Points	Justera angränsande breddpunkter
+	Incoming	Inkommande
+	Outgoing	Utgående
+	Single Width Only	Endast en bredd
 	Adjust Color Balance…	Justera färgbalans…
 	Adjust Colors	Justera färger
 	Adjust Options:	Justeringsalternativ:
@@ -5019,6 +5022,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no such user library	användarbiblioteket finns inte
 @msg	no such view	vyn finns inte
 @msg	no such width point	breddpunkten finns inte
+@msg	`single` must be `incoming` or `outgoing`	`single` måste vara `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` och `outIndex` måste vara de två halvorna av en och samma diskontinuerliga breddpunkt
+@msg	a discontinuous width point keeps its place	en diskontinuerlig breddpunkt behåller sin plats
 @msg	no swatch `{name}`	ingen färgruta `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	inget färgrutebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	inga symbolinstanser är markerade

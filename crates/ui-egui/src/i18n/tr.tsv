@@ -127,6 +127,9 @@
 	Additional Plug-ins Folder	Ek Eklentiler Klasörü
 	Additional Fonts Folder	Ek Yazı Tipleri Klasörü
 	Adjust Adjoining Width Points	Bitişik Genişlik Noktalarını Ayarlayın
+	Incoming	Gelen
+	Outgoing	Giden
+	Single Width Only	Yalnızca Tek Genişlik
 	Adjust Color Balance…	Renk Dengesini Ayarlayın…
 	Adjust Colors	Renkleri Ayarla
 	Adjust Options:	Seçenekleri Ayarlayın:
@@ -4833,6 +4836,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no such user library	böyle bir kullanıcı kütüphanesi yok
 @msg	no such view	öyle bir görüş yok
 @msg	no such width point	böyle bir genişlik noktası yok
+@msg	`single` must be `incoming` or `outgoing`	`single`, `incoming` veya `outgoing` olmalıdır
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` ve `outIndex`, tek bir süreksiz genişlik noktasının iki yarısı olmalıdır
+@msg	a discontinuous width point keeps its place	süreksiz genişlik noktası yerini korur
 @msg	no swatch `{name}`	renk örneği yok `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	renk örneği kitaplığı yok `{l}` (bkz. swatch.library.list)
 @msg	no symbol instances selected	sembol örneği seçilmedi
