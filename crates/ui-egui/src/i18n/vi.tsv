@@ -6736,6 +6736,13 @@ axis	Y Axis	Trục Y
 	Bus Lines	Đường bus
 	Terminal Nodes	Nút đầu cuối
 
+# Original arrow art brushes.
+	Arrows	Cọ mũi tên
+	Solid Arrow	Mũi tên đặc
+	Open Arrow	Mũi tên rỗng
+	Double Arrow	Mũi tên đôi
+	Chevron Arrow	Mũi tên chữ V
+
 	Notched Ribbon	Dải băng khía
 	Double Line	Đường đôi
 	Wave	Sóng

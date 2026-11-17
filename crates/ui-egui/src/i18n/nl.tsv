@@ -9009,6 +9009,12 @@ axis	Y Axis	Y-as
 	Bus Lines	Buslijnen
 	Terminal Nodes	Aansluitpunten
 
+# Original arrow art brushes.
+	Arrows	Pijlen
+	Solid Arrow	Massieve pijl
+	Open Arrow	Open pijl
+	Chevron Arrow	Chevronpijl
+
 	Notched Ribbon	Gekerfd lint
 	Double Line	Dubbele lijn
 	Wave	Golf

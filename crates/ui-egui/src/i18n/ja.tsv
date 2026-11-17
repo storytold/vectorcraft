@@ -8602,6 +8602,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	バス配線
 	Terminal Nodes	端子ノード
 
+# Original arrow art brushes.
+	Arrows	矢印ブラシ
+	Solid Arrow	塗りつぶし矢印
+	Open Arrow	中抜き矢印
+	Double Arrow	両矢印
+	Chevron Arrow	山形付き矢印
+
 	Notched Ribbon	ノッチリボン
 	Double Line	二重線
 	Wave	波

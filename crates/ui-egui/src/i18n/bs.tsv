@@ -6469,6 +6469,12 @@ axis	Y Axis	Y osa
 	Bus Lines	Linije sabirnice
 	Terminal Nodes	Priključni čvorovi
 
+# Original arrow art brushes.
+	Arrows	Strelice
+	Solid Arrow	Puna strelica
+	Open Arrow	Otvorena strelica
+	Chevron Arrow	Strelica sa ševronom
+
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
 	Wave	Talas

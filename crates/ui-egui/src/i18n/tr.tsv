@@ -8981,6 +8981,12 @@ axis	Y Axis	Y ekseni
 	Bus Lines	Veriyolu hatları
 	Terminal Nodes	Bağlantı düğümleri
 
+# Original arrow art brushes.
+	Arrows	Oklar
+	Solid Arrow	Dolu Ok
+	Open Arrow	Açık Ok
+	Chevron Arrow	Köşeli Ok
+
 	Notched Ribbon	Çentikli Şerit
 	Double Line	Çift Çizgi
 	Wave	Dalga

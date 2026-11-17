@@ -7082,6 +7082,12 @@ axis	Y Axis	Άξονας Y
 	Bus Lines	Γραμμές διαύλου
 	Terminal Nodes	Τερματικοί κόμβοι
 
+# Original arrow art brushes.
+	Arrows	Βέλη
+	Solid Arrow	Συμπαγές βέλος
+	Open Arrow	Ανοιχτό βέλος
+	Chevron Arrow	Βέλος με σεβρόν
+
 	Notched Ribbon	Οδοντωτή κορδέλα
 	Double Line	Διπλή γραμμή
 	Wave	Κύμα

@@ -6687,6 +6687,13 @@ axis	Y Axis	Y축
 	Bus Lines	버스 배선
 	Terminal Nodes	단자 노드
 
+# Original arrow art brushes.
+	Arrows	화살표 브러시
+	Solid Arrow	채워진 화살표
+	Open Arrow	속이 빈 화살표
+	Double Arrow	양방향 화살표
+	Chevron Arrow	갈매기형 화살표
+
 	Notched Ribbon	노치 리본
 	Double Line	이중선
 	Wave	물결

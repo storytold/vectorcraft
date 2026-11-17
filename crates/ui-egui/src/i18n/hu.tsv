@@ -7084,6 +7084,12 @@ axis	Y Axis	Y tengely
 	Bus Lines	Buszvonalak
 	Terminal Nodes	Csatlakozási pontok
 
+# Original arrow art brushes.
+	Arrows	Nyilak
+	Solid Arrow	Tömör nyíl
+	Open Arrow	Nyitott nyíl
+	Chevron Arrow	Ékmintás nyíl
+
 	Notched Ribbon	Csipkézett szalag
 	Double Line	Dupla vonal
 	Wave	Hullám

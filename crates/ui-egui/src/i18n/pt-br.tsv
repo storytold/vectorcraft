@@ -7012,6 +7012,12 @@ axis	Y Axis	Eixo Y
 	Bus Lines	Linhas de barramento
 	Terminal Nodes	Nós terminais
 
+# Original arrow art brushes.
+	Arrows	Setas
+	Solid Arrow	Seta Sólida
+	Open Arrow	Seta Aberta
+	Chevron Arrow	Seta com Divisa
+
 	Notched Ribbon	Fita Entalhada
 	Double Line	Linha Dupla
 	Wave	Onda

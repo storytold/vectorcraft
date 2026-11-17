@@ -7070,6 +7070,12 @@ axis	Y Axis	Eje Y
 	Bus Lines	Líneas de bus
 	Terminal Nodes	Nodos terminales
 
+# Original arrow art brushes.
+	Arrows	Flechas
+	Solid Arrow	Flecha sólida
+	Open Arrow	Flecha abierta
+	Chevron Arrow	Flecha con cheurón
+
 	Notched Ribbon	Cinta dentada
 	Double Line	Línea doble
 	Wave	Onda

@@ -9241,6 +9241,12 @@ axis	Y Axis	Y ღერძი
 	Bus Lines	სალტის ხაზები
 	Terminal Nodes	ტერმინალური კვანძები
 
+# Original arrow art brushes.
+	Arrows	ისრები
+	Solid Arrow	მყარი ისარი
+	Open Arrow	ღია ისარი
+	Chevron Arrow	შევრონიანი ისარი
+
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
 	Wave	ტალღა

@@ -6415,6 +6415,12 @@ axis	Y Axis	Y ос
 	Bus Lines	Шинни линии
 	Terminal Nodes	Крайни възли
 
+# Original arrow art brushes.
+	Arrows	Стрелки
+	Solid Arrow	Плътна стрелка
+	Open Arrow	Отворена стрелка
+	Chevron Arrow	Стрелка с шеврон
+
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
 	Wave	Вълна

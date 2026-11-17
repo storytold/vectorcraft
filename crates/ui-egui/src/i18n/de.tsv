@@ -6687,6 +6687,13 @@ axis	Y Axis	Y-Achse
 	Bus Lines	Busleitungen
 	Terminal Nodes	Anschlussknoten
 
+# Original arrow art brushes.
+	Arrows	Pfeile
+	Solid Arrow	Gefüllter Pfeil
+	Open Arrow	Offener Pfeil
+	Double Arrow	Doppelpfeil
+	Chevron Arrow	Winkelpfeil
+
 	Notched Ribbon	Gekerbtes Band
 	Double Line	Doppellinie
 	Wave	Welle

@@ -4680,6 +4680,13 @@ antiAlias	Sharp	શાર્પ
 	Bus Lines	બસ રેખાઓ
 	Terminal Nodes	ટર્મિનલ નોડ્સ
 
+# Original arrow art brushes.
+	Arrows	તીરો
+	Solid Arrow	ભરેલું તીર
+	Open Arrow	ખુલ્લું તીર
+	Double Arrow	બેવડું તીર
+	Chevron Arrow	શેવરોન તીર
+
 	Notched Ribbon	ખાંચાવાળી રિબન
 	Double Line	બેવડી રેખા
 	Wave	તરંગ

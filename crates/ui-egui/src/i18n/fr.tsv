@@ -7095,6 +7095,12 @@ axis	Y Axis	Axe Y
 	Bus Lines	Lignes de bus
 	Terminal Nodes	Nœuds terminaux
 
+# Original arrow art brushes.
+	Arrows	Flèches
+	Solid Arrow	Flèche pleine
+	Open Arrow	Flèche ouverte
+	Chevron Arrow	Flèche à chevron
+
 	Notched Ribbon	Ruban cranté
 	Double Line	Double ligne
 	Wave	Vague

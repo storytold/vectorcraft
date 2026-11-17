@@ -6431,6 +6431,12 @@ axis	Y Axis	Sumbu Y
 	Bus Lines	Jalur bus
 	Terminal Nodes	Simpul terminal
 
+# Original arrow art brushes.
+	Arrows	Kuas panah
+	Solid Arrow	Panah solid
+	Open Arrow	Panah terbuka
+	Chevron Arrow	Panah chevron
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang

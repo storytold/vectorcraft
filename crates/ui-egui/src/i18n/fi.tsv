@@ -7159,6 +7159,12 @@ axis	Y Axis	Y-akseli
 	Bus Lines	Väylälinjat
 	Terminal Nodes	Liitäntäpisteet
 
+# Original arrow art brushes.
+	Arrows	Nuolet
+	Solid Arrow	Umpinainen nuoli
+	Open Arrow	Avoin nuoli
+	Chevron Arrow	Kulmanuoli
+
 	Notched Ribbon	Lovettu nauha
 	Double Line	Kaksoisviiva
 	Wave	Aalto

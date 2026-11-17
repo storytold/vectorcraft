@@ -6724,6 +6724,12 @@ axis	Y Axis	Ось Y
 	Bus Lines	Линии шины
 	Terminal Nodes	Контактные узлы
 
+# Original arrow art brushes.
+	Arrows	Кисти-стрелки
+	Solid Arrow	Сплошная стрелка
+	Open Arrow	Открытая стрелка
+	Chevron Arrow	Стрелка с шевроном
+
 	Notched Ribbon	Лента с насечками
 	Double Line	Двойная линия
 	Wave	Волна

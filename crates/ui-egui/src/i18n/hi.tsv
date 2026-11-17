@@ -452,6 +452,12 @@ antiAlias	Sharp	शार्प
 	Bus Lines	बस रेखाएँ
 	Terminal Nodes	टर्मिनल नोड
 
+# Original arrow art brushes.
+	Arrows	तीर ब्रश
+	Solid Arrow	ठोस तीर
+	Open Arrow	खुला तीर
+	Chevron Arrow	शेवरॉन तीर
+
 	Notched Ribbon	नोकदार रिबन
 	Double Line	दोहरी लाइन
 	Wave	लहर

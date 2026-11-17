@@ -7101,6 +7101,12 @@ axis	Y Axis	Y-axel
 	Bus Lines	Bussledningar
 	Terminal Nodes	Anslutningspunkter
 
+# Original arrow art brushes.
+	Arrows	Pilar
+	Solid Arrow	Massiv pil
+	Open Arrow	Öppen pil
+	Chevron Arrow	Chevronpil
+
 	Notched Ribbon	Hackat band
 	Double Line	Dubbellinje
 	Wave	Våg

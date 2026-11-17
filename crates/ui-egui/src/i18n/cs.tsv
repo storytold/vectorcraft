@@ -7100,6 +7100,12 @@ axis	Y Axis	osa Y
 	Bus Lines	Sběrnicové linky
 	Terminal Nodes	Koncové uzly
 
+# Original arrow art brushes.
+	Arrows	Šipky
+	Solid Arrow	Plná šipka
+	Open Arrow	Otevřená šipka
+	Chevron Arrow	Šipka s krokví
+
 	Notched Ribbon	Vroubkovaná stuha
 	Double Line	Dvojitá čára
 	Wave	Vlna

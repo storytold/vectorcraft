@@ -6746,6 +6746,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	匯流排
 	Terminal Nodes	端子節點
 
+# Original arrow art brushes.
+	Arrows	箭頭筆刷
+	Solid Arrow	實心箭頭
+	Open Arrow	空心箭頭
+	Double Arrow	雙向箭頭
+	Chevron Arrow	人字紋箭頭
+
 	Notched Ribbon	凹口緞帶
 	Double Line	雙線
 	Wave	波浪

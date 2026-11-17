@@ -6938,6 +6938,13 @@ axis	Y Axis	Y 轴
 	Bus Lines	总线
 	Terminal Nodes	端子节点
 
+# Original arrow art brushes.
+	Arrows	箭头画笔
+	Solid Arrow	实心箭头
+	Open Arrow	空心箭头
+	Double Arrow	双向箭头
+	Chevron Arrow	人字纹箭头
+
 	Notched Ribbon	凹口丝带
 	Double Line	双线
 	Wave	波浪

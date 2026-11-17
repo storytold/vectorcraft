@@ -6954,6 +6954,12 @@ axis	Y Axis	Oś Y
 	Bus Lines	Linie magistrali
 	Terminal Nodes	Węzły końcowe
 
+# Original arrow art brushes.
+	Arrows	Strzałki
+	Solid Arrow	Pełna strzałka
+	Open Arrow	Otwarta strzałka
+	Chevron Arrow	Strzałka z szewronem
+
 	Notched Ribbon	Wstęga z nacięciami
 	Double Line	Podwójna linia
 	Wave	Fala
