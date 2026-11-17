@@ -4964,6 +4964,73 @@ fn live_paint_does_not_count_art_named_like_its_parts() {
     }
 }
 
+/// A path drawn in an isolated Live Paint group can't be named Face or Edge, the names of the
+/// group's faces and edges: `object.setProps` and `layer.setProps` return an error and rename
+/// nothing, so Gap Options and a path dragged into the group keep the path. A face keeps its name.
+#[test]
+fn live_paint_refuses_part_names_for_paths_drawn_in_it() {
+    use vectorcraft_tools::builder::{EDGE_NAME, FACE_NAME, faces};
+    let mut s = session();
+    let g = live(&mut s);
+    let face = faces(&node(&s, g))[0].id;
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let a = line_across(&mut s, 50.0);
+    // Hidden, the path stays in the group as drawn when isolation mode ends.
+    s.execute("object.setProps", &json!({"id": a.0, "visible": false})).unwrap();
+    let before = (s.doc().unwrap().doc.clone(), s.doc().unwrap().history.undo.len());
+    for name in [FACE_NAME, EDGE_NAME] {
+        let calls = [
+            ("object.setProps", json!({"id": a.0, "name": name})),
+            ("layer.setProps", json!({"id": a.0, "name": name})),
+            ("layer.setProps", json!({"ids": [face.0, a.0], "name": name})),
+        ];
+        for (c, p) in calls {
+            let err = s.execute(c, &p).unwrap_err().to_string();
+            assert!(err.contains("give the path another name"), "{c} {p}: {err}");
+        }
+    }
+    assert!(s.doc().unwrap().doc == before.0, "nothing was renamed");
+    assert_eq!(s.doc().unwrap().history.undo.len(), before.1);
+    s.execute("layer.setProps", &json!({"id": face.0, "name": FACE_NAME})).unwrap();
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "the hidden path stays in the group");
+    s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "Gap Options keeps the path");
+    let b = line_to_right_face(&mut s, 30.0);
+    s.execute("layer.move", &json!({"ids": [b.0], "target": g.0, "place": "inside"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(a), Some(g), "a path dragged in keeps it");
+    assert_eq!(faces(&node(&s, g)).len(), 5);
+}
+
+/// A path pasted into an isolated Live Paint group under the name of a face or an edge loses the
+/// name, so Gap Options keeps it and it joins the group's paths when isolation mode ends.
+#[test]
+fn live_paint_paste_clears_part_names() {
+    use vectorcraft_tools::builder::{EDGE_NAME, FACE_NAME, faces, sources};
+    for name in [FACE_NAME, EDGE_NAME] {
+        let mut s = session();
+        let g = live(&mut s);
+        let r = rect(&mut s, 20.0, 40.0, 60.0, 20.0);
+        s.execute("object.setProps", &json!({"id": r.0, "name": name})).unwrap();
+        s.execute("select.set", &json!({"ids": [r.0]})).unwrap();
+        s.execute("edit.copy", &json!({})).unwrap();
+        s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+        s.execute("edit.pasteInPlace", &json!({})).unwrap();
+        let pasted = s.doc().unwrap().selection.objects.clone();
+        assert_eq!(pasted.len(), 1);
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.parent_of(pasted[0]), Some(g), "{name}: the paste goes into the group");
+        assert_eq!(d.node(pasted[0]).unwrap().name, None, "{name}: the paste loses the name");
+        assert_eq!(d.node(r).unwrap().name.as_deref(), Some(name), "the path outside keeps its name");
+        s.execute("livePaint.gapOptions", &json!({"ids": [g.0], "detect": true})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.parent_of(pasted[0]), Some(g), "{name}: Gap Options keeps the paste");
+        s.execute("object.exitIsolation", &json!({})).unwrap();
+        let n = node(&s, g);
+        assert_eq!(s.doc().unwrap().doc.parent_of(pasted[0]), Some(sources(&n).unwrap().id), "{name}: the paste joined");
+        assert!(faces(&n).len() > 3);
+    }
+}
+
 /// With Real-time Drawing and Editing off, a rectangle still being drawn in a Live Paint group
 /// isolated in a pattern tile is drawn first when Exit Isolation Mode leaves pattern editing, and
 /// joins the group with the tile saved.

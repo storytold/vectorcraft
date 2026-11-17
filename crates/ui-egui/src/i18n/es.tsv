@@ -4754,6 +4754,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Installed plug-in {_1}	Se instaló el plugin {_1}
 @msg	Internal error: {msg} (please report this bug)	Error interno: {msg} (por favor, informa de este error)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Combinar pintura interactiva: selecciona un grupo de pintura interactiva y los trazados que quieres agregar
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` y `Edge` son los nombres de las caras y los bordes de un grupo de pintura interactiva: ponle otro nombre al trazado
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	La pintura interactiva admite trazados y trazados compuestos: convierte primero el texto, las imágenes y otros objetos en trazados
 @msg	Live Paint: select paths or compound paths	Pintura interactiva: selecciona trazados o trazados compuestos
 @msg	Live Paint: these paths are too degenerate to paint	Pintura interactiva: estos trazados están demasiado degenerados para pintarlos

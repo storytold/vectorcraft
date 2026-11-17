@@ -4716,6 +4716,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	Installed plug-in {_1}	Module externe {_1} installé
 @msg	Internal error: {msg} (please report this bug)	Erreur interne : {msg} (merci de signaler ce bogue)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Fusion de peinture dynamique : sélectionnez un groupe de peinture dynamique et les tracés à ajouter
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	Les noms `Face` et `Edge` sont réservés aux faces et aux bords d’un groupe de peinture dynamique, choisissez un autre nom pour le tracé
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	La peinture dynamique accepte les tracés et les tracés transparents : convertissez d’abord le texte, les images et les autres objets en tracés
 @msg	Live Paint: select paths or compound paths	Peinture dynamique : sélectionnez des tracés ou des tracés transparents
 @msg	Live Paint: these paths are too degenerate to paint	Peinture dynamique : ces tracés sont trop dégénérés pour être peints

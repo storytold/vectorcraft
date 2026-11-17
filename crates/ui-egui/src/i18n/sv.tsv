@@ -4660,6 +4660,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Installed plug-in {_1}	Installerade pluginet {_1}
 @msg	Internal error: {msg} (please report this bug)	Internt fel: {msg} (rapportera gärna felet)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Sammanfoga Live Paint: markera en Live Paint-grupp och de banor som ska läggas till
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` och `Edge` är namnen på ytorna och kanterna i en Live Paint-grupp: ge banan ett annat namn
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint tar banor och sammansatta banor: konvertera först text, bilder och andra objekt till banor
 @msg	Live Paint: select paths or compound paths	Live Paint: markera banor eller sammansatta banor
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: de här banorna är för degenererade för att målas

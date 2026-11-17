@@ -74,6 +74,44 @@ fn set_parts(g: &mut Node, mut parts: Vec<Arc<Node>>, gone: &[NodeId]) {
     }
 }
 
+/// Whether a path named `name` directly in a Live Paint group is one of its faces or edges: the
+/// name is [`FACE_NAME`] or [`EDGE_NAME`].
+fn part_name(name: Option<&str>) -> bool {
+    matches!(name, Some(FACE_NAME | EDGE_NAME))
+}
+
+/// Whether `n` is a path whose parent `parent` is a Live Paint group.
+fn path_in_live_paint(d: &Document, parent: Option<NodeId>, n: &Node) -> bool {
+    n.path_data().is_some() && parent.and_then(|p| d.node(p)).is_some_and(is_live_paint)
+}
+
+/// Clear the name of `n`, put directly in `parent`, when it is a path named like a face or an edge
+/// ([`part_name`]) and `parent` is a Live Paint group, so that the group's other children
+/// ([`others_in`]) keep it when its faces and edges are made again. Paste uses it.
+pub(crate) fn clear_part_name(d: &Document, parent: Option<NodeId>, n: &mut Node) {
+    if part_name(n.name.as_deref()) && path_in_live_paint(d, parent, n) {
+        n.name = None;
+    }
+}
+
+/// Refuse naming rows `ids` `name` when it is the name of a face or an edge ([`part_name`]) and one
+/// of them is a path directly in a Live Paint group that is not named `name` already. Checked
+/// before anything changes.
+pub(crate) fn check_part_name(d: &Document, ids: &[NodeId], name: &str) -> Result<()> {
+    if !part_name(Some(name)) {
+        return Ok(());
+    }
+    for id in ids {
+        if let Some(n) = d.node(*id)
+            && n.name.as_deref() != Some(name)
+            && path_in_live_paint(d, d.parent_of(*id), n)
+        {
+            return Err(EngineError::Other("`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name".into()));
+        }
+    }
+    Ok(())
+}
+
 /// Select `ids` alone, without an undo step, when they are not selected that way already.
 fn select_only(s: &mut Session, ids: &[NodeId]) -> Result<()> {
     let st = s.doc()?;
