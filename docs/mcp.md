@@ -6644,7 +6644,8 @@ go; let go sooner, it runs what the key runs without a hold shortcut, at the rel
 waits, or Cmd, Ctrl or Alt pressed then, ends the wait first, so keys act in the order they went down. The window losing
 the keyboard, a dialog, a text field, Presentation Mode or an input method composition ends the wait and runs nothing.
 Keys without a hold shortcut run on their press as before, and so does a letter with Shift when only the letter alone
-has a hold shortcut, or a key the active tool uses itself (E with the Extend Path tool).
+has a hold shortcut, or a key the active tool uses itself (E with the Extend Path tool). When one entry holds a key with
+Shift (Shift+1) and another the character it types (`!`), that key runs the hold shortcut of the first.
 
 `shortcuts.set {id, hold}` sets a hold shortcut, and `hold: ""` or `null` removes it; `hold` alone leaves the entry's
 shortcut as it is, and a key that another entry already holds is refused unless `force` is true. Hold shortcuts are

@@ -530,6 +530,20 @@ fn a_shifted_digit_holds_when_it_types_its_symbol() {
     assert_eq!(fill(&app), "#0000ff");
 }
 
+/// With one entry holding Shift+1 and another `!`, which Shift+1 types, holding Shift+1 runs the
+/// entry that holds the key itself.
+#[test]
+fn a_shifted_digit_holds_before_the_symbol_it_types() {
+    let mut app = app_with(true);
+    app.run("shortcuts.set", json!({"id": "paint.swap", "hold": "Shift+1"})).unwrap();
+    app.run("shortcuts.set", json!({"id": "select.all", "hold": "!"})).unwrap();
+    assert_eq!(app.ui.shortcut_holds.len(), 2);
+    let keys = Keyboard::new();
+    keys.frame(&mut app, 0.0, press(Key::Num1, "!", Modifiers::SHIFT));
+    keys.frame(&mut app, 0.4, vec![]);
+    assert_eq!(fill(&app), "#0000ff", "Shift+1's hold ran");
+}
+
 /// A quick press of a shifted key with a hold shortcut runs what the key runs without one: a
 /// shortcut on Shift+. (typing `>`) runs, and Shift+1 (typing `!`) runs what `!` runs.
 #[test]

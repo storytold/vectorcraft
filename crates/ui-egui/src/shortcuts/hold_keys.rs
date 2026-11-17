@@ -163,19 +163,19 @@ fn settle(app: &mut VectorcraftApp, ctx: &egui::Context, hold: bool, down: bool)
     opened
 }
 
-/// The chords a press names for a hold shortcut, first match first: those of the text it typed, as
-/// a single-key shortcut reads them, then the key itself with its Shift (Shift+1 typing `!`). A
-/// letter names only the chord with its own Shift state: a hold on X does not catch Shift+X.
+/// The chords a press names for a hold shortcut, first match first: the key itself with its Shift
+/// (Shift+1 typing `!`), then those of the text it typed, as a single-key shortcut reads them. When
+/// one entry holds Shift+1 and another `!`, Shift+1 runs the first. A letter names only the chord
+/// with its own Shift state: a hold on X does not catch Shift+X.
 fn press_chords(text: &str, key: Key, m: Modifiers) -> Vec<craft_keymap::Chord> {
     let mut chords = super::text_chords(text, m, Some(key));
     if !text.is_empty() && text.chars().all(char::is_alphabetic) {
         chords.retain(|c| c.mods.shift == m.shift);
     }
     let shift = Modifiers { shift: m.shift, ..Modifiers::NONE };
-    if let Some(c) = crate::shortcut_editor::chord_from_event(key, shift).and_then(|t| crate::keymap::vc_chord(&t))
-        && !chords.contains(&c)
-    {
-        chords.push(c);
+    if let Some(c) = crate::shortcut_editor::chord_from_event(key, shift).and_then(|t| crate::keymap::vc_chord(&t)) {
+        chords.retain(|t| *t != c);
+        chords.insert(0, c);
     }
     chords
 }
