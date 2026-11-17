@@ -148,6 +148,7 @@ impl Session {
             global_edit_options: Default::default(),
             select_similar: crate::cmd::SIMILAR[0].0,
             keyboard_text: false,
+            toasts: Default::default(),
             script_key: None,
             script_engines: crate::script::EnginesKey::new(),
             script_stop: vectorcraft_js::Interrupt::new(),

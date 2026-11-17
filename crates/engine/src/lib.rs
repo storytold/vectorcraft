@@ -356,6 +356,8 @@ pub struct Session {
     /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
     /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
     keyboard_text: bool,
+    /// The messages `app.toast` and [`Session::toast`] queued for the app to show; not saved.
+    pub(crate) toasts: cmd::toast::Queue,
 }
 
 impl Default for Session {

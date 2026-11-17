@@ -84,6 +84,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.shapes.star",
     "addon.type.releasePath",
     "addon.type.textTweaker",
+    "app.toast",
     "appearance.addEffect",
     "appearance.addFill",
     "appearance.addStroke",
