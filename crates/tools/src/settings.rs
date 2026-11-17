@@ -53,6 +53,8 @@ const ROWS: &[Row] = &[
     (&["star"], None, &["points"]),
     // The Ellipse dialog's Anchors.
     (&["ellipse"], None, &["anchors"]),
+    // Circle Tool Options (`circle::CircleTool`).
+    (&[crate::circle::ID], None, &["center", "radii", "diameter", "color", "standardAnchors", "dragThird"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (

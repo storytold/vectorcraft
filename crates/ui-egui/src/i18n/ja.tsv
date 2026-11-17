@@ -1299,6 +1299,11 @@ antiAlias	Sharp	シャープ
 	Circle	円
 	Circle Tool	円ツール
 	Circle too large	円が大きすぎます
+	Show Radii	半径を表示
+	Show Diameter	直径を表示
+	Anchors at Standard Positions	アンカーポイントを標準位置に配置
+	Third Point by Dragging	3 点目をドラッグで指定
+	Gray	グレー
 	Clear All Tabs	すべてのタブを消去
 	Above Text	テキストの上
 	Position Panel Above Text	テキストの上にパネルを配置

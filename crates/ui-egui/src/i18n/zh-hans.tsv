@@ -430,6 +430,10 @@ antiAlias	Sharp	锐利
 	Circle	圆形
 	Circle Tool	圆形工具
 	Circle too large	圆形过大
+	Show Radii	显示半径
+	Show Diameter	显示直径
+	Anchors at Standard Positions	锚点位于标准位置
+	Third Point by Dragging	拖动放置第三点
 	Classic Defaults	经典默认
 	Clean Up…	清理…
 	Clear	清除

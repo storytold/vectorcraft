@@ -6348,6 +6348,10 @@ font-technology	Variable	ცვლადი
 	Circle	წრე
 	Circle Tool	წრის ხელსაწყო
 	Circle too large	წრე ზედმეტად დიდია
+	Show Radii	რადიუსების ჩვენება
+	Show Diameter	დიამეტრის ჩვენება
+	Anchors at Standard Positions	საყრდენი წერტილები სტანდარტულ პოზიციებზე
+	Third Point by Dragging	მესამე წერტილი გადათრევით
 	Clip to Art	ნახატზე მოჭრა
 	Colorize	გაფერადება
 	Gamma	გამა

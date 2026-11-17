@@ -23,6 +23,7 @@ pub mod brush_replace_art;
 pub mod bullets_numbering;
 pub mod char_style_options;
 pub mod check_spelling;
+pub mod circle_options;
 pub mod color_balance;
 pub mod color_guide_options;
 mod color_picker;
@@ -449,6 +450,7 @@ registry! {
     FreehandOptions: [freehand::KIND] => freehand::SPEC,
     ShapeBuilderOptions: [shape_builder_options::KIND] => shape_builder_options::SPEC,
     ObjectsOnPathOptions: [objects_on_path_options::KIND] => objects_on_path_options::SPEC,
+    CircleOptions: [circle_options::KIND] => circle_options::SPEC,
     FlareOptions: [flare_options::KIND] => flare_options::SPEC,
     SymbolOptions: [symbol_options::KIND] => symbol_options::SPEC,
     DeleteSymbol: [symbol_delete::KIND] => symbol_delete::SPEC,

@@ -4550,6 +4550,10 @@ font-technology	Variable	Muuttuvat
 	Circle	Ympyrä
 	Circle Tool	Ympyrätyökalu
 	Circle too large	Ympyrä on liian suuri
+	Show Radii	Näytä säteet
+	Show Diameter	Näytä halkaisija
+	Anchors at Standard Positions	Ankkuripisteet vakiokohdissa
+	Third Point by Dragging	Kolmas piste vetämällä
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
 	Gamma	Gamma
