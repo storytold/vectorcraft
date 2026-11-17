@@ -33,6 +33,13 @@ const MAX_CHARS: usize = 4096;
 const MAX_TO_UNICODE: usize = 256 << 10;
 /// The most bytes of `ToUnicode` maps decoded, all fonts together.
 const MAX_TO_UNICODE_TOTAL: usize = 4 << 20;
+/// The longest string a `ToUnicode` map read may hold, decoded, in bytes: a destination is a
+/// character or a short run of them (a ligature's), and each lookup of a code in a range copies its
+/// range's whole destination. A map with a longer one is left unread.
+const MAX_DESTINATION: usize = 128;
+/// The most codes of a composite font whose characters are looked up (its first, in `W` order):
+/// [`MAX_CHARS`] bounds the characters kept, not the codes looked at to find them.
+const MAX_LOOKUPS: usize = 4 * MAX_CHARS;
 /// How far apart two widths a file gives one character of one font may be and still be one width,
 /// in thousandths of an em: files write widths rounded.
 const SAME_WIDTH: f32 = 1.0;
@@ -127,7 +134,8 @@ impl Walk {
 
     /// The `ToUnicode` map `s`, parsed once however many fonts name it: `None` when it decodes to
     /// more than [`MAX_TO_UNICODE`] bytes, when the maps decoded so far reach
-    /// [`MAX_TO_UNICODE_TOTAL`], or when it can't be read. A map is charged what was decoded of it,
+    /// [`MAX_TO_UNICODE_TOTAL`], when it holds a string longer than [`MAX_DESTINATION`], or when it
+    /// can't be read. A map is charged what was decoded of it,
     /// at most the limit: a stream written plain comes back whole without being decoded.
     fn character_map(&mut self, s: &Stream<'_>) -> Option<Rc<CMap>> {
         let id = s.obj_id();
@@ -135,7 +143,9 @@ impl Walk {
             let left = MAX_TO_UNICODE_TOTAL.saturating_sub(self.decoded).min(MAX_TO_UNICODE + 1);
             let data = s.decoded_within(left).ok();
             self.decoded += data.as_ref().map_or(left, |d| d.len().min(left));
-            let map = data.filter(|d| d.len() < left && d.len() <= MAX_TO_UNICODE).and_then(|d| CMap::parse(&d, |_| None));
+            let map = data
+                .filter(|d| d.len() < left && d.len() <= MAX_TO_UNICODE && !d.starts_with(b"bcmap") && longest_string(d) <= MAX_DESTINATION)
+                .and_then(|d| CMap::parse(&d, |_| None));
             self.maps.insert(id, map.map(Rc::new));
         }
         self.maps.get(&id)?.clone()
@@ -233,7 +243,8 @@ fn walk<'a>(pages: impl IntoIterator<Item = &'a Resources<'a>>) -> Walk {
 }
 
 /// The PostScript name of font `f` (its `BaseFont` without a subset prefix) and the width of each
-/// character it names, at most [`MAX_CHARS`]. A code's character comes from the font's `ToUnicode`
+/// character it names, at most [`MAX_CHARS`] (of a composite font, among its first [`MAX_LOOKUPS`]
+/// codes with a width). A code's character comes from the font's `ToUnicode`
 /// map or, for a simple font without one whose `Encoding` is `WinAnsiEncoding`, from that encoding;
 /// a composite font's codes are its CIDs, so only under an `Identity-H` or `Identity-V` CMap. A
 /// width of 0 is a code the subset doesn't use, and is left out. `None` for a Type 3 font (its
@@ -271,11 +282,14 @@ fn font_widths(f: &Dict<'_>, walk: &mut Walk) -> Option<(String, Vec<(char, f32)
             return None;
         }
         let d = f.get::<Array<'_>>(b"DescendantFonts").and_then(|a| a.iter::<Dict<'_>>().next())?;
+        let mut looked = 0;
         for (cid, w) in walk.cid_widths(&d)?.iter() {
-            if widths.len() >= MAX_CHARS {
+            if widths.len() >= MAX_CHARS || looked >= MAX_LOOKUPS {
                 break;
             }
-            if let (Some(c), Some(w)) = (char_of(*cid), width(*w)) {
+            let Some(w) = width(*w) else { continue };
+            looked += 1;
+            if let Some(c) = char_of(*cid) {
                 widths.push((c, w));
             }
         }
@@ -283,12 +297,70 @@ fn font_widths(f: &Dict<'_>, walk: &mut Walk) -> Option<(String, Vec<(char, f32)
         let first = f.get::<u32>(b"FirstChar")?;
         // A simple font's codes are bytes.
         for (code, w) in (first..256).zip(walk.simple_widths(f)?.iter()) {
-            if let (Some(c), Some(w)) = (char_of(code), width(*w)) {
+            let Some(w) = width(*w) else { continue };
+            if let Some(c) = char_of(code) {
                 widths.push((c, w));
             }
         }
     }
     Some((name, widths))
+}
+
+/// The decoded length, in bytes, of the longest string in CMap text `data`: a hex string's digits
+/// halved, or a literal string's bytes (escapes counted as written, so at least its length). A `<<`
+/// opens a dictionary, not a string, and a `%` outside a string starts a comment. An ASCII85
+/// string (`<~`), which no `ToUnicode` map writes and whose `z` stands for four bytes, counts as
+/// longer than any.
+fn longest_string(data: &[u8]) -> usize {
+    let mut longest = 0;
+    let mut i = 0;
+    while let Some(&b) = data.get(i) {
+        i += 1;
+        let len = match b {
+            b'%' => {
+                while data.get(i).is_some_and(|b| !matches!(b, b'\n' | b'\r')) {
+                    i += 1;
+                }
+                continue;
+            }
+            b'<' if data.get(i) == Some(&b'~') => return usize::MAX,
+            b'<' if data.get(i) == Some(&b'<') => {
+                i += 1;
+                continue;
+            }
+            b'<' => {
+                let mut digits = 0;
+                while let Some(&b) = data.get(i) {
+                    i += 1;
+                    if b == b'>' {
+                        break;
+                    }
+                    digits += usize::from(b.is_ascii_hexdigit());
+                }
+                digits.div_ceil(2)
+            }
+            b'(' => {
+                let (mut depth, mut len) = (1usize, 0);
+                while let Some(&b) = data.get(i) {
+                    i += 1;
+                    match b {
+                        b'\\' => i += 1,
+                        b'(' => depth += 1,
+                        b')' => depth -= 1,
+                        _ => {}
+                    }
+                    if depth == 0 {
+                        break;
+                    }
+                    len += 1;
+                }
+                len
+            }
+            _ => continue,
+        };
+        longest = longest.max(len);
+    }
+    longest
 }
 
 /// The character of code `code` in `WinAnsiEncoding` (ISO 32000-1 Annex D.2), which is Windows-1252
@@ -555,6 +627,81 @@ mod tests {
         assert!(widths.widths("Unread").is_none());
         assert!(widths.widths("Named").is_none());
         assert_eq!(widths.widths("Plain").map(|w| w.get(&'A').copied()), Some(Some(600.0)));
+    }
+
+    /// A `ToUnicode` map with a destination longer than [`super::MAX_DESTINATION`] is left unread,
+    /// though the whole map is under [`super::MAX_TO_UNICODE`]: each lookup of a code in its range
+    /// would copy the whole destination. A hex destination of 60,000 characters, a literal one of
+    /// 600, and ASCII85 ones (`z` stands for four bytes, and one can hide the rest of its line
+    /// behind a `%` the pre-scan would take for a comment) are all left unread. A map with a long
+    /// name in a dictionary (`<<`) and a comment with an unclosed `(`, more than the limit before
+    /// the map's end, is still read.
+    #[test]
+    fn a_to_unicode_map_with_a_long_destination_is_left_unread() {
+        let head = "begincmap\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n1 beginbfchar\n<0001> <0041>\nendbfchar\n";
+        let range = |dst: &str| format!("{head}1 beginbfrange\n<0100> <01FF> {dst}\nendbfrange\nendcmap\n");
+        let hex = range(&format!("<{}>", "0042".repeat(60_000)));
+        let literal = range(&format!("({})", "B".repeat(600)));
+        let zeros = range(&format!("<~{}~>", "z".repeat(1_000)));
+        let hidden = format!("{head}<~>%~> 1 beginbfrange <0100> <01FF> <{}> endbfrange\nendcmap\n", "0042".repeat(300));
+        let padding = "1 beginbfchar\n<0002> <0042>\nendbfchar\n".repeat(10);
+        let short = format!(
+            "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 /{} 1 >> def\n% (an unclosed comment\n{head}{padding}endcmap\n",
+            "A".repeat(600)
+        );
+        assert!(hex.len() < super::MAX_TO_UNICODE);
+        let extra = first_extra(1);
+        let names = ["Hex", "Literal", "Zeros", "Hidden", "Short"];
+        let fonts: Vec<String> = names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                format!(
+                    "/{name} << /Type /Font /Subtype /Type0 /BaseFont /{name} /Encoding /Identity-H /ToUnicode {} 0 R \
+                     /DescendantFonts [<< /Subtype /CIDFontType2 /W [1 [500] 256 511 500] >>] >>",
+                    extra + i
+                )
+            })
+            .collect();
+        let page = PdfPage { resources: format!("/Font << {} >>", fonts.join(" ")), ..PdfPage::new(100.0, 100.0, "") };
+        let maps: Vec<String> =
+            [hex, literal, zeros, hidden, short].iter().map(|m| format!("<< /Length {} >>\nstream\n{m}endstream", m.len())).collect();
+        let refs: Vec<&str> = maps.iter().map(String::as_str).collect();
+        let file = pdf_with(&[page], &refs, None);
+        let widths = crate::open_pdf(&file, None).unwrap().page_widths();
+        for unread in ["Hex", "Literal", "Zeros", "Hidden"] {
+            assert!(widths.widths(unread).is_none(), "{unread}");
+        }
+        let short = widths.widths("Short").map(|w| w.iter().map(|(c, w)| (*c, *w)).collect::<Vec<_>>());
+        assert_eq!(short, Some(vec![('A', 500.0)]));
+    }
+
+    /// Past [`super::MAX_LOOKUPS`] codes of a composite font, no more are looked up, though few of
+    /// them gave a character: of two fonts whose `W` gives all 65,536 CIDs a width, the one whose
+    /// map gives CID 1 a character gives its width, and the one whose map only gives CID 20,000 one
+    /// gives none.
+    #[test]
+    fn codes_past_the_most_looked_up_are_left() {
+        let cmap = |code: &str| {
+            format!("begincmap\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n1 beginbfchar\n<{code}> <0041>\nendbfchar\nendcmap\n")
+        };
+        const { assert!(20_000 > super::MAX_LOOKUPS) };
+        let extra = first_extra(1);
+        let font = |name: &str, map: usize| {
+            format!(
+                "/{name} << /Type /Font /Subtype /Type0 /BaseFont /{name} /Encoding /Identity-H /ToUnicode {} 0 R \
+                 /DescendantFonts [<< /Subtype /CIDFontType2 /W {} 0 R >>] >>",
+                extra + map,
+                extra + 2
+            )
+        };
+        let page = PdfPage { resources: format!("/Font << {} {} >>", font("Near", 0), font("Far", 1)), ..PdfPage::new(100.0, 100.0, "") };
+        let maps: Vec<String> =
+            ["0001", "4E20"].iter().map(|c| cmap(c)).map(|m| format!("<< /Length {} >>\nstream\n{m}endstream", m.len())).collect();
+        let file = pdf_with(&[page], &[&maps[0], &maps[1], "[0 65535 500]"], None);
+        let widths = crate::open_pdf(&file, None).unwrap().page_widths();
+        assert_eq!(widths.widths("Near").map(|w| w.get(&'A').copied()), Some(Some(500.0)));
+        assert!(widths.widths("Far").is_none());
     }
 
     /// [`crate::import_scan::cid_ranges`] gives each CID of a `W` its values, a list's in turn (an
