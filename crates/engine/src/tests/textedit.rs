@@ -2289,6 +2289,41 @@ fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, Strin
     (s, a, b, story)
 }
 
+/// Type › Insert Break Character › Forced Line Break (`type.insert`) after Select All in threaded
+/// text replaces the whole story, every frame's text, as one undo step.
+#[test]
+fn insert_character_replaces_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "\u{2028}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+}
+
+/// When `type.insert` at the caret in the first frame of threaded text pushes the caret's place on
+/// into the next frame, the Type tool's caret goes there with it, and typing goes after the
+/// insertion.
+#[test]
+fn insert_character_moves_the_caret_with_the_text_it_flows_on() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let first = obj(&s, a).plain_text();
+    // Before the last word of the first frame: two line breaks there push the line after the
+    // first one on into the second frame.
+    let at = first.trim_end().rfind(' ').map_or(0, |k| k + 1);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": at, "caret": at}));
+    for _ in 0..2 {
+        s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    }
+    assert!(obj(&s, a).plain_text().len() < at + 6, "the second break flows on into the second frame");
+    s.tool_text("X", ViewInfo::default()).unwrap();
+    let want = format!("{}\u{2028}\u{2028}X{}", &story[..at], &story[at..]);
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), want);
+}
+
 #[test]
 fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
     let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();

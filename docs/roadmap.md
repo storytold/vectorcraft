@@ -37,8 +37,9 @@ Window → Help Bar toggles the bottom tool-help strip independently of the stat
 **Feature evidence last updated:** 2026-11-03.
 
 M1 selection: Enclosing Lasso selects whole objects enclosed by a freehand loop. It is an add-on
-under Object › Plug-ins and has its own heading in All Tools. It has no default shortcut or Basic
-toolbar slot. Shift adds and Alt subtracts enclosed objects; Escape cancels the loop.
+under Object › Plug-ins, and its tool is also in the Lasso tool's group in both shipped toolbars,
+after the Lasso. It has no default shortcut. Shift adds and Alt subtracts enclosed objects; Escape
+cancels the loop.
 This is a VectorCraft addition; milestone estimates and parity scores are unchanged.
 
 The shared assessment status line and revision history are current upstream; this dated section records the submission's feature evidence and revisions without rescoring upstream or claiming a new combined build or runtime measurement.
