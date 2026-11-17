@@ -1407,17 +1407,19 @@ fn painted_bounds(object: &Node, appearance: &Appearance) -> Option<Rect> {
 /// object the look's bounds within a quarter of the least distance a head moves between the two
 /// (at least 0.05 pt, at most 0.5 pt). `None`
 /// when neither does (the file draws the heads elsewhere: on other subpaths, say), or when both do
-/// and the heads move 0.2 pt or more between them (the bounds can't tell which the file draws).
+/// and any head moves 0.2 pt or more between them (the bounds can't tell which the file draws).
 fn heads_placed(object: &Node, look: &Node, mut appearance: Appearance, space: Affine) -> Option<Appearance> {
     let k = space.determinant().abs().sqrt();
     let k = if k.is_finite() && k > 0.0 { k } else { 1.0 };
-    // How far each head moves between the placements: its line's length under it.
-    let mut shift = f64::INFINITY;
+    // How far each head moves between the placements (its line's length under it): the least and
+    // the most.
+    let (mut shift, mut most) = (f64::INFINITY, 0.0f64);
     for item in &appearance.items {
         let AppearanceItem::Stroke(s) = item else { continue };
         for (head, end) in [(&s.start_arrow, false), (&s.end_arrow, true)] {
             if let Some(Arrowhead::Custom(c)) = head {
-                shift = shift.min(c.stop() * s.arrow_weight(end) * k);
+                let moves = c.stop() * s.arrow_weight(end) * k;
+                (shift, most) = (shift.min(moves), most.max(moves));
             }
         }
     }
@@ -1444,10 +1446,10 @@ fn heads_placed(object: &Node, look: &Node, mut appearance: Appearance, space: A
         }
     }
     // Both fit when the bounds can't tell the placements apart (the end inside the bounds of the
-    // line's other segments), unless the heads move so little that either draws alike.
+    // line's other segments), unless every head moves so little that either draws alike.
     let align = match fits.as_slice() {
         [one] => *one,
-        [first, _] if shift < 0.2 => *first,
+        [first, _] if most < 0.2 => *first,
         _ => return None,
     };
     for item in &mut appearance.items {
