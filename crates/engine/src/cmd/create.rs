@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Flare",
             [],
             None,
-            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: places the rings along the path anew, keeping their count and sizes)} → {id}",
+            "{cx, cy, diameter=100, opacity=50 (%), brightness=30 (%), growth=20 (%), fuzziness=50 (%), rays=15, longest=300 (%), rayFuzziness=100 (%), rotation=0 (deg, turns the rays clockwise), x2?, y2? (ring end; else pathLength at direction), pathLength=300, rings=10, largest=50 (%), direction=45 (deg counter-clockwise from 3 o'clock: where the rings run from the centre), seed?, ringSeed? (whole number below 2^53: deterministically places every ring along the path, including the first for small seed values, keeping their count and sizes)} → {id}",
             has_doc,
             flare
         ),
@@ -67,7 +67,15 @@ pub fn specs() -> Vec<CommandSpec> {
             circle_through_points
         ),
         cmd!("shape.line", "Line Segment", [], None, "{x1, y1, x2, y2, fill?: bool (Fill Line: the current fill, else none)} → {id}", has_doc, line),
-        cmd!("shape.spiral", "Spiral", [], None, "{cx, cy, radius, decay=80 (%), segments=10, clockwise?} → {id}", has_doc, spiral),
+        cmd!(
+            "shape.spiral",
+            "Spiral",
+            [],
+            None,
+            "{cx, cy, radius, decay=80 (%), segments=10, clockwise?, rotation?: deg clockwise about (cx, cy)} (0: outer end at (cx + radius, cy)) → {id}",
+            has_doc,
+            spiral
+        ),
         cmd!(
             "shape.arc",
             "Arc",
@@ -125,13 +133,6 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// Insert a new object at the top of the insertion parent with the current paint and new-art
-/// template; select it.
-pub(crate) fn add_art(s: &mut Session, label: &str, kind: NodeKind, name: Option<String>) -> Result<Value> {
-    let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
-    add_look(s, label, kind, look, name)
-}
-
 /// Insert a new object looking like `look` (drawing modes apply); select it.
 pub(crate) fn add_look(s: &mut Session, label: &str, kind: NodeKind, look: NewArt, name: Option<String>) -> Result<Value> {
     insert_look(s, label, kind, look, name, true)
@@ -143,7 +144,8 @@ pub(crate) fn insert_look(s: &mut Session, label: &str, kind: NodeKind, look: Ne
     insert_look_turned(s, label, kind, look, name, select, 0.0, true)
 }
 
-/// [`add_art`] for an object made turned by a `rotation` param (degrees, clockwise on the page):
+/// Insert a new object at the top of the insertion parent with the current paint and new-art
+/// template, made turned by a `rotation` param (degrees, clockwise on the page), and select it:
 /// its bounding box turns with it, as after the Rotate tool.
 fn add_art_turned(s: &mut Session, label: &str, kind: NodeKind, rotation: f64) -> Result<Value> {
     let look = s.new_art_look(s.paint.fill.clone(), s.paint.stroke.clone(), s.paint.stroke_width);
@@ -321,7 +323,7 @@ fn path_kind(path: PathData, live: Option<LiveShape>) -> NodeKind {
 /// a box (rectangle, ellipse, grid) runs along the turned axes from `pivot`, the point the dialog
 /// placed at the click (its top-left corner `x`, `y`, or a grid's reference point), which stays
 /// put; an arc sized by its lengths turns about its reference point `x`, `y`, which the dialog
-/// placed at the click; a polygon or star turns its base orientation about its centre. The params as they are at
+/// placed at the click; a polygon, star or spiral turns its base orientation about its centre. The params as they are at
 /// 0° or a whole turn, for other commands and when they already carry a `rotation`.
 pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) -> Value {
     let base = s.prefs.constrain_angle;
@@ -337,7 +339,7 @@ pub fn constrain_click(s: &Session, cmd: &str, mut params: Value, pivot: Point) 
             o.insert("y".into(), json!(c.y - h / 2.0));
             o.insert("rotation".into(), json!(rotation));
         }
-        "shape.polygon" | "shape.star" => {
+        "shape.polygon" | "shape.star" | "shape.spiral" => {
             o.insert("rotation".into(), json!(rotation));
         }
         "shape.arc" if o.contains_key("lengthX") || o.contains_key("lengthY") => {
@@ -565,7 +567,7 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v.as_u64().map(Some).ok_or_else(|| bad("shape.flare", format!("`{key}` must be a whole number of at least 0, not {v}"))),
     };
-    // The generator's state is odd (never 0).
+    // Xorshift64. Both streams start from a nonzero state.
     let random = |mut state: u64| {
         move || {
             state ^= state << 13;
@@ -580,7 +582,13 @@ fn flare(s: &mut Session, p: &Value) -> Result<Value> {
         Some(r) if r >= 1 << 53 => return Err(bad("shape.flare", format!("`ringSeed` must be below 2^53, not {r}"))),
         r => r,
     };
-    let mut ring_at = ring_seed.map(|r| random((r << 1) | 1));
+    let mut ring_at = ring_seed.map(|r| {
+        // SplitMix64 initializes the ring-position stream.
+        let mut z = r.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        random(z ^ (z >> 31))
+    });
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, vectorcraft_color::Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));
@@ -667,6 +675,10 @@ fn line(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
+    let rotation = if p.get("rotation").is_some() { f64_req(p, "rotation", "shape.spiral")? } else { 0.0 };
+    if !rotation.is_finite() {
+        return Err(bad("shape.spiral", "rotation must be finite"));
+    }
     let c = Point::new(f64_req(p, "cx", "shape.spiral")?, f64_req(p, "cy", "shape.spiral")?);
     let segments = count_or(p, "segments", 10, "shape.spiral")?.clamp(2, 1000) as u32;
     let path = shapes::spiral(
@@ -676,7 +688,15 @@ fn spiral(s: &mut Session, p: &Value) -> Result<Value> {
         segments,
         switch_or(p, "clockwise", true, "shape.spiral")?,
     );
-    add_art(s, "Spiral", path_kind(path, None), None)
+    // The outer end turns clockwise from (cx + radius, cy) about the center; 0 and whole turns
+    // leave the path as it is, and quarter turns are exact.
+    let path = if bbox_turn(rotation) == 0.0 {
+        path
+    } else {
+        let c = c.to_vec2();
+        path.transformed(Affine::translate(c) * vectorcraft_geom::rotate_deg(rotation) * Affine::translate(-c))
+    };
+    add_art_turned(s, "Spiral", path_kind(path, None), constrained_turn(s, rotation))
 }
 
 fn arc(s: &mut Session, p: &Value) -> Result<Value> {

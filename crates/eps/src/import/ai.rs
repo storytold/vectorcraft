@@ -47,6 +47,7 @@ pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 #[cfg(test)]
 pub(crate) use frames::TEXT_FRAME_SCANS;
 pub(crate) use frames::text_frames;
+pub(crate) use mesh::{MAX_SIDE as MAX_MESH_SIDE, mesh_reads};
 pub use obj::{NameEncoding, Names};
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;
 #[cfg(test)]

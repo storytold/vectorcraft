@@ -761,7 +761,18 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
         });
     });
-    if !flat {
+    if flat {
+        let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
+        let preset_opts = FlattenOptions::for_export(Some(name), d.fields.get("flattener"), &app.session.prefs.flattener_presets).unwrap_or_default();
+        let line_ppi = preset_opts.line_art_ppi.round() as u32;
+        let grad_ppi = preset_opts.gradient_ppi.round() as u32;
+        note(
+            ui,
+            &crate::i18n::fmt(
+                tl!("Raster resolution: {line_ppi} ppi line art and text, {grad_ppi} ppi gradient and mesh"),
+                &[("line_ppi", &line_ppi.to_string()), ("grad_ppi", &grad_ppi.to_string())],
+            ),
+        );
         note(ui, tl!("PDF 1.3 files have no transparency: the preset flattens it."));
     }
 }
