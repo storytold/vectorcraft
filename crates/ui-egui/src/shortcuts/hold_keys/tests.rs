@@ -294,17 +294,22 @@ fn turning_hold_shortcuts_off_ends_the_wait() {
 /// first.
 #[test]
 fn another_key_ends_the_wait_and_runs_after_it() {
-    let mut app = erolka_x(true);
+    let (swap, default) = (label("paint.swap"), label("paint.default"));
+    let mut app = swap_on_x();
+    app.select_tool("selection");
     let keys = Keyboard::new();
     keys.press(&mut app, 0.0, Key::P, "p");
     assert_eq!(app.session.tool_id(), "pen", "P runs on its press");
     keys.release(&mut app, 0.05, Key::P);
+    let n = steps(&app, 0).len();
     keys.press(&mut app, 0.1, Key::X, "x");
-    keys.press(&mut app, 0.2, Key::V, "v");
-    assert_eq!(app.session.tool_id(), "selection", "X's tap (Eyedropper) ran, then V (Selection)");
-    assert_eq!(fill(&app), "#ff0000");
+    assert_eq!(steps(&app, n), Vec::<String>::new(), "X waits");
+    keys.press(&mut app, 0.2, Key::D, "d");
+    assert_eq!(steps(&app, n), [swap.clone(), default.clone()], "X's tap ran, then D");
     keys.release(&mut app, 0.3, Key::X);
-    assert_eq!(app.session.tool_id(), "selection", "the release of X runs nothing more");
+    keys.release(&mut app, 0.35, Key::D);
+    assert_eq!(steps(&app, n), [swap, default], "the release of X runs nothing more");
+    assert_eq!(selected(&app), 1, "and no hold");
 }
 
 /// The labels of the document's undo steps after the first `from`.
