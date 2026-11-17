@@ -545,7 +545,7 @@ pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'
         }
         (vectorcraft_effects::CLASSIC_ROTATE, "surface") => vec![(tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse")],
         (vectorcraft_effects::CLASSIC_EXTRUDE | vectorcraft_effects::CLASSIC_REVOLVE | vectorcraft_effects::CLASSIC_ROTATE, "shadingColor") => {
-            vec![(tl!("Black"), "black"), (tl!("Custom"), "custom"), (tl!("None"), "none")]
+            vec![(tl!("Black"), "black"), (tl!("Custom"), "custom"), (tl!("None"), "none"), (tl!("Black Overprint"), "blackOverprint")]
         }
         (vectorcraft_effects::EXTRUDE | vectorcraft_effects::CLASSIC_EXTRUDE, "bevel") => vec![
             (tl!("None"), "none"),

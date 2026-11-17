@@ -2,6 +2,7 @@ use super::*;
 
 mod caps;
 mod classic;
+mod cut_sides;
 mod lighting;
 mod multiple_lights;
 mod profile_limits;

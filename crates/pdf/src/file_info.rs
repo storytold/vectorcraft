@@ -2,6 +2,9 @@
 //! dictionary (ISO 32000-1 §14.3.3) and the XMP packet of the catalog's metadata stream (§14.3.2,
 //! ISO 16684-1). Where both give a field, the XMP packet's value is taken; a packet that can't be
 //! read leaves the information dictionary's values.
+//!
+//! File › File Info's metadata templates are XMP packets of the same properties: [`metadata_template`]
+//! writes one and [`read_template`] reads one back.
 
 use craft_pdf::syntax::Pdf;
 use craft_pdf::syntax::object::{DateTime, Dict, Stream};
@@ -19,8 +22,14 @@ pub(crate) const DC: &str = "http://purl.org/dc/elements/1.1/";
 const XMP: &str = "http://ns.adobe.com/xap/1.0/"; // brand-ok: the XMP namespace the files use
 pub(crate) const XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/"; // brand-ok: the XMP namespace the files use
 const PDF: &str = "http://ns.adobe.com/pdf/1.3/"; // brand-ok: the XMP namespace the files use
+const PHOTOSHOP: &str = "http://ns.adobe.com/photoshop/1.0/"; // brand-ok: the XMP namespace the files use
+const X: &str = "adobe:ns:meta/"; // brand-ok: the XMP namespace the files use
 
-const XMP_NAMESPACES: Canonical<'static> = Canonical::new(&[("rdf", RDF), ("dc", DC), ("xmp", XMP), ("xmpRights", XMP_RIGHTS), ("pdf", PDF)]);
+/// The longest metadata template [`read_template`] reads, in bytes.
+pub const MAX_TEMPLATE_BYTES: usize = MAX_XMP;
+
+const XMP_NAMESPACES: Canonical<'static> =
+    Canonical::new(&[("rdf", RDF), ("dc", DC), ("xmp", XMP), ("xmpRights", XMP_RIGHTS), ("pdf", PDF), ("photoshop", PHOTOSHOP)]); // brand-ok: the XMP namespace prefix the files use
 
 /// The File Info fields a PDF gives, each `None` when the file gives none (or only blank text).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -29,10 +38,15 @@ pub struct FileInfo {
     pub title: Option<String>,
     /// XMP `dc:creator` (its names joined with ", "), else Info `Author`.
     pub author: Option<String>,
+    /// XMP `photoshop:AuthorsPosition`.
+    pub author_title: Option<String>,
     /// XMP `dc:description` (its `x-default` item, else its first), else Info `Subject`.
     pub description: Option<String>,
     /// XMP `dc:subject`, else XMP `pdf:Keywords` or Info `Keywords` split at commas and semicolons.
     pub keywords: Option<Vec<String>>,
+    /// XMP `xmp:Rating`, a whole number from 0 to 5 (a rejected file's -1 and other values are
+    /// left out).
+    pub rating: Option<u8>,
     /// XMP `dc:rights` (its `x-default` item, else its first).
     pub copyright_notice: Option<String>,
     /// XMP `xmpRights:WebStatement`.
@@ -77,6 +91,21 @@ fn packet(pdf: &Pdf) -> Option<Vec<u8>> {
 /// [`xmp`] of `packet`; `None` when it isn't XML in UTF-8 or UTF-16, or when its elements nest
 /// more than [`MAX_NESTING`] deep.
 fn xmp(packet: &[u8]) -> Option<FileInfo> {
+    read_xmp(packet, false)
+}
+
+/// The File Info fields of the metadata template `bytes`, an XMP packet as [`metadata_template`]
+/// writes one (or any XMP file); `None` when it is longer than [`MAX_TEMPLATE_BYTES`], isn't XML in
+/// UTF-8 or UTF-16, has no `rdf:RDF` element, or nests more than [`MAX_NESTING`] deep.
+pub fn read_template(bytes: &[u8]) -> Option<FileInfo> {
+    if bytes.len() > MAX_TEMPLATE_BYTES {
+        return None;
+    }
+    read_xmp(bytes, true)
+}
+
+/// [`xmp`]; with `need_rdf`, `None` for XML that has no `rdf:RDF` element.
+fn read_xmp(packet: &[u8], need_rdf: bool) -> Option<FileInfo> {
     let text = xml_text(packet)?;
     let opts = Options {
         names: Names::Canonical(&XMP_NAMESPACES),
@@ -86,9 +115,12 @@ fn xmp(packet: &[u8]) -> Option<FileInfo> {
     }
     .strict();
     let root = opts.parse(text.as_bytes()).ok()?;
+    let rdfs: Vec<&El> = std::iter::once(&root).chain(root.descendants()).filter(|n| n.is("rdf:RDF")).collect();
+    if need_rdf && rdfs.is_empty() {
+        return None;
+    }
     // The resource's own descriptions: those right under `rdf:RDF`, not the ones inside a value.
-    let descriptions: Vec<&El> =
-        std::iter::once(&root).chain(root.descendants()).filter(|n| n.is("rdf:RDF")).flat_map(|rdf| rdf.children("rdf:Description")).collect();
+    let descriptions: Vec<&El> = rdfs.iter().flat_map(|rdf| rdf.children("rdf:Description")).collect();
     let get = |name: &str| property(&descriptions, name);
     let first = |name: &str| get(name).into_iter().next();
     let creators = get("dc:creator");
@@ -96,8 +128,10 @@ fn xmp(packet: &[u8]) -> Option<FileInfo> {
     Some(FileInfo {
         title: first("dc:title"),
         author: (!creators.is_empty()).then(|| creators.join(", ")),
+        author_title: first("photoshop:AuthorsPosition"), // brand-ok: the XMP property name the files use
         description: first("dc:description"),
         keywords: if subjects.is_empty() { first("pdf:Keywords").map(|k| split(&k)).filter(|k| !k.is_empty()) } else { Some(subjects) },
+        rating: first("xmp:Rating").and_then(|r| rating(&r)),
         copyright_notice: first("dc:rights"),
         copyright_url: first("xmpRights:WebStatement"),
         copyrighted: first("xmpRights:Marked").and_then(|m| match m.to_ascii_lowercase().as_str() {
@@ -108,6 +142,59 @@ fn xmp(packet: &[u8]) -> Option<FileInfo> {
         created: first("xmp:CreateDate").and_then(|d| xmp_date(&d)),
         modified: first("xmp:ModifyDate").and_then(|d| xmp_date(&d)),
     })
+}
+
+/// An `xmp:Rating` value as File Info takes one: a whole number from 0 to 5, written as an integer
+/// or as a real with no fraction (`3`, `3.0`). The rejected rating -1, fractions and other values
+/// give `None`.
+fn rating(s: &str) -> Option<u8> {
+    let r: f64 = s.trim().parse().ok()?;
+    (r.fract() == 0.0 && (0.0..=5.0).contains(&r)).then_some(r as u8)
+}
+
+/// The metadata template of `f`: an XMP packet (ISO 16684-1) holding its title (`dc:title`), author
+/// (`dc:creator`), author title (`photoshop:AuthorsPosition`), description (`dc:description`),
+/// keywords (`dc:subject`), rating (`xmp:Rating`), copyright status (`xmpRights:Marked`), notice
+/// (`dc:rights`) and URL (`xmpRights:WebStatement`), each where `f` gives it, which
+/// [`read_template`] reads back. The dates are left out.
+pub fn metadata_template(f: &FileInfo) -> String {
+    use crate::post::xml_text as esc;
+    let alt = |name: &str, v: &str| format!("   <{name}><rdf:Alt><rdf:li xml:lang=\"x-default\">{}</rdf:li></rdf:Alt></{name}>\n", esc(v));
+    let simple = |name: &str, v: &str| format!("   <{name}>{}</{name}>\n", esc(v));
+    let blank = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+    let mut props = String::new();
+    if let Some(v) = blank(&f.title) {
+        props.push_str(&alt("dc:title", &v));
+    }
+    if let Some(v) = blank(&f.author) {
+        props.push_str(&format!("   <dc:creator><rdf:Seq><rdf:li>{}</rdf:li></rdf:Seq></dc:creator>\n", esc(&v)));
+    }
+    if let Some(v) = blank(&f.author_title) {
+        props.push_str(&simple("photoshop:AuthorsPosition", &v)); // brand-ok: the XMP property name the files use
+    }
+    if let Some(v) = blank(&f.description) {
+        props.push_str(&alt("dc:description", &v));
+    }
+    let keywords: Vec<&str> = f.keywords.iter().flatten().map(|k| k.trim()).filter(|k| !k.is_empty()).collect();
+    if !keywords.is_empty() {
+        let items: String = keywords.iter().map(|k| format!("<rdf:li>{}</rdf:li>", esc(k))).collect();
+        props.push_str(&format!("   <dc:subject><rdf:Bag>{items}</rdf:Bag></dc:subject>\n"));
+    }
+    if let Some(r) = f.rating {
+        props.push_str(&simple("xmp:Rating", &r.to_string()));
+    }
+    if let Some(c) = f.copyrighted {
+        props.push_str(&simple("xmpRights:Marked", if c { "True" } else { "False" }));
+    }
+    if let Some(v) = blank(&f.copyright_notice) {
+        props.push_str(&alt("dc:rights", &v));
+    }
+    if let Some(v) = blank(&f.copyright_url) {
+        props.push_str(&simple("xmpRights:WebStatement", &v));
+    }
+    format!(
+        "<?xpacket begin=\"\u{FEFF}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"{X}\">\n <rdf:RDF xmlns:rdf=\"{RDF}\">\n  <rdf:Description rdf:about=\"\" xmlns:dc=\"{DC}\" xmlns:xmp=\"{XMP}\" xmlns:xmpRights=\"{XMP_RIGHTS}\" xmlns:photoshop=\"{PHOTOSHOP}\">\n{props}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n" // brand-ok: the XMP namespace prefix the files use
+    )
 }
 
 /// A packet's text: UTF-8 (with or without a byte order mark), or UTF-16 told by its byte order

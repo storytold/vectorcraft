@@ -276,3 +276,61 @@ fn overprint_black_covers_type_gradients_spots_and_groups() {
     s.execute("edit.colors.overprintBlack", &json!({"includeCmyBlacks": true, "includeSpotBlacks": true})).unwrap();
     assert!(fill(&s, g) && fill(&s, spot));
 }
+
+/// The plate `plate` of `doc`, drawn as Separations Preview draws one plate, as one gray value per
+/// pixel (0 full ink, 255 none).
+fn plate(doc: &Document, plate: &str) -> Vec<u8> {
+    let mut r = Renderer::new();
+    r.threads = 0;
+    let seps = vectorcraft_render::proof::ProofSetup { separations: Some(vec![plate.into()]), ..Default::default() };
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), proof: Some(seps), ..Default::default() };
+    let image = r.render(doc, 100, 100, Affine::IDENTITY, &opts);
+    (0..100 * 100).map(|i| image.pixel(i % 100, i / 100)[0]).collect()
+}
+
+/// 3D (Classic) with the shading color Black Overprint puts the shading on the black plate, shows
+/// it as the cyan darkened, and writes it to PDF as overprinting fills.
+#[test]
+fn classic_3d_black_overprint_shades_on_the_black_plate() {
+    let doc = |params: Value| {
+        let mut s = session();
+        rect(&mut s, [30.0, 30.0, 40.0, 40.0], cyan_ink(), None, 0.0);
+        s.execute("effect.apply", &json!({"effect": "threeD.classicExtrude", "item": null, "params": params})).unwrap();
+        s
+    };
+    let over = doc(json!({"surface": "diffuse", "depth": 20, "shadingColor": "blackOverprint"}));
+    let flat = doc(json!({"surface": "none", "depth": 20, "shadingColor": "blackOverprint"}));
+    let black = doc(json!({"surface": "diffuse", "depth": 20}));
+    let (over_doc, flat_doc) = (&over.doc().unwrap().doc, &flat.doc().unwrap().doc);
+    let inked = |p: &[u8]| p.iter().filter(|v| **v < 250).count();
+    assert!(inked(&plate(over_doc, "Cyan")) > 1000, "the solid is drawn");
+    assert!(inked(&plate(over_doc, "Black")) > 100, "the shading is on the black plate");
+    assert_eq!(inked(&plate(flat_doc, "Black")), 0, "No Shading adds no black");
+    // On screen a shaded face is the cyan darkened, not gray: the black multiplies the cyan.
+    let image = |d: &Document| {
+        let mut r = Renderer::new();
+        r.threads = 0;
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        r.render(d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let (shaded, unshaded) = (image(over_doc), image(flat_doc));
+    let mut darker = 0;
+    for (x, y) in (0..100u32).flat_map(|y| (0..100u32).map(move |x| (x, y))) {
+        let (s, u) = (shaded.pixel(x, y), unshaded.pixel(x, y));
+        // Inside the solid (no white mixed in at an antialiased edge) where the shading darkens it.
+        if u[0] < 30 && (s[1] as i32) + 20 < u[1] as i32 {
+            darker += 1;
+            assert!(s[2] as i32 > s[0] as i32 + 20, "a shaded face keeps its cyan at ({x}, {y}): {s:?}");
+        }
+    }
+    assert!(darker > 100, "the faces turned from the light are darker");
+
+    let pdf_overprints = |s: &mut Session| {
+        let v = s.execute("document.exportPdf", &json!({"compression": {"compressText": false}, "preserveEditing": false})).unwrap();
+        let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+        String::from_utf8_lossy(&bytes).matches("/OP true/op true/OPM 1").count()
+    };
+    let (mut over, mut black) = (over, black);
+    assert!(pdf_overprints(&mut over) > 0, "the black is written overprinting");
+    assert_eq!(pdf_overprints(&mut black), 0);
+}

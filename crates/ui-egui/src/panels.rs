@@ -618,13 +618,16 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
 }
 
-/// "Recent Colors" header + rows of chips (the Session's recent colours, which every paint
-/// command feeds), wrapped onto as many rows as the panel's width needs; returns the one clicked,
-/// for the caller to apply. A chip drags its color as a solid paint, which the Swatches panel
-/// makes a swatch of.
-pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
+/// Rows of chips (the Session's recent colors, which every paint command feeds), wrapped onto as
+/// many rows as the panel's width needs, under a "Recent Colors" header when `heading` is set;
+/// returns the one clicked, for the caller to apply. The chips sit in a group that, without the
+/// header, screen readers name "Recent Colors". A chip drags its color as a solid paint, which
+/// the Swatches panel makes a swatch of.
+pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui, heading: bool) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
-    crate::widgets::subheader(ui, tl!("Recent Colors"));
+    if heading {
+        crate::widgets::subheader(ui, tl!("Recent Colors"));
+    }
     let width = ui.available_width();
     let colors = &app.session.recent_colors;
     // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge.
@@ -632,11 +635,22 @@ pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Col
     let rows = colors.len().div_ceil(per_row).max(1);
     let (r, _) = ui.allocate_exact_size(vec2(width, 3.0 + rows as f32 * 19.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    // The chips go in a child `Ui` over the box, so screen readers find them inside its group;
+    // their ids stay under the caller's scope.
+    let scope = ui.scope_id();
+    let mut builder = egui::UiBuilder::new().max_rect(r).accessibility_role(egui::accesskit::Role::Group);
+    if !heading {
+        builder = builder.accessibility_label(tl!("Recent Colors"));
+    }
+    let ui = &mut ui.new_child(builder);
+    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+        node.set_bounds(egui::accesskit::Rect { x0: r.min.x.into(), y0: r.min.y.into(), x1: r.max.x.into(), y1: r.max.y.into() });
+    });
     let mut chosen = None;
     for (i, c) in colors.iter().enumerate() {
         let (row, col) = (i / per_row, i % per_row);
         let cell = Rect::from_min_size(r.min + vec2(3.0 + col as f32 * 19.0, 3.0 + row as f32 * 19.0), vec2(16.0, 16.0));
-        let resp = ui.interact(cell, ui.scope_id().with(("recent", i)), Sense::click_and_drag());
+        let resp = ui.interact(cell, scope.with(("recent", i)), Sense::click_and_drag());
         crate::widgets::drag_source(ui, &resp, || crate::widgets::PanelDrag::paint(Paint::solid(*c)));
         crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
         if resp.on_hover_text(c.to_hex()).clicked() {

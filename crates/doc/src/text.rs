@@ -35,7 +35,7 @@ pub use tabs_lists::{
     Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
     TabStop,
 };
-pub use wrap::{resolve_wrap, wrap_work};
+pub use wrap::{resolve_wrap, wrap_outline, wrap_sources, wrap_work};
 
 /// A text object. `runs` split into paragraphs at `\n`.
 ///
@@ -67,6 +67,12 @@ pub struct TextObject {
     /// it on a frame that leaves its thread and on a copy. Not saved.
     #[serde(skip)]
     pub first_para_continues: bool,
+    /// Threaded text whose first paragraph continues ([`TextObject::first_para_continues`]): the
+    /// last character of that paragraph in the frames before that a repeat mark could stand for
+    /// (Kurikaeshi Moji Shori), or None. The engine sets it with `first_para_continues`; layout
+    /// reads it only while `first_para_continues` is on. Not saved.
+    #[serde(skip)]
+    pub first_para_lead: Option<char>,
     /// Area Type Options (area type only).
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
     pub area: AreaOptions,

@@ -1038,7 +1038,17 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         // not in a scaled label's own units).
         let mut labels_changed = false;
         if range.is_none() {
-            labels_changed = super::graph::capture_label_styles(d, &ids, &|st| {
+            let gives_character = font.is_some()
+                || style.is_some()
+                || size.is_some()
+                || leading.is_some()
+                || tracking.is_some()
+                || fill.is_some()
+                || stroke.is_some()
+                || !stroke_weight.is_empty()
+                || features.is_some()
+                || feature_changes.as_ref().is_some_and(|c| !c.is_empty());
+            let change = |st: &mut vectorcraft_doc::CharStyle| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
                     st.font_version = None;
@@ -1079,7 +1089,13 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(c) = &feature_changes {
                     st.features = super::textedit::change_features(&st.features, c);
                 }
-            });
+            };
+            // A command that gives character attributes keeps the style even when they equal the labels' own.
+            labels_changed = if gives_character {
+                super::graph::capture_label_styles_given(d, &ids, &change)
+            } else {
+                super::graph::capture_label_styles(d, &ids, &change)
+            };
         }
         Ok(((), labels_changed))
     })?;

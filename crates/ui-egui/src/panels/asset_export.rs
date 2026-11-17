@@ -230,6 +230,17 @@ fn collect(app: &mut VectorcraftApp, ctx: &egui::Context, ids: Option<Vec<NodeId
     }
 }
 
+/// Does the export of 3D asset `asset` draw a texture for the graphics mapped onto its faces
+/// ([`vectorcraft_engine::cmd::fileio::draws_textures`])? Only objects whose 3D effects map graphics
+/// are built to find out.
+fn writes_textures(doc: &vectorcraft_doc::Document, asset: &ExportAsset) -> bool {
+    let maps = |e: &vectorcraft_doc::Effect| e.visible && !vectorcraft_render::effects::mapped_graphics(&e.params).is_empty();
+    let nodes: Vec<&Node> = asset.nodes.iter().filter_map(|id| doc.node(*id)).collect();
+    nodes.iter().any(|n| n.appearance.effects.iter().chain(n.appearance.items.iter().flat_map(|i| i.effects())).any(maps))
+        && vectorcraft_render::effects::three_d_meshes_of_in(Some(doc), nodes.iter().copied())
+            .is_ok_and(|parts| vectorcraft_engine::cmd::fileio::draws_textures(doc, &parts))
+}
+
 /// Export assets `ids` (`files_each`: the files one asset makes) into a picked folder (without a
 /// folder picker: the last folder Export for Screens used, else the Desktop); the web downloads
 /// them, several as one zip.
@@ -240,11 +251,20 @@ fn export(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
 
 fn export_now(app: &mut VectorcraftApp, ids: Vec<u64>, files_each: usize) {
     // 3D assets are written as mesh files (`assets.export3D`), the others as pictures.
+    let web = io::is_web(app);
     let Some(st) = app.session.active() else { return };
     let format = |id: &u64| st.doc.asset(*id).and_then(|a| a.format_3d.clone());
     let (three_d, ids): (Vec<u64>, Vec<u64>) = ids.into_iter().partition(|id| format(id).is_some());
-    // An OBJ is two files.
-    let mesh_files: usize = three_d.iter().map(|id| if format(id).as_deref() == Some("obj") { 2 } else { 1 }).sum();
+    // An OBJ is two files, and an OBJ or a USDA whose graphics draw a texture writes it beside
+    // them. Only the web, which zips several files, needs the count.
+    let mesh_files: usize = three_d
+        .iter()
+        .map(|id| {
+            let format = format(id);
+            let textures = web && matches!(format.as_deref(), Some("obj" | "usda")) && st.doc.asset(*id).is_some_and(|a| writes_textures(&st.doc, a));
+            usize::from(format.as_deref() == Some("obj")) + 1 + usize::from(textures)
+        })
+        .sum();
     // Create Sub-folders as the panel menu checks it: on by default, and remembered folders (per
     // row, format or item) are used as Export for Screens uses them (a remembered `subfolders`
     // false beside them would alone put every file in the folder itself).

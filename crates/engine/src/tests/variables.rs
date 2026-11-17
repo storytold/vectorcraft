@@ -2420,6 +2420,69 @@ fn a_variable_library_defines_text_variables_and_data_sets() {
     assert_eq!(s.doc().unwrap().doc.variables.datasets.len(), 2);
 }
 
+/// The Variables panel's Import… reads a data source by its extension, in any case: a .csv, .tsv
+/// or .txt file as Import Data Sets… reads it, and an .xml file as Load Variable Library… reads it.
+/// Any other extension, or none, is refused before the file is read.
+#[test]
+fn variable_import_reads_a_data_source_by_its_extension() {
+    let dir = Folder::new("vars-import");
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+
+    for name in ["rows.csv", "rows.TSV", "rows.txt"] {
+        let path = dir.file(name);
+        write(&path, b"Name\nAnn\nBob\n");
+        let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+        assert_eq!((r["format"].clone(), r["names"].clone()), (json!("csv"), json!(["Data Set 1", "Data Set 2"])), "{name}");
+    }
+    s.execute("dataset.select", &json!({"name": "Data Set 2"})).unwrap();
+    assert_eq!(plain(&s, t), "Bob");
+
+    let xml = r#"<variableSets><variableSet><variables><variable varName="Name" trait="textcontent"/></variables><sampleDataSets><sampleDataSet dataSetName="Row 1"><Name><p>Charlie</p></Name></sampleDataSet></sampleDataSets></variableSet></variableSets>"#;
+    let path = dir.file("library.Xml");
+    write(&path, xml.as_bytes());
+    let r = s.execute("variable.import", &json!({"path": path})).unwrap();
+    assert_eq!((r["format"].clone(), r["names"].clone(), r["deleted"].clone()), (json!("xml"), json!(["Row 1"]), json!([])));
+    // The library declares the bound text variable, so its binding stays.
+    s.execute("dataset.select", &json!({"name": "Row 1"})).unwrap();
+    assert_eq!(plain(&s, t), "Charlie");
+
+    // The extension picks the reader: CSV text in an .xml file goes to the library reader, which
+    // refuses it, and a library in a .csv file goes to the CSV reader.
+    let csv_in_xml = dir.file("rows.xml");
+    write(&csv_in_xml, b"Name\nAnn\n");
+    let e = s.execute("variable.import", &json!({"path": csv_in_xml})).unwrap_err().to_string();
+    assert!(e.contains("variable.loadLibrary"), "{e}");
+    let xml_in_csv = dir.file("library.csv");
+    write(&xml_in_csv, xml.as_bytes());
+    let e = s.execute("variable.import", &json!({"path": xml_in_csv})).unwrap_err().to_string();
+    assert!(e.contains("dataset.import"), "{e}");
+
+    // Other extensions, or none, are refused before the file is read, so a missing file gives the
+    // same error; the data sets stay as they were.
+    let refused = "Import reads a data source file ending in .csv, .tsv, .txt or .xml";
+    for (name, exists) in [("rows.json", true), ("rows", true), ("rows.csv.bak", true), ("missing.ai", false)] {
+        let path = dir.file(name);
+        if exists {
+            write(&path, b"Name\nAnn\n");
+        }
+        let e = s.execute("variable.import", &json!({"path": path})).unwrap_err().to_string();
+        assert!(e.contains(refused), "{name}: {e}");
+    }
+    let names: Vec<String> = s.doc().unwrap().doc.variables.datasets.iter().map(|d| d.name.clone()).collect();
+    assert_eq!(names, ["Row 1"]);
+
+    // `path` is required, and the command takes no other parameter.
+    for bad in [json!({}), json!({"path": 3})] {
+        let e = s.execute("variable.import", &bad).unwrap_err().to_string();
+        assert!(e.contains("missing `path`"), "{bad}: {e}");
+    }
+    let e = s.execute("variable.import", &json!({"path": dir.file("rows.csv"), "csv": "Name\nX\n"})).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `csv`"), "{e}");
+}
+
 /// Load Variable Library replaces the document's variables and data sets: every variable goes with
 /// its bindings and values, a variable of another kind with a library variable's name included,
 /// and every data set goes, the active one included. A text variable the library also declares
