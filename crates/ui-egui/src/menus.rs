@@ -65,7 +65,7 @@ pub(crate) use bar::{home_key, home_showing};
 use bar::{menu_body, pointer_reaches_title};
 pub use context::{context_items, context_menu_body, ruler_menu_body, ruler_unit_items};
 pub use entries::{
-    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, pretty_shortcut, shown_shortcut,
+    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, plays_in_app, pretty_shortcut, shown_shortcut,
 };
 pub(crate) use invoke::graph_dialog;
 #[cfg(test)]

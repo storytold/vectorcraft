@@ -13,8 +13,16 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
     let y = p.get("y").and_then(Value::as_f64).unwrap_or(0.0);
     let alt = p.get("alt").and_then(Value::as_bool).unwrap_or(false);
     let d = match kind {
-        "rectangle" | "ellipse" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt"})),
-        "roundedRectangle" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": "12 pt"})),
+        "rectangle" => Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt"})),
+        "ellipse" => Dialog::new(
+            kind,
+            json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "anchors": app.session.tool_options_of(kind)["anchors"]}),
+        ),
+        // The radius starts at General › Corner Radius, which OK sets to the radius typed.
+        "roundedRectangle" => {
+            let radius = format!("{} pt", app.session.prefs.corner_radius);
+            Dialog::new(kind, json!({"x": x, "y": y, "alt": alt, "width": "100 pt", "height": "100 pt", "radius": radius}))
+        }
         "polygon" => Dialog::new(kind, json!({"x": x, "y": y, "radius": "50 pt", "sides": app.session.tool_options_of(kind)["sides"]})),
         "star" => {
             Dialog::new(kind, json!({"x": x, "y": y, "radius1": "50 pt", "radius2": "25 pt", "points": app.session.tool_options_of(kind)["points"]}))

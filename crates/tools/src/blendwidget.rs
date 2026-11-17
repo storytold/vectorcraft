@@ -5,8 +5,11 @@
 //! the canvas draws from the halfway point to the widget grows with it. The upper one sets the
 //! blend's color shift (`colorShift`, -100 to 100) and the lower one its easing strength (`ramp`,
 //! 0 to 100). The lower one shows only when the steps follow a spine (a replaced or edited spine,
-//! or Align to Path), where easing moves them; a blend made without a spine shows neither. A drag along the spine's direction at the press
-//! changes the value by one per screen pixel, starting from the value at the press, and the arrow
+//! or Align to Path), where easing moves them. A blend made without a spine shows the upper one
+//! alone, placed in the same way against the straight lines between its key centers that its steps
+//! are laid out along ([`blend_layout_line`]); the canvas does not draw those lines. A drag along
+//! the spine's direction at the press changes the value by one per screen pixel, starting from the
+//! value at the press, and the arrow
 //! keys during the drag change it by one (Shift: by ten); Escape or a switch to another tool
 //! cancels the drag and puts the value back. Each drag previews
 //! `object.blend.setEasing` and is one undo step, or none when the value ends where it started; a
@@ -14,7 +17,7 @@
 //! from the same geometry.
 
 use serde_json::json;
-use vectorcraft_doc::live::{Spine, blend_spine};
+use vectorcraft_doc::live::{Spine, blend_layout_line};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Point, Rect, Vec2};
 
@@ -69,7 +72,8 @@ impl BlendControl {
 pub struct BlendWidget {
     pub id: NodeId,
     pub control: BlendControl,
-    /// The spine's halfway point, in the document.
+    /// The spine's halfway point, in the document (for a blend without a spine, the halfway point of
+    /// the line its steps are laid out along).
     pub on: Point,
     /// The widget's center in the document: [`OFFSET_PX`] from `on`, or further out where other
     /// artwork crowds that spot.
@@ -84,9 +88,10 @@ impl BlendWidget {
     /// The widgets of the selection at `zoom` (screen px per document point), with `up` the
     /// document direction of the screen's up: the Appearance widget, then the Easing widget. Empty
     /// unless the selection is one whole blend, visible and unlocked, with two or more keys and a
-    /// spine of some length, and no anchors are selected. Each widget sits at the first spot out
-    /// from the spine, in [`OFFSET_PX`] steps, that the boxes of fewer than three other visible
-    /// objects hold, at most nine steps out; where every spot is crowded it stays at the first.
+    /// spine (or, without one, a step layout line) of some length, and no anchors are selected.
+    /// Each widget sits at the first spot out from the spine, in [`OFFSET_PX`] steps, that the
+    /// boxes of fewer than three other visible objects hold, at most nine steps out; where every
+    /// spot is crowded it stays at the first.
     pub fn of(doc: &Document, selection: &Selection, zoom: f64, up: Vec2) -> Vec<Self> {
         let up_len = up.hypot();
         let usable = |v: f64| v.is_finite() && v > 0.0;
@@ -98,7 +103,7 @@ impl BlendWidget {
         if children.len() < 2 || !doc.is_editable(*id) {
             return vec![];
         }
-        let Some(spine) = blend_spine(children, spec).and_then(|(path, _)| Spine::new(&path)) else { return vec![] };
+        let Some(spine) = blend_layout_line(children, spec).and_then(|path| Spine::new(&path)) else { return vec![] };
         if !usable(spine.length()) {
             return vec![];
         }
@@ -430,9 +435,60 @@ mod tests {
         // One key.
         let (d, _, s) = blend_doc(&[(100.0, 200.0)], eased());
         assert!(BlendWidget::of(&d, &s, 1.0, UP).is_empty(), "one key");
-        // A blend made without a spine (Create Spine › Never), Align to Path included.
-        let (d, _, s) = blend_doc(&[(100.0, 200.0), (300.0, 200.0)], BlendSpec { no_spine: true, ..eased() });
-        assert!(BlendWidget::of(&d, &s, 1.0, UP).is_empty(), "no spine");
+        // Without a spine: locked or hidden, or keys on one spot.
+        let (d, id, s) = blend_doc(&[(100.0, 200.0), (300.0, 200.0)], BlendSpec { no_spine: true, ..eased() });
+        for hide in [false, true] {
+            let mut d = d.clone();
+            let n = d.node_mut(id).unwrap();
+            (n.visible, n.locked) = (!hide, !hide);
+            assert!(BlendWidget::of(&d, &s, 1.0, UP).is_empty(), "no spine, hidden: {hide}");
+        }
+        let (d, _, s) = blend_doc(&[(100.0, 200.0), (100.0, 200.0)], BlendSpec { no_spine: true, ..eased() });
+        assert!(BlendWidget::of(&d, &s, 1.0, UP).is_empty(), "no spine, no length");
+    }
+
+    /// A blend made without a spine (Create Spine › Never), Align to Path included, shows the
+    /// Appearance widget alone, at the halfway point by length of the straight lines between its
+    /// key centers.
+    #[test]
+    fn a_blend_without_a_spine_shows_the_appearance_widget_alone() {
+        let no_spine = || BlendSpec { no_spine: true, ..eased() };
+        let (d, id, s) = blend_doc(&[(100.0, 200.0), (300.0, 200.0)], no_spine());
+        let w = BlendWidget::of(&d, &s, 1.0, UP);
+        assert_eq!(w.iter().map(|w| w.control).collect::<Vec<_>>(), [BlendControl::Appearance], "{w:?}");
+        assert!(w[0].id == id && near(w[0].on, Point::new(200.0, 200.0)) && near(w[0].at, Point::new(200.0, 184.0)), "{w:?}");
+        assert_eq!(w[0].value, -20.0);
+        // Halfway along by length, not the middle key: (0, 0), (100, 0), (100, 300) is 400 long.
+        let (d, _, s) = blend_doc(&[(0.0, 0.0), (100.0, 0.0), (100.0, 300.0)], no_spine());
+        let w = BlendWidget::of(&d, &s, 1.0, UP);
+        assert!(w.len() == 1 && near(w[0].on, Point::new(100.0, 100.0)), "{w:?}");
+        // There the line runs down, so a drag down adds.
+        assert!(near(Point::new(w[0].along.x, w[0].along.y), Point::new(0.0, 1.0)), "{w:?}");
+        // Two keys on one spot and a third away: the line still has length.
+        let (d, _, s) = blend_doc(&[(100.0, 200.0), (100.0, 200.0), (300.0, 200.0)], no_spine());
+        let w = BlendWidget::of(&d, &s, 1.0, UP);
+        assert!(w.len() == 1 && near(w[0].on, Point::new(200.0, 200.0)), "{w:?}");
+    }
+
+    /// With the Selection or the Blend tool, a drag of a spineless blend's Appearance widget
+    /// previews the color shift alone, in one undo step.
+    #[test]
+    fn dragging_the_appearance_widget_of_a_blend_without_a_spine() {
+        let (d, id, s) = blend_doc(&[(100.0, 200.0), (300.0, 200.0)], BlendSpec { no_spine: true, ..eased() });
+        let p = paint();
+        let c = cx(&d, &s, &p);
+        let at = Point::new(200.0, 184.0);
+        assert!(over_widget(&c, at) && !over_widget(&c, Point::new(200.0, 216.0)), "no Easing widget below");
+        let tools: [Box<dyn Tool>; 2] = [Box::new(SelectionTool::default()), Box::new(crate::meshblend::BlendTool::default())];
+        for mut t in tools {
+            assert!(t.pointer(&c, &ev(PointerKind::Down, at)).is_empty());
+            let a = t.pointer(&c, &ev(PointerKind::Drag, at + Vec2::new(30.0, 0.0)));
+            assert_eq!(
+                a,
+                vec![Action::Begin(LABEL.into()), Action::Preview("object.blend.setEasing".into(), json!({"id": id.0, "colorShift": 10.0}))]
+            );
+            assert_eq!(t.pointer(&c, &ev(PointerKind::Up, at + Vec2::new(30.0, 0.0))), vec![Action::Commit]);
+        }
     }
 
     /// A drag of the Easing widget along the spine changes the ramp by one per pixel from its

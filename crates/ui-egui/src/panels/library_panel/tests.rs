@@ -127,7 +127,7 @@ fn a_plain_click_sets_where_a_shift_click_range_starts() {
     let ctx = context();
     app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap();
     let (_, lib) = SwatchLibraries::get(&app, "pastels").unwrap();
-    let order: Vec<String> = SwatchLibraries::rows(&lib, "").iter().map(|r| r.name.to_string()).collect();
+    let order: Vec<String> = SwatchLibraries::rows(&lib, "pastels", "").iter().map(|r| r.name.to_string()).collect();
     click(&mut app, &ctx, &order[1], Modifiers::NONE, 0.0);
     click(&mut app, &ctx, &order[4], Modifiers::SHIFT, 2.0);
     assert_eq!(selection(&ctx, "library:swatches:pastels"), order[1..=4], "the range starts at the plain click");

@@ -8,6 +8,11 @@
 //! seen from the front of that face), its size as a share of the symbol's own, and its turn
 //! (degrees, counterclockwise). On the back cap, x runs to the right as the back is seen from
 //! behind, so the graphic reads the right way round there.
+//!
+//! On Revolve the graphics lie on the swept side surface, unrolled flat
+//! ([`vectorcraft_three_d::SurfaceCell`]): x and y are the offset of the graphic's center from the
+//! middle of that surface, x around the axis and y along the profile, and each face of the side
+//! draws the part of the graphics that falls on it ([`surface_parts`]).
 
 use std::sync::Arc;
 
@@ -15,7 +20,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, Symbol};
 use vectorcraft_geom::kurbo::{CubicBez, ParamCurve, PathEl, Shape};
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, SubPath};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 use vectorcraft_three_d::{FaceMap, Facet, PlanarFace};
 
 /// The effect parameter that holds the graphics.
@@ -40,6 +45,33 @@ const MAX_NESTING: usize = 8;
 /// How deep the objects of a graphic's art may be, counting groups and the art of the symbols it
 /// places: as deep as an object may be drawn.
 const MAX_LEVELS: usize = 4 * vectorcraft_doc::MAX_DEPTH;
+
+/// The error for graphics on a 3D effect that takes none.
+pub const NOT_TAKEN: &str = "Graphics map onto the Plane, Extrude and Revolve object types";
+
+/// The buckets around the unrolled side surface that the pieces of Revolve's graphics are sorted
+/// into, so each face looks only at the pieces near it.
+const SURFACE_BUCKETS: usize = 256;
+
+/// How closely the curves of a graphic on Revolve's side follow their shape when they are cut into
+/// straight pieces, in points of the unrolled surface.
+const SURFACE_TOLERANCE: f64 = 0.05;
+
+/// How far from the middle of Revolve's unrolled side a curve of a graphic may reach, in points:
+/// as far as a Revolve profile's coordinates may.
+const SURFACE_REACH: f64 = 1e8;
+
+/// The most points the parts of Revolve's graphics draw on its faces together, a graphic's area cut
+/// at every face it crosses. Past it no graphic is drawn on that surface.
+const MAX_SURFACE_POINTS: usize = 2_000_000;
+
+/// The most points of Revolve's graphics cut at its faces together, counted before each cut whether
+/// or not it keeps any of them. Past it no graphic is drawn on that surface.
+const MAX_SURFACE_CUTS: usize = 32 * MAX_SURFACE_POINTS;
+
+/// The width of the stroke of the same paint around each opaque part of a graphic on Revolve's
+/// side, which covers the seams between the parts on neighboring faces.
+const SURFACE_SEAM: f64 = 0.3;
 
 /// The size range of a graphic, as a percentage of its symbol's own size.
 pub const SCALE_RANGE: (f64, f64) = (1.0, 10_000.0);
@@ -116,10 +148,10 @@ impl MappedGraphic {
     }
 }
 
-/// The 3D effects that take graphics: Extrude & Bevel (its caps) and Rotate (the plane), the two
-/// object types of the 3D and Materials panel with planar faces.
+/// The 3D effects that take graphics: Extrude & Bevel (its caps), Rotate (the plane) and Revolve
+/// (its swept side).
 pub fn takes_graphics(id: &str) -> bool {
-    id == super::EXTRUDE || id == super::ROTATE
+    id == super::EXTRUDE || id == super::ROTATE || id == crate::REVOLVE
 }
 
 /// The graphics in parameters `p`, leaving out entries that are not valid (a file may hold
@@ -131,8 +163,9 @@ pub fn mapped_graphics(p: &Value) -> Vec<MappedGraphic> {
     }
 }
 
-/// Are the graphics in parameters `p` of 3D effect `id` valid? Only Extrude & Bevel and Rotate take
-/// graphics, and a plane has only a front.
+/// Are the graphics in parameters `p` of 3D effect `id` valid? Only Extrude & Bevel, Rotate and
+/// Revolve take graphics; a plane has only a front, and Revolve's graphics go on its side, named
+/// the front.
 pub fn validate(id: &str, p: &Value) -> Result<(), String> {
     let list = match p.get(GRAPHICS) {
         None => return Ok(()),
@@ -143,7 +176,7 @@ pub fn validate(id: &str, p: &Value) -> Result<(), String> {
         return Ok(());
     }
     if !takes_graphics(id) {
-        return Err("Graphics map onto planar faces: use the Extrude or Plane object type".into());
+        return Err(NOT_TAKEN.into());
     }
     if list.len() > MAX_GRAPHICS {
         return Err(format!("`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics"));
@@ -152,6 +185,9 @@ pub fn validate(id: &str, p: &Value) -> Result<(), String> {
         let g = MappedGraphic::from_value(v)?;
         if id == super::ROTATE && g.face == PlanarFace::Back {
             return Err("A plane has one face: map its graphics onto the front".into());
+        }
+        if id == crate::REVOLVE && g.face == PlanarFace::Back {
+            return Err("Revolve maps graphics onto its side: map them onto the front".into());
         }
     }
     Ok(())
@@ -481,6 +517,411 @@ pub(super) fn face_art(
     }
     let clip = Node::path(id, PathData::from_bezpath(&clip), Appearance::default());
     Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, children))], clip: true }))
+}
+
+/// One area of a graphic placed on Revolve's unrolled side surface, cut into straight pieces.
+struct Unrolled {
+    polygons: Vec<Vec<Point>>,
+    /// The bounds of each of `polygons`.
+    boxes: Vec<Rect>,
+    bounds: Rect,
+    rule: FillRule,
+    paint: Paint,
+    opacity: f32,
+    blend: BlendMode,
+    /// Where the graphic's art goes on the surface: its gradients and patterns are placed with it.
+    place: Affine,
+}
+
+/// The areas of `graphics` (those of the front: Revolve's side) placed on the unrolled side
+/// surface, cut into straight pieces. A graphic whose symbol `doc` does not have, or whose art is
+/// past the limits of [`pieces_of`], is left out. `None` when the pieces take more than
+/// [`MAX_ELEMENTS`] points together.
+fn unrolled(doc: &Document, graphics: &[MappedGraphic]) -> Option<Vec<Unrolled>> {
+    let mut pieces = vec![];
+    let mut points = 0usize;
+    for g in graphics.iter().filter(|g| g.face == PlanarFace::Front) {
+        let Some(symbol) = doc.symbols.iter().find(|s| s.name == g.symbol) else { continue };
+        let Ok(art) = pieces_of(doc, symbol) else { continue };
+        let Some(bounds) = art.iter().filter_map(|p| p.path.bounds()).reduce(|a, b| a.union(b)) else { continue };
+        let place = g.placement(bounds, Point::ZERO);
+        for piece in art {
+            let placed = place * piece.path.to_bezpath();
+            let mut polygons = straight_pieces(&placed, &mut points)?;
+            polygons.retain(|p| p.len() >= 3 && p.iter().all(|q| q.is_finite()));
+            let boxes: Vec<Rect> =
+                polygons.iter().filter_map(|polygon| polygon.iter().map(|p| Rect::from_points(*p, *p)).reduce(|a, b| a.union(b))).collect();
+            let Some(bounds) = boxes.iter().copied().reduce(|a, b| a.union(b)) else { continue };
+            pieces.push(Unrolled {
+                polygons,
+                boxes,
+                bounds,
+                rule: piece.rule,
+                paint: piece.paint,
+                opacity: piece.opacity,
+                blend: piece.blend,
+                place,
+            });
+        }
+    }
+    Some(pieces)
+}
+
+/// The contours of `path` cut into straight pieces within [`SURFACE_TOLERANCE`], adding the points
+/// made to `points`. Each curve is cut on its own and the count is checked before the next one, so
+/// the work stops at the first curve past [`MAX_ELEMENTS`] points: `None` then, and for a path with
+/// a coordinate of a line or a curve farther than [`SURFACE_REACH`] from the origin, which bounds
+/// the pieces of one curve and the arithmetic of the cuts at the faces.
+fn straight_pieces(path: &BezPath, points: &mut usize) -> Option<Vec<Vec<Point>>> {
+    let near = |p: &Point| p.x.abs() <= SURFACE_REACH && p.y.abs() <= SURFACE_REACH;
+    let mut polygons: Vec<Vec<Point>> = vec![];
+    let mut current: Vec<Point> = vec![];
+    let (mut start, mut last) = (Point::ZERO, Point::ZERO);
+    for el in path.elements() {
+        if *points > MAX_ELEMENTS {
+            return None;
+        }
+        match *el {
+            PathEl::MoveTo(p) | PathEl::LineTo(p) if !near(&p) => return None,
+            PathEl::MoveTo(p) => {
+                polygons.push(std::mem::take(&mut current));
+                current.push(p);
+                *points += 1;
+                (start, last) = (p, p);
+            }
+            PathEl::LineTo(p) => {
+                current.push(p);
+                *points += 1;
+                last = p;
+            }
+            PathEl::ClosePath => {
+                polygons.push(std::mem::take(&mut current));
+                last = start;
+            }
+            PathEl::QuadTo(a, p) | PathEl::CurveTo(_, a, p) => {
+                let first = if let PathEl::CurveTo(b, ..) = *el { b } else { a };
+                if ![last, first, a, p].iter().all(near) {
+                    return None;
+                }
+                vectorcraft_geom::kurbo::flatten([PathEl::MoveTo(last), *el], SURFACE_TOLERANCE, |cut| {
+                    if let PathEl::LineTo(q) = cut {
+                        current.push(q);
+                        *points += 1;
+                    }
+                });
+                last = p;
+            }
+        }
+    }
+    polygons.push(current);
+    (*points <= MAX_ELEMENTS).then_some(polygons)
+}
+
+/// Do the graphics in Revolve parameters `p` fit the limits with the symbols of `doc`? Their art,
+/// cut into straight pieces on the side surface, may take up to [`MAX_ELEMENTS`] points together.
+pub(crate) fn validate_surface_symbols(doc: &Document, p: &Value) -> Result<(), String> {
+    let list = mapped_graphics(p);
+    if list.is_empty() || unrolled(doc, &list).is_some() {
+        return Ok(());
+    }
+    Err("The graphics are too complex: simplify the symbols' art".into())
+}
+
+/// The parts of `graphics` that fall on each of `faces`, a revolved surface's faces in drawing
+/// order, for an object with id `id`: for each face, the nodes to draw right after it. Only faces
+/// of the swept side that show their outside to the viewer carry a part, so a graphic narrows
+/// toward the silhouette, is hidden past it and is covered by the nearer faces drawn after it.
+/// `shade` gives the paint of a solid color on a face, as the surface under it is shaded; the
+/// colors of gradients and patterns are multiplied by the face's light. A graphic whose symbol
+/// `doc` does not have, or that is past the limits of its art, draws nothing. `None` past
+/// [`MAX_ELEMENTS`] points together before they are cut at the faces, [`MAX_SURFACE_POINTS`]
+/// after, [`MAX_SURFACE_CUTS`] points cut, or when the copies of their paints in the parts take
+/// `copies`, the bytes of the copies of the object's graphics so far, past Revolve's budget for
+/// them: commands refuse such graphics, and a loaded file draws the surface without them.
+pub(crate) fn surface_parts(
+    doc: Option<&Document>,
+    id: NodeId,
+    graphics: &[MappedGraphic],
+    faces: &[vectorcraft_three_d::Face],
+    shade: &dyn Fn(&vectorcraft_three_d::Face, vectorcraft_doc::color::Color) -> Paint,
+    copies: &mut usize,
+) -> Option<Vec<Vec<Arc<Node>>>> {
+    let mut out: Vec<Vec<Arc<Node>>> = vec![vec![]; faces.len()];
+    let Some(doc) = doc else { return Some(out) };
+    let pieces = unrolled(doc, graphics)?;
+    let Some(all) = pieces.iter().map(|p| p.bounds).reduce(|a, b| a.union(b)) else { return Some(out) };
+    // Each piece listed in the buckets of the surface's x its bounds reach across.
+    let width = (all.width() / SURFACE_BUCKETS as f64).max(1e-9);
+    let bucket = |x: f64| (((x - all.x0) / width).floor().max(0.0) as usize).min(SURFACE_BUCKETS - 1);
+    let mut buckets: Vec<Vec<usize>> = vec![vec![]; SURFACE_BUCKETS];
+    for (k, p) in pieces.iter().enumerate() {
+        for b in buckets.get_mut(bucket(p.bounds.x0)..=bucket(p.bounds.x1)).into_iter().flatten() {
+            b.push(k);
+        }
+    }
+    let mut seen = vec![usize::MAX; pieces.len()];
+    let mut drawn = 0usize;
+    let mut cut_points = 0usize;
+    let mut triangle_id = 0usize;
+    for (face, parts) in faces.iter().zip(out.iter_mut()) {
+        let Some(cell) = face.surface.as_ref().filter(|c| c.outward && !face.cap) else { continue };
+        if cell.uv.len() != cell.page.len() || !(3..=4).contains(&cell.uv.len()) {
+            continue;
+        }
+        let triangles: &[[usize; 3]] = if cell.uv.len() == 3 { &[[0, 1, 2]] } else { &[[0, 1, 2], [0, 2, 3]] };
+        for corners in triangles {
+            triangle_id += 1;
+            let pick = |of: &[Point]| corners.iter().map(|k| of.get(*k).copied()).collect::<Option<Vec<Point>>>();
+            let (Some(uv), Some(page)) = (pick(&cell.uv), pick(&cell.page)) else { continue };
+            let (Some(map), Some(window)) = (triangle_map(&uv, &page), counterclockwise(&uv)) else { continue };
+            // A face along an end cap's ring has that edge curved on the page: its parts are cut
+            // from a larger triangle and then to the face's own outline, so they reach the curve
+            // where the graphic runs past the end of the profile. A four-cornered face is cut into
+            // two triangles along its diagonal from corner 0 to corner 2: each takes the part of
+            // the outline on its own side of it.
+            let window = if face.outline.is_some() { grown(window, 3.0) } else { window };
+            // The pieces are looked up over the whole of the window they are cut to.
+            let Some(reach) = window.iter().map(|p| Rect::from_points(*p, *p)).reduce(|a, b| a.union(b)) else { continue };
+            if reach.x1 < all.x0 || reach.x0 > all.x1 || reach.y1 < all.y0 || reach.y0 > all.y1 {
+                continue;
+            }
+            // The pieces near the triangle, each once, in the graphics' drawing order.
+            let mut near = vec![];
+            for b in buckets.get(bucket(reach.x0)..=bucket(reach.x1)).into_iter().flatten() {
+                for &k in b {
+                    let Some(slot) = seen.get_mut(k) else { continue };
+                    if *slot != triangle_id {
+                        *slot = triangle_id;
+                        near.push(k);
+                    }
+                }
+            }
+            near.retain(|k| {
+                pieces
+                    .get(*k)
+                    .is_some_and(|p| p.bounds.x1 >= reach.x0 && p.bounds.x0 <= reach.x1 && p.bounds.y1 >= reach.y0 && p.bounds.y0 <= reach.y1)
+            });
+            if near.is_empty() {
+                continue;
+            }
+            near.sort_unstable();
+            let own = corners.iter().find(|k| **k != 0 && **k != 2).and_then(|k| cell.page.get(*k)).filter(|_| triangles.len() == 2);
+            let rim = face.outline.as_ref().map(|outline| match (own, cell.page.first(), cell.page.get(2)) {
+                (Some(&toward), Some(&a), Some(&b)) => {
+                    let side = side_of(a, b, toward);
+                    vectorcraft_pathops::boolean(outline, FillRule::NonZero, &side, FillRule::NonZero, vectorcraft_pathops::BoolOp::Intersect)
+                }
+                _ => outline.clone(),
+            });
+            let rim = rim.as_ref();
+            for k in near {
+                let Some(piece) = pieces.get(k) else { continue };
+                let mut path = BezPath::new();
+                // Each contour is cut only where its own bounds reach the triangle.
+                for (polygon, b) in piece.polygons.iter().zip(&piece.boxes) {
+                    if b.x1 < reach.x0 || b.x0 > reach.x1 || b.y1 < reach.y0 || b.y0 > reach.y1 {
+                        continue;
+                    }
+                    cut_points = cut_points.saturating_add(polygon.len());
+                    if cut_points > MAX_SURFACE_CUTS {
+                        return None;
+                    }
+                    let cut = clip_to(polygon, &window);
+                    let Some((first, rest)) = cut.split_first() else { continue };
+                    path.move_to(map * *first);
+                    rest.iter().for_each(|q| path.line_to(map * *q));
+                    path.close_path();
+                    drawn = drawn.saturating_add(cut.len());
+                }
+                if drawn > MAX_SURFACE_POINTS {
+                    return None;
+                }
+                if path.elements().is_empty() {
+                    continue;
+                }
+                let (path, rule) = match rim {
+                    Some(outline) => {
+                        let cut = vectorcraft_pathops::boolean(
+                            &PathData::from_bezpath(&path),
+                            piece.rule,
+                            outline,
+                            FillRule::NonZero,
+                            vectorcraft_pathops::BoolOp::Intersect,
+                        );
+                        (cut.to_bezpath(), FillRule::NonZero)
+                    }
+                    None => (path, piece.rule),
+                };
+                if path.elements().is_empty() {
+                    continue;
+                }
+                // Each part copies its paint into its fill, and into the stroke over its seams when
+                // it takes one.
+                if !crate::revolve::paint_copies_add(copies, 1 + usize::from(takes_seam(piece)), &piece.paint) {
+                    return None;
+                }
+                parts.push(Arc::new(surface_piece(id, piece, (path, rule), map, face, shade)));
+            }
+        }
+    }
+    Some(out)
+}
+
+/// The node of the part `path` (on the page, filled under `rule`) of `piece`, which `map` takes
+/// from the unrolled surface onto `face`.
+fn surface_piece(
+    id: NodeId,
+    piece: &Unrolled,
+    (path, rule): (BezPath, FillRule),
+    map: Affine,
+    face: &vectorcraft_three_d::Face,
+    shade: &dyn Fn(&vectorcraft_three_d::Face, vectorcraft_doc::color::Color) -> Paint,
+) -> Node {
+    let gradient_map = map * piece.place;
+    // Under several lights a face's light varies across it in each channel: a solid color draws
+    // as the face's own lit art in that color, clipped to the part. An opaque part also draws that
+    // art clipped to a band of the seam stroke's width around its edges, as the other parts take
+    // a stroke over their seams.
+    if let (Some(c), Some(light)) = (piece.paint.color().filter(|_| matches!(piece.paint, Paint::Solid { .. })), face.rgb_gradient) {
+        let lit = Arc::new(crate::lighting::rgb_gradient_art(id, &face.path(), &Paint::solid(c), light));
+        let clipped = |area: &BezPath, rule: FillRule| {
+            let mut clip = Node::path(id, PathData::from_bezpath(area), Appearance::default());
+            if let NodeKind::Path { rule: r, .. } = &mut clip.kind {
+                *r = rule;
+            }
+            Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), lit.clone()], clip: true })
+        };
+        let mut group = clipped(&path, rule);
+        if takes_seam(piece) {
+            let style = vectorcraft_geom::kurbo::Stroke::new(SURFACE_SEAM).with_join(vectorcraft_geom::kurbo::Join::Round);
+            let band = vectorcraft_geom::kurbo::stroke(path.iter(), &style, &vectorcraft_geom::kurbo::StrokeOpts::default(), SURFACE_TOLERANCE);
+            group = Node::group(id, vec![Arc::new(group), Arc::new(clipped(&band, FillRule::NonZero))]);
+        }
+        group.opacity = piece.opacity;
+        group.blend = piece.blend;
+        return group;
+    }
+    let mut paint = piece.paint.clone();
+    if let Paint::Pattern { xf, .. } = &mut paint {
+        *xf = gradient_map * *xf;
+    }
+    let solid = paint.color().filter(|_| matches!(paint, Paint::Solid { .. }));
+    let mut fill = FillLayer::new(paint);
+    fill.opacity = piece.opacity;
+    fill.blend = piece.blend;
+    let mut appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() };
+    appearance.transform_gradients(gradient_map);
+    for item in appearance.items.iter_mut() {
+        if let AppearanceItem::Fill(f) = item {
+            match solid {
+                Some(c) => f.paint = shade(face, c),
+                None => {
+                    vectorcraft_doc::recolor::map_paint(&mut f.paint, &|c| crate::lighting::shade(c, face.illumination));
+                }
+            }
+        }
+    }
+    // Parts on neighboring faces meet edge to edge: an opaque part takes a narrow stroke of its
+    // paint over the seam, as the faces do.
+    if takes_seam(piece)
+        && let Some(AppearanceItem::Fill(f)) = appearance.items.first()
+    {
+        let mut seam = vectorcraft_doc::StrokeLayer::new(f.paint.clone(), SURFACE_SEAM);
+        seam.join = vectorcraft_doc::LineJoin::Round;
+        appearance.items.push(AppearanceItem::Stroke(seam));
+    }
+    let mut node = Node::path(id, PathData::from_bezpath(&path), appearance);
+    if let NodeKind::Path { rule: r, .. } = &mut node.kind {
+        *r = rule;
+    }
+    node
+}
+
+/// Does each part of `piece` take a stroke of its paint over its seams? Only an opaque part does:
+/// the overlap of a transparent one, of one whose gradient has a stop or a freeform point that is
+/// not fully opaque, or of a pattern, whose tile may hold transparent art, would show.
+fn takes_seam(piece: &Unrolled) -> bool {
+    let clear = match &piece.paint {
+        Paint::Gradient(g) => {
+            g.gradient.stops.iter().any(|s| s.opacity < 1.0) || g.freeform.as_ref().is_some_and(|f| f.points.iter().any(|p| p.opacity < 1.0))
+        }
+        Paint::Pattern { .. } => true,
+        _ => false,
+    };
+    piece.opacity >= 1.0 && piece.blend == BlendMode::Normal && !clear
+}
+
+/// A region far larger than the face on the side of the line through `a` and `b` that `toward` is
+/// on: a rectangle with one edge along the line, reaching a thousand times the line's length past
+/// its ends and away from it.
+fn side_of(a: Point, b: Point, toward: Point) -> PathData {
+    let along = b - a;
+    let mut across = Vec2::new(-along.y, along.x);
+    if across.dot(toward - a) < 0.0 {
+        across = -across;
+    }
+    let (far, wide) = (across * 1000.0, along * 1000.0);
+    let mut out = BezPath::new();
+    out.move_to(a - wide);
+    out.line_to(b + wide);
+    out.line_to(b + wide + far);
+    out.line_to(a - wide + far);
+    out.close_path();
+    PathData::from_bezpath(&out)
+}
+
+/// Triangle `t` scaled by `factor` about its centroid, wound as it was.
+fn grown(t: [Point; 3], factor: f64) -> [Point; 3] {
+    let c = Point::new((t[0].x + t[1].x + t[2].x) / 3.0, (t[0].y + t[1].y + t[2].y) / 3.0);
+    t.map(|p| c + (p - c) * factor)
+}
+
+/// The affine map that takes the corners `from` of a triangle onto `to`. `None` for a triangle
+/// with no area or a map that is not finite.
+fn triangle_map(from: &[Point], to: &[Point]) -> Option<Affine> {
+    let ([u0, u1, u2], [p0, p1, p2]) = (<[Point; 3]>::try_from(from).ok()?, <[Point; 3]>::try_from(to).ok()?);
+    let (a, b) = (u1 - u0, u2 - u0);
+    let det = a.x * b.y - b.x * a.y;
+    if det.abs() <= 1e-12 * (a.hypot2() + b.hypot2()).max(1e-300) {
+        return None;
+    }
+    let (c, d) = (p1 - p0, p2 - p0);
+    let m = [(c.x * b.y - d.x * a.y) / det, (c.y * b.y - d.y * a.y) / det, (d.x * a.x - c.x * b.x) / det, (d.y * a.x - c.y * b.x) / det];
+    let xf = Affine::new([m[0], m[1], m[2], m[3], p0.x - m[0] * u0.x - m[2] * u0.y, p0.y - m[1] * u0.x - m[3] * u0.y]);
+    xf.as_coeffs().iter().all(|v| v.is_finite()).then_some(xf)
+}
+
+/// Triangle `t` wound counterclockwise (y up), as [`clip_to`] reads its window. `None` without
+/// three corners.
+fn counterclockwise(t: &[Point]) -> Option<[Point; 3]> {
+    let [a, b, c] = <[Point; 3]>::try_from(t).ok()?;
+    Some(if (b - a).cross(c - a) < 0.0 { [a, c, b] } else { [a, b, c] })
+}
+
+/// The part of `polygon` inside the convex `window` (one step of Sutherland and Hodgman's clip for
+/// each of its edges). A polygon that is not convex keeps its area, with edges along the window's
+/// sides where it leaves and comes back.
+fn clip_to(polygon: &[Point], window: &[Point; 3]) -> Vec<Point> {
+    let mut out = polygon.to_vec();
+    for k in 0..3 {
+        let (a, b) = (window[k], window[(k + 1) % 3]);
+        let side = |p: Point| (b - a).cross(p - a);
+        let input = std::mem::take(&mut out);
+        for (i, &p) in input.iter().enumerate() {
+            let q = input[(i + 1) % input.len()];
+            let (sp, sq) = (side(p), side(q));
+            if sp >= 0.0 {
+                out.push(p);
+            }
+            if (sp >= 0.0) != (sq >= 0.0) {
+                out.push(p.lerp(q, sp / (sp - sq)));
+            }
+        }
+        if out.len() < 3 {
+            return vec![];
+        }
+    }
+    out
 }
 
 /// The bounds of the art symbol `name` of `doc` draws as a graphic, in the symbol's coordinates.

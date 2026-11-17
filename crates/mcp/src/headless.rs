@@ -81,6 +81,7 @@ pub(crate) fn pointer_kind(k: &str) -> Option<PointerKind> {
         "up" => PointerKind::Up,
         "move" => PointerKind::Move,
         "doubleclick" | "dblclick" => PointerKind::DoubleClick,
+        "tripleclick" => PointerKind::TripleClick,
         _ => return None,
     })
 }
@@ -238,7 +239,7 @@ impl Headless {
             .map(|(e, backquote)| {
                 let mods = packet_mods(e)?.unwrap_or(base);
                 let kind = s(e, "kind").unwrap_or("");
-                let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick)"))?;
+                let kind = pointer_kind(kind).ok_or_else(|| format!("unknown pointer kind `{kind}` (down|drag|up|move|doubleclick|tripleclick)"))?;
                 PointerEvent::json_check(e)?;
                 if s(e, "space") == Some("screen") {
                     return Err("screen-space pointer events need the desktop app; use document coordinates".to_string());

@@ -45,7 +45,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Text",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{by?: \"lines\"|\"paragraphs\"|\"words\"|\"glyphs\" (lines), ids?: [id…] (default: the selection)} each horizontal point or area type object becomes point type objects, one per line, paragraph, word or glyph, each where its characters were and with their character styles, as one undo step; spaces between pieces go, a paragraph's lines stay lines (a wrapped line ends in a line break), justified lines close up, and a paragraph broken out whole keeps its bullet (not its number; other pieces have no list markers). Type on a path, vertical type, threaded type and area type whose text doesn't fit stay as they are → {ids (the pieces, selected), skipped}",
+            "{by?: \"lines\"|\"paragraphs\"|\"words\"|\"glyphs\" (lines), ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} each horizontal point or area type object becomes point type objects, one per line, paragraph, word or glyph, each where its characters were and with their character styles, as one undo step; spaces between pieces go, a paragraph's lines stay lines (a wrapped line ends in a line break), justified lines close up, and a paragraph broken out whole keeps its bullet (not its number; other pieces have no list markers). Type on a path, vertical type, threaded type and area type whose text doesn't fit stay as they are → {ids (the pieces, selected), skipped}",
             has_selection,
             break_text
         ),
@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Combine Point Text",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{ids?: [id…] (default: the selection)} merge one-line horizontal point type into as few objects as it can, every glyph staying where it was: pieces turned and sheared alike whose baselines line up (within 0.4 em; the difference becomes baseline shift) join left to right, a space goes between pieces at least half a space apart, and tracking on the character before each piece keeps the spacing; each object keeps its character styles, and the leftmost piece of each run its place and paint, as one undo step → {ids (the objects made, selected), combined (pieces merged into them)}",
+            "{ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} merge one-line horizontal point type into as few objects as it can, every glyph staying where it was: pieces turned and sheared alike, as visible and as locked (their groups and layers included), whose baselines line up (within 0.4 em; the difference becomes baseline shift) join left to right, a space goes between pieces at least half a space apart, and tracking on the character before each piece keeps the spacing; each object keeps its character styles, and the leftmost piece of each run its place and paint, as one undo step → {ids (the objects made, selected), combined (pieces merged into them)}",
             has_selection,
             combine_text
         ),
@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Join Point Text",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{ids?: [id…] (default: the selection)} join one-line horizontal point type into one point type object, as one undo step: pieces turned and sheared like the top-left one are read as lines (baselines within 0.4 em of each other), top to bottom, each line's pieces left to right with a space between them; each line becomes a paragraph, left aligned, and keeps the distance between baselines as its leading. The text keeps its character styles; the object takes the top-left piece's place and paint, and the other pieces go → {id (selected), joined (pieces merged into it), lines}",
+            "{ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} join one-line horizontal point type into one point type object, as one undo step: pieces turned and sheared like the top-left one, and as visible and as locked (their groups and layers included), are read as lines (baselines within 0.4 em of each other), top to bottom, each line's pieces left to right with a space between them; each line becomes a paragraph, left aligned, and keeps the distance between baselines as its leading. The text keeps its character styles; the object takes the top-left piece's place and paint, and the other pieces go → {id (selected), joined (pieces merged into it), lines}",
             has_selection,
             join_text
         ),
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Breaks",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{kind: \"line\"|\"paragraph\", ids?: [id…]} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
+            "{kind: \"line\"|\"paragraph\", ids?: [id…] (the type they name is taken locked or hidden too)} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story, locked and hidden frames included), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
             has_selection,
             remove_breaks
         ),
@@ -90,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Alignment, Keep Position",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{align: \"left\"|\"center\"|\"right\", ids?: [id…] (default: the selection)} align every paragraph of each horizontal point type object so, moving the object so its longest line stays where it is (one line: the text doesn't move), as one undo step → {ids (the objects changed)}",
+            "{align: \"left\"|\"center\"|\"right\", ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} align every paragraph of each horizontal point type object so, moving the object so its longest line stays where it is (one line: the text doesn't move), as one undo step → {ids (the objects changed)}",
             has_selection,
             align_in_place
         ),
@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Text Transform",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{scale?: bool (false: the horizontal scale stays; true: it goes too, the object's and every character's), ids?: [id…] (default: the selection)} take the rotation, shear and reflection off each point type object, its size and the centre of its text staying, as one undo step → {ids (the objects changed)}",
+            "{scale?: bool (false: the horizontal scale stays; true: it goes too, the object's and every character's), ids?: [id…] (default: the selection; the type they name is taken locked or hidden too)} take the rotation, shear and reflection off each point type object, its size and the centre of its text staying, as one undo step → {ids (the objects changed)}",
             has_selection,
             reset_transform
         ),
@@ -123,8 +123,17 @@ fn editing_text(s: &Session) -> std::result::Result<(), String> {
     }
 }
 
-/// The type objects under `roots` (inside groups and layers, not live art) that can be edited.
-fn texts_under(d: &Document, roots: &[NodeId]) -> Result<Vec<NodeId>> {
+/// The type objects a command acts on: those under the objects `ids` names, locked and hidden ones
+/// included, else those under the selection that can be edited ([`texts_under`]).
+fn target_texts(s: &Session, p: &Value, command: &str) -> Result<Vec<NodeId>> {
+    let named = p.get("ids").is_some_and(|v| !v.is_null());
+    texts_under(&s.doc()?.doc, &checked_ids_or_selection(s, p, command)?, named)
+}
+
+/// The type objects under `roots` (inside groups and layers, not live art). When `named`, every one
+/// not on a locked artboard, locked and hidden ones (and ones in a locked or hidden group or layer)
+/// included; else only those that can be edited.
+fn texts_under(d: &Document, roots: &[NodeId], named: bool) -> Result<Vec<NodeId>> {
     fn visit(n: &Node, out: &mut Vec<NodeId>) {
         match &n.kind {
             NodeKind::Text(_) => out.push(n.id),
@@ -134,8 +143,13 @@ fn texts_under(d: &Document, roots: &[NodeId]) -> Result<Vec<NodeId>> {
     }
     let mut out = vec![];
     roots.iter().filter_map(|id| d.node(*id)).for_each(|n| visit(n, &mut out));
-    let editable = d.editable();
-    out.retain(|id| editable(*id));
+    if named {
+        let locks = d.locked_artboards();
+        out.retain(|id| !locks.holds_id(*id));
+    } else {
+        let editable = d.editable();
+        out.retain(|id| editable(*id));
+    }
     out.dedup();
     if out.len() > MAX_TEXTS {
         return Err(EngineError::Other("Too many type objects to change at once".into()));
@@ -206,11 +220,31 @@ struct Source {
     text: String,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`thread_index`] went through the document's threads on this thread.
+    static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Each object the document's text threads list, with the index of the first thread that lists it.
+fn thread_index(d: &Document) -> std::collections::HashMap<NodeId, usize> {
+    #[cfg(test)]
+    THREAD_SCANS.with(|c| c.set(c.get() + 1));
+    let mut out = std::collections::HashMap::new();
+    for (i, thread) in d.text_threads.iter().enumerate() {
+        for id in thread {
+            out.entry(*id).or_insert(i);
+        }
+    }
+    out
+}
+
 impl Source {
-    /// Horizontal point or area type that isn't threaded and whose text all fits; None otherwise.
-    fn of(d: &Document, id: NodeId) -> Option<Self> {
+    /// Horizontal point or area type that isn't threaded (`threaded` false) and whose text all
+    /// fits; None otherwise.
+    fn of(d: &Document, id: NodeId, threaded: bool) -> Option<Self> {
         let t = text_of(d, id)?;
-        if t.vertical || matches!(t.kind, TextKind::OnPath { .. }) || d.text_threads.iter().any(|th| th.contains(&id)) {
+        if t.vertical || matches!(t.kind, TextKind::OnPath { .. }) || threaded {
             return None;
         }
         let lay = layout(t);
@@ -356,7 +390,9 @@ fn replace_with_pieces(s: &mut Session, label: &str, items: Vec<(NodeId, Node, V
             places.push((id, nodes));
         }
         d.insert_beside(places, true)?;
-        sel.set(made.iter().copied());
+        // Pieces of locked or hidden type stay unselected.
+        let editable = d.editable();
+        sel.set(made.iter().copied().filter(|id| editable(*id)));
         Ok(made.iter().map(|i| i.0).collect())
     })
 }
@@ -376,8 +412,10 @@ fn break_text(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let d = &s.doc()?.doc;
     let (mut items, mut skipped, mut count) = (vec![], vec![], 0);
-    for id in texts_under(d, &checked_ids_or_selection(s, p, C)?)? {
-        let (Some(src), Some(node)) = (Source::of(d, id), d.node(id)) else {
+    let ids = target_texts(s, p, C)?;
+    let threads = thread_index(d);
+    for id in ids {
+        let (Some(src), Some(node)) = (Source::of(d, id, threads.contains_key(&id)), d.node(id)) else {
             skipped.push(id);
             continue;
         };
@@ -405,7 +443,8 @@ fn split_text(s: &mut Session, _: &Value) -> Result<Value> {
         return Err(EngineError::Other("Click in type with a Type tool to split it".into()));
     };
     let d = &s.doc()?.doc;
-    let (Some(src), Some(node)) = (Source::of(d, id), d.node(id).filter(|_| d.is_editable(id))) else {
+    let threaded = d.text_threads.iter().any(|th| th.contains(&id));
+    let (Some(src), Some(node)) = (Source::of(d, id, threaded), d.node(id).filter(|_| d.is_editable(id))) else {
         return Err(EngineError::Other("Select horizontal point or area type whose text fits".into()));
     };
     let text = &src.text;
@@ -427,6 +466,9 @@ fn split_text(s: &mut Session, _: &Value) -> Result<Value> {
 struct Piece {
     id: NodeId,
     t: TextObject,
+    /// Whether the object and every group and layer above it are visible, and whether they are all
+    /// unlocked.
+    state: (bool, bool),
     /// The object's turn and shear (`xf` without its move).
     turn: [f64; 4],
     /// Where its first character's glyph starts on its baseline, in that frame.
@@ -464,12 +506,18 @@ impl Piece {
         if !(at.x.is_finite() && at.y.is_finite() && size > 0.0) {
             return None;
         }
-        Some((Self { id, t, turn: [a, b, c, dd], at, end: at.x + end, size, pens }, node))
+        let state = d.ancestry(id)?.iter().filter_map(|i| d.node(*i)).fold((true, true), |(v, u), n| (v && n.visible, u && !n.locked));
+        Some((Self { id, t, state, turn: [a, b, c, dd], at, end: at.x + end, size, pens }, node))
     }
 
     /// Whether `o` is turned and sheared alike.
     fn turned_like(&self, o: &Piece) -> bool {
         self.turn.iter().zip(&o.turn).all(|(x, y)| (x - y).abs() <= 1e-6 * x.abs().max(y.abs()).max(1.0))
+    }
+
+    /// Whether `o` is turned and sheared alike and has the same `state`.
+    fn joins(&self, o: &Piece) -> bool {
+        self.turned_like(o) && self.state == o.state
     }
 }
 
@@ -572,15 +620,14 @@ fn merge(chain: &[&Piece]) -> std::result::Result<TextObject, usize> {
 fn combine_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.cleanup.combineText";
     let d = &s.doc()?.doc;
-    let mut pieces: Vec<(Piece, &Node)> =
-        texts_under(d, &checked_ids_or_selection(s, p, C)?)?.into_iter().filter_map(|id| Piece::of(d, id)).collect();
-    // Lines: pieces turned alike and looking alike, by baseline, then left to right.
+    let mut pieces: Vec<(Piece, &Node)> = target_texts(s, p, C)?.into_iter().filter_map(|id| Piece::of(d, id)).collect();
+    // Lines: pieces turned alike, as visible and as locked and looking alike, by baseline, then left
+    // to right.
     pieces.sort_by(|x, y| x.0.at.y.total_cmp(&y.0.at.y).then(x.0.at.x.total_cmp(&y.0.at.x)));
     let mut lines: Vec<Vec<(&Piece, &Node)>> = vec![];
     for (piece, node) in &pieces {
         let fits = |l: &Vec<(&Piece, &Node)>| {
-            l.first()
-                .is_some_and(|(f, n)| f.turned_like(piece) && same_look(n, node) && (f.at.y - piece.at.y).abs() <= SAME_LINE * f.size.min(piece.size))
+            l.first().is_some_and(|(f, n)| f.joins(piece) && same_look(n, node) && (f.at.y - piece.at.y).abs() <= SAME_LINE * f.size.min(piece.size))
         };
         match lines.iter_mut().find(|l| fits(l)) {
             Some(l) => l.push((piece, node)),
@@ -649,7 +696,8 @@ fn combine_text(s: &mut Session, p: &Value) -> Result<Value> {
             gone.extend(others);
         }
         d.remove_many(&gone)?;
-        sel.set(ids.iter().map(|i| NodeId(*i)));
+        let editable = d.editable();
+        sel.set(ids.iter().map(|i| NodeId(*i)).filter(|id| editable(*id)));
         Ok(())
     })?;
     Ok(json!({ "ids": ids, "combined": combined }))
@@ -658,15 +706,15 @@ fn combine_text(s: &mut Session, p: &Value) -> Result<Value> {
 fn join_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "addon.cleanup.joinText";
     let d = &s.doc()?.doc;
-    let pieces: Vec<Piece> =
-        texts_under(d, &checked_ids_or_selection(s, p, C)?)?.into_iter().filter_map(|id| Piece::of(d, id).map(|p| p.0)).collect();
-    // The piece top-left on the page sets the turn; the others turned like it are read in that frame.
+    let pieces: Vec<Piece> = target_texts(s, p, C)?.into_iter().filter_map(|id| Piece::of(d, id).map(|p| p.0)).collect();
+    // The piece top-left on the page sets the turn; the others turned like it, and as visible and as
+    // locked, are read in that frame.
     let on_page = |p: &Piece| Affine::new([p.turn[0], p.turn[1], p.turn[2], p.turn[3], 0.0, 0.0]) * p.at;
     let first = pieces.iter().min_by(|x, y| {
         let (a, b) = (on_page(x), on_page(y));
         a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))
     });
-    let mut kept: Vec<&Piece> = first.map(|f| pieces.iter().filter(|p| p.turned_like(f)).collect()).unwrap_or_default();
+    let mut kept: Vec<&Piece> = first.map(|f| pieces.iter().filter(|p| f.joins(p)).collect()).unwrap_or_default();
     kept.sort_by(|x, y| x.at.y.total_cmp(&y.at.y).then(x.at.x.total_cmp(&y.at.x)));
     // Lines, top to bottom, by baseline; each line's pieces left to right.
     let mut lines: Vec<Vec<&Piece>> = vec![];
@@ -728,7 +776,7 @@ fn join_text(s: &mut Session, p: &Value) -> Result<Value> {
             n.kind = NodeKind::Text(Box::new(m));
         }
         d.remove_many(&gone)?;
-        sel.set([id]);
+        sel.set([id].into_iter().filter(|id| d.is_editable(*id)));
         Ok(())
     })?;
     Ok(json!({ "id": id.0, "joined": joined, "lines": count }))
@@ -773,8 +821,8 @@ fn apply_cuts(t: &mut TextObject, cuts: &[(usize, bool)], brk: char) -> usize {
 }
 
 /// The breaks `brk` in the text of the frames of `story`, read as one text: a break at the end or
-/// start of a frame between words of the frames on either side becomes a space. Each editable frame
-/// comes with its own breaks, at its own bytes.
+/// start of a frame between words of the frames on either side becomes a space. Each frame comes
+/// with its own breaks, at its own bytes, its locked and hidden frames included.
 fn story_cuts(d: &Document, story: &[NodeId], brk: char) -> Vec<(NodeId, Vec<(usize, bool)>)> {
     let texts: Vec<(NodeId, String)> = story.iter().filter_map(|id| Some((*id, text_of(d, *id)?.plain_text()))).collect();
     let joined: String = texts.iter().map(|(_, t)| t.as_str()).collect();
@@ -788,9 +836,7 @@ fn story_cuts(d: &Document, story: &[NodeId], brk: char) -> Vec<(NodeId, Vec<(us
         while let Some((at, space)) = cuts.next_if(|(at, _)| *at < end) {
             own.push((at - start, space));
         }
-        if d.is_editable(id) {
-            out.push((id, own));
-        }
+        out.push((id, own));
         start = end;
     }
     out
@@ -818,20 +864,30 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
             .filter_map(|(id, a, b)| Some((id, break_cuts(&text_of(d, id)?.plain_text(), a, b, brk))))
             .collect(),
         None => {
-            let ids = texts_under(d, &checked_ids_or_selection(s, p, C)?)?;
+            let ids = target_texts(s, p, C)?;
             // A threaded story whose frames are all among them is read as one text, once.
             let named: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+            let threads = thread_index(d);
             let mut done = std::collections::HashSet::new();
+            // The threads already found not to be a story whose frames are all among them: their
+            // other frames are read one at a time without going through the thread again.
+            let mut partial = std::collections::HashSet::new();
             let mut out: Vec<(NodeId, Vec<(usize, bool)>)> = vec![];
             for &id in &ids {
                 if !done.insert(id) {
                     continue;
                 }
-                let story = crate::cmd::threads::story_of(d, id);
+                let thread = threads.get(&id).copied();
+                let story = match thread.filter(|i| !partial.contains(i)).and_then(|i| d.text_threads.get(i)) {
+                    Some(frames) => crate::cmd::threads::story_in(d, frames, id),
+                    None => vec![],
+                };
                 if !story.is_empty() && story.iter().all(|f| named.contains(f)) {
                     done.extend(story.iter().copied());
                     out.extend(story_cuts(d, &story, brk));
                 } else if let Some(t) = text_of(d, id) {
+                    // `id` is type, so the story of its thread is the same for each of its frames.
+                    partial.extend(thread);
                     out.push((id, break_cuts(&t.plain_text(), 0, usize::MAX, brk)));
                 }
             }
@@ -864,10 +920,8 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
 /// Horizontal point type among the objects `p` names.
 fn point_texts(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
-    let ids: Vec<NodeId> = texts_under(d, &checked_ids_or_selection(s, p, cmd)?)?
-        .into_iter()
-        .filter(|id| text_of(d, *id).is_some_and(|t| matches!(t.kind, TextKind::Point)))
-        .collect();
+    let ids: Vec<NodeId> =
+        target_texts(s, p, cmd)?.into_iter().filter(|id| text_of(d, *id).is_some_and(|t| matches!(t.kind, TextKind::Point))).collect();
     if ids.is_empty() {
         return Err(EngineError::Other("Select point type".into()));
     }

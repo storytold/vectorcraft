@@ -1039,6 +1039,9 @@ fn ui_docking_leaves_out_the_controls_of_os_windows() {
 #[test]
 fn wheel_over_a_floating_character_font_field_changes_the_font() {
     let mut h = Harness::new();
+    // The later turns step to whichever families the process has loaded, test fonts without Latin
+    // glyphs included. Missing glyph protection would keep the text in its previous font.
+    h.app.run("prefs.set", json!({"key": "missingGlyphProtection", "value": false})).unwrap();
     h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
     let viewport = h.float("character");
     let field = h

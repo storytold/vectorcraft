@@ -607,7 +607,7 @@ fn a_drag_from_the_first_anchor_always_closes() {
 fn alt_mid_close_keeps_the_turned_outgoing_handle() {
     use vectorcraft_geom::{Anchor, SubPath};
     let anchors = vec![Anchor::smooth(Point::new(100.0, 300.0), Point::new(150.0, 300.0)), Anchor::corner(Point::new(200.0, 200.0))];
-    let (mut d, id, s) = drawing(SubPath { anchors, closed: false });
+    let (mut d, id, s) = drawing(SubPath::new(anchors, false));
     let p = paint();
     let mut t = PenTool { drawing: true, ..PenTool::default() };
     assert_eq!(t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 100.0, 300.0)), close_press(id, Point::new(100.0, 300.0)));
@@ -634,7 +634,7 @@ fn alt_mid_close_keeps_the_turned_outgoing_handle() {
 fn space_moves_the_closing_anchor() {
     use vectorcraft_geom::{Anchor, SubPath};
     let anchors = vec![Anchor::smooth(Point::new(100.0, 300.0), Point::new(150.0, 300.0)), Anchor::corner(Point::new(200.0, 200.0))];
-    let (mut d, id, s) = drawing(SubPath { anchors, closed: false });
+    let (mut d, id, s) = drawing(SubPath::new(anchors, false));
     let p = paint();
     let mut t = PenTool { drawing: true, ..PenTool::default() };
     assert_eq!(t.pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 100.0, 300.0)), close_press(id, Point::new(100.0, 300.0)));

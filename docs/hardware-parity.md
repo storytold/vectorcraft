@@ -28,7 +28,7 @@ It reads the pen's tilt and barrel rotation on macOS and on Linux under X11 and 
 | Trackpad (smooth scroll, pinch) | yes | yes | precision touchpads | yes | yes | done |
 | HiDPI / Retina, per-monitor scale | yes | yes | yes | yes | yes | done; a window dragged between monitors of different scale can still grow on Windows (#1459, open); the custom title bar's window on Windows stays truly borderless so the pointer lines up with what is drawn (#1791, #1758; awaiting the reporter's confirmation) ; macOS cursors use aligned 1×/2× native image representations (#2292), covered by headless construction tests; mixed-display transitions and physical cursor sizing remain unverified, no additional hardware validated |
 | Multiple monitors: panels and document windows on another screen | yes | no (one OS window) | no | no | — | missing: 6–10 h (with multiple windows, gap G7) |
-| Display colour profile (proof and display through the monitor's ICC) | yes | no | no | no | — | missing: 3–5 h |
+| Display colour profile (proof and display through the monitor's ICC) | yes | yes: the window is tagged sRGB and macOS converts it | yes: the display's default ICC profile, Windows' own conversion with Advanced Color on | X11: colord or `_ICC_PROFILE`; Wayland: sRGB | — | done on macOS, Windows and X11; Wayland and floating document windows remain |
 | 3D GPU rendering (Materials, ray tracing) | yes | — | — | — | — | blocked on 3D (gap G3) |
 
 ## Revision history

@@ -29,6 +29,11 @@ pub(crate) fn end_document_drag(ctx: &egui::Context) {
     });
 }
 
+/// Whether a Selection tool move has left the canvas ([`drag_art_out`]) and still waits there.
+pub(crate) fn art_out(ctx: &egui::Context) -> bool {
+    matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art))
+}
+
 /// Temp-memory key for the active canvas drag state.
 pub(super) fn drag_id() -> egui::Id {
     egui::Id::unique("canvas-drag")
@@ -265,6 +270,12 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
+/// Whether Space, held with the modifiers `m`, lends the Hand, Rotate View or Zoom tool. While the
+/// Type tool edits text, Space types a space, and only Cmd+Space still lends the Zoom tool.
+pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, space: bool) -> bool {
+    space && (m.command || !app.session.tool_wants_text())
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
@@ -314,6 +325,9 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
 /// panel that takes the art ([`widgets::PanelDrag::Art`]) takes it where it was, and no move is
 /// left open (#2826). The art stays where it last moved while the pointer is over the panel.
 pub(crate) fn release_over_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    // A floating window's pane, or the main window's while the current window floats, takes the
+    // art first.
+    super::release_on_noted(app, ctx);
     crate::document_drag::cleanup(app, ctx);
     let art = matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art));
     // Over a floating panel's own OS window the pointer is gone from this window, and the release
@@ -349,8 +363,9 @@ pub(crate) fn release_art_in_window(app: &mut VectorcraftApp, ctx: &egui::Contex
     }
 }
 
-/// Roll back the art move dragged off the canvas; a panel takes the art instead.
-fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// Roll back the art move dragged off the canvas, and end the canvas's drag; a panel or another
+/// window's tiled pane takes the art instead.
+pub(crate) fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // With no document open there is nothing to roll back; the tool still gets its mouse-up.
     let _ = app.session.cancel_interaction();
     let view = app.view_info();
@@ -399,7 +414,9 @@ fn pressed_with(app: &mut VectorcraftApp, index: Option<usize>, pos: Point, tool
     }
 }
 
-/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error.
+/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error. When an
+/// edit the tool committed or ran no longer fits in the action being recorded, the edit stays and
+/// the status bar names the limit ([`crate::panels::actions::after_journaled_edit`]).
 pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Vec<vectorcraft_engine::UiRequest>>) {
     match r {
         Ok(reqs) => {
@@ -420,6 +437,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                     }
                 }
             }
+            crate::panels::actions::after_journaled_edit(app);
         }
         Err(e) => app.status(e.to_string()),
     }

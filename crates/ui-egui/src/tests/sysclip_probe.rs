@@ -12,7 +12,7 @@ use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::clipboard::Flavour;
 
 use crate::tests_sysclip::{copy_rect, run};
-use crate::{Services, SystemClipboard, VectorcraftApp, menus};
+use crate::{Services, SystemClipboard, VectorcraftApp, clipboard_probe, menus};
 
 /// What the clipboard handles saw: the thread each `has()` ran on, how many handles are alive, and
 /// the thread each handle was dropped on, in order.
@@ -204,6 +204,87 @@ fn quitting_drops_the_probes_clipboard_before_the_apps() {
     let drops = rec.drops.lock().unwrap().clone();
     let ui = std::thread::current().name().map(str::to_owned);
     assert_eq!(drops, vec![Some("vectorcraft-clip".to_owned()), ui], "handles dropped on: {drops:?}");
+}
+
+/// The probe's clipboard: dropping it tells `dropping` it started, then waits until `release` sends
+/// (a handle that lets go only once an unanswered read ends), and tells `dropped` once it is gone.
+struct Releasing {
+    rec: Arc<Recorder>,
+    dropping: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+    dropped: std::sync::mpsc::Sender<()>,
+}
+
+impl Drop for Releasing {
+    fn drop(&mut self) {
+        let _ = self.dropping.send(());
+        let _ = self.release.recv();
+        self.rec.drops.lock().unwrap().push(std::thread::current().name().map(str::to_owned));
+        let _ = self.dropped.send(());
+    }
+}
+
+impl SystemClipboard for Releasing {
+    fn write(&mut self, _flavours: &[Flavour]) -> Result<(), String> {
+        Ok(())
+    }
+    fn holds_ours(&mut self) -> bool {
+        false
+    }
+    fn read(&mut self, _mimes: &[&'static str]) -> Option<Flavour> {
+        None
+    }
+    fn has(&mut self, _mimes: &[&'static str]) -> bool {
+        false
+    }
+}
+
+#[test]
+fn quitting_waits_while_the_probes_clipboard_is_still_letting_go() {
+    let rec = Arc::new(Recorder::default());
+    let (dropping, dropping_seen) = std::sync::mpsc::channel();
+    let (release, released) = std::sync::mpsc::channel();
+    let (dropped, dropped_seen) = std::sync::mpsc::channel();
+    let make = {
+        let rec = Arc::clone(&rec);
+        move || -> Box<dyn SystemClipboard> { Box::new(Releasing { rec, dropping, release: released, dropped }) }
+    };
+    let services = Services {
+        system_clipboard: Some(Slow::boxed(&rec, Duration::ZERO, Some(false))),
+        clipboard_probe: Some(Box::new(make)),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    frame(&mut app);
+    // A controllable clock: the probe's handle lets go 26 s after the quit (a text read unanswered
+    // just before it, and the worker's teardown). The wait sees the handle start to drop, then
+    // either reaches that time and waits for the worker, or ends at its deadline first.
+    let lets_go = Duration::from_secs(26);
+    let release_at_deadline = release.clone();
+    app.clipboard_probe.as_mut().expect("the probe started").stop = Box::new(move |verdicts, quit, end| {
+        dropping_seen.recv().expect("the probe's handle was never dropped");
+        if end >= quit + lets_go {
+            let _ = release_at_deadline.send(());
+            while verdicts.recv().is_ok() {}
+        }
+    });
+    drop(app);
+    // A wait that ended first left the handle dropping: let it finish to read the order.
+    let _ = release.send(());
+    dropped_seen.recv().expect("the probe's handle was never dropped");
+    let drops = rec.drops.lock().unwrap().clone();
+    let ui = std::thread::current().name().map(str::to_owned);
+    assert_eq!(drops, vec![Some("vectorcraft-clip".to_owned()), ui], "handles dropped on: {drops:?}");
+}
+
+#[test]
+fn quitting_waits_out_an_unanswered_x11_read_and_its_teardown() {
+    let quit = Instant::now();
+    // A look whose text read went unanswered just before the quit: the Linux host's worker holds its
+    // handle until 25 s after the read was sent, and an idle worker's teardown takes 2 s at most.
+    assert!(clipboard_probe::stop_by(quit) >= quit + Duration::from_secs(25) + Duration::from_secs(2));
+    // A handle that never lets go still lets the app quit.
+    assert_eq!(clipboard_probe::stop_by(quit), quit + Duration::from_secs(27));
 }
 
 #[test]

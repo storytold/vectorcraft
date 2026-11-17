@@ -18,7 +18,7 @@ use vectorcraft_doc::{Appearance, AppearanceItem, CustomArrowhead, Document, Nod
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, SubPath};
 use vectorcraft_pathops::BoolOp;
 
-use super::{CommandSpec, Result, Session, always, bad, cmd};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd};
 
 /// The arrowheads file's name, in the folder of the preferences.
 pub const FILE_NAME: &str = "Arrowheads.vectorcraft";
@@ -37,7 +37,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Arrowheads",
             [],
             None,
-            "{} → {arrowheads: [{name (stroke.set `startArrow`/`endArrow` as {custom: name}), reach, halfWidth (in head weights)}], file: the arrowheads file's path or null (no file here, as on the web), skipped: [{name, reason}] symbols of the file that are not heads, error: why the file could not be read, or null} the custom arrowheads, listed after the built-in ones in the Stroke panel's arrowhead menus",
+            "{} → {arrowheads: [{name (stroke.set `startArrow`/`endArrow` as {custom: name}), reach, halfWidth (in head weights)}], file: the arrowheads file's path or null (no file here, as on the web, or the file is outside the automation read roots), skipped: [{name, reason}] symbols of the file that are not heads, error: why the file could not be read (naming the file by its file name outside the read roots), or null} the custom arrowheads, listed after the built-in ones in the Stroke panel's arrowhead menus",
             always,
             list
         ),
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Arrowheads",
             [],
             None,
-            "{} open the arrowheads file (a native document next to the preferences; created first with one example head when it is missing). Each symbol in it is one custom arrowhead named after the symbol: it points right, its registration point is the tip, and its height is drawn as wide as the built-in heads; its visible fills and outlined strokes make the head. Saving the file reloads the heads → {path, created: whether the file was made now}",
+            "{} open the arrowheads file (a native document next to the preferences; created first with one example head when it is missing). Each symbol in it is one custom arrowhead named after the symbol: it points right, its registration point is the tip, and its height is drawn as wide as the built-in heads; its visible fills and outlined strokes make the head. Saving the file reloads the heads. Under automation read roots, a file outside them is an error, and nothing is made or opened → {path, created: whether the file was made now}",
             has_file,
             edit
         ),
@@ -55,7 +55,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reload Arrowheads",
             [],
             None,
-            "{} read the arrowheads file again (a save of it from VectorCraft does this already) → {count, skipped: [{name, reason}]}",
+            "{} read the arrowheads file again (a save of it from VectorCraft does this already; under automation read roots, a file outside them is an error and is not read) → {count, skipped: [{name, reason}]}",
             has_file,
             reload
         ),
@@ -409,13 +409,36 @@ fn skipped(s: &Session) -> Vec<Value> {
     s.arrowheads.skipped.iter().map(|(name, reason)| json!({"name": name, "reason": reason})).collect()
 }
 
+/// The arrowheads file at `path` checked for reading against the automation roots in force: an agent
+/// confined to read roots reaches the file only inside them. The error names the file by its file
+/// name outside them.
+fn may_reach(path: &str) -> Result<()> {
+    crate::file_access::check_read(path).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), path))
+}
+
+/// `msg`, an error about the arrowheads file at `path`, as the request being served may see it: the
+/// file named whole inside the read roots, else by its file name.
+fn shown_error(msg: &str, path: Option<&str>) -> String {
+    let Some(path) = path else { return msg.to_string() };
+    match super::fileio::naming_in_error(EngineError::Other(msg.to_string()), path) {
+        EngineError::Other(m) => m,
+        e => e.to_string(),
+    }
+}
+
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let heads: Vec<Value> = s.arrowheads.heads.iter().map(|h| json!({"name": h.name, "reach": h.reach(), "halfWidth": h.half_width()})).collect();
-    Ok(json!({"arrowheads": heads, "file": s.arrowheads.path, "skipped": skipped(s), "error": s.arrowheads.error}))
+    let path = s.arrowheads.path.as_deref();
+    let file = path.filter(|p| crate::file_access::check_read(p).is_ok());
+    let error = s.arrowheads.error.as_deref().map(|e| shown_error(e, path));
+    Ok(json!({"arrowheads": heads, "file": file, "skipped": skipped(s), "error": error}))
 }
 
 fn reload(s: &mut Session, _: &Value) -> Result<Value> {
     const C: &str = "stroke.arrowheads.reload";
+    if let Some(path) = &s.arrowheads.path {
+        may_reach(path)?;
+    }
     s.reload_arrowheads();
     if let Some(e) = &s.arrowheads.error {
         return Err(bad(C, e.clone()));
@@ -426,8 +449,11 @@ fn reload(s: &mut Session, _: &Value) -> Result<Value> {
 fn edit(s: &mut Session, _: &Value) -> Result<Value> {
     const C: &str = "stroke.arrowheads.edit";
     let path = s.arrowheads.path.clone().ok_or_else(|| bad(C, "no arrowheads file here"))?;
+    // Checked before anything is made, brought to the front or opened.
+    may_reach(&path)?;
     if let Some(dir) = std::path::Path::new(&path).parent() {
-        std::fs::create_dir_all(dir).map_err(|e| bad(C, format!("{}: {e}", dir.display())))?;
+        let dir = dir.to_string_lossy();
+        std::fs::create_dir_all(&*dir).map_err(|e| super::fileio::naming_in_error(bad(C, format!("{dir}: {e}")), &dir))?;
     }
     // Made only when no file is there, also when another run makes one at the same moment.
     let bytes = vectorcraft_format::save_file(&starter());
@@ -446,7 +472,8 @@ fn edit(s: &mut Session, _: &Value) -> Result<Value> {
             s.set_active(i);
         }
         None => {
-            crate::file_access::unconfined(|| s.execute("document.open", &json!({ "path": path })))?;
+            // Opened in the request's own scope, so the document keeps the roots it was opened under.
+            s.execute("document.open", &json!({ "path": path }))?;
         }
     }
     Ok(json!({"path": path, "created": created}))

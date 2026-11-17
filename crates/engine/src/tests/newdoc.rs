@@ -90,7 +90,26 @@ fn a_white_background_exports_opaque() {
         let mut s = new_doc(json!({"width": 20, "height": 20, "backgroundContents": bg}));
         let r = s.execute("document.export", &json!({"format": "png"})).unwrap();
         let png = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
-        image::load_from_memory(&png).unwrap().to_rgba8().get_pixel(10, 10).0
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(10, 10)
+            .0
     };
     assert_eq!(alpha("white"), [255, 255, 255, 255]);
     assert_eq!(alpha("transparent")[3], 0);
@@ -540,9 +559,41 @@ fn edit_print_profile(s: &mut Session, dir: &std::path::Path) {
     // One embedded image becomes a symbol's art, another stays on the profile's layer.
     let png = |rgb: [u8; 3]| {
         let mut out = vec![];
-        image::RgbaImage::from_pixel(4, 4, image::Rgba([rgb[0], rgb[1], rgb[2], 255]))
-            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-            .unwrap();
+        {
+            let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([rgb[0], rgb[1], rgb[2], 255]))).into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                .map(|__b| out.extend_from_slice(&__b))
+        }
+        .unwrap();
         vectorcraft_format::base64_encode(&out)
     };
     s.execute("file.place", &json!({"name": "red.png", "dataBase64": png([255, 0, 0]), "link": false})).unwrap();
@@ -631,6 +682,39 @@ fn the_profile_follows_the_preset_access_and_reset() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn profile_errors_name_the_file_by_its_name_outside_the_read_roots() {
+    let (mut s, dir) = with_profiles("errors");
+    let elsewhere = dir.with_extension("elsewhere");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let whole = dir.join("Print.vectorcraft").to_string_lossy().to_string();
+    let run = |s: &mut Session, roots: &std::sync::Arc<crate::file_access::AutomationRoots>, cmd: &str| {
+        crate::file_access::confine(Some(roots), || s.execute(cmd, &json!({"name": "Print"}))).unwrap_err().to_string()
+    };
+    // No write access: edit and reset are refused before anything is written or deleted.
+    let read_only = crate::file_access::AutomationRoots::new(&[elsewhere.as_path()], &[]).unwrap().unwrap();
+    for cmd in ["file.newProfiles.edit", "file.newProfiles.reset"] {
+        let e = run(&mut s, &read_only, cmd);
+        assert!(e.ends_with(": Print.vectorcraft") && !e.contains(&whole), "{cmd}: {e}");
+    }
+    // Write access without read access: edit is refused, and nothing is written.
+    let write_only = crate::file_access::AutomationRoots::new(&[elsewhere.as_path()], &[dir.as_path()]).unwrap().unwrap();
+    let e = run(&mut s, &write_only, "file.newProfiles.edit");
+    assert!(e.contains("outside the read root") && e.ends_with(": Print.vectorcraft") && !e.contains(&whole), "{e}");
+    assert!(!dir.join("Print.vectorcraft").exists());
+    // A file reset cannot delete (a folder in its place) is named by its file name too.
+    std::fs::create_dir_all(dir.join("Print.vectorcraft")).unwrap();
+    let e = run(&mut s, &write_only, "file.newProfiles.reset");
+    assert!(e.starts_with("Print.vectorcraft: ") && !e.contains(&whole), "{e}");
+    // Inside the read roots the error names the whole path.
+    let inside = crate::file_access::AutomationRoots::new(&[dir.as_path()], &[dir.as_path()]).unwrap().unwrap();
+    let e = run(&mut s, &inside, "file.newProfiles.reset");
+    assert!(e.starts_with(&format!("{whole}: ")), "{e}");
+    let _ = std::fs::remove_dir_all(&elsewhere);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The new document's links find their files from the profile's file, as a document opened from
 /// that file does; a document without a profile has no such file.
 #[test]
@@ -650,6 +734,9 @@ fn the_new_document_links_from_the_profile_file() {
 /// is a warning.
 #[test]
 fn a_profile_brings_the_color_profile_its_file_carries() {
+    if !super::in_own_process("tests::newdoc::a_profile_brings_the_color_profile_its_file_carries") {
+        return;
+    }
     use vectorcraft_color::cms;
     let (mut s, dir) = with_profiles("icc");
     let builtin = cms::profiles().into_iter().find(|p| p.kind == cms::ProfileKind::Rgb && p.builtin && p.name != cms::SRGB).unwrap();

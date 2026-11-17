@@ -215,7 +215,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     o.insert("stroke".into(), json!(stroke));
     o.insert("kind".into(), json!(g.kind.label().to_lowercase()));
     o.insert("stops".into(), stops_json(&g.stops));
-    o.insert("method".into(), json!(g.method.label().to_lowercase()));
+    o.insert("method".into(), json!(g.method.id()));
     // A freeform preset takes no spread (paint.editGradient refuses one).
     if g.kind != vectorcraft_color::GradientKind::Freeform {
         o.insert("spread".into(), json!(g.spread.label().to_lowercase()));

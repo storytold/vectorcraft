@@ -213,7 +213,7 @@ fn go_to_selects_the_image() {
     run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
     assert_ne!(s.doc().unwrap().selection.objects, vec![id]);
     let r = run(&mut s, "links.goTo", json!({"id": id.0}));
-    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0]}));
+    assert_eq!(r, json!({"id": id.0, "bounds": [-100.0, 0.0, 500.0, 300.0], "onCanvas": true}));
     assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
     let rect = s.doc().unwrap().doc.layers[0].children().unwrap()[1].id;
     assert!(s.execute("links.goTo", &json!({"id": rect.0})).is_err(), "not an image");
@@ -248,7 +248,42 @@ fn the_list_shows_each_image_with_its_status() {
     assert_eq!(run(&mut s, "links.list", json!({"show": "missing"}))["links"][0]["id"], linked.0);
     assert_eq!(run(&mut s, "links.list", json!({"sort": "name"}))["links"][0]["name"], "a.png");
     assert!(s.execute("links.list", &json!({"show": "broken"})).is_err());
-    assert!(s.execute("links.list", &json!({"sort": "size"})).is_err());
+    assert!(s.execute("links.list", &json!({"sort": "date"})).is_err());
+}
+
+#[test]
+fn sort_by_size_lists_the_smallest_file_first() {
+    let dir = Folder::new("list-size");
+    let files = [("a.png", png(600, 300, RED)), ("b.png", png(10, 10, BLUE)), ("c.png", png(100, 100, RED)), ("d.png", png(10, 10, BLUE))];
+    let mut s = session();
+    for (name, bytes) in &files {
+        let path = dir.file(name);
+        write(&path, bytes);
+        place(&mut s, &path);
+    }
+    let e = dir.file("e.png");
+    write(&e, &png(1, 1, RED));
+    place_embedded(&mut s, &e);
+    let names = |s: &mut Session| -> Vec<String> {
+        let l = run(s, "links.list", json!({"sort": "size"}));
+        l["links"].as_array().unwrap().iter().map(|r| r["name"].as_str().unwrap_or_default().to_string()).collect()
+    };
+    // Smallest first, equal sizes by name, the embedded image (no file) last.
+    let mut want: Vec<(usize, &str)> = files.iter().map(|(n, b)| (b.len(), *n)).collect();
+    want.sort();
+    assert!(want[0].0 < want[2].0 && want[2].0 < want[3].0, "{want:?}");
+    let mut want: Vec<String> = want.iter().map(|(_, n)| n.to_string()).collect();
+    want.push("e.png".into());
+    assert_eq!(names(&mut s), want);
+    // A missing file sorts by the size the document keeps of it.
+    std::fs::remove_file(dir.file("a.png")).unwrap();
+    assert_eq!(names(&mut s), want);
+    // A modified file sorts by its size now.
+    let bigger = png(900, 900, BLUE);
+    assert!(bigger.len() > files[0].1.len());
+    write(&dir.file("c.png"), &bigger);
+    let got = names(&mut s);
+    assert_eq!(got[got.len() - 2..], ["c.png".to_string(), "e.png".to_string()]);
 }
 
 #[test]

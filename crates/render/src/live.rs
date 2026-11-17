@@ -127,8 +127,9 @@ struct Walked {
 }
 
 impl Walked {
-    /// The [`resources_key`] of the node walked: the walk's hash, the font generation when it found
-    /// type or a placed file, the plug-in revision and the hash of the document's swatch and pattern
+    /// The [`resources_key`] of the node walked: the walk's hash, the layout inputs (fonts and
+    /// hyphenation exceptions, [`vectorcraft_text::layout_inputs`]) when it found type or a placed
+    /// file, the plug-in revision and the hash of the document's swatch and pattern
     /// names (`names`) when it found a plug-in effect, and the color settings `cms`. Whether a
     /// plug-in paints its pieces depends on the plug-ins installed, so the names count for every
     /// plug-in effect.
@@ -136,7 +137,7 @@ impl Walked {
         let mut h = DefaultHasher::new();
         self.hash.hash(&mut h);
         if self.text {
-            vectorcraft_text::FontDb::global().generation().hash(&mut h);
+            vectorcraft_text::layout_inputs().hash(&mut h);
         }
         if self.plugins {
             crate::effects::plugin_revision().hash(&mut h);

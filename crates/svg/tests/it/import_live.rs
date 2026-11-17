@@ -2,6 +2,7 @@
 //! with `<use>` a symbol and its instances, blurs and drop-shadow chains live effects; and
 //! export → import keeps them.
 
+use craft_svg::tree::draw::resvg;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -284,6 +285,63 @@ fn a_gaussian_blur_becomes_the_effect_with_its_radius() {
     assert_eq!(effects(&d)[0].params["radius"], json!(12.0));
 }
 
+/// A blur that differs by direction in the document (standard deviations that differ, or an even
+/// one in a user space scaled unevenly or skewed) is kept as an SVG filter, which draws it as it
+/// is, not as an even Gaussian Blur. In a turned, flipped or evenly scaled user space an even blur
+/// stays the effect.
+#[test]
+fn a_blur_that_differs_by_direction_is_kept_as_its_filter() {
+    let ids = |body: &str| {
+        let (d, w) = open(body);
+        assert!(w.is_empty(), "{w:?}");
+        effects(&d).iter().map(|e| e.id.clone()).collect::<Vec<_>>()
+    };
+    let blur = |sd: &str, transform: &str| {
+        format!(
+            r##"<defs><filter id="b"><feGaussianBlur stdDeviation="{sd}"/></filter></defs><rect x="50" y="30" width="60" height="40" fill="#08f" transform="{transform}" filter="url(#b)"/>"##
+        )
+    };
+    assert_eq!(ids(&blur("4 1", "translate(0)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "scale(1 4)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "skewX(30)")), ["svg.filter"]);
+    assert_eq!(ids(&blur("3", "rotate(30) scale(2)")), ["blur.gaussian"]);
+    assert_eq!(ids(&blur("3", "scale(-2 2)")), ["blur.gaussian"]);
+    let shadow = |sd: &str| {
+        format!(
+            r##"<defs><filter id="s"><feDropShadow dx="2" dy="2" stdDeviation="{sd}"/></filter></defs><rect width="60" height="40" filter="url(#s)"/>"##
+        )
+    };
+    assert_eq!(ids(&shadow("3 1")), ["svg.filter"]);
+    assert_eq!(ids(&shadow("3")), ["stylize.dropShadow"]);
+}
+
+/// An SVG filter's blur in a user space scaled unevenly is written live and opens again as the
+/// same effect, which blurs more along the stretched axis, not as an even Gaussian Blur.
+#[test]
+fn an_exported_blur_in_a_stretched_user_space_opens_as_the_same_effect() {
+    let xml = r#"<filter id="b" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter>"#;
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(60.0, 40.0, 140.0, 80.0)),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::None, 0.0),
+    );
+    let params = json!({ "xml": xml, "scale": 2.0, "origin": [0.0, 0.0], "axes": [0.5, 0.0, 0.0, 2.0] });
+    n.appearance.effects = vec![Effect { id: "svg.filter".into(), params, visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = export(&d, &ExportOptions::default());
+    assert!(out.contains("<g filter=\"url(#") && !out.contains("<image"), "{out}");
+    let (back, w) = import_with_report(&out).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&back);
+    assert_eq!(fx.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"], "{out}");
+    let num = |v: &serde_json::Value| v.as_f64().unwrap();
+    let axes: Vec<f64> = fx[0].params["axes"].as_array().unwrap().iter().map(num).collect();
+    assert!(axes.iter().zip([0.5, 0.0, 0.0, 2.0]).all(|(a, b)| (a - b).abs() < 1e-6), "{axes:?}");
+    assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.02);
+}
+
 /// `color-interpolation-filters` (SVG 1.1 §15.7.6, initially linearRGB:
 /// https://www.w3.org/TR/SVG11/painting.html#ColorInterpolationFiltersProperty) picks whether the
 /// blur mixes colours in linear light; sRGB, on the primitive or the filter, keeps them as they
@@ -522,7 +580,8 @@ fn a_filter_used_twice_among_many_is_kept_twice() {
     assert_eq!(filters, vec![vec![json!("g")], vec![json!("g")]], "{:?}", art(&d));
 }
 
-/// Other filters come in as SVG filters; one on a turned object is reported and left out.
+/// Other filters come in as SVG filters, on a turned or skewed object too, with the object's user
+/// space in `scale`, `origin` and `axes`; one past what the effect measures is reported and left out.
 #[test]
 fn other_filters_are_kept_or_reported() {
     let (d, w) =
@@ -530,8 +589,32 @@ fn other_filters_are_kept_or_reported() {
     assert!(w.is_empty(), "{w:?}");
     let fx = effects(&d);
     assert_eq!((fx.len(), fx[0].id.as_str(), &fx[0].params["name"]), (1, "svg.filter", &json!("t")));
+    assert!(fx[0].params.get("axes").is_none(), "the document's axes: {:?}", fx[0].params);
     let (d, w) = open(
-        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" transform="rotate(30)" filter="url(#t)"/>"##,
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" transform="translate(10 20) scale(2) rotate(30)" filter="url(#t)"/>"##,
+    );
+    assert!(w.is_empty(), "{w:?}");
+    let fx = effects(&d);
+    assert_eq!(fx.len(), 1);
+    let p = &fx[0].params;
+    let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let num = |v: &serde_json::Value| v.as_f64().unwrap();
+    assert!((num(&p["scale"]) - 2.0).abs() < 1e-6 && p["origin"] == json!([10.0, 20.0]), "{p}");
+    let axes: Vec<f64> = p["axes"].as_array().unwrap().iter().map(num).collect();
+    assert!(axes.iter().zip([c, s, -s, c]).all(|(a, b)| (a - b).abs() < 1e-6), "{axes:?}");
+    // Skewed, and scaled unevenly: the axes keep both.
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="60" height="40" transform="skewX(45)" filter="url(#t)"/><rect width="60" height="40" transform="scale(1 4)" filter="url(#t)"/>"##,
+    );
+    assert!(w.is_empty(), "{w:?}");
+    let all: Vec<Vec<f64>> =
+        art(&d).iter().flat_map(|n| &n.appearance.effects).map(|e| e.params["axes"].as_array().unwrap().iter().map(num).collect()).collect();
+    assert_eq!(all.len(), 2);
+    assert!(all.iter().any(|a| a.iter().zip([1.0, 0.0, 1.0, 1.0]).all(|(a, b)| (a - b).abs() < 1e-6)), "{all:?}");
+    assert!(all.iter().any(|a| a.iter().zip([0.5, 0.0, 0.0, 2.0]).all(|(a, b)| (a - b).abs() < 1e-6)), "{all:?}");
+    // Skewed so far that an axis would stretch past 1000 times: reported and left out.
+    let (d, w) = open(
+        r##"<defs><filter id="t"><feTurbulence baseFrequency="0.05"/></filter></defs><rect width="0.01" height="0.01" transform="skewX(89.95)" filter="url(#t)"/>"##,
     );
     assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
     assert!(effects(&d).is_empty());
@@ -541,6 +624,40 @@ fn other_filters_are_kept_or_reported() {
     );
     assert!(w.iter().any(|w| w.contains("filter")), "{w:?}");
     assert!(effects(&d).is_empty());
+}
+
+/// A filter on a turned object runs in the object's user space (SVG 1.1 measures its lengths
+/// there): opened, it draws as the same filter does on the same art drawn unturned with its offset
+/// turned by hand.
+#[test]
+fn a_filter_on_a_turned_object_draws_in_its_user_space() {
+    let filter = |dx: f64, dy: f64| {
+        format!(
+            r#"<filter id="m" x="-1" y="-1" width="3" height="3"><feOffset dx="{dx}" dy="{dy}"/><feColorMatrix type="hueRotate" values="90"/></filter>"#
+        )
+    };
+    let turned = format!(
+        r##"<defs>{}</defs><rect x="60" y="30" width="40" height="40" fill="#08f" transform="rotate(30 80 50)" filter="url(#m)"/>"##,
+        filter(24.0, 0.0)
+    );
+    let (d, w) = open(&turned);
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(effects(&d).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["svg.filter"]);
+    // The same square, its corners turned by hand, with the offset 24 along the turned x axis.
+    let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let corner = |x: f64, y: f64| format!("{},{}", 80.0 + c * (x - 80.0) - s * (y - 50.0), 50.0 + s * (x - 80.0) + c * (y - 50.0));
+    let reference = format!(
+        r##"<defs>{}</defs><polygon points="{} {} {} {}" fill="#08f" filter="url(#m)"/>"##,
+        filter(24.0 * c, 24.0 * s),
+        corner(60.0, 30.0),
+        corner(100.0, 30.0),
+        corner(100.0, 70.0),
+        corner(60.0, 70.0)
+    );
+    let canvas = render_artboard(&d);
+    // The moved square lies beyond where it was: its center, turned and moved, is near (100.8, 62).
+    assert!(canvas.over_white(101, 62) != [255, 255, 255], "drawn where the offset puts it");
+    assert_similar(&canvas, &resvg_render(&svg(&reference), 200, 120), 40.0, 0.02);
 }
 
 #[test]
@@ -636,6 +753,69 @@ fn filtered_rect(xml: &str) -> Document {
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
     d
+}
+
+/// An SVG filter in a scaled, turned or skewed user space is written live: the filter's user space
+/// is a group's transform, and the art is written in document coordinates in a group inside the
+/// filter that maps it back, so its stroke keeps its width. Opened again, it is the same effect
+/// and draws as the canvas drew it.
+#[test]
+fn an_exported_turned_filter_opens_as_the_same_effect() {
+    let xml = r#"<filter id="m" x="-1" y="-1" width="3" height="3"><feOffset dx="10"/><feColorMatrix type="hueRotate" values="90"/></filter>"#;
+    for (scale, axes) in [(2.0, json!([0.8, 0.6, -0.6, 0.8])), (1.0, json!([1.0, 0.0, 0.5, 1.0])), (0.5, serde_json::Value::Null)] {
+        let mut d = Document::new(200.0, 120.0);
+        let mut n = Node::path(
+            d.alloc_id(),
+            shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::solid(Color::BLACK), 4.0),
+        );
+        let mut params = json!({ "xml": xml, "scale": scale, "origin": [30.0, 10.0] });
+        if !axes.is_null() {
+            params["axes"] = axes.clone();
+        }
+        n.appearance.effects = vec![Effect { id: "svg.filter".into(), params, visible: true }];
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, n).unwrap();
+        let out = export(&d, &ExportOptions::default());
+        assert!(out.contains("<g filter=\"url(#") && !out.contains("<image"), "{out}");
+        assert!(out.contains("stroke-width=\"4\""), "the stroke keeps its width: {out}");
+        let (back, w) = import_with_report(&out).unwrap();
+        assert!(w.is_empty(), "{w:?}");
+        let fx = effects(&back);
+        assert_eq!(fx.len(), 1, "{out}");
+        let num = |v: &serde_json::Value| v.as_f64().unwrap();
+        assert!((num(&fx[0].params["scale"]) - scale).abs() < 1e-6, "{:?}", fx[0].params);
+        let origin: Vec<f64> = fx[0].params["origin"].as_array().unwrap().iter().map(num).collect();
+        assert!((origin[0] - 30.0).abs() < 1e-6 && (origin[1] - 10.0).abs() < 1e-6, "{origin:?}");
+        match fx[0].params.get("axes") {
+            Some(got) => {
+                let got: Vec<f64> = got.as_array().unwrap().iter().map(num).collect();
+                let want: Vec<f64> = axes.as_array().unwrap().iter().map(num).collect();
+                assert!(got.iter().zip(&want).all(|(a, b)| (a - b).abs() < 1e-6), "{got:?}");
+            }
+            None => assert!(axes.is_null(), "{:?}", fx[0].params),
+        }
+        assert_similar(&render_artboard(&d), &render_artboard(&back), 40.0, 0.02);
+    }
+    // A user space stretched 10,000 times along x: the inverse transform holds 0.0001, which the
+    // export's three decimals would round to 0, and the art still opens at its place.
+    let mut d = Document::new(200.0, 120.0);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(40.0, 20.0, 100.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.1, 0.1)), Paint::None, 0.0),
+    );
+    let xml = r#"<filter id="k"><feColorMatrix type="hueRotate" values="90"/></filter>"#;
+    let params = json!({ "xml": xml, "scale": 10.0, "axes": [1000.0, 0.0, 0.0, 1.0] });
+    n.appearance.effects = vec![Effect { id: "svg.filter".into(), params, visible: true }];
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = export(&d, &ExportOptions::default());
+    let (back, w) = import_with_report(&out).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let bounds = |d: &Document| art(d).iter().find_map(|n| n.path_data().and_then(|p| p.bounds())).unwrap();
+    let (a, b) = (bounds(&d), bounds(&back));
+    assert!((a.x0 - b.x0).abs() < 1e-3 && (a.x1 - b.x1).abs() < 1e-3 && (a.y1 - b.y1).abs() < 1e-3, "{a:?} {b:?}: {out}");
 }
 
 /// SVG 1.1 export writes an SVG filter's image reference as `xlink:href`, and it imports back.
