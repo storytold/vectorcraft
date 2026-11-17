@@ -1775,8 +1775,8 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "General:"))]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
     assert!(painted(&texts, general), "the General row's sentence shows: {texts:?}");
-    // Go to the Guides & Grid category and point at a row with no sentence.
-    let button = at(&texts, "Guides & Grid");
+    // Go to the Slices category and point at a row with no sentence.
+    let button = at(&texts, "Slices");
     let press = |pressed| egui::Event::PointerButton { pos: button, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(button), press(true), press(false)]);
     let (texts, _) = description_frame(&mut a, &ctx, vec![]);
@@ -1790,13 +1790,13 @@ fn a_row_without_a_description_leaves_the_line_empty() {
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
     empty(&after, "on the line after changing category");
-    assert_eq!(descriptions::description("gridlineEvery"), None);
-    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "Gridline every:"))]);
+    assert_eq!(descriptions::description("showSliceNumbers"), None);
+    description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(at(&texts, "Show Slice Numbers"))]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on Gridline every");
+    empty(&after, "on Show Slice Numbers");
     description_frame(&mut a, &ctx, vec![egui::Event::PointerMoved(line.center())]);
     let (after, _) = description_frame(&mut a, &ctx, vec![]);
-    empty(&after, "on the line after Gridline every");
+    empty(&after, "on the line after Show Slice Numbers");
     assert_eq!(preferences_window(&ctx).size(), size);
 }
 
