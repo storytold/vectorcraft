@@ -369,6 +369,50 @@ fn a_pattern_swatch_named_after_its_pattern_reuses_one_added_in_the_same_call() 
     assert_eq!(d.swatches_iter().filter(|w| matches!(&w.paint, Paint::Pattern { pattern, .. } if pattern == "Dots")).count(), 1, "{r}");
 }
 
+/// A library pattern painted with another pattern is not taken for a document pattern with the
+/// same art when the pattern its art paints with differs: it comes in as a numbered copy with its
+/// own inner pattern, and adding it again reuses that copy.
+#[test]
+fn a_pattern_painted_with_another_pattern_is_not_matched_by_the_inner_patterns_name() {
+    use std::sync::Arc;
+    use vectorcraft_doc::pattern::pattern_paint;
+    // `Inner` with a tile of `inner` points, `Dots` painted with it, and swatch `Tiles` painting `Dots`.
+    let make = |d: &mut vectorcraft_doc::Document, inner: f64| {
+        let dot = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(0.0, 0.0, 2.0, 2.0));
+        let dot = vectorcraft_doc::Node::path(d.alloc_id(), dot, vectorcraft_doc::Appearance::default_art());
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, inner, inner);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Inner", vec![Arc::new(dot)]) });
+        let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 6.0, 6.0));
+        let square = vectorcraft_doc::Node::path(d.alloc_id(), square, vectorcraft_doc::Appearance::basic(pattern_paint("Inner"), Paint::None, 0.0));
+        let tile = vectorcraft_geom::Rect::new(0.0, 0.0, 8.0, 8.0);
+        d.patterns.push(vectorcraft_doc::PatternDef { tile, ..vectorcraft_doc::PatternDef::new("Dots", vec![Arc::new(square)]) });
+        d.swatches.push(vectorcraft_color::Swatch { name: "Tiles".into(), paint: pattern_paint("Dots"), global: false, spot: false });
+    };
+    let mut s = session();
+    s.edit("Pattern", |d, _| {
+        make(d, 4.0);
+        Ok(())
+    })
+    .unwrap();
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let id = run(&mut s, "swatch.library.load", json!({"dataBase64": b64, "name": "Dots.vectorcraft"}))["library"].clone();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    s.edit("Pattern", |d, _| {
+        make(d, 5.0);
+        Ok(())
+    })
+    .unwrap();
+    let r = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles"]}));
+    assert_eq!((&r["added"], &r["existing"]), (&json!(["Tiles 2"]), &json!([])), "{r}");
+    let d = doc(&s);
+    let Some(Paint::Pattern { pattern, .. }) = d.swatch("Tiles 2").map(|w| &w.paint) else { panic!("no pattern swatch Tiles 2: {r}") };
+    let inner = d.pattern(pattern).and_then(|p| p.art.first()).map(|n| n.appearance.fill_paint());
+    let Some(Paint::Pattern { pattern: inner, .. }) = inner else { panic!("the added pattern is not painted with a pattern: {r}") };
+    assert_eq!(d.pattern(&inner).map(|p| p.tile), Some(vectorcraft_geom::Rect::new(0.0, 0.0, 4.0, 4.0)), "the library's inner pattern");
+    let again = run(&mut s, "swatch.library.add", json!({"library": id, "names": ["Tiles"]}));
+    assert_eq!((&again["added"], &again["existing"]), (&json!([]), &json!(["Tiles 2"])), "{again}");
+}
+
 #[test]
 fn swatch_exchange_files_load_add_and_list_as_user_libraries() {
     let bytes = vectorcraft_testkit::ase::sample();

@@ -939,7 +939,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let there = |w: &Swatch| match (&w.paint, &patterns) {
         (Paint::Pattern { pattern, .. }, Some(src)) => {
-            patternlib::existing_pattern(d, src, pattern).and_then(|target| library_pattern_swatch(d, w, &target))
+            patternlib::present_pattern(d, src, pattern).and_then(|target| library_pattern_swatch(d, w, &target))
         }
         _ => match by_name.get(w.name.as_str()) {
             Some(x) => x.paint == w.paint,
