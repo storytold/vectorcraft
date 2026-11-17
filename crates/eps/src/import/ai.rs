@@ -41,6 +41,8 @@ pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
 pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGIN, outline as envelope_outline, upright as envelope_upright};
 pub(crate) use envelope::{MAX_ANY as ENVELOPE_MAX_ANY, MAX_SOLID as ENVELOPE_MAX_SOLID};
 pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
+#[cfg(test)]
+pub(crate) use frames::TEXT_FRAME_SCANS;
 pub(crate) use frames::text_frames;
 pub use obj::{NameEncoding, Names};
 pub(crate) use paint::MAX_STOPS as MAX_GRADIENT_STOPS;

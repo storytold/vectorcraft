@@ -2101,7 +2101,8 @@
 	Locked	લૉક કરેલું
 	Long	લાંબું
 	Longest:	સૌથી લાંબું:
-	Lossless (lossy WebP isn't available yet)	લોસલેસ (લોસી WebP હજી ઉપલબ્ધ નથી)
+	Lossless	લોસલેસ
+	Lossy	લોસી
 	Lossy:	લોસી:
 	Luminosity	લ્યુમિનોસિટી
 	Magic Wand	મૅજિક વૅન્ડ
@@ -3408,6 +3409,7 @@
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
 	Type to search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધવા માટે લખો
 	Recent	તાજેતરના
+	Search commands	આદેશો શોધો
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
 	Secondary	ગૌણ
