@@ -1221,6 +1221,55 @@ fn the_document_filter_counts_type_in_graph_designs() {
     assert_eq!(names, ["inter", "jetbrains mono"]);
 }
 
+/// Type in the art of a stored scatter brush counts as the document's type, as a scatter stroke
+/// draws it, after a malformed library entry too. Type in an art or pattern brush's art does not,
+/// as those brushes leave type out when they bend their art.
+#[test]
+fn the_document_filter_counts_type_in_scatter_brushes() {
+    let mut app = app_with_type(&["Inter"]);
+    let mut art = |font: &str| {
+        let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Dot", "font": font})).unwrap()["id"].as_u64().unwrap();
+        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().expect("the new type");
+        app.run("edit.undo", serde_json::json!({})).unwrap();
+        node
+    };
+    let (scatter, bent, tiled) = (art("JetBrains Mono"), art("Source Serif 4"), art("Source Sans 3"));
+    let brush = |name: &str, kind| serde_json::to_value(vectorcraft_brush::Brush { name: name.into(), kind }).unwrap();
+    let library = serde_json::json!([
+        {"name": "Broken", "type": "scatter", "art": 7},
+        brush("Art", vectorcraft_brush::BrushKind::Art(vectorcraft_brush::ArtBrush { art: bent, ..Default::default() })),
+        brush("Pattern", vectorcraft_brush::BrushKind::Pattern(vectorcraft_brush::PatternBrush { side: tiled, ..Default::default() })),
+        brush("Dots", vectorcraft_brush::BrushKind::Scatter(vectorcraft_brush::Scatter { art: scatter, ..Default::default() })),
+    ]);
+    let mut doc = (*app.session.active().unwrap().doc).clone();
+    doc.unknown.insert(vectorcraft_brush::DOC_KEY.into(), library);
+    let db = vectorcraft_text::FontDb::global();
+    let mut names: Vec<_> = super::document_families(db, &doc).into_iter().collect();
+    names.sort();
+    assert_eq!(names, ["inter", "jetbrains mono"]);
+}
+
+/// A scatter brush made of type keeps its family in the Document filter after the type is deleted;
+/// deleting the brush takes the family out, and undoing the deletion brings it back.
+#[test]
+fn the_document_filter_follows_a_scatter_brushs_edits_and_undo() {
+    let mut app = app_with_type(&["Inter"]);
+    let id = app.run("text.create", serde_json::json!({"x": 20, "y": 90, "text": "Dot", "font": "JetBrains Mono"})).unwrap()["id"].clone();
+    let name = app.run("brush.new", serde_json::json!({"type": "scatter", "name": "Type Dots"})).unwrap()["name"].clone();
+    app.run("edit.clear", serde_json::json!({"ids": [id]})).unwrap();
+    let db = vectorcraft_text::FontDb::global();
+    let families = |app: &crate::VectorcraftApp| {
+        let mut names: Vec<_> = super::document_families(db, &app.session.active().unwrap().doc).into_iter().collect();
+        names.sort();
+        names
+    };
+    assert_eq!(families(&app), ["inter", "jetbrains mono"], "the brush's type");
+    app.run("brush.delete", serde_json::json!({"name": name})).unwrap();
+    assert_eq!(families(&app), ["inter"], "the brush deleted");
+    app.run("edit.undo", serde_json::json!({})).unwrap();
+    assert_eq!(families(&app), ["inter", "jetbrains mono"], "the deletion undone");
+}
+
 /// A run whose family and style were split from a PostScript name (as an importer without the font
 /// splits one) counts under the family of the installed font of that name, found with its style.
 #[test]
