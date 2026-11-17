@@ -59,7 +59,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         }
         if preset.is_none()
-            && let Some(v) = widgets::plain_field(ui, "raster-ppi", ppi, " ppi", 0, 80.0)
+            && let Some(v) = widgets::plain_field(ui, "raster-ppi", ppi, &super::ppi_suffix(), 0, 80.0)
         {
             d.fields.insert("resolution".into(), json!(v));
         }
@@ -124,7 +124,7 @@ pub(super) fn effect_fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dia
         }
         if !document
             && preset.is_none()
-            && let Some(v) = widgets::plain_field(ui, "rasterize-ppi", ppi, " ppi", 0, 80.0)
+            && let Some(v) = widgets::plain_field(ui, "rasterize-ppi", ppi, &super::ppi_suffix(), 0, 80.0)
         {
             d.fields.insert("resolution".into(), json!(v));
         }

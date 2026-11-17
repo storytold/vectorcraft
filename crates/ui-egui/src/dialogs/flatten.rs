@@ -220,7 +220,7 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
                     if let Some(n) = widgets::range_field_named(ui, (id, key), Some(label), *v, 1.0..=2400.0, "", 0, FIELD) {
                         *v = n;
                     }
-                    dim(ui, "ppi");
+                    dim(ui, super::ppi_suffix().trim());
                 });
                 ui.end_row();
             }

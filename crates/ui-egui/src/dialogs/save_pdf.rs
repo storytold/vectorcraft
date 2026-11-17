@@ -561,9 +561,10 @@ fn image_rows(ui: &mut egui::Ui, d: &mut Dialog, key: &str, title: &str) {
     ui.horizontal(|ui| {
         pick::<Downsample>(ui, d, &format!("{base}.downsample"), 150.0, |_| true);
         ui.label(tl!("to"));
-        number(ui, d, &format!("{base}.ppi"), " ppi", on);
+        let ppi = super::ppi_suffix();
+        number(ui, d, &format!("{base}.ppi"), &ppi, on);
         ui.label(tl!("above"));
-        number(ui, d, &format!("{base}.abovePpi"), " ppi", on);
+        number(ui, d, &format!("{base}.abovePpi"), &ppi, on);
     });
     ui.horizontal(|ui| {
         ui.label(tl!("Compression:"));

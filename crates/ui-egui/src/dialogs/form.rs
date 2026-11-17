@@ -778,6 +778,12 @@ pub(crate) fn unit_suffix(unit: &str) -> String {
     if unit.is_empty() || unit.starts_with(['°', '%', '′', '″']) { unit.to_string() } else { format!(" {unit}") }
 }
 
+/// What a resolution field shows after its value in the interface language: the `{n} ppi` row
+/// without its number (" ppi", French " ppp").
+pub(crate) fn ppi_suffix() -> String {
+    crate::i18n::fill_once(tl!("{n} ppi"), &[("n", "")])
+}
+
 /// A number of a list as [`value_field`] shows it: at most 4 decimals, without trailing zeros.
 fn number_text(x: f64) -> String {
     let s = format!("{x:.4}");
@@ -1152,6 +1158,27 @@ mod plugin_field_tests {
     fn units_follow_the_number() {
         let shown = |unit| format!("5{}", unit_suffix(unit));
         assert_eq!([shown("mm"), shown("°"), shown("%"), shown("1/min"), shown("µm")], ["5 mm", "5°", "5%", "5 1/min", "5 µm"]);
+    }
+
+    /// A resolution field's unit is the `{n} ppi` row without its number.
+    #[test]
+    fn the_ppi_unit_is_translated() {
+        assert_eq!(ppi_suffix(), " ppi");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let fr = ppi_suffix();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(fr, " ppp");
+    }
+
+    /// [`ppi_suffix`] drops the number from the `{n} ppi` row, so every catalog writes the number
+    /// first and then a space before the unit.
+    #[test]
+    fn every_catalog_writes_the_ppi_unit_after_the_number() {
+        for lang in crate::i18n::Lang::all() {
+            let row = crate::i18n::tr(lang, "{n} ppi");
+            let unit = row.strip_prefix("{n}").unwrap_or_default();
+            assert!(unit.starts_with(char::is_whitespace) && !unit.trim().is_empty(), "{}: {row:?}", lang.code());
+        }
     }
 
     #[test]

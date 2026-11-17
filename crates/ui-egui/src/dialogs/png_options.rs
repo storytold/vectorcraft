@@ -148,7 +148,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("__otherPpi".into(), json!(i == 3));
             }
             if preset.is_none()
-                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, 1.0..=4608.0, " ppi", 0, 80.0)
+                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, 1.0..=4608.0, &super::ppi_suffix(), 0, 80.0)
             {
                 d.fields.insert("ppi".into(), json!(v));
             }
