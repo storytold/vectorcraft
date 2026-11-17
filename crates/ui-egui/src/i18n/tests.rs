@@ -1739,6 +1739,92 @@ fn menu_labels() -> Vec<(&'static str, &'static str, serde_json::Value)> {
     labels
 }
 
+/// The effect an Effect menu item (`effect.apply` or `effect.dialog`) runs.
+fn menu_item_effect<'a>(id: &str, p: &'a serde_json::Value) -> Option<&'a str> {
+    p.get("effect").and_then(serde_json::Value::as_str).filter(|_| matches!(id, "effect.apply" | "effect.dialog"))
+}
+
+/// The label a menu item shows in `lang`, as the menus resolve it: an Effect menu item by its
+/// effect's `@id` row when the catalog has one, any other command by its id's row or its English
+/// label, and a submenu or an unbuilt item by its English label.
+fn shown_menu_label(lang: Lang, item: &crate::menus::Item) -> Option<&'static str> {
+    use crate::menus::Item;
+    match item {
+        Item::Cmd(l, id, p) => {
+            let by_effect = menu_item_effect(id, p).map(|e| tr_id(lang, e, "")).filter(|s| !s.is_empty());
+            Some(by_effect.unwrap_or_else(|| tr_id(lang, id, l)))
+        }
+        Item::Todo(l, _) | Item::Sub(l, _) => Some(tr(lang, l)),
+        Item::Header(_) | Item::Sep => None,
+    }
+}
+
+/// Items side by side in a menu show different labels in every language, so each can be told
+/// from the others. Items with the same English label (the slots of a recent-files list) are
+/// alike in every language.
+#[test]
+fn menu_items_side_by_side_have_different_labels() {
+    use crate::menus::Item;
+    fn walk(lang: Lang, path: &str, items: &[Item], out: &mut Vec<String>) {
+        let mut seen: std::collections::BTreeMap<&str, (&str, &str)> = std::collections::BTreeMap::new();
+        for item in items {
+            let Some(shown) = shown_menu_label(lang, item) else { continue };
+            let (english, what) = match item {
+                Item::Cmd(l, id, p) => (*l, menu_item_effect(id, p).unwrap_or(id)),
+                Item::Todo(l, _) | Item::Sub(l, _) => (*l, "submenu or unbuilt item"),
+                Item::Header(_) | Item::Sep => continue,
+            };
+            match seen.get(shown) {
+                Some(&(other, other_what)) if other != english => {
+                    out.push(format!("{}: {path}: {other:?} ({other_what}) and {english:?} ({what}) both show {shown:?}", lang.0.code));
+                }
+                Some(_) => {}
+                None => {
+                    seen.insert(shown, (english, what));
+                }
+            }
+            if let Item::Sub(l, children) = item {
+                walk(lang, &format!("{path} › {l}"), children, out);
+            }
+        }
+    }
+    let tree = crate::menus::menu_tree();
+    let mut same = vec![];
+    for l in &LANGUAGES {
+        for (title, items) in &tree {
+            walk(Lang(l), title, items, &mut same);
+        }
+    }
+    assert!(same.is_empty(), "{} pairs of menu items look alike:\n{}", same.len(), same.join("\n"));
+}
+
+/// Menu items show words, never the command or effect id their catalog row is keyed by.
+#[test]
+fn menu_items_never_show_an_id() {
+    fn walk(lang: Lang, items: &[crate::menus::Item], out: &mut Vec<String>) {
+        for item in items {
+            if let crate::menus::Item::Cmd(l, id, p) = item {
+                let key = menu_item_effect(id, p).unwrap_or(id);
+                let shown = shown_menu_label(lang, item).unwrap_or_default();
+                if !command_ids(shown).is_empty() && command_ids(l).is_empty() {
+                    out.push(format!("{}: {l:?} ({key}) shows {shown:?}", lang.0.code));
+                }
+            }
+            if let crate::menus::Item::Sub(_, children) = item {
+                walk(lang, children, out);
+            }
+        }
+    }
+    let tree = crate::menus::menu_tree();
+    let mut ids = vec![];
+    for l in &LANGUAGES {
+        for (_, items) in &tree {
+            walk(Lang(l), items, &mut ids);
+        }
+    }
+    assert!(ids.is_empty(), "{} menu items show an id:\n{}", ids.len(), ids.join("\n"));
+}
+
 /// The labels toggling items switch to ("Show Guides" once guides are hidden…), from a document
 /// with every toggle flipped.
 fn toggled_labels() -> Vec<String> {
@@ -1968,6 +2054,50 @@ fn georgian_rows_have_no_mtavruli() {
     let (entries, _) = parse_entries(ka().0.source);
     let caps: Vec<_> = entries.iter().filter(|(_, _, tr)| tr.chars().any(|c| matches!(c, '\u{1C90}'..='\u{1CBF}'))).collect();
     assert!(caps.is_empty(), "Mtavruli in ka.tsv: {caps:?}");
+}
+
+/// French rows follow the typography fr.tsv's header sets: a no-break space before : ; ? ! and inside
+/// « », and the typographic apostrophe ’ in elisions. Text in backticks is code and is not checked, and
+/// a straight apostrophe inside double quotes is a literal value.
+#[test]
+fn french_catalog_uses_nonbreaking_prose_punctuation() {
+    let (entries, _) = parse_entries(fr().0.source);
+    let letter = |c: Option<char>| c.is_some_and(char::is_alphabetic);
+    let mut bad = Vec::new();
+    for (ctx, src, tr) in &entries {
+        let mut code = false;
+        let prose: Vec<char> = tr
+            .chars()
+            .map(|c| {
+                if c == '`' {
+                    code = !code;
+                }
+                if code || c == '`' { '\0' } else { c }
+            })
+            .collect();
+        let mut quoted = false;
+        for (i, &c) in prose.iter().enumerate() {
+            let prev = i.checked_sub(1).map(|j| prose[j]);
+            let next = prose.get(i + 1).copied();
+            if c == '"' {
+                quoted = !quoted;
+            }
+            let fault = match c {
+                ':' | ';' | '?' | '!' if prev == Some(' ') => "has an ordinary space before it",
+                ';' | '?' | '!' if letter(prev) && next.is_none_or(|n| n == ' ') => "has no space before it",
+                '«' if next == Some(' ') => "has an ordinary space after it",
+                '»' if prev == Some(' ') => "has an ordinary space before it",
+                '\'' if !quoted && letter(prev) && letter(next) => "is a straight apostrophe where an elision takes ’",
+                _ => continue,
+            };
+            bad.push(format!("{ctx}\t{src}: `{c}` {fault}"));
+        }
+    }
+    assert!(bad.is_empty(), "{} French spacing faults:\n{}", bad.len(), bad.join("\n"));
+}
+
+fn fr() -> Lang {
+    Lang::from_code("fr").expect("fr registered")
 }
 
 fn de() -> Lang {
@@ -2229,6 +2359,22 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
             let english = ["completed", "locked", "hidden", "object", "objects", "unchanged"];
             assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {shown}");
             assert!(counts.iter().all(|n| shown.contains(n)), "{code}: {shown}");
+        }
+    }
+}
+
+/// The error that `text.setFormat` and the paragraph style commands give when a justification
+/// setting's Minimum, Desired and Maximum are out of order is translated in every
+/// complete-message language, with the setting's name kept.
+#[test]
+fn justification_order_error_translates_with_the_setting_name() {
+    for name in ["wordSpacing", "justification.glyph_scaling"] {
+        let error = format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            let shown = message(lang, &error);
+            assert!(shown != error && !shown.contains("Desired"), "{code}: {shown}");
+            assert!(shown.contains(&format!("`{name}`")), "{code}: {shown}");
         }
     }
 }
@@ -2773,7 +2919,7 @@ fn plugin_errors_translate_with_their_values() {
     }
     assert_eq!(message(de(), &errors[1].0), "Plug-in-Manifest: das Manifest ist 65537 Byte groß (Grenze 65536)");
     let fr = Lang::from_code("fr").expect("registered");
-    assert!(message(fr, &errors[3].0).ends_with(r#"attendu : {"objects": [...]}"#), "{}", message(fr, &errors[3].0));
+    assert!(message(fr, &errors[3].0).ends_with("attendu\u{a0}: {\"objects\": [...]}"), "{}", message(fr, &errors[3].0));
 }
 
 /// The reasons the plug-in host puts inside its errors (what is wrong with a parameter's spec or
@@ -2874,6 +3020,36 @@ fn three_d_refusals_are_translated_in_every_complete_catalog() {
     assert!(missing.is_empty(), "{} 3D messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
 }
 
+/// The Eraser's range refusals (`path.eraseRegion` `angle` and `roundness`) and the Scissors' (`path.split`
+/// `t`) show in every complete-message language with the key and the range numbers as given; the
+/// error the command returns stays English.
+#[test]
+fn eraser_and_scissors_range_refusals_translate_with_their_values() {
+    use serde_json::json;
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    let refusals = [
+        ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "angle": 200}), "`angle`", ["-180", "180"]),
+        ("path.eraseRegion", json!({"points": [[10, 10], [60, 10]], "roundness": 0}), "`roundness`", ["1", "100"]),
+        ("path.split", json!({"id": id, "segment": 0, "t": 1.5}), "`t`", ["0", "1"]),
+    ];
+    for (cmd, p, key, numbers) in &refusals {
+        let e = s.execute(cmd, p).unwrap_err().to_string();
+        assert!(e.starts_with(&format!("invalid parameters for `{cmd}`: ")) && e.contains(key) && e.contains(" must be from "), "{e}");
+        assert_eq!(message(Lang::EN, &e), e);
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &e);
+            assert!(!shown.contains(" must be from ") && shown.contains(&format!("`{cmd}`")) && shown.contains(key), "{code}: {e} -> {shown}");
+            assert!(numbers.iter().all(|n| shown.contains(n)), "{code}: {e} -> {shown}");
+        }
+    }
+    assert_eq!(
+        message(de(), &s.execute("path.eraseRegion", &json!({"points": [[10, 10], [60, 10]], "roundness": 101})).unwrap_err().to_string()),
+        "ungültige Parameter für `path.eraseRegion`: `roundness` muss zwischen 1 und 100 % liegen"
+    );
+}
+
 /// A 3D effect's refusal shows in the interface language whole, with the effect's translated
 /// name, and with its numbers, the parameter keys it names and a symbol's name as given; the
 /// error the command returns stays English.
@@ -2927,6 +3103,98 @@ fn three_d_refusals_translate_with_their_values() {
         assert!(label != "Extrude & Bevel" && symbol.contains(&label), "{code}: the effect's name is translated: {symbol}");
     }
     assert_eq!(message(de(), &errors[1].0), "ungültige Parameter für `effect.apply`: Licht: intensity muss eine Zahl von 0 bis 100 sein");
+}
+
+/// The values SVG filter refusals put in `{what}` that are messages of their own: the attributes
+/// over their limit, named with their element. `kernelUnitLength` is an attribute's name as written.
+const SVG_FILTER_PARTS: &[&str] = &["feConvolveMatrix's order", "feMorphology's radius", "a blur's stdDeviation"];
+
+/// The SVG filter check's refusals as catalog templates: the messages of `svg_filter.rs` that
+/// [`source_messages`] finds, the XML errors its `map_err` closures make included.
+fn svg_filter_refusals() -> std::collections::BTreeSet<String> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../effects/src/svg_filter.rs");
+    let text = std::fs::read_to_string(path).expect("the SVG filter source");
+    let code = without_test_module(&text);
+    let mut consts = std::collections::BTreeMap::new();
+    for (name, value) in str_consts(code) {
+        consts.entry(name).or_insert_with(Vec::new).push(value);
+    }
+    source_messages(code, &[], &consts).into_iter().collect()
+}
+
+/// The SVG filter check's refusals, and the attributes they name, have an `@msg` row in every
+/// complete-message catalog.
+#[test]
+fn svg_filter_refusals_are_translated_in_every_complete_catalog() {
+    let refusals = svg_filter_refusals();
+    assert!(refusals.len() >= 16, "scan found only {} SVG filter refusals: {refusals:?}", refusals.len());
+    for m in [
+        "the SVG filter isn't valid XML: {e}",
+        "an SVG filter's id is at most {MAX_NAME} characters",
+        "<{_1}> isn't an element of an SVG filter",
+        "{what} is at most {max}",
+        "an SVG filter is at most {_1} KB",
+    ] {
+        assert!(refusals.contains(m), "the scan reads map_err closures and format! arguments: {m}");
+    }
+    let mut missing = vec![];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let rows: std::collections::BTreeSet<&str> = entries.iter().filter(|(ctx, _, _)| ctx == "@msg").map(|(_, src, _)| src.as_str()).collect();
+        let parts = SVG_FILTER_PARTS.iter().map(|p| p.to_string());
+        missing.extend(refusals.iter().cloned().chain(parts).filter(|m| !rows.contains(m.as_str())).map(|m| format!("{code}: {m}")));
+    }
+    assert!(missing.is_empty(), "{} SVG filter messages have no @msg row:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// An SVG filter's refusal shows in the interface language whole, with the limits, element and
+/// attribute names and the XML parser's position as given; the error the command returns stays
+/// English.
+#[test]
+fn svg_filter_refusals_translate_with_their_values() {
+    let refuse = |xml: &str| {
+        let e = vectorcraft_effects::svg_filter::check(xml).expect_err("refused");
+        vectorcraft_engine::EngineError::BadParams { cmd: "svgFilter.define".into(), msg: e }.to_string()
+    };
+    let fe = |inner: &str| refuse(&format!("<filter id=\"f\">{inner}</filter>"));
+    let deep = format!("<filter id=\"f\">{}{}</filter>", "<feMerge>".repeat(20), "</feMerge>".repeat(20));
+    let errors = [
+        (refuse("<filter id=\"f\"><feOffset dx=\"2\"></filter>"), "isn't valid XML", vec![]),
+        (refuse("<filter><feOffset dx=\"2\"/></filter>"), "needs an id", vec!["<filter>", "id"]),
+        (refuse(&format!("<filter id=\"{}\"><feOffset dx=\"2\"/></filter>", "f".repeat(256))), "characters", vec!["id", "255"]),
+        (fe("<script/>"), "isn't an element", vec!["<script>"]),
+        (fe("<feOffset onload=\"x\"/>"), "event attributes", vec!["onload"]),
+        (fe("<feImage href=\"https://example.com/a.png\"/>"), "or WebP", vec!["PNG", "JPEG", "GIF", "WebP", "data:"]),
+        (fe("<feTurbulence numOctaves=\"12\"/>"), "is at most", vec!["feTurbulence", "numOctaves", "10"]),
+        (fe("<feConvolveMatrix order=\"12\" kernelMatrix=\"1\"/>"), "is at most", vec!["feConvolveMatrix", "order", "9"]),
+        (fe("<feMorphology radius=\"200\"/>"), "is at most", vec!["feMorphology", "radius", "100"]),
+        (fe("<feGaussianBlur stdDeviation=\"600\"/>"), "is at most", vec!["stdDeviation", "500"]),
+        (fe("<feDiffuseLighting kernelUnitLength=\"200\"><feDistantLight/></feDiffuseLighting>"), "is at most", vec!["kernelUnitLength", "100"]),
+        (refuse("<filter id=\"f\"/>"), "has no primitives", vec![]),
+        (refuse(&deep), "nest at most", vec!["16"]),
+        (refuse(&format!("<filter id=\"f\"><desc>{}</desc></filter>", "x".repeat(70_000))), "is at most", vec!["64"]),
+    ];
+    for (e, english, _) in &errors {
+        assert!(e.starts_with("invalid parameters for `svgFilter.define`: ") && e.contains(english), "{e}");
+        assert_eq!(message(Lang::EN, e), *e);
+    }
+    let at = errors[0].0.rsplit_once(" at ").map(|(_, p)| p.to_string()).expect("the parser's position");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (e, english, kept) in &errors {
+            let shown = message(lang, e);
+            assert!(!shown.contains(english) && shown.contains("`svgFilter.define`"), "{code}: {e} -> {shown}");
+            assert!(kept.iter().all(|k| shown.contains(k)), "{code}: {e} -> {shown}");
+        }
+        assert!(message(lang, &errors[0].0).contains(&at), "{code}: the parser's position stays as given");
+        for (e, part) in errors[7..10].iter().zip(SVG_FILTER_PARTS) {
+            let shown = message(lang, &e.0);
+            let named = message(lang, part);
+            assert!(named != *part && shown.contains(&named), "{code}: {part} is translated in {shown}");
+        }
+    }
+    assert_eq!(message(de(), &errors[2].0), "ungültige Parameter für `svgFilter.define`: die id eines SVG-Filters hat höchstens 255 Zeichen");
 }
 
 /// A value a message quotes is a name and is shown as written, even when a catalog row translates
@@ -4096,7 +4364,41 @@ fn the_keep_colors_trace_warnings_are_translated() {
         image::Rgba(if (10..30).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255, 255, 255, 255] })
     });
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     let mut warnings = vec![];
     for (params, shown) in [

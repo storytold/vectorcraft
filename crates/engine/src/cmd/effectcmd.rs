@@ -97,7 +97,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too; a symbol instance whose topmost fill or stroke is visible, has an opacity above 0 and has a geometry effect becomes a group of its art, that fill's effects reshaping the art's filled shapes and that stroke's effects reshaping its stroked shapes, as the canvas draws them. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked. Hidden fills, strokes and effects are dropped. In Safe Mode, an object with a visible plug-in effect (in it, or in a symbol it places) is an error and nothing changes. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too; a symbol instance whose topmost fill or stroke is visible, has an opacity above 0 and has a geometry or raster effect becomes a group of its art, that fill's effects reshaping the art's filled shapes and that stroke's effects reshaping its stroked shapes, as the canvas draws them, its raster effects an image as for other objects; a symbol instance in that art whose topmost fill or stroke has such an effect (its own or one the outer instance passes on) becomes its art and image in turn. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked. Hidden fills, strokes and effects are dropped. One expansion makes at most 1,024 images of raster effects, 256 megapixels in all (VectorCraft's own limits): an object or symbol instance whose image would go past them stays as it is, with its effects, and when nothing else expands that is an error. In Safe Mode, an object with a visible plug-in effect (in it, or in a symbol it places) is an error and nothing changes. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says; or raster effects were left past the limits), rasterLeft? (how many objects were left so)}",
             can_expand,
             expand_appearance
         ),
@@ -963,16 +963,74 @@ fn is_container(n: &Node) -> bool {
 
 /// The raster effects of `n` (its own, its fills' and strokes') as an embedded image rendered at
 /// the document's raster effects resolution or a Rasterize effect's finer one, with whether they
-/// all paint below it (shadows and outer glows: the image then holds just them). A group's or
-/// layer's image leaves out its members' raster effects, which are expanded with them. `None`
-/// when it has none.
-fn raster_image(d: &mut Document, n: &Node) -> Option<(Node, bool)> {
+/// all paint below it (shadows and outer glows: the image then holds just them, and paints with
+/// their blend mode when they all use one). A group's or layer's image leaves out its members'
+/// raster effects, which are expanded with them. `None` when it has none.
+/// `Err` when that image would take `budget` past its limits: the object then stays as it is.
+fn raster_image(d: &mut Document, n: &Node, budget: &mut RasterBudget) -> std::result::Result<Option<(Node, bool)>, OverBudget> {
     let fx = rasterfx::raster_fx(n);
     if fx.is_empty() {
-        return None;
+        return Ok(None);
     }
     let below = fx.iter().all(effects::RasterFx::is_below);
-    Some((rasterfx::raster_image(d, n, below, true)?, below))
+    let pixels = budget.take(rasterfx::raster_pixels(d, n, below, true))?;
+    let mut image = rasterfx::raster_image(d, n, below, true);
+    if image.is_none() {
+        // No image was made: it takes nothing from the budget.
+        budget.images += 1;
+        budget.pixels += pixels;
+    }
+    // Rendered alone, over nothing, the shadows and glows can't blend with the art below the
+    // object, so the image does, as the canvas draws them.
+    let mut modes = fx.iter().filter_map(effects::RasterFx::mode);
+    if below
+        && let (Some(mode), Some(image)) = (modes.next(), image.as_mut())
+        && modes.all(|m| m == mode)
+    {
+        image.blend = mode;
+    }
+    Ok(image.map(|image| (image, below)))
+}
+
+/// The most images of raster effects one Expand Appearance makes.
+const MAX_RASTER_IMAGES: u32 = 1_024;
+
+/// The most pixels the images of raster effects one Expand Appearance makes hold in all.
+const MAX_RASTER_PIXELS: u64 = 256_000_000;
+
+/// The note when objects keep their raster effects because their images would take an Expand
+/// Appearance past [`MAX_RASTER_IMAGES`] or [`MAX_RASTER_PIXELS`].
+pub(crate) const RASTER_EFFECTS_LEFT: &str =
+    "some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all";
+
+/// An image of raster effects that would take a [`RasterBudget`] past its limits.
+#[derive(Debug)]
+struct OverBudget;
+
+/// What one Expand Appearance has left of [`MAX_RASTER_IMAGES`] and [`MAX_RASTER_PIXELS`], and the
+/// objects whose raster effects it left as they are because their images would go past them.
+pub(crate) struct RasterBudget {
+    images: u32,
+    pixels: u64,
+    pub(crate) left: usize,
+}
+
+impl RasterBudget {
+    pub(crate) fn new() -> Self {
+        Self { images: MAX_RASTER_IMAGES, pixels: MAX_RASTER_PIXELS, left: 0 }
+    }
+
+    /// Take an image of `pixels` ([`rasterfx::raster_pixels`]) before it is made, and return
+    /// them; `Err`, with its object counted in `left`, when it would go past what is left.
+    fn take(&mut self, pixels: u64) -> std::result::Result<u64, OverBudget> {
+        if self.images == 0 || pixels > self.pixels {
+            self.left += 1;
+            return Err(OverBudget);
+        }
+        self.images -= 1;
+        self.pixels -= pixels;
+        Ok(pixels)
+    }
 }
 
 /// Expand the pieces of `m`, art evaluated from the object of the same id (its pieces share that
@@ -983,6 +1041,7 @@ fn raster_image(d: &mut Document, n: &Node) -> Option<(Node, bool)> {
 /// pieces with the ids they have before that. `kept` gets the new id of each object in them that
 /// had an id `skip` lists before. Returns what each of those other members' expansions lists, by
 /// the member's new id.
+#[allow(clippy::too_many_arguments)]
 fn expand_pieces(
     d: &mut Document,
     m: &mut Node,
@@ -991,6 +1050,7 @@ fn expand_pieces(
     skip: &[NodeId],
     kept: &mut Vec<NodeId>,
     stroke_art: effects::StrokeArt,
+    raster: &mut RasterBudget,
 ) -> std::collections::HashMap<NodeId, Vec<Listed>> {
     let id = m.id;
     let mut seen = std::collections::HashSet::from([id]);
@@ -1005,7 +1065,7 @@ fn expand_pieces(
         if all || c.id == id {
             effects::expand_art(d, c, stroke_art);
         } else if has_seeded(c) && repeats_an_id(c, &seen) {
-            listed = Some(expand_in_place(d, c, brushes, skip));
+            listed = Some(expand_in_place(d, c, brushes, skip, raster));
         }
         let mut was = vec![];
         if !skip.is_empty() {
@@ -1029,36 +1089,85 @@ fn expand_pieces(
     expanded
 }
 
+/// `m`, the art a 3D effect expanded into, with each object in it that has effects of its own (a
+/// shadow blurred by the light's Softness) expanded as Expand Appearance expands it on its own:
+/// a blurred shadow becomes an image. Groups in `m` without effects that hold such an object are
+/// looked into; the rest are left as they are. The objects `skip` lists are not expanded.
+fn expand_raster_pieces(d: &mut Document, mut m: Node, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId], raster: &mut RasterBudget) -> Node {
+    for c in m.children_mut().into_iter().flatten() {
+        if !c.appearance.effects.is_empty() {
+            if let Some(e) = expanded_node(d, (**c).clone(), brushes, skip, &mut vec![], raster) {
+                *c = Arc::new(e);
+            }
+        } else if c.children().is_some() {
+            let mut holds = false;
+            c.walk(&mut |n| holds |= !n.appearance.effects.is_empty());
+            if holds {
+                *c = Arc::new(expand_raster_pieces(d, (**c).clone(), brushes, skip, raster));
+            }
+        }
+    }
+    m
+}
+
 /// Replace each symbol instance in `m`, art an instance placed (`depth` instances deep), whose
-/// active fill or stroke has a geometry effect ([`effects::has_item_geometry`]) by its art as
-/// [`effects::expand_outlined`] makes it, and the instances in that art in turn, so
-/// [`expand_pieces`] bakes their effects with the rest. An instance stays as it is when it is more
-/// than [`vectorcraft_doc::depth::MAX_DEPTH`] instances deep, its symbol is missing, or its art
-/// would take the objects placed so far past `budget`.
-fn expand_nested_instances(d: &Document, m: &mut Node, depth: usize, budget: &mut u64) {
+/// active fill or stroke has a geometry or raster effect ([`effects::has_item_geometry`],
+/// [`effects::has_instance_row_raster`]) by its art ([`expanded_instance`]), and the instances in
+/// that art in turn, so [`expand_pieces`] bakes their effects with the rest.
+fn expand_nested_instances(d: &mut Document, m: &mut Node, depth: usize, budget: &mut u64, raster: &mut RasterBudget) {
     for c in m.children_mut().into_iter().flatten() {
         if !matches!(c.kind, NodeKind::SymbolInstance { .. }) {
             if c.children().is_some() {
-                expand_nested_instances(d, Arc::make_mut(c), depth, budget);
+                expand_nested_instances(d, Arc::make_mut(c), depth, budget, raster);
             }
             continue;
         }
-        let NodeKind::SymbolInstance { symbol, .. } = &c.kind else { continue };
-        if depth >= vectorcraft_doc::depth::MAX_DEPTH || !effects::has_item_geometry(c) {
-            continue;
-        }
-        let Some(sym) = d.symbols.iter().find(|s| s.name == *symbol) else { continue };
-        let count = sym.art.count() as u64;
-        if count > *budget {
-            continue;
-        }
-        *budget -= count;
-        let art = vectorcraft_render::instance_art(&sym.art, c);
-        if let Some(mut a) = effects::expand_outlined(Some(d), c, Some(&art)) {
-            expand_nested_instances(d, &mut a, depth + 1, budget);
+        if let Some(a) = expanded_instance(d, c, depth, budget, raster) {
             *c = Arc::new(a);
         }
     }
+}
+
+/// Symbol instance `c`, art an instance placed (`depth` instances deep), as art: the raster
+/// effects of its active fill or stroke an embedded image ([`raster_image`]) that replaces the art
+/// (blur, feather, inner glow) or goes below it (shadows, outer glows), and its art as
+/// [`effects::expand_outlined`] makes it without them, or as [`effects::instance_as_art`] does when
+/// it has no geometry effect, with the instances in that art expanded in turn. `None`, the instance
+/// staying as it is, when its active fill and stroke have no such effect, it is more than
+/// [`vectorcraft_doc::depth::MAX_DEPTH`] instances deep, its symbol is missing, or its art would
+/// take the objects placed so far past `budget`, or the image of its raster effects would take
+/// `raster` past its limits. When that image can't be made, they stay on the art its geometry
+/// effects make, and without one it stays as it is.
+fn expanded_instance(d: &mut Document, c: &Node, depth: usize, budget: &mut u64, raster: &mut RasterBudget) -> Option<Node> {
+    let NodeKind::SymbolInstance { symbol, .. } = &c.kind else { return None };
+    let has_raster = effects::has_instance_row_raster(c);
+    if depth >= vectorcraft_doc::depth::MAX_DEPTH || !(has_raster || effects::has_item_geometry(c)) {
+        return None;
+    }
+    let sym = d.symbols.iter().find(|s| s.name == *symbol)?;
+    let count = sym.art.count() as u64;
+    if count > *budget {
+        return None;
+    }
+    let art = vectorcraft_render::instance_art(&sym.art, c);
+    let image = if has_raster { raster_image(d, c, raster).ok()? } else { None };
+    *budget -= count;
+    let mut v = c.clone();
+    if image.is_some() {
+        rasterfx::strip_raster(&mut v, false);
+    }
+    let below = match image {
+        Some((image, false)) => return Some(rasterfx::replace_with_image(v, image)),
+        Some((image, true)) => Some(image),
+        None => None,
+    };
+    let mut a = effects::expand_outlined(Some(&*d), &v, Some(&art))
+        .or_else(|| if below.is_some() { effects::instance_as_art(Some(&*d), &v, Some(&art)) } else { None })?;
+    expand_nested_instances(d, &mut a, depth + 1, budget, raster);
+    if let Some(image) = below {
+        rasterfx::put_below(d, &mut a, image);
+    }
+    Some(a)
 }
 
 /// Does `n` hold an id of `seen`, or one id twice: does [`effects::fresh_ids`] give it new ids?
@@ -1075,9 +1184,9 @@ fn repeats_an_id(n: &Node, seen: &std::collections::HashSet<NodeId>) -> bool {
 type Listed = (NodeId, usize);
 
 /// [`expanded_node`] of `c` in place. Returns what the expansion lists, by places in the walk of `c`.
-fn expand_in_place(d: &mut Document, c: &mut Node, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId]) -> Vec<Listed> {
+fn expand_in_place(d: &mut Document, c: &mut Node, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId], raster: &mut RasterBudget) -> Vec<Listed> {
     let mut listed = vec![];
-    if let Some(e) = expanded_node(d, c.clone(), brushes, skip, &mut listed) {
+    if let Some(e) = expanded_node(d, c.clone(), brushes, skip, &mut listed, raster) {
         *c = e;
     }
     listed
@@ -1099,18 +1208,26 @@ fn fresh_ids_listed(d: &mut Document, c: &mut Node, seen: &mut std::collections:
 /// Expand Appearance of `id` (and, recursively, of a group's or layer's members): every fill and
 /// stroke becomes an object of its own (a stroke a path stroked by it alone, brushes as their art),
 /// geometry effects are baked, raster effects become an embedded image, and the object keeps its
-/// transparency.
-pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>) {
-    expand_node_except(d, id, brushes, &[], out);
+/// transparency. An object whose raster effects' image would take `raster` past its limits stays
+/// as it is, with what is inside it.
+pub(crate) fn expand_node(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], out: &mut Vec<NodeId>, raster: &mut RasterBudget) {
+    expand_node_except(d, id, brushes, &[], out, raster);
 }
 
 /// [`expand_node`], leaving the objects `skip` lists, and what they hold, as they are. A geometry
 /// effect of a group or layer around one still reshapes it with the rest of its members, and the
 /// copies of it that such an effect makes are left as they are too.
-fn expand_node_except(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId], out: &mut Vec<NodeId>) {
+fn expand_node_except(
+    d: &mut Document,
+    id: NodeId,
+    brushes: &[vectorcraft_brush::Brush],
+    skip: &[NodeId],
+    out: &mut Vec<NodeId>,
+    raster: &mut RasterBudget,
+) {
     let Some(n) = d.node(id).cloned() else { return };
     let mut listed = vec![];
-    let m = expanded_node(d, n, brushes, skip, &mut listed);
+    let m = expanded_node(d, n, brushes, skip, &mut listed, raster);
     out.extend(listed.into_iter().map(|(id, _)| id));
     if let Some(mut m) = m {
         // Art made from type takes its emoji's pixels into the document.
@@ -1121,14 +1238,86 @@ fn expand_node_except(d: &mut Document, id: NodeId, brushes: &[vectorcraft_brush
     }
 }
 
+/// Replace `n`, a group or layer whose Transform effect's copies each carry the raster effects
+/// listed before it ([`effects::outer_effects`]), with its art ([`effects::evaluate_container`]):
+/// the copies become groups of their own with those effects, and they and what they hold get ids
+/// of their own, so they expand as its members do; the raster effects after the Transform effect
+/// stay on `n`. A copy that repeats an id ([`repeats_an_id`]) and holds a random Transform effect
+/// ([`has_seeded`]) expands before its ids change ([`expand_in_place`]), as [`expand_pieces`] does,
+/// and `members` gets what that expansion lists, by the copy's new id. `kept` gets the new id of
+/// each copy of an object `skip` lists, and `out` gets `n` unless `listed` says it is there.
+/// Returns whether `n` changed; any other object stays as it is. `Err`, with `n` as it is, when
+/// such a copy still holds a random Transform effect after the raster budget left part of it as
+/// it is: its new ids would give that effect another seed.
+fn copies_carrying_raster(
+    d: &mut Document,
+    n: &mut Node,
+    (brushes, skip): (&[vectorcraft_brush::Brush], &[NodeId]),
+    kept: &mut Vec<NodeId>,
+    members: &mut std::collections::HashMap<NodeId, Vec<Listed>>,
+    (out, listed): (&mut Vec<Listed>, &mut bool),
+    raster: &mut RasterBudget,
+) -> std::result::Result<bool, OverBudget> {
+    if !carries_copies(n) {
+        return Ok(false);
+    }
+    let Some(mut m) = effects::evaluate_container(Some(&*d), n) else { return Ok(false) };
+    let mut seen = std::collections::HashSet::from([n.id]);
+    for c in m.children_mut().into_iter().flatten().filter(|c| !c.is_ruler_guide()) {
+        let c = Arc::make_mut(c);
+        let left = raster.left;
+        let mut expanded = (has_seeded(c) && repeats_an_id(c, &seen)).then(|| expand_in_place(d, c, brushes, skip, raster));
+        if expanded.is_some() && raster.left > left && has_seeded(c) {
+            return Err(OverBudget);
+        }
+        let mut was = vec![];
+        if !skip.is_empty() {
+            c.walk(&mut |n| was.push(n.id));
+        }
+        fresh_ids_listed(d, c, &mut seen, expanded.as_deref_mut().unwrap_or_default());
+        // A copy of an object `skip` lists is left as it is too.
+        let mut at = 0;
+        c.walk(&mut |n| {
+            if was.get(at).is_some_and(|old| *old != n.id && skip.contains(old)) {
+                kept.push(n.id);
+            }
+            at += 1;
+        });
+        if let Some(expanded) = expanded {
+            members.insert(c.id, expanded);
+        }
+    }
+    if !*listed {
+        out.push((n.id, 0));
+        *listed = true;
+    }
+    *n = m;
+    Ok(true)
+}
+
+/// Is `n` a group or layer whose Transform effect's copies each carry the raster effects listed
+/// before it ([`copies_carrying_raster`])?
+fn carries_copies(n: &Node) -> bool {
+    is_container(n) && effects::outer_effects(n).len() != n.appearance.effects.len()
+}
+
 /// [`expand_node`] of `n`, which need not be in `d`: `n` with its appearance expanded, `None` when
 /// it has nothing to expand. `out` gets the objects whose appearance expands, by places in the walk
 /// of the expanded `n`, `n`'s first when its own does. The objects `skip` lists are not expanded.
-fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Brush], skip: &[NodeId], out: &mut Vec<Listed>) -> Option<Node> {
+fn expanded_node(
+    d: &mut Document,
+    mut n: Node,
+    brushes: &[vectorcraft_brush::Brush],
+    skip: &[NodeId],
+    out: &mut Vec<Listed>,
+    raster: &mut RasterBudget,
+) -> Option<Node> {
     let id = n.id;
     if skip.contains(&id) || !expandable(&n) {
         return None;
     }
+    // What `out` held before `n`: an object left by the raster budget lists nothing.
+    let listed_before = out.len();
     // Colour adjustments: the colours inside become the adjusted ones (an embedded image a
     // recoloured copy), then the rest of the appearance expands.
     let mut changed = false;
@@ -1141,6 +1330,13 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         }
         _ => None,
     };
+    // The embedded images before the adjustment and the expansions of the copies
+    // ([`copies_carrying_raster`]), when the raster budget may yet leave `n` as it is: the
+    // recolored copies and the images those add then go again.
+    let images_before = ((effects::has_adjustment(&n) && !rasterfx::raster_fx(&n).is_empty()) || carries_copies(&n))
+        .then(|| d.images.keys().cloned().collect::<std::collections::HashSet<_>>());
+    // What the raster budget had left before those expansions: it gets back what they took.
+    let budget_before = (raster.images, raster.pixels);
     if effects::has_adjustment(&n)
         && let Some(m) = effects::adjust_in_document(d, &n, symbol_art)
     {
@@ -1163,7 +1359,7 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         for (i, c) in m.children_mut().into_iter().flatten().enumerate() {
             let c = Arc::make_mut(c);
             if i == 0 {
-                expanded = expand_in_place(d, c, brushes, skip);
+                expanded = expand_in_place(d, c, brushes, skip, raster);
                 fresh_ids_listed(d, c, &mut seen, &mut expanded);
             } else {
                 effects::fresh_ids(d, c, &mut seen);
@@ -1186,15 +1382,30 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
         }
         return Some(m);
     }
-    let image = raster_image(d, &n);
+    // New ids of the copies of objects `skip` lists among the members.
+    let mut kept = vec![];
+    // Members of a group or layer that `expand_pieces` or `copies_carrying_raster` expanded, by id,
+    // with what their expansion lists.
+    let mut members = std::collections::HashMap::new();
+    let copies = copies_carrying_raster(d, &mut n, (brushes, skip), &mut kept, &mut members, (out, &mut listed_n), raster);
+    // Raster effects whose image would go past the budget stay: so does the object, with what is
+    // inside it and its color adjustments (a symbol instance stays an instance of its symbol), and
+    // so does a group or layer whose copies keep a random Transform effect the budget left.
+    let Ok(image) = copies.and_then(|copied| {
+        changed |= copied;
+        raster_image(d, &n, raster)
+    }) else {
+        out.truncate(listed_before);
+        if let Some(keys) = images_before {
+            d.images.retain(|k, _| keys.contains(k));
+        }
+        (raster.images, raster.pixels) = budget_before;
+        return None;
+    };
     let mut v = n.clone();
     rasterfx::strip_raster(&mut v, false);
     let mut stroke_art =
         |d: &mut Document, path: &PathData, rule: FillRule, st: &StrokeLayer| super::pathops::outlined_stroke(d, brushes, path, rule, st);
-    // Members of a group or layer that `expand_pieces` expanded, by id, with what their expansion lists.
-    let mut members = std::collections::HashMap::new();
-    // New ids of the copies of objects `skip` lists among those members.
-    let mut kept = vec![];
     let expanded = match image {
         // Blur, feather and inner glow change the object itself: it becomes the image (a layer
         // keeps it as its only member).
@@ -1206,7 +1417,7 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
             } else if container {
                 // A group's or layer's own fills and strokes become art among its members.
                 effects::evaluate_container(Some(&*d), &v).map(|mut m| {
-                    members = expand_pieces(d, &mut m, false, brushes, skip, &mut kept, &mut stroke_art);
+                    members.extend(expand_pieces(d, &mut m, false, brushes, skip, &mut kept, &mut stroke_art, raster));
                     m
                 })
             } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
@@ -1224,13 +1435,21 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
                     }
                     _ => None,
                 };
-                effects::expand_outlined(Some(&*d), &v, symbol.as_ref()).map(|mut m| {
+                // A symbol instance whose active fill or stroke has only effects that paint below it
+                // (now in the image) becomes its art as well.
+                let row_raster = image.is_some() && effects::has_instance_row_raster(&n);
+                let outlined = effects::expand_outlined(Some(&*d), &v, symbol.as_ref())
+                    .or_else(|| if row_raster { effects::instance_as_art(Some(&*d), &v, symbol.as_ref()) } else { None });
+                outlined.map(|mut m| {
                     let mut budget = vectorcraft_doc::MAX_SYMBOL_NODES;
-                    expand_nested_instances(d, &mut m, 1, &mut budget);
-                    expand_pieces(d, &mut m, true, brushes, skip, &mut kept, &mut stroke_art);
+                    expand_nested_instances(d, &mut m, 1, &mut budget, raster);
+                    expand_pieces(d, &mut m, true, brushes, skip, &mut kept, &mut stroke_art, raster);
                     m
                 })
             };
+            // A 3D effect's shadow blurred by the light's Softness keeps its blur in the art: it
+            // expands in turn, to an image.
+            let m = if effects::has_solid(&v) || effects::has_revolve(&v) { m.map(|m| expand_raster_pieces(d, m, brushes, skip, raster)) } else { m };
             match image {
                 Some((image, _)) => {
                     let mut m = m.unwrap_or(v);
@@ -1262,7 +1481,7 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
             match members.remove(&c.id) {
                 Some(listed) => out.extend(listed),
                 None => {
-                    if let Some(e) = expanded_node(d, (**c).clone(), brushes, &skip, out) {
+                    if let Some(e) = expanded_node(d, (**c).clone(), brushes, &skip, out, raster) {
                         *c = Arc::new(e);
                         changed = true;
                     }
@@ -1336,6 +1555,7 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let failed = vectorcraft_render::decode_failures();
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
+    let mut raster = RasterBudget::new();
     let ids = s.edit("Expand Appearance", |d, _| {
         let before = d.clone();
         // The art of graph designs in the graphs and series among the roots stays as the graph draws it. A group whose
@@ -1351,7 +1571,7 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
         let mut out = vec![];
         let threaded = super::threads::frames(d);
         for id in &roots {
-            expand_node_except(d, *id, &brushes, &designs, &mut out);
+            expand_node_except(d, *id, &brushes, &designs, &mut out, &mut raster);
         }
         super::dimension::put_back(d, lifted);
         // A dimension whose source was replaced stays where it was, no longer linked.
@@ -1360,6 +1580,9 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
         // stays type under a new id takes its frame's place.
         super::threads::leave_threads(d, &threaded);
         if out.is_empty() || (kept && d.layers == before.layers) {
+            if raster.left > 0 {
+                return Err(EngineError::Other(RASTER_EFFECTS_LEFT.into()));
+            }
             return Err(EngineError::Other("Expand Appearance: the selection has a basic appearance".into()));
         }
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad("Expand Appearance", e))?;
@@ -1367,8 +1590,12 @@ fn expand_appearance(s: &mut Session, p: &Value) -> Result<Value> {
     })?;
     let mut out = json!({ "ids": ids_json(&ids) });
     // Raster effects become images rendered from the art.
-    if let Some(w) = rasterfx::undecoded_warning(failed) {
-        out["warning"] = json!(w);
+    let warnings: Vec<&str> = rasterfx::undecoded_warning(failed).into_iter().chain((raster.left > 0).then_some(RASTER_EFFECTS_LEFT)).collect();
+    if !warnings.is_empty() {
+        out["warning"] = json!(warnings.join("; "));
+    }
+    if raster.left > 0 {
+        out["rasterLeft"] = json!(raster.left);
     }
     Ok(out)
 }

@@ -1678,6 +1678,8 @@ file-filter	Templates	Sablonok
 	Font Family & Style	Betűcsalád és stílus
 	Font Family, Style & Size	Betűcsalád, stílus és méret
 	Font List	Betűtípuslista
+	Show Similar Fonts	Hasonló betűtípusok megjelenítése
+	Clear Similar Fonts	Hasonló betűtípusok törlése
 	Font Preview Size	Betűtípus-előnézet mérete
 	Font Size	Betűméret
 	Variable Font	Változó betűtípus
@@ -1817,6 +1819,7 @@ file-filter	Templates	Sablonok
 	Connect Data Points	Adatpontok összekötése
 	Edge-to-Edge Lines	Széltől szélig érő vonalak
 	Draw Filled Lines	Kitöltött vonalak rajzolása
+	Line Width	Vonalvastagság
 	Tick Values	Osztásértékek
 	Override Calculated Values	Számított értékek felülírása
 	Divisions	Osztások
@@ -1969,6 +1972,11 @@ file-filter	Templates	Sablonok
 	Show smooth color wheel	Folytonos színkör megjelenítése
 	Show segmented color wheel	Szegmentált színkör megjelenítése
 	Show color bars	Színsávok megjelenítése
+	Show brightness and hue on wheel	Fényesség és színárnyalat megjelenítése a színkörön
+	Show saturation and hue on wheel	Telítettség és színárnyalat megjelenítése a színkörön
+	Add Color Tool	Szín hozzáadása eszköz
+	Remove Color Tool	Szín eltávolítása eszköz
+	Remove Color	Szín eltávolítása
 	Find the selected colors in the artwork	A kijelölt színek keresése a grafikában
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
@@ -2155,6 +2163,10 @@ file-filter	Templates	Sablonok
 	Em Box	Kvirtmező
 	x-Height	x-magasság
 	ICF Box	ICF-mező
+	Show Sample	Minta megjelenítése
+	Hide Sample	Minta elrejtése
+	Max Ascent/Descent	Max. magasság/mélység
+	Max Ascender	Max. felnyúló szár
 	ICF Top/Right	ICF teteje/jobb oldala
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy
@@ -2256,6 +2268,7 @@ file-filter	Templates	Sablonok
 	Isolate Blending	Keverés elkülönítése
 	Isolate Group	Csoport elkülönítése
 	Isolate Selected Group	Kijelölt csoport elkülönítése
+	Isolate Selected Path	Kijelölt útvonal elkülönítése
 	Isolate Selected Object	Kijelölt objektum elkülönítése
 	Italian	Olasz
 	Italic	Dőlt
@@ -2365,6 +2378,8 @@ file-filter	Templates	Sablonok
 	Lasso Tool	Lasszó
 	Enclosing Lasso Tool	Körülzáró lasszó
 	Enclosing Lasso	Körülzáró lasszó
+	Polygonal Lasso Tool	Sokszöglasszó
+	Polygonal Lasso	Sokszöglasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}
@@ -3194,6 +3209,10 @@ diagnostics	ui	felület
 	Play Current Selection	Kijelölt művelet lejátszása
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
+	Reset Actions	Műveletek visszaállítása
+	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
+	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.
+	Append	Hozzáfűzés
 	Plug-in Info	Bővítmény adatai
 	Plug-ins	Bővítmények
 	Plug-in…	Bővítmény…
@@ -5444,6 +5463,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	egy diagram adatsorában a diagramminta grafikája a mintából rajzolódik újra: a módosításához szerkeszd a mintát
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	néhány raszteres effektus nem lett képpé alakítva: több mint 1024 képet vagy összesen 256 megapixelt foglalnának
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
 @msg	Expand: no gradient fills	Kibontás: nincs színátmenetes kitöltés
 @msg	Expand: nothing to expand	Kibontás: nincs mit kibontani
@@ -6192,6 +6212,24 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	the <filter> element needs an id, the filter's name	a <filter> elemnek id kell, a szűrő neve
+@msg	an SVG filter's id is at most {MAX_NAME} characters	egy SVG-szűrő id-je legfeljebb {MAX_NAME} karakter
+@msg	<{_1}> isn't an element of an SVG filter	a(z) <{_1}> nem SVG-szűrő eleme
+@msg	an SVG filter has no event attributes such as {_1}	egy SVG-szűrőnek nincsenek eseményattribútumai, például {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	egy SVG-szűrő képei PNG, JPEG, GIF vagy WebP formátumú data: URL-ek
+@msg	the SVG filter isn't valid XML: {e}	az SVG-szűrő nem érvényes XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	a feTurbulence numOctaves értéke legfeljebb {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} legfeljebb {max}
+@msg	feConvolveMatrix's order	a feConvolveMatrix order értéke
+@msg	feMorphology's radius	a feMorphology radius értéke
+@msg	a blur's stdDeviation	egy elmosás stdDeviation értéke
+@msg	the SVG filter has no primitives	az SVG-szűrőnek nincsenek primitívjei
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	egy SVG-szűrőnek legfeljebb {MAX_PRIMITIVES} primitívje van
+@msg	the SVG filter is too large once its attributes are written out	az SVG-szűrő túl nagy, miután az attribútumai ki vannak írva
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	egy SVG-szűrő képei összesen legfeljebb {MAX_IMAGE_PIXELS} képpontosak
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	az SVG-szűrő nem rajzolható meg: ellenőrizze a primitívjeit és azok bemeneteit
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	egy SVG-szűrő elemei legfeljebb {MAX_DEPTH} szint mélyen ágyazhatók egymásba
+@msg	an SVG filter is at most {_1} KB	egy SVG-szűrő legfeljebb {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	a `render` csak `mode` mezőt tartalmazó objektum lehet, shaded vagy wireframe értékkel
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
@@ -6343,7 +6381,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Unknown dimension style	Ismeretlen méretezési stílus
 @msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak is lezáródnak.
 	Distance	Távolság
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát
@@ -6496,6 +6534,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 	Single Word Justification:	Egyetlen szó igazítása:
 	Full Justify	Teljes sorkizárás
 	Minimum must not exceed Desired, nor Desired Maximum.	A minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: a minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot
 	Justification	Sorkizárás
 	Add filters from the list above	Adjon hozzá szűrőket a fenti listából
 	Add to Stack	Hozzáadás a veremhez
@@ -7431,6 +7470,22 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Közös érintők…
+	Common Tangents	Közös érintők
+	Tangents	Érintők
+	Centerline	Középvonal
+	External	Külső
+	Internal	Belső
+@msg	select two closed paths	jelöljön ki két zárt útvonalat
+@msg	a selected path is open	egy kijelölt útvonal nyitott
+@msg	a selected path is not convex	egy kijelölt útvonal nem konvex
+@msg	a selected path has no area	egy kijelölt útvonalnak nincs területe
+@msg	a selected path has more than 10000 segments	egy kijelölt útvonalnak több mint 10000 szakasza van
+@msg	the two paths have the same outline	a két útvonal körvonala azonos
+@msg	One path lies inside the other, so they have no common tangents	Az egyik útvonal a másikon belül van, így nincsenek közös érintőik
+@msg	The paths overlap, so they have no internal tangents	Az útvonalak átfedik egymást, így nincsenek belső érintőik
+@msg	One path lies inside the other, so they have no internal tangents	Az egyik útvonal a másikon belül van, így nincsenek belső érintőik
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
@@ -7473,6 +7528,11 @@ breakText	Glyphs	Glifák
 	Malayalam	Malajálam
 	Odia	Odia
 	Urdu	Urdu
+	Sanskrit	Szanszkrit
+	Nepali	Nepáli
+	Assamese	Asszámi
+	Konkani	Konkani
+	Sindhi	Szindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} és újabb (verzió: {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Az összes megnyitott dokumentum exportálása PDF-ként
@@ -7506,7 +7566,7 @@ breakText	Glyphs	Glifák
 @msg	stroke cannot be set on a symbol instance	a stroke nem állítható be szimbólumpéldányon
 @msg	fill on a symbol instance must be a solid color or none	a szimbólumpéldány fill értéke csak egyszínű szín vagy none lehet
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	a {key} nem állítható be olyan képen, amelyen nincs Átalakítás alakzattá vagy Objektum útvonallá alakítása effektus
-@msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	adja meg a newName, registration, exportType, nineSlice, type és/vagy alignToPixelGrid értékét
 	Text Flow	Szövegfolyás
 	By Rows	Soronként
 	By Columns	Oszloponként
@@ -7732,6 +7792,8 @@ breakText	Glyphs	Glifák
 @msg	No bridge of this width fits across the selected art	Ilyen széles híd nem fér el a kijelölt grafikán
 @msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
 @msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
+@msg	`angle` must be from -180 to 180 degrees	Az `angle` értéke -180 és 180 fok között lehet
+@msg	`roundness` must be from 1 to 100%	A `roundness` értéke 1 és 100% között lehet
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
 	Weed Box and Lines…	Gyomláló keret és vonalak…
 	Weed Box and Lines	Gyomláló keret és vonalak
@@ -8987,7 +9049,9 @@ breakText	Glyphs	Glifák
 @msg	position must be normal, superscript or subscript	position: normal, superscript vagy subscript kell
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position: topLeft, topRight, bottomLeft vagy bottomRight kell
 @msg	positions must be between 0 and 100000 pt	positions: 0 és 100000 pt közötti értékek kellenek
+@msg	ppi can't be more than {max} for this image	ppi: ennél a képnél legfeljebb {max} lehet
 @msg	ppi must be a positive number, not {ppi}	ppi: pozitív szám kell, ez nem az: {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	a trim változatlanul hagyja a kép képpontjait: hagyja el a ppi értéket
 @msg	ppi must be between 1 and 2400	ppi: 1 és 2400 közötti érték kell
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`: nem transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape: clippingMask|transparency kell
@@ -9700,3 +9764,23 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Check	Ellenőrzés
+	Check Fold Lines	Hajtásvonalak ellenőrzése
+@msg	No cut lines are in the selection.	A kijelölésben nincs vágóvonal.
+@msg	No cut lines are in the document.	A dokumentumban nincs vágóvonal.
+@msg	The cut lines do not enclose an area.	A vágóvonalak nem zárnak közre területet.
+@msg	A cut line ends without meeting another cut line.	Egy vágóvonal úgy ér véget, hogy nem találkozik másik vágóvonallal.
+@msg	A gap between cut lines was closed.	A vágóvonalak közötti rés le lett zárva.
+@msg	The fold lines are too complex to check.	A hajtásvonalak túl összetettek az ellenőrzéshez.
+@msg	A cut line and a crease lie on top of each other.	Egy vágóvonal és egy bigvonal egymáson fekszik.
+@msg	No cut lines are among the given objects.	A megadott objektumok között nincs vágóvonal.
+@msg	Two fold lines lie on top of each other.	Két hajtásvonal egymáson fekszik.
+@msg	A crease ends inside a panel.	Egy bigvonal egy panelen belül ér véget.
+@msg	A crease does not divide two panels.	Egy bigvonal nem választ el két panelt.
+@msg	A crease lies outside the cut outline, wholly or in part.	Egy bigvonal teljesen vagy részben a vágási körvonalon kívül van.
+@msg	The pieces of a hinge are not on one straight line.	Egy zsanér részei nem egy egyenesen vannak.
+@msg	A gap between cut lines is too narrow to tell apart.	A vágóvonalak közötti rés túl keskeny a megkülönböztetéshez.
+@msg	A cut-out area holds other fold lines or another blank.	Egy kivágott terület további hajtásvonalakat vagy egy másik kiterítéket tartalmaz.
+@msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
+@msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
