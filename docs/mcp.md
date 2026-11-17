@@ -7385,6 +7385,9 @@ small caps size (1 to 200%) lies outside those ranges opens with the nearer end 
 `document.setup` does not take the color mode or the assigned profiles. The Document Setup dialog's Color tab sets
 them with `edit.assignProfile` and `file.documentColorMode`: its OK runs `document.setup`, then `edit.assignProfile`,
 then `file.documentColorMode` in one `command.batch`, and the document's changes are one undo step.
+On the dialog's Transparency tab, a click on either grid color's box (or Enter or Space with the keyboard on it) opens
+the `colorPicker` dialog over Document Setup on that color. Its OK sets only that entry of the dialog's `gridColors`
+and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes back with `gridColors` unchanged.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.setup","params":{"gridColors":"Blue","gridSize":"large","language":"German","bleed":9}}}

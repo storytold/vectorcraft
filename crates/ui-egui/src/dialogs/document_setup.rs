@@ -175,6 +175,11 @@ fn general(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool 
     close
 }
 
+/// The id of the Transparency tab's box that shows grid color `index` (0 or 1).
+fn grid_color_box_id(index: usize) -> egui::Id {
+    egui::Id::unique(("grid-color-box", index))
+}
+
 fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let t = Tokens::get(ui.ctx());
     widgets::subheader(ui, tl!("Transparency Grid"));
@@ -196,16 +201,35 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             d.fields.insert("gridColors".into(), json!(pair.map(|c| c.to_hex())));
         }
     });
-    // The two colours (the first is also the paper colour): editing either makes them Custom.
+    // The two colours (the first is also the paper colour): editing either makes them Custom. A
+    // click on a color's box, or Space or Enter with the keyboard on it, opens the Color Picker on
+    // that color (white when its hex is not a color), and the picker's OK sets that color.
+    let mut pick = None;
     widgets::label_row(ui, "", LABEL, |ui| {
         for i in 0..2 {
             let hex = colors.get(i).map_or("", |h| h.trim_start_matches('#'));
+            let colour = vectorcraft_color::Color::from_hex(hex);
+            let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
             let (chip, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
-            if let Some(c) = vectorcraft_color::Color::from_hex(hex) {
+            let resp = ui.interact(chip, grid_color_box_id(i), egui::Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &name));
+            let keyed = resp.has_focus()
+                && ui.input_mut(|inp| {
+                    inp.consume_key(egui::Modifiers::NONE, egui::Key::Space) | inp.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
+                });
+            if resp.clicked() || keyed {
+                pick = Some((i, colour.unwrap_or(vectorcraft_color::Color::WHITE)));
+            }
+            if resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            if let Some(c) = colour {
                 ui.painter().rect_filled(chip, 2.0, crate::panels::c32(&c));
             }
             ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
-            let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
+            if resp.has_focus() {
+                ui.painter().rect_stroke(chip.expand(2.0), 3.0, ui.visuals().selection.stroke, egui::StrokeKind::Outside);
+            }
             if let Some(c) = widgets::hex_field_named(ui, ("grid-color", i), Some(&name), hex).and_then(|h| vectorcraft_color::Color::from_hex(&h)) {
                 let mut v = colors.clone();
                 v.resize(2, "#ffffff".into());
@@ -215,6 +239,9 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
             ui.add_space(10.0);
         }
     });
+    if let Some((i, c)) = pick {
+        *d = super::color_picker::over_list_entry(d, "gridColors", i, c);
+    }
     ui.add_space(4.0);
     check(ui, d, "simulatePaper", tl!("Simulate Colored Paper"));
     ui.add_space(14.0);
@@ -634,5 +661,135 @@ mod tests {
         assert_eq!((st.doc.color_mode, st.doc.color_profiles.cmyk.clone()), (ColorMode::Rgb, None));
         assert_eq!(fill(&app, id), before);
         assert_eq!(undo_steps(&app), steps);
+    }
+
+    /// The Light pair a new document's transparency grid starts with.
+    const LIGHT: [&str; 2] = ["#ffffff", "#cccccc"];
+
+    fn hex(h: &str) -> Color {
+        Color::from_hex(h).unwrap_or_else(|| panic!("bad hex {h}"))
+    }
+
+    /// The grid colors Document Setup `d` holds.
+    fn dialog_grid(d: &crate::state::Dialog) -> Vec<Color> {
+        d.fields["gridColors"].as_array().unwrap().iter().map(|c| hex(c.as_str().unwrap())).collect()
+    }
+
+    /// A new document with Document Setup open on its Transparency tab, drawn in the context returned.
+    fn transparency_tab() -> (VectorcraftApp, egui::Context) {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.documentSetup", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("tab".into(), json!("Transparency"));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        for _ in 0..4 {
+            dialog_frame(&mut app, &ctx, vec![]);
+        }
+        (app, ctx)
+    }
+
+    /// Clicks the box of grid color `index`.
+    fn click_grid_box(app: &mut VectorcraftApp, ctx: &egui::Context, index: usize) {
+        let at = ctx.read_response(super::grid_color_box_id(index)).unwrap_or_else(|| panic!("no box {index}")).rect.center();
+        let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        dialog_frame(app, ctx, vec![Event::PointerMoved(at), button(true)]);
+        dialog_frame(app, ctx, vec![button(false)]);
+    }
+
+    /// The Color Picker is open over Document Setup, on `color`, and Document Setup's OK has not run.
+    fn assert_picker_over_setup(app: &VectorcraftApp, color: &str, case: &str) {
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{case}: no dialog"));
+        assert_eq!(d.kind, "colorPicker", "{case}");
+        assert_eq!(d.fields.get("color").and_then(vectorcraft_engine::cmd::color_value), Some(hex(color)), "{case}");
+        assert_eq!(crate::dialogs::parent(d).map(|p| p.kind), Some(super::KIND.to_string()), "{case}");
+        assert_eq!(undo_steps(app), 0, "{case}: Document Setup's OK has not run");
+    }
+
+    /// A click on either grid color's box opens the Color Picker over Document Setup on that
+    /// color. Its OK sets only that color, the Grid Colors menu names the pair (Custom, or the
+    /// preset it matches), and Document Setup's OK applies the pair in one undo step.
+    #[test]
+    fn a_grid_color_box_opens_the_color_picker_and_its_ok_sets_that_color() {
+        for (index, picked, pair, name) in [(0, "#00ff00", ["#00ff00", "#cccccc"], "Custom"), (1, "#c4dcff", ["#ffffff", "#c4dcff"], "Blue")] {
+            let (mut app, ctx) = transparency_tab();
+            click_grid_box(&mut app, &ctx, index);
+            assert_picker_over_setup(&app, LIGHT[index], name);
+            app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!(picked));
+            crate::dialogs::confirm(&mut app).unwrap();
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, pair.map(hex).to_vec()), "{name}");
+            assert_eq!(undo_steps(&app), 0, "{name}: the picker's OK leaves the document as it is");
+            dialog_frame(&mut app, &ctx, vec![]);
+            let texts: Vec<String> = dialog_frame(&mut app, &ctx, vec![]).into_iter().map(|(t, _)| t).collect();
+            assert!(texts.iter().any(|t| t == name), "{name}: {texts:?}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            let st = app.session.active().unwrap();
+            assert_eq!((st.doc.setup.grid_colors, st.doc.setup.grid_colors_name()), (pair.map(hex), name));
+            assert_eq!(undo_steps(&app), 1, "{name}");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, LIGHT.map(hex), "{name}");
+        }
+    }
+
+    /// With the keyboard on a grid color's box, Enter or Space opens the Color Picker on that
+    /// color instead of pressing Document Setup's OK.
+    #[test]
+    fn enter_or_space_on_a_grid_color_box_opens_the_color_picker() {
+        for (index, key) in [(0, egui::Key::Enter), (1, egui::Key::Space)] {
+            let (mut app, ctx) = transparency_tab();
+            ctx.memory_mut(|m| m.request_focus(super::grid_color_box_id(index)));
+            dialog_frame(&mut app, &ctx, vec![]);
+            let press = Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+            dialog_frame(&mut app, &ctx, vec![press]);
+            assert_picker_over_setup(&app, LIGHT[index], &format!("{key:?}"));
+        }
+    }
+
+    /// Cancel in the Color Picker goes back to Document Setup with the grid colors as they were,
+    /// and so does its OK on the color it opened on; Document Setup's OK then records no undo step.
+    #[test]
+    fn grid_color_picker_cancel_or_an_unchanged_ok_changes_nothing() {
+        for cancel in [true, false] {
+            let (mut app, ctx) = transparency_tab();
+            click_grid_box(&mut app, &ctx, 1);
+            assert_picker_over_setup(&app, LIGHT[1], &format!("cancel {cancel}"));
+            if cancel {
+                app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+                crate::dialogs::cancel(&mut app);
+            } else {
+                crate::dialogs::confirm(&mut app).unwrap();
+            }
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, LIGHT.map(hex).to_vec()), "cancel {cancel}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(app.ui.dialog.is_none());
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors_name(), "Light");
+            assert_eq!(undo_steps(&app), 0, "cancel {cancel}");
+        }
+    }
+
+    /// The picker's OK sets nothing when the dialog under it has no such color or is gone: it is
+    /// an error, and the picker stays open.
+    #[test]
+    fn grid_color_picker_without_its_color_or_its_dialog_is_an_error() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("file.documentSetup", json!({})).unwrap();
+        let setup = app.ui.dialog.clone().unwrap();
+        let mut short = setup.clone();
+        short.fields.insert("gridColors".into(), json!(["#ffffff"]));
+        let mut orphan = crate::dialogs::color_picker::over_list_entry(&setup, "gridColors", 0, Color::WHITE);
+        orphan.fields.remove(crate::dialogs::PARENT);
+        for picker in [crate::dialogs::color_picker::over_list_entry(&short, "gridColors", 1, Color::WHITE), orphan] {
+            app.ui.dialog = Some(picker);
+            app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#ff0000"));
+            assert!(crate::dialogs::confirm(&mut app).is_err());
+            assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("colorPicker"));
+        }
+        assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, LIGHT.map(hex));
+        assert_eq!(undo_steps(&app), 0);
     }
 }
