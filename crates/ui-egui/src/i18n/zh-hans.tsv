@@ -212,7 +212,7 @@ antiAlias	Sharp	锐利
 	Assign Profile…	指定配置文件…
 	Assign:	指定：
 	Attach to Active Plane	附加到活动平面
-	Attributes	属性
+	Attributes	特性
 	Author Title:	作者职务：
 	Author:	作者：
 	Auto	自动
@@ -1303,6 +1303,10 @@ file-filter	Templates	模板
 	Font List	字体列表
 	Show Similar Fonts	显示相似字体
 	Clear Similar Fonts	清除相似字体
+	Fonts used in this document	此文档中使用的字体
+	This document uses no available fonts	此文档未使用任何可用字体
+	Recently Added	最近添加
+	Fonts added in the last 30 days	最近 30 天内添加的字体
 	Font Preview Size	字体预览大小
 	Font Size	字号
 	Variable Font	可变字体
@@ -3329,8 +3333,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Shear	倾斜
 	Shear Tool	倾斜工具
 	Shear…	倾斜…
-	Shell Lower…	下弧形…
-	Shell Upper…	上弧形…
+	Shell Lower…	下壳形…
+	Shell Upper…	上壳形…
 	Shift	Shift
 	Shift to Color…	偏移至颜色…
 	Shifts the tints of global and spot colors; other colors stay.	偏移全局色和专色的淡色；其他颜色保持不变。
@@ -4497,6 +4501,9 @@ imageTrace	Outline	轮廓
 @msg	image would be too large; lower the resolution	图像将过大；请降低分辨率
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
+@msg	`points` must be three [x, y] pairs of numbers	`points` 必须是三对数字 [x, y]
+@msg	direct-select three anchor points, or give `points`	请直接选择三个锚点，或提供 `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
 @msg	no saved presets	没有已保存的预设
@@ -6152,6 +6159,24 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
 @msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，即滤镜的名称
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 滤镜的 id 最多 {MAX_NAME} 个字符
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 滤镜的元素
+@msg	an SVG filter has no event attributes such as {_1}	SVG 滤镜不能有 {_1} 等事件属性
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 滤镜的图像必须是 PNG、JPEG、GIF 或 WebP 格式的 data: URL
+@msg	the SVG filter isn't valid XML: {e}	SVG 滤镜不是有效的 XML：{e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence 的 numOctaves 最大为 {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}最大为 {max}
+@msg	feConvolveMatrix's order	feConvolveMatrix 的 order
+@msg	feMorphology's radius	feMorphology 的 radius
+@msg	a blur's stdDeviation	模糊的 stdDeviation
+@msg	the SVG filter has no primitives	SVG 滤镜没有基元
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 滤镜最多有 {MAX_PRIMITIVES} 个基元
+@msg	the SVG filter is too large once its attributes are written out	写出属性后，SVG 滤镜过大
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 滤镜的图像总共最多 {MAX_IMAGE_PIXELS} 像素
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	无法绘制 SVG 滤镜：请检查其基元及其输入
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 滤镜的元素最多嵌套 {MAX_DEPTH} 层
+@msg	an SVG filter is at most {_1} KB	SVG 滤镜最大为 {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必须是只含 `mode` 的对象，值为 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
@@ -7009,6 +7034,7 @@ anchor	Points:	点：
 	Open a document to check it for issues.	打开文档以检查其中的问题。
 	Empty Text	空文本
 	Unpainted Objects	无上色对象
+	Empty Text Paths	空文本路径
 	Zero-Opacity Objects	不透明度为零的对象
 	Duplicate Objects	重复对象
 	Off-Artboard Art	画板外的图稿

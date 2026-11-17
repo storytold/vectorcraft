@@ -3,9 +3,10 @@
 //! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
 //! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one;
-//! double-click opens Graphic Style Options. Dragging a style moves it in the list, or applies it
-//! to the art it is dropped on (`canvas::panel_drop`); art dragged off the canvas or the Appearance
-//! panel's thumbnail dropped on the panel becomes a new style. Holding the right button on a style
+//! double-click opens Graphic Style Options. Dragging a style moves it in the list, applies it
+//! to the art it is dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a
+//! copy of it and of the styles highlighted with it at the end of the list; art dragged off the
+//! canvas or the Appearance panel's thumbnail dropped on the panel becomes a new style. Holding the right button on a style
 //! shows it large, on the selected object when there is one. The Control bar's Style picker lists
 //! the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
@@ -566,7 +567,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 None => tiles(app, ui, &shown, &sel, &mut ev),
             }
         });
-        let zone = ui.interact(out.inner_rect, ui.scope_id().with("gs-drop"), Sense::hover());
+        // The drop zone is the part of the list on screen: when the list shrinks to its rows,
+        // `inner_rect` reaches past it over the footer's buttons.
+        let zone = ui.interact(out.inner_rect.intersect(ui.min_rect()), ui.scope_id().with("gs-drop"), Sense::hover());
         zone_input(ui, &zone, &doc, &mut ev);
     });
     act(app, ui, &shown, ev, false);
@@ -584,14 +587,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run("graphicStyle.breakLink", json!({})).ok();
         }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Graphic Style (Alt-click to name it)"), false, has_sel, 24.0).clicked() {
+        // A style dragged from the list can be dropped on it, also with no art selected: the
+        // button is enabled while one is held.
+        let new_enabled = has_sel || dragged_style(ui.ctx(), &doc).is_some();
+        let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Graphic Style (Alt-click to name it)"), false, new_enabled, 24.0);
+        if new.clicked() {
             new_style(app, alt_held(ui));
         }
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Graphic Style (Alt-click: without asking)"), false, !sel.is_empty(), 24.0)
-            .clicked()
-        {
+        drop_on_new(app, ui, &new, &sel);
+        // So is Delete Graphic Style, which deletes a style dropped on it.
+        let trash_enabled = !sel.is_empty() || dragged_style(ui.ctx(), &doc).is_some();
+        let trash = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Graphic Style (Alt-click: without asking)"), false, trash_enabled, 24.0);
+        if trash.clicked() && !sel.is_empty() {
             delete(app, &sel, alt_held(ui));
         }
+        drop_on_delete(app, ui, &trash, &sel);
     });
 }
 
@@ -629,6 +639,71 @@ fn new_style(app: &mut VectorcraftApp, ask: bool) {
         app.run("ui.graphicStyleOptions", json!({})).ok();
     } else {
         app.run("graphicStyle.new", json!({})).ok();
+    }
+}
+
+/// The style of `d` being dragged from the panel, if one is.
+fn dragged_style(ctx: &egui::Context, d: &Document) -> Option<String> {
+    match egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref() {
+        Some(PanelDrag::GraphicStyle(n)) if d.graphic_style(n).is_some() => Some(n.clone()),
+        _ => None,
+    }
+}
+
+/// The styles a style dragged from the panel carries: every highlighted style (`sel`) in panel
+/// order when the dragged style `name` is one of them, else that style alone.
+fn carried(d: &Document, sel: &[String], name: &str) -> Vec<String> {
+    if sel.iter().any(|s| s == name) {
+        d.graphic_styles.iter().filter(|g| sel.contains(&g.name)).map(|g| g.name.clone()).collect()
+    } else {
+        vec![name.to_string()]
+    }
+}
+
+/// A style dragged onto New Graphic Style (`button`): the button is outlined while the style is
+/// held over it, and on release the style, with the styles highlighted with it (`sel`), is
+/// duplicated ([`duplicate`]). Other drags are left to their own targets.
+fn drop_on_new(app: &mut VectorcraftApp, ui: &Ui, button: &Response, sel: &[String]) {
+    let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
+    let Some(name) = dragged_style(ui.ctx(), &doc) else { return };
+    if button.dnd_hover_payload::<PanelDrag>().is_none() {
+        return;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    if button.dnd_release_payload::<PanelDrag>().is_some() {
+        duplicate(app, ui.ctx(), &carried(&doc, sel, &name));
+    }
+}
+
+/// A style dragged onto Delete Graphic Style (`button`): the button is outlined while the style is
+/// held over it, and on release the style, with the styles highlighted with it (`sel`), is deleted
+/// as the button deletes ([`delete`]): after asking, or at once with Alt held. Other drags are left
+/// to their own targets.
+fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, sel: &[String]) {
+    let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
+    let Some(name) = dragged_style(ui.ctx(), &doc) else { return };
+    if button.dnd_hover_payload::<PanelDrag>().is_none() {
+        return;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    if button.dnd_release_payload::<PanelDrag>().is_some() {
+        delete(app, &carried(&doc, sel, &name), alt_held(ui));
+    }
+}
+
+/// Duplicates `names` (`graphicStyle.duplicate`, each copy at the end of the list) in one undo
+/// step and highlights the copies. A failure is shown in the status bar and changes nothing.
+fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, names: &[String]) {
+    let made = if let [name] = names {
+        app.run("graphicStyle.duplicate", json!({ "name": name })).map(|r| vec![r])
+    } else {
+        let commands: Vec<Value> = names.iter().map(|n| json!({ "command": "graphicStyle.duplicate", "params": { "name": n } })).collect();
+        app.run("command.batch", json!({ "label": "Duplicate Graphic Style", "commands": commands }))
+            .map(|r| r["results"].as_array().cloned().unwrap_or_default())
+    };
+    match made {
+        Ok(made) => set_pstate(ctx, "gs-sel", made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect::<Vec<_>>()),
+        Err(e) => app.status(e),
     }
 }
 
@@ -1162,6 +1237,199 @@ mod tests {
         let d = app.session.active().unwrap().doc.clone();
         assert_eq!(d.graphic_styles.len(), n0.len() + 2);
         assert_eq!(d.node(rect).unwrap().extras().graphic_style, d.graphic_styles.last().map(|g| g.id));
+    }
+
+    /// A style dropped on New Graphic Style is duplicated at the end of the list, also with no art
+    /// selected; a highlighted style carries the other highlighted styles with it, in one undo step.
+    #[test]
+    fn a_style_dropped_on_new_graphic_style_is_duplicated_at_the_end() {
+        let mut app = app();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 600.0)));
+        // One frame of the panel with `events`: the center of the footer button labeled `label`
+        // and whether it is enabled.
+        let button = |app: &mut VectorcraftApp, events: Vec<egui::Event>, label: &str| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: screen, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility tree").nodes;
+            let (_, node) = nodes.iter().find(|(_, n)| n.label() == Some(label)).unwrap_or_else(|| panic!("{label}"));
+            let b = node.bounds().expect("visible button");
+            (pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32), !node.is_disabled())
+        };
+        let new_button = |app: &mut VectorcraftApp, events: Vec<egui::Event>| button(app, events, "New Graphic Style (Alt-click to name it)");
+        let release = |at: egui::Pos2| {
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+            vec![egui::Event::PointerMoved(at), up]
+        };
+        let links = |app: &VectorcraftApp| {
+            app.session.active().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.extras().graphic_style).collect::<Vec<_>>()
+        };
+        let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+        for view in [View::SmallList, View::Thumbnail] {
+            app.ui.graphic_styles_view = view;
+            let n = names(&app);
+            let linked = links(&app);
+            // With no art selected the button is off until a style is held over it.
+            let (at, on) = new_button(&mut app, vec![]);
+            assert!(!on, "{view:?}: off with no art selected");
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[1].clone()));
+            let (_, on) = new_button(&mut app, vec![egui::Event::PointerMoved(at)]);
+            assert!(on, "{view:?}: on while a style is dragged");
+            assert_eq!(names(&app), n, "{view:?}: holding it there changes nothing");
+            // Released on it: a copy with the same look and a new id goes to the end, highlighted.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[1].clone()));
+            new_button(&mut app, release(at));
+            let copy = format!("{} copy", n[1]);
+            assert_eq!(names(&app)[..n.len()], n[..], "{view:?}");
+            assert_eq!(names(&app)[n.len()..], *std::slice::from_ref(&copy), "{view:?}");
+            let d = doc(&app);
+            let (src, made) = (d.graphic_style(&n[1]).unwrap(), d.graphic_style(&copy).unwrap());
+            assert_eq!(made.appearance, src.appearance);
+            assert_ne!(made.id, src.id);
+            assert_eq!(links(&app), linked, "{view:?}: no art is linked or unlinked");
+            assert_eq!(selected(&ctx, &d), std::slice::from_ref(&copy));
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(names(&app), n, "{view:?}: one undo step");
+        }
+
+        // Two highlighted styles, one of them dragged: both are copied in panel order, in one step.
+        app.ui.graphic_styles_view = View::SmallList;
+        let n = names(&app);
+        let (at, _) = new_button(&mut app, vec![]);
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[3].clone()));
+        new_button(&mut app, release(at));
+        let copies = [format!("{} copy", n[0]), format!("{} copy", n[3])];
+        assert_eq!(names(&app)[n.len()..], copies);
+        assert_eq!(selected(&ctx, &doc(&app)), copies);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(names(&app), n, "the group's copies go in one undo step");
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(names(&app)[n.len()..], copies);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // A style that is not highlighted is copied alone.
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[2].clone()));
+        new_button(&mut app, release(at));
+        assert_eq!(names(&app)[n.len()..], [format!("{} copy", n[2])]);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // Other drags dropped on the button make nothing.
+        let rect = doc(&app).layers[0].children().unwrap()[0].id;
+        for payload in [PanelDrag::Art(vec![rect]), PanelDrag::Appearance(rect), PanelDrag::GraphicStyle("No such style".into())] {
+            egui::DragAndDrop::set_payload(&ctx, payload);
+            new_button(&mut app, release(at));
+            assert_eq!(names(&app), n);
+        }
+    }
+
+    /// A style dropped on Delete Graphic Style is deleted as the button deletes: after asking, or at
+    /// once with Alt held, also with no style highlighted, and the button is outlined while the style
+    /// is held over it. A highlighted style carries the other highlighted styles with it, in one undo
+    /// step. Art linked to a deleted style keeps its look and is unlinked. Other drags delete nothing.
+    #[test]
+    fn a_style_dropped_on_delete_graphic_style_is_deleted_as_the_button_deletes() {
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 600.0)));
+        const DELETE: &str = "Delete Graphic Style (Alt-click: without asking)";
+        // One frame of the panel with `events` and `modifiers` held: the center of the Delete
+        // button, whether it is enabled, and whether a drop-target outline is drawn around it.
+        let trash = |app: &mut VectorcraftApp, events: Vec<egui::Event>, modifiers: egui::Modifiers| {
+            let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: screen, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility tree").nodes;
+            let (_, node) = nodes.iter().find(|(_, n)| n.label() == Some(DELETE)).expect("the Delete button");
+            let b = node.bounds().expect("visible button");
+            let at = pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+            let accent = Tokens::get(&ctx).accent;
+            let outlined = out.shapes.iter().any(|c| match &c.shape {
+                egui::Shape::Rect(r) => r.stroke.width == 1.5 && r.stroke.color == accent && r.rect.contains(at),
+                _ => false,
+            });
+            (at, !node.is_disabled(), outlined)
+        };
+        let release = |at: egui::Pos2, modifiers: egui::Modifiers| {
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+            vec![egui::Event::PointerMoved(at), up]
+        };
+        let none = egui::Modifiers::default();
+        let rect = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id;
+        let node = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(rect).unwrap().clone();
+        let mine_id = app.session.active().unwrap().doc.graphic_style("Mine").unwrap().id;
+        assert_eq!(node(&app).extras().graphic_style, Some(mine_id));
+        let look = node(&app).appearance;
+        for view in [View::SmallList, View::Thumbnail] {
+            app.ui.graphic_styles_view = view;
+            set_pstate(&ctx, "gs-sel", Vec::<String>::new());
+            let n = names(&app);
+            // With no style highlighted the button is off until a style is held over it.
+            let (at, on, outlined) = trash(&mut app, vec![], none);
+            assert!(!on && !outlined, "{view:?}: off with no style highlighted");
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Mine".into()));
+            let (_, on, outlined) = trash(&mut app, vec![egui::Event::PointerMoved(at)], none);
+            assert!(on && outlined, "{view:?}: on and outlined while a style is held over it");
+            assert_eq!(names(&app), n, "{view:?}: holding it there changes nothing");
+            // Released on it: the button's question, and nothing is deleted or moved until OK.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Mine".into()));
+            trash(&mut app, release(at, none), none);
+            assert_eq!(names(&app), n, "{view:?}");
+            assert_eq!(app.ui.dialog.as_ref().unwrap().str("message"), "Delete the graphic style “Mine”?", "{view:?}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            let rest: Vec<String> = n.iter().filter(|s| *s != "Mine").cloned().collect();
+            assert_eq!(names(&app), rest, "{view:?}");
+            assert_eq!(node(&app).extras().graphic_style, None, "{view:?}: the art is unlinked");
+            assert_eq!(node(&app).appearance, look, "{view:?}: and keeps its look");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(names(&app), n, "{view:?}: one undo step");
+            assert_eq!(node(&app).extras().graphic_style, Some(mine_id), "{view:?}: undo links the art again");
+        }
+
+        // Two highlighted styles, one of them dragged, with Alt held: both go at once, in one step.
+        app.ui.graphic_styles_view = View::SmallList;
+        let n = names(&app);
+        let (at, _, _) = trash(&mut app, vec![], none);
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[3].clone()));
+        trash(&mut app, release(at, egui::Modifiers::ALT), egui::Modifiers::ALT);
+        assert!(app.ui.dialog.is_none(), "Alt deletes without asking");
+        let rest: Vec<String> = n.iter().filter(|s| **s != n[0] && **s != n[3]).cloned().collect();
+        assert_eq!(names(&app), rest);
+        assert!(selected(&ctx, &app.session.active().unwrap().doc.clone()).is_empty(), "the deleted styles are no longer highlighted");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(names(&app), n, "the group goes in one undo step");
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(names(&app), rest);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // A style that is not highlighted is deleted alone, and the highlight stays.
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[2].clone()));
+        trash(&mut app, release(at, none), none);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("message"), format!("Delete the graphic style “{}”?", n[2]));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let rest: Vec<String> = n.iter().filter(|s| **s != n[2]).cloned().collect();
+        assert_eq!(names(&app), rest);
+        assert_eq!(selected(&ctx, &app.session.active().unwrap().doc.clone()), [n[3].clone(), n[0].clone()]);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // Other drags dropped on the button delete nothing and ask nothing.
+        set_pstate(&ctx, "gs-sel", Vec::<String>::new());
+        for payload in [PanelDrag::Art(vec![rect]), PanelDrag::Appearance(rect), PanelDrag::GraphicStyle("No such style".into())] {
+            egui::DragAndDrop::set_payload(&ctx, payload);
+            let (_, on, outlined) = trash(&mut app, vec![egui::Event::PointerMoved(at)], none);
+            assert!(!on && !outlined);
+            trash(&mut app, release(at, egui::Modifiers::ALT), egui::Modifiers::ALT);
+            assert_eq!(names(&app), n);
+            assert!(app.ui.dialog.is_none());
+        }
     }
 
     #[test]
