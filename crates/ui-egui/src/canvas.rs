@@ -643,8 +643,7 @@ fn cache_key(
         rich_black: app.session.prefs.black_on_screen == "rich",
         // A tool's drag on the canvas, during an interaction (not a dialog's preview).
         dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
-        // The sampler keeps its bound original visible between clicks, independently of the eye.
-        trace_source: crate::panels::image_trace::ignore_sampler_source(app, st.uid).or_else(|| app.ui.trace_hold_source.clone()),
+        trace_source: app.ui.trace_hold_source.clone(),
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
         backdrop: backdrop(app, st, app.outline_view()),

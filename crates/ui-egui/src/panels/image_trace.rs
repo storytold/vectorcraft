@@ -272,7 +272,7 @@ pub(crate) fn cancel_ignore_sampler(app: &mut VectorcraftApp, restore: bool) {
     }
 }
 
-/// Also runs when the panel is closed: document changes and tool changes end the source preview.
+/// Also runs when the panel is closed: document changes and tool changes end the pick.
 pub(crate) fn refresh_ignore_sampler(app: &mut VectorcraftApp) -> bool {
     let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return false };
     if !sampler_valid(app, s) {
@@ -294,12 +294,6 @@ pub(crate) fn discard_stale_ignore_click(app: &mut VectorcraftApp) -> bool {
     let restore = app.session.tool_id() == "eyedropper";
     cancel_ignore_sampler(app, restore);
     true
-}
-
-/// Render the bound live trace's original without changing its stored View or the eye's hold.
-pub(crate) fn ignore_sampler_source(app: &VectorcraftApp, doc: u64) -> Option<Arc<Vec<NodeId>>> {
-    let s = app.ui.trace_ignore_sampler.as_ref()?;
-    (s.doc == doc && sampler_valid(app, s) && sampler_tool_active(app, s) && target(app).0).then(|| Arc::new(vec![s.target]))
 }
 
 fn start_ignore_sampler(app: &mut VectorcraftApp, ctx: &egui::Context) {
@@ -347,21 +341,28 @@ fn sampled_ignore_color(app: &VectorcraftApp, s: &crate::state::TraceIgnoreSampl
     (alpha != 0).then(|| format!("#{r:02x}{g:02x}{b:02x}"))
 }
 
-/// Handle the one-shot tool's reply after it has consumed its transient binding.
+/// A miss keeps the pick armed; only a valid source color, Escape or invalid binding ends it.
 pub(crate) fn apply_ignore_color_sample(app: &mut VectorcraftApp, p: &Value) {
     let Some(s) = app.ui.trace_ignore_sampler.as_ref() else { return };
     if p["binding"] != sampler_binding(s) {
         return;
     }
-    let valid = sampler_valid(app, s);
-    let s = s.clone();
-    cancel_ignore_sampler(app, false);
-    if !valid || p["cancel"] == true {
+    if p["cancel"] == true {
+        // Escape already carries its one deferred SwitchTool request.
+        cancel_ignore_sampler(app, false);
         return;
     }
-    let Some(color) = sampled_ignore_color(app, &s, p) else { return };
+    if !sampler_valid(app, s) {
+        cancel_ignore_sampler(app, true);
+        return;
+    }
+    // Outside the source or over a transparent pixel there is no color to accept. Keep the
+    // binding and previous tool so the next canvas click can still complete this pick.
+    let Some(color) = sampled_ignore_color(app, s, p) else { return };
+    let s = s.clone();
     // The canvas UI establishes this context before a real panel click can arm the sampler.
     let Some(ctx) = app.ui_ctx.clone() else { return };
+    cancel_ignore_sampler(app, false);
     let all = presets(app, &ctx);
     let mut st: TraceUi = pstate(&ctx, "image-trace");
     let (is_trace, _, stored) = target(app);
@@ -379,6 +380,9 @@ pub(crate) fn apply_ignore_color_sample(app: &mut VectorcraftApp, p: &Value) {
     }
     set_pstate(&ctx, "image-trace", st);
     ctx.request_repaint();
+    // The old deferred SwitchTool ran after the panel accepted the color. Keep that order and
+    // fresh tool choice; a miss above has no switch request and remains armed.
+    app.select_tool(&s.back);
 }
 
 /// The selected Image Trace object's View row (Control bar, Properties).

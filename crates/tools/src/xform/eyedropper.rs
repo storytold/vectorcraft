@@ -21,7 +21,8 @@
 //! armed, Escape is left to the application.
 //!
 //! Image Trace's Ignore Color eyedropper passes its bound document point to the panel, which
-//! samples the original image pixels; this tool changes neither paint nor selection.
+//! samples the original image pixels and ends the pick only when a color is accepted. A miss
+//! stays armed; this tool changes neither paint nor selection.
 
 use std::collections::HashSet;
 
@@ -470,12 +471,10 @@ impl Tool for EyedropperTool {
         if ev.kind != PointerKind::Down {
             return vec![];
         }
-        if let Some(binding) = self.image_trace_ignore_color.take() {
-            let back = self.stop.take().unwrap_or_else(|| "selection".to_string());
-            return vec![
-                Action::Dialog("imageTraceIgnoreColor".into(), json!({ "binding": binding, "point": [ev.pos.x, ev.pos.y] })),
-                Action::SwitchTool(back),
-            ];
+        if let Some(binding) = &self.image_trace_ignore_color {
+            // The panel knows whether this hits an opaque source pixel. It clears the binding
+            // and restores the previous tool only after accepting a color, not on a miss.
+            return vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({ "binding": binding, "point": [ev.pos.x, ev.pos.y] }))];
         }
         let opts = sample_options(cx);
         if self.brush_key_color {
@@ -726,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn image_trace_sampling_forwards_its_binding_and_document_point_once() {
+    fn image_trace_sampling_keeps_forwarding_its_binding_until_the_panel_accepts_a_color() {
         let (d, id) = doc_with_rect();
         let (s, p) = (Selection::default(), paint());
         let cx = cx(&d, &s, &p);
@@ -740,14 +739,17 @@ mod tests {
             assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, -25.5, 400.25)).is_empty());
             assert_eq!(
                 t.pointer(&cx, &PointerEvent::new(PointerKind::Down, -25.5, 400.25).with_mods(mods)),
-                vec![
-                    Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "point": [-25.5, 400.25]})),
-                    Action::SwitchTool("gradient".into()),
-                ]
+                vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "point": [-25.5, 400.25]}))]
             );
+            assert_eq!(t.options()["imageTraceIgnoreColor"], binding, "a point is only a request until the panel accepts its source color");
+            assert_eq!(t.options()["stop"], "gradient");
+            assert!(t.claims_key(&cx, ToolKey::Escape));
+            assert!(t.ends_on_escape(&cx));
+            let next = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 20.0));
+            assert_eq!(next, vec![Action::Dialog("imageTraceIgnoreColor".into(), json!({"binding": binding, "point": [10.0, 20.0]}))]);
+            t.set_option("imageTraceIgnoreColor", &Value::Null);
+            t.set_option("stop", &Value::Null);
             assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
-            assert!(!t.claims_key(&cx, ToolKey::Escape));
-            assert!(!t.ends_on_escape(&cx));
             assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
         }
     }

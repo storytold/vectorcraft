@@ -62,10 +62,24 @@ fn click_control(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
 }
 
 fn fixture(live_trace: bool, rgb: [u8; 3], preview: bool) -> (VectorcraftApp, egui::Context) {
+    fixture_with_transparent_edge(live_trace, rgb, preview, false)
+}
+
+fn fixture_with_transparent_edge(live_trace: bool, rgb: [u8; 3], preview: bool, transparent: bool) -> (VectorcraftApp, egui::Context) {
     vectorcraft_ui_egui::i18n::set_current(vectorcraft_ui_egui::i18n::Lang::EN);
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-    let pixels: Vec<u8> = (0..400).flat_map(|i| if i % 20 < 10 { [rgb[0], rgb[1], rgb[2], 255] } else { [255; 4] }).collect();
+    let pixels: Vec<u8> = (0..400)
+        .flat_map(|i| {
+            if transparent && i % 20 == 19 {
+                [0; 4]
+            } else if i % 20 < 10 {
+                [rgb[0], rgb[1], rgb[2], 255]
+            } else {
+                [255; 4]
+            }
+        })
+        .collect();
     let image =
         craft_image_codecs::Image::from_raw(20, 20, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, pixels).unwrap();
     let png = craft_image_codecs::encode(&image, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
@@ -121,6 +135,14 @@ fn sample(app: &mut VectorcraftApp, ctx: &egui::Context, point: Point) {
     assert_eq!(app.session.tool_id(), "eyedropper", "the actual panel button arms sampling");
     let view = app.view_info();
     canvas::dispatch(app, &PointerEvent::new(PointerKind::Down, point.x, point.y), view);
+    settle(app, ctx);
+}
+
+fn press_armed_canvas(app: &mut VectorcraftApp, ctx: &egui::Context, point: Point) {
+    assert_eq!(app.session.tool_id(), "eyedropper", "this is a continuation of the existing armed pick");
+    let view = app.view_info();
+    canvas::dispatch(app, &PointerEvent::new(PointerKind::Down, point.x, point.y), view);
+    canvas::dispatch(app, &PointerEvent::new(PointerKind::Up, point.x, point.y), view);
     settle(app, ctx);
 }
 
@@ -217,8 +239,8 @@ fn preview_traces_once_and_undo_redo_restore_the_results() {
 }
 
 #[test]
-fn miss_escape_and_explicit_tool_choice_do_not_sample_or_paint() {
-    for exit in ["outside", "escape", "rectangle", "eyedropper"] {
+fn escape_and_explicit_tool_choice_do_not_sample_or_paint() {
+    for exit in ["escape", "rectangle", "eyedropper"] {
         let (mut app, ctx) = fixture(true, [37, 83, 149], false);
         let old_color = settings(&app)["params"]["ignoreColor"].clone();
         let state = app.session.active().unwrap();
@@ -228,10 +250,6 @@ fn miss_escape_and_explicit_tool_choice_do_not_sample_or_paint() {
         click_control(&mut app, &ctx, SAMPLE_TIP);
         assert_eq!(app.session.tool_id(), "eyedropper");
         match exit {
-            "outside" => {
-                let view = app.view_info();
-                canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Down, -100.0, -100.0), view);
-            }
             "escape" => {
                 let key = |pressed| Event::Key {
                     key: egui::Key::Escape,
@@ -247,7 +265,7 @@ fn miss_escape_and_explicit_tool_choice_do_not_sample_or_paint() {
             }
             chosen => app.select_tool(chosen),
         }
-        let expected = if exit == "outside" || exit == "escape" { "selection" } else { exit };
+        let expected = if exit == "escape" { "selection" } else { exit };
         assert_eq!(app.session.tool_id(), expected, "{exit}: restore or respect the explicit choice");
         assert!(app.session.tool_options_of("eyedropper")["imageTraceIgnoreColor"].is_null());
         settle(&mut app, &ctx);
@@ -260,6 +278,55 @@ fn miss_escape_and_explicit_tool_choice_do_not_sample_or_paint() {
         assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
         click_control(&mut app, &ctx, "Trace");
         assert_eq!(settings(&app)["params"]["ignoreColor"], old_color, "{exit}: no hidden draft color was sampled");
+    }
+}
+
+#[test]
+fn outside_and_transparent_misses_stay_armed_until_an_opaque_source_pixel_is_picked() {
+    for live_trace in [false, true] {
+        let (mut app, ctx) = fixture_with_transparent_edge(live_trace, [37, 83, 149], false, true);
+        let hit = source_point(&app, 0.25);
+        let outside = source_point(&app, -0.25);
+        let transparent = source_point(&app, 0.975);
+        let state = app.session.active().unwrap();
+        let (document, selection, revision) = (state.doc.clone(), state.selection.clone(), state.revision);
+        let history = (state.history.undo.len(), state.history.redo.len());
+        let paint = app.session.paint.clone();
+        let node = selected(&app);
+        let original = if live_trace { node.children().unwrap()[0].as_ref() } else { &node };
+        let NodeKind::Image(image) = &original.kind else { panic!("original fixture image") };
+        let blob = &state.doc.images[&image.key];
+        let keep = |_: f64, _: f64| true;
+        assert_eq!(
+            blob.sample_pixels(&[(Some([0.95, 0.5, 1.0, 0.55]), 1, &keep)]),
+            Some(vec![vec![[0; 4]]]),
+            "the missed point is really transparent in the source"
+        );
+        assert!(blob.sample_object(19.5, 10.0, (image.width, image.height), 1).is_none(), "a transparent source pixel has no color to pick");
+        click_control(&mut app, &ctx, SAMPLE_TIP);
+        let binding = app.session.tool_options()["imageTraceIgnoreColor"].clone();
+        assert!(!binding.is_null());
+        for miss in [outside, transparent] {
+            press_armed_canvas(&mut app, &ctx, miss);
+            assert_eq!(app.session.tool_id(), "eyedropper", "live={live_trace}: a miss stays armed");
+            assert!(app.ui.trace_ignore_sampler.is_some());
+            assert_eq!(app.session.tool_options()["imageTraceIgnoreColor"], binding);
+            assert_eq!(app.session.tool_options()["stop"], "selection");
+            assert_eq!(app.session.paint, paint);
+            let state = app.session.active().unwrap();
+            assert_eq!(state.doc, document);
+            assert_eq!(state.selection, selection);
+            assert_eq!(state.revision, revision);
+            assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
+        }
+        press_armed_canvas(&mut app, &ctx, hit);
+        assert_eq!(app.session.tool_id(), "selection", "the valid pick restores the previous tool");
+        assert!(app.ui.trace_ignore_sampler.is_none());
+        assert!(app.session.tool_options_of("eyedropper")["imageTraceIgnoreColor"].is_null());
+        assert_eq!(app.session.paint, paint);
+        assert_eq!(app.session.active().unwrap().doc, document, "Preview off keeps the accepted color in the draft");
+        click_control(&mut app, &ctx, "Trace");
+        assert_eq!(settings(&app)["params"]["ignoreColor"], "#255395", "the next valid source pixel completes the same armed pick");
     }
 }
 
@@ -366,7 +433,7 @@ fn pixel_at(image: &vectorcraft_render::Rendered, key: &CacheKey, point: Point) 
 }
 
 #[test]
-fn actual_canvas_shows_original_while_armed_then_restores_the_stored_view() {
+fn actual_canvas_keeps_its_displayed_view_while_the_original_pixels_are_sampled() {
     let (mut app, ctx) = fixture(true, [37, 83, 149], false);
     let point = source_point(&app, 0.25);
     let control = source_point(&app, 0.75);
@@ -383,39 +450,34 @@ fn actual_canvas_shows_original_while_armed_then_restores_the_stored_view() {
         blob.sample_object(f64::from(image.width) * 0.25, f64::from(image.height) * 0.5, (image.width, image.height), 1),
         Some([37, 83, 149, 255])
     );
-    let source_hash = blob.content_key();
     let stored = settings(&app);
     let (before, before_key) = capture_canvas(&mut app, &ctx);
     assert_eq!(pixel_at(&before, &before_key, point), [0, 0, 0, 255]);
     assert_eq!(pixel_at(&before, &before_key, control), [255; 4]);
     click_control(&mut app, &ctx, SAMPLE_TIP);
     let (armed, armed_key) = capture_canvas(&mut app, &ctx);
-    assert!(!ctx.input(|i| i.pointer.any_down()), "the source remains visible after releasing the button");
-    assert_eq!(armed_key.trace_source.as_deref().map(Vec::as_slice), Some([target].as_slice()));
-    assert_eq!(pixel_at(&armed, &armed_key, point), [37, 83, 149, 255]);
+    assert!(!ctx.input(|i| i.pointer.any_down()), "the button press has ended");
+    assert_eq!(armed_key.trace_source, before_key.trace_source, "arming does not override the existing eye hold or trace View");
+    assert_eq!(armed.pixels, before.pixels, "sampling original pixels does not change the displayed tracing result");
+    assert_eq!(pixel_at(&armed, &armed_key, point), [0, 0, 0, 255]);
     assert_eq!(pixel_at(&armed, &armed_key, control), [255; 4]);
-    app.select_tool("selection");
+    press_armed_canvas(&mut app, &ctx, point);
+    assert_eq!(app.session.tool_id(), "selection");
     let (restored, restored_key) = capture_canvas(&mut app, &ctx);
     assert!(restored_key.trace_source.is_none());
-    assert_eq!(restored.pixels, before.pixels, "the exact stored result returns");
+    assert_eq!(restored.pixels, before.pixels, "the valid Preview-off pick leaves the displayed result unchanged");
+    assert_eq!(settings(&app), stored, "the stored View and trace settings are unchanged");
     let state = app.session.active().unwrap();
     assert_eq!((state.uid, state.revision), (uid, revision));
     assert_eq!(state.doc, document);
     assert_eq!(state.selection, selection);
     assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
-    if let Some(dir) = std::env::var_os("VECTORCRAFT_TRACE_SAMPLER_EVIDENCE") {
-        let dir = std::path::PathBuf::from(dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        for (name, image) in [("before.png", &before), ("armed.png", &armed), ("restored.png", &restored)] {
-            std::fs::write(dir.join(name), image.to_png().unwrap()).unwrap();
-        }
-        let binding = json!({"doc": uid, "target": target.0, "revision": revision, "storedTrace": stored, "sourceContentKey": source_hash,
-            "point": [point.x,point.y], "controlPoint": [control.x,control.y], "width": before.width, "height": before.height,
-            "before": pixel_at(&before,&before_key,point), "armed": pixel_at(&armed,&armed_key,point), "restored": pixel_at(&restored,&restored_key,point),
-            "sourceIdsWhileArmed": [target.0], "undoRedoLengths": [history.0,history.1], "documentUnchanged": true,
-            "view": {"zoom":before_key.zoom,"center":[before_key.cx,before_key.cy],"rotation":before_key.rot,"pixelsPerPoint":before_key.ppp}});
-        std::fs::write(dir.join("binding.json"), serde_json::to_vec_pretty(&binding).unwrap()).unwrap();
-    }
+    click_control(&mut app, &ctx, "Trace");
+    assert_eq!(
+        settings(&app)["params"]["ignoreColor"],
+        "#255395",
+        "the source color is sampled while the canvas still shows its black tracing result"
+    );
 }
 
 /// Cancelling while Cmd/Ctrl borrows Selection also clears the parked eyedropper's one-shot.
