@@ -10285,3 +10285,7 @@ font-script	Japanese	იაპონური
 @msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არაბეჭდვად შრეზეა.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Nature Icons	ბუნების ხატულები
+	Flower	ყვავილი
+	Tree	ხე
+	Mountain	მთა

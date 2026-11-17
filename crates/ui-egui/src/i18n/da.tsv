@@ -10025,3 +10025,7 @@ breakText	Glyphs	Glyffer
 @msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+	Nature Icons	Naturikoner
+	Flower	Blomst
+	Tree	Træ
+	Mountain	Bjerg

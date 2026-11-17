@@ -475,6 +475,16 @@ fn objects_on_path_detach_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The Nature Icons library and its symbols display in each complete UI language.
+#[test]
+fn nature_symbol_library_names_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for name in ["Nature Icons", "Leaf", "Flower", "Tree", "Mountain", "Wave"] {
+            assert!(lang.catalog().plain(name).is_some(), "{} is missing {name}", lang.code);
+        }
+    }
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {
