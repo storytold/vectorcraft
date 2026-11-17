@@ -920,3 +920,46 @@ fn anchor_point_shift_drag_honors_measurement_labels() {
     assert!(t.overlays(&on).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)));
     assert!(!t.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));
 }
+
+/// Disabled Drawing pixel snapping must behave like the same effective art-snap mode.
+/// Drawing enabled is the ordinary pixel-priority control at this integer cut point.
+#[test]
+fn scissors_drawing_pixel_option_keeps_valid_isolated_cuts() {
+    let (mut d, rect) = doc_with_rect();
+    let outside = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            outside,
+            vectorcraft_geom::shapes::line(Point::new(150.0, 103.5), Point::new(350.0, 350.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let paint = paint();
+    let at = Point::new(150.0, 100.0);
+    for drawing in [true, false] {
+        let c = ToolContext {
+            isolation: Some(rect),
+            smart_guides: true,
+            snap_to_point: true,
+            snap_to_pixel: true,
+            pixel_snap: crate::PixelSnap { drawing, ..Default::default() },
+            snap_to_grid: false,
+            ..cx(&d, &selected, &paint)
+        };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+        let labels = scissors_labels(&tool, &c);
+        let cursor = tool.cursor(&c, at, Mods::default());
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        assert!(!actions.is_empty(), "drawing={drawing}: expected a valid isolated cut");
+        assert!(scissors_cut_at(&d, rect, &actions).distance(at) < 1e-6, "drawing={drawing}: {actions:?}");
+        assert_eq!(cursor, Cursor::Scissors, "drawing={drawing}");
+        assert!(labels.is_empty(), "rejected outside snap must not guide the raw cut: {labels:?}");
+        assert!(scissors_labels(&tool, &c).is_empty(), "the press also discards its rejected guide");
+    }
+}

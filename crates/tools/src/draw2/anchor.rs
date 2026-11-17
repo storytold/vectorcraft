@@ -20,7 +20,7 @@ use vectorcraft_geom::Point;
 use super::{hit_anchor, hit_segment, insert_anchor, remove_anchor};
 use crate::direct::hit_handle;
 use crate::guides::{DrawSnap, HandleSnap};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, PixelOp, Tool, ToolContext, ToolKey};
 use vectorcraft_geom::constrain_angle_from;
 
 #[derive(Clone, Copy, Debug)]
@@ -158,7 +158,7 @@ impl AnchorTool {
     fn resolve_scissors_snap(&mut self, cx: &ToolContext, raw: Point, snapped: Point) -> Point {
         let eligible = |p| hit_anchor(cx, p, 0.0).is_some() || hit_segment(cx, p, cx.pick_tol()).is_some();
         let fallback =
-            (cx.smart_guides || cx.snap_to_point) && !cx.snap_to_pixel && !cx.snap_to_grid && snapped != raw && !eligible(snapped) && eligible(raw);
+            (cx.smart_guides || cx.snap_to_point) && !cx.snaps_to_pixel(PixelOp::Drawing) && !cx.snap_to_grid && snapped != raw && !eligible(snapped) && eligible(raw);
         let snapped = if fallback {
             self.scissors_snap.clear();
             raw
@@ -175,7 +175,7 @@ impl AnchorTool {
     /// paths; there the ordinary full pick radius keeps the existing selected-path priority.
     fn scissors_segment(cx: &ToolContext, p: Point) -> Option<(NodeId, usize, usize, f64)> {
         let tol = cx.pick_tol();
-        if cx.smart_guides || cx.snap_to_point || cx.snap_to_pixel || cx.snap_to_grid {
+        if cx.smart_guides || cx.snap_to_point || cx.snaps_to_pixel(PixelOp::Drawing) || cx.snap_to_grid {
             super::segment_in(cx, super::candidate_paths(cx), p, tol.min(1e-6)).or_else(|| hit_segment(cx, p, tol))
         } else {
             hit_segment(cx, p, tol)
@@ -192,7 +192,7 @@ impl AnchorTool {
         let point = cx.point_tol();
         // A path snap must not be pulled to a nearby anchor by the larger pick radius.
         // Shared anchor targets and the path's anchors use the same stored coordinates.
-        let snapping = cx.smart_guides || cx.snap_to_point || cx.snap_to_pixel || cx.snap_to_grid;
+        let snapping = cx.smart_guides || cx.snap_to_point || cx.snaps_to_pixel(PixelOp::Drawing) || cx.snap_to_grid;
         let anchor_tol = if snapping { 0.0 } else { point };
         if let Some((id, si, ai)) = hit_anchor(cx, p, anchor_tol) {
             return vec![Action::Exec("path.split".into(), json!({"id": id.0, "subpath": si, "anchor": ai}))];
