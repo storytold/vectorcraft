@@ -129,34 +129,39 @@ fn fit_from(a: Point, pts: &[Point], tol: Option<f64>, reach: f64) -> Vec<Anchor
 /// Bend the ends of `stroke` onto `a` (its start) and `b` (its end): each end moves all the way
 /// and the stroke behind it less and less, to not at all `reach` along it (Edit selected paths
 /// within), so a stroke that starts or ends near the path joins it smoothly instead of with a
-/// straight piece.
+/// straight piece. A stroke shorter than `reach` bends over its own length, so each end still
+/// lands on its target and the other end's bend doesn't move it off.
 fn bend_ends(stroke: &mut [Point], a: Option<Point>, b: Option<Point>, reach: f64) {
-    let bend = |pts: &mut dyn Iterator<Item = &mut Point>, to: Point| {
-        let mut pts = pts.peekable();
-        let Some(first) = pts.peek().map(|p| **p) else { return };
-        let shift = to - first;
-        let (mut along, mut prev) = (0.0, first);
-        for p in pts {
-            along += prev.distance(*p);
-            prev = *p;
-            let w = if reach > 0.0 {
-                1.0 - along / reach
-            } else if along == 0.0 {
-                1.0
-            } else {
-                0.0
-            };
-            if w <= 0.0 {
-                break;
-            }
-            *p += shift * w;
-        }
-    };
-    if let Some(a) = a {
-        bend(&mut stroke.iter_mut(), a);
+    let (Some(&first), Some(&last)) = (stroke.first(), stroke.last()) else { return };
+    // How far along the stroke each point lies, measured before anything moves.
+    let mut along = Vec::with_capacity(stroke.len());
+    let mut total = 0.0;
+    let mut prev = first;
+    for p in stroke.iter() {
+        total += prev.distance(*p);
+        prev = *p;
+        along.push(total);
     }
-    if let Some(b) = b {
-        bend(&mut stroke.iter_mut().rev(), b);
+    let reach = reach.min(total);
+    if !reach.is_finite() || reach <= 0.0 {
+        // No length to bend over: only the ends move.
+        if let (Some(a), Some(p)) = (a, stroke.first_mut()) {
+            *p = a;
+        }
+        if let (Some(b), Some(p)) = (b, stroke.last_mut()) {
+            *p = b;
+        }
+        return;
+    }
+    let weight = |d: f64| (1.0 - d / reach).max(0.0);
+    let (shift_a, shift_b) = (a.map(|a| a - first), b.map(|b| b - last));
+    for (p, &d) in stroke.iter_mut().zip(&along) {
+        if let Some(s) = shift_a {
+            *p += s * weight(d);
+        }
+        if let Some(s) = shift_b {
+            *p += s * weight(total - d);
+        }
     }
 }
 
@@ -872,5 +877,16 @@ mod bend_tests {
         assert!((pts[2].y - 8.0 * 0.5).abs() < 1e-9, "halfway along the reach, half the shift: {:?}", pts[2]);
         assert!((pts[8].y + 8.0 * 0.5).abs() < 1e-9, "{:?}", pts[8]);
         assert_eq!(pts[5], Point::new(50.0, 0.0), "the middle doesn't move");
+    }
+
+    /// A stroke shorter than `reach` still has both ends on their targets: bending one end onto
+    /// its target doesn't pull the other end off its own.
+    #[test]
+    fn bend_ends_keeps_both_ends_on_target_for_a_short_stroke() {
+        let mut pts = vec![Point::new(40.0, -12.0), Point::new(44.0, -12.0), Point::new(48.0, -12.0)];
+        bend_ends(&mut pts, Some(Point::new(40.0, 0.0)), Some(Point::new(48.0, 0.0)), 16.0);
+        assert_eq!(pts[0], Point::new(40.0, 0.0), "{pts:?}");
+        assert_eq!(pts[2], Point::new(48.0, 0.0), "{pts:?}");
+        assert_eq!(pts[1], Point::new(44.0, 0.0), "halfway, half of each end's shift: {pts:?}");
     }
 }
