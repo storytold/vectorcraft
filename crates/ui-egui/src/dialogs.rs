@@ -997,6 +997,8 @@ mod tests_plugin_import;
 #[cfg(test)]
 mod tests_raster_formats;
 #[cfg(test)]
+mod tests_raster_supplied_options;
+#[cfg(test)]
 mod tests_svg_options_range;
 
 #[cfg(test)]
