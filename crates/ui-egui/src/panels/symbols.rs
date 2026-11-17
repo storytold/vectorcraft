@@ -420,6 +420,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link to Symbol"), false, inst, 24.0).clicked() {
             app.run("symbol.breakLink", json!({})).ok();
         }
+        // Opens Symbol Options on the current symbol, as the panel menu's Symbol Options… does;
+        // Alt does the same.
+        if widgets::icon_button_enabled(ui, "dc-options", tl!("Symbol Options"), false, sel.is_some(), 24.0).clicked() {
+            app.run("ui.symbolOptions", json!({"edit": true, "name": sel})).ok();
+        }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
         let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0);
         // A symbol dragged from the panel and dropped on New Symbol is duplicated, with or without
@@ -1009,6 +1014,58 @@ mod tests {
         assert_eq!(undo_len(&app), undo + 1, "one undo step");
         click_new(&mut app, egui::Modifiers::ALT);
         assert_eq!(art(&app, "New Symbol 3"), (1, 0), "Alt alone: the rectangle becomes an instance");
+    }
+
+    /// The center of the panel's Symbol Options button, and of Break Link to Symbol and New Symbol
+    /// beside it, in a frame of `app`.
+    fn options_button(app: &mut VectorcraftApp) -> (Pos2, Pos2, Pos2) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let found = clickable(&frame_held(&ctx, app, vec![], egui::Modifiers::NONE));
+        let at = |label: &str| found.iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
+        (at("Break Link to Symbol"), at("Symbol Options"), at("New Symbol"))
+    }
+
+    /// Clicks the panel at `at` with `modifiers` held.
+    fn click_at(app: &mut VectorcraftApp, at: Pos2, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        frame_held(&ctx, app, vec![], modifiers);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+    }
+
+    /// The bottom bar's Symbol Options button sits between Break Link to Symbol and New Symbol and
+    /// opens Symbol Options on the current symbol, as the panel menu's item does, with or without
+    /// Alt, and adds no undo step; in a document without symbols it is disabled and opens nothing.
+    #[test]
+    fn symbol_options_button_edits_the_current_symbol() {
+        let mut app = leaf_and_dot();
+        app.run("select.all", json!({})).unwrap();
+        let (break_link, options, new) = options_button(&mut app);
+        assert!(break_link.x < options.x && options.x < new.x, "Break Link, Symbol Options, New Symbol: {break_link:?} {options:?} {new:?}");
+        let undo = undo_len(&app);
+        for (current, modifiers) in [("Dot", egui::Modifiers::NONE), ("Leaf", egui::Modifiers::ALT)] {
+            app.run("symbol.setCurrent", json!({ "name": current })).unwrap();
+            click_at(&mut app, options, modifiers);
+            let d = app.ui.dialog.as_ref().expect("Symbol Options opens");
+            assert_eq!(d.kind, crate::dialogs::symbol_options::KIND);
+            assert_eq!((d.fields.get("name"), d.fields.get("__edit")), (Some(&json!(current)), Some(&json!(true))), "{modifiers:?}");
+            crate::dialogs::cancel(&mut app);
+        }
+        assert_eq!(undo_len(&app), undo, "opening the dialog adds no undo step");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"]);
+        let mut empty = VectorcraftApp::new(Session::new(), Default::default());
+        empty.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        for (app, disabled) in [(&mut app, false), (&mut empty, true)] {
+            let out = frame_held(&ctx, app, vec![], egui::Modifiers::NONE);
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            let button = &nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Symbol Options")).expect("a Symbol Options button").1;
+            assert_eq!(button.is_disabled(), disabled, "disabled without a current symbol");
+        }
+        click_at(&mut empty, options, egui::Modifiers::NONE);
+        assert_eq!(dialog_kind(&empty), None, "no symbol, no dialog");
     }
 
     /// Art dropped on the panel with Shift held as the primary button goes up becomes a new
