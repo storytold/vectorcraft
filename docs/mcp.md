@@ -6136,6 +6136,29 @@ slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` w
 Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
 slider back to the Auto-Smooth level.
 
+## Circle through three points
+
+`shape.circleThroughPoints {points?: [[x, y], [x, y], [x, y]]}` draws the circle whose edge passes through three
+points, as a live ellipse with the current paint, and selects it. Without `points`, it uses the three selected anchor
+points, from one path or several: anchor points selected with Direct Selection, or all the anchor points of a path
+selected whole, such as a triangle. The ends of selected segments do not count. The result is `{id, cx, cy, radius}`,
+and one undo removes the circle. The circle is not pixel-aligned, even while the document's
+[Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on, so it stays through the points. The command
+returns an error and draws nothing when two points are the same or the three lie on one line (twice the triangle's area
+at most 10⁻¹⁰ of its longest side squared), when `points` is not three pairs of numbers, and when `points` is left out
+and the selection does not hold exactly three anchor points of paths.
+
+With the Ellipse tool, the first two Shift-clicks place points, and the third draws the circle through the three with
+this command. After two points the tool previews the circle through them and the pointer as a dashed outline. Once a
+point is placed, a Shift-click on the selection's handles, center point or shape widgets places a point too. Escape, a
+click without Shift, a drag, a press without Shift on the selection or a shape widget, and an edit, Undo or Redo made
+outside the tool remove the points placed so far. A Shift-drag still draws a circle from corner to corner. While the
+perspective grid shows with an active plane, a Shift-click opens the size dialog, as a click does.
+
+```json
+{"name":"run_command","arguments":{"command":"shape.circleThroughPoints","params":{"points":[[0,0],[80,0],[0,60]]}}}
+```
+
 ## Editing a path with the Curvature tool
 
 The Curvature tool edits any selected path, whatever drew it, keeping its shape except where edited (#798). Each edit
