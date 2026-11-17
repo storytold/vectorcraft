@@ -585,6 +585,7 @@ font-technology	Variable	Variabel
 	Consolidate All Windows	Alle Fenster zusammenführen
 	Constrain Angle	Winkelbeschränkung
 	Constrain Width and Height Proportions	Proportionen von Breite und Höhe beibehalten
+	Copy Width to Height	Breite in Höhe kopieren
 	Construction Guides	Konstruktionslinien
 	Contextual Alternates	Kontextbedingte Varianten
 	Contextual Task Bar	Kontextbezogene Taskleiste
@@ -1340,6 +1341,10 @@ file-filter	Templates	Vorlagen
 	Font List	Schriftliste
 	Show Similar Fonts	Ähnliche Schriften anzeigen
 	Clear Similar Fonts	Ähnliche Schriften zurücksetzen
+	Fonts used in this document	In diesem Dokument verwendete Schriften
+	This document uses no available fonts	Dieses Dokument verwendet keine verfügbaren Schriften
+	Recently Added	Kürzlich hinzugefügt
+	Fonts added in the last 30 days	In den letzten 30 Tagen hinzugefügte Schriften
 	Font Preview Size	Größe der Schriftvorschau
 	Font Size	Schriftgrad
 	Variable Font	Variable Schrift
@@ -1554,6 +1559,11 @@ file-filter	Templates	Vorlagen
 	Show smooth color wheel	Stufenlosen Farbkreis anzeigen
 	Show segmented color wheel	Segmentierten Farbkreis anzeigen
 	Show color bars	Farbbalken anzeigen
+	Show brightness and hue on wheel	Helligkeit und Farbton im Farbkreis anzeigen
+	Show saturation and hue on wheel	Sättigung und Farbton im Farbkreis anzeigen
+	Add Color Tool	Farbe-hinzufügen-Werkzeug
+	Remove Color Tool	Farbe-entfernen-Werkzeug
+	Remove Color	Farbe entfernen
 	Find the selected colors in the artwork	Ausgewählte Farben in der Grafik finden
 	Harmony Sets	Harmoniesätze
 	Height	Höhe
@@ -1902,6 +1912,8 @@ file-filter	Templates	Vorlagen
 	Lasso Tool	Lasso-Werkzeug
 	Enclosing Lasso Tool	Umschließendes Lasso-Werkzeug
 	Enclosing Lasso	Umschließendes Lasso
+	Polygonal Lasso Tool	Polygon-Lasso-Werkzeug
+	Polygonal Lasso	Polygon-Lasso
 	Last Effect: {name}	Letzter Effekt: {name}
 	Last Effect: {}	Letzter Effekt: {}
 	Last Effect…	Letzter Effekt…
@@ -2025,7 +2037,8 @@ file-filter	Templates	Vorlagen
 	Lock Others	Andere sperren
 	Lock Slices	Slices sperren
 	Lock Station Point	Standpunkt sperren
-	Lossless (lossy WebP isn't available yet)	Verlustfrei (verlustbehaftetes WebP ist noch nicht verfügbar)
+	Lossless	Verlustfrei
+	Lossy	Verlustbehaftet
 	Lossy:	Verlustbehaftet:
 	Low	Niedrig
 	lowercase	kleinbuchstaben
@@ -2612,6 +2625,10 @@ diagnostics	ui	Oberfläche
 	Play Current Selection	Aktuelle Auswahl abspielen
 	Save Actions…	Aktionen speichern…
 	Load Actions…	Aktionen laden…
+	Reset Actions	Aktionen zurücksetzen
+	Replace the current actions with the default set?	Aktuelle Aktionen durch den Standardsatz ersetzen?
+	Append adds the default set after the current sets instead.	Mit „Anhängen“ wird der Standardsatz stattdessen nach den aktuellen Sätzen hinzugefügt.
+	Append	Anhängen
 	Plug-in Info	Plug-in-Informationen
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -3009,6 +3026,38 @@ digits	Malayalam	Malayalam
 	Responsive	Responsiv
 	Restore	Wiederherstellen
 	Restore every preference to its default (applied on OK)	Alle Voreinstellungen auf ihre Standardwerte zurücksetzen (wird bei OK angewendet)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Zeigt auf der Arbeitsfläche eine Leiste mit Befehlen für die Auswahl oder das Werkzeug; sie wird beim Ziehen und im Präsentationsmodus ausgeblendet.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Wie weit eine Pfeiltaste die Auswahl verschiebt; mit Umschalt verschiebt sie sie zehnmal so weit.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Der Winkel der Achsen, entlang derer Pfeiltasten verschieben und an die Umschalt das Zeichnen und Verschieben bindet.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Der Eckenradius, mit dem das Werkzeug „Abgerundetes Rechteck“ zeichnet; wird der Radius beim Zeichnen geändert, ändert sich auch dieser Wert.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Wie weit „Einfügen“ die Kopie nach rechts und unten versetzt, wenn keine Position angegeben ist, etwa aus einem Skript; „Einfügen“ in der App setzt sie in die Mitte der Ansicht.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Verhindert, dass der Zeichenstift einen angeklickten Ankerpunkt eines ausgewählten Pfads löscht oder an einem angeklickten Segment einen hinzufügt.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Zeichenwerkzeuge zeigen statt ihres Symbols ein Fadenkreuz; die Feststelltaste bewirkt dasselbe, solange sie aktiv ist.
+	Shows a tip when the pointer rests on a button or field that has one.	Zeigt einen Tipp an, wenn der Zeiger auf einer Schaltfläche oder einem Feld mit Tipp ruht.
+	Shows a warning before a script you choose runs.	Zeigt eine Warnung an, bevor ein von Ihnen gewähltes Skript ausgeführt wird.
+	Smooths the edges of artwork on the canvas.	Glättet die Kanten des Bildmaterials auf der Arbeitsfläche.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	„Auswahl › Gleich › Flächenfarbe“, „Konturfarbe“ und „Fläche und Kontur“ finden nur denselben Farbton eines globalen oder Volltonfarbfelds, nicht jeden Farbton davon.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Zeigt den Startbildschirm, wenn kein Dokument geöffnet ist; ist die Option aus, bleibt das Fenster leer, bis Sie auf „Start“ klicken.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Misst Objekte für Größe, Position und Ausrichtung mit ihren Konturen und formverändernden Effekten; Schatten, Schein und Weichzeichnungen werden nicht gemessen.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Bei 100 % Zoom nimmt ein Zoll des Dokuments 96 statt 72 Bildschirmpunkte ein.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ein Doppelklick mit dem Auswahl-Werkzeug auf eine Gruppe, einen Pfad oder ein Bild öffnet sie im Isolationsmodus.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Musterflächen und -konturen werden mit dem Bildmaterial transformiert, sofern die Transformation oder das Menü des Bedienfelds „Transformieren“ nichts anderes wählt.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Live-Eckenradien skalieren mit dem Bildmaterial, sofern die Skalierung nichts anderes wählt.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Konturstärken, Striche und Effektabstände skalieren mit dem Bildmaterial, sofern die Skalierung nichts anderes wählt.
+	The mouse wheel zooms the canvas instead of scrolling it.	Das Mausrad zoomt die Arbeitsfläche, statt sie zu scrollen.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mit gedrückter Befehls-/Strg-Taste scrollt das Mausrad die Arbeitsfläche seitwärts.
+	Dragging sideways on a numeric field's label changes the field's value.	Seitliches Ziehen auf der Beschriftung eines Zahlenfelds ändert den Wert des Felds.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Eine Drehgeste mit zwei Fingern auf einem Trackpad dreht die Ansicht der Arbeitsfläche.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Solange Sie das Tastaturkürzel eines Werkzeugs gedrückt halten, ist dieses Werkzeug gewählt; danach wird wieder das vorherige gewählt.
+	Shows the bounding box while you move the selection or draw a shape.	Zeigt den Begrenzungsrahmen an, während Sie die Auswahl verschieben oder eine Form zeichnen.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	„Schnittmarken erstellen“ zeichnet japanische statt römische Marken.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Neues Bildmaterial übernimmt nur Fläche und Kontur der Auswahl; ist die Option aus, übernimmt es das gesamte Aussehen des ausgewählten Objekts.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Wenn Sie Breite oder Höhe im Bedienfeld „Transformieren“, im Bedienfeld „Eigenschaften“ oder im Steuerungsbedienfeld ändern, ändert sich der andere Wert proportional.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Die Eigenschaften eines Live-Rechtecks zeigen ein Feld „Eckenradius“ für alle vier Ecken; ist die Option aus, hat jede Ecke ihr eigenes Feld.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Was Änderungen im Bedienfeld „Transformieren“ transformieren: das Objekt, seine Musterkacheln oder beides; „Standard“ folgt „Musterkacheln transformieren“.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Ist eine Symbolinstanz ausgewählt, verwendet das Bedienfeld „Transformieren“ den Registrierungspunkt des Symbols als Referenzpunkt.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Dunkelt die Arbeitsfläche außerhalb der Zeichenflächen ab, solange das Zeichenflächen-Werkzeug aktiv ist.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Ist „Bereich außerhalb der Zeichenfläche abblenden“ an, bleibt der Bereich außerhalb der Zeichenflächen dunkel, während Sie mit dem Zeichenflächen-Werkzeug ziehen.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Die Einheit für neue Dokumente in den integrierten Größen außer Pixelgrößen und für geöffnete Dateien ohne gespeicherte Einheit; wenn Sie sie hier wählen und auf OK klicken, erhält auch das aktive Dokument diese Einheit.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Konturstärken, Striche und Lücken werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Schriftgrade, Zeilenabstand und Grundlinienversatz werden in dieser Einheit angezeigt, und dafür eingegebene Zahlen werden in ihr gelesen.
@@ -3241,10 +3290,15 @@ digits	Malayalam	Malayalam
 	Filter Layers Panel Rows	Zeilen im Ebenenbedienfeld filtern
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` steht für geänderte Einstellungen: Speichern Sie die Vorgabe unter einem anderen Namen
 @msg	`{key}` must be an array of these names: {_1}	`{key}` muss ein Array mit diesen Namen sein: {_1}
-	Search commands and tools	Befehle und Werkzeuge suchen
-	Search commands and tools…	Befehle und Werkzeuge suchen…
+	Search commands, tools, panels and effects	Befehle, Werkzeuge, Bedienfelder und Effekte suchen
+	Search commands, tools, panels and effects…	Befehle, Werkzeuge, Bedienfelder und Effekte suchen…
+	No commands match	Keine passenden Befehle
+	{pos} of {total}: {name}	{pos} von {total}: {name}
+@plural	{n} result|{n} results	{n} Ergebnis|{n} Ergebnisse
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} von {n} Ergebnis. Tippen Sie weiter, um sie einzugrenzen.|{shown} von {n} Ergebnissen. Tippen Sie weiter, um sie einzugrenzen.
 	Recent Commands	Zuletzt verwendete Befehle
 	No recent commands	Keine zuletzt verwendeten Befehle
+	Search commands	Befehle suchen
 	Search Commands…	Befehle suchen…
 	Secondary	Sekundär
 	Section Symbol	Paragrafenzeichen
@@ -4218,6 +4272,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 legt Abstand und Ausrichtung fest
 	:	:
 	Isolate Selected Group	Ausgewählte Gruppe isolieren
+	Isolate Selected Path	Ausgewählten Pfad isolieren
 	Isolate Selected Object	Ausgewähltes Objekt isolieren
 	Release Clipping Mask	Schnittmaske zurückwandeln
 	Make Compound Path	Zusammengesetzten Pfad erstellen
@@ -4795,6 +4850,9 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no active document	kein aktives Dokument
 @msg	no active perspective plane	keine aktive Perspektivebene
 @msg	no anchor points selected	keine Ankerpunkte ausgewählt
+@msg	`points` must be three [x, y] pairs of numbers	`points` muss aus drei Zahlenpaaren [x, y] bestehen
+@msg	direct-select three anchor points, or give `points`	wählen Sie drei Ankerpunkte direkt aus oder geben Sie `points` an
+@msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien
 @msg	no artboard	keine Zeichenfläche
 @msg	no artboard {i} (0-based; the document has {_1})	keine Zeichenfläche {i} (Zählung ab 0; das Dokument hat {_1})
@@ -5783,6 +5841,24 @@ lighting	Light	Licht
 @msg	a 3D effect on a group's fill or stroke draws nothing	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ein 3D-Effekt auf der Fläche oder Kontur einer Gruppe zeichnet nichts, das exportiert werden kann
 @msg	The 3D object is too complex to export	Das 3D-Objekt ist zu komplex für den Export
+@msg	the <filter> element needs an id, the filter's name	das <filter>-Element braucht eine id, den Namen des Filters
+@msg	an SVG filter's id is at most {MAX_NAME} characters	die id eines SVG-Filters hat höchstens {MAX_NAME} Zeichen
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> ist kein Element eines SVG-Filters
+@msg	an SVG filter has no event attributes such as {_1}	ein SVG-Filter hat keine Ereignisattribute wie {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	die Bilder eines SVG-Filters sind data:-URLs im Format PNG, JPEG, GIF oder WebP
+@msg	the SVG filter isn't valid XML: {e}	der SVG-Filter ist kein gültiges XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves von feTurbulence ist höchstens {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} ist höchstens {max}
+@msg	feConvolveMatrix's order	order von feConvolveMatrix
+@msg	feMorphology's radius	radius von feMorphology
+@msg	a blur's stdDeviation	stdDeviation einer Weichzeichnung
+@msg	the SVG filter has no primitives	der SVG-Filter hat keine Filterprimitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	ein SVG-Filter hat höchstens {MAX_PRIMITIVES} Filterprimitive
+@msg	the SVG filter is too large once its attributes are written out	der SVG-Filter ist zu groß, sobald seine Attribute ausgeschrieben sind
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	die Bilder eines SVG-Filters haben insgesamt höchstens {MAX_IMAGE_PIXELS} Pixel
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	der SVG-Filter kann nicht gezeichnet werden: Prüfen Sie seine Filterprimitive und deren Eingaben
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	die Elemente eines SVG-Filters sind höchstens {MAX_DEPTH} Ebenen tief verschachtelt
+@msg	an SVG filter is at most {_1} KB	ein SVG-Filter ist höchstens {_1} KB groß
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	das Objekt hat keinen 3D-Effekt (Extrudieren und abgeflachte Kante, Kreiseln, Aufblasen oder Drehen)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` muss ein Objekt sein, das nur `mode` mit dem Wert shaded oder wireframe enthält
 @msg	its 3D effect builds no solid	sein 3D-Effekt erzeugt keinen Körper
@@ -6687,6 +6763,7 @@ anchor	Points:	Punkte:
 	Open a document to check it for issues.	Öffnen Sie ein Dokument, um es auf Probleme zu prüfen.
 	Empty Text	Leerer Text
 	Unpainted Objects	Objekte ohne Farbe
+	Empty Text Paths	Leere Textpfade
 	Zero-Opacity Objects	Objekte mit 0 % Deckkraft
 	Duplicate Objects	Doppelte Objekte
 	Off-Artboard Art	Bildmaterial außerhalb der Zeichenflächen
@@ -7100,6 +7177,11 @@ breakText	Glyphs	Glyphen
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepalesisch
+	Assamese	Assamesisch
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} und neuer (Version {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Alle geöffneten Dokumente als PDF exportieren
@@ -9224,6 +9306,7 @@ breakText	Glyphs	Glyphen
 @msg	Too many Revolve faces for visibility evaluation	Zu viele Kreiseln-Flächen für die Sichtbarkeitsberechnung
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft liest höchstens {ASE_MAX_ENTRIES} Farben und Gruppen aus einer Farbfeld-Austauschdatei, und diese Bibliothek hat {entries}
 @msg	WebP encoding failed: {e}	WebP-Kodierung fehlgeschlagen: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-Kodierung fehlgeschlagen: Das Bild ist für verlustbehaftetes WebP zu groß: Verringern Sie die Auflösung oder wählen Sie Verlustfrei
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` ist smallThumb, mediumThumb, largeThumb, smallList oder largeList
@@ -9335,3 +9418,23 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Check	Prüfen
+	Check Fold Lines	Faltlinien prüfen
+@msg	No cut lines are in the selection.	Die Auswahl enthält keine Schnittlinien.
+@msg	No cut lines are in the document.	Das Dokument enthält keine Schnittlinien.
+@msg	The cut lines do not enclose an area.	Die Schnittlinien umschließen keine Fläche.
+@msg	A cut line ends without meeting another cut line.	Eine Schnittlinie endet, ohne auf eine andere Schnittlinie zu treffen.
+@msg	A gap between cut lines was closed.	Eine Lücke zwischen Schnittlinien wurde geschlossen.
+@msg	The fold lines are too complex to check.	Die Faltlinien sind zu komplex für die Prüfung.
+@msg	A cut line and a crease lie on top of each other.	Eine Schnittlinie und eine Rilllinie liegen übereinander.
+@msg	No cut lines are among the given objects.	Die angegebenen Objekte enthalten keine Schnittlinien.
+@msg	Two fold lines lie on top of each other.	Zwei Faltlinien liegen übereinander.
+@msg	A crease ends inside a panel.	Eine Rilllinie endet innerhalb eines Felds.
+@msg	A crease does not divide two panels.	Eine Rilllinie trennt keine zwei Felder.
+@msg	A crease lies outside the cut outline, wholly or in part.	Eine Rilllinie liegt ganz oder teilweise außerhalb der Schnittkontur.
+@msg	The pieces of a hinge are not on one straight line.	Die Teile eines Scharniers liegen nicht auf einer geraden Linie.
+@msg	A gap between cut lines is too narrow to tell apart.	Eine Lücke zwischen Schnittlinien ist zu schmal, um sie zu unterscheiden.
+@msg	A cut-out area holds other fold lines or another blank.	Ein ausgeschnittener Bereich enthält weitere Faltlinien oder einen anderen Zuschnitt.
+@msg	A panel is not joined to the rest by a crease.	Ein Feld ist durch keine Rilllinie mit den übrigen verbunden.
+@msg	A fold line is on a non-printing layer.	Eine Faltlinie liegt auf einer nicht druckbaren Ebene.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Felder: {panels}, Scharniere: {hinges}, Fehler: {errors}, Warnungen: {warnings}

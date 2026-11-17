@@ -101,13 +101,48 @@ fn text_export_options_write_the_stories() {
     assert_eq!((path.as_str(), bytes.as_slice()), ("/out/Untitled-1.txt", &b"Hello\r\nthere\r\n"[..]));
 }
 
+/// WebP Options: Lossless by default, with the Quality slider disabled; Lossy enables it, and OK
+/// writes a lossy file at that quality, without a note.
 #[test]
-fn webp_options_say_the_file_is_lossless() {
-    let (mut app, _) = app(1);
+fn webp_options_choose_lossless_or_lossy_at_a_quality() {
+    use crate::widgets::accessibility_tests::tree;
+    use egui::accesskit::Role;
+    let quality_disabled = |app: &mut VectorcraftApp| {
+        let t = tree(|ui| show(app, ui.ctx()));
+        t.iter().find(|n| n.role() == Role::Slider).expect("the Quality slider").is_disabled()
+    };
+    let (mut app, written) = app(1);
     app.run("file.exportAs", json!({"format": "webp"})).unwrap();
     confirm(&mut app).unwrap();
     assert_eq!(kind(&app), Some("webpOptions"));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((&d.fields["lossless"], &d.fields["quality"]), (&json!(true), &json!(90)));
+    assert!(quality_disabled(&mut app), "Quality applies to Lossy");
     frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert_eq!(&written.borrow()[0].1[12..16], b"VP8L", "lossless by default");
+
+    app.run("file.exportAs", json!({"format": "webp"})).unwrap();
+    confirm(&mut app).unwrap();
+    set(&mut app, "lossless", json!(false));
+    set(&mut app, "quality", json!(40));
+    assert!(!quality_disabled(&mut app), "Lossy enables Quality");
+    frame(&mut app);
+    // The dialog's options, as `document.export` takes them.
+    let mut options = app.ui.dialog.as_ref().unwrap().fields.clone();
+    options.retain(|k, _| !k.starts_with("__") && k != "path");
+    let r = confirm(&mut app).unwrap();
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    let file = written.borrow().last().unwrap().1.clone();
+    assert!(file.windows(4).any(|w| w == b"VP8 ") && !file.windows(4).any(|w| w == b"VP8L"), "lossy");
+    // The file is the one `document.export` writes with those options at quality 40.
+    let at = |app: &mut VectorcraftApp, q: u8| {
+        let mut p = options.clone();
+        p.insert("quality".into(), json!(q));
+        vectorcraft_format::base64_decode(app.run("document.export", serde_json::Value::Object(p)).unwrap()["dataBase64"].as_str().unwrap()).unwrap()
+    };
+    assert_eq!(file, at(&mut app, 40));
+    assert_ne!(file, at(&mut app, 90));
 }
 
 #[test]
@@ -123,14 +158,48 @@ fn save_for_office_documents_picks_the_resolution() {
     set(&mut app, "transparent", json!(true));
     frame(&mut app);
     assert_eq!(confirm(&mut app).unwrap()["path"], "/out/Untitled-1.png");
-    let img = image::load_from_memory(&written.borrow()[0].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&written.borrow()[0].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!(img.dimensions(), (250, 167), "60 × 40 pt at 300 ppi");
     assert_eq!(img.get_pixel(0, 0)[3], 0, "transparent");
     // With a path (agents), no dialog.
     let r = app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
     assert_eq!(r["path"], "/x/o.png");
     assert!(app.ui.dialog.is_none());
-    let img = image::load_from_memory(&written.borrow()[1].1).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&written.borrow()[1].1)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     assert_eq!((img.dimensions(), img.get_pixel(0, 0).0), ((60, 40), [255, 255, 255, 255]));
 }
 
@@ -142,9 +211,41 @@ fn save_for_office_and_export_selection_say_when_an_image_could_not_be_decoded()
     assert_eq!(app.ui.status, "Saved /x/o.png");
     // A PNG whose header reads but whose pixel data is cut short.
     let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [10, 10]}));
     app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
     assert_eq!(app.ui.status, format!("Saved /x/o.png {NOTE}"));

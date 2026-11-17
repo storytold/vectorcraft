@@ -294,13 +294,19 @@ impl GuideOptions {
     }
 }
 
+/// The share of the way to its target (black or white, cool or warm, gray or full color) that the
+/// variation at `step` goes: 0 at the center, the options' reach at the outermost steps.
+pub fn step_fraction(opts: &GuideOptions, step: i32) -> f32 {
+    (step.unsigned_abs() as f32 / opts.steps.max(1) as f32).min(1.0) * opts.reach()
+}
+
 /// Variation of `c` at `step` (−steps..=steps: negative towards shades/cool/muted, positive towards
 /// tints/warm/vivid; 0 is `c` itself), in `c`'s model.
 pub fn variation(c: Color, opts: &GuideOptions, step: i32) -> Color {
     if step == 0 {
         return c;
     }
-    let f = (step.unsigned_abs() as f32 / opts.steps.max(1) as f32).min(1.0) * opts.reach();
+    let f = step_fraction(opts, step);
     let v = match opts.variation {
         Variation::TintsShades => c.lerp(if step < 0 { &Color::BLACK } else { &Color::WHITE }, f),
         Variation::WarmCool => {

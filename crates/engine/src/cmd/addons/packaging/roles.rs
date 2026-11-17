@@ -186,7 +186,7 @@ fn free_role_name(d: &Document, table: &RoleTable, role: Role) -> String {
 
 /// Whether `n` can carry a role: a path (a live shape too) that is neither a clipping path nor a
 /// guide, or a compound path.
-fn can_carry(n: &Node) -> bool {
+pub(super) fn can_carry(n: &Node) -> bool {
     match &n.kind {
         NodeKind::Path { clipping, guide, .. } => !clipping && !guide,
         NodeKind::Compound { .. } => true,
@@ -199,7 +199,7 @@ fn can_carry(n: &Node) -> bool {
 /// how many of `roots` and their members can't (text, images, symbol instances and other objects).
 /// With `editable`, objects that are locked or hidden, are in a locked or hidden group or layer, or
 /// are on a locked artboard are left out and counted as skipped.
-fn role_targets(d: &Document, roots: &[NodeId], editable: bool) -> (Vec<NodeId>, usize) {
+pub(super) fn role_targets(d: &Document, roots: &[NodeId], editable: bool) -> (Vec<NodeId>, usize) {
     fn walk(n: &Node, out: &mut Vec<NodeId>, skipped: &mut usize) {
         match &n.kind {
             NodeKind::Group { children, .. } => {

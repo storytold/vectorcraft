@@ -950,6 +950,7 @@ digits	Malayalam	マラヤーラム数字
 	Auto Color	自動カラー
 	Automatic	自動
 	Isolate Selected Group	選択したグループを分離
+	Isolate Selected Path	選択したパスを分離
 	Isolate Selected Object	選択したオブジェクトを分離
 	Exit Isolation Mode	分離モードを終了
 	Make Clipping Mask	クリッピングマスクを作成
@@ -1368,6 +1369,7 @@ antiAlias	Sharp	シャープ
 	Conflict {n} of {count}	競合 {n} / {count}
 	Constrain Angle	角度を制限
 	Constrain Width and Height Proportions	幅と高さの縦横比を固定
+	Copy Width to Height	幅を高さにコピー
 	Construction Guides	作図ガイド
 	Contextual Alternates	前後関係に依存する字形
 	Convert	変換
@@ -1868,6 +1870,10 @@ antiAlias	Sharp	シャープ
 	Font List	フォントリスト
 	Show Similar Fonts	類似フォントを表示
 	Clear Similar Fonts	類似フォントの表示を解除
+	Fonts used in this document	このドキュメントで使用されているフォント
+	This document uses no available fonts	このドキュメントでは使用可能なフォントが使われていません
+	Recently Added	最近追加
+	Fonts added in the last 30 days	過去 30 日間に追加されたフォント
 	Font Preview Size	フォントプレビューのサイズ
 	Font:	フォント:
 	Fonts	フォント
@@ -1959,6 +1965,11 @@ antiAlias	Sharp	シャープ
 	Show smooth color wheel	滑らかなカラーホイールを表示
 	Show segmented color wheel	分割カラーホイールを表示
 	Show color bars	カラーバーを表示
+	Show brightness and hue on wheel	ホイールに明るさと色相を表示
+	Show saturation and hue on wheel	ホイールに彩度と色相を表示
+	Add Color Tool	カラー追加ツール
+	Remove Color Tool	カラー削除ツール
+	Remove Color	カラーを削除
 	Find the selected colors in the artwork	選択したカラーをアートワーク内で検索
 	Height	高さ
 	Height:	高さ:
@@ -2230,6 +2241,8 @@ antiAlias	Sharp	シャープ
 	Lasso Tool	なげなわツール
 	Enclosing Lasso Tool	囲みなげなわツール
 	Enclosing Lasso	囲みなげなわ
+	Polygonal Lasso Tool	多角形なげなわツール
+	Polygonal Lasso	多角形なげなわ
 	Last Effect: {name}	最後の効果：{name}
 	Last Page	最後のページ
 	Layer Options…	レイヤーオプション…
@@ -2318,7 +2331,8 @@ antiAlias	Sharp	シャープ
 	Location	場所
 	Location:	位置:
 	Lock (⌘2)	ロック (⌘2)
-	Lossless (lossy WebP isn't available yet)	ロスレス (非可逆 WebP は未対応)
+	Lossless	ロスレス
+	Lossy	非可逆
 	Lossy:	圧縮率:
 	Luminosity	輝度
 	Magic Wand Options	自動選択オプション
@@ -2779,6 +2793,10 @@ diagnostics	ui	UI
 	Play Current Selection	選択項目を再生
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
+	Reset Actions	アクションをリセット
+	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
+	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。
+	Append	追加
 	Plug-in Info	プラグイン情報
 	Plug-in…	プラグイン…
 	Points	ポイント
@@ -3066,6 +3084,38 @@ mark-style	Japanese	日本式
 	Restore	復元
 	Restore Recovered Documents	復帰したドキュメントを復元
 	Restore every preference to its default (applied on OK)	すべての環境設定を初期値に戻す (OK で適用)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	選択範囲やツールに応じたコマンドのバーをカンバスに表示します。ドラッグ中とプレゼンテーションモードでは隠れます。
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	矢印キーで選択範囲を移動する距離です。Shift キーを押すと 10 倍移動します。
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	矢印キーで移動する軸と、Shift キーで描画や移動を固定する軸の角度です。
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	角丸長方形ツールで描くときの角丸の半径です。描画中に半径を変えるとこの値も変わります。
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	スクリプトからなど位置の指定がないときに、ペーストでコピーを右と下へずらす距離です。アプリでのペーストはコピーを表示の中央に置きます。
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	選択したパスでクリックしたアンカーポイントをペンツールが削除したり、セグメントをクリックした位置に追加したりしないようにします。
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	描画ツールのポインターをアイコンではなく十字にします。Caps Lock がオンの間も同じになります。
+	Shows a tip when the pointer rests on a button or field that has one.	ヒントのあるボタンやフィールドにポインターを置くとヒントを表示します。
+	Shows a warning before a script you choose runs.	選んだスクリプトを実行する前に警告を表示します。
+	Smooths the edges of artwork on the canvas.	カンバス上のアートワークの縁を滑らかにします。
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選択 › 共通 › カラー (塗り)、カラー (線)、塗りと線は、グローバルスウォッチまたは特色スウォッチの同じ濃度だけを選び、ほかの濃度は選びません。
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	ドキュメントが開いていないときにホーム画面を表示します。オフのときは、ホームをクリックするまでウィンドウは空のままです。
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	サイズ、位置、整列のために、線と形を変える効果を含めてオブジェクトを測ります。ドロップシャドウ、光彩、ぼかしは含めません。
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 表示のとき、ドキュメントの 1 インチを 72 ではなく 96 スクリーンポイントで表示します。
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	選択ツールでグループ、パス、画像をダブルクリックすると、編集モードで開きます。
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	変形コマンドや変形パネルのメニューで別の指定をしない限り、パターンの塗りと線をアートワークと一緒に変形します。
+	Live corner radii scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、ライブコーナーの半径をアートワークと一緒に拡大・縮小します。
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、線幅、破線、効果の距離をアートワークと一緒に拡大・縮小します。
+	The mouse wheel zooms the canvas instead of scrolling it.	マウスホイールでカンバスをスクロールせずにズームします。
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl キーを押しながらマウスホイールを回すとカンバスを横にスクロールします。
+	Dragging sideways on a numeric field's label changes the field's value.	数値フィールドのラベルを横にドラッグすると、フィールドの値が変わります。
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
+	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	トリムマークを作成で、西洋式ではなく日本式のトンボを描きます。
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	新規オブジェクトに選択範囲の塗りと線だけを適用します。オフのときは、選択したオブジェクトのアピアランス全体を適用します。
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	変形パネル、プロパティパネル、コントロールパネルで幅または高さを変えると、もう一方も比率を保って変わります。
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	ライブ長方形のプロパティで、4 つの角に共通の角丸の半径フィールドを 1 つ表示します。オフのときは角ごとにフィールドを表示します。
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	変形パネルでの編集が変形する対象で、オブジェクト、パターンタイル、またはその両方です。デフォルトはパターンタイルを変形に従います。
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	シンボルインスタンスを 1 つ選択したとき、変形パネルはシンボルの基準点を基準点として使います。
+	Darkens the canvas outside the artboards while the Artboard tool is active.	アートボードツールを使っている間、アートボードの外側のカンバスを暗く表示します。
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	アートボードの外側を暗く表示がオンのとき、アートボードツールでドラッグしている間もアートボードの外側を暗いままにします。
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ピクセル以外の組み込みサイズの新規ドキュメントと、単位を記録していない開いたファイルに使う単位で、ここで選んで OK をクリックすると作業中のドキュメントの単位も変わります。
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	線幅、線分、間隔はこの単位で表示され、入力した数値もこの単位で読み取られます。
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	フォントサイズ、行送り、ベースラインシフトはこの単位で表示され、入力した数値もこの単位で読み取られます。
@@ -3199,10 +3249,15 @@ mark-style	Japanese	日本式
 	Filter Layers Panel Rows	レイヤーパネルの行をフィルター
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` は変更した設定を表します: プリセットを別の名前で保存してください
 @msg	`{key}` must be an array of these names: {_1}	`{key}` には {_1} の中の名前の配列を指定してください
-	Search commands and tools	コマンドとツールを検索
-	Search commands and tools…	コマンドとツールを検索…
+	Search commands, tools, panels and effects	コマンド、ツール、パネル、効果を検索
+	Search commands, tools, panels and effects…	コマンド、ツール、パネル、効果を検索…
+	No commands match	一致するコマンドはありません
+	{pos} of {total}: {name}	{total} 件中 {pos} 件目: {name}
+@plural	{n} result|{n} results	{n} 件
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド
 	No recent commands	最近使ったコマンドはありません
+	Search commands	コマンドを検索
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
 	Select All Assets	すべてのアセットを選択
@@ -4728,6 +4783,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	image would be too large; lower the resolution	画像が大きくなりすぎるため、解像度を下げてください
 @msg	clipboard is empty	クリップボードが空です
 @msg	no anchor points selected	アンカーポイントが選択されていません
+@msg	`points` must be three [x, y] pairs of numbers	`points` は 3 組の数値 [x, y] にしてください
+@msg	direct-select three anchor points, or give `points`	アンカーポイントを 3 つダイレクト選択するか、`points` を指定してください
+@msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
 @msg	exit isolation mode first	先に分離モードを終了してください
 @msg	no saved presets	保存したプリセットはありません
@@ -5870,6 +5928,24 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing	グループの塗りまたは線にある 3D 効果は何も描画しません
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
+@msg	the <filter> element needs an id, the filter's name	<filter> 要素には id (フィルターの名前) が必要です
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG フィルターの id は {MAX_NAME} 文字までです
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> は SVG フィルターの要素ではありません
+@msg	an SVG filter has no event attributes such as {_1}	SVG フィルターには {_1} などのイベント属性は使えません
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG フィルターの画像は PNG、JPEG、GIF、WebP の data: URL に限ります
+@msg	the SVG filter isn't valid XML: {e}	SVG フィルターが有効な XML ではありません: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence の numOctaves は {MAX_OCTAVES} までです
+@msg	{what} is at most {max}	{what} は {max} までです
+@msg	feConvolveMatrix's order	feConvolveMatrix の order
+@msg	feMorphology's radius	feMorphology の radius
+@msg	a blur's stdDeviation	ぼかしの stdDeviation
+@msg	the SVG filter has no primitives	SVG フィルターにプリミティブがありません
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG フィルターのプリミティブは {MAX_PRIMITIVES} 個までです
+@msg	the SVG filter is too large once its attributes are written out	属性を書き出すと SVG フィルターが大きくなりすぎます
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG フィルターの画像は合計 {MAX_IMAGE_PIXELS} ピクセルまでです
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG フィルターを描画できません: プリミティブとその入力を確認してください
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG フィルターの要素の入れ子は {MAX_DEPTH} 階層までです
+@msg	an SVG filter is at most {_1} KB	SVG フィルターは {_1} KB までです
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` は `mode` だけを持ち、その値が shaded または wireframe のオブジェクトにしてください
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
@@ -8602,6 +8678,7 @@ anchor	Points:	ポイント:
 	Open a document to check it for issues.	ドキュメントを開くと問題をチェックできます。
 	Empty Text	空のテキスト
 	Unpainted Objects	塗りも線もないオブジェクト
+	Empty Text Paths	空のテキストパス
 	Zero-Opacity Objects	不透明度 0% のオブジェクト
 	Duplicate Objects	重複したオブジェクト
 	Off-Artboard Art	アートボード外のアートワーク
@@ -9015,6 +9092,11 @@ breakText	Glyphs	字形
 	Malayalam	マラヤーラム語
 	Odia	オディア語
 	Urdu	ウルドゥー語
+	Sanskrit	サンスクリット語
+	Nepali	ネパール語
+	Assamese	アッサム語
+	Konkani	コンカニ語
+	Sindhi	シンド語
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 以降 (バージョン {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	開いているすべてのドキュメントを PDF として書き出し
@@ -9336,6 +9418,7 @@ breakText	Glyphs	字形
 @msg	Too many Revolve faces for visibility evaluation	可視判定を行うには回転体の面が多すぎます
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft がスウォッチ交換ファイルから読み込めるカラーとグループは {ASE_MAX_ENTRIES} 個までですが、このライブラリには {entries} 個あります
 @msg	WebP encoding failed: {e}	WebP のエンコードに失敗しました: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP のエンコードに失敗しました: 画像が大きすぎて非可逆 WebP にできません: 解像度を下げるか、ロスレスを選択してください
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` には smallThumb、mediumThumb、largeThumb、smallList、largeList のいずれかを指定してください
@@ -9436,3 +9519,23 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Check	チェック
+	Check Fold Lines	折り線をチェック
+@msg	No cut lines are in the selection.	選択範囲にカット線がありません。
+@msg	No cut lines are in the document.	ドキュメントにカット線がありません。
+@msg	The cut lines do not enclose an area.	カット線が領域を囲んでいません。
+@msg	A cut line ends without meeting another cut line.	カット線が他のカット線と接しないまま終わっています。
+@msg	A gap between cut lines was closed.	カット線間の隙間を閉じました。
+@msg	The fold lines are too complex to check.	折り線が複雑すぎるためチェックできません。
+@msg	A cut line and a crease lie on top of each other.	カット線と筋入れ線が重なっています。
+@msg	No cut lines are among the given objects.	指定したオブジェクトにカット線がありません。
+@msg	Two fold lines lie on top of each other.	折り線が 2 本重なっています。
+@msg	A crease ends inside a panel.	筋入れ線がパネルの内側で終わっています。
+@msg	A crease does not divide two panels.	筋入れ線が 2 つのパネルを分けていません。
+@msg	A crease lies outside the cut outline, wholly or in part.	筋入れ線の全体または一部がカットの輪郭の外側にあります。
+@msg	The pieces of a hinge are not on one straight line.	ヒンジの各部分が 1 本の直線上にありません。
+@msg	A gap between cut lines is too narrow to tell apart.	カット線間の隙間が狭すぎて区別できません。
+@msg	A cut-out area holds other fold lines or another blank.	切り抜かれた領域に他の折り線または別の展開図があります。
+@msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
+@msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}

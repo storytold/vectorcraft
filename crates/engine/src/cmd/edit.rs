@@ -399,9 +399,7 @@ fn select_found(s: &mut Session, p: &Value, ids: &[NodeId]) -> Result<Value> {
     let compound = |n: &Node| matches!(n.kind, vectorcraft_doc::NodeKind::Compound { .. });
     let members = st.isolation.and_then(|i| st.doc.ancestry(i)).is_some_and(|a| a.iter().any(|i| st.doc.node(*i).is_some_and(compound)));
     let found: BTreeSet<NodeId> = ids.iter().copied().collect();
-    super::select::select_where(s, "document.find", p, |d, n| {
-        found.contains(&n.id) && (members || !d.parent_of(n.id).and_then(|p| d.node(p)).is_some_and(compound))
-    })
+    super::select::select_where(s, "document.find", p, |_, n, parent| found.contains(&n.id) && (members || !parent.is_some_and(compound)))
 }
 
 /// Render an artboard at an image's size, drawn as a PNG export draws it (linked images and placed
@@ -526,26 +524,34 @@ fn doc_compare(s: &mut Session, p: &Value) -> Result<Value> {
 /// RGBA: a PNG, JPEG, WebP, TIFF or BMP within the allocation an opened image may take.
 #[cfg(not(target_arch = "wasm32"))]
 fn compare_image(path: &str) -> Result<image::RgbaImage> {
-    use image::ImageDecoder as _;
     const C: &str = "document.compare";
     let bytes = super::fileio::read_file(path)?;
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(&bytes) {
         return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
     }
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| bad(C, format!("{path}: {e}")))?;
-    let readable = [image::ImageFormat::Png, image::ImageFormat::Jpeg, image::ImageFormat::WebP, image::ImageFormat::Tiff, image::ImageFormat::Bmp];
-    if !reader.format().is_some_and(|f| readable.contains(&f)) {
+    let format = craft_image_codecs::detect(&bytes);
+    let readable = [
+        craft_image_codecs::Format::Png,
+        craft_image_codecs::Format::Jpeg,
+        craft_image_codecs::Format::WebP,
+        craft_image_codecs::Format::Tiff,
+        craft_image_codecs::Format::Bmp,
+    ];
+    let Some(format) = format.filter(|f| readable.contains(f)) else {
         return Err(bad(C, format!("{path}: not a PNG, JPEG, WebP, TIFF or BMP image")));
-    }
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(vectorcraft_doc::MAX_RASTER_ALLOC);
-    reader.limits(limits);
-    let decoder = reader.into_decoder().map_err(|e| bad(C, format!("{path}: {e}")))?;
-    let (w, h) = decoder.dimensions();
-    if decoder.total_bytes() > vectorcraft_doc::MAX_RASTER_ALLOC || u64::from(w) * u64::from(h) * 4 > vectorcraft_doc::MAX_RASTER_ALLOC {
-        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to draw")));
-    }
-    Ok(image::DynamicImage::from_decoder(decoder).map_err(|e| bad(C, format!("{path}: {e}")))?.to_rgba8())
+    };
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC;
+    opts.limits.max_pixels = vectorcraft_doc::MAX_RASTER_ALLOC / 4;
+    let img = match craft_image_codecs::decode_as_with(format, &bytes, &opts) {
+        Ok(img) => img,
+        Err(craft_image_codecs::CodecError::LimitExceeded(_)) => {
+            return Err(bad(C, "image is too large to draw"));
+        }
+        Err(e) => return Err(bad(C, format!("{path}: {e}"))),
+    };
+    let (w, h) = img.dimensions();
+    image::RgbaImage::from_raw(w, h, img.to_rgba8()).ok_or_else(|| bad(C, format!("{path}: invalid pixel buffer")))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1181,9 +1187,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
             d.retain_guides(sel, |g| !g.id.is_some_and(|id| gone.contains(&id)));
         }
         if is_explicit {
-            for id in &ids {
-                sel.remove(*id);
-            }
+            sel.remove_all(ids.iter().copied());
             sel.prune(d);
         } else {
             sel.clear();
