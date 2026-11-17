@@ -601,6 +601,212 @@ fn click_opens_dialog() {
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0)), vec![Action::Dialog("star".into(), json!({"x": 10.0, "y": 10.0}))]);
 }
 
+/// With the Ellipse tool, the first two Shift-clicks place points (shown as marks, and with two
+/// placed, the circle through them and the pointer is previewed); the third runs the circle
+/// command through the three. A Shift-click with another shape tool still opens its dialog.
+#[test]
+fn three_shift_clicks_with_the_ellipse_tool_run_the_circle_through_them() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    assert_eq!(click(&mut t, 10.0, 10.0), vec![]);
+    assert_eq!(click(&mut t, 90.0, 10.0), vec![]);
+    assert!(t.ends_on_escape(&cx) && t.claims_key(&cx, ToolKey::Escape));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 10.0, 70.0));
+    let o = t.overlays(&cx);
+    assert_eq!(o.iter().filter(|o| matches!(o, Overlay::Anchor { .. })).count(), 2, "{o:?}");
+    let preview = o.iter().find_map(|o| match o {
+        Overlay::Path { path, dashed: true, .. } => Some(path.clone()),
+        _ => None,
+    });
+    let b = vectorcraft_geom::Shape::bounding_box(&preview.expect("the circle is previewed"));
+    assert!(b.x0.abs() < 1e-9 && (b.y0 + 10.0).abs() < 1e-9 && (b.x1 - 100.0).abs() < 1e-9 && (b.y1 - 90.0).abs() < 1e-9, "{b:?}");
+    assert_eq!(
+        click(&mut t, 10.0, 70.0),
+        vec![Action::Exec("shape.circleThroughPoints".into(), json!({"points": [[10.0, 10.0], [90.0, 10.0], [10.0, 70.0]]}))]
+    );
+    assert!(!t.ends_on_escape(&cx) && t.overlays(&cx).is_empty());
+    // Another shape tool keeps its dialog on a Shift-click.
+    let mut r = ShapeTool::new("rectangle");
+    assert_eq!(click(&mut r, 10.0, 10.0), vec![Action::Dialog("rectangle".into(), json!({"x": 10.0, "y": 10.0}))]);
+}
+
+/// With Smart Guides on, the preview passes through the point the pointer snaps to, which is where
+/// the third Shift-click lands.
+#[test]
+fn the_circle_preview_passes_through_the_snapped_pointer() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(300.0, 0.0), (300.0, 200.0)] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    // Near the rectangle's corner anchor at (100, 100): the circle through (300, 0), (300, 200)
+    // and (100, 100) has its center at (225, 100) and radius 125.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 98.0, 102.0));
+    let preview = t.overlays(&cx).into_iter().find_map(|o| match o {
+        Overlay::Path { path, dashed: true, .. } => Some(path),
+        _ => None,
+    });
+    let b = vectorcraft_geom::Shape::bounding_box(&preview.expect("the circle is previewed"));
+    let want = [100.0, -25.0, 350.0, 225.0];
+    assert!([b.x0, b.y0, b.x1, b.y1].iter().zip(want).all(|(a, w)| (a - w).abs() < 1e-9), "{b:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 98.0, 102.0).with_mods(shift));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 98.0, 102.0).with_mods(shift));
+    assert!(matches!(&a[..], [Action::Exec(_, v)] if v["points"][2] == json!([100.0, 100.0])), "{a:?}");
+}
+
+/// Escape, a plain click and a drag drop the points Shift-clicks placed, so the next Shift-click
+/// starts a new circle.
+#[test]
+fn escape_a_click_or_a_drag_drops_the_shift_clicked_points() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let shift_click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    shift_click(&mut t, 10.0, 10.0);
+    shift_click(&mut t, 90.0, 10.0);
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![]);
+    assert!(!t.ends_on_escape(&cx));
+    shift_click(&mut t, 10.0, 10.0);
+    shift_click(&mut t, 90.0, 10.0);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    assert_eq!(
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 50.0, 50.0)),
+        vec![Action::Dialog("ellipse".into(), json!({"x": 50.0, "y": 50.0}))]
+    );
+    assert!(!t.ends_on_escape(&cx), "a plain click drops them");
+    shift_click(&mut t, 10.0, 10.0);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0).with_mods(shift));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 90.0).with_mods(shift));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 90.0, 90.0).with_mods(shift)), vec![Action::Commit]);
+    assert!(!t.ends_on_escape(&cx), "a Shift-drag draws a circle and drops them");
+    // A move of the selection by its centre point drops them too.
+    let (d, s) = unfilled_live_rect();
+    let c = ToolContext { smart_guides: false, ..crate::testutil::cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(10.0, 10.0), (90.0, 10.0)] {
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    assert!(t.ends_on_escape(&c));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 160.0));
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 160.0)), vec![Action::Commit]);
+    assert!(!t.ends_on_escape(&c), "a move of the selection drops them");
+}
+
+/// Escape pressed while the third Shift-click is held drops the points and the press, so the
+/// release draws no circle.
+#[test]
+fn escape_during_the_third_shift_click_drops_the_points_and_the_press() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    for (x, y) in [(10.0, 10.0), (90.0, 10.0)] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift));
+    }
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 70.0).with_mods(shift));
+    assert!(t.claims_key(&cx, ToolKey::Escape));
+    assert_eq!(t.key(&cx, ToolKey::Escape, shift), vec![]);
+    assert!(!t.ends_on_escape(&cx) && t.overlays(&cx).is_empty());
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 70.0).with_mods(shift)), vec![]);
+    assert!(!t.ends_on_escape(&cx), "the release places no point");
+}
+
+/// Once a point is placed, a Shift-click on the selection's side handle or centre point places a
+/// point instead of scaling or moving the selection, and the cursor over them is the crosshair.
+#[test]
+fn shift_clicks_on_the_selection_place_points_once_one_is_placed() {
+    let (d, s) = unfilled_live_rect();
+    let p = paint();
+    let c = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let centre = Point::new(150.0, 150.0);
+    assert_eq!(t.cursor(&c, centre, shift), Cursor::Move, "no point placed yet: the centre point moves");
+    let click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    assert_eq!(click(&mut t, 10.0, 10.0), vec![]);
+    assert_eq!(t.cursor(&c, centre, shift), Cursor::Crosshair);
+    assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::Move, "without Shift a press still moves the selection");
+    assert_eq!(click(&mut t, 100.0, 150.0), vec![], "the left side handle");
+    assert!(!t.busy());
+    assert_eq!(
+        click(&mut t, centre.x, centre.y),
+        vec![Action::Exec("shape.circleThroughPoints".into(), json!({"points": [[10.0, 10.0], [100.0, 150.0], [150.0, 150.0]]}))]
+    );
+}
+
+/// The pointer leaving the canvas removes the circle's preview, and an edit, Undo or Redo made
+/// outside the tool drops the points placed so far.
+#[test]
+fn leaving_the_canvas_or_an_outside_edit_clears_the_circle_in_progress() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    let click = |t: &mut ShapeTool, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(shift));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y).with_mods(shift))
+    };
+    let dashed = |t: &ShapeTool| t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Path { dashed: true, .. }));
+    click(&mut t, 10.0, 10.0);
+    click(&mut t, 90.0, 10.0);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 10.0, 70.0));
+    assert!(dashed(&t));
+    t.hover_ended(&cx);
+    assert!(!dashed(&t), "no preview through a pointer off the canvas");
+    assert!(t.ends_on_escape(&cx), "the points stay");
+    t.history_moved();
+    assert!(!t.ends_on_escape(&cx) && t.overlays(&cx).is_empty());
+    assert_eq!(click(&mut t, 10.0, 70.0), vec![], "the next Shift-click starts a new circle");
+}
+
+/// While the perspective grid shows with an active plane, a Shift-click with the Ellipse tool opens
+/// the size dialog, whose shape goes on the plane, as before.
+#[test]
+fn a_shift_click_on_an_active_perspective_plane_opens_the_dialog() {
+    let (mut d, _) = doc_with_rect();
+    crate::distort::perspective::PerspectiveGrid::preset(2, Rect::new(0.0, 0.0, 612.0, 792.0)).store(&mut d);
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = ShapeTool::new("ellipse");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(shift));
+    assert_eq!(
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 10.0, 10.0).with_mods(shift)),
+        vec![Action::Dialog("ellipse".into(), json!({"x": 10.0, "y": 10.0}))]
+    );
+    assert!(!t.ends_on_escape(&cx));
+}
+
 #[test]
 fn alt_click_passes_draw_from_centre_to_the_dialog() {
     let (d, _) = doc_with_rect();
