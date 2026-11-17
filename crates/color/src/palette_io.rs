@@ -192,14 +192,23 @@ fn write_css(lib: &SwatchLibrary, keep: impl Fn(&&Swatch) -> bool) -> String {
                     // A mirrored conic turns counterclockwise, and CSS only turns clockwise: its stops
                     // are written mirrored about the seam instead.
                     let mirrored = g.gradient.kind == GradientKind::Conic && g.geom.is_some_and(|geom| geom.is_mirrored());
-                    let stop = |s: &crate::GradientStop| {
-                        let at = if mirrored { 1.0 - s.offset } else { s.offset };
-                        format!("{} {}%", css_color(&s.color, s.opacity), at * 100.0)
+                    let stop = |&(t, c, o): &(f32, Color, f32)| {
+                        let at = if mirrored { 1.0 - t } else { t };
+                        format!("{} {}%", css_color(&c, o), at * 100.0)
                     };
-                    // Stops that repeat or reflect run that many times across the box.
+                    // Stops that repeat or reflect run that many times across the box. CSS mixes
+                    // hex colors evenly in sRGB between two stops
+                    // (https://www.w3.org/TR/css-color-4/#interpolation-space), so an off-center
+                    // midpoint and the curve of a Perceptual or hue gradient are written as stops
+                    // of their own, each with its color and opacity. A gradient that would need
+                    // more than `MAX_SPREAD_STOPS` stops that way is written with its own stops.
                     let unrolled = g.gradient.unrolled();
-                    let stops: Vec<String> =
-                        if mirrored { unrolled.stops.iter().rev().map(stop).collect() } else { unrolled.stops.iter().map(stop).collect() };
+                    let expanded: Vec<(f32, Color, f32)> = if unrolled.expanded().nth(crate::gradient::MAX_SPREAD_STOPS).is_none() {
+                        unrolled.expanded_stops()
+                    } else {
+                        unrolled.stops.iter().map(|s| (s.offset, s.color, s.opacity)).collect()
+                    };
+                    let stops: Vec<String> = if mirrored { expanded.iter().rev().map(stop).collect() } else { expanded.iter().map(stop).collect() };
                     match g.gradient.kind {
                         GradientKind::Radial => format!("radial-gradient(circle, {})", stops.join(", ")),
                         // CSS sweeps clockwise from straight up; the angle is counted counterclockwise

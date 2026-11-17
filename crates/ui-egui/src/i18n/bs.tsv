@@ -384,7 +384,7 @@
 	Insert Whitespace Character	Umetni znak razmaka
 	Em Space	Široki razmak (em)
 	En Space	Polu-široki razmak (en)
-	Hair Space	Tanki razmak
+	Hair Space	Najtanji razmak
 	Sixth Space	Šestina razmaka
 	Thin Space	Tanki razmak
 	Nonbreaking Space	Neprelomivi razmak
@@ -880,6 +880,7 @@
 	Auto Color	Automatska boja
 	Automatic	Automatski
 	Isolate Selected Group	Izoliraj odabranu grupu
+	Isolate Selected Path	Izoliraj odabranu putanju
 	Isolate Selected Object	Izoliraj odabrani objekat
 	Exit Isolation Mode	Izađi iz načina izolacije
 	Make Clipping Mask	Napravi masku isijecanja
@@ -1300,9 +1301,10 @@ lighting	Light	Svjetlo
 	Name* @ 66.67% (RGB/Preview)	Naziv* @ 66,67% (RGB/pregled)
 	No Document	Nema dokumenta
 	Press 	Pritisnite 
-	Search commands and tools	Pretraži naredbe i alate
+	Search commands, tools, panels and effects	Pretraži naredbe, alate, panele i efekte
 	Style:	Stil:
 	Switch workspace	Promijeni radni prostor
+	Search commands	Pretraži naredbe
 	Show all open documents	Prikaži sve otvorene dokumente
 	Use 	Koristite 
 	 the object to select  |  	 objekat za odabir  |  
@@ -1413,6 +1415,8 @@ lighting	Light	Svjetlo
 	Lasso Tool	Alat laso
 	Enclosing Lasso Tool	Alat laso za obuhvatanje
 	Enclosing Lasso	Laso za obuhvatanje
+	Polygonal Lasso Tool	Alat poligonalni laso
+	Polygonal Lasso	Poligonalni laso
 	Lasso	Laso
 	Line Cut Tool	Alat za rez linijom
 	Line Graph Tool	Alat za linijski grafikon
@@ -1500,6 +1504,10 @@ lighting	Light	Svjetlo
 	Play Current Selection	Reprodukuj trenutni odabir
 	Save Actions…	Sačuvaj akcije…
 	Load Actions…	Učitaj akcije…
+	Reset Actions	Vrati akcije na početno
+	Replace the current actions with the default set?	Zamijeniti trenutne akcije zadanim skupom?
+	Append adds the default set after the current sets instead.	Dugme Dodaj umjesto toga dodaje zadani skup iza trenutnih skupova.
+	Append	Dodaj
 	Reflect Horizontal	Odrazi vodoravno
 	Rotate 90° CW	Rotiraj za 90° u smjeru kazaljke
 	Set 1	Skup 1
@@ -2818,7 +2826,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
-	Lossless (lossy WebP isn't available yet)	Bez gubitaka (WebP s gubicima još nije dostupan)
+	Lossless	Bez gubitaka
+	Lossy	S gubicima
 	Scans:	Skenovi:
 	Server-side (.map)	Na strani servera (.map)
 	{format} Options	Opcije za {format}
@@ -2832,6 +2841,7 @@ digits	Malayalam	Malajalam
 	Collate	Složi po kopijama
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitne boje se pretvaraju u njega; separacije se razdvajaju njime kad je CMYK profil.
 	Convert All Spot Colors to Process	Pretvori sve spot boje u procesne
+	Overprint Black	Pretisak crne
 	Default Printer	Zadani štampač
 	Document Ink Options	Opcije tinti dokumenta
 	Download:	Preuzimanje:
@@ -2925,6 +2935,11 @@ digits	Malayalam	Malajalam
 	Show smooth color wheel	Prikaži glatki kotač boja
 	Show segmented color wheel	Prikaži segmentirani kotač boja
 	Show color bars	Prikaži trake boja
+	Show brightness and hue on wheel	Prikaži svjetlinu i nijansu na kotaču
+	Show saturation and hue on wheel	Prikaži zasićenje i nijansu na kotaču
+	Add Color Tool	Alat za dodavanje boje
+	Remove Color Tool	Alat za uklanjanje boje
+	Remove Color	Ukloni boju
 	Find the selected colors in the artwork	Pronađi odabrane boje u crtežu
 	Harmony Rules	Pravila harmonije
 	Keep this row's colors (exclude)	Zadrži boje ovog reda (isključi)
@@ -3600,6 +3615,10 @@ theme	Appearance	Izgled
 	Font List	Lista fontova
 	Show Similar Fonts	Prikaži slične fontove
 	Clear Similar Fonts	Očisti slične fontove
+	Fonts used in this document	Fontovi korišteni u ovom dokumentu
+	This document uses no available fonts	Ovaj dokument ne koristi dostupne fontove
+	Recently Added	Nedavno dodani
+	Fonts added in the last 30 days	Fontovi dodani u posljednjih 30 dana
 	Fonts in Document	Fontovi u dokumentu
 	Refresh Font List	Osvježi listu fontova
 	Replace Font	Zamijeni font
@@ -3871,6 +3890,7 @@ theme	Appearance	Izgled
 	Command Click to Select Objects Behind	Command-klik za odabir objekata iza
 	Constrain Angle	Ograniči ugao
 	Constrain Width and Height Proportions	Zadrži proporcije širine i visine
+	Copy Width to Height	Kopiraj širinu u visinu
 	Construction Guides	Konstrukcijske vodilice
 	Curvature Tool	Alat zakrivljenost
 	Data Recovery	Oporavak podataka
@@ -4376,7 +4396,11 @@ font-technology	Variable	Varijabilni
 	Saved {path}	Sačuvano: {path}
 	Saving	Čuvanje
 	Saving {}	Čuvanje {}
-	Search commands and tools…	Pretraži naredbe i alate…
+	Search commands, tools, panels and effects…	Pretraži naredbe, alate, panele i efekte…
+	No commands match	Nijedna naredba se ne podudara
+	{pos} of {total}: {name}	{pos} od {total}: {name}
+@plural	{n} result|{n} results	{n} rezultat|{n} rezultata|{n} rezultata
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.|{shown} od {n} rezultata. Nastavite kucati da ih suzite.
 	Recent Commands	Nedavne naredbe
 	No recent commands	Nema nedavnih naredbi
 	Dashed Line	Isprekidana linija
@@ -4389,6 +4413,38 @@ font-technology	Variable	Varijabilni
 	Preferences	Postavke
 	Previous	Prethodno
 	Restore every preference to its default (applied on OK)	Vrati svaku postavku na zadanu vrijednost (primjenjuje se na U redu)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Prikazuje na platnu traku s naredbama za odabir ili alat; skriva se dok prevlačite i u načinu prezentacije.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Koliko daleko tipka sa strelicom pomjera odabir; uz Shift ga pomjera deset puta dalje.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Ugao osa duž kojih pomjeraju tipke sa strelicama i na koje Shift ograničava crtanje i pomjeranje.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Poluprečnik ugla kojim crta alat Zaobljeni pravougaonik; promjena poluprečnika tokom crtanja mijenja i ovu vrijednost.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Koliko udesno i nadolje Zalijepi pomjera kopiju kada položaj nije zadan, na primjer iz skripte; Zalijepi u aplikaciji je stavlja u sredinu prikaza.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Sprječava da alat Pero briše sidrenu tačku na koju kliknete na odabranoj putanji ili dodaje tačku tamo gdje kliknete na njen segment.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Alati za crtanje prikazuju pokazivač u obliku krstića umjesto svoje ikone; Caps Lock čini isto dok je uključen.
+	Shows a tip when the pointer rests on a button or field that has one.	Prikazuje savjet kada se pokazivač zadrži na dugmetu ili polju koje ga ima.
+	Shows a warning before a script you choose runs.	Prikazuje upozorenje prije nego što se pokrene skripta koju odaberete.
+	Smooths the edges of artwork on the canvas.	Izglađuje rubove grafike na platnu.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Odabir › Isto › Boja ispune, Boja poteza i Ispuna i potez pronalaze samo istu nijansu globalnog ili spot uzorka, a ne bilo koju njegovu nijansu.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Prikazuje početni ekran kada nijedan dokument nije otvoren; kada je isključeno, prozor ostaje prazan dok ne kliknete Početna.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mjeri objekte zajedno s potezima i efektima koji mijenjaju oblik za veličinu, položaj i poravnanje; sjene, sjaj i zamućenja se ne mjere.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Pri zumu od 100% jedan inč dokumenta zauzima 96 tačaka ekrana umjesto 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dvostruki klik na grupu, putanju ili sliku alatom Odabir otvara ih u načinu izolacije.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Ispune i potezi s uzorkom transformišu se zajedno s grafikom, osim ako transformacija ili meni panela Transformiši ne odabere drugačije.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Poluprečnici dinamičnih uglova skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Debljine poteza, crtice i udaljenosti efekata skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
+	The mouse wheel zooms the canvas instead of scrolling it.	Točkić miša zumira platno umjesto da ga pomjera.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
+	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
+	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kreiraj oznake za obrezivanje crta oznake u japanskom stilu umjesto rimskih.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Nova grafika preuzima samo ispunu i potez odabira; kada je isključeno, preuzima cijeli izgled odabranog objekta.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Promjena širine ili visine u panelu Transformiši, panelu Svojstva ili kontrolnom panelu proporcionalno mijenja drugu dimenziju.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Svojstva dinamičnog pravougaonika prikazuju jedno polje Poluprečnik ugla za sva četiri ugla; kada je isključeno, svaki ugao ima svoje polje.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Šta transformišu izmjene u panelu Transformiši: objekat, pločice njegovog uzorka ili oboje; Zadano prati Transformiši pločice uzorka.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Kada je odabrana jedna instanca simbola, panel Transformiši koristi tačku registracije simbola kao referentnu tačku.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Zatamnjuje platno izvan radnih ploča dok je alat Radna ploča aktivan.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Kada je uključeno Zatamni područje izvan radne ploče, područje izvan radnih ploča ostaje tamno dok prevlačite alatom Radna ploča.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jedinica za nove dokumente ugrađenih veličina, osim onih u pikselima, i za otvorene datoteke bez zapisane jedinice; ako je odaberete ovdje i kliknete U redu, postaje i jedinica aktivnog dokumenta.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Debljine poteza, crtice i razmaci prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Veličine teksta, prored i pomak osnovne linije prikazuju se u ovoj jedinici, a brojevi uneseni za njih čitaju se u njoj.
@@ -6482,6 +6538,7 @@ anchor	Points:	Tačke:
 	Open a document to check it for issues.	Otvorite dokument da ga provjerite na probleme.
 	Empty Text	Prazan tekst
 	Unpainted Objects	Neobojeni objekti
+	Empty Text Paths	Prazne tekstualne putanje
 	Zero-Opacity Objects	Objekti s nultom neprozirnošću
 	Duplicate Objects	Duplirani objekti
 	Off-Artboard Art	Grafika izvan radne ploče
@@ -6883,6 +6940,11 @@ shape	Open	Otvoren
 	Malayalam	Malajalam
 	Odia	Odija
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepalski
+	Assamese	Asamski
+	Konkani	Konkani
+	Sindhi	Sindi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} i novije (verzija {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Izvezi sve otvorene dokumente kao PDF
@@ -7148,4 +7210,24 @@ shape	Open	Otvoren
 	No objects are selected.	Nijedan objekat nije odabran.
 	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
 	Remove Fold Line Role	Ukloni vrstu linije
+	Check	Provjeri
+	Check Fold Lines	Provjeri linije savijanja
+@msg	No cut lines are in the selection.	U odabiru nema linija rezanja.
+@msg	No cut lines are in the document.	U dokumentu nema linija rezanja.
+@msg	The cut lines do not enclose an area.	Linije rezanja ne zatvaraju nijednu površinu.
+@msg	A cut line ends without meeting another cut line.	Linija rezanja završava a da ne susreće drugu liniju rezanja.
+@msg	A gap between cut lines was closed.	Razmak između linija rezanja je zatvoren.
+@msg	The fold lines are too complex to check.	Linije savijanja su previše složene za provjeru.
+@msg	A cut line and a crease lie on top of each other.	Linija rezanja i linija bigovanja leže jedna preko druge.
+@msg	No cut lines are among the given objects.	Među zadanim objektima nema linija rezanja.
+@msg	Two fold lines lie on top of each other.	Dvije linije savijanja leže jedna preko druge.
+@msg	A crease ends inside a panel.	Linija bigovanja završava unutar panela.
+@msg	A crease does not divide two panels.	Linija bigovanja ne razdvaja dva panela.
+@msg	A crease lies outside the cut outline, wholly or in part.	Linija bigovanja leži potpuno ili djelimično izvan konture rezanja.
+@msg	The pieces of a hinge are not on one straight line.	Dijelovi jedne šarke ne leže na jednoj pravoj liniji.
+@msg	A gap between cut lines is too narrow to tell apart.	Razmak između linija rezanja je preuzak da bi se razlikovao.
+@msg	A cut-out area holds other fold lines or another blank.	Izrezana površina sadrži druge linije savijanja ili drugi kroj.
+@msg	A panel is not joined to the rest by a crease.	Panel nije povezan s ostatkom nijednom linijom bigovanja.
+@msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
