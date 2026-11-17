@@ -8494,7 +8494,9 @@ each file deflated, or stored when deflating does not make it smaller.
 A row is `{format, scale?}` where `scale` is a factor (`2`, `"2x"`), a pixel width (`"100w"` or `width: 100`), a
 height (`"100h"`) or a resolution (`"72ppi"`); raster rows name their files `@2x`, `@100w`… unless `suffix` says
 otherwise. `fullDocument` writes one file per row instead (a PDF of every artboard, other formats the bounds of all
-art), `includeBleed` grows each artboard by the document's bleed, `includeArtboardFill: false` (Include Artboard
+art), `includeBleed` grows each artboard by the document's bleed (a PDF row's page keeps the artboard as its
+TrimBox and puts the row's `bleed` around it once: the row's own values, zero included, else the document's bleed
+when the row sets none and its PDF preset gives none or a bleed of 0), `includeArtboardFill: false` (Include Artboard
 Fill unchecked) leaves the artboards' background colors out of the files, `pdfs: "single"` (Export PDFs As › Single file)
 writes the artboards a PDF row exports as the pages of one PDF named after the document (it is refused with
 `assets`, `layers` or `selection: "each"`, whose files each hold one item's art), `subfolders` puts each
