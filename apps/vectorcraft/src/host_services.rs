@@ -1,5 +1,7 @@
 #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))]
 use super::portal_save;
+#[cfg(windows)]
+use super::windows_screen_color;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 use super::windows_stylus;
 use super::{ClipboardProbeFactory, FilePick, PickRequest, Services, clipboard, cursor_theme, fileio, printing};
@@ -354,7 +356,7 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         .is_some_and(|h| matches!(h.as_raw(), RawWindowHandle::Xlib(_) | RawWindowHandle::Xcb(_)));
     let (clip, clip_probe) = (parent.clone(), parent.clone());
     let (p1, p2, p3, p4, p5) = (parent.clone(), parent.clone(), parent.clone(), parent.clone(), parent);
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(any(target_os = "macos", target_os = "linux", windows))]
     let sampled_ui = ui.clone();
     #[cfg(target_os = "linux")]
     let sampled_parent = p1.clone();
@@ -413,6 +415,8 @@ pub(crate) fn services(parent: Parent, ui: egui::Context) -> Services {
         screen_color: Some(mac_screen_color::sampler(sampled_ui)),
         #[cfg(target_os = "linux")]
         screen_color: Some(linux_screen_color::sampler(sampled_ui, sampled_parent)),
+        #[cfg(windows)]
+        screen_color: Some(windows_screen_color::sampler(sampled_ui)),
         // File → Print: the system's printers and print queue.
         print: Some(Box::new(printing::SystemPrint)),
         ..Default::default()
