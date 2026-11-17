@@ -418,6 +418,7 @@ impl VectorcraftApp {
     /// and the tool remembered for the toolbar group and for the Touch workspace's drawing mode
     /// stays as it was.
     pub(crate) fn try_select_tool(&mut self, id: &str) -> Result<(), String> {
+        crate::dialogs::cancel_brush_key_color(self, false);
         // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
         // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();

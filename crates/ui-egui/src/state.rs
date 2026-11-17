@@ -6,6 +6,14 @@ use vectorcraft_geom::Point;
 
 use crate::theme::Brightness;
 
+/// A Brush Options Key Color click, owned by its dialog and document until release or cancel.
+#[derive(Clone, Debug)]
+pub struct BrushKeyColorPick {
+    pub doc: u64,
+    pub back: String,
+    pub press: Option<Point>,
+}
+
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
@@ -563,6 +571,8 @@ pub struct UiState {
     pub tab_hid: Option<TabHid>,
     pub view: ViewFlags,
     pub dialog: Option<Dialog>,
+    #[serde(skip)]
+    pub brush_key_color_pick: Option<BrushKeyColorPick>,
     /// Messages to show in a dialog once the open one is closed (`dialogs::confirm::tell`), in
     /// the order they came.
     #[serde(skip)]
@@ -1194,6 +1204,7 @@ impl Default for UiState {
             tab_hid: None,
             view: ViewFlags::default(),
             dialog: None,
+            brush_key_color_pick: None,
             told: vec![],
             answering_control: false,
             flyout: None,

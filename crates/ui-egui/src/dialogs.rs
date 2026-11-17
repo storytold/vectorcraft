@@ -17,6 +17,7 @@ pub mod action_stop;
 pub mod artboard_options;
 pub mod blend_options;
 mod brush_art_options;
+pub(crate) use brush_art_options::{brush_key_color_canvas, brush_key_color_input, cancel_brush_key_color, refresh_brush_key_color};
 pub mod brush_delete;
 pub mod brush_options;
 pub mod brush_replace_art;
@@ -681,6 +682,7 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
 /// Close the open dialog as Cancel does, rolling back a live preview and showing the dialog it was
 /// opened over (`ui.dialog.cancel`).
 pub fn cancel(app: &mut VectorcraftApp) {
+    cancel_brush_key_color(app, true);
     missing_fonts::requeue_replaced(app);
     // More Settings' pop-up and Save Preset end on their own; New Document stays.
     if app.ui.dialog.as_mut().is_some_and(new_document::close_popup) {
@@ -741,6 +743,7 @@ pub(crate) fn reset(app: &mut VectorcraftApp) -> DialogResult {
 
 /// Apply the open dialog (OK).
 pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
+    cancel_brush_key_color(app, true);
     missing_fonts::requeue_replaced(app);
     let Some(d) = app.ui.dialog.clone() else { return Err("no dialog open".into()) };
     // A file dialog it shows off the UI thread confirms the dialog as it is again.
@@ -780,6 +783,7 @@ pub(crate) fn opened_by_panel(app: &mut VectorcraftApp) {
 /// Draws the active dialog and handles shared initial focus, keyboard shortcuts and actions.
 /// Inline actions and footer buttons use the same confirmation and preview rollback paths.
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    refresh_brush_key_color(app);
     crate::shortcuts::hold_back_keys(app, ctx);
     about::show(app, ctx);
     settle(app);
@@ -837,7 +841,8 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let initial = if revolves { egui::vec2((ctx.content_rect().width() / 2.0 - 226.0).max(0.0), -40.0) } else { egui::vec2(0.0, -40.0) };
     let id = egui::Id::unique(("dialog", d.kind.as_str()));
     let id = if revolves { id.with("revolve") } else { id };
-    modal::show_at(ctx, &heading, id, initial, MARGIN, |ui| {
+    let canvas_pick = brush_key_color_canvas(app, ctx);
+    modal::show_at(ctx, &heading, id, initial, MARGIN, canvas_pick, |ui| {
         // Never wider than the window (a large UI scale in a small window): the text wraps.
         let room = (ctx.content_rect().width() - 2.0 * (f32::from(MARGIN) + EDGE_GAP)).max(EDGE_GAP);
         ui.set_min_width(spec.min_width.min(room));
