@@ -462,22 +462,22 @@ pub(crate) fn line_rows(app: &mut VectorcraftApp, ui: &mut Ui, live: &LiveShape,
     }
     let (units, fw) = (app.session.general_unit(), super::field_width(ui));
     widgets::subheader(ui, tl!("Line Properties:"));
-    // The `object.setLiveShape` param an edited field sets.
-    let mut set = None;
+    // The `object.setLiveShape` params the edited fields set, all sent in one call.
+    let mut set = serde_json::Map::new();
     egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         widgets::dim_label(ui, tl!("Line Length:"));
         if let Some(l) = widgets::num_field_named(ui, (id, "length"), Some(tl!("Line Length:")), live.line_length(), units, fw) {
-            set = Some(("lineLength", json!(l)));
+            set.insert("lineLength".into(), json!(l));
         }
         ui.end_row();
         widgets::dim_label(ui, tl!("Line Angle:"));
         if let Some(a) = widgets::plain_field_named(ui, (id, "angle"), Some(tl!("Line Angle:")), live.line_angle().unwrap_or(0.0), "°", 1, fw) {
-            set = Some(("lineAngle", json!(a)));
+            set.insert("lineAngle".into(), json!(a));
         }
         ui.end_row();
     });
-    if let Some((key, v)) = set
-        && let Err(e) = app.run("object.setLiveShape", json!({ key: v }))
+    if !set.is_empty()
+        && let Err(e) = app.run("object.setLiveShape", serde_json::Value::Object(set))
     {
         app.status(e);
     }

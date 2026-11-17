@@ -120,7 +120,7 @@ fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<Live
         new.set_line_angle(a);
         changed = true;
     }
-    changed.then_some(new)
+    (changed && new != *l).then_some(new)
 }
 
 pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {

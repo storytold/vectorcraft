@@ -612,6 +612,12 @@ fn a_line_takes_its_length_and_angle() {
     run(&mut s, json!({"ids": [speck.0], "lineLength": 1e-12}));
     assert_eq!(steps(&s), n + 1, "a length of 1e-12 pt is a change");
     assert!(ends(&s, speck).2 > 20.0, "{:?}", ends(&s, speck));
+    // A length so short that the rounded ends do not move records no undo step.
+    let dust = line(&mut s, (20.0, 20.0), (20.0, 20.0));
+    let n = steps(&s);
+    run(&mut s, json!({"ids": [dust.0], "lineLength": 1e-20}));
+    assert_eq!(steps(&s), n, "a length of 1e-20 pt changes nothing");
+    near(ends(&s, dust), (20.0, 20.0, 20.0, 20.0));
     // Other live shapes ignore the line params.
     let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
     let n = steps(&s);
