@@ -28,6 +28,7 @@ craft-gzip = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # SVG parsing, limits, SVGZ and writer (craft-libs#778).
 craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "431f704478962677ec47e512754464d372901830", features = ["tree"] }
+craft-mime = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
 craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "a499742a9389f47d10cdc61e4cdbf4e5f07f48cd" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
