@@ -2217,14 +2217,14 @@ mod tests {
         let ctx = egui::Context::default();
         crate::theme::install_fonts(&ctx);
         // The payloads are set directly, as if dragged from this document's panel.
-        set_pstate(&ctx, DRAG_DOC, uid(&app));
+        let document = uid(&app).expect("an active document");
         let trash = button_rect(&ctx, &mut app, "Delete Symbol");
         let elsewhere = trash.center() - vec2(0.0, 60.0);
         let cases = [
             ("a library symbol", PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Leaf".into() }, trash.center()),
             ("art", PanelDrag::Art(vec![leaf]), trash.center()),
-            ("a stale name", PanelDrag::Symbol("Gone".into()), trash.center()),
-            ("a symbol released elsewhere", PanelDrag::Symbol("Dot".into()), elsewhere),
+            ("a stale name", PanelDrag::Symbol { document, name: "Gone".into() }, trash.center()),
+            ("a symbol released elsewhere", PanelDrag::Symbol { document, name: "Dot".into() }, elsewhere),
         ];
         for (case, drag, at) in cases {
             egui::DragAndDrop::set_payload(&ctx, drag);
@@ -2241,7 +2241,7 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())));
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Leaf".into() }));
         app.run("symbol.delete", json!({"name": "Leaf"})).unwrap();
         let undo = app.session.active().unwrap().history.undo.len();
         let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash.center())], egui::Modifiers::NONE);
@@ -2253,7 +2253,7 @@ mod tests {
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
         frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
-        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Dot".into())));
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol { document, name: "Dot".into() }));
         app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
         app.run("symbol.new", json!({"name": "Dot"})).unwrap();
