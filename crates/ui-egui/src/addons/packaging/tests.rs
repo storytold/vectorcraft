@@ -213,6 +213,28 @@ fn the_check_button_checks_and_clicking_an_issue_selects_its_lines() {
 }
 
 #[test]
+fn each_document_keeps_its_own_check() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (mut app, _) = blank();
+    let ctx = egui::Context::default();
+    let text = frames(&mut app, &ctx, Some("Check"));
+    assert!(text.contains("A cut line ends without meeting another cut line."), "{text}");
+    // A second document, checked too: it has no cut lines.
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let text = frames(&mut app, &ctx, Some("Check"));
+    assert!(text.contains("No cut lines are in the document.") && !text.contains("A cut line ends"), "{text}");
+    // Back on the first document, unchanged since its check: its issues are still listed.
+    assert!(app.session.set_active(0));
+    let text = frames(&mut app, &ctx, None);
+    assert!(text.contains("A cut line ends without meeting another cut line."), "{text}");
+    assert!(text.contains("Panels: 2, hinges: 1, errors: 1, warnings: 0"), "{text}");
+    // And the second document's check stays its own.
+    assert!(app.session.set_active(1));
+    let text = frames(&mut app, &ctx, None);
+    assert!(text.contains("No cut lines are in the document.") && !text.contains("A cut line ends"), "{text}");
+}
+
+#[test]
 fn issues_and_the_summary_show_in_the_interface_language() {
     let (mut app, _) = blank();
     let ctx = egui::Context::default();

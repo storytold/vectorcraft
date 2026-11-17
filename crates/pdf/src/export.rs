@@ -108,6 +108,9 @@ pub(crate) struct Exporter<'a> {
     paper: Rect,
     /// Overprinting fills and strokes are drawn as forms marked to overprint.
     pub overprint: bool,
+    /// Overprinting characters' fills and strokes are drawn with Darken, as a separation's plate
+    /// draws its overprinting fills and strokes ([`vectorcraft_doc::overprint::darken_overprints`]).
+    pub darken_overprints: bool,
     /// An overprinting fill or stroke was drawn so.
     pub overprinted: bool,
     /// Characters with neither fill nor stroke, or whose fill is drawn as art (outlines filled

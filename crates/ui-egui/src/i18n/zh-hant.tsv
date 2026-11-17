@@ -1338,6 +1338,10 @@ file-filter	Templates	範本
 	Font List	字體清單
 	Show Similar Fonts	顯示相似字體
 	Clear Similar Fonts	清除相似字體
+	Fonts used in this document	此文件中使用的字體
+	This document uses no available fonts	此文件未使用任何可用字體
+	Recently Added	最近新增
+	Fonts added in the last 30 days	最近 30 天內新增的字體
 	Font Preview Size	字體預覽大小
 	Font Size	字體大小
 	Variable Font	可變字體
@@ -2062,6 +2066,9 @@ file-filter	Templates	範本
 @msg	image would be too large; lower the resolution	影像會過大；請降低解析度
 @msg	clipboard is empty	剪貼簿是空的
 @msg	no anchor points selected	未選取錨點
+@msg	`points` must be three [x, y] pairs of numbers	`points` 必須是三組數字 [x, y]
+@msg	direct-select three anchor points, or give `points`	請以直接選取方式選取三個錨點，或提供 `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
 @msg	select at least two objects	請選取至少兩個物件
 @msg	exit isolation mode first	請先結束隔離模式
 @msg	no saved presets	沒有已儲存的預設集
@@ -3180,7 +3187,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Lock Others	鎖定其他
 	Lock Slices	鎖定切片
 	Lock Station Point	鎖定基準點
-	Lossless (lossy WebP isn't available yet)	無失真 (尚未提供有失真的 WebP)
+	Lossless	無失真
+	Lossy	有失真
 	Lossy:	失真度：
 	Low	低
 	lowercase	全部小寫
@@ -4469,6 +4477,7 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
+	Search commands	搜尋指令
 	Search Commands…	搜尋指令…
 	Secondary	次要
 	Section Symbol	章節符號
@@ -4586,8 +4595,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Shear	傾斜
 	Shear Tool	傾斜工具
 	Shear…	傾斜…
-	Shell Lower…	下弧形…
-	Shell Upper…	上弧形…
+	Shell Lower…	下殼形…
+	Shell Upper…	上殼形…
 	Shift	Shift
 	Shift to Color…	位移至顏色…
 	Shifts the tints of global and spot colors; other colors stay.	位移整體色與特別色的色調；其他顏色維持不變。
@@ -5936,6 +5945,24 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	群組填色或筆畫上的 3D 效果不會繪製任何內容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
+@msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，也就是濾鏡的名稱
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 濾鏡的 id 最多 {MAX_NAME} 個字元
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 濾鏡的元素
+@msg	an SVG filter has no event attributes such as {_1}	SVG 濾鏡不能有 {_1} 等事件屬性
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 濾鏡的影像必須是 PNG、JPEG、GIF 或 WebP 格式的 data: URL
+@msg	the SVG filter isn't valid XML: {e}	SVG 濾鏡不是有效的 XML：{e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence 的 numOctaves 最大為 {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}最大為 {max}
+@msg	feConvolveMatrix's order	feConvolveMatrix 的 order
+@msg	feMorphology's radius	feMorphology 的 radius
+@msg	a blur's stdDeviation	模糊的 stdDeviation
+@msg	the SVG filter has no primitives	SVG 濾鏡沒有基本元件
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 濾鏡最多有 {MAX_PRIMITIVES} 個基本元件
+@msg	the SVG filter is too large once its attributes are written out	寫出屬性後，SVG 濾鏡過大
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 濾鏡的影像總共最多 {MAX_IMAGE_PIXELS} 像素
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	無法繪製 SVG 濾鏡：請檢查其基本元件及其輸入
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 濾鏡的元素最多巢狀 {MAX_DEPTH} 層
+@msg	an SVG filter is at most {_1} KB	SVG 濾鏡最大為 {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` 必須是只含 `mode` 的物件，值為 shaded 或 wireframe
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
@@ -6765,6 +6792,7 @@ anchor	Points:	點：
 	Open a document to check it for issues.	開啟文件以檢查其中的問題。
 	Empty Text	空白文字
 	Unpainted Objects	未上色物件
+	Empty Text Paths	空白文字路徑
 	Zero-Opacity Objects	不透明度為零的物件
 	Duplicate Objects	重複物件
 	Off-Artboard Art	工作區域外的圖稿
@@ -7501,6 +7529,7 @@ breakText	Glyphs	字符
 @msg	Too many Revolve faces for visibility evaluation	迴轉的面過多，無法計算可見性
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 從色票交換檔案最多讀取 {ASE_MAX_ENTRIES} 個顏色和群組，而此資料庫有 {entries} 個
 @msg	WebP encoding failed: {e}	WebP 編碼失敗：{e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 編碼失敗：影像太大，無法產生有失真 WebP：請降低解析度或選擇無失真
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必須是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList

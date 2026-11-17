@@ -338,6 +338,12 @@ pub fn ai_with_entries_and_content(private: &[u8], page: &str, entries: &str, co
     with_private(private, page, "AIPrivateData", entries, content)
 }
 
+/// [`ai_with_content`] with `streams` more in the dictionary of each private data stream
+/// (`/Filter /Bogus `).
+pub fn ai_with_private_streams(private: &[u8], page: &str, content: &str, streams: &str) -> Vec<u8> {
+    with_private_streams(private, page, "AIPrivateData", "", content, streams)
+}
+
 /// A PDF saved with Illustrator's editing data: [`ai`]'s file with the two streams under
 /// `AIPDFPrivateData1` and `AIPDFPrivateData2`. These key names were seen in the PDF attached to
 /// #868, and nothing else of that file is used; ExifTool's PDF tag table lists them too
@@ -354,6 +360,11 @@ pub fn pdf_with_content(private: &[u8], page: &str, content: &str) -> Vec<u8> {
 /// The file of [`ai`] and [`pdf`], with `private` in the streams `{key}1` and `{key}2`, `entries`
 /// more in the page dictionary and `content` more in its content stream's dictionary.
 fn with_private(private: &[u8], page: &str, key: &str, entries: &str, content: &str) -> Vec<u8> {
+    with_private_streams(private, page, key, entries, content, "")
+}
+
+/// [`with_private`] with `streams` more in each private data stream's dictionary.
+fn with_private_streams(private: &[u8], page: &str, key: &str, entries: &str, content: &str, streams: &str) -> Vec<u8> {
     let (first, second) = private.split_at(private.len() / 2);
     let stream = |part: &[u8], more: &str| {
         let mut s = format!("<< /Length {} {more}>>\nstream\n", part.len()).into_bytes();
@@ -371,8 +382,8 @@ fn with_private(private: &[u8], page: &str, key: &str, entries: &str, content: &
         )
         .into_bytes(),
         stream(page.as_bytes(), content),
-        stream(first, ""),
-        stream(second, ""),
+        stream(first, streams),
+        stream(second, streams),
     ];
     let mut out = b"%PDF-1.5\n".to_vec();
     let mut offsets = vec![];

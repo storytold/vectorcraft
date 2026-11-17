@@ -302,6 +302,136 @@ fn each_copys_fill_shadow_expands_as_the_canvas_draws_it() {
     }
 }
 
+/// Each copy of a group's Transform effect draws the drop shadow listed before the effect under
+/// itself, of both its squares together and scaled with it, and Expand Appearance keeps those
+/// shadows: the squares (20..40 together) have their shadow 20 pt to their right, and their copy
+/// scaled 200 % and moved 80 pt down (10..50 across, 90..130 down) has its own 40 pt to its right.
+/// A copy moved 30 pt right (50..70) lies under the squares' shadow (40..60), which still paints
+/// over it once expanded. The expanded art has no effects left, and each object in it an id of its
+/// own.
+#[test]
+fn each_copys_shadow_on_a_group_expands_as_the_canvas_draws_it() {
+    let cases = [
+        (json!({"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1}), (80, 110), "the copy's shadow"),
+        (json!({"moveH": 30, "copies": 1}), (55, 30), "the squares' shadow over the copy"),
+    ];
+    for (params, (x, y), what) in cases {
+        let mut s = session();
+        let mut ids = vec![];
+        for x in [20, 30] {
+            ids.push(run(&mut s, "shape.rectangle", json!({"x": x, "y": 20, "width": 10, "height": 20}))["id"].as_u64().unwrap());
+            run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+            run(&mut s, "paint.setStroke", json!({"none": true}));
+        }
+        run(&mut s, "select.set", json!({"ids": ids}));
+        run(&mut s, "object.group", json!({}));
+        let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+        run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": params}));
+        let before = render(&s);
+        assert_eq!(before.pixel(x, y), [0, 255, 0, 255], "{params}: {what}");
+        run(&mut s, "effect.expandAppearance", json!({}));
+        let after = render(&s);
+        let diff = differing(&before, &after, 64);
+        assert_eq!(diff, 0, "{params}: {diff} pixels differ");
+        let doc = &s.doc().unwrap().doc;
+        let (mut seen, mut count, mut effects) = (std::collections::HashSet::new(), 0, 0);
+        for l in &doc.layers {
+            l.walk(&mut |n| {
+                seen.insert(n.id);
+                count += 1;
+                effects += n.appearance.effects.len();
+            });
+        }
+        assert_eq!(seen.len(), count, "{params}: each object has an id of its own");
+        assert_eq!(effects, 0, "{params}: no effects are left");
+    }
+}
+
+/// A member's random Transform effect takes its seed from the member's id, and the canvas draws
+/// every copy of the group with that id: Expand Appearance of a group with a stroke of its own, a
+/// shadow and a copying Transform effect gives each copy's symbol instance the same random move, so
+/// the copies, 60 pt apart, still draw alike.
+#[test]
+fn each_copys_random_member_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    let mut ids = vec![];
+    for x in [20, 50] {
+        ids.push(run(&mut s, "shape.rectangle", json!({"x": x, "y": 20, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+        run(&mut s, "paint.setStroke", json!({"none": true}));
+    }
+    run(&mut s, "select.set", json!({"ids": [ids[0]]}));
+    ids[0] = run(&mut s, "symbol.new", json!({"name": "Box"}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [ids[0]]}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveH": 16, "moveV": 16, "random": true}}));
+    run(&mut s, "select.set", json!({"ids": ids}));
+    let g = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [g]}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    assert!(node(&s, NodeId(g)).appearance.items.iter().any(|i| i.visible()), "the group has a stroke of its own");
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveV": 60, "copies": 2}}));
+    // The pixels of each copy's 60 pt band that differ from the first copy's by more than 64.
+    let unlike = |r: &vectorcraft_render::Rendered| {
+        let px = |x: usize, y: usize| {
+            let i = (y * r.width as usize + x) * 4;
+            r.pixels.get(i..i + 4).map(<[u8]>::to_vec).unwrap_or_default()
+        };
+        let mut n = 0;
+        for k in [60, 120] {
+            for y in 0..60 {
+                for x in 0..r.width as usize {
+                    n += usize::from(px(x, y).iter().zip(px(x, y + k)).any(|(a, b)| a.abs_diff(b) > 64));
+                }
+            }
+        }
+        n
+    };
+    let before = render(&s);
+    assert_eq!(unlike(&before), 0, "the canvas draws the copies alike");
+    let art = vectorcraft_render::effects::evaluate_container(Some(&s.doc().unwrap().doc), &node(&s, NodeId(g))).unwrap();
+    let mut live = 0;
+    art.walk(&mut |n| live += n.appearance.effects.iter().filter(|e| e.id == "distort.transform").count());
+    assert_eq!(live, 3, "each copy's instance keeps its random effect live");
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    assert_eq!(unlike(&after), 0, "the expanded copies draw alike");
+    assert!(differing(&before, &after, 64) < 200, "the copies stay where they are drawn");
+}
+
+/// A member's own Offset Path applies before the copying Transform effect of its group, which has
+/// a stroke of its own, whether or not a shadow is listed before that Transform effect: the copy
+/// scaled 200 % draws the offset square scaled, with or without a shadow at 0 % opacity.
+#[test]
+fn a_members_offset_path_applies_before_its_painted_groups_copies() {
+    let draw = |shadow: bool| {
+        let mut s = session();
+        let mut ids = vec![];
+        for x in [20, 40] {
+            ids.push(run(&mut s, "shape.rectangle", json!({"x": x, "y": 20, "width": 10, "height": 10}))["id"].as_u64().unwrap());
+            run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+            run(&mut s, "paint.setStroke", json!({"none": true}));
+        }
+        run(&mut s, "select.set", json!({"ids": [ids[0]]}));
+        run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 5}}));
+        run(&mut s, "select.set", json!({"ids": ids}));
+        let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+        run(&mut s, "appearance.addStroke", json!({}));
+        if shadow {
+            let fx = json!({"x": 10, "y": 0, "blur": 0, "opacity": 0, "mode": "normal", "color": "#00ff00"});
+            run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": fx}));
+        }
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}}));
+        let n = node(&s, g);
+        assert_eq!(vectorcraft_render::effects::outer_effects(&n).len() < n.appearance.effects.len(), shadow, "each copy carries the shadow");
+        render(&s)
+    };
+    let diff = differing(&draw(false), &draw(true), 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
 /// Each copy of type's Transform effect draws the drop shadow listed before the effect under
 /// itself, scaled with it, and Expand Appearance keeps those shadows: the type's copy, scaled 200 %
 /// and moved 80 pt down, has its shadow 40 pt to the right of its letters rather than the type's
