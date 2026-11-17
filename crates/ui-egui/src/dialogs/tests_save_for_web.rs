@@ -884,6 +884,30 @@ fn double_clicking_a_swatch_shifts_its_color() {
     assert_eq!((remembered.shifted.get("#0000ff").map(String::as_str), remembered.web_shift.len()), (Some("#00ff00"), 0));
 }
 
+/// `ui.dialog.set` accepts `__editColor`, and the next frame opens the Color Picker on that color,
+/// whose OK shifts it.
+#[test]
+fn dialog_set_edit_color_opens_the_color_picker() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-edit-color-set");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("gif"));
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (req, _) = crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__editColor", "value": "#0000ff"}));
+    let crate::control::Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(r["ok"], true, "{r}");
+    tick(&mut app, &ctx, vec![]);
+    assert_eq!(picker_color(&app).as_deref(), Some("#0000ff"));
+    set(&mut app, "color", json!("#00ff00"));
+    confirm(&mut app).unwrap();
+    tick(&mut app, &ctx, vec![]);
+    let shifted = app.ui.dialog.as_ref().map(|d| d.fields["colorTable"]["shifted"].clone());
+    assert_eq!((kind(&app), shifted), (Some(save_for_web::KIND), Some(json!({"#0000ff": "#00ff00"}))));
+}
+
 /// Click the dialog's text `label` with the pointer (frames a quarter second apart).
 fn click_text(app: &mut VectorcraftApp, label: &str) {
     let ctx = egui::Context::default();
