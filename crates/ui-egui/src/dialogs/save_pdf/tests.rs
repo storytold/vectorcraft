@@ -220,6 +220,24 @@ fn save_summary_does_not_use_another_documents_summary() {
     assert!(!text.contains("kept"), "the other document's Summary: {text}");
 }
 
+/// The Summary is computed again when the saved preset it compares against is replaced while the
+/// dialog stays open.
+#[test]
+fn save_summary_compares_against_a_replaced_preset() {
+    let (mut app, written, _) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
+    app.run("ui.savePdfDialog", json!({"preset": "Mine"})).unwrap();
+    set_field(&mut app, "thumbnails", json!(false));
+    app.ui_ctx = Some(egui::Context::default());
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/a.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[0].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nGeneral › Thumbnails: Off\n"), "{text}");
+    app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": false})).unwrap();
+    app.run(SAVE_SUMMARY, json!({"path": "/tmp/b.txt"})).unwrap();
+    let text = String::from_utf8(written.borrow()[1].1.clone()).unwrap();
+    assert!(text.starts_with("Options\nEvery option matches the preset.\n"), "compared against the replaced preset: {text}");
+}
+
 /// With the desktop's file writer: a file already at the path is replaced whole, a folder's path
 /// is an error that leaves the folder as it was, and under automation write roots a path outside
 /// them is refused without writing.

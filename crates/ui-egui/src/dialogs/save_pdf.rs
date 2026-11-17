@@ -852,7 +852,7 @@ pub(super) fn option_label(option: &str) -> String {
 }
 
 /// `document.pdfSettings` for the dialog with the document's warnings (an export in memory),
-/// cached until a field or the document changes.
+/// cached until a field, the document or the saved presets change.
 fn summary_of(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Result<Value, String> {
     let (key, stamp) = summary_key(app, p);
     if let Some((s, v)) = ctx.data(|m| m.get_temp::<(egui::Id, Result<Value, String>)>(key))
@@ -865,11 +865,12 @@ fn summary_of(app: &mut VectorcraftApp, ctx: &egui::Context, p: &Value) -> Resul
     v
 }
 
-/// Where [`summary_of`] keeps the Summary, and the stamp of the params `p` and the active
-/// document and its revision it was computed for.
+/// Where [`summary_of`] keeps the Summary, and the stamp of the params `p`, the active document
+/// and its revision, and the saved presets (which `preset` can name) it was computed for.
 fn summary_key(app: &VectorcraftApp, p: &Value) -> (egui::Id, egui::Id) {
     let document = app.session.active().map(|s| (s.uid, s.revision));
-    (egui::Id::unique("save-pdf-summary"), egui::Id::unique((p.to_string(), document)))
+    let presets = serde_json::to_string(&app.session.prefs.pdf_presets).unwrap_or_default();
+    (egui::Id::unique("save-pdf-summary"), egui::Id::unique((p.to_string(), document, presets)))
 }
 
 /// `document.pdfSettings` for the dialog's `document.exportPdf` params `p`, with the document's
@@ -967,9 +968,9 @@ pub(crate) fn summary_open(app: &VectorcraftApp) -> bool {
 
 /// `ui.pdfSummary.save {path}`: write the open Save PDF dialog's (or preset editor's) Summary as
 /// text to `path` (the web downloads it under the path's file name). The Summary the section last
-/// drew for the same fields and document is used as it is; the settings are computed only when
-/// there is none. The dialog stays open and the document is not changed → `{path, bytes}`. A
-/// missing, empty or non-string `path` is an error that writes nothing.
+/// drew for the same fields, document and saved presets is used as it is; the settings are
+/// computed only when there is none. The dialog stays open and the document is not changed →
+/// `{path, bytes}`. A missing, empty or non-string `path` is an error that writes nothing.
 pub(crate) fn save_summary(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let key = "path";
     let path = match p.get(key) {
