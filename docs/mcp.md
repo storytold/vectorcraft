@@ -3053,6 +3053,14 @@ whose order changed and the id of the object now on top in each. A move that cha
 overlap offers Bring to Front, Bring Forward, Send Backward and Send to Back, which run this command for the object
 nearest to the pointer.
 
+`layer.move` and `node.move` add objects to an Intertwine group: an object placed inside the group or beside one of its
+members becomes a member, drawn in its row's order, with no arranged areas; the other members keep theirs. An object
+placed in a group that is a member becomes part of that member and is drawn with it. An object that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused, as
+`object.intertwine.make` refuses it, in a group inside the group too, and nothing changes. A member moved out of the group (also by
+`object.arrange.sendToCurrentLayer`) drops its arranged areas. A group left with one member is replaced by that member, or
+becomes a plain group of that member when the group has an opacity, blending, appearance, opacity mask, lock or hidden
+state of its own. A group left with none is removed. Each of these happens in the move's undo step.
+
 ## Global Edit
 
 Select › Start Global Edit is `select.globalEdit {appearance?, size?, artboards?, includeCanvas?}`. With one path,
@@ -5370,8 +5378,9 @@ and `layerRows`, the rows highlighted in the panel.
   row highlighted, the trash button runs `edit.clear` on the selected guides and art, and guide rows dropped on the
   trash are deleted (`guide.remove {indexes}`).
 - **Dragging rows**: `layer.move {ids, target, place?: above|below|inside, copy?}` moves rows beside a row or into a
-  layer or group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves copies. Layers go
-  only in layers or at the top level and objects in layers and groups (an object placed beside a top-level layer goes
+  layer, group or Intertwine group (on top of its contents), keeping their stacking order; `copy` (Alt-drag) moves
+  copies. Layers go only in layers or at the top level and objects in layers, groups and Intertwine groups (see
+  Intertwine for the members an Intertwine group takes; an object placed beside a top-level layer goes
   inside it); a row never goes into itself or a row inside it, and a locked layer or group takes nothing. Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
   form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group.
@@ -6751,9 +6760,12 @@ also measured by its reshaped art when its symbol's art has geometry effects. A 
 Pathfinder effects, or with a fill or stroke of its own that has geometry effects or paints members with geometry
 effects, is measured by its evaluated art. A blend, envelope or repeat whose objects have geometry effects is
 measured by its evaluated art, with those objects measured after their effects. A 100 pt square without a stroke,
-with Offset Path 10, measures 120 pt, and type with Outline Object is measured by its glyph outlines. Raster effects such as shadows and glows are not
-measured. In one object, the art of at most 4,096 symbol instances is measured with its geometry effects, and the
-other instances are measured without them. `object.setBounds` with `width: 100` gives that type a glyph box 100 pt
+with Offset Path 10, measures 120 pt, and type with Outline Object is measured by its glyph outlines.
+Extrude & Bevel, Revolve, Inflate and Rotate are measured by their projected vector art, including effects on
+individual fills or strokes and geometry effects after projection. Groups and symbol instances include their
+members' projected art. Raster effects such as shadows and glows are not measured. In one object, the art of at
+most 4,096 symbol instances is measured with its geometry or 3D effects, and the other instances are measured
+without them. `object.setBounds` with `width: 100` gives that type a glyph box 100 pt
 wide.
 
 ```json
@@ -8482,7 +8494,9 @@ each file deflated, or stored when deflating does not make it smaller.
 A row is `{format, scale?}` where `scale` is a factor (`2`, `"2x"`), a pixel width (`"100w"` or `width: 100`), a
 height (`"100h"`) or a resolution (`"72ppi"`); raster rows name their files `@2x`, `@100w`… unless `suffix` says
 otherwise. `fullDocument` writes one file per row instead (a PDF of every artboard, other formats the bounds of all
-art), `includeBleed` grows each artboard by the document's bleed, `includeArtboardFill: false` (Include Artboard
+art), `includeBleed` grows each artboard by the document's bleed (a PDF row's page keeps the artboard as its
+TrimBox and puts the row's `bleed` around it once: the row's own values, zero included, else the document's bleed
+when the row sets none and its PDF preset gives none or a bleed of 0), `includeArtboardFill: false` (Include Artboard
 Fill unchecked) leaves the artboards' background colors out of the files, `pdfs: "single"` (Export PDFs As › Single file)
 writes the artboards a PDF row exports as the pages of one PDF named after the document (it is refused with
 `assets`, `layers` or `selection: "each"`, whose files each hold one item's art), `subfolders` puts each
@@ -9770,7 +9784,7 @@ paragraphs a `start` / `end` range touches), in percent:
 
 The options are saved with the paragraph (`justification` in `para`) only when they differ from the defaults, and
 paragraph styles carry them (`paraStyle.new {attrs: {justification: {auto_leading: 150}}}`). Vertical type isn't glyph
-scaled, and type on a path doesn't use them. One undo step. `ui.justification` opens the Justification dialog on the
+scaled. Type on a path takes the Desired values and does not use Minimum or Maximum. One undo step. `ui.justification` opens the Justification dialog on the
 values the Paragraph panel shows, with Preview; OK sends the values that changed.
 
 ```json
@@ -12271,10 +12285,12 @@ type and evening out horizontal scales are not there yet.
 Path Precision Tools is a built-in add-on for exact anchor and path work: its commands are `addon.pathtools.*`, and in
 the desktop app it lives in Object › Plug-ins › Path Precision Tools, in its Anchor Inspector panel
 (`window.panel {panel: "anchorInspector"}`), in its Parametric Shape panel (`window.panel {panel: "parametricShape"}`)
-and in eight tools that the toolbars don't show until they are added from the All Tools drawer (or chosen with
-`tool.select`): `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
-`sharedEdge` and `trimAtCrossings`.
-None has a shortcut. Each edit is one undo step, and an edit that changes nothing makes no step.
+and in eight tools: `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
+`sharedEdge` and `trimAtCrossings`. The toolbars don't show the first seven until they are added from the All Tools
+drawer (or chosen with `tool.select`); `trimAtCrossings` is in the Scissors tool's group in both shipped toolbars,
+after the Knife, and `ui.tool.list` lists it there. A toolbar edited before it joined keeps its saved layout until
+Reset Toolbar. None has a shortcut; one can be set in Edit › Keyboard Shortcuts › Tools. Each edit is one undo step,
+and an edit that changes nothing makes no step.
 
 Tools:
 
@@ -12335,7 +12351,7 @@ Tools:
   line has at most 4,096 points; past those limits it draws none. Once finding the crossings takes more than a
   twentieth of the work a release may do, or checking the line against the paths' segments takes more than 1,000,000
   box tests, the drag draws none until the next press. A click or a release still removes what it reaches. The tool
-  has no options.
+  has no options. Its cursor is the Knife's (`Knife`): a knife whose blade's point is the hotspot.
 
 Commands:
 
