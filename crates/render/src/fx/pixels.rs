@@ -95,7 +95,9 @@ impl Renderer {
         let key = content.cache.map(|slot| (content.node as *const Node as usize, slot, f.ink));
         // Made again at this zoom and rotation (after a pan), a raster cropped to the view covers a
         // margin around the view too, so that later pans within the margin draw it.
-        let again = key.and_then(|key| self.pixel_fx.get(&key)).is_some_and(|e| e.linear == linear) && content.kept.is_none() && !f.opts.dragging;
+        let again = key.and_then(|key| self.pixel_fx.get(&key)).is_some_and(|e| e.linear == linear)
+            && content.kept.is_none_or(|k| k.shared)
+            && !f.opts.dragging;
         let room = match margin {
             Some(m) if !fits && again => {
                 let e = pan_margin((screen.width(), screen.height()), m, PIXEL_BUDGET, f64::from(crate::MAX_RASTER_SIDE));
@@ -289,7 +291,7 @@ impl Renderer {
         // A raster kept for this view alone at a lower resolution than the view's is resampled to the
         // view's pixels once: each frame that draws it then copies it pixel for pixel, where sampling
         // it again across the whole view cost several times as much as a plain fill.
-        let view_raster = key.is_some() && in_view.is_some() && k < 1.0 && content.kept.is_none();
+        let view_raster = key.is_some() && in_view.is_some() && k < 1.0 && content.kept.is_none_or(|k| k.shared);
         let (image, x0, y0, k) = match view_raster.then(|| self.resampled(f, image.clone(), (x0, y0), k, screen)).flatten() {
             Some((image, x, y)) => (image, x, y, 1.0),
             None => (image, x0, y0, k),
@@ -308,8 +310,9 @@ impl Renderer {
             self.pixel_fx.insert(key, entry);
             self.trim_fx_rasters(FX_RASTER_BUDGET);
         }
-        // An image over the limits was drawn at a frame's resolution: its raster is kept.
-        match content.kept.filter(|kept| kept.image.borrow().is_none()) {
+        // An image over the limits was drawn at a frame's resolution: its raster is kept. The
+        // placements of a copied image each draw their own (`Kept::shared`).
+        match content.kept.filter(|kept| !kept.shared && kept.image.borrow().is_none()) {
             Some(kept) => {
                 let place = f.view.inverse() * Affine::translate((x0, y0)) * Affine::scale(1.0 / k);
                 *kept.image.borrow_mut() = Some(KeptImage::Raster(image.clone(), place, failed, image_left_out));

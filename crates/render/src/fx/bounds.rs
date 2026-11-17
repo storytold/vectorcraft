@@ -49,12 +49,13 @@ pub(crate) fn effected_path_carrying(doc: &Document, n: &Node, bp: &BezPath) -> 
 }
 
 /// `n`, a path or compound path whose own Rasterize effect is followed by Transform effects that
-/// move its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and the map
-/// they move the image by ([`effects::stage_map`]): the image is made of that node's art on its
-/// own pixel grid, then drawn through the map. `None` for any other object, when the node without
-/// those Transform effects is drawn through its art ([`has_object_fx`]: a Transform effect that
-/// copies it, Crop Marks, a 3D effect…), and when the art before the Transform effects is empty.
-pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)> {
+/// move or copy its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and
+/// the maps they place the image by, the lowest first ([`effects::stage_maps`]): the image is made
+/// of that node's art on its own pixel grid, then drawn through each map. `None` for any other
+/// object, when the node without those Transform effects is drawn through its art
+/// ([`has_object_fx`]: Crop Marks, a 3D effect…), and when the art before the Transform effects is
+/// empty.
+pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Vec<Affine>)> {
     if !has_fx(n) {
         return None;
     }
@@ -65,15 +66,21 @@ pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)
         return None;
     }
     let g = effected_path(doc, &stage, &node_bezpath(n)?);
-    let map = effects::stage_map(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
-    Some((stage, map))
+    let maps = effects::stage_maps(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
+    Some((stage, maps))
 }
 
-/// The box `map` ([`rasterize_stage`]) takes `b` to; `None` when it flattens it to a line or a
-/// point, which leaves nothing to draw.
-pub(crate) fn staged_reach(map: Affine, b: Rect) -> Option<Rect> {
+/// Does `map` ([`rasterize_stage`]) place an image? Not when it flattens it to a line or a point,
+/// which leaves nothing to draw.
+pub(crate) fn places(map: Affine) -> bool {
     let det = map.determinant();
-    (det.is_finite() && det.abs() > 1e-12).then(|| map.transform_rect_bbox(b))
+    det.is_finite() && det.abs() > 1e-12
+}
+
+/// The box the maps of [`rasterize_stage`] take `b` to, all placements together; `None` when each
+/// one flattens it ([`places`]).
+pub(crate) fn staged_reach(maps: &[Affine], b: Rect) -> Option<Rect> {
+    maps.iter().filter(|m| places(**m)).map(|m| m.transform_rect_bbox(b)).reduce(|a, r| a.union(r))
 }
 
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
@@ -103,10 +110,10 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     {
         return cull_bounds(symbols, &art);
     }
-    // A Rasterize image moved by the Transform effects after it reaches as far as the map takes
-    // what the art before them reaches, the image included.
-    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
-        return staged_reach(map, visual_bounds(symbols, &stage)?);
+    // A Rasterize image moved or copied by the Transform effects after it reaches as far as the
+    // maps take what the art before them reaches, the image included.
+    if let Some((stage, maps)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(&maps, visual_bounds(symbols, &stage)?);
     }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
@@ -483,8 +490,8 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = effects::crop_marks_art(n) {
         return drawn_bounds(symbols, &art);
     }
-    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
-        return staged_reach(map, painted_reach(symbols, &stage)?);
+    if let Some((stage, maps)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(&maps, painted_reach(symbols, &stage)?);
     }
     let ran = ran(symbols.document(), n);
     let b = drawn_bounds_ran(symbols, n, Some(&ran))?;
