@@ -61,6 +61,9 @@ pub struct CanvasCache {
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// The Transform panel's Align to Pixel Grid state (on, off or mixed, and whether every
+    /// selected object can be aligned) for (document uid, revision).
+    pub pixel_aligned: Option<((u64, u64), Option<PixelAligned>)>,
     /// [`CacheKey::plugins`] by document uid, with the plug-in revision
     /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
     pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
@@ -107,6 +110,10 @@ pub type SliceCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_doc::SliceArea
 /// [`CanvasCache::live_paint_gaps`]: the gap lines of the selected Live Paint groups of (document
 /// uid, revision).
 pub type LivePaintGapsCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_tools::Overlay>>);
+
+/// [`CanvasCache::pixel_aligned`]: the selected objects' Align to Pixel Grid, on or off when they
+/// agree and `None` when they differ, with whether every one can be aligned.
+pub type PixelAligned = (Option<bool>, bool);
 
 /// [`CanvasCache::print_tiling`]: the print tiling of (document uid, revision).
 pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::TilingPage>>);
