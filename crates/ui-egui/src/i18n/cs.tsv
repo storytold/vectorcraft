@@ -1328,6 +1328,7 @@ lighting	Light	Světlo
 	Search commands, tools, panels and effects	Hledat příkazy, nástroje, panely a efekty
 	Style:	Styl:
 	Switch workspace	Přepnout pracovní prostor
+	Search commands	Hledat příkazy
 	Show all open documents	Zobrazit všechny otevřené dokumenty
 	Use 	Příkazem 
 	 the object to select  |  	 na objekt jej vybere  |  
@@ -2909,7 +2910,8 @@ digits	Malayalam	Malajálamské
 	Hide Video Rulers	Skrýt video pravítka
 	Client-side (.html)	Na straně klienta (.html)
 	Color Reduction:	Redukce barev:
-	Lossless (lossy WebP isn't available yet)	Bezeztrátový (ztrátový WebP zatím není k dispozici)
+	Lossless	Bezeztrátový
+	Lossy	Ztrátový
 	Scans:	Průchody:
 	Server-side (.map)	Na straně serveru (.map)
 	{format} Options	Možnosti {format}
@@ -3717,6 +3719,10 @@ theme	Appearance	Motiv
 	Font List	Seznam písem
 	Show Similar Fonts	Zobrazit podobná písma
 	Clear Similar Fonts	Zrušit podobná písma
+	Fonts used in this document	Písma použitá v tomto dokumentu
+	This document uses no available fonts	Tento dokument nepoužívá žádná dostupná písma
+	Recently Added	Nedávno přidané
+	Fonts added in the last 30 days	Písma přidaná za posledních 30 dní
 	Fonts in Document	Písma v dokumentu
 	Refresh Font List	Obnovit seznam písem
 	Replace Font	Nahradit písmo
@@ -3988,6 +3994,7 @@ theme	Appearance	Motiv
 	Command Click to Select Objects Behind	Kliknutím s Cmd vybírat objekty vzadu
 	Constrain Angle	Úhel omezení
 	Constrain Width and Height Proportions	Zachovat proporce šířky a výšky
+	Copy Width to Height	Kopírovat šířku do výšky
 	Construction Guides	Konstrukční vodítka
 	Curvature Tool	Nástroj Zakřivení
 	Data Recovery	Obnovení dat
@@ -4512,6 +4519,38 @@ font-technology	Variable	Variabilní
 	Preferences	Předvolby
 	Previous	Předchozí
 	Restore every preference to its default (applied on OK)	Obnovit všechny předvolby na výchozí hodnoty (použije se po OK)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Zobrazí na plátně lištu příkazů pro výběr nebo nástroj; při tažení a v režimu prezentace se skryje.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Jak daleko klávesa se šipkou posune výběr; s klávesou Shift ho posune desetkrát dál.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Úhel os, podél kterých posouvají klávesy se šipkami a ke kterým Shift váže kreslení a přesouvání.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Poloměr rohu, kterým kreslí nástroj Zaoblený obdélník; změna poloměru během kreslení změní i tuto hodnotu.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Jak daleko doprava a dolů Vložit posune kopii, když není zadána poloha, například ze skriptu; Vložit v aplikaci ji umístí doprostřed zobrazení.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Zabrání nástroji Pero odstranit kotvicí bod, na který klepnete na vybrané cestě, nebo přidat bod tam, kde klepnete na její segment.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Kreslicí nástroje zobrazí místo své ikony nitkový kříž; Caps Lock udělá totéž, dokud je zapnutý.
+	Shows a tip when the pointer rests on a button or field that has one.	Zobrazí tip, když ukazatel spočine na tlačítku nebo poli, které ho má.
+	Shows a warning before a script you choose runs.	Zobrazí upozornění před spuštěním skriptu, který zvolíte.
+	Smooths the edges of artwork on the canvas.	Vyhladí okraje kresby na plátně.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Výběr › Stejné › Barva výplně, Barva tahu a Výplň a tah najdou jen stejný odstín globálního nebo přímého vzorku, ne libovolný jeho odstín.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Zobrazí domovskou obrazovku, když není otevřený žádný dokument; když je vypnuto, okno zůstane prázdné, dokud neklepnete na Domů.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Měří objekty včetně tahů a efektů měnících tvar pro velikost, polohu a zarovnání; stíny, záře a rozostření se neměří.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Při zvětšení 100 % zabere jeden palec dokumentu 96 obrazovkových bodů místo 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Poklepání na skupinu, cestu nebo obraz nástrojem Výběr je otevře v izolačním režimu.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Výplně a tahy se vzorkem se transformují s kresbou, pokud transformace nebo nabídka panelu Transformace nezvolí jinak.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Poloměry živých rohů se mění s velikostí kresby, pokud změna velikosti nezvolí jinak.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Tloušťky tahů, čárky a vzdálenosti efektů se mění s velikostí kresby, pokud změna velikosti nezvolí jinak.
+	The mouse wheel zooms the canvas instead of scrolling it.	Kolečko myši plátno zvětšuje a zmenšuje místo posouvání.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kolečko myši s podrženou klávesou Cmd/Ctrl posouvá plátno do stran.
+	Dragging sideways on a numeric field's label changes the field's value.	Tažení do stran po popisku číselného pole mění hodnotu pole.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gesto otočení dvěma prsty na trackpadu otáčí zobrazení plátna.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Podržení zkratky nástroje vybere nástroj, dokud ji nepustíte, a pak se znovu vybere předchozí nástroj.
+	Shows the bounding box while you move the selection or draw a shape.	Zobrazí ohraničovací rámeček, když přesouváte výběr nebo kreslíte tvar.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Vytvořit značky ořezu nakreslí značky v japonském stylu místo římských.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Nová kresba převezme jen výplň a tah výběru; když je vypnuto, převezme celý vzhled vybraného objektu.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Změna šířky nebo výšky v panelu Transformace, v panelu Vlastnosti nebo v ovládacím panelu úměrně změní i druhý rozměr.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Vlastnosti živého obdélníku zobrazí jedno pole Poloměr rohu pro všechny čtyři rohy; když je vypnuto, má každý roh vlastní pole.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Co úpravy v panelu Transformace transformují: objekt, dlaždice jeho vzorku nebo obojí; Výchozí se řídí volbou Transformovat dlaždice vzorku.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Když je vybraná jedna instance symbolu, panel Transformace použije registrační bod symbolu jako referenční bod.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Ztmaví plátno mimo pracovní plochy, dokud je aktivní nástroj Pracovní plocha.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Když je zapnuto Ztmavit oblast mimo pracovní plochu, zůstane oblast mimo pracovní plochy tmavá i při tažení nástrojem Pracovní plocha.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jednotka nových dokumentů z vestavěných velikostí kromě velikostí v obrazových bodech a otevřených souborů bez uložené jednotky; když ji zde zvolíte a kliknete na OK, nastaví se i jako jednotka aktivního dokumentu.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Tloušťky tahů, čárky a mezery se zobrazují v této jednotce a čísla pro ně zadaná se v ní čtou.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Velikosti písma, proklad a posun účaří se zobrazují v této jednotce a čísla pro ně zadaná se v ní čtou.
@@ -5214,6 +5253,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
+@msg	`points` must be three [x, y] pairs of numbers	`points` musí být tři dvojice čísel [x, y]
+@msg	direct-select three anchor points, or give `points`	vyberte přímým výběrem tři kotevní body, nebo zadejte `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
 @msg	no artboard {i} (0-based; the document has {_1})	pracovní plocha {i} neexistuje (číslováno od 0; dokument jich má {_1})
@@ -7136,6 +7178,7 @@ anchor	Points:	Body:
 	Open a document to check it for issues.	Otevřete dokument a zkontrolujte jeho problémy.
 	Empty Text	Prázdný text
 	Unpainted Objects	Objekty bez barvy
+	Empty Text Paths	Prázdné textové cesty
 	Zero-Opacity Objects	Objekty s nulovým krytím
 	Duplicate Objects	Duplicitní objekty
 	Off-Artboard Art	Kresba mimo pracovní plochy
@@ -7800,6 +7843,7 @@ breakText	Glyphs	Glyfy
 @msg	Too many Revolve faces for visibility evaluation	Rotační těleso má příliš mnoho stěn pro výpočet viditelnosti
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft čte ze souboru pro výměnu vzorníku nejvýše {ASE_MAX_ENTRIES} barev a skupin a tato knihovna jich má {entries}
 @msg	WebP encoding failed: {e}	kódování WebP selhalo: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	kódování WebP selhalo: obrázek je pro ztrátový WebP příliš velký: snižte rozlišení nebo zvolte Bezeztrátový
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` je smallThumb, mediumThumb, largeThumb, smallList nebo largeList

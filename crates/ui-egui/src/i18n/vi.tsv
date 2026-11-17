@@ -705,6 +705,7 @@ font-technology	Variable	Biến thiên
 	Constrain	Giữ tỷ lệ
 	Constrain Angle	Ràng buộc góc
 	Constrain Width and Height Proportions	Ràng buộc tỷ lệ chiều rộng và chiều cao
+	Copy Width to Height	Sao chép chiều rộng sang chiều cao
 	Construction Guides	Đường căn xây dựng
 	Contextual Alternates	Ký tự thay thế theo ngữ cảnh
 	Contextual Task Bar	Thanh tác vụ theo ngữ cảnh
@@ -1593,6 +1594,10 @@ file-filter	Templates	Mẫu
 	Font List	Danh sách phông
 	Show Similar Fonts	Hiển thị phông tương tự
 	Clear Similar Fonts	Xóa phông tương tự
+	Fonts used in this document	Phông được dùng trong tài liệu này
+	This document uses no available fonts	Tài liệu này không dùng phông nào có sẵn
+	Recently Added	Mới thêm gần đây
+	Fonts added in the last 30 days	Phông được thêm trong 30 ngày qua
 	Font Preview Size	Cỡ xem trước phông
 	Font Size	Cỡ chữ
 	Variable Font	Phông chữ biến thiên
@@ -2374,7 +2379,8 @@ digits	Hindi	Hindi
 	Long Lines	Nét dài
 	Long Strokes	Nét vẽ dài
 	Longest:	Dài nhất:
-	Lossless (lossy WebP isn't available yet)	Không mất dữ liệu (WebP mất dữ liệu chưa hỗ trợ)
+	Lossless	Không mất dữ liệu
+	Lossy	Mất dữ liệu
 	Lossy:	Mất dữ liệu:
 	Low	Thấp
 	lowercase	chữ thường
@@ -3410,6 +3416,38 @@ mark-style	Japanese	Kiểu Nhật
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Hiển thị trên khung vẽ một thanh lệnh cho vùng chọn hoặc công cụ; thanh này ẩn khi bạn kéo và trong chế độ trình bày.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Khoảng cách một phím mũi tên di chuyển vùng chọn; khi giữ Shift, phím di chuyển xa gấp mười lần.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Góc của các trục mà phím mũi tên di chuyển theo và Shift giữ việc vẽ và di chuyển theo.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Bán kính góc mà công cụ Hình chữ nhật bo góc dùng để vẽ; đổi bán kính trong khi vẽ cũng đổi giá trị này.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Khoảng cách Dán dời bản sao sang phải và xuống dưới khi không có vị trí được chỉ định, như từ một tập lệnh; Dán trong ứng dụng đặt bản sao vào giữa khung nhìn.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Ngăn công cụ Bút xóa điểm neo bạn nhấp trên một đường dẫn đã chọn, hoặc thêm điểm neo nơi bạn nhấp vào đoạn của nó.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Các công cụ vẽ hiển thị con trỏ hình chữ thập thay cho biểu tượng của chúng; Caps Lock cũng làm vậy khi đang bật.
+	Shows a tip when the pointer rests on a button or field that has one.	Hiển thị mẹo khi con trỏ dừng trên một nút hoặc trường có mẹo.
+	Shows a warning before a script you choose runs.	Hiển thị cảnh báo trước khi một tập lệnh bạn chọn chạy.
+	Smooths the edges of artwork on the canvas.	Làm mịn các cạnh của hình minh họa trên khung vẽ.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Vùng chọn › Giống nhau › Màu tô, Màu nét và Tô & Nét chỉ khớp với cùng sắc độ của một mẫu màu toàn cục hoặc màu pha, không phải mọi sắc độ của nó.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiển thị màn hình Trang chủ khi không có tài liệu nào mở; khi tắt, cửa sổ để trống cho đến khi bạn nhấp vào Trang chủ.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Đo đối tượng cùng với nét và các hiệu ứng thay đổi hình dạng cho kích thước, vị trí và căn chỉnh; bóng đổ, ánh sáng và làm mờ không được đo.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Ở mức thu phóng 100%, một inch của tài liệu chiếm 96 điểm màn hình thay vì 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Nhấp đúp vào một nhóm, đường dẫn hoặc hình ảnh bằng công cụ Vùng chọn sẽ mở nó trong chế độ cô lập.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Phần tô và nét họa tiết biến đổi cùng hình minh họa, trừ khi phép biến đổi hoặc menu của bảng Biến đổi chọn khác.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Bán kính góc động co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Độ dày nét, gạch đứt và khoảng cách hiệu ứng co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
+	The mouse wheel zooms the canvas instead of scrolling it.	Con lăn chuột thu phóng khung vẽ thay vì cuộn nó.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Con lăn chuột kèm giữ Cmd/Ctrl cuộn khung vẽ sang ngang.
+	Dragging sideways on a numeric field's label changes the field's value.	Kéo sang ngang trên nhãn của một trường số sẽ thay đổi giá trị của trường.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
+	Shows the bounding box while you move the selection or draw a shape.	Hiển thị hộp giới hạn khi bạn di chuyển vùng chọn hoặc vẽ một hình.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Tạo dấu cắt xén vẽ dấu kiểu Nhật thay cho kiểu La Mã.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Hình minh họa mới chỉ lấy phần tô và nét của vùng chọn; khi tắt, nó lấy toàn bộ diện mạo của đối tượng đã chọn.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Đổi chiều rộng hoặc chiều cao trong bảng Biến đổi, bảng Thuộc tính hoặc thanh Điều khiển sẽ đổi kích thước kia theo tỷ lệ.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Thuộc tính của một hình chữ nhật động hiển thị một trường Bán kính góc cho cả bốn góc; khi tắt, mỗi góc có trường riêng.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Những gì thao tác trong bảng Biến đổi biến đổi: đối tượng, các ô họa tiết của nó hoặc cả hai; Mặc định theo Biến đổi ô họa tiết.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Khi chọn một thể hiện biểu tượng, bảng Biến đổi dùng điểm đăng ký của biểu tượng làm điểm tham chiếu.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Làm tối khung vẽ bên ngoài các bảng vẽ khi công cụ Bảng vẽ đang hoạt động.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Khi Làm tối vùng bên ngoài bảng vẽ đang bật, vùng bên ngoài các bảng vẽ vẫn tối trong khi bạn kéo bằng công cụ Bảng vẽ.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Đơn vị cho tài liệu mới theo kích thước dựng sẵn, trừ kích thước bằng pixel, và cho tệp đã mở không ghi đơn vị; chọn đơn vị ở đây rồi bấm OK cũng đặt nó cho tài liệu đang hoạt động.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Độ dày nét, nét đứt và khoảng cách hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Cỡ chữ, giãn dòng và dịch chuyển đường cơ sở hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
@@ -3678,6 +3716,7 @@ mark-style	Japanese	Kiểu Nhật
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
+	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
 	Searching…	Đang tìm kiếm…
@@ -5268,6 +5307,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no active document	không có tài liệu đang hoạt động
 @msg	no active perspective plane	không có mặt phẳng phối cảnh đang hoạt động
 @msg	no anchor points selected	chưa chọn điểm neo
+@msg	`points` must be three [x, y] pairs of numbers	`points` phải là ba cặp số [x, y]
+@msg	direct-select three anchor points, or give `points`	hãy chọn trực tiếp ba điểm neo hoặc cung cấp `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
 @msg	no artboard {i} (0-based; the document has {_1})	không có bảng vẽ {i} (bắt đầu từ 0; tài liệu có {_1})
@@ -6772,6 +6814,7 @@ anchor	Points:	Điểm:
 	Open a document to check it for issues.	Mở một tài liệu để kiểm tra vấn đề.
 	Empty Text	Văn bản trống
 	Unpainted Objects	Đối tượng không tô màu
+	Empty Text Paths	Đường dẫn văn bản trống
 	Zero-Opacity Objects	Đối tượng có độ mờ đục bằng 0
 	Duplicate Objects	Đối tượng trùng lặp
 	Off-Artboard Art	Hình vẽ ngoài bảng vẽ
@@ -7561,6 +7604,7 @@ breakText	Glyphs	Glyph
 @msg	Too many Revolve faces for visibility evaluation	Quá nhiều mặt Xoay tròn để tính toán phần nhìn thấy
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft đọc tối đa {ASE_MAX_ENTRIES} màu và nhóm từ một tệp trao đổi mẫu màu, còn thư viện này có {entries}
 @msg	WebP encoding failed: {e}	Mã hóa WebP thất bại: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Mã hóa WebP thất bại: ảnh quá lớn cho WebP có mất dữ liệu: hãy giảm độ phân giải hoặc chọn Không mất dữ liệu
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` phải là số nguyên

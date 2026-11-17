@@ -2524,6 +2524,59 @@ fn flare_options_alt_turns_cancel_into_reset() {
     );
 }
 
+/// While Alt is held, Save PDF's Cancel button reads Reset; Reset puts the chosen preset's settings
+/// back and leaves the dialog open with its path, letting Alt go shows Cancel again, and Cancel
+/// closes the dialog.
+#[test]
+fn save_pdf_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/alt.pdf"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("compatibility".into(), json!("1.4"));
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!((d.str("compatibility"), d.str("path")), ("1.7".to_string(), "/tmp/alt.pdf".to_string()));
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    let cancel = f.button(&mut app, "Cancel");
+    f.press(&mut app, cancel, true);
+    f.press(&mut app, cancel, false);
+    assert!(app.ui.dialog.is_none(), "Cancel closes the dialog");
+}
+
+/// While Alt is held, Save for Web's Cancel button reads Reset; Reset puts the remembered settings
+/// back without remembering anything and leaves the dialog open, and letting Alt go shows Cancel again.
+#[test]
+fn save_for_web_alt_turns_cancel_into_reset() {
+    let mut app = app();
+    app.run("webExport.settings", json!({"format": "jpg", "quality": 70})).unwrap();
+    let remembered = app.session.last_web_settings().to_json();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (k, v) in [("format", json!("png8")), ("quality", json!(20)), ("colors", json!(16)), ("__view", json!("optimized"))] {
+        d.fields.insert(k.into(), v);
+    }
+    let mut f = Frames::new();
+    f.button(&mut app, "Cancel");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::ALT)]);
+    let reset = f.button(&mut app, "Reset");
+    let texts = f.texts(&mut app);
+    assert!(!texts.iter().any(|(t, _)| t == "Cancel"), "Reset takes Cancel's place: {texts:?}");
+    f.press(&mut app, reset, true);
+    f.press(&mut app, reset, false);
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    assert_eq!((d.str("format"), d.f64("quality", 0.0), d.f64("colors", 0.0)), ("jpg".into(), 70.0, 128.0));
+    assert_eq!(d.str("__view"), "optimized", "the view stays");
+    assert_eq!(app.session.last_web_settings().to_json(), remembered, "Reset remembers nothing");
+    f.run(&mut app, vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    f.button(&mut app, "Cancel");
+}
+
 /// Reset Actions' question: OK replaces the action sets with the built-in set, Append adds the
 /// built-in set after them, and Cancel or Escape (`cancel`) leaves them as they are.
 #[test]

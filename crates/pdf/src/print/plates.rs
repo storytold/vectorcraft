@@ -9,7 +9,7 @@ use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
 use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
-use vectorcraft_doc::overprint::{darken_overprints, is_white};
+use vectorcraft_doc::overprint::{darken_overprints, is_black_ink, is_white};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, ImageBlob, Node, NodeKind};
 
 use super::{DEFAULT_FREQUENCY, InkSettings, PrintInk, PrintSettings};
@@ -168,17 +168,26 @@ impl<'a> Separator<'a> {
 
     /// Whether paint `p` puts none of ink `plate` down: a solid color, a gradient whose every stop
     /// does, or a freeform gradient with color points whose every point does (points carry no
-    /// swatch link). On PostScript plates, to within half a percent (the other inks a black may
-    /// carry and still count as black, [`vectorcraft_doc::overprint::is_black_ink`]).
+    /// swatch link). Any ink above zero puts ink down, except on PostScript plates for a color that
+    /// counts as 100% black ([`vectorcraft_doc::overprint::is_black_ink`], as
+    /// [`vectorcraft_doc::overprint::OverprintBlack::default`] judges it) and is not linked to a
+    /// spot swatch, to Registration or to a swatch the document lacks: up to the half a percent of
+    /// another ink such a black may carry counts as none.
     fn no_ink(&self, plate: &str, p: &Paint) -> bool {
-        let none = if self.postscript { 0.005 } else { 0.0 };
+        let process = |swatch: Option<&str>| swatch.is_none_or(|n| n != REGISTRATION && self.doc.swatch(n).is_some_and(|w| !w.spot));
+        let none = |c: &Color, process: bool, ink: f32| ink <= 0.0 || (self.postscript && process && ink <= 0.005 && is_black_ink(c, 1.0, false));
         match p {
-            Paint::Solid { color, swatch, tint } => self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))) <= none,
+            Paint::Solid { color, swatch, tint } => {
+                none(color, process(swatch.as_deref()), self.ink(plate, color, swatch.as_deref().map(|s| (s, *tint))))
+            }
             Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
-                Some(f) => f.points.iter().all(|pt| self.ink(plate, &pt.color, None) <= none),
+                Some(f) => f.points.iter().all(|pt| none(&pt.color, true, self.ink(plate, &pt.color, None))),
                 None => {
                     !g.gradient.stops.is_empty()
-                        && g.gradient.stops.iter().all(|s| self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates) <= none)
+                        && g.gradient.stops.iter().all(|s| {
+                            let ink = self.stop_ink(plate, &s.color, s.swatch.as_deref().map(|n| (n, s.tint)), s.plates);
+                            none(&s.color, s.plates.is_none() && process(s.swatch.as_deref()), ink)
+                        })
                 }
             },
             _ => false,
@@ -189,7 +198,9 @@ impl<'a> Separator<'a> {
     /// overprinting character fills and strokes, that put none of ink `plate` down leave its plate
     /// as it is: they are drawn as nothing on it (white ones with `discard_white` aside, which
     /// knock out). A writer without blending modes (PostScript) then keeps the ink below them,
-    /// where it would draw their Darken as a knockout.
+    /// where it would draw their Darken as a knockout. One that puts any ink down is drawn, and on
+    /// a PostScript plate its ink replaces the ink below, as a nonzero component of an overprinting
+    /// color replaces the backdrop's with overprint mode 1 (ISO 32000-1, 11.7.4.2).
     fn clear_inkless_overprints(&self, plate: &str, a: &mut Arc<Node>, discard_white: bool) {
         let inkless = |overprint: bool, p: &Paint| overprint && !p.is_none() && !(discard_white && is_white(p)) && self.no_ink(plate, p);
         let n = Arc::make_mut(a);

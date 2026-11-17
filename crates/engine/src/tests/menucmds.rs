@@ -3161,6 +3161,27 @@ fn direction_handles_leave_out_hidden_and_locked_paths() {
 }
 
 #[test]
+fn direction_handles_select_many_paths_in_groups_and_layers_in_paint_order() {
+    let mut s = session();
+    let mut paths: Vec<NodeId> = (0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, (i / 20) as f64 * 12.0, 10.0, 10.0)).collect();
+    sel(&mut s, &paths[10..40]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.new", &json!({})).unwrap();
+    paths.extend((0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, 100.0 + (i / 20) as f64 * 12.0, 10.0, 10.0)));
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4 * paths.len());
+    let st = s.doc().unwrap();
+    let mut want = vectorcraft_doc::Selection::default();
+    for id in st.doc.paint_order(paths.iter().copied()) {
+        want.add(id);
+        want.anchors.insert(id, (0..4).map(|i| (0, i)).collect());
+    }
+    want.new_art = st.selection.new_art.clone();
+    assert_eq!(st.selection.objects.len(), paths.len());
+    assert_eq!(st.selection, want);
+}
+
+#[test]
 fn select_point_and_area_text() {
     let mut s = session();
     let p = text(&mut s, "point");

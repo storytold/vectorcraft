@@ -884,6 +884,7 @@ antiAlias	Sharp	Nítid
 	Constrain	Restringeix
 	Constrain Angle	Angle de restricció
 	Constrain Width and Height Proportions	Restringeix les proporcions d’amplada i alçada
+	Copy Width to Height	Copia l’amplada a l’alçada
 	Construction Guides	Guies de construcció
 	Contextual Alternates	Alternatives contextuals
 	Contextual Task Bar	Barra de tasques contextual
@@ -1809,6 +1810,10 @@ digits	Malayalam	Malaiàlam
 	Font List	Llista de tipus de lletra
 	Show Similar Fonts	Mostra tipus de lletra semblants
 	Clear Similar Fonts	Esborra els tipus de lletra semblants
+	Fonts used in this document	Tipus de lletra utilitzats en aquest document
+	This document uses no available fonts	Aquest document no utilitza cap tipus de lletra disponible
+	Recently Added	Afegits recentment
+	Fonts added in the last 30 days	Tipus de lletra afegits en els darrers 30 dies
 	Font Preview Size	Mida de previsualització del tipus de lletra
 	Font Size	Mida del tipus de lletra
 	Font Style:	Estil de tipus de lletra:
@@ -2559,7 +2564,8 @@ digits	Malayalam	Malaiàlam
 	Long Lines	Línies llargues
 	Long Strokes	Traços llargs
 	Longest:	El més llarg:
-	Lossless (lossy WebP isn't available yet)	Sense pèrdua (el WebP amb pèrdua encara no està disponible)
+	Lossless	Sense pèrdua
+	Lossy	Amb pèrdua
 	Lossy:	Amb pèrdua:
 	Low	Baix
 	Low Fidelity Photo	Foto de baixa fidelitat
@@ -3802,6 +3808,38 @@ digits	Malayalam	Malaiàlam
 	Responsive	Adaptatiu
 	Restore	Restaura
 	Restore every preference to its default (applied on OK)	Restaura cada preferència al seu valor predeterminat (s’aplica en prémer D’acord)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Mostra al llenç una barra d’ordres per a la selecció o l’eina; s’amaga mentre arrossegueu i en el mode de presentació.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Quant mou la selecció una tecla de fletxa; amb Maj, la mou deu vegades més.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	L’angle dels eixos al llarg dels quals mouen les tecles de fletxa i als quals Maj restringeix el dibuix i el moviment.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	El radi de cantonada amb què dibuixa l’eina Rectangle arrodonit; canviar el radi mentre dibuixeu també canvia aquest valor.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Quant desplaça Enganxa la còpia cap a la dreta i cap avall quan no es dona cap posició, com des d’un script; Enganxa a l’aplicació la centra a la vista.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Impedeix que l’eina Ploma suprimeixi el punt d’ancoratge on feu clic en un traçat seleccionat o n’afegeixi un on feu clic al seu segment.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Les eines de dibuix mostren un punter en creu en lloc de la seva icona; Bloq Maj fa el mateix mentre està activat.
+	Shows a tip when the pointer rests on a button or field that has one.	Mostra un consell quan el punter s’atura sobre un botó o un camp que en té.
+	Shows a warning before a script you choose runs.	Mostra un avís abans que s’executi un script que trieu.
+	Smooths the edges of artwork on the canvas.	Suavitza les vores de la il·lustració al llenç.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selecció › Igual › Color de farciment, Color del traç i Farciment i traç només coincideixen amb el mateix matís d’una mostra global o de tinta plana, no amb qualsevol matís seu.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Mostra la pantalla d’inici quan no hi ha cap document obert; desactivada, la finestra queda buida fins que feu clic a Inici.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mesura els objectes amb els traços i els efectes que en canvien la forma per a la mida, la posició i l’alineació; les ombres, les lluïsors i els desenfocaments no es mesuren.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Amb un zoom del 100 %, una polzada del document ocupa 96 punts de pantalla en lloc de 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Fer doble clic en un grup, traçat o imatge amb l’eina Selecció l’obre en mode d’aïllament.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Els farciments i traços de motiu es transformen amb la il·lustració, tret que una transformació o el menú del panell Transforma triï una altra cosa.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Els radis de cantonada dinàmics s’escalen amb la il·lustració, tret que l’escalat triï una altra cosa.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Els gruixos de traç, els guions i les distàncies dels efectes s’escalen amb la il·lustració, tret que l’escalat triï una altra cosa.
+	The mouse wheel zooms the canvas instead of scrolling it.	La roda del ratolí fa zoom al llenç en lloc de desplaçar-lo.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La roda del ratolí amb Cmd/Ctrl premut desplaça el llenç en horitzontal.
+	Dragging sideways on a numeric field's label changes the field's value.	Arrossegar en horitzontal sobre l’etiqueta d’un camp numèric canvia el valor del camp.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
+	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Crea marques de retall dibuixa marques d’estil japonès en lloc de romanes.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	La il·lustració nova pren només el farciment i el traç de la selecció; desactivada, pren tota l’aparença de l’objecte seleccionat.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Canviar l’amplada o l’alçada al panell Transforma, al panell Propietats o al panell Control canvia l’altra proporcionalment.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Les propietats d’un rectangle dinàmic mostren un sol camp Radi de cantonada per a les quatre cantonades; desactivada, cada cantonada té el seu propi camp.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Què transformen els canvis al panell Transforma: l’objecte, les peces del seu motiu o tots dos; Predeterminat segueix Transforma les peces del motiu.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Amb una instància de símbol seleccionada, el panell Transforma fa servir el punt de registre del símbol com a punt de referència.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Enfosqueix el llenç fora dels taulers mentre l’eina Tauler està activa.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Amb Enfosqueix la regió fora del tauler activat, l’àrea fora dels taulers continua fosca mentre arrossegueu amb l’eina Tauler.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	La unitat dels documents nous de mides predefinides, excepte les mides en píxels, i dels fitxers oberts que no registren cap unitat; si la trieu aquí i feu clic a D’acord, també passa a ser la unitat del document actiu.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Els gruixos de traç, els guions i els espais es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Les mides del text, l’interlineat i el desplaçament de la línia de base es mostren en aquesta unitat, i els nombres que s’hi escriuen es llegeixen en aquesta unitat.
@@ -4127,6 +4165,7 @@ digits	Malayalam	Malaiàlam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
 	No recent commands	No hi ha ordres recents
+	Search commands	Cerca ordres
 	Search Commands…	Cerca ordres…
 	Search Fonts Folder	Cerca a la carpeta de tipus de lletra
 	Searching…	Cercant…
@@ -6054,6 +6093,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no active document	no hi ha cap document actiu
 @msg	no active perspective plane	no hi ha cap pla de perspectiva actiu
 @msg	no anchor points selected	no hi ha cap punt d’ancoratge seleccionat
+@msg	`points` must be three [x, y] pairs of numbers	`points` han de ser tres parells de nombres [x, y]
+@msg	direct-select three anchor points, or give `points`	seleccioneu directament tres punts d’ancoratge o indiqueu `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers
 @msg	no artboard	no hi ha tauler
 @msg	no artboard {i} (0-based; the document has {_1})	no hi ha el tauler {i} (basat en 0; el document en té {_1})
@@ -7134,6 +7176,7 @@ anchor	Points:	Punts:
 	Open a document to check it for issues.	Obriu un document per revisar-ne els problemes.
 	Empty Text	Text buit
 	Unpainted Objects	Objectes sense pintura
+	Empty Text Paths	Traçats de text buits
 	Zero-Opacity Objects	Objectes amb opacitat zero
 	Duplicate Objects	Objectes duplicats
 	Off-Artboard Art	Art fora dels taulers
@@ -7893,6 +7936,7 @@ breakText	Glyphs	Glifs
 @msg	Too many Revolve faces for visibility evaluation	Massa cares de Revolució per avaluar-ne la visibilitat
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft llegeix com a màxim {ASE_MAX_ENTRIES} colors i grups d’un fitxer d’intercanvi de mostres, i aquesta biblioteca en té {entries}
 @msg	WebP encoding failed: {e}	La codificació WebP ha fallat: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	La codificació WebP ha fallat: la imatge és massa gran per a WebP amb pèrdua: reduïu la resolució o trieu Sense pèrdua
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` ha de ser un nombre enter

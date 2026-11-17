@@ -601,6 +601,7 @@ font-technology	Variable	Варіативні
 	Consolidate All Windows	Об’єднати всі вікна
 	Constrain Angle	Обмежити кут
 	Constrain Width and Height Proportions	Зберігати пропорції ширини та висоти
+	Copy Width to Height	Копіювати ширину у висоту
 	Construction Guides	Напрямні побудови
 	Contextual Alternates	Контекстні альтернативи
 	Contextual Task Bar	Контекстна панель завдань
@@ -1370,6 +1371,10 @@ file-filter	Templates	Шаблони
 	Font List	Список шрифтів
 	Show Similar Fonts	Показати схожі шрифти
 	Clear Similar Fonts	Скинути схожі шрифти
+	Fonts used in this document	Шрифти, використані в цьому документі
+	This document uses no available fonts	Цей документ не використовує доступних шрифтів
+	Recently Added	Нещодавно додані
+	Fonts added in the last 30 days	Шрифти, додані за останні 30 днів
 	Font Preview Size	Розмір попереднього перегляду шрифту
 	Font Size	Розмір шрифту
 	Variable Font	Варіативний шрифт
@@ -2065,7 +2070,8 @@ file-filter	Templates	Шаблони
 	Lock Others	Заблокувати решту
 	Lock Slices	Заблокувати фрагменти
 	Lock Station Point	Заблокувати точку стояння
-	Lossless (lossy WebP isn't available yet)	Без втрат (WebP із втратами поки недоступний)
+	Lossless	Без втрат
+	Lossy	Із втратами
 	Lossy:	Із втратами:
 	Low	Низька
 	lowercase	малі
@@ -3095,6 +3101,38 @@ digits	Malayalam	Малаялам
 	Responsive	Адаптивний
 	Restore	Відновити
 	Restore every preference to its default (applied on OK)	Відновити всі параметри за промовчанням (застосовується при натисканні ОК)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Показує на полотні панель команд для виділення або інструмента; вона ховається під час перетягування та в режимі презентації.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Наскільки клавіша зі стрілкою зсуває виділення; із Shift вона зсуває його вдесятеро далі.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Кут осей, уздовж яких зсувають клавіші зі стрілками і до яких Shift прив’язує малювання та переміщення.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Радіус кута, з яким малює інструмент «Округлений прямокутник»; зміна радіуса під час малювання змінює й це значення.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Наскільки «Вставити» зсуває копію праворуч і вниз, коли положення не задано, наприклад зі скрипту; «Вставити» в застосунку розміщує її в центрі вигляду.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Не дає інструменту «Перо» видаляти опорну точку, на яку ви клацаєте на виділеному контурі, або додавати точку там, де ви клацаєте на його сегменті.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Інструменти малювання показують вказівник-перехрестя замість свого значка; Caps Lock робить те саме, поки він увімкнений.
+	Shows a tip when the pointer rests on a button or field that has one.	Показує підказку, коли вказівник зупиняється на кнопці або полі, що її мають.
+	Shows a warning before a script you choose runs.	Показує попередження перед запуском вибраного вами скрипту.
+	Smooths the edges of artwork on the canvas.	Згладжує краї графіки на полотні.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Виділення › Те саме › Колір заливки», «Колір обведення» та «Заливка та обведення» знаходять лише той самий відтінок глобального або плашкового зразка, а не будь-який його відтінок.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показує початковий екран, коли немає відкритих документів; якщо вимкнено, вікно лишається порожнім, доки ви не натиснете «Додому».
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Вимірює об’єкти з обведеннями та ефектами, що змінюють форму, для розміру, положення й вирівнювання; тіні, світіння та розмиття не враховуються.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	За масштабу 100 % один дюйм документа займає 96 екранних пунктів замість 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Подвійне клацання на групі, контурі або зображенні інструментом «Виділення» відкриває їх у режимі ізоляції.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки й обведення візерунком трансформуються разом із графікою, якщо трансформування або меню панелі «Трансформувати» не задає іншого.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Радіуси динамічних кутів масштабуються разом із графікою, якщо масштабування не задає іншого.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Товщина обведень, штрихи та відстані ефектів масштабуються разом із графікою, якщо масштабування не задає іншого.
+	The mouse wheel zooms the canvas instead of scrolling it.	Колесо миші масштабує полотно, а не прокручує його.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
+	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
+	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	«Створити мітки підрізування» малює мітки в японському стилі замість західних.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Нові об’єкти отримують лише заливку та обведення виділення; якщо вимкнено, вони отримують усе оформлення виділеного об’єкта.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Зміна ширини або висоти на панелі «Трансформувати», панелі «Властивості» або панелі керування пропорційно змінює інший розмір.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Властивості динамічного прямокутника показують одне поле «Радіус кута» для всіх чотирьох кутів; якщо вимкнено, кожен кут має власне поле.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Що трансформують зміни на панелі «Трансформувати»: об’єкт, плитки його візерунка або обидва; «За замовчуванням» слідує «Трансформувати плитки візерунка».
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Коли виділено один екземпляр символу, панель «Трансформувати» використовує точку реєстрації символу як опорну точку.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Затемнює полотно поза монтажними областями, поки активний інструмент «Монтажна область».
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Коли ввімкнено «Затемнювати ділянку поза монтажною областю», ділянка поза монтажними областями лишається темною, поки ви перетягуєте інструментом «Монтажна область».
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Одиниця нових документів вбудованих розмірів, крім розмірів у пікселях, і відкритих файлів без записаної одиниці; якщо вибрати її тут і натиснути ОК, вона стане й одиницею активного документа.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Товщина обведення, штрихи й зазори показуються в цій одиниці, і введені для них числа читаються в ній.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Розміри тексту, інтерліньяж і зміщення базової лінії показуються в цій одиниці, і введені для них числа читаються в ній.
@@ -3335,6 +3373,7 @@ digits	Malayalam	Малаялам
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
 	No recent commands	Немає нещодавніх команд
+	Search commands	Пошук команд
 	Search Commands…	Пошук команд…
 	Secondary	Вторинний
 	Section Symbol	Символ параграфа
@@ -4931,6 +4970,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
 @msg	no anchor points selected	опорні точки не виділені
+@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
+@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})
@@ -6741,6 +6783,7 @@ anchor	Points:	Точки:
 	Open a document to check it for issues.	Відкрийте документ, щоб перевірити його на проблеми.
 	Empty Text	Порожній текст
 	Unpainted Objects	Об’єкти без заливки й обведення
+	Empty Text Paths	Порожні текстові контури
 	Zero-Opacity Objects	Об’єкти з нульовою непрозорістю
 	Duplicate Objects	Дублікати об’єктів
 	Off-Artboard Art	Графіка поза монтажними областями
@@ -7352,6 +7395,7 @@ breakText	Glyphs	Гліфи
 @msg	Too many Revolve faces for visibility evaluation	Забагато граней обертання для обчислення видимості
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читає з файлу обміну зразками не більше {ASE_MAX_ENTRIES} кольорів і груп, а в цій бібліотеці їх {entries}
 @msg	WebP encoding failed: {e}	Не вдалося закодувати WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Не вдалося закодувати WebP: зображення завелике для WebP із втратами: зменште роздільність або виберіть «Без втрат»
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList
