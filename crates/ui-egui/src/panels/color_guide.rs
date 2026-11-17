@@ -99,7 +99,7 @@ pub(crate) fn set_limit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, St
 
 /// The Limit to Library popup: None, Document Swatches, then the colour libraries.
 fn limit_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.set_min_width(200.0);
+    widgets::menu_min_width(ui, 200.0);
     let cur = app.ui.color_guide_limit.clone();
     let mut chosen = None;
     for (key, label) in [("", tl!("None")), (swatchlib::DOCUMENT_SWATCHES, swatches::DOCUMENT_SWATCHES)] {
@@ -233,7 +233,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let lr = widgets::icon_button(ui, "library", "", limit.is_some(), 24.0);
         lr.widget_info(|| widgets::icon_button_info(ui.is_enabled(), limit.is_some(), &tip));
         let lr = lr.on_hover_text(tip);
-        egui::Popup::menu(&lr).show(|ui| limit_menu(app, ui));
+        egui::Popup::menu(&lr).show(|ui| widgets::menu_scroll(ui, |ui| limit_menu(app, ui)));
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
         // Recolor Artwork with the harmony colours as the new colours: the selected art's, or
         // (without art) the colours themselves, which OK saves as a colour group.

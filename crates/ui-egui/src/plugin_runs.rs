@@ -9,12 +9,20 @@
 //! ([`FilterRun::hand_in`]), so the edit is one undo step like any run, unless the document or the
 //! plug-in changed meanwhile: then nothing changes and the status bar says to run it again. On the
 //! web (no threads) it runs at once ([`available`]).
+//!
+//! A filter of plug-in API level 2 may report how far it has got (`vc_progress`): the progress
+//! window then shows a bar with the share done. Its Cancel also makes the filter's `vc_cancelled`
+//! return 1, so a filter that checks it stops at once; one that doesn't stops at the next slice of
+//! its budget. A light filter that may report its progress (the `progress` permission) and calls
+//! no commands runs here too, under its light budget, so its progress and Cancel show while it
+//! computes.
 
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::cancel::{self, CancelToken};
 use vectorcraft_engine::EngineError;
+use vectorcraft_engine::cmd::fileio::progress::{self, Progress};
 use vectorcraft_engine::cmd::plugin::FilterRun;
 
 use crate::VectorcraftApp;
@@ -34,8 +42,8 @@ pub struct Running {
     who: String,
     /// `plugin.run`'s params that apply its output: the objects it was given as `ids`.
     params: Value,
-    /// Its Cancel.
-    token: CancelToken,
+    /// How far it has got, as it reports it, and its Cancel.
+    pub progress: Arc<Progress>,
     /// Continue in Background: the progress window no longer shows it.
     pub hidden: bool,
     done: Receiver<Done>,
@@ -44,7 +52,7 @@ pub struct Running {
 impl Running {
     /// Does the progress window show it: neither hidden (Continue in Background) nor cancelled?
     fn shown(&self) -> bool {
-        !self.hidden && !self.token.is_cancelled()
+        !self.hidden && !self.progress.cancelled()
     }
 }
 
@@ -72,12 +80,12 @@ pub fn start(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
     let mut params = p;
     params["ids"] = json!(run.inputs().iter().map(|i| i.0).collect::<Vec<_>>());
     let (tx, done) = channel();
-    let token = CancelToken::new();
-    let stop = token.clone();
+    let shown = Progress::new();
+    let reporting = Arc::clone(&shown);
     std::thread::Builder::new()
         .name("vectorcraft-plugin".into())
         .spawn(move || {
-            let output = vectorcraft_engine::guard::catch_panic(|| cancel::scope(&stop, None, || run.run()))
+            let output = vectorcraft_engine::guard::catch_panic(|| progress::scope(&reporting, || run.run()))
                 .map_err(|msg| format!("internal error: {msg} (please report this bug)"))
                 .and_then(|r| r.map_err(|e| e.to_string()));
             // The app may have quit meanwhile: nothing to hand it to.
@@ -87,7 +95,7 @@ pub fn start(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
     let label = format!("Running {who}…");
     let runs = &mut app.plugin_runs;
     runs.next_id += 1;
-    runs.running.push(Running { id: runs.next_id, label: label.clone(), who, params, token, hidden: false, done });
+    runs.running.push(Running { id: runs.next_id, label: label.clone(), who, params, progress: shown, hidden: false, done });
     app.status(label.clone());
     Ok(json!({ "background": true, "status": label }))
 }
@@ -121,7 +129,7 @@ pub fn poll(app: &mut VectorcraftApp) {
 /// they were; else why it has none, in the status bar.
 fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     // Cancel changes nothing, even when the run ended just before it.
-    if r.token.is_cancelled() {
+    if r.progress.cancelled() {
         app.status(EngineError::Cancelled.to_string());
         return;
     }
@@ -146,12 +154,12 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     }
 }
 
-/// The progress window's Cancel (also Esc): every heavy filter running stops at the next slice of
-/// its budget and changes nothing → `{cancelled: n}`.
+/// The progress window's Cancel (also Esc): every filter running in the background stops (at once when it checks
+/// `vc_cancelled`, else at the next slice of its budget) and changes nothing → `{cancelled: n}`.
 pub fn cancel_all(app: &mut VectorcraftApp) -> Value {
     let mut n = 0;
-    for r in app.plugin_runs.running.iter().filter(|r| !r.token.is_cancelled()) {
-        r.token.cancel();
+    for r in app.plugin_runs.running.iter().filter(|r| !r.progress.cancelled()) {
+        r.progress.cancel();
         n += 1;
     }
     json!({ "cancelled": n })
@@ -170,7 +178,7 @@ pub fn hide_all(app: &mut VectorcraftApp) -> Value {
 
 /// Is a heavy filter running that hasn't been cancelled?
 pub fn any_running(app: &VectorcraftApp) -> bool {
-    app.plugin_runs.running.iter().any(|r| !r.token.is_cancelled())
+    app.plugin_runs.running.iter().any(|r| !r.progress.cancelled())
 }
 
 /// Is a heavy filter running that the progress window shows?
@@ -195,7 +203,11 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     let heading = crate::i18n::msg(&first.label);
-    let pressed = export_progress::window(ctx, "plugin-run-progress", &heading, |ui| export_progress::busy(ui, tl!("The plug-in is computing…")));
+    let reported = first.progress.fraction();
+    let pressed = export_progress::window(ctx, "plugin-run-progress", &heading, |ui| match reported {
+        Some(share) => export_progress::share(ui, tl!("The plug-in is computing…"), share as f32),
+        None => export_progress::busy(ui, tl!("The plug-in is computing…")),
+    });
     let id = match pressed {
         Some(Pressed::Cancel) => "plugin.cancelRuns",
         Some(Pressed::Hide) => "plugin.hideRuns",

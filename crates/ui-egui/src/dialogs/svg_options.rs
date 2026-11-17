@@ -112,7 +112,8 @@ pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
 /// only when saving).
 fn options(d: &Dialog) -> Value {
     let mode = Mode::of(d);
-    let mut o: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let mut o: Map<String, Value> =
+        d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str()) && !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     if mode == Mode::Export {
         o.remove("preserveEditing");
         if d.bool("useArtboards") {
@@ -128,15 +129,23 @@ fn options(d: &Dialog) -> Value {
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let opts = options(d);
-    if Mode::of(d) == Mode::Export && d.bool("useArtboards") {
+    let selection = d.bool(super::export_as::SELECTION_FIELD);
+    if Mode::of(d) == Mode::Export && d.bool("useArtboards") && !selection {
         let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
         let pick: vectorcraft_engine::cmd::fileio::ArtboardPick = serde_json::from_value(opts.clone()).map_err(|e| e.to_string())?;
         pick.resolve(n)?;
     }
-    // Remembered for next time, without the document's artboard range.
+    // Remembered for next time, without the document's artboard range. Export Selection shows no
+    // Use Artboards, so the one remembered before stays.
     let mut last = opts.clone();
     if let Some(o) = last.as_object_mut() {
         o.remove("range");
+        if selection {
+            match app.ui.svg_options.get("useArtboards") {
+                Some(v) => o.insert("useArtboards".into(), v.clone()),
+                None => o.remove("useArtboards"),
+            };
+        }
     }
     app.ui.svg_options = last;
     app.ui.dialog = None;
@@ -144,6 +153,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(p) = d.fields.get("path").filter(|p| p.is_string()) {
         params["path"] = p.clone();
     }
+    let params = super::export_as::exported(d, params);
     let id = match Mode::of(d) {
         Mode::Export => "file.export.svg",
         Mode::Save => "file.saveAs",
@@ -176,8 +186,11 @@ fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, enabled: boo
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     option_fields(ui, d, false);
+    // Export Selection writes the selection's crop, without artboards to choose.
     if Mode::of(d) == Mode::Export {
-        artboards(app, ui, d);
+        if !d.bool(super::export_as::SELECTION_FIELD) {
+            artboards(app, ui, d);
+        }
     } else {
         check(ui, d, "preserveEditing", tl!("Preserve Editing Capabilities"), true);
     }
@@ -226,6 +239,9 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     check(ui, d, "embedFonts", tl!("Embed Fonts (Glyphs Used)"), !d.bool("outlineText") && !tiny);
     check(ui, d, "fewerTspans", tl!("Fewer <tspan> Elements"), !d.bool("outlineText"));
     check(ui, d, "metadata", tl!("Include Metadata"), true);
+    if !screens {
+        check(ui, d, "variableData", tl!("Include Variable Data"), true);
+    }
 }
 
 /// Use Artboards: all of them or a range; off = the bounds of all art.
@@ -253,27 +269,49 @@ fn artboards(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// The SVG the current options write for the first chosen artboard (read-only, selectable),
-/// encoded again only when the options or the document change.
+/// The SVG the current options write for the first chosen artboard, or under Export Selection for
+/// the selection alone, cropped to it (read-only, selectable), encoded again only when the
+/// options, the document or the selection change.
 fn code_view(app: &VectorcraftApp, ui: &mut egui::Ui, d: &Dialog) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
+    let selection = d.bool(super::export_as::SELECTION_FIELD);
     let mut opts = options(d);
-    if let Some(o) = opts.as_object_mut()
-        && let Some(r) = o.remove("range")
-    {
-        // The first artboard of the range (or the first one).
-        let first = r.as_str().and_then(|r| r.split([',', '-', '\u{2013}']).next()).and_then(|n| n.trim().parse::<usize>().ok());
-        o.insert("artboard".into(), json!(first.map_or(0, |n| n.saturating_sub(1))));
+    if let Some(o) = opts.as_object_mut() {
+        if selection {
+            // Export Selection writes one crop, without artboards to choose.
+            for k in vectorcraft_engine::cmd::fileio::ARTBOARD_PARAMS.iter().chain(&["useArtboards"]) {
+                o.remove(*k);
+            }
+        } else if let Some(r) = o.remove("range") {
+            // The first artboard of the range (or the first one).
+            let first = r.as_str().and_then(|r| r.split([',', '-', '\u{2013}']).next()).and_then(|n| n.trim().parse::<usize>().ok());
+            o.insert("artboard".into(), json!(first.map_or(0, |n| n.saturating_sub(1))));
+        }
     }
-    // One cached text, replaced when the document or the options change.
+    // One cached text, replaced when the document, the options or the selection change.
     let key = egui::Id::unique("svg-code");
-    let sig = egui::Id::unique((st.uid, st.revision, opts.to_string())).value();
+    // The read roots in force and the document's folder decide whether the text may be shown.
+    let roots = vectorcraft_engine::file_access::current().map(|r| r.describe());
+    let selected = selection.then(|| st.selection.objects.clone());
+    let sig = egui::Id::unique((st.uid, st.revision, opts.to_string(), roots, st.path.as_deref(), selected)).value();
     let code: Arc<String> = match ui.ctx().data(|m| m.get_temp::<(u64, Arc<String>)>(key)).filter(|(s, _)| *s == sig) {
         Some((_, c)) => c,
         None => {
             const MAX: usize = 200_000;
-            let mut text = match vectorcraft_engine::cmd::fileio::encode_all(&st.doc, "svg", &json!({ "svg": opts })) {
+            let params = json!({ "svg": opts });
+            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st, &params).and_then(|()| {
+                let selected;
+                let doc = if selection {
+                    selected = vectorcraft_engine::cmd::fileio::selection_doc(st, "document.exportSelection", false)?.0;
+                    &selected
+                } else {
+                    &st.doc
+                };
+                vectorcraft_engine::cmd::fileio::check_linked_images("document.export", "svg", st, doc, &params)?;
+                vectorcraft_engine::cmd::fileio::encode_all(doc, "svg", &params)
+            });
+            let mut text = match encoded {
                 // Shown as text whatever the file's encoding.
                 Ok(enc) => enc
                     .files
@@ -379,6 +417,128 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().unwrap().f64("decimals", 0.0), 1.0);
     }
 
+    /// Show Code under read roots draws no SVG of a document that links a JavaScript file outside
+    /// them: it shows the error, which names no file or folder. Without roots it shows the link.
+    #[test]
+    fn show_code_leaves_out_a_linked_javascript_file_outside_the_read_roots() {
+        let tmp = std::env::temp_dir();
+        let root = tmp.join(format!("vc-svg-code-root-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let script = tmp.join(format!("vc-svg-code-away-{}", std::process::id())).join("menu.js").to_string_lossy().into_owned();
+        let (mut app, _) = app("/tmp/code.svg");
+        app.run("svgInteractivity.addFile", json!({"file": script})).unwrap();
+        app.run("file.export.svg", Value::Null).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("showCode".into(), json!(true));
+        let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap().unwrap();
+        // The text the code view shows after two frames in one context, with `roots` in force.
+        let code = |app: &mut VectorcraftApp, roots: Option<&Arc<vectorcraft_engine::file_access::AutomationRoots>>| {
+            let ctx = egui::Context::default();
+            theme::install_fonts(&ctx);
+            for _ in 0..2 {
+                let mut out =
+                    vectorcraft_engine::file_access::confine(roots, || ctx.run_ui(Default::default(), |ui| super::super::show(app, ui.ctx())));
+                out.textures_delta.clear();
+            }
+            ctx.data(|m| m.get_temp::<(u64, Arc<String>)>(egui::Id::unique("svg-code"))).map(|(_, c)| c.to_string()).unwrap_or_default()
+        };
+        let confined = code(&mut app, Some(&roots));
+        assert!(confined.contains("a linked JavaScript file is outside the read roots"), "{confined}");
+        assert!(!confined.contains("menu.js") && !confined.contains("vc-svg-code"), "{confined}");
+        let shown = code(&mut app, None);
+        assert!(shown.contains(&format!("<script xlink:href=\"{script}\"/>")), "{shown}");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// Show Code under read roots draws no SVG that would name a linked image's file outside them
+    /// (Images: Link): it shows the error, which names no file or folder. Embedded pixels are
+    /// shown, and without roots the link is shown.
+    #[test]
+    fn show_code_leaves_out_a_linked_image_file_outside_the_read_roots() {
+        let tmp = std::env::temp_dir();
+        let root = tmp.join(format!("vc-svg-image-root-{}", std::process::id()));
+        let away = tmp.join(format!("vc-svg-image-away-{}", std::process::id()));
+        for dir in [&root, &away] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let photo = away.join("photo.png").to_string_lossy().into_owned();
+        let mut png = vec![];
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        std::fs::write(&photo, png).unwrap();
+        let (mut app, _) = app("/tmp/code.svg");
+        app.run("file.place", json!({"path": photo, "link": true, "at": [50, 50]})).unwrap();
+        app.run("file.export.svg", Value::Null).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("showCode".into(), json!(true));
+        let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap().unwrap();
+        // The text the code view shows after two frames in one context, with `roots` in force.
+        let code = |app: &mut VectorcraftApp, roots: Option<&Arc<vectorcraft_engine::file_access::AutomationRoots>>| {
+            let ctx = egui::Context::default();
+            theme::install_fonts(&ctx);
+            for _ in 0..2 {
+                let mut out =
+                    vectorcraft_engine::file_access::confine(roots, || ctx.run_ui(Default::default(), |ui| super::super::show(app, ui.ctx())));
+                out.textures_delta.clear();
+            }
+            ctx.data(|m| m.get_temp::<(u64, Arc<String>)>(egui::Id::unique("svg-code"))).map(|(_, c)| c.to_string()).unwrap_or_default()
+        };
+        let embedded = code(&mut app, Some(&roots));
+        assert!(embedded.contains("data:image/png;base64,") && !embedded.contains(&photo), "{embedded}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("images".into(), json!("link"));
+        let confined = code(&mut app, Some(&roots));
+        assert!(confined.contains("a linked image file is outside the read roots"), "{confined}");
+        assert!(!confined.contains("photo.png") && !confined.contains("vc-svg-image"), "{confined}");
+        let shown = code(&mut app, None);
+        assert!(shown.contains(&format!("xlink:href=\"{photo}\"")), "{shown}");
+        for dir in [root, away] {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
+    /// Show Code under Export Selection shows the SVG that OK writes: the selection alone, cropped
+    /// to it with what its effects draw, not the whole document.
+    #[test]
+    fn show_code_under_export_selection_shows_the_selection() {
+        let (mut app, written) = app("/tmp/selection.svg");
+        app.run("shape.rectangle", json!({"x": 70, "y": 40, "width": 20, "height": 20})).unwrap();
+        app.run("effect.apply", json!({"effect": "stylize.dropShadow"})).unwrap();
+        app.run("document.exportSelection", Value::Null).unwrap();
+        let d = app.ui.dialog.as_mut().expect("SVG Options opened");
+        assert_eq!(d.kind, KIND);
+        assert!(d.bool(super::super::export_as::SELECTION_FIELD));
+        d.fields.insert("showCode".into(), json!(true));
+        // The text the code view shows after two frames in one context.
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(Default::default(), |ui| super::super::show(&mut app, ui.ctx()));
+            out.textures_delta.clear();
+        }
+        let code = ctx.data(|m| m.get_temp::<(u64, Arc<String>)>(egui::Id::unique("svg-code"))).map(|(_, c)| c.to_string()).unwrap_or_default();
+        super::super::confirm(&mut app).unwrap();
+        let svg = text(&written, 0);
+        assert_eq!(written.borrow()[0].0, "/tmp/selection.svg");
+        assert_eq!(code, svg, "Show Code shows what OK writes");
+        // The shadow reaches past the 21-point square, and the other rectangle is left out.
+        assert!(!svg.contains("viewBox=\"0 0 120 80\"") && !svg.contains("viewBox=\"0 0 21 21\""), "{svg}");
+        assert!(!svg.contains("width=\"40\""), "{svg}");
+        assert_eq!(svg.matches("<rect").count(), 1, "{svg}");
+        assert!(svg.contains("width=\"20\" height=\"20\"") && svg.contains("<feOffset"), "{svg}");
+    }
+
+    /// A dialog a save panel opened carries the dialog layer's own `__` fields; the save is given
+    /// only the SVG options, so it is not refused for an unknown key.
+    #[test]
+    fn save_as_svg_from_a_save_panel_passes_only_the_options() {
+        let (mut app, written) = app("/tmp/panel.svg");
+        app.run("file.saveAs", Value::Null).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert(crate::dialogs::AFTER_PANEL.into(), json!(true));
+        assert!(options(app.ui.dialog.as_ref().unwrap()).get(crate::dialogs::AFTER_PANEL).is_none());
+        let d = app.ui.dialog.take().unwrap();
+        confirm(&mut app, &d).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(written.borrow()[0].0, "/tmp/panel.svg");
+    }
+
     #[test]
     fn all_artboards_export_one_file_each() {
         let (mut app, written) = app("/tmp/set.svg");
@@ -427,6 +587,24 @@ mod tests {
         assert!(app.ui.dialog.as_ref().unwrap().fields.get("artboard").is_none());
         super::super::confirm(&mut app).unwrap();
         assert_eq!((written.borrow().len(), written.borrow()[1].0.as_str()), (2, "/tmp/doc.svg"));
+    }
+
+    /// Include Variable Data starts off, draws in the dialog, and writes the text variables and
+    /// data sets into the saved SVG when it is on.
+    #[test]
+    fn include_variable_data_reaches_the_file() {
+        let (mut app, written) = app("/tmp/vars.svg");
+        let id = app.run("text.create", json!({"x": 10, "y": 60, "text": "Alice"})).unwrap()["id"].clone();
+        app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
+        app.run("variable.bind", json!({"variable": "Name", "ids": [id]})).unwrap();
+        app.run("dataset.new", json!({"name": "Row", "values": {"Name": "Bob"}})).unwrap();
+        app.run("file.saveAs", Value::Null).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("variableData"), "off at first");
+        frame(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("variableData".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let svg = text(&written, 0);
+        assert!(svg.contains("<variable varName=\"Name\"") && svg.contains("dataSetName=\"Row\"") && svg.contains("<p>Bob</p>"), "{svg}");
     }
 
     #[test]

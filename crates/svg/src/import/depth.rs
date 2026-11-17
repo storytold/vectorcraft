@@ -220,7 +220,14 @@ fn prescan_with(svg: &str, most: usize) -> Prescan<'_> {
 /// `most`. Without recursion.
 pub(super) fn height(xml: &roxmltree::Document, most: usize) -> Option<usize> {
     let elements = || xml.descendants().filter(|n| n.is_element());
-    let ids: HashMap<&str, XNode> = elements().filter_map(|n| Some((n.attribute("id")?, n))).collect();
+    // The first element of an id, as usvg resolves references: a later one of the same id would
+    // hide a deep target behind a shallow one.
+    let mut ids: HashMap<&str, XNode> = HashMap::new();
+    for n in elements() {
+        if let Some(id) = n.attribute("id") {
+            ids.entry(id).or_insert(n);
+        }
+    }
     let css = Styles::new(xml);
     // How deep each element's own tree goes, itself included; 0 while it is being worked out: a
     // reference back to it then is a loop, which usvg leaves out.
@@ -392,6 +399,16 @@ mod tests {
         let defs: String = (0..300).map(|i| format!("<linearGradient id='g{i}'><stop class='c{i}' offset='0'/></linearGradient>")).collect();
         let art: String = (0..300).map(|i| format!("<g class='c{i}'><rect class='c{i}' width='1' height='1'/></g>")).collect();
         assert!(!deep(&svg(&format!("<style>{rules}</style><defs>{defs}</defs>{art}"))));
+    }
+
+    #[test]
+    fn a_reference_follows_the_first_element_of_its_id() {
+        // A chain of `<use>`s as deep as the cap, each link's id given again later to an empty group:
+        // usvg follows the first, so the chain is deep.
+        let chain: String = (1..MAX_ELEMENT_DEPTH).map(|i| format!("<g id='a{i}'><use href='#a{}'/></g>", i - 1)).collect();
+        let shallow: String = (1..MAX_ELEMENT_DEPTH).map(|i| format!("<g id='a{i}'/>")).collect();
+        let top = format!("<use href='#a{}'/>", MAX_ELEMENT_DEPTH - 1);
+        assert!(deep(&svg(&format!("<defs><g id='a0'><rect width='1' height='1'/></g>{chain}{shallow}</defs>{top}"))));
     }
 
     #[test]

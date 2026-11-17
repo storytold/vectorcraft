@@ -14,29 +14,43 @@ use crate::{VectorcraftApp, io};
 
 /// Dialog kind. Fields: `index` (document), `uid` (the same document, which `index` may no longer
 /// point at once a file dialog answers), `name` (its title), `then` (`close`, `closeAll` or `quit`:
-/// what continues after this document) and `discard` (Don't Save).
+/// what continues after this document) and `discard` (Don't Save). With `then` = `close`, the
+/// protected field [`FRONT`] holds the uid of the document that was in front before the question.
 pub const KIND: &str = "saveChanges";
+
+/// Field of a [`KIND`] dialog asked by File → Close or a tab's ×: the uid of the document in front
+/// before the question showed the asked one. Once the asked document closes, that document is in
+/// front again while it is still open.
+const FRONT: &str = "__front";
 
 /// Nothing closes while a file dialog's sheet is on the window (macOS): what asked for it runs
 /// again when it answers. (Elsewhere the dialog is a window of its own, and closing goes on.)
-fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
+pub(crate) fn refuse_while_picking(app: &VectorcraftApp) -> Result<(), String> {
     if app.file_sheet_open() { Err(crate::picks::busy().into()) } else { Ok(()) }
+}
+
+/// Finishes the work that decides whether there is anything left to save: the saves running in
+/// the background, and an edit the active tool is computing on another thread (a Shape Builder
+/// merge), which is applied.
+pub fn finish_pending(app: &mut VectorcraftApp) {
+    crate::background::wait_all(app);
+    let r = app.session.finish_tool_edit();
+    crate::canvas::apply_requests(app, r);
 }
 
 /// File → Close (or a tab's ×) for document `i`.
 pub fn close(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
     refuse_while_picking(app)?;
-    // A save still running decides whether there is anything left to save.
-    crate::background::wait_all(app);
+    finish_pending(app);
     let dirty = app.session.documents().get(i).ok_or("no such document")?.is_dirty();
-    if dirty { ask(app, i, "close") } else { close_now(app, i) }
+    if dirty { ask(app, i, "close") } else { close_now(app, i, None) }
 }
 
 /// File → Close All (`then` = `closeAll`) or Quit (`quit`): ask about the next modified document,
 /// or finish once none is left.
 pub fn close_all(app: &mut VectorcraftApp, then: &str) -> Result<Value, String> {
     refuse_while_picking(app)?;
-    crate::background::wait_all(app);
+    finish_pending(app);
     if let Some(i) = app.session.documents().iter().position(|d| d.is_dirty()) {
         return ask(app, i, then);
     }
@@ -60,20 +74,27 @@ pub fn any_dirty(app: &VectorcraftApp) -> bool {
     app.session.documents().iter().any(|d| d.is_dirty())
 }
 
-/// Show document `i` and ask whether to save it.
+/// Show document `i` and ask whether to save it. For a single close (`then` = `close`), the
+/// dialog also remembers the document in front before it ([`FRONT`]).
 fn ask(app: &mut VectorcraftApp, i: usize, then: &str) -> Result<Value, String> {
+    let front = app.session.active().map(|d| d.uid);
     app.session.set_active(i);
     let doc = &app.session.documents()[i];
     let (name, uid) = (doc.title(), doc.uid);
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "index": i, "uid": uid, "name": name, "then": then })));
+    let mut fields = json!({ "index": i, "uid": uid, "name": name, "then": then });
+    if let Some(front) = front.filter(|f| then == "close" && *f != uid) {
+        fields[FRONT] = json!(front);
+    }
+    app.ui.dialog = Some(Dialog::new(KIND, fields));
     Ok(json!({ "pending": KIND }))
 }
 
-/// Close document `i` through the engine command, keeping `views` aligned with the documents.
-fn close_now(app: &mut VectorcraftApp, i: usize) -> Result<Value, String> {
+/// Close document `i` through the engine command; [`VectorcraftApp::sync_views`] drops its view.
+/// When `front` names a document that is still open, that document is in front afterwards.
+fn close_now(app: &mut VectorcraftApp, i: usize, front: Option<u64>) -> Result<Value, String> {
     let r = app.session.execute("file.close", &json!({ "index": i })).map_err(|e| e.to_string())?;
-    if i < app.views.len() {
-        app.views.remove(i);
+    if let Some(j) = front.and_then(|uid| app.session.documents().iter().position(|d| d.uid == uid)) {
+        app.session.set_active(j);
     }
     app.sync_views();
     if app.session.tool_id() == "artboard"
@@ -112,7 +133,7 @@ pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
             }
         }
     }
-    close_now(app, i)?;
+    close_now(app, i, d.fields.get(FRONT).and_then(Value::as_u64))?;
     match d.str("then").as_str() {
         "close" => Ok(Value::Null),
         then => close_all(app, then),
@@ -188,6 +209,98 @@ mod tests {
         confirm(&mut app).unwrap();
         assert_eq!(*written.lock().unwrap(), vec!["out.vectorcraft".to_string()]);
         assert_eq!((docs(&app), app.views.len()), (1, 1));
+    }
+
+    /// Three documents, A clean, B modified and C clean, with A in front: their uids.
+    fn front_and_modified_background_tab(app: &mut VectorcraftApp) -> [u64; 3] {
+        new_doc(app, false);
+        new_doc(app, true);
+        new_doc(app, false);
+        app.session.set_active(0);
+        let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+        [uids[0], uids[1], uids[2]]
+    }
+
+    fn front_uid(app: &VectorcraftApp) -> Option<u64> {
+        app.session.active().map(|d| d.uid)
+    }
+
+    #[test]
+    fn closing_a_modified_background_tab_keeps_the_front_document_after_dont_save() {
+        let (mut app, written) = app();
+        let [a, _, c] = front_and_modified_background_tab(&mut app);
+        assert_eq!(app.run("file.close", json!({ "index": 1 })).unwrap(), json!({ "pending": KIND }));
+        // The question shows the document it asks about.
+        assert_eq!((pending(&app), app.session.active_index()), (Some(1), Some(1)));
+        app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+        confirm(&mut app).unwrap();
+        let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+        assert_eq!((uids, front_uid(&app), app.views.len()), (vec![a, c], Some(a), 2));
+        assert!(written.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn closing_a_modified_background_tab_keeps_the_front_document_after_save() {
+        let (mut app, written) = app();
+        let [a, _, c] = front_and_modified_background_tab(&mut app);
+        close(&mut app, 1).unwrap();
+        confirm(&mut app).unwrap();
+        assert_eq!(*written.lock().unwrap(), vec!["out.vectorcraft".to_string()]);
+        let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+        assert_eq!((uids, front_uid(&app)), (vec![a, c], Some(a)));
+    }
+
+    #[test]
+    fn cancel_keeps_the_asked_background_tab_in_front() {
+        let (mut app, _) = app();
+        let [_, b, _] = front_and_modified_background_tab(&mut app);
+        close(&mut app, 1).unwrap();
+        app.ui.dialog = None;
+        assert_eq!((docs(&app), front_uid(&app)), (3, Some(b)));
+        // A later close of the tab in front brings its neighbor to the front.
+        close(&mut app, 1).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+        confirm(&mut app).unwrap();
+        assert_eq!((docs(&app), app.session.active_index()), (2, Some(1)));
+    }
+
+    #[test]
+    fn closing_the_modified_front_document_brings_its_neighbor_to_the_front() {
+        let (mut app, _) = app();
+        new_doc(&mut app, false);
+        new_doc(&mut app, true);
+        new_doc(&mut app, false);
+        let c = app.session.documents()[2].uid;
+        app.session.set_active(1);
+        close(&mut app, 1).unwrap();
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| !d.fields.contains_key(FRONT)));
+        app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+        confirm(&mut app).unwrap();
+        assert_eq!((docs(&app), front_uid(&app)), (2, Some(c)));
+    }
+
+    /// The document in front before the question is remembered by its uid: when it closed while
+    /// the question was open, the closed document's neighbor comes to the front as before.
+    #[test]
+    fn a_front_document_closed_meanwhile_is_not_brought_back() {
+        let (mut app, _) = app();
+        let [a, _, c] = front_and_modified_background_tab(&mut app);
+        close(&mut app, 1).unwrap();
+        let d = app.ui.dialog.take().unwrap();
+        assert_eq!(d.fields.get(FRONT), Some(&json!(a)));
+        close(&mut app, 0).unwrap();
+        app.ui.dialog = Some(d);
+        app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+        confirm(&mut app).unwrap();
+        assert_eq!((docs(&app), front_uid(&app)), (1, Some(c)));
+    }
+
+    #[test]
+    fn close_all_does_not_remember_a_front_document() {
+        let (mut app, _) = app();
+        front_and_modified_background_tab(&mut app);
+        app.run("file.closeAll", json!({})).unwrap();
+        assert!(app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND && !d.fields.contains_key(FRONT)));
     }
 
     #[test]

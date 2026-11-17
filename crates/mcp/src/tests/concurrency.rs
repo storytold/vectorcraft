@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use vectorcraft_engine::cancel;
 
+use super::TempFolder;
 use crate::{Backend, Server};
 
 /// A backend whose `engine.execute` runs until cancelled (or for `limit`), like a long export.
@@ -318,8 +319,8 @@ impl Backend for Gated {
 
 #[test]
 fn a_cancelled_export_through_the_real_engine_writes_nothing_and_leaves_the_session_usable() {
-    let path = vectorcraft_testkit::temp_dir("mcp-cancel").join("out.pdf");
-    std::fs::remove_file(&path).ok();
+    let dir = TempFolder::new("cancel");
+    let path = dir.file("out.pdf");
     let (read, mut to_server) = std::io::pipe().unwrap();
     let (tx, replies) = mpsc::channel();
     let (started_tx, started) = mpsc::channel();
@@ -342,6 +343,23 @@ fn a_cancelled_export_through_the_real_engine_writes_nothing_and_leaves_the_sess
     assert!(!path.exists(), "a cancelled export writes no file");
     drop(to_server);
     thread.join().unwrap();
+}
+
+#[test]
+fn a_change_while_a_script_runs_is_refused_as_busy() {
+    let mut backend = crate::Headless::with_document();
+    backend.session.script_frames = true;
+    backend.session.execute("script.run", &json!({"source": "while (true) {}"})).unwrap();
+    let mut s = Server::new(Box::new(backend));
+    let call = |id: &str, params: Value| json!({"name": "command_run", "arguments": {"id": id, "params": params}});
+    let reply = super::rpc(&mut s, 1, "tools/call", call("shape.rectangle", json!({"x": 0, "y": 0, "width": 1, "height": 1})));
+    assert_eq!(reply["error"]["code"], -32003, "{reply}");
+    assert!(reply["error"]["message"].as_str().unwrap().contains("a script is running"), "{reply}");
+    let reply = super::rpc(&mut s, 2, "tools/call", json!({"name": "doc_inspect", "arguments": {}}));
+    assert_eq!(reply["result"]["isError"], false, "reading the document is not refused: {reply}");
+    let reply = super::rpc(&mut s, 3, "tools/call", call("no.such", json!({})));
+    assert_eq!(reply["result"]["isError"], true, "any other failure stays a tool error: {reply}");
+    assert!(reply.get("error").is_none(), "{reply}");
 }
 
 #[test]

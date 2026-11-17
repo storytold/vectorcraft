@@ -500,6 +500,25 @@ fn apply_rows(app: &mut VectorcraftApp, start: &str, rows: &[(&str, &str, &str, 
     (out, dialog(app).fields["overrides"].clone())
 }
 
+#[test]
+fn resetting_an_imported_function_key_restores_its_edit_default() {
+    if crate::keymap::platform().is_mac() {
+        return;
+    }
+    for (alias, edit) in [("F2", "edit.cut"), ("F3", "edit.copy"), ("F4", "edit.paste")] {
+        let mut app = app();
+        let (out, value) = apply_rows(&mut app, "defaults", &[("Acme Duplicate", "Menus", "edit.duplicate", alias)]);
+        assert_eq!(out["applied"], 1);
+        let mut saved = crate::keymap::stored::from_value(value);
+        assert!(!crate::keymap::has_override(&saved, edit), "{alias} saved edit override");
+        shortcut_editor::reset_one(&mut saved, "edit.duplicate");
+        assert_eq!(
+            crate::keymap::lookup(&crate::keymap::keymap_with(&saved), &crate::keymap::vc_chord(alias).unwrap()),
+            Some(crate::keymap::command_of(edit)),
+        );
+    }
+}
+
 /// Cmd and Ctrl are one key off the Mac: the review lets both rows through, and the later one takes
 /// the shortcut.
 #[test]
@@ -575,6 +594,30 @@ fn long_names_match_and_apply() {
     let name = "Acme Copy ".repeat(150);
     let (out, ov) = apply_rows(&mut app, "defaults", &[(&name, "Menus", "edit.copy", "Cmd+Alt+Shift+F11")]);
     assert_eq!((out["applied"].clone(), ov), (json!(1), json!({"edit.copy": "Cmd+Alt+Shift+F11"})));
+}
+
+/// A filter plug-in's row takes an imported shortcut when the user picks it, stored under its
+/// `plugin.dialog {id}` key. A file's row with the plug-in's name does not match it by itself, and
+/// a removed plug-in is not a target.
+#[test]
+fn an_imported_shortcut_reaches_a_filter_plugin_picked_as_its_target() {
+    use vectorcraft_plugins::wat as tpl;
+    let id = "test.UI.import_filter-one";
+    let key = format!("plugin:{id}");
+    let manifest = format!(r#"{{"id":"{id}","name":"Acme Import Filter","version":"1","kind":"filter","params":{{}}}}"#);
+    vectorcraft_plugins::registry::install_bytes(&wat::parse_str(tpl::returning(&manifest, r#"{"objects":[]}"#)).unwrap()).unwrap();
+    assert!(shortcut_editor::entry(&key).is_some(), "a target the picker lists");
+    assert!(super::shortcut_import::candidates().iter().all(|c| c.id != key), "a name alone does not match it");
+
+    let mut app = app();
+    let (out, ov) = apply_rows(&mut app, "defaults", &[("Anything", "Menus", &key, "Cmd+Alt+Shift+F11")]);
+    assert_eq!(out["applied"], 1);
+    assert_eq!(ov, json!({ key.as_str(): "Cmd+Alt+Shift+F11" }), "not a binding of plugin.dialog without its id");
+    let reloaded = crate::keymap::stored::from_value(ov);
+    assert_eq!(reloaded.get(&crate::keymap::stored_key(&key)).map(<[String]>::len), Some(1), "read back under the filter's id");
+
+    vectorcraft_plugins::registry::remove(id);
+    assert!(shortcut_editor::entries().iter().all(|e| e.key != key), "a removed filter is no target");
 }
 
 /// A search in a row's target picker that matches nothing shrinks its menu to the search field

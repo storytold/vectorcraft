@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, NodeKind};
+use vectorcraft_doc::{Document, Node, NodeKind};
 use vectorcraft_engine::Session;
 
 /// Serialize a document to JSON (the canonical form for equality checks).
@@ -11,7 +11,8 @@ pub fn doc_json(doc: &Document) -> Value {
     serde_json::to_value(doc).expect("document serializes")
 }
 
-/// Tree invariants: ids unique, `node_count` equals the number of walked nodes, `next_id` above
+/// Tree invariants: ids unique, `node_count` equals the number of walked nodes other than ruler
+/// guides, ruler guides only at the top of a layer, `next_id` above
 /// every id, top level made of layers, layers only at the top or inside layers, clip groups have
 /// a first child, compound children are paths, no image holds its own pixels (the document keeps
 /// them).
@@ -21,10 +22,20 @@ pub fn check_document(doc: &Document) -> Result<(), String> {
     let mut max = 0u64;
     let mut err = None;
     doc.walk(|n| {
-        walked += 1;
+        // `node_count` counts objects: ruler guides are left out of it.
+        walked += usize::from(!n.is_ruler_guide());
         max = max.max(n.id.0);
         if !seen.insert(n.id) && err.is_none() {
             err = Some(format!("duplicate id {}", n.id));
+        }
+        let guides = n.children().map_or(0, |ch| ch.iter().filter(|c| c.is_ruler_guide()).count());
+        if guides > 0 && err.is_none() {
+            let ch = n.children().map(Vec::as_slice).unwrap_or_default();
+            if !n.is_layer() {
+                err = Some(format!("{} holds a ruler guide but is not a layer", n.id));
+            } else if ch.len() - Node::guide_run_start(ch) != guides {
+                err = Some(format!("layer {} has a ruler guide below its art", n.id));
+            }
         }
         match &n.kind {
             NodeKind::Group { children, .. } if children.iter().any(|c| c.is_layer()) && err.is_none() => {

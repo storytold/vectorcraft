@@ -75,7 +75,7 @@ pub(crate) fn checksum(header: &[u8]) -> u16 {
 fn flatten(bp: &BezPath, tol: f64) -> Vec<(Vec<Point>, bool)> {
     let mut out: Vec<(Vec<Point>, bool)> = vec![];
     let mut cur: Vec<Point> = vec![];
-    kurbo::flatten(bp.iter(), tol, |el| match el {
+    vectorcraft_geom::flatten(bp.iter(), tol, |el| match el {
         PathEl::MoveTo(p) => {
             if cur.len() > 1 {
                 out.push((std::mem::take(&mut cur), false));

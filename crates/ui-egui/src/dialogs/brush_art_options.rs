@@ -8,9 +8,10 @@
 //! `tintsAndShades` | `hueShift`), `keyColor` (a color), `tips` (whether Colorization Tips is
 //! open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
-//! (`fixed` | `random` | `pressure`), `rotationRelativeTo` (`page` | `path`).
-//! Art: `width` (%), `widthMode` (`fixed` | `pressure`), `widthMax` (the width at the heaviest pen
-//! pressure, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
+//! (`fixed` | `random` | `pressure` | `tilt` | `bearing` | `rotation`), `rotationRelativeTo` (`page` |
+//! `path`).
+//! Art: `width` (%), `widthMode` (`fixed` | `pressure` | `tilt` | `bearing` | `rotation`),
+//! `widthMax` (the width at the heaviest pen pressure, upright or at 180°, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
 //! `overlap` (bend on each run between sharp corners).
 //! Pattern: `scale`, `spacing` (%), `fit` (`stretch` | `addSpace` | `approximate`), `flipAlong`,
@@ -68,10 +69,10 @@ fn pattern_choice(d: &Dialog, choice: &str) -> Option<String> {
     (!reserved && pattern_names(d).iter().any(|candidate| candidate == name)).then(|| name.to_string())
 }
 
+/// Whether tile `field`'s menu offers Original: the tile the dialog opened with, kept available after
+/// a swatch is chosen so the tile can go back to it.
 pub(super) fn original_available(d: &Dialog, field: &str) -> bool {
-    let choice = d.str(&tile_key(field));
-    let drawn = if field.ends_with("corner") { corner_art_field(d.fields.get("__def"), field) } else { Some(field) };
-    drawn.is_some() && pattern_choice(d, &choice).is_none()
+    !field.ends_with("corner") || corner_art_field(d.fields.get("__def"), field).is_some()
 }
 
 pub(super) fn reconcile_pattern_choices(f: &mut Map<String, Value>) {
@@ -253,12 +254,9 @@ fn scatter_mode(d: &Dialog, key: &str) -> Variation {
     Variation::parse(&d.str(&mode_key(key))).unwrap_or_default()
 }
 
-/// How an art brush's width varies: Fixed or Pressure.
+/// How an art brush's width varies: Fixed, or with the pen's pressure, tilt, bearing or rotation.
 fn art_width_mode(d: &Dialog) -> Variation {
-    match Variation::parse(&d.str("widthMode")) {
-        Some(Variation::Pressure) => Variation::Pressure,
-        _ => Variation::Fixed,
-    }
+    Variation::parse(&d.str("widthMode")).filter(|m| m.follows_pen()).unwrap_or(Variation::Fixed)
 }
 
 /// `brush.options` params from the fields.
@@ -281,11 +279,12 @@ pub(super) fn params(d: &Dialog) -> Value {
                 },
                 _ => ArtScale::Stretch,
             };
-            let pressure = art_width_mode(d) == Variation::Pressure;
+            let mode = art_width_mode(d);
+            let pen = mode.follows_pen();
             json!({
                 "width": clamped(d, "width", ArtBrush::WIDTH_RANGE),
-                "width_mode": if pressure { json!(Variation::Pressure.id()) } else { Value::Null },
-                "width_max": if pressure { json!(clamped(d, "widthMax", ArtBrush::WIDTH_RANGE)) } else { Value::Null },
+                "width_mode": if pen { json!(mode.id()) } else { Value::Null },
+                "width_max": if pen { json!(clamped(d, "widthMax", ArtBrush::WIDTH_RANGE)) } else { Value::Null },
                 "scale": serde_json::to_value(scale).unwrap_or_default(),
                 "direction": id_of(&parse_field::<Direction>(d, "direction")),
                 "flip_along": d.bool("flipAlong"),
@@ -461,14 +460,14 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
 }
 
 fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    // Width, then the width at the heaviest pen pressure (only with Pressure) and how it varies.
+    // Width, then the second width (only when the width follows the pen) and how it varies.
     let rail = Tokens::get(ui.ctx()).input_border;
     let range = ArtBrush::WIDTH_RANGE;
     widgets::label_row(ui, tl!("Width:"), LABEL_W, |ui| {
         super::form::slider_field_named(ui, d, "width", tl!("Width:"), range.0..=range.1, "%", &|_| rail);
         let mode = art_width_mode(d);
-        number(ui, d, "widthMax", range, "%", mode == Variation::Pressure);
-        let modes = [Variation::Fixed, Variation::Pressure];
+        number(ui, d, "widthMax", range, "%", mode.follows_pen());
+        let modes = [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation];
         if let Some(m) = widgets::dropdown(ui, "brush-art-width-mode", mode.label(), &modes.map(Variation::label), 104.0).and_then(|i| modes.get(i)) {
             d.fields.insert("widthMode".into(), json!(m.id()));
         }
@@ -541,8 +540,7 @@ fn pattern_body(ui: &mut egui::Ui, d: &mut Dialog) {
     radios(ui, d, "fit", &fits);
 }
 
-/// Built-in corner choices. Original is disabled when the slot has no retained art or a listed
-/// swatch was selected.
+/// Built-in corner choices. Original is disabled when the corner opened with no art to draw.
 fn corner_choices() -> [(&'static str, &'static str); 6] {
     [
         (CornerSource::None.id(), tl!("None")),

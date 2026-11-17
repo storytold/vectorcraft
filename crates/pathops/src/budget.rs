@@ -82,10 +82,15 @@ pub(crate) fn overlaps_within(boxes: &[Rect], cap: usize) -> bool {
     true
 }
 
+/// Can a planar map be built of `paths` within `cap` segment pairs?
+pub(crate) fn sweep_fits_within<'a>(paths: impl IntoIterator<Item = &'a BezPath>, cap: usize) -> bool {
+    let boxes: Vec<Rect> = paths.into_iter().flat_map(|p| p.segments().map(|s| s.bounding_box())).collect();
+    overlaps_within(&boxes, cap)
+}
+
 /// Can a planar map be built of `paths` within [`MAX_SEGMENT_PAIRS`]?
 pub(crate) fn sweep_fits<'a>(paths: impl IntoIterator<Item = &'a BezPath>) -> bool {
-    let boxes: Vec<Rect> = paths.into_iter().flat_map(|p| p.segments().map(|s| s.bounding_box())).collect();
-    overlaps_within(&boxes, MAX_SEGMENT_PAIRS)
+    sweep_fits_within(paths, MAX_SEGMENT_PAIRS)
 }
 
 #[cfg(test)]

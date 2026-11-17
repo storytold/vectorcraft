@@ -11,7 +11,16 @@ pub(super) struct SysFallback {
     pub(super) misses: std::collections::HashSet<char>,
     /// Counts the scans of the font folders: a search that a scan overtook doesn't record its miss.
     pub(super) scans: u64,
+    /// Characters that went on to read every cataloged font file (and found nothing, or a face).
+    /// Each such search rereads the catalog, so only [`MAX_FILE_SEARCHES`] are made per scan.
+    pub(super) file_searches: u32,
 }
+
+/// The most characters searched for in the font files themselves between two scans of the font
+/// folders. Real text has a few uncovered characters; a document of thousands of distinct
+/// private-use code points would reread the whole catalog for each.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) const MAX_FILE_SEARCHES: u32 = 1024;
 
 /// Fonts made for Thai, tried first (when installed) for Thai the font in use lacks: Windows
 /// (Leelawadee UI; Tahoma before Windows 8), macOS (Thonburi, Sukhumvit Set) and Linux (Noto,
@@ -31,7 +40,7 @@ pub const THAI_FAMILIES: &[&str] = &[
 ];
 
 /// The families tried first for character `c`, in a script whose text only fonts made for it set
-/// well (Thai, Lao, Khmer, Myanmar); none for other characters.
+/// well (Thai, Lao, Khmer, Myanmar, Devanagari); none for other characters.
 pub(super) fn script_families(c: char) -> &'static [&'static str] {
     use unicode_script::{Script, UnicodeScript};
     match c.script() {
@@ -39,6 +48,16 @@ pub(super) fn script_families(c: char) -> &'static [&'static str] {
         Script::Lao => &["Lao UI", "Leelawadee UI", "Lao Sangam MN", "Noto Sans Lao", "Noto Sans Lao UI", "Phetsarath OT"],
         Script::Khmer => &["Khmer UI", "Khmer Sangam MN", "Noto Sans Khmer", "Noto Sans Khmer UI", "Khmer OS"],
         Script::Myanmar => &["Myanmar Text", "Myanmar Sangam MN", "Noto Sans Myanmar", "Noto Sans Myanmar UI", "Padauk"],
+        Script::Devanagari => &[
+            "Nirmala UI",
+            "Kohinoor Devanagari",
+            "Devanagari Sangam MN",
+            "Noto Sans Devanagari",
+            "Noto Sans Devanagari UI",
+            "Lohit Devanagari",
+            "Mangal",
+        ],
+        Script::Gujarati => &["Gujarati Sangam MN", "GujaratiMT", "Nirmala UI", "Shruti", "Noto Sans Gujarati", "Noto Sans Gujarati UI"],
         _ => &[],
     }
 }
@@ -80,9 +99,23 @@ pub(super) fn name(font: &skrifa::FontRef<'_>, ids: &[StringId]) -> Option<Strin
 /// The most distinct legacy family (and style) names of a font used as keys.
 pub(super) const MAX_LEGACY_NAMES: usize = 64;
 
+/// Records can share their encoded bytes, so a small table names many long strings: stop at this
+/// many records or decoded bytes (real fonts have a few dozen short names per id).
+const MAX_NAME_RECORDS: usize = 1024;
+const MAX_NAME_BYTES: usize = 1 << 20;
+
 /// Every localized string of `id`, with its language.
 pub(super) fn localized(font: &skrifa::FontRef<'_>, id: StringId) -> Vec<(Option<String>, String)> {
-    font.localized_strings(id).map(|s| (s.language().map(str::to_owned), s.to_string())).filter(|(_, s)| !s.is_empty()).collect()
+    let mut bytes = 0usize;
+    font.localized_strings(id)
+        .take(MAX_NAME_RECORDS)
+        .map(|s| (s.language().map(str::to_owned), s.to_string()))
+        .take_while(|(_, s)| {
+            bytes = bytes.saturating_add(s.len());
+            bytes <= MAX_NAME_BYTES
+        })
+        .filter(|(_, s)| !s.is_empty())
+        .collect()
 }
 
 /// Whether a name-table language tag is English (Illustrator's "Show Font Names in English").
@@ -128,8 +161,8 @@ pub(super) fn norm(s: &str) -> String {
 /// point many records at one large string, or fill the table with ones that name nothing, so the
 /// blob's size alone bounds neither the decoding work nor the memory (CWE-770); a menu lists a
 /// handful of languages and no family name is longer than a sentence.
-pub(super) const MAX_NAME_RECORDS: usize = 64;
-const MAX_NAME_BYTES: usize = 8 << 10;
+pub(super) const MAX_FAMILY_NAME_RECORDS: usize = 64;
+const MAX_FAMILY_NAME_BYTES: usize = 8 << 10;
 
 /// Every family name a face writes, in every language: its typographic family (ID 16) records and
 /// its family (ID 1) ones, plus the names an old font keeps only in a legacy CJK encoding. What a
@@ -147,7 +180,7 @@ pub(super) fn localized_family(font: &skrifa::FontRef<'_>) -> Arc<[(String, Stri
         seen.push(name.clone());
         true
     }));
-    names.truncate(MAX_NAME_RECORDS);
+    names.truncate(MAX_FAMILY_NAME_RECORDS);
     Arc::from(names)
 }
 
@@ -159,14 +192,14 @@ pub(super) fn name_for_script(names: &[(String, String)], script: CjkScript) -> 
 
 /// A face's name records of one ID, without blanks or duplicates: the ones the font stack reads,
 /// then names kept only in a legacy CJK encoding ([`legacy_records`]). Bounded by
-/// [`MAX_NAME_RECORDS`] records examined — blank ones count, so a font whose records mostly name
-/// nothing cannot make the menu walk the whole table — and by [`MAX_NAME_BYTES`] of text.
+/// [`MAX_FAMILY_NAME_RECORDS`] records examined — blank ones count, so a font whose records mostly name
+/// nothing cannot make the menu walk the whole table — and by [`MAX_FAMILY_NAME_BYTES`] of text.
 fn records_of(font: &skrifa::FontRef<'_>, id: StringId) -> Vec<(String, String)> {
     let mut names: Vec<(String, String)> = Vec::new();
     let mut bytes = 0usize;
     let mut examined = 0usize;
     for record in font.localized_strings(id) {
-        if examined >= MAX_NAME_RECORDS {
+        if examined >= MAX_FAMILY_NAME_RECORDS {
             break;
         }
         examined += 1;
@@ -175,14 +208,14 @@ fn records_of(font: &skrifa::FontRef<'_>, id: StringId) -> Vec<(String, String)>
         if name.trim().is_empty() {
             continue;
         }
-        if bytes + name.len() > MAX_NAME_BYTES {
+        if bytes + name.len() > MAX_FAMILY_NAME_BYTES {
             break;
         }
         bytes += name.len();
         names.push((language, name));
     }
     // The legacy records get what the Unicode ones left of both budgets.
-    names.extend(legacy_records(font, id, MAX_NAME_BYTES.saturating_sub(bytes), MAX_NAME_RECORDS.saturating_sub(examined)));
+    names.extend(legacy_records(font, id, MAX_FAMILY_NAME_BYTES.saturating_sub(bytes), MAX_FAMILY_NAME_RECORDS.saturating_sub(examined)));
     let mut seen: Vec<(String, String)> = Vec::with_capacity(names.len());
     names.retain(|name| {
         if seen.contains(name) {
@@ -265,4 +298,33 @@ fn legacy_records(font: &skrifa::FontRef<'_>, id: StringId, bytes_left: usize, r
 #[cfg(target_arch = "wasm32")]
 fn legacy_records(_font: &skrifa::FontRef<'_>, _id: StringId, _bytes_left: usize, _records_left: usize) -> Vec<(String, String)> {
     Vec::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Devanagari takes a font made for it, not whichever face covering it loaded first.
+    #[test]
+    fn devanagari_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ह').first(), Some(&"Nirmala UI"));
+        assert!(script_families('ह').contains(&"Noto Sans Devanagari"));
+        assert!(script_families('a').is_empty());
+    }
+
+    /// Gujarati takes a font that draws it (macOS Gujarati Sangam MN, Windows Nirmala UI or Shruti).
+    #[test]
+    fn gujarati_prefers_fonts_made_for_it() {
+        assert_eq!(script_families('ગ').first(), Some(&"Gujarati Sangam MN"));
+        assert!(script_families('ગ').contains(&"Nirmala UI"));
+    }
+
+    #[test]
+    fn a_name_table_of_many_records_is_cut_short() {
+        let many: Vec<(u16, &str)> = (0..2000).map(|_| (1, "Short")).collect();
+        let name = crate::test_fonts::name_table(&many).unwrap_or_default();
+        let font = crate::fontdb::sfnt_of(&[(b"name", &name)]).unwrap_or_default();
+        let font = skrifa::FontRef::new(&font).unwrap();
+        assert_eq!(localized(&font, StringId::FAMILY_NAME).len(), MAX_NAME_RECORDS);
+    }
 }

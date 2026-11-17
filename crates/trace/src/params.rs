@@ -24,7 +24,8 @@ pub enum Method {
     #[default]
     Abutting,
     /// Stacked: every layer extends under the layers above it, within the areas that hold its own
-    /// color.
+    /// color. With Fills (without Create Strokes) each shape is filled whole, and what it encloses
+    /// is stacked above it.
     Overlapping,
 }
 
@@ -81,8 +82,10 @@ pub struct TraceParams {
     pub paths: f64,
     /// Corners 0–100: higher keeps more corners.
     pub corners: f64,
-    /// Noise: areas smaller than this many pixels are ignored. (Flat Logo mode: areas smaller than
-    /// `noise / 10` pixels of the source image.)
+    /// Noise: areas smaller than this many pixels are ignored: each joins the color it shares the
+    /// longest border with, or, when that color is far from its own, the color beside it nearest
+    /// its source pixels. (Flat Logo mode: areas smaller than `noise / 10` pixels of the source
+    /// image.)
     pub noise: u32,
     pub method: Method,
     /// Ignore Color: drop the areas of one colour (no background shape): white, unless
@@ -91,6 +94,15 @@ pub struct TraceParams {
     /// The colour Ignore Color leaves out (`#rrggbb`): the palette colours within about 30 levels
     /// of it. `None` is white. (Flat Logo mode leaves out white only.)
     pub ignore_color: Option<String>,
+    /// With Ignore Color: leave out only the areas of that color that reach the image's edge (a
+    /// background), through neighbors above, below and to either side, and trace the areas of it
+    /// that other colors enclose. (Flat Logo mode leaves out every white area.)
+    pub ignore_background: bool,
+    /// Keep Colors: the colors to trace (`#rrggbb`). Only the palette colors within about 30
+    /// levels of one of them (as Ignore Color matches a color) are traced, a gradient by its middle
+    /// color, and their paths are the ones the trace of every color has. Empty traces every color.
+    /// (Flat Logo mode does not use it: it traces the colors named in `logo_colors`.)
+    pub keep_colors: Vec<String>,
     /// Replace nearly-straight curves with straight lines. In Logo mode this also snaps tight arcs
     /// to true circles.
     pub snap_curves_to_lines: bool,
@@ -105,14 +117,24 @@ pub struct TraceParams {
     pub gradients: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
-    /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
+    /// Create: trace lines no wider than `stroke_width`, and such thin features of wider shapes, as
+    /// stroked center lines.
     pub strokes: bool,
     /// Stroke: the widest feature (px) traced as a stroke.
     pub stroke_width: f64,
     /// Flat Logo mode: the flat colours (`#rrggbb`) to use; empty finds them automatically. White is
-    /// always traced on its own and cannot be named, colours closer than about 12 (RGB distance)
-    /// count as one, and at most ten are used. (Not `palette`: that is Color mode's colour source.)
+    /// traced on its own and cannot be named unless [`logo_white`](Self::logo_white) is off, colours
+    /// closer than about 12 (RGB distance) count as one, and at most ten are used. Whether the image
+    /// is flat art (and not refused) is judged by its own colors, which are found the same way as when
+    /// no colors are named; as many are looked for as are named, with white, or as
+    /// [`colors`](Self::colors) gives, whichever is more. (Not `palette`: that is Color mode's colour source.)
     pub logo_colors: Vec<String>,
+    /// Flat Logo mode with named `logo_colors`: `true` traces white (every channel 245 or more) as a
+    /// color of its own beside the named ones. `false` traces the named colors only: white areas
+    /// take the nearest of them, a named white or near-white is used as named, and enclosed
+    /// transparent areas stay holes. With the colors found automatically, white is always its own,
+    /// and with [`ignore_white`](Self::ignore_white) white areas are left out whatever this says.
+    pub logo_white: bool,
 }
 
 impl Default for TraceParams {
@@ -133,6 +155,8 @@ impl Default for TraceParams {
             method: Method::Abutting,
             ignore_white: false,
             ignore_color: None,
+            ignore_background: false,
+            keep_colors: Vec::new(),
             snap_curves_to_lines: false,
             shapes: false,
             auto_grouping: false,
@@ -141,6 +165,7 @@ impl Default for TraceParams {
             strokes: false,
             stroke_width: 10.0,
             logo_colors: Vec::new(),
+            logo_white: true,
         }
     }
 }
@@ -218,19 +243,19 @@ pub fn preset(name: &str) -> Option<TraceParams> {
         // many as its tones need where it is not.
         // (Color detail 85: a colour on a hundredth of the picture is still one of its colours.)
         "auto color" => TraceParams { palette: Palette::Automatic, color_detail: 85.0, ..color(6, 65.0, 60.0, 16, Method::Abutting) },
-        "high fidelity photo" => color(64, 90.0, 25.0, 4, Method::Overlapping),
-        "low fidelity photo" => color(20, 60.0, 50.0, 12, Method::Overlapping),
-        "3 colors" => color(3, 60.0, 60.0, 20, Method::Abutting),
-        "6 colors" => color(6, 65.0, 60.0, 16, Method::Abutting),
-        "16 colors" => color(16, 70.0, 55.0, 10, Method::Abutting),
-        "shades of gray" => TraceParams { mode: Mode::Grayscale, colors: 8, paths: 60.0, corners: 50.0, noise: 10, method: Method::Overlapping, ..d },
-        "black and white logo" => bw(128, 95.0, 80.0, 8, true),
-        "sketched art" => bw(150, 50.0, 50.0, 100, false),
-        "silhouettes" => bw(200, 40.0, 60.0, 30, false),
-        "line art" => bw(128, 80.0, 70.0, 10, false),
-        "technical drawing" => bw(128, 95.0, 90.0, 4, true),
+        "high fidelity photo" => color(64, 50.0, 50.0, 5, Method::Overlapping),
+        "low fidelity photo" => color(20, 50.0, 50.0, 10, Method::Overlapping),
+        "3 colors" => color(3, 50.0, 50.0, 15, Method::Abutting),
+        "6 colors" => color(6, 50.0, 50.0, 8, Method::Abutting),
+        "16 colors" => color(16, 50.0, 50.0, 8, Method::Abutting),
+        "shades of gray" => TraceParams { mode: Mode::Grayscale, colors: 8, paths: 50.0, corners: 50.0, noise: 15, method: Method::Overlapping, ..d },
+        "black and white logo" => bw(128, 50.0, 75.0, 5, true),
+        "sketched art" => bw(150, 50.0, 50.0, 20, false),
+        "silhouettes" => bw(200, 50.0, 50.0, 90, false),
+        "line art" => bw(128, 50.0, 75.0, 20, false),
+        "technical drawing" => bw(128, 50.0, 100.0, 1, true),
         // Black outlines: lines as stroked centre lines, wider areas as stroked outlines.
-        "outline" => TraceParams { fills: false, strokes: true, ..bw(128, 80.0, 70.0, 10, false) },
+        "outline" => TraceParams { fills: false, strokes: true, ..bw(128, 50.0, 75.0, 20, false) },
         // Flat-colour logos: colours found automatically, edges placed to a fraction of a pixel.
         "flat logo" => TraceParams { mode: Mode::Logo, colors: 8, paths: 60.0, corners: 50.0, noise: 6, snap_curves_to_lines: true, ..d },
         _ => return None,

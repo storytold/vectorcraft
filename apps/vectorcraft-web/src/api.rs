@@ -1,14 +1,18 @@
 //! `window.vectorcraft`: the control channel for the page, as promises.
 //!
+//! `request`, `execute`, `commands`, `docInspect`, `uiInspect` and `screenshot` come from
+//! `craft-web-api` (storytold/craft-libs#413), the same in every Craft app; VectorCraft adds its own
+//! functions on the same object.
+//!
 //! The same JSON methods as the desktop control server (`docs/control-protocol.md`), so an agent
 //! driving VectorCraft in a browser tab (or an `<iframe>` in another app) uses the same commands as
 //! the CLI and the MCP server:
 //!
 //! ```js
-//! await vectorcraft.execute("object.rectangle", {x: 0, y: 0, width: 100, height: 50})  // engine command → its result
+//! await vectorcraft.execute("shape.rectangle", {x: 0, y: 0, width: 100, height: 50})  // engine command → its result
 //! await vectorcraft.request("ui.inspect")                      // control method → its result
 //! await vectorcraft.commands()                                 // command list
-//! const {base64} = await vectorcraft.screenshot()              // the canvas as PNG (base64)
+//! const {data} = await vectorcraft.screenshot()                // the canvas as PNG (base64)
 //! await vectorcraft.openFile("logo.svg", bytes)               // opened as a dropped file is
 //! vectorcraft.captureDownloads(true)                           // saves stay in the page…
 //! vectorcraft.files(); await vectorcraft.readFile("logo.png")  // …to be read back
@@ -17,21 +21,24 @@
 //! Results resolve with the method's `result`; errors reject with an `Error`.
 
 use std::cell::{Cell, RefCell};
+use std::future::Future;
+use std::pin::Pin;
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
+use craft_web_api::methods::Methods;
+use craft_web_api::page::{PageApi, Request};
 use serde_json::{Value, json};
-use vectorcraft_ui_egui::ControlRequest;
+use vectorcraft_ui_egui::{ControlRequest, ControlTicket as Ticket};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 use crate::saved_files::SavedFiles;
 
 use crate::web::Inbox;
 
-type Waiting = (Receiver<Value>, js_sys::Function, js_sys::Function);
-
 thread_local! {
     static TX: RefCell<Option<Sender<ControlRequest>>> = const { RefCell::new(None) };
-    static WAITING: RefCell<Vec<Waiting>> = const { RefCell::new(Vec::new()) };
     static CTX: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
     static INBOX: RefCell<Option<Inbox>> = const { RefCell::new(None) };
     static CAPTURE: Cell<bool> = const { Cell::new(false) };
@@ -69,77 +76,96 @@ fn to_js(v: &Value) -> JsValue {
     js_sys::JSON::parse(&v.to_string()).unwrap_or(JsValue::NULL)
 }
 
-fn from_js(v: &JsValue) -> Value {
-    if v.is_undefined() || v.is_null() {
-        return json!({});
+/// A reply as a promise outcome: the `result`, or an `Error` carrying the `error`.
+fn outcome(reply: &Value) -> Result<JsValue, JsValue> {
+    if reply.get("ok").and_then(Value::as_bool) == Some(true) {
+        Ok(to_js(reply.get("result").unwrap_or(&Value::Null)))
+    } else {
+        Err(js_sys::Error::new(reply.get("error").and_then(Value::as_str).unwrap_or("error")).into())
     }
-    js_sys::JSON::stringify(v).ok().and_then(|s| s.as_string()).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(json!({}))
 }
 
-/// Settle the promises of answered requests (called every frame).
-pub fn poll_replies() {
-    WAITING.with(|w| {
-        w.borrow_mut().retain(|(rx, resolve, reject)| match rx.try_recv() {
-            Ok(v) => {
-                if v.get("ok").and_then(Value::as_bool) == Some(true) {
-                    let _ = resolve.call1(&JsValue::NULL, &to_js(v.get("result").unwrap_or(&Value::Null)));
-                } else {
-                    let msg = v.get("error").and_then(Value::as_str).unwrap_or("error").to_string();
-                    let _ = reject.call1(&JsValue::NULL, &js_sys::Error::new(&msg));
-                }
-                false
+/// How often a waiting call looks for the app's reply, in milliseconds (about a frame).
+const POLL_MS: i32 = 16;
+
+/// A queued control request whose reply has not arrived. Dropping it before the reply (the page's
+/// timeout fired) gives the request up if the app has not started it, so the app never runs it late.
+struct Waiting {
+    reply: Receiver<Value>,
+    ticket: Ticket,
+    answered: bool,
+}
+
+impl Waiting {
+    /// The app's reply once it has answered or gone away; `None` while the request is waiting.
+    fn poll(&mut self) -> Option<Value> {
+        match self.reply.try_recv() {
+            Ok(reply) => {
+                self.answered = true;
+                Some(reply)
             }
-            Err(TryRecvError::Empty) => true,
+            Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => {
-                let _ = reject.call1(&JsValue::NULL, &js_sys::Error::new("request dropped"));
-                false
+                self.answered = true;
+                Some(json!({"ok": false, "error": "request dropped"}))
             }
-        });
-    });
+        }
+    }
 }
 
-fn request(method: &str, params: Value) -> js_sys::Promise {
-    let method = method.to_string();
-    let p = js_sys::Promise::new(&mut |resolve, reject| {
-        let (req, rx) = ControlRequest::new(method.clone(), params.clone());
-        let sent = TX.with(|t| t.borrow().as_ref().is_some_and(|tx| tx.send(req).is_ok()));
-        if sent {
-            WAITING.with(|w| w.borrow_mut().push((rx, resolve, reject)));
-        } else {
-            let _ = reject.call1(&JsValue::NULL, &js_sys::Error::new("VectorCraft is not running yet"));
+impl Drop for Waiting {
+    fn drop(&mut self) {
+        if !self.answered {
+            self.ticket.give_up();
+        }
+    }
+}
+
+/// Queue a control request for the app and wait for its reply, as the protocol's `{ok, result}` /
+/// `{ok: false, error}` object.
+fn send(method: &str, params: Value) -> Pin<Box<dyn Future<Output = Value>>> {
+    let (req, rx) = ControlRequest::new(method, params);
+    let ticket = req.ticket();
+    let sent = TX.with(|t| t.borrow().as_ref().is_some_and(|tx| tx.send(req).is_ok()));
+    if !sent {
+        return Box::pin(async { json!({"ok": false, "error": "VectorCraft is not running yet"}) });
+    }
+    repaint();
+    let mut waiting = Waiting { reply: rx, ticket, answered: false };
+    Box::pin(async move {
+        loop {
+            if let Some(reply) = waiting.poll() {
+                return reply;
+            }
+            sleep(POLL_MS).await;
+        }
+    })
+}
+
+async fn sleep(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
         }
     });
-    repaint();
-    p
+    let _ = JsFuture::from(promise).await;
 }
 
 fn set_fn(obj: &js_sys::Object, name: &str, f: JsValue) -> Result<(), JsValue> {
     js_sys::Reflect::set(obj, &name.into(), &f).map(|_| ())
 }
 
-/// Install `window.vectorcraft`.
+/// Install `window.vectorcraft`: the crate's functions, then VectorCraft's own (`inspect` is its
+/// `ui.inspect`).
 pub fn install() -> Result<(), JsValue> {
-    let obj = js_sys::Object::new();
+    let request: Request = Rc::new(|method, params| send(&method, params));
+    Rc::new(PageApi::new("vectorcraft", Methods::default(), request)).install()?;
+    let window = web_sys::window().ok_or("no window")?;
+    let obj: js_sys::Object = js_sys::Reflect::get(&window, &"vectorcraft".into())?.unchecked_into();
     set_fn(
         &obj,
-        "request",
-        Closure::<dyn Fn(String, JsValue) -> js_sys::Promise>::new(|method: String, params: JsValue| request(&method, from_js(&params)))
-            .into_js_value(),
-    )?;
-    set_fn(
-        &obj,
-        "execute",
-        Closure::<dyn Fn(String, JsValue) -> js_sys::Promise>::new(|command: String, params: JsValue| {
-            request("engine.execute", json!({"command": command, "params": from_js(&params)}))
-        })
-        .into_js_value(),
-    )?;
-    set_fn(&obj, "commands", Closure::<dyn Fn() -> js_sys::Promise>::new(|| request("engine.commands", json!({}))).into_js_value())?;
-    set_fn(&obj, "inspect", Closure::<dyn Fn() -> js_sys::Promise>::new(|| request("ui.inspect", json!({}))).into_js_value())?;
-    set_fn(
-        &obj,
-        "screenshot",
-        Closure::<dyn Fn(JsValue) -> js_sys::Promise>::new(|params: JsValue| request("ui.screenshot", from_js(&params))).into_js_value(),
+        "inspect",
+        Closure::<dyn Fn() -> js_sys::Promise>::new(|| future_to_promise(async { outcome(&send("ui.inspect", json!({})).await) })).into_js_value(),
     )?;
     set_fn(
         &obj,
@@ -178,7 +204,5 @@ pub fn install() -> Result<(), JsValue> {
         })
         .into_js_value(),
     )?;
-    let w = web_sys::window().ok_or("no window")?;
-    js_sys::Reflect::set(&w, &"vectorcraft".into(), &obj)?;
     Ok(())
 }

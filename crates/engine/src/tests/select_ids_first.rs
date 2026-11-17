@@ -208,7 +208,7 @@ fn id_errors_name_the_command_run() {
         for (given, want) in [
             (json!([999]), "no such object id 999".to_string()),
             (json!([999, layer]), "no such object id 999".to_string()),
-            (json!([ids[0], ids[1], -1]), "invalid object id -1: expected a non-negative integer".to_string()),
+            (json!([ids[0], ids[1], -1]), "`ids` entry 2 is -1, not a non-negative integer object id".to_string()),
             (json!(ids[0]), "ids must be an array of non-negative integer object ids".to_string()),
         ] {
             let mut p = match *cmd {

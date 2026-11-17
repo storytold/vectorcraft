@@ -40,8 +40,7 @@ pub fn flat_button(ui: &mut Ui, text: &str, width: f32) -> Response {
 /// A [`flat_button`] that expands to fit localized labels wider than `min_width`.
 pub fn flat_button_fit(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     let t = Tokens::get(ui.ctx());
-    let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), egui::FontId::proportional(12.5), t.text_strong);
-    let width = (galley.size().x + 24.0).max(min_width);
+    let width = flat_button_fit_width(ui, text, min_width);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), Sense::click());
     let rect = rect.shrink2(vec2(0.0, 0.5));
     ui.painter().rect_filled(rect, CornerRadius::same(5), t.button);
@@ -49,6 +48,13 @@ pub fn flat_button_fit(ui: &mut Ui, text: &str, min_width: f32) -> Response {
     ui.painter().with_clip_rect(rect).text(rect.center(), egui::Align2::CENTER_CENTER, tl!(text), egui::FontId::proportional(12.5), t.text_strong);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!(text)));
     resp
+}
+
+/// The width [`flat_button_fit`] gives `text`, translated: its label and padding, at least
+/// `min_width`.
+pub(crate) fn flat_button_fit_width(ui: &Ui, text: &str, min_width: f32) -> f32 {
+    let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), egui::FontId::proportional(12.5), Color32::PLACEHOLDER);
+    (galley.size().x + 24.0).max(min_width)
 }
 
 /// Width of a [`split_button`]'s arrow.
@@ -99,6 +105,13 @@ fn flat_fill(ui: &Ui, rect: Rect, resp: &Response) {
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, CornerRadius::same(5), t.hover);
     }
+}
+
+/// The width [`primary_button`] and [`secondary_button`] give `text` (their label plus padding, at
+/// least 72), for centring a row of them.
+pub(crate) fn button_width(ui: &Ui, text: &str) -> f32 {
+    let galley = ui.painter().layout_no_wrap(tl!(text).to_string(), theme::semibold(12.5), Color32::PLACEHOLDER);
+    (galley.size().x + 32.0).max(72.0)
 }
 
 /// The accent call-to-action button (dialog OK/Create).

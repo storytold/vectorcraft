@@ -86,7 +86,7 @@ fn shown(app: &mut VectorcraftApp, ui: &Ui, opts: &CssOptions, all: bool) -> Opt
         let (id, scope) = if all { ("css.generate", "all") } else { ("css.selection", "selection") };
         let out = app.session.execute(id, &params(opts, scope)).unwrap_or_default();
         let rules: Vec<&str> = out["rules"].as_array().into_iter().flatten().filter_map(|r| r["css"].as_str()).collect();
-        let warnings = out["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
+        let warnings = io::notes_of(&out);
         let job = (!rules.is_empty())
             .then(|| Arc::new(highlight(rules.get(..MAX_SHOWN).unwrap_or(&rules), &t, egui::TextStyle::Monospace.resolve(ui.style()))));
         let skipped = out["skipped"].as_u64().unwrap_or(0);
@@ -204,13 +204,14 @@ pub(crate) fn export_file(app: &mut VectorcraftApp, p: &Value) -> Result<Value, 
         io::write_to(&mut app.services, &at, &bytes)?;
         images.push(at);
     }
-    // The status bar shows the first warning in Export As's message.
-    let warnings: Vec<&str> = r["warnings"].as_array().map(|w| w.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    // The status bar shows the warnings as Export As shows them.
+    let warnings = io::notes_of(&r);
     let what = &path;
-    app.status(match warnings.first() {
+    let status = match warnings.first() {
         Some(first) => io::exported_with_notes(what, warnings.len(), first),
         None => format!("Exported {path}"),
-    });
+    };
+    io::show_with_notes(app, status, warnings);
     Ok(json!({ "path": path, "rules": r["rules"], "images": images, "warnings": r["warnings"] }))
 }
 

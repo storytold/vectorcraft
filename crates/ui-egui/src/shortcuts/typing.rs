@@ -1,4 +1,5 @@
-use super::{EngineResult, Key, Mods, SurroundingUnit, ToolKey, UiRequest, VectorcraftApp, ViewInfo};
+use super::{EngineResult, Key, Mods, SurroundingUnit, ToolKey, UiRequest, VectorcraftApp, ViewInfo, chord_runs_a_command};
+use crate::panels::character::TextInput;
 
 /// Drop each key press made with Ctrl and Alt held that is followed by the text it typed. Firefox
 /// on Windows reports AltGr as Ctrl and Alt held, so AltGr+L on a Polish layout arrives as a
@@ -26,7 +27,7 @@ pub(crate) fn keep_marked_text(app: &mut VectorcraftApp) {
     app.ime_discard = true;
     if app.session.tool_composing() {
         // Errors are already reported by the engine's interaction.
-        let _ = app.session.tool_text(&m, app.view_info());
+        let _ = app.session.tool_typed_text(&m, app.view_info());
     }
 }
 
@@ -41,6 +42,8 @@ enum Seq {
     Text(String),
     Preedit(String, Option<std::ops::Range<usize>>),
     Commit(String),
+    /// A space the IME commits during a Zoom tool drag on the canvas, where Space moves the marquee.
+    MarqueeSpace,
     Erase(ToolKey, Mods),
     /// An input method replaces text around the composition (upstream's character counts or
     /// the fork's exact UTF-8 byte counts), then commits.
@@ -51,9 +54,14 @@ enum Seq {
     InterruptNavigation,
     InterruptCommand,
     ResetCompleted(egui::ImeResetId),
+    /// Enter, which types a line break. Cmd+Enter (Ctrl+Enter on Windows and Linux) ends editing.
+    Enter(Mods),
+    /// An editing key with modifiers, an arrow, Home, End, Tab or a clipboard event.
+    Edit(TextInput),
 }
 
-/// Typed text and IME events, in the order they came, to the Type tool.
+/// Typed text, IME events, editing keys, Enter and clipboard events, in the order they came, to the
+/// Type tool. Escape is handled before them, in [`handle`].
 pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     let view = app.view_info();
     // Switching apps mid-composition needs nothing: the macOS IME keeps its marked text and goes
@@ -62,15 +70,25 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     // A frame that began composing keeps its editing keys for the IME: a Backspace that empties the
     // marked text must not then delete the committed character before it.
     let was_composing = app.session.tool_composing();
+    crate::panels::character::keep_ctx(ctx);
     // Text, IME events and plain Backspace/Delete are taken together, in the order they arrived, so
     // a keyboard-hook IME (UniKey/OpenKey) whose tone key sends Backspace(s) and then re-injects
     // characters in one frame interleaves correctly. Taken as two passes (all text, then the keys)
-    // the deletes land after the inserts and the diacritics are lost. Each handled event is removed
-    // so `route_type_input` below does not process the same Backspace/Delete again.
+    // the deletes land after the inserts and the diacritics are lost. Enter, the other editing keys
+    // and the clipboard events join them: ← or a paste lands between the texts around it, and each
+    // Enter types its own line break (or, as Cmd+Enter, ends editing there). Each handled event is
+    // removed from the input.
     let seq = type_sequence(ctx);
     let viewport = ctx.viewport_id();
     let mut old_composition_retired = false;
+    // Set once the IME commits text in this frame.
+    let mut committed = false;
     for e in seq {
+        // With text marked, the IME's space commits that text as usual.
+        let e = match e {
+            Seq::MarqueeSpace if app.session.tool_composing() || app.ime_marked.is_some() => Seq::Commit(" ".into()),
+            e => e,
+        };
         // Before the UI, a changed composition or guard is settled `pending`: a token bound here
         // could outlive a route this pass invalidates later (a palette/dialog/Home) and attach to
         // the stock descriptor. The post-UI finalizer binds the confirmed replacement.
@@ -83,17 +101,32 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
             match &e {
                 // Accepted old payloads precede the fence even when their terminal arrives.
                 // None of these events proves the local reset has reached its boundary.
-                Seq::Commit(_) | Seq::DeleteSurrounding(..) | Seq::Preedit(..) => continue,
+                Seq::Commit(_) | Seq::MarqueeSpace | Seq::DeleteSurrounding(..) | Seq::Preedit(..) => continue,
                 _ => {}
             }
+        }
+        // Otherwise the IME's input ends there, and the space is not typed.
+        if matches!(e, Seq::MarqueeSpace) {
+            committed = true;
+            app.ime_compositions.remove(&viewport);
+            continue;
         }
         // A pointer/navigation/command notice has not reached its real handler yet. Text and
         // erases after it belong to the old caret, not to the destination it will establish.
         if crate::ime::deferred(app, ctx) {
             match &e {
-                Seq::Text(_) | Seq::Erase(..) => continue,
+                // A cut or paste must not change the text at the old caret either.
+                Seq::Text(_) | Seq::Erase(..) | Seq::Edit(TextInput::Cut | TextInput::Paste(_)) => continue,
                 _ => {}
             }
+        }
+        // Editing keys and clipboard events belong to the IME while it composes, and in a frame
+        // that began composing until the IME commits or the composition is retired.
+        if matches!(&e, Seq::Edit(_)) && (app.session.tool_composing() || (was_composing && !committed && !old_composition_retired)) {
+            continue;
+        }
+        if let Seq::Commit(t) = &e {
+            committed |= !t.is_empty() && t != "\n" && t != "\r";
         }
         let preedit_empty = match &e {
             Seq::Preedit(text, _) => Some(text.is_empty()),
@@ -114,9 +147,12 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     old_composition_retired
 }
 
-/// Take this frame's typed text, IME events and plain Backspace/Delete, in the order they arrived.
+/// Take this frame's typed text, IME events, editing keys, Enter and clipboard events, in the order
+/// they arrived. A space typed during the canvas's Zoom tool drag is not typed.
 fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
     let mut seq = vec![];
+    let mut edits = vec![];
+    let zooming = crate::canvas::dragging_zoom(ctx);
     ctx.input_mut(|i| {
         // Move the events out instead of cloning their strings: a keyboard hook that reinjects a
         // batch keeps the batch in `seq` only, not in both the input list and a second copy.
@@ -133,10 +169,13 @@ fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
             .unwrap_or_else(|| i.pointer.primary_down());
         for e in std::mem::take(&mut i.events) {
             match e {
+                // The zoom drag lasts until the primary button goes up.
+                egui::Event::Text(t) if zooming && primary_down && t == " " => {}
                 egui::Event::Text(t) => seq.push(Seq::Text(t)),
                 egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
                     seq.push(Seq::Preedit(text, active_range_chars));
                 }
+                egui::Event::Ime(egui::ImeEvent::Commit(t)) if zooming && primary_down && t == " " => seq.push(Seq::MarqueeSpace),
                 egui::Event::Ime(egui::ImeEvent::Commit(t)) => seq.push(Seq::Commit(t)),
                 egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { before_chars, after_chars }) => {
                     seq.push(Seq::DeleteSurrounding(before_chars, after_chars, SurroundingUnit::Chars));
@@ -149,12 +188,19 @@ fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
                 // routed as a key or shortcut).
                 egui::Event::MiddleClickPaste { text, .. } => seq.push(Seq::Text(text)),
                 // Only unmodified Backspace/Delete interleave with injected text; word-delete and other
-                // modified forms stay with `route_type_input`.
+                // modified forms are taken with the other editing keys below.
                 egui::Event::Key { key: key @ (Key::Backspace | Key::Delete), pressed: true, modifiers: m, .. }
                     if !m.command && !m.alt && !m.ctrl =>
                 {
                     let tk = if key == Key::Backspace { ToolKey::Backspace } else { ToolKey::Delete };
                     seq.push(Seq::Erase(tk, Mods { shift: m.shift, ..Mods::default() }));
+                }
+                // A command bound to the chord (Cmd+Enter) runs instead of ending editing, in the
+                // shortcuts after this.
+                egui::Event::Key { key: Key::Enter, pressed, modifiers: m, .. } if !chord_runs_a_command(Key::Enter, m, true) => {
+                    if pressed {
+                        seq.push(Seq::Enter(crate::canvas::mods(m, false)));
+                    }
                 }
                 e @ egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed, .. } => {
                     primary_down = pressed;
@@ -169,22 +215,25 @@ fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
                     }
                     kept.push(e);
                 }
-                e @ egui::Event::Key { key, pressed: true, modifiers, .. }
-                    if matches!(key, Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown | Key::Home | Key::End)
-                        || key == Key::A && modifiers.command =>
-                {
-                    seq.push(Seq::InterruptNavigation);
-                    kept.push(e);
+                e => {
+                    let interrupt = match &e {
+                        egui::Event::Key { key, pressed: true, modifiers, .. }
+                            if matches!(key, Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown | Key::Home | Key::End)
+                                || *key == Key::A && modifiers.command =>
+                        {
+                            Some(Seq::InterruptNavigation)
+                        }
+                        egui::Event::Key { pressed: true, modifiers, .. } if is_shortcut_chord(*modifiers) => Some(Seq::InterruptCommand),
+                        egui::Event::Cut | egui::Event::Paste(_) => Some(Seq::InterruptCommand),
+                        _ => None,
+                    };
+                    seq.extend(interrupt);
+                    // The other editing keys and the clipboard events apply in this order too.
+                    if crate::panels::character::type_input(&e, &mut edits) {
+                        kept.push(e);
+                    }
+                    seq.extend(edits.drain(..).map(Seq::Edit));
                 }
-                e @ egui::Event::Key { pressed: true, modifiers, .. } if is_shortcut_chord(modifiers) => {
-                    seq.push(Seq::InterruptCommand);
-                    kept.push(e);
-                }
-                e @ (egui::Event::Cut | egui::Event::Paste(_)) => {
-                    seq.push(Seq::InterruptCommand);
-                    kept.push(e);
-                }
-                other => kept.push(other),
             }
         }
         i.events = kept;
@@ -222,13 +271,13 @@ fn apply_type_event(
             }
             Ok(vec![])
         }
-        Seq::ResetCompleted(_) => Ok(vec![]),
+        Seq::ResetCompleted(_) | Seq::MarqueeSpace => Ok(vec![]),
         // Keys the IME passed through come as text only when nothing is marked. This is an
         // application edit (also a hook IME's reinjected characters): `Other` dominates.
         Seq::Text(t) if !app.session.tool_composing() && !shortcut_mods => {
             let target_before = crate::ime::target(&mut app.session, view);
             let before = crate::ime::stamp(&mut app.session, view);
-            let r = app.session.tool_text(&t, view);
+            let r = app.session.tool_typed_text(&t, view);
             if r.is_ok() {
                 crate::ime::note_application_edit(app, ctx, view, target_before, before);
             }
@@ -251,7 +300,7 @@ fn apply_type_event(
             let composing = app.session.tool_composing();
             let verbatim = app.session.tool_ime_session_matches(view)
                 && match app.ime_marked.as_deref() {
-                    Some(m) => app.session.tool_text_is_verbatim(m, view),
+                    Some(m) => app.session.tool_typed_text_is_verbatim(m, view),
                     None => true,
                 };
             keep_marked_text(app);
@@ -274,8 +323,8 @@ fn apply_type_event(
             let before = crate::ime::stamp(&mut app.session, view);
             // A document edit since the composition means this commit starts a fresh typing
             // session: that reset is application-side, so it cannot earn `InputMethod`.
-            let verbatim = app.session.tool_ime_session_matches(view) && app.session.tool_text_is_verbatim(&t, view);
-            let r = app.session.tool_text(&t, view);
+            let verbatim = app.session.tool_ime_session_matches(view) && app.session.tool_typed_text_is_verbatim(&t, view);
+            let r = app.session.tool_typed_text(&t, view);
             if r.is_ok() {
                 if verbatim {
                     crate::ime::note_ime_apply(app, ctx, view, target_before, before);
@@ -287,8 +336,8 @@ fn apply_type_event(
         }
         // While composing (or in a frame that began composing), editing keys belong to the IME.
         Seq::Erase(tk, m) if !was_composing && !app.session.tool_composing() => {
-            // Mirror `route_type_input`/`text_key`: surface an erase error in the status bar
-            // instead of discarding it, and report the successful edit as application-origin.
+            // Mirror `text_key`: surface an erase error in the status bar instead of discarding it,
+            // and report the successful edit as application-origin.
             let target_before = crate::ime::target(&mut app.session, view);
             let before = crate::ime::stamp(&mut app.session, view);
             let r = app.session.tool_key(tk, m, view);
@@ -311,6 +360,23 @@ fn apply_type_event(
                 Ok(_) => crate::ime::note_ime_apply(app, ctx, view, target_before, stamp_before),
             }
             r
+        }
+        // An Enter that confirms the composition types no line break.
+        Seq::Enter(_) if was_composing || app.session.tool_composing() => Ok(vec![]),
+        Seq::Enter(m) => {
+            let target_before = crate::ime::target(&mut app.session, view);
+            let before = crate::ime::stamp(&mut app.session, view);
+            let r = app.session.tool_key(ToolKey::Enter, m, view);
+            if r.is_ok() {
+                crate::ime::note_application_edit(app, ctx, view, target_before, before);
+            }
+            crate::canvas::apply_requests(app, r);
+            Ok(vec![])
+        }
+        // `text_key` and `text_paste` report the edit as application-origin.
+        Seq::Edit(t) => {
+            crate::panels::character::apply_type_input(app, t);
+            Ok(vec![])
         }
     }
 }

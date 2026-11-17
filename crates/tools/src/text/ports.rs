@@ -145,19 +145,30 @@ pub fn ports_shown(d: &vectorcraft_doc::Document, selected: &[NodeId]) -> bool {
 /// on the in port to thread into one before it. Every such frame has both ports, threaded,
 /// overflowing or not, while their ports show ([`PORTS_MAX`]).
 pub(crate) fn port_at(cx: &ToolContext, p: Point) -> Option<(NodeId, Port)> {
+    port_near(cx, p).map(|(id, port, _)| (id, port))
+}
+
+/// [`port_at`], with how far (document units) the port's centre is from `p`: the nearest port
+/// within reach, of every selected frame (ports of overlapping frames can both be in reach).
+pub(crate) fn port_near(cx: &ToolContext, p: Point) -> Option<(NodeId, Port, f64)> {
     if !ports_shown(cx.doc, &cx.selection.objects) {
         return None;
     }
     let h = cx.tol(PORT_HALF_PX + 1.0);
     let near = |c: Point| (c.x - p.x).abs() <= h && (c.y - p.y).abs() <= h;
-    cx.selection.objects.iter().find_map(|id| {
-        let t = ported(cx.doc, *id)?;
-        [Port::Out, Port::In].into_iter().find(|port| port_centre(t, *port, cx.tol(1.0)).is_some_and(near)).map(|port| (*id, port))
-    })
+    cx.selection
+        .objects
+        .iter()
+        .filter_map(|id| ported(cx.doc, *id).map(|t| (*id, t)))
+        .flat_map(|(id, t)| [Port::Out, Port::In].into_iter().filter_map(move |port| port_centre(t, port, cx.tol(1.0)).map(|c| (id, port, c))))
+        .filter(|(_, _, c)| near(*c))
+        .map(|(id, port, c)| (id, port, c.distance(p)))
+        .min_by(|a, b| a.2.total_cmp(&b.2))
 }
 
 /// Which selected text overflows, for [`thread_ports`]: each text object's layout verdict kept
-/// with the object and the fonts it was made from, as overlays run every frame.
+/// with the object and the layout inputs it was made with (fonts and hyphenation exceptions,
+/// [`vectorcraft_text::layout_inputs`]), as overlays run every frame.
 #[derive(Default)]
 pub struct PortMarks {
     seen: std::collections::HashMap<NodeId, ((u64, TextObject), bool)>,
@@ -168,7 +179,7 @@ pub struct PortMarks {
 /// port whether text is hidden by the size of its frame, whatever tool is active. None when more
 /// than [`PORTS_MAX`] of them are selected.
 pub fn thread_ports(marks: &mut PortMarks, cx: &ToolContext) -> Vec<Overlay> {
-    let fonts = FontDb::global().generation();
+    let fonts = vectorcraft_text::layout_inputs();
     let mut o = Vec::new();
     let mut kept = std::collections::HashMap::new();
     if !ports_shown(cx.doc, &cx.selection.objects) {

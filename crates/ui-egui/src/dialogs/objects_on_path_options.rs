@@ -48,7 +48,7 @@ fn reset(_: &VectorcraftApp, d: &mut Dialog) {
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     widgets::label_row(ui, tl!("Pivot:"), LABEL_W, |ui| {
         let current = d.f64("pivot", f64::from(CENTER)).clamp(0.0, 8.0) as usize;
-        if let Some(i) = widgets::reference_point(ui, current) {
+        if let Some(i) = widgets::reference_point_named(ui, current, tl!("Pivot:")) {
             d.fields.insert("pivot".into(), json!(i));
         }
     });

@@ -1,18 +1,22 @@
 //! Artboard Options (double-click with the Artboard tool, double-click the tool, or the Artboards
 //! panel's options icon or menu): the artboard's fields, sizes parsed with units, its position
 //! from a reference point, its background color (`color`: a color as the paint commands take
-//! it, or null for none), Show Center Mark and Show Cross Hairs (`showCenterMark`,
+//! it, or null for none), its guide label (`guideLabel`: the color its own guides are drawn in, a
+//! layer color's name or `#rrggbb`, or null for none), Show Center Mark and Show Cross Hairs (`showCenterMark`,
 //! `showCrossHairs`), the display marks the canvas draws on the artboard
 //! (https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/modify-display-settings-of-artboards.html),
 //! and its video display options, Show Video Safe Areas and Video Ruler Pixel Aspect Ratio
 //! (`showVideoSafeAreas`, `videoRulerPixelAspectRatio`)
 //! (https://helpx.adobe.com/illustrator/desktop/create-manage-artboards/organize-manage-artboards/set-video-display-options-for-artboards.html).
+//! Under Global, Fade Region Outside Artboard and Update While Dragging set the application
+//! preferences `fadeRegionOutsideArtboard` and `artboardUpdateWhileDragging` for every document
+//! (https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf, Artboard options).
 //! Sizing choices also go to the other selected artboards; fitting changes only the active
 //! artboard around stationary artwork.
 
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
-use vectorcraft_doc::Unit;
+use vectorcraft_doc::{LAYER_COLORS, LayerColor, Unit};
 use vectorcraft_engine::cmd::color_value;
 use vectorcraft_geom::{Point, Rect};
 
@@ -28,8 +32,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     body,
     confirm,
     // A new artboard's dialog opens without these; its swatch, checkboxes and Video Ruler Pixel
-    // Aspect Ratio field add them.
-    inputs: |_| &["color", "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT],
+    // Aspect Ratio field add them. The Global checkboxes' fields come from the preferences.
+    inputs: |_| &["color", GUIDE_LABEL, "showCenterMark", "showCrossHairs", "showVideoSafeAreas", PIXEL_ASPECT, FADE, UPDATE_WHILE_DRAGGING],
     ..DialogSpec::FORM
 };
 
@@ -46,8 +50,9 @@ fn placed(d: &Dialog) -> Rect {
 /// as the Transform panel and the Control bar show an artboard's. A new Width or Height keeps the
 /// reference point where it was, as their sizes do.
 /// Then Background Color: the Fill list (None, White, Black; Custom for another color) and a swatch
-/// that picks a color of its own, the Show Center Mark, Show Cross Hairs and Show Video Safe Areas
-/// checkboxes, and the Video Ruler Pixel Aspect Ratio field.
+/// that picks a color of its own, the Guide Label row ([`guide_label_row`]), the Show Center Mark, Show Cross Hairs and Show Video Safe Areas
+/// checkboxes, and the Video Ruler Pixel Aspect Ratio field. Last, under Global, the Fade Region
+/// Outside Artboard and Update While Dragging checkboxes.
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     let (unit, origin, refi) = (app.session.general_unit(), app.ruler_origin(), reference_index(ui));
     let (was, w0, h0) = (placed(d), d.f64("width", 0.0), d.f64("height", 0.0));
@@ -112,6 +117,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if let Some(c) = set {
         d.fields.insert("color".into(), c.as_ref().map_or(Value::Null, crate::panels::color_json));
     }
+    guide_label_row(ui, d);
     ui.add_space(8.0);
     form::check(ui, d, "showCenterMark", tl!("Show Center Mark"));
     form::check(ui, d, "showCrossHairs", tl!("Show Cross Hairs"));
@@ -126,7 +132,115 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             }
         });
     });
+    ui.add_space(8.0);
+    ui.label(egui::RichText::new(tl!("Global")).strong());
+    form::check(ui, d, FADE, tl!("Fade Region Outside Artboard"));
+    form::check(ui, d, UPDATE_WHILE_DRAGGING, tl!("Update While Dragging"));
     false
+}
+
+/// The field of the guide label, as `artboard.setProps` and `artboard.new` take it: a layer
+/// color's name, `#rrggbb`, or null for none.
+pub(super) const GUIDE_LABEL: &str = "guideLabel";
+
+/// The size of the color chip before each name in the Guide Label list.
+const CHIP: egui::Vec2 = egui::vec2(16.0, 10.0);
+
+/// The Guide Label row: a list of None, the layer colors (each after a chip of its color) and
+/// Custom, and, while the artboard has a label, a swatch that picks a color of its own. Custom
+/// keeps the label's color as a `#rrggbb` value.
+fn guide_label_row(ui: &mut egui::Ui, d: &mut Dialog) {
+    let now = d.fields.get(GUIDE_LABEL).and_then(Value::as_str).and_then(LayerColor::from_label_text);
+    let shown = match now {
+        None => "None",
+        Some(LayerColor::Preset(i)) => LAYER_COLORS.get(usize::from(i)).map_or("Custom", |(n, _)| *n),
+        Some(LayerColor::Custom(_)) => "Custom",
+    };
+    let mut set = None;
+    ui.horizontal(|ui| {
+        let row = form::row_label(ui, tl!("Guide Label:"));
+        ui.label_inputs_by(row.id, |ui| {
+            let border = crate::theme::Tokens::get(ui.ctx()).input_border;
+            let rows = std::iter::once(("None", None)).chain(LAYER_COLORS.iter().map(|(n, c)| (*n, Some(*c)))).chain([("Custom", None)]);
+            let picked = crate::widgets::combo(ui, "ab-options-guide-label", tl!(shown), 140.0, |ui| {
+                let mut chosen = None;
+                for (i, (name, rgb)) in rows.enumerate() {
+                    let chip = egui::IdSalt::new(("ab-guide-label-chip", i));
+                    let r = egui::Button::selectable(name == shown, (egui::Atom::custom(chip, CHIP), tl!(name))).atom_ui(ui);
+                    if let (Some(rect), Some([cr, cg, cb])) = (r.rect(chip), rgb) {
+                        ui.painter().rect_filled(rect, 1.0, egui::Color32::from_rgb(cr, cg, cb));
+                        ui.painter().rect_stroke(rect, 1.0, egui::Stroke::new(1.0, border), egui::StrokeKind::Inside);
+                    }
+                    if r.response.clicked() {
+                        chosen = Some(i);
+                    }
+                }
+                chosen
+            });
+            match picked {
+                Some(0) => set = Some(None),
+                Some(i) if i <= LAYER_COLORS.len() => set = u8::try_from(i - 1).ok().map(|i| Some(LayerColor::Preset(i))),
+                Some(_) => set = Some(Some(LayerColor::Custom(now.map_or(LAYER_COLORS[0].1, LayerColor::rgb)))),
+                None => {}
+            }
+            if let Some(c) = now {
+                let mut rgb = c.rgb();
+                let swatch_name = format!("{} {}", tl!("Guide Label:"), tl!("Swatches"));
+                if ui.name_inputs(swatch_name, |ui| ui.color_edit_button_srgb(&mut rgb)).changed() {
+                    set = Some(Some(LayerColor::Custom(rgb)));
+                }
+            }
+        });
+    });
+    if let Some(c) = set {
+        d.fields.insert(GUIDE_LABEL.into(), c.map_or(Value::Null, |c| json!(c.label_text())));
+    }
+}
+
+/// The preference and field of Fade Region Outside Artboard: while the Artboard tool is active,
+/// the canvas draws everything outside the artboards darker.
+const FADE: &str = "fadeRegionOutsideArtboard";
+/// The preference and field of Update While Dragging: the area outside the artboards stays darker
+/// while the Artboard tool moves or resizes an artboard.
+const UPDATE_WHILE_DRAGGING: &str = "artboardUpdateWhileDragging";
+
+/// `fields` with the Global checkboxes ([`global_fields`]) added.
+fn with_globals(app: &VectorcraftApp, mut fields: Value) -> Value {
+    for (key, on) in global_fields(app) {
+        fields[key] = json!(on);
+    }
+    fields
+}
+
+/// The Global checkboxes as the preferences have them, for the dialog's fields.
+fn global_fields(app: &VectorcraftApp) -> [(&'static str, bool); 2] {
+    let prefs = &app.session.prefs;
+    [(FADE, prefs.fade_region_outside_artboard), (UPDATE_WHILE_DRAGGING, prefs.artboard_update_while_dragging)]
+}
+
+/// The Global checkboxes' preferences that the form changed. A value that is not true or false is
+/// an error, which keeps the dialog open before anything changes.
+fn global_changes(app: &VectorcraftApp, d: &Dialog) -> Result<serde_json::Map<String, Value>, String> {
+    let mut values = serde_json::Map::new();
+    for (key, now) in global_fields(app) {
+        match d.fields.get(key) {
+            Some(Value::Bool(on)) if *on != now => {
+                values.insert(key.into(), json!(on));
+            }
+            Some(Value::Bool(_)) | None => {}
+            Some(_) => return Err(format!("`{key}` must be true or false")),
+        }
+    }
+    Ok(values)
+}
+
+/// OK sets the Global checkboxes' preferences that the form changed ([`global_changes`]), in one
+/// `prefs.set`, and leaves the preferences alone when none changed.
+fn set_globals(app: &mut VectorcraftApp, values: serde_json::Map<String, Value>) -> Result<(), String> {
+    if values.is_empty() {
+        return Ok(());
+    }
+    app.run("prefs.set", json!({ "values": values })).map(drop)
 }
 
 /// The field of the Video Ruler Pixel Aspect Ratio, as `artboard.setProps` takes it.
@@ -238,12 +352,14 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let a = st.doc.artboards.get(index).ok_or("no artboard")?;
     let r = a.rect;
     let color = a.color.as_ref().map(crate::panels::color_json);
+    let guide_label = a.guide_label.map(LayerColor::label_text);
     let fields = json!({
         "index": index, "name": a.name, "x": r.x0, "y": r.y0, "width": r.width(), "height": r.height(), "color": color,
+        GUIDE_LABEL: guide_label,
         "showCenterMark": a.show_center_mark, "showCrossHairs": a.show_cross_hairs,
         "showVideoSafeAreas": a.show_video_safe_areas, PIXEL_ASPECT: a.video_ruler_pixel_aspect_ratio,
     });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    app.ui.dialog = Some(Dialog::new(KIND, with_globals(app, fields)));
     Ok(json!({ "dialog": KIND }))
 }
 
@@ -252,10 +368,14 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
 /// one is among them), each resized about the reference
 /// point the form's last Width or Height change used (fields `__refx` and `__refy`, its column and
 /// row; the top-left corner when the form set none), all in one undo step. Fitting applies only
-/// to this artboard and never moves its artwork.
+/// to this artboard and never moves its artwork. The Global checkboxes' preferences are set only
+/// after the artboard command succeeds, so an error leaves them as they were.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let globals = global_changes(app, d)?;
     if d.bool("new") {
-        return confirm_new(app, d);
+        let r = confirm_new(app, d)?;
+        set_globals(app, globals)?;
+        return Ok(r);
     }
     let mut p = Value::Object(d.fields.clone());
     for k in ["x", "y", "width", "height", PIXEL_ASPECT] {
@@ -264,7 +384,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         }
     }
     if let Some(o) = p.as_object_mut() {
-        o.retain(|k, _| !k.starts_with("__"));
+        o.retain(|k, _| !k.starts_with("__") && k != FADE && k != UPDATE_WHILE_DRAGGING);
     }
     let index = p["index"].as_u64().and_then(|i| usize::try_from(i).ok()).unwrap_or(0);
     let was = app.session.active().and_then(|st| st.doc.artboards.get(index)).map(|a| a.rect);
@@ -295,7 +415,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         "moveArt": !d.bool("__fit") && crate::panels::artboards::move_art(app),
     });
     let p = crate::panels::artboards::set_props_params(common, entries).ok_or("no artboard")?;
-    run_and_close(app, "artboard.setProps", p)
+    let r = run_and_close(app, "artboard.setProps", p)?;
+    set_globals(app, globals)?;
+    Ok(r)
 }
 
 /// `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard): Artboard Options for a new
@@ -309,12 +431,12 @@ pub fn open_new(app: &mut VectorcraftApp) -> Result<Value, String> {
         "new": true, "name": format!("Artboard {}", abs.len() + 1),
         "x": last.x1 + 20.0, "y": last.y0, "width": last.width(), "height": last.height(),
     });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    app.ui.dialog = Some(Dialog::new(KIND, with_globals(app, fields)));
     Ok(json!({ "dialog": KIND }))
 }
 
 /// OK for a new artboard: `artboard.new` with the fields (an empty name gives the default one),
-/// the background color picked, the display marks ticked and the Video Ruler Pixel Aspect Ratio
+/// the background color and guide label picked, the display marks ticked and the Video Ruler Pixel Aspect Ratio
 /// typed, and the new artboard becomes the active one.
 fn confirm_new(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut p = json!({});
@@ -327,6 +449,9 @@ fn confirm_new(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     if let Some(c) = d.fields.get("color") {
         p["color"] = c.clone();
+    }
+    if let Some(c) = d.fields.get(GUIDE_LABEL).filter(|c| !c.is_null()) {
+        p[GUIDE_LABEL] = c.clone();
     }
     for k in ["showCenterMark", "showCrossHairs", "showVideoSafeAreas"] {
         if d.bool(k) {

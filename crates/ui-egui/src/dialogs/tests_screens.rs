@@ -88,6 +88,39 @@ fn opens_on_defaults_and_draws_every_view() {
     assert_eq!((spec(export_for_screens::KIND).ok_label.unwrap())(&app), "Export Artboard");
 }
 
+/// The dialog's own request, with a row of every format its Format menu offers and every format's
+/// settings as it opens, gets no note about an option a file doesn't read.
+#[test]
+fn the_dialogs_own_rows_and_settings_get_no_unused_option_notes() {
+    let (mut app, _) = app(1, true);
+    open(&mut app);
+    let rows: Vec<Value> = [
+        json!({"format": "png"}),
+        json!({"format": "png8"}),
+        json!({"format": "jpg", "quality": 100}),
+        json!({"format": "webp"}),
+        json!({"format": "gif"}),
+        json!({"format": "tiff"}),
+        json!({"format": "svg"}),
+        json!({"format": "pdf"}),
+        json!({"format": "pdf", "marks": {"trim": true}, "suffix": "-print"}),
+        json!({"format": "eps"}),
+        json!({"format": "ai"}),
+        json!({"format": "vectorcraft"}),
+    ]
+    .into_iter()
+    .map(|mut r| {
+        r["scale"] = json!("1x");
+        r
+    })
+    .collect();
+    set(&mut app, "formats", json!(rows));
+    let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+    let r = app.session.execute("document.exportForScreens", &p).unwrap();
+    let unused: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).collect();
+    assert!(unused.is_empty(), "{unused:?}");
+}
+
 #[test]
 fn checked_artboards_read_as_a_range() {
     let (mut app, _) = app(5, false);
@@ -115,7 +148,7 @@ fn opens_with_the_artboards_the_artboard_tool_selected_and_exports_only_them() {
     let click = |app: &mut VectorcraftApp, i: usize, shift: bool| {
         let mods = Mods { shift, ..Default::default() };
         for kind in [PointerKind::Down, PointerKind::Up] {
-            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, backquote: false, pressure: 1.0 }, view);
+            crate::canvas::dispatch(app, &PointerEvent { kind, pos: boards[i].center(), mods, backquote: false, pressure: 1.0, pen: None }, view);
         }
     };
     // A click on artboard 2 and a Shift-click on artboard 3 select those two. The dialog opens with
@@ -341,6 +374,32 @@ fn edits_after_ok_do_not_reach_the_files() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// An export into the folder its export preset keeps, with no folder of its own, is written in the
+/// background as one into a folder it names, and the status bar names that folder.
+#[test]
+fn an_export_into_a_presets_folder_writes_in_the_background() {
+    let gate = Gate::default();
+    let (mut app, _, files) = app_with_worker(1, &gate);
+    let dir = temp_folder("preset-folder");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let settings = json!({"formats": [{"format": "svg"}], "folder": folder});
+    app.run("document.exportPresets.save", json!({"name": "Kept", "settings": settings})).unwrap();
+    let p = json!({"exportPreset": "Kept"});
+    background_export(&mut app, false);
+    let want = on_disk(&app.run("file.exportForScreens", p.clone()).unwrap());
+    assert_eq!(want.len(), 1);
+    let status = app.ui.status.clone();
+    assert_eq!(status, format!("Exported 1 file to {folder}"));
+    std::fs::remove_dir_all(&dir).unwrap();
+    background_export(&mut app, true);
+    assert_eq!(app.run("file.exportForScreens", p).unwrap()["background"], true);
+    assert!(written(&files).is_empty(), "nothing written yet");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!((files.lock().unwrap().clone(), app.ui.status.clone()), (want, status));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Cancel stops the export before its next file; the file being written when it came stays.
 #[test]
 fn cancel_stops_the_export_before_its_next_file() {
@@ -477,7 +536,7 @@ fn include_artboard_fill_reaches_the_files_and_is_remembered() {
 
 #[test]
 fn the_status_bar_says_when_an_image_could_not_be_decoded() {
-    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    const NOTE: &str = "with 1 note: an image couldn't be decoded and is missing from the picture";
     // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
@@ -505,6 +564,35 @@ fn the_status_bar_says_when_an_image_could_not_be_decoded() {
     place(&mut web);
     web.run("file.exportForScreens", json!({"zip": true, "formats": rows})).unwrap();
     assert_eq!(web.ui.status, format!("Saved Untitled-1.zip {NOTE}"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// An export into a folder with several notes, from Export for Screens and from the Asset Export
+/// panel: the status bar names the first, counts them, and keeps every one of them for its hover.
+#[test]
+fn an_export_into_a_folder_keeps_every_note_for_the_hover() {
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let dir = temp_folder("notes");
+    let folder = dir.to_string_lossy().replace('\\', "/");
+    let rows = json!([{"format": "png", "scale": "1x", "suffix": ""}]);
+    let (mut app, _) = app(1, false);
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [10, 10]}));
+    app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    let r = app.run("file.exportForScreens", json!({"folder": folder, "formats": rows})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert!(app.ui.status.starts_with(&format!("Saved {folder} with 2 notes: {}", notes[0])), "{}", app.ui.status);
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
+    app.ui.status_notes = None;
+    app.run("select.all", json!({})).unwrap();
+    app.run("assets.add", json!({"multiple": false})).unwrap();
+    let r = crate::io::export_files(&mut app, "assets.export", json!({"folder": folder, "formats": rows})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)), "assets.export");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -905,4 +993,632 @@ fn sub_folders_and_single_file_pdfs() {
         (json!(true), json!("format"), json!("Logo Package"))
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Save Preset… on an applied preset saves the dialog's rows, settings, prefix and sub-folders and
+/// keeps the preset's keys the dialog does not show (a file name pattern, other export settings).
+#[test]
+fn saving_an_applied_preset_keeps_the_keys_the_dialog_does_not_show() {
+    use export_for_screens::PresetPick;
+    let (mut app, _) = app(2, false);
+    app.run(
+        "document.exportPresets.save",
+        json!({
+            "name": "Repeat",
+            "settings": {"formats": [{"format": "png"}], "name": "<name>-###", "counterPer": "file", "antiAlias": "none", "prefix": "a-"}
+        }),
+    )
+    .unwrap();
+    open(&mut app);
+    let preset = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Repeat").cloned().unwrap();
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &preset);
+    set(&mut app, "prefix", json!("b-"));
+    set(&mut app, "subfolders", json!(true));
+    set(&mut app, "subfolderBy", json!("format"));
+    let mut d = app.ui.dialog.take().unwrap();
+    export_for_screens::preset_pick(&mut app, &mut d, PresetPick::Save("Repeat".into()));
+    app.ui.dialog = Some(d);
+
+    let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Repeat").unwrap_or_else(|| panic!("{}", app.ui.status));
+    let s = &saved.settings;
+    assert_eq!((s.get("counterPer"), s.get("antiAlias"), s.get("name")), (Some(&json!("file")), Some(&json!("none")), Some(&json!("<name>-###"))));
+    assert_eq!((s.get("prefix"), s.get("folders")), (Some(&json!("b-")), Some(&json!("format"))));
+    assert_eq!(field(&app, "exportPreset"), "Repeat");
+}
+
+/// Save Preset… on an applied preset saves the dialog's Include Bleed and Include Artboard Fill.
+#[test]
+fn saving_an_applied_preset_keeps_its_bleed_and_fill() {
+    use export_for_screens::PresetPick;
+    let (mut app, _) = app(2, false);
+    let settings = json!({"formats": [{"format": "png"}], "includeBleed": true, "includeArtboardFill": false});
+    app.run("document.exportPresets.save", json!({"name": "Bleed", "settings": settings})).unwrap();
+    open(&mut app);
+    let preset = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Bleed").cloned().unwrap();
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &preset);
+    let mut d = app.ui.dialog.take().unwrap();
+    export_for_screens::preset_pick(&mut app, &mut d, PresetPick::Save("Bleed".into()));
+    app.ui.dialog = Some(d);
+
+    let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Bleed").unwrap_or_else(|| panic!("{}", app.ui.status));
+    let s = &saved.settings;
+    assert_eq!((s.get("includeBleed"), s.get("includeArtboardFill")), (Some(&json!(true)), Some(&json!(false))));
+}
+
+/// Remembered settings and a preset that hold keys the export no longer reads, in a row, in a
+/// format's settings and inside an object option, and settings for a format it doesn't write, open
+/// without them, so the dialog's export is not refused.
+#[test]
+fn saved_keys_no_longer_read_are_left_out_of_the_dialog_s_export() {
+    let (mut app, _) = app(1, false);
+    let stale = json!({
+        "formats": [{"format": "png", "scale": "2x", "noSuchOption": 1}, {"format": "pdf", "marks": {"trim": true, "noSuchMark": 1}}],
+        "settings": {"png": {"noSuchSetting": true}, "dxf": {}, "pdf": {"bleed": {"top": 1, "inner": 2}}}
+    });
+    let Value::Object(saved) = stale.clone() else { panic!("an object") };
+    std::sync::Arc::make_mut(&mut app.session.active_mut().unwrap().doc).export_settings = saved;
+    let folder = temp_folder("stale");
+    let check = |app: &VectorcraftApp| {
+        let p = export_for_screens::params(app, app.ui.dialog.as_ref().unwrap()).unwrap();
+        app.session.check_params("document.exportForScreens", &p).unwrap_or_else(|e| panic!("{e}: {p}"));
+        p
+    };
+    open(&mut app);
+    set(&mut app, "folder", json!(folder.to_string_lossy()));
+    let p = check(&app);
+    assert_eq!(p["formats"][0]["scale"], json!("2x"));
+    assert_eq!(p["formats"][1]["marks"]["trim"], json!(true));
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &json!({"name": "Old", "settings": stale}));
+    check(&app);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A preset that puts each item in its own folder (`item` or `itemFormat`, which the dialog has no
+/// control for) keeps that folder mode when it is exported or saved again from the dialog, until
+/// the sub-folder controls change (in the dialog or by `ui.dialog.set`).
+#[test]
+fn an_applied_preset_keeps_its_item_folders() {
+    use crate::control::{ControlRequest, Outcome};
+    use export_for_screens::PresetPick;
+    for mode in ["item", "itemFormat"] {
+        let (mut app, _) = app(2, false);
+        app.run("document.exportPresets.save", json!({"name": "Items", "settings": {"formats": [{"format": "png"}], "folders": mode}})).unwrap();
+        open(&mut app);
+        let preset = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Items").cloned().unwrap();
+        export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &preset);
+        set(&mut app, "folder", json!("out"));
+        let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+        assert_eq!(p["folders"], json!(mode), "exported");
+        let mut d = app.ui.dialog.take().unwrap();
+        export_for_screens::preset_pick(&mut app, &mut d, PresetPick::Save("Items".into()));
+        app.ui.dialog = Some(d);
+        let saved = app.session.prefs.screen_export_presets.iter().find(|p| p.name == "Items").unwrap_or_else(|| panic!("{}", app.ui.status));
+        assert_eq!(saved.settings.get("folders"), Some(&json!(mode)), "saved");
+
+        // `ui.dialog.set` of the sub-folder controls, as a change in the dialog, ends the item folders.
+        for (on, folders) in [(false, "none"), (true, "rows")] {
+            let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "subfolders", "value": on}));
+            let Outcome::Done(r) = crate::control::handle(&mut app, &egui::Context::default(), &req) else { panic!("not done") };
+            assert_eq!(r["ok"], true, "{r}");
+            let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+            assert_eq!(p["folders"], json!(folders), "subfolders {on}");
+        }
+    }
+}
+
+/// A preset whose `folders` is empty turns Create Sub-folders off whatever its `subfolders`, as
+/// the export command puts every file in the folder itself; without `folders` it uses its
+/// `subfolders`, and without either it keeps the dialog's sub-folders.
+#[test]
+fn a_preset_with_empty_folders_exports_into_the_folder() {
+    let (mut app, _) = app(2, false);
+    open(&mut app);
+    let apply = |app: &mut VectorcraftApp, settings: Value| {
+        export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &json!({"name": "Empty", "settings": settings}));
+    };
+    for settings in [json!({"folders": ""}), json!({"folders": "", "subfolders": true})] {
+        set(&mut app, "subfolders", json!(true));
+        apply(&mut app, settings.clone());
+        assert_eq!(field(&app, "subfolders"), json!(false), "{settings}");
+    }
+    apply(&mut app, json!({"subfolders": true}));
+    assert_eq!(field(&app, "subfolders"), json!(true));
+    set(&mut app, "subfolderBy", json!("format"));
+    apply(&mut app, json!({}));
+    assert_eq!((field(&app, "subfolders"), field(&app, "subfolderBy")), (json!(true), json!("format")));
+}
+
+/// The Asset Export panel menu's Export Preset… writes a preset to a file and its Import Preset… adds
+/// the presets of a file, which the open dialog's dropdown then lists, as it does after opening
+/// the file (the web's Import).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn export_preset_and_import_preset_go_through_files() {
+    let dir = temp_folder("preset-files");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("pack.vcexportpresets").to_string_lossy().to_string();
+    let (saved_to, picked) = (file.clone(), file.clone());
+    let suggested = Rc::new(RefCell::new(vec![]));
+    let shown = suggested.clone();
+    let services = Services {
+        pick_save: Some(Box::new(move |pick: &crate::FilePick| {
+            shown.borrow_mut().push(pick.name.clone());
+            Some(saved_to.clone())
+        })),
+        pick_open: Some(Box::new(move |_: &crate::FilePick| Some(picked.clone()))),
+        write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
+    app.run("document.exportPresets.save", json!({"name": "Pack", "settings": {"formats": [{"format": "svg"}], "folders": "format"}})).unwrap();
+    open(&mut app);
+    let names = |app: &VectorcraftApp| -> Vec<String> {
+        field(app, "__exportPresets").as_array().unwrap().iter().filter_map(|p| p["name"].as_str().map(str::to_string)).collect()
+    };
+    assert_eq!(export_for_screens::export_preset(&mut app, "Pack").unwrap(), file);
+    // The save panel suggests the preset's name, not the document's.
+    assert_eq!(*suggested.borrow(), ["Pack.vcexportpresets"]);
+    app.run("document.exportPresets.delete", json!({"name": "Pack"})).unwrap();
+    frame(&mut app);
+    assert_eq!(names(&app), ["Logo Package", "Print-Ready PDF"]);
+    assert_eq!(export_for_screens::import_presets(&mut app).unwrap(), ["Pack"]);
+    assert_eq!(app.ui.status, "Imported export presets: Pack");
+    frame(&mut app);
+    assert_eq!(names(&app), ["Logo Package", "Print-Ready PDF", "Pack"]);
+    let pack = field(&app, "__exportPresets")[2].clone();
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &pack);
+    assert_eq!((field(&app, "formats")[0]["format"].clone(), field(&app, "subfolderBy")), (json!("svg"), json!("format")));
+    // The file opened again: a second copy, numbered, in the open dialog's dropdown.
+    let bytes = std::fs::read(&file).unwrap();
+    crate::io::open_bytes(&mut app, &file, &bytes, Some(file.clone())).unwrap();
+    frame(&mut app);
+    assert_eq!(kind(&app), Some(export_for_screens::KIND));
+    assert_eq!(names(&app), ["Logo Package", "Print-Ready PDF", "Pack", "Pack 2"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Export Preset… suggests the preset's name as a file name, as Export Library… does a library's.
+#[test]
+fn an_exported_preset_file_is_named_after_the_preset() {
+    let name = export_for_screens::preset_file_name;
+    assert_eq!(name("Logo Package 2"), "Logo Package 2.vcexportpresets");
+    assert_eq!(name("Print-Ready PDF"), "Print-Ready PDF.vcexportpresets");
+    assert_eq!(name("Web/App: v1.2"), "Web-App- v1-2.vcexportpresets");
+    assert_eq!(name("CON"), "CON-.vcexportpresets");
+}
+
+/// A preset saved with the mobile or density rows (as the Asset Export panel saves one) sets the
+/// dialog's rows to them.
+#[test]
+fn a_mobile_preset_sets_the_rows() {
+    let (mut app, _) = app(1, false);
+    app.run("document.exportPresets.save", json!({"name": "Phones", "settings": {"preset": "mobile", "subfolders": true}})).unwrap();
+    open(&mut app);
+    let phones = export_for_screens::export_presets(&mut app).as_array().unwrap().iter().find(|p| p["name"] == "Phones").cloned().unwrap();
+    set(&mut app, "subfolders", json!(false));
+    set(&mut app, "subfolderBy", json!("format"));
+    export_for_screens::apply_preset(app.ui.dialog.as_mut().unwrap(), &phones);
+    assert_eq!(field(&app, "formats"), json!(fileio::screen_preset_rows("mobile").unwrap()));
+    assert_eq!((field(&app, "preset"), field(&app, "subfolders"), field(&app, "subfolderBy")), (json!("mobile"), json!(true), json!("scale")));
+}
+
+/// `ui.dialog.set` of `exportPreset` applies the preset it names, as a pick in the ☰ menu does, so
+/// the dialog holds the settings of the preset it names; a name that is no preset's is an error and
+/// leaves the dialog as it was.
+#[test]
+fn setting_the_export_preset_field_applies_the_preset() {
+    use crate::control::{ControlRequest, Outcome};
+    let (mut app, _) = app(1, false);
+    let ctx = egui::Context::default();
+    open(&mut app);
+    let set_preset = |app: &mut VectorcraftApp, name: &str| {
+        let (req, _rx) = ControlRequest::new("ui.dialog.set", json!({"field": "exportPreset", "value": name}));
+        let Outcome::Done(r) = crate::control::handle(app, &ctx, &req) else { panic!("not done") };
+        r
+    };
+    let r = set_preset(&mut app, "Logo Package");
+    assert_eq!(r["ok"], true, "{r}");
+    let rows: Vec<Value> = field(&app, "formats").as_array().unwrap().iter().map(|r| r["format"].clone()).collect();
+    assert_eq!(rows, [json!("svg"), json!("png"), json!("png"), json!("pdf"), json!("pdf")]);
+    assert_eq!(field(&app, "subfolderBy"), json!("format"));
+    assert_eq!(r["result"]["fields"]["subfolderBy"], "format", "{r}");
+    let r = set_preset(&mut app, "Never saved");
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(field(&app, "exportPreset"), "Logo Package");
+    assert_eq!(field(&app, "subfolderBy"), "format");
+    // A request that fails on a later field changes none of its fields.
+    let fields = json!({"fields": [{"field": "subfolderBy", "value": "scale"}, {"field": "exportPreset", "value": "Never saved"}]});
+    let (req, _rx) = ControlRequest::new("ui.dialog.set", fields);
+    let Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!((field(&app, "exportPreset"), field(&app, "subfolderBy")), (json!("Logo Package"), json!("format")));
+    // In one request the fields apply in order: a field after the preset goes over it.
+    let fields = json!({"fields": [{"field": "exportPreset", "value": "Logo Package"}, {"field": "subfolderBy", "value": "scale"}]});
+    let (req, _rx) = ControlRequest::new("ui.dialog.set", fields);
+    let Outcome::Done(r) = crate::control::handle(&mut app, &ctx, &req) else { panic!("not done") };
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!((field(&app, "exportPreset"), field(&app, "subfolderBy")), (json!("Logo Package"), json!("scale")));
+}
+
+/// The Asset Export panel menu's Import Preset… and Export Preset… show their file dialogs off the UI
+/// thread (as sheets on macOS) and read or write the file when the dialog answers.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn preset_files_ask_off_the_ui_thread() {
+    use crate::panels::asset_export;
+    use crate::picks::PickRequest;
+    use export_for_screens::PresetPick;
+    let mut services = Services { dialogs_are_sheets: true, ..Default::default() };
+    let (shown, written) = crate::tests_picks::off_the_ui_thread(&mut services);
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 60, "height": 40})).unwrap();
+    app.run("document.exportPresets.save", json!({"name": "Pack", "settings": {"formats": [{"format": "svg"}]}})).unwrap();
+    let dir = temp_folder("preset-sheets");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("pack.vcexportpresets");
+    std::fs::write(&file, app.run("document.exportPresets.export", json!({"names": ["Pack"]})).unwrap()["data"].as_str().unwrap()).unwrap();
+    let file = file.to_string_lossy().to_string();
+    let names = |app: &VectorcraftApp| app.session.prefs.screen_export_presets.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+    let poll = |app: &mut VectorcraftApp| crate::picks::poll(app, &egui::Context::default());
+    let ctx = egui::Context::default();
+    let doc = app.session.active().unwrap().uid;
+    asset_export::preset(&mut app, &ctx, doc, PresetPick::Export("Pack".into()));
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(p)] if p.name == "Pack.vcexportpresets"), "{:?}", shown.requests());
+    assert!(written.borrow().is_empty() && app.ui.status.is_empty(), "{}", app.ui.status);
+    shown.answer(&["/presets/pack.vcexportpresets"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/presets/pack.vcexportpresets"], "{}", app.ui.status);
+    asset_export::preset(&mut app, &ctx, doc, PresetPick::Import);
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Open(_)]), "{:?}", shown.requests());
+    assert_eq!(names(&app), ["Pack"]);
+    shown.answer(&[&file]);
+    poll(&mut app);
+    assert_eq!(names(&app), ["Pack", "Pack 2"], "{}", app.ui.status);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The dialog's Export Preset row has no Import Preset… or Export Preset…: those picks change
+/// nothing there.
+#[test]
+fn the_dialog_leaves_preset_files_to_the_panel() {
+    use export_for_screens::PresetPick;
+    let (mut app, _) = app(1, false);
+    open(&mut app);
+    let before = serde_json::to_value(&app.ui.dialog).unwrap();
+    for pick in [PresetPick::Import, PresetPick::Export("Logo Package".into())] {
+        let mut d = app.ui.dialog.take().unwrap();
+        export_for_screens::preset_pick(&mut app, &mut d, pick);
+        app.ui.dialog = Some(d);
+    }
+    assert_eq!(serde_json::to_value(&app.ui.dialog).unwrap(), before);
+    assert_eq!(app.ui.status, "");
+}
+
+/// The dialog keeps its list of export presets from frame to frame, and builds it again when the
+/// saved presets change.
+#[test]
+fn the_dialog_builds_the_preset_list_again_only_when_the_presets_change() {
+    let (mut app, _) = app(1, false);
+    open(&mut app);
+    frame(&mut app);
+    let mark = |app: &mut VectorcraftApp| app.ui.dialog.as_mut().unwrap().fields.get_mut("__exportPresets").unwrap()[0]["mark"] = json!(true);
+    mark(&mut app);
+    frame(&mut app);
+    frame(&mut app);
+    assert_eq!(field(&app, "__exportPresets")[0]["mark"], true, "the list was not built again");
+    app.run("document.exportPresets.save", json!({"name": "Mine", "settings": {"formats": [{"format": "svg"}]}})).unwrap();
+    frame(&mut app);
+    let list = field(&app, "__exportPresets");
+    assert!(list[0].get("mark").is_none() && list.as_array().unwrap().iter().any(|p| p["name"] == "Mine"), "{list}");
+    // A saved preset changed under the same name is a change too.
+    mark(&mut app);
+    app.run("document.exportPresets.save", json!({"name": "Mine", "settings": {"formats": [{"format": "pdf"}]}})).unwrap();
+    frame(&mut app);
+    let list = field(&app, "__exportPresets");
+    let mine = list.as_array().unwrap().iter().find(|p| p["name"] == "Mine").unwrap();
+    assert_eq!(mine["settings"]["formats"][0]["format"], "pdf", "{list}");
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn same_frame_artboard_double_click_keeps_export_selection() {
+    for view in ["grid", "list"] {
+        for checked in [true, false] {
+            let (mut app, _) = app(2, true);
+            open(&mut app);
+            set(&mut app, "view", json!(view));
+            let mut h = ScreensFrame::new();
+            let out = h.settle(&mut app);
+            let name = app.session.active().unwrap().doc.artboards[0].name.clone();
+            let at = screen_text_at(&out, &format!("1  {name}"));
+            if !checked {
+                h.click(&mut app, at);
+                h.time += 1.0;
+                h.settle(&mut app);
+            }
+            let before = field(&app, "boards");
+            h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+            let events = [true, false, true, false]
+                .into_iter()
+                .map(|pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() })
+                .collect();
+            h.frame(&mut app, events);
+            h.settle(&mut app);
+            assert!(h.ctx.egui_wants_keyboard_input(), "{view}, checked={checked}");
+            assert_eq!(field(&app, "boards"), before, "{view}, checked={checked}");
+        }
+    }
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn switching_export_tabs_commits_an_artboard_name() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let out = h.settle(&mut app);
+        let old = app.session.active().unwrap().doc.artboards[0].name.clone();
+        let at = screen_text_at(&out, &format!("1  {old}"));
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        assert!(h.ctx.egui_wants_keyboard_input());
+        h.frame(&mut app, vec![egui::Event::Text("Committed on tab".into())]);
+        h.click_label(&mut app, "Assets");
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Committed on tab");
+        assert_eq!(field(&app, "tab"), "assets");
+        assert_eq!(field(&app, "boards"), before);
+        assert!(log.borrow().is_empty());
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
+    }
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn double_clicking_an_artboard_name_in_export_for_screens_renames_it() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let out = h.settle(&mut app);
+        let old = app.session.active().unwrap().doc.artboards[0].name.clone();
+        let at = screen_text_at(&out, &format!("1  {old}"));
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        assert!(h.ctx.egui_wants_keyboard_input(), "double-clicking the artboard name must open an editable field");
+        h.frame(&mut app, vec![egui::Event::Text("Renamed".into())]);
+        h.frame(
+            &mut app,
+            vec![egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+        );
+        h.settle(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed");
+        assert_eq!(kind(&app), Some(export_for_screens::KIND));
+        assert_eq!(field(&app, "boards"), before, "renaming must not change the checked artboards");
+        assert!(log.borrow().is_empty(), "renaming must not export");
+        // The real shortcut handler runs before the dialog body. Escape cancels only the name.
+        let out = h.settle(&mut app);
+        let at = screen_text_at(&out, "1  Renamed");
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        h.frame(&mut app, vec![egui::Event::Text("Discard".into())]);
+        let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        h.time += 0.1;
+        let input = egui::RawInput {
+            events: vec![key],
+            time: Some(h.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+            ..Default::default()
+        };
+        let mut out = h.ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            super::show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        h.settle(&mut app);
+        assert_eq!(kind(&app), Some(export_for_screens::KIND));
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
+    }
+}
+
+/// #7275: the typed name goes to the artboard whose name was double-clicked, even when the
+/// artboards change order (a command from the control channel or MCP) while it is typed. When that
+/// artboard is deleted, the field closes and Escape closes the dialog.
+#[test]
+fn an_artboard_name_follows_its_artboard_while_it_is_typed() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(3, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+        let rename = |h: &mut ScreensFrame, app: &mut VectorcraftApp, label: &str| {
+            let out = h.settle(app);
+            let at = screen_text_at(&out, label);
+            h.frame(app, vec![egui::Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                h.frame(
+                    app,
+                    vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+                );
+            }
+            h.settle(app);
+            assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the double-click opens the name");
+        };
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        rename(&mut h, &mut app, "2  Artboard 2");
+        app.run("artboard.reorder", json!({"index": 1, "to": 0})).unwrap();
+        h.frame(&mut app, vec![egui::Event::Text("Hero".into())]);
+        h.frame(&mut app, vec![enter]);
+        h.settle(&mut app);
+        assert_eq!(names(&app), ["Hero", "Artboard 1", "Artboard 3"], "{view}");
+        assert_eq!(kind(&app), Some(export_for_screens::KIND), "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+        // The artboard is deleted while its name is typed: the field closes, no other artboard
+        // takes the name, and Escape closes the dialog again.
+        rename(&mut h, &mut app, "2  Artboard 1");
+        h.frame(&mut app, vec![egui::Event::Text("Gone".into())]);
+        app.run("artboard.delete", json!({"indices": [1]})).unwrap();
+        h.settle(&mut app);
+        assert!(!h.ctx.egui_wants_keyboard_input(), "{view}: the field of a deleted artboard closes");
+        assert_eq!(names(&app), ["Hero", "Artboard 3"], "{view}");
+        let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        h.time += 0.1;
+        let input = egui::RawInput {
+            events: vec![escape],
+            time: Some(h.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+            ..Default::default()
+        };
+        let mut out = h.ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            super::show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        h.settle(&mut app);
+        assert_eq!(kind(&app), None, "{view}: Escape closes the dialog");
+        assert_eq!(names(&app), ["Hero", "Artboard 3"], "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+    }
+}
+
+/// #7275: a name typed while another document becomes active (a command from the control channel
+/// or MCP) renames no artboard in either document, and Escape closes the dialog.
+#[test]
+fn an_artboard_name_stays_with_its_document() {
+    let (mut app, log) = app(2, true);
+    app.run("file.new", json!({"width": 60, "height": 40, "artboards": 2})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    open(&mut app);
+    let mut h = ScreensFrame::new();
+    let names = |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+    let out = h.settle(&mut app);
+    let at = screen_text_at(&out, "2  Artboard 2");
+    h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+    for pressed in [true, false, true, false] {
+        h.frame(&mut app, vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }]);
+    }
+    h.settle(&mut app);
+    assert!(h.ctx.egui_wants_keyboard_input(), "the double-click opens the name");
+    h.frame(&mut app, vec![egui::Event::Text("Elsewhere".into())]);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    h.time += 0.1;
+    let input = egui::RawInput {
+        events: vec![escape],
+        time: Some(h.time),
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+        ..Default::default()
+    };
+    let mut out = h.ctx.run_ui(input, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        super::show(&mut app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    h.settle(&mut app);
+    assert_eq!(kind(&app), None, "Escape closes the dialog");
+    assert_eq!(names(&app, 0), ["Artboard 1", "Artboard 2"]);
+    assert_eq!(names(&app, 1), ["Artboard 1", "Artboard 2"]);
+    assert!(log.borrow().is_empty(), "renaming must not export");
+}
+
+/// Escape or Enter in the first frame that draws an artboard's name field closes the field, and
+/// the dialog stays open.
+#[test]
+fn a_key_in_the_first_frame_of_an_artboard_name_closes_it() {
+    for view in ["grid", "list"] {
+        for key in [egui::Key::Escape, egui::Key::Enter] {
+            let (mut app, log) = app(2, true);
+            open(&mut app);
+            set(&mut app, "view", json!(view));
+            let mut h = ScreensFrame::new();
+            let out = h.settle(&mut app);
+            let at = screen_text_at(&out, "1  Artboard 1");
+            h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                h.frame(
+                    &mut app,
+                    vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+                );
+            }
+            // The double-click opened the field in the last frame; this frame draws it first.
+            h.time += 0.1;
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+                time: Some(h.time),
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+                ..Default::default()
+            };
+            let mut out = h.ctx.run_ui(input, |ui| {
+                crate::shortcuts::handle(&mut app, ui.ctx());
+                super::show(&mut app, ui.ctx());
+            });
+            out.textures_delta.clear();
+            h.settle(&mut app);
+            assert!(!h.ctx.egui_wants_keyboard_input(), "{view}, {key:?}: the field closes");
+            assert_eq!(kind(&app), Some(export_for_screens::KIND), "{view}, {key:?}");
+            assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Artboard 1", "{view}, {key:?}");
+            assert!(log.borrow().is_empty(), "{view}, {key:?}: the key must not export");
+        }
+    }
+}
+
+/// A double-click on an earlier artboard's name, both clicks in one frame, renames the artboard
+/// whose name was being typed before it opens the new field.
+#[test]
+fn double_clicking_another_artboard_name_keeps_the_typed_name() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let double_click = |h: &mut ScreensFrame, app: &mut VectorcraftApp, at: egui::Pos2| {
+            h.frame(app, vec![egui::Event::PointerMoved(at)]);
+            let events = [true, false, true, false]
+                .into_iter()
+                .map(|pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() })
+                .collect();
+            h.frame(app, events);
+            h.settle(app);
+        };
+        let out = h.settle(&mut app);
+        let first = screen_text_at(&out, "1  Artboard 1");
+        double_click(&mut h, &mut app, screen_text_at(&out, "2  Artboard 2"));
+        assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the double-click opens the name");
+        h.frame(&mut app, vec![egui::Event::Text("Typed".into())]);
+        h.time += 1.0;
+        double_click(&mut h, &mut app, first);
+        let names: Vec<String> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+        assert_eq!(names, ["Artboard 1", "Typed"], "{view}");
+        assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the second double-click opens its name");
+        assert_eq!(field(&app, "boards"), before, "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+    }
 }

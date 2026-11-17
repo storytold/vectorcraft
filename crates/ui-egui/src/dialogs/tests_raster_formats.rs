@@ -136,7 +136,7 @@ fn save_for_office_documents_picks_the_resolution() {
 
 #[test]
 fn save_for_office_and_export_selection_say_when_an_image_could_not_be_decoded() {
-    const NOTE: &str = "with 1 note(s): an image couldn't be decoded and is missing from the picture";
+    const NOTE: &str = "with 1 note: an image couldn't be decoded and is missing from the picture";
     let (mut app, written) = app(1);
     app.run("document.exportForOffice", json!({"path": "/x/o.png", "ppi": 72})).unwrap();
     assert_eq!(app.ui.status, "Saved /x/o.png");

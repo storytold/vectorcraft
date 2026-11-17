@@ -294,7 +294,7 @@ fn files_named_after_the_title_follow_windows_naming_rules() {
 
 #[test]
 fn files_are_written_beside_the_path() {
-    let dir = vectorcraft_testkit::temp_dir("webexport");
+    let dir = vectorcraft_testkit::TempDir::new("webexport");
     let mut s = two_colours();
     let path = dir.join("art.gif").to_string_lossy().to_string();
     let r = run(&mut s, "document.exportForWeb", json!({"path": path}));
@@ -324,7 +324,7 @@ fn an_export_says_when_an_image_could_not_be_decoded() {
         let r = run(&mut s, "document.exportForWeb.preview", json!({"format": format}));
         assert!(undecoded(&r), "{format} preview: {}", r["warnings"]);
     }
-    let dir = vectorcraft_testkit::temp_dir("webexport-undecoded");
+    let dir = vectorcraft_testkit::TempDir::new("webexport-undecoded");
     let page = dir.join("page.html").to_string_lossy().to_string();
     let r = run(&mut s, "document.exportForWeb", json!({"path": page, "output": "html"}));
     assert!(undecoded(&r), "{r}");
@@ -373,7 +373,9 @@ fn image_size_region_and_metadata() {
         json!({"format": "bmp"}),
         json!({"colors": "many"}),
         json!({"matte": "plaid"}),
+        json!({"matte": "#ffff0080"}),
         json!({"colorTable": {"locked": ["nope"]}}),
+        json!({"colorTable": {"transparent": ["#ff000080"]}}),
         json!({"artboard": 3}),
         json!({"preset": "Nope"}),
     ] {

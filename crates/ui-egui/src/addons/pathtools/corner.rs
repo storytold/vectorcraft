@@ -1,5 +1,6 @@
 //! The Anchor Inspector panel's Corners section: the Corner Tool's radius and kind, how many corners
-//! the selection holds, and Apply (`addon.pathtools.cornerSet`).
+//! the selection holds, Apply (`addon.pathtools.cornerSet`) and Set Corners… (its dialog, which
+//! can also take every other anchor, or only the corners in an angle range).
 
 use egui::Ui;
 use serde_json::{Value, json};
@@ -18,8 +19,8 @@ const FIELD_W: f32 = 96.0;
 
 /// Object › Plug-ins › Path Precision Tools › Corner Tool.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    app.select_tool(ID);
-    app.run("window.panel", json!({ "panel": super::ID }))
+    app.try_select_tool(ID)?;
+    crate::panel_docking::reveal_panel(app, super::ID)
 }
 
 /// How many corners Apply would edit: the selected paths' direct-selected ones, or all of a path
@@ -55,10 +56,14 @@ pub(super) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let width = ui.available_width();
     let apply = ui.add_enabled_ui(count > 0, |ui| widgets::flat_button(ui, tl!("Apply to Selected Anchors"), width).clicked()).inner;
+    let dialog = ui.add_enabled_ui(count > 0, |ui| widgets::flat_button(ui, tl!("Set Corners…"), width).clicked()).inner;
     if let Some(values) = set {
         run(app, "tool.setOption", json!({ "tool": ID, "values": values }));
     }
     if apply {
         run(app, "addon.pathtools.cornerSet", json!({ "radius": radius, "kind": kind }));
+    }
+    if dialog {
+        crate::menus::invoke(app, super::set_corners::COMMAND, json!({}));
     }
 }

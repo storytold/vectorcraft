@@ -22,6 +22,7 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
         ("Measure & Inspect Tool", "measureInspect"),
         ("Parametric Shape Tool", "parametricShape"),
         ("Slide Anchor Along Path", "slideAnchor"),
+        ("Trim at Crossings Tool", "trimAtCrossings"),
     ] {
         let e = under(label).expect(label);
         assert_eq!((e.command.as_deref(), &e.params), (Some("tool.select"), &json!({ "tool": tool })));
@@ -142,6 +143,24 @@ fn the_corner_tool_item_selects_the_tool_and_opens_its_panel_section() {
     assert!(!vectorcraft_tools::TOOL_GROUPS.iter().flat_map(|g| g.iter()).any(|t| t.id == "cornerTool" || t.id == "slideAnchor"));
 }
 
+/// The Corner Tool and Shared Edge Merge Tool items leave a floating Anchor Inspector showing
+/// instead of closing it, and in Presentation Mode they choose the tool without failing.
+#[test]
+fn the_tool_items_keep_a_floating_anchor_inspector_showing() {
+    let mut app = app();
+    app.run("window.panel.float", json!({ "panel": ID })).unwrap();
+    assert!(crate::panel_docking::visible(&app.ui, ID));
+    for command in [super::corner::COMMAND, super::shared_edge::COMMAND] {
+        app.run(command, json!({})).unwrap();
+        assert!(crate::panel_docking::visible(&app.ui, ID), "{command} leaves the panel showing");
+    }
+    app.ui.screen_mode = 3;
+    app.run(super::corner::COMMAND, json!({})).unwrap();
+    assert_eq!(app.session.tool_id(), "cornerTool");
+    app.ui.screen_mode = 0;
+    assert!(crate::panel_docking::visible(&app.ui, ID), "the panel shows when Presentation Mode ends");
+}
+
 #[test]
 fn the_shared_edge_item_selects_the_tool_and_opens_its_panel_section() {
     let mut app = app();
@@ -238,4 +257,74 @@ fn effect_path_effects_lists_the_live_effects_and_their_dialogs_pick_from_their_
         assert!(options.iter().any(|(_, value)| *value == default), "{effect} {key}");
         assert!(options.iter().all(|(_, value)| doc.params.contains(&format!("\"{value}\""))), "{effect} {key}");
     }
+}
+
+/// Object › Plug-ins › Path Precision Tools › Common Tangents… opens the command dialog on all
+/// tangents without the centerline, Preview off. With Preview on the lines show on the canvas;
+/// Cancel takes them away with no step of history, and OK keeps them as one step. Nested circles
+/// change nothing and say why.
+#[test]
+fn common_tangents_previews_cancels_and_runs_on_ok() {
+    let mut app = app();
+    let circle = |app: &mut VectorcraftApp, x: f64, r: f64| {
+        app.run("shape.ellipse", json!({"x": x - r, "y": 150.0 - r, "width": 2.0 * r, "height": 2.0 * r})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (circle(&mut app, 60.0, 20.0), circle(&mut app, 220.0, 40.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node_count();
+    let (start, n, nodes) = (app.session.doc().unwrap().doc.clone(), steps(&app), count(&app));
+    let open = |app: &mut VectorcraftApp| {
+        let entries = menus::menu_entries(app);
+        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == "Common Tangents…").unwrap();
+        assert!(item.enabled);
+        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        menus::invoke(app, &cmd, p);
+    };
+
+    open(&mut app);
+    let d = app.ui.dialog.as_ref().expect("a dialog opens");
+    assert_eq!((d.str("__command"), d.str("__label")), (super::COMMON_TANGENTS.to_string(), "Common Tangents".to_string()));
+    assert_eq!((d.str("tangents"), d.bool("centerline"), d.bool("preview")), ("all".to_string(), false, false));
+    let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    for s in ["Common Tangents", "Tangents", "All", "Centerline", "Preview"] {
+        assert!(shown.contains(s), "{s} in {shown}");
+    }
+    // Each kind the list offers is one the command takes.
+    for (_, kind) in super::TANGENT_KINDS {
+        assert!(vectorcraft_engine::check_params(super::COMMON_TANGENTS, &json!({"tangents": kind})).is_ok(), "{kind}");
+    }
+    assert_eq!(count(&app), nodes, "no preview without the checkbox");
+
+    // Preview on: the four lines are on the canvas.
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+    painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    assert_eq!(count(&app), nodes + 4, "previewed");
+    // External only, with the centerline: two lines and the centerline.
+    let d = app.ui.dialog.as_mut().unwrap();
+    crate::dialogs::set_field(d, "tangents".into(), json!("external"));
+    crate::dialogs::set_field(d, "centerline".into(), json!(true));
+    painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    assert_eq!(count(&app), nodes + 3, "previewed again");
+
+    // Cancel: as it was, with no step of history.
+    crate::dialogs::cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, start, "Cancel takes the preview away");
+    assert_eq!(steps(&app), n, "and adds no undo step");
+
+    // OK: one step.
+    open(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(steps(&app), n + 1, "one undo step");
+    assert_eq!(count(&app), nodes + 4);
+
+    // A circle inside another: nothing changes, and a message says why.
+    let inner = circle(&mut app, 220.0, 10.0);
+    app.run("select.set", json!({"ids": [b, inner]})).unwrap();
+    let (n, nodes) = (steps(&app), count(&app));
+    open(&mut app);
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!((steps(&app), count(&app)), (n, nodes));
+    assert!(app.ui.status.contains("inside the other"), "{}", app.ui.status);
 }

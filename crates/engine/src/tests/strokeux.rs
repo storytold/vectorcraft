@@ -111,3 +111,49 @@ fn inspect_reports_stroke_options() {
     let text = doc["layers"][0]["children"].as_array().unwrap().iter().find(|c| c["kind"] == "Text" || c.get("text").is_some()).unwrap().clone();
     assert_eq!(text["strokeOptions"]["join"], "round", "{text}");
 }
+
+/// Stroke Weight Up and Down (Cmd/Ctrl+Alt+. and ,) step each selected stroke from its own
+/// weight, a quarter point at a time below 1 pt and whole points above, in one undo step each.
+#[test]
+fn stroke_weight_up_and_down_step_each_selected_stroke() {
+    let mut s = session();
+    let (a, b, bare) = (rect(&mut s, 10.0), rect(&mut s, 60.0), rect(&mut s, 110.0));
+    select(&mut s, &[a]);
+    run(&mut s, "stroke.set", json!({"weight": 0.6}));
+    select(&mut s, &[b]);
+    run(&mut s, "stroke.set", json!({"weight": 3}));
+    select(&mut s, &[bare]);
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let has_stroke = |s: &Session| {
+        s.doc().unwrap().doc.node(bare).unwrap().appearance.stroke().is_some_and(|st| !matches!(st.paint, vectorcraft_color::Paint::None))
+    };
+    let bare_before = has_stroke(&s);
+    let w = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_width();
+    select(&mut s, &[a, b, bare]);
+    run(&mut s, "stroke.weightUp", json!({}));
+    assert_eq!((w(&s, a), w(&s, b)), (0.75, 4.0));
+    run(&mut s, "stroke.weightUp", json!({}));
+    assert_eq!((w(&s, a), w(&s, b)), (1.0, 5.0));
+    assert_eq!(has_stroke(&s), bare_before, "an object without a stroke takes none");
+    for _ in 0..6 {
+        run(&mut s, "stroke.weightDown", json!({}));
+    }
+    // 1 → 0.75 → 0.5 → 0.25, where it stays; 5 → 4 → 3 → 2 → 1 → 0.75 → 0.5.
+    assert_eq!((w(&s, a), w(&s, b)), (0.25, 0.5));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!((w(&s, a), w(&s, b)), (0.25, 0.75), "one undo step per press");
+}
+
+/// With nothing selected the next object drawn takes the stepped weight.
+#[test]
+fn stroke_weight_up_with_nothing_selected_sets_up_new_art() {
+    let mut s = session();
+    run(&mut s, "select.none", json!({}));
+    run(&mut s, "stroke.set", json!({"weight": 2}));
+    run(&mut s, "stroke.weightUp", json!({}));
+    assert_eq!(s.paint.stroke_width, 3.0);
+    let r = rect(&mut s, 10.0);
+    assert_eq!(s.doc().unwrap().doc.node(r).unwrap().appearance.stroke_width(), 3.0);
+    assert_eq!(crate::cmd::find_command("stroke.weightUp").unwrap().shortcut, Some("Cmd+Alt+."));
+    assert_eq!(crate::cmd::find_command("stroke.weightDown").unwrap().shortcut, Some("Cmd+Alt+,"));
+}

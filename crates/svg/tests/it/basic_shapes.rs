@@ -134,3 +134,104 @@ fn shape_elements_reimport_with_the_same_geometry() {
         assert!(!far, "{a:?} came back as {b:?}");
     }
 }
+
+/// The paths of the objects in `d`, in order.
+fn paths(d: &Document) -> Vec<PathData> {
+    let mut v = Vec::new();
+    d.walk(|n| v.extend(n.path_data().cloned()));
+    v
+}
+
+#[test]
+fn circles_and_ellipses_import_as_the_ellipse_drawn() {
+    // What export writes comes back with the anchors and handles it was written from.
+    let drawn = [shapes::ellipse(Rect::new(10.0, 80.0, 50.0, 120.0)), shapes::ellipse(Rect::new(60.0, 80.0, 140.0, 120.0))];
+    let d = doc(drawn.iter().map(|p| (p.clone(), false)).collect());
+    let back = paths(&import(&export(&d, &ExportOptions::default())).unwrap());
+    assert_eq!(back.len(), 2);
+    for (want, got) in drawn.iter().zip(&back) {
+        let [w, g] = [want, got].map(|p| &p.subpaths[0].anchors);
+        assert!(got.subpaths.len() == 1 && got.subpaths[0].closed && g.len() == 4, "{got:?}");
+        // The same four anchors, starting on the right as an SVG ellipse does.
+        for a in g {
+            let same = w.iter().any(|b| a.p.distance(b.p) < 1e-4 && a.h_in.distance(b.h_in) < 1e-4 && a.h_out.distance(b.h_out) < 1e-4);
+            assert!(same, "{a:?} is not one of {w:?}");
+        }
+        assert!((g[0].p.x - want.bounds().unwrap().x1).abs() < 1e-4, "{g:?}");
+    }
+    // From another app, with a transform: four anchors on the axes, transformed.
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+        <circle cx="50" cy="50" r="40" transform="translate(10 20)"/>
+        <ellipse cx="100" cy="100" rx="60" ry="20" transform="rotate(30 100 100)"/>
+        <ellipse cx="36.255" cy="154.118" rx="36.255" ry="5.421"/>
+        <circle cx="40000000" cy="0" r="400"/>
+        <ellipse cx="1000000" cy="1000000" rx="36" ry="1"/></svg>"#;
+    let back = paths(&import(svg).unwrap());
+    assert_eq!(back.len(), 5);
+    let circle = &back[0].subpaths[0].anchors;
+    let want: Vec<Point> = [(100.0, 70.0), (60.0, 110.0), (20.0, 70.0), (60.0, 30.0)].map(|(x, y)| Point::new(x, y)).into();
+    assert_eq!(circle.len(), 4);
+    for (a, w) in circle.iter().zip(&want) {
+        assert!(a.p.distance(*w) < 1e-4, "{circle:?}");
+    }
+    let turned = &back[1].subpaths[0].anchors;
+    let r = Affine::rotate_about(30f64.to_radians(), Point::new(100.0, 100.0));
+    assert!(turned.len() == 4 && turned[0].p.distance(r * Point::new(160.0, 100.0)) < 1e-3, "{turned:?}");
+    // However many curves the arcs of a flat ellipse make.
+    let flat = &back[2].subpaths[0].anchors;
+    assert!(flat.len() == 4 && flat[0].p.distance(Point::new(72.51, 154.118)) < 1e-3, "{flat:?}");
+    // A small circle far from the origin too.
+    let far = &back[3].subpaths[0].anchors;
+    assert!(far.len() == 4 && far[0].p.distance(Point::new(40_000_400.0, 0.0)) < 8.0, "{far:?}");
+    // A radius of a few of f32's steps at its coordinates, with handles of the standard length.
+    let thin = &back[4].subpaths[0].anchors;
+    let handle = thin.first().map(|a| a.h_out - a.p);
+    assert!(thin.len() == 4 && thin[0].p.distance(Point::new(1_000_036.0, 1_000_000.0)) < 0.25, "{thin:?}");
+    assert!(handle.is_some_and(|h| h.x.abs() < 1e-6 && (h.y - shapes::KAPPA).abs() < 1e-6), "{thin:?}");
+}
+
+#[test]
+fn circles_import_without_changing_ids_or_style_matches() {
+    // The file's own ids stay unique: the `<use>` shows the rectangle, not the circle.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200">
+        <circle cx="30" cy="30" r="20" fill="#0000ff"/>
+        <defs><rect id="vectorcraft-id-0" width="40" height="40" fill="#ff0000"/></defs>
+        <use xlink:href="#vectorcraft-id-0" x="120" y="120"/></svg>"##;
+    let img = render_artboard(&import(svg).unwrap());
+    assert_eq!(img.over_white(30, 30), [0, 0, 255]);
+    assert_eq!(img.over_white(140, 140), [255, 0, 0]);
+    // A style sheet's `[id]` selector still matches only the circle that has an id.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+        <style>circle[id] { fill: #ff0000 }</style>
+        <circle cx="30" cy="30" r="20" fill="#0000ff"/>
+        <circle id="named" cx="130" cy="30" r="20" fill="#0000ff"/></svg>"##;
+    let img = render_artboard(&import(svg).unwrap());
+    assert_eq!(img.over_white(30, 30), [0, 0, 255]);
+    assert_eq!(img.over_white(130, 30), [255, 0, 0]);
+}
+
+#[test]
+fn circles_import_without_an_id_the_file_names() {
+    // A style sheet's rule for an id no element has does not reach the circle.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+        <style>#vectorcraft-id-0 { fill: #ff0000 }</style>
+        <circle cx="30" cy="30" r="20" fill="#000000"/></svg>"##;
+    let img = render_artboard(&import(svg).unwrap());
+    assert_eq!(img.over_white(30, 30), [0, 0, 0]);
+}
+
+#[test]
+fn circles_import_without_an_id_a_use_names() {
+    // A `<use>` of an id no element has does not show the circle, nor does one that writes the
+    // id with a character reference.
+    for href in ["#vectorcraft-id-0", "#vectorcraft-id-&#48;"] {
+        let svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200">
+            <circle cx="30" cy="30" r="20" fill="#000000"/>
+            <use xlink:href="{href}" x="100"/></svg>"##
+        );
+        let img = render_artboard(&import(&svg).unwrap());
+        assert_eq!(img.over_white(30, 30), [0, 0, 0], "{href}");
+        assert_eq!(img.over_white(130, 30), [255, 255, 255], "{href}");
+    }
+}

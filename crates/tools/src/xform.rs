@@ -22,8 +22,10 @@ pub use artboard::ArtboardTool;
 pub use eyedropper::EyedropperTool;
 pub use free::{DistortMode, FreeTransformTool};
 pub use gradient::GradientTool;
+pub(crate) use measure::end_point as measure_end_point;
 pub use measure::{MeasureTool, measure};
 pub use transform::{TransformKind, TransformTool};
+pub(crate) use wand::lasso_select;
 pub use wand::{LassoTool, MagicWandTool};
 
 /// Create a transform/utility tool by id (None = not one of ours).

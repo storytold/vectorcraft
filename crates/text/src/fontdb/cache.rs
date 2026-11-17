@@ -11,7 +11,10 @@ pub(super) struct CatalogFamily {
     /// by in the interface's own writing system (the first face found that has any).
     pub(super) localized: Vec<(String, String)>,
     pub(super) faces: Vec<CatalogFace>,
-    /// The family's kind (from its first face found); variable when any face found is.
+    /// The family's kind (from its first face found); variable when any face found is. Its
+    /// likeness is the one of the face found nearest an upright Regular ([`regular_rank`]).
+    ///
+    /// [`regular_rank`]: super::traits::regular_rank
     pub(super) traits: Option<FontTraits>,
 }
 
