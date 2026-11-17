@@ -301,7 +301,7 @@ impl SearchField {
             t.input
         };
         let border = if resp.has_focus() { t.accent } else { t.input_border };
-        ui.painter().rect(r, CornerRadius::same(4), fill, Stroke::new(1.0, border), egui::StrokeKind::Inside);
+        ui.painter().rect(r, t.cr(), fill, Stroke::new(1.0, border), egui::StrokeKind::Inside);
         icons::paint(ui, "search", egui::Rect::from_center_size(r.left_center() + vec2(14.0, 0.0), vec2(14.0, 14.0)), t.icon);
         let mut text_right = r.right() - 8.0;
         if let Some(key) = self.key {
