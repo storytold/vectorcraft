@@ -67,6 +67,87 @@ fn the_strip_scroll_bar_stays_a_slim_line_while_the_pointer_is_on_it() {
     assert!(widest > 0.0, "the scroll bar is drawn");
     assert!(widest <= 4.5, "the scroll bar is {widest} points wide");
 }
+
+/// The filled rectangles of a scroll bar drawn at the right of `content` in `shapes`: narrow
+/// rectangles that start at or past the content's right edge.
+fn bar_rects(shapes: &[egui::Shape], content: Rect, widest: f32) -> Vec<(Rect, Color32)> {
+    shapes
+        .iter()
+        .filter_map(|s| match s {
+            egui::Shape::Rect(r)
+                if r.fill != Color32::TRANSPARENT && r.rect.width() <= widest && r.rect.height() > 4.0 && r.rect.min.x >= content.right() - 0.5 =>
+            {
+                Some((r.rect, r.fill))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+// Regression test for #5941: a scrolling list in a panel or a dialog showed no scroll bar until the
+// pointer came over it, so nothing told the user that the list had more rows. In every brightness
+// the bar shows while the pointer is elsewhere, in a column of its own beside the rows, and its
+// handle stands out from its track.
+#[test]
+fn a_scroll_bar_shows_while_the_pointer_is_elsewhere() {
+    for brightness in theme::Brightness::ALL {
+        let ctx = themed(brightness);
+        let rows = std::cell::Cell::new(Rect::NOTHING);
+        let mut add = |ui: &mut Ui| {
+            ui.allocate_ui(vec2(160.0, 200.0), |ui| {
+                egui::ScrollArea::vertical().id_salt("list").auto_shrink([false, false]).show(ui, |ui| {
+                    for i in 0..40 {
+                        ui.label(format!("Row {i}"));
+                    }
+                    rows.set(ui.max_rect());
+                });
+            });
+        };
+        frame(&ctx, 0.0, vec![egui::Event::PointerMoved(pos2(500.0, 350.0))], &mut add);
+        let shapes = frame(&ctx, 1.0, vec![], &mut add);
+        let rows = rows.get();
+        assert!(rows.width() < 160.0, "{brightness:?}: the rows leave a column for the bar: {rows:?}");
+        let bar = bar_rects(&shapes, rows, 10.0);
+        let (Some(track), Some(handle)) =
+            (bar.iter().max_by(|a, b| a.0.height().total_cmp(&b.0.height())), bar.iter().min_by(|a, b| a.0.height().total_cmp(&b.0.height())))
+        else {
+            panic!("{brightness:?}: the scroll bar is drawn at rest: {bar:?}");
+        };
+        assert!(handle.0.height() < track.0.height(), "{brightness:?}: a handle on a track: {bar:?}");
+        assert_eq!(handle.1.a(), 255, "{brightness:?}: the handle is opaque: {:?}", handle.1);
+        let gap = (i32::from(handle.1.r()) - i32::from(track.1.r())).abs();
+        assert!(gap >= 24, "{brightness:?}: handle {:?} on track {:?}", handle.1, track.1);
+    }
+}
+
+// Regression test for #5941: the toolbar's and the dock icon column's scroll bar showed nothing
+// until the pointer came over the column. Its slim line shows at rest, still at most 4 points
+// wide (#808).
+#[test]
+fn the_strip_scroll_bar_shows_while_the_pointer_is_elsewhere() {
+    let ctx = themed(Default::default());
+    let column = std::cell::Cell::new(Rect::NOTHING);
+    let mut add = |ui: &mut Ui| {
+        column.set(
+            ui.allocate_ui(vec2(80.0, 200.0), |ui| {
+                strip_scroll(ui, "strip", |ui| {
+                    for i in 0..40 {
+                        ui.label(format!("Tool {i}"));
+                    }
+                });
+            })
+            .response
+            .rect,
+        );
+    };
+    frame(&ctx, 0.0, vec![egui::Event::PointerMoved(pos2(500.0, 350.0))], &mut add);
+    let shapes = frame(&ctx, 1.0, vec![], &mut add);
+    let column = column.get();
+    // The bar lies along the column's right edge, inside it.
+    let buttons = Rect::from_min_max(column.min, pos2(column.right() - 6.0, column.bottom()));
+    let bar = bar_rects(&shapes, buttons, 4.5);
+    assert!(!bar.is_empty(), "the slim scroll bar is drawn at rest");
+}
 // Regression test for #900: a number field with a spinner and a preset list drew as three
 // boxes side by side: its text box was a point taller than the 26-point row, and each joint had
 // two borders.

@@ -663,8 +663,9 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
         ui.add_space(4.0);
         widgets::list_box(ui, |ui| {
             let max_h = (side - 28.0).max(1.0);
-            egui::ScrollArea::vertical().id_salt("cp-swatches").max_height(max_h).show(ui, |ui| {
-                ui.set_width(list_w - 8.0);
+            // The rows take the list's width less its scroll bar's column.
+            egui::ScrollArea::vertical().id_salt("cp-swatches").max_width(list_w - 8.0).max_height(max_h).auto_shrink([false, true]).show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 let cur = d.str("library");
                 if cur.is_empty() || cur == swatchlib::DOCUMENT_SWATCHES {
                     let Some(st) = app.session.active() else {

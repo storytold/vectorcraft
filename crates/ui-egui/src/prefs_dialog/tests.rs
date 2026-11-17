@@ -163,6 +163,53 @@ fn app() -> VectorcraftApp {
     VectorcraftApp::new(Session::new(), Services::default())
 }
 
+/// #5941: a page whose settings run past the bottom of the list showed no scroll bar, so a setting
+/// lower on the page was easy to miss. Every page that scrolls shows its bar inside the window, and
+/// no label is cut off at the side.
+#[test]
+fn a_page_that_scrolls_shows_its_bar() {
+    fn walk(shape: &egui::Shape, clip: egui::Rect, texts: &mut Vec<(String, egui::Rect, egui::Rect)>, bars: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Text(t) if !t.galley.text().trim().is_empty() => texts.push((t.galley.text().into(), t.visual_bounding_rect(), clip)),
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, texts, bars)),
+            _ => {}
+        }
+    }
+    let mut scrolled = 0;
+    for cat in PREF_CATEGORIES {
+        let mut a = app();
+        open(&mut a, Some(cat));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        let (mut texts, mut bars) = (vec![], vec![]);
+        for time in [0.0, 0.25, 0.5, 0.75] {
+            let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 900.0)));
+            let raw = egui::RawInput { screen_rect, time: Some(time), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| show(&mut a, ui.ctx()));
+            out.textures_delta.clear();
+            (texts, bars) = (vec![], vec![]);
+            out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        }
+        let window = ctx.memory(|m| m.area_rect(egui::Id::unique("dialog-preferences"))).expect("the dialog window is shown");
+        // A label below its clip: the page runs past the bottom of the list.
+        let scrolls = texts.iter().any(|(_, r, clip)| window.contains_rect(*clip) && r.top() >= clip.bottom());
+        if scrolls {
+            scrolled += 1;
+            assert!(bars.iter().any(|b| window.contains_rect(*b)), "{cat}: the page scrolls and its bar shows in {window:?}: {bars:?}");
+        }
+        let cut: Vec<_> = texts
+            .iter()
+            .filter(|(_, r, clip)| clip.y_range().contains(r.center().y) && (r.left() < clip.left() - 1.0 || r.right() > clip.right() + 1.0))
+            .filter(|(_, r, _)| window.intersects(*r))
+            .map(|(s, r, clip)| format!("{s:?} {r:?} in {clip:?}"))
+            .collect();
+        assert!(cut.is_empty(), "{cat}: labels cut off at the side: {cut:?}");
+    }
+    assert!(scrolled > 0, "at least one page runs past the bottom of its list");
+}
+
 #[test]
 fn dialog_ok_applies_prefs_and_ui_fields() {
     let mut a = app();
