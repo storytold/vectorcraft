@@ -179,6 +179,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
     BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
+    BuiltinBrushLibrary { id: "vector-packs", name: "Vector Packs", make: vector_packs },
 ];
 
 /// Built-in library `id`, made once.
@@ -533,6 +534,38 @@ fn scatter_shapes() -> BrushLibrary {
         ),
     ];
     built("Scatter Shapes", doc, brushes)
+}
+
+/// Vector Packs: four original, editable vector marks that follow the stroke color.
+fn vector_packs() -> BrushLibrary {
+    let compass = group(vec![black(shapes::star(Point::ZERO, 10.0, 3.0, 8, 0.0)), black(shapes::ellipse(Rect::new(-1.5, -1.5, 1.5, 1.5)))]);
+    let sprig = group(vec![
+        black(polygon(&[(-0.7, 10.0), (0.7, 10.0), (0.7, -10.0), (-0.7, -10.0)])),
+        black(polygon(&[(0.0, 5.0), (5.0, 2.0), (7.0, -1.0), (3.0, 0.0)])),
+        black(polygon(&[(0.0, 0.0), (-5.0, -3.0), (-7.0, -6.0), (-3.0, -5.0)])),
+        black(polygon(&[(0.0, -5.0), (5.0, -8.0), (7.0, -10.0), (3.0, -9.0)])),
+    ]);
+    let diamond = group(vec![
+        black(polygon(&[(-9.0, 0.0), (-1.0, -9.0), (-1.0, -1.0)])),
+        black(polygon(&[(1.0, -9.0), (9.0, 0.0), (1.0, -1.0)])),
+        black(polygon(&[(9.0, 0.0), (1.0, 9.0), (1.0, 1.0)])),
+        black(polygon(&[(-1.0, 9.0), (-9.0, 0.0), (-1.0, 1.0)])),
+    ]);
+    let tide = group(vec![
+        black(band(20.0, 1.2, 32, |x| -3.0 + 2.0 * (x * std::f64::consts::TAU / 20.0).sin())),
+        black(band(20.0, 1.2, 32, |x| 3.0 + 2.0 * (x * std::f64::consts::TAU / 20.0).sin())),
+    ]);
+    let settings = Scatter { size: (90.0, 110.0), spacing: (130.0, 160.0), colorization: Colorization::Tints, ..Default::default() };
+    built(
+        "Vector Packs",
+        Document::new(100.0, 100.0),
+        vec![
+            scatter("Compass Rose", compass, settings.clone()),
+            scatter("Botanical Sprig", sprig, settings.clone()),
+            scatter("Facet Diamond", diamond, settings.clone()),
+            scatter("Tide Crest", tide, settings),
+        ],
+    )
 }
 
 /// Game Trails: art brushes for motion lines and impact streaks (original game HUD / VFX art).

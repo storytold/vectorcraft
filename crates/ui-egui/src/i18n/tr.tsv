@@ -9875,3 +9875,8 @@ breakText	Glyphs	Glifler
 @msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
 @msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}
+	Vector Packs	Vektör Paketleri
+	Compass Rose	Pusula Gülü
+	Botanical Sprig	Botanik Dal
+	Facet Diamond	Fasetli Elmas
+	Tide Crest	Dalga Tepesi

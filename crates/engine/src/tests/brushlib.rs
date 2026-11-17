@@ -116,7 +116,8 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "game-trails",
             "energy-beams",
             "dry-media",
-            "tech-circuit"
+            "tech-circuit",
+            "vector-packs"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
@@ -160,6 +161,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
+        ("vector-packs", "scatter"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
@@ -188,6 +190,30 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
     }
     assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
+}
+
+#[test]
+fn vector_packs_marks_are_editable_and_survive_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "vector-packs").unwrap();
+    let names = ["Compass Rose", "Botanical Sprig", "Facet Diamond", "Tide Crest"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let line = run(&mut s, "shape.line", json!({"x1": 10, "y1": 50, "x2": 190, "y2": 50}))["id"].as_u64().unwrap();
+    for b in &lib.brushes {
+        let BrushKind::Scatter(sc) = &b.kind else { panic!("{} is not a scatter brush", b.name) };
+        assert!(art_paths(&sc.art).len() >= 2, "{} has no editable vector mark", b.name);
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &black_stroke());
+        assert!(pieces.len() >= 3, "{} does not repeat along a path", b.name);
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "vector-packs", "name": b.name, "apply": true, "ids": [line]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([line]));
+        assert_eq!(undo_len(&s), before + 1);
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
 }
 
 /// Every path of brush art `n`: (anchors, opacity).

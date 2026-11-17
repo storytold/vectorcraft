@@ -9514,3 +9514,8 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Vector Packs	벡터 팩
+	Compass Rose	나침반 장미
+	Botanical Sprig	식물 가지
+	Facet Diamond	패싯 다이아몬드
+	Tide Crest	파도 마루

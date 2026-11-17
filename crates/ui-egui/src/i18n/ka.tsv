@@ -10285,3 +10285,8 @@ font-script	Japanese	იაპონური
 @msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არაბეჭდვად შრეზეა.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
+	Vector Packs	ვექტორული პაკეტები
+	Compass Rose	კომპასის ვარდი
+	Botanical Sprig	ბოტანიკური ტოტი
+	Facet Diamond	წახნაგოვანი ბრილიანტი
+	Tide Crest	ტალღის ქედი
