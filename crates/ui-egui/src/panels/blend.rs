@@ -16,7 +16,7 @@ use vectorcraft_doc::live::BlendSpineMode;
 use super::selection_len;
 use crate::VectorcraftApp;
 use crate::dialogs::blend_options::{SPACING, orientation_button};
-use crate::widgets;
+use crate::widgets::{self, Live};
 
 pub const ID: &str = "blend";
 
@@ -50,10 +50,19 @@ fn available(app: &VectorcraftApp, cmd: &str) -> bool {
         && (cmd != "object.blend.reverseSpine" || !selects_blend_without_spine(app))
 }
 
-/// Is a blend made without a spine selected?
+/// Is a blend made without a spine selected? Each selected object counts as its nearest blend,
+/// itself or an ancestor, as the Object › Blend commands resolve it, so a key selected with Direct
+/// Selection counts as its blend.
 fn selects_blend_without_spine(app: &VectorcraftApp) -> bool {
-    let Ok(st) = app.session.doc() else { return false };
-    st.selection.objects.iter().any(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Blend { spec, .. }) if spec.no_spine))
+    let Some(st) = app.session.active().filter(|st| st.selection.symbol_part.is_none()) else { return false };
+    st.selection.objects.iter().any(|id| {
+        let ancestry = st.doc.ancestry(*id).unwrap_or_default();
+        let blend = ancestry.iter().rev().find_map(|a| match st.doc.node(*a).map(|n| &n.kind) {
+            Some(NodeKind::Blend { spec, .. }) => Some(spec.no_spine),
+            _ => None,
+        });
+        blend == Some(true)
+    })
 }
 
 /// `object.blend.options` parameters for spacing mode `mode`, with the step count and distance
@@ -64,6 +73,22 @@ fn spacing_params(mode: &str, steps: f64, distance: f64) -> Value {
         "distance" => json!({"spacing": "distance", "distance": distance}),
         _ => json!({"spacing": "smooth"}),
     }
+}
+
+/// The Ramp or Shift slider: `key` of `object.blend.options` as a percentage from `min` to 100.
+/// A drag, a press on the rail included, previews the selected blends and its release records one
+/// undo step; a change without a drag, from the keyboard, records one at once.
+fn percent_slider(app: &mut VectorcraftApp, ui: &mut Ui, key: &str, value: Option<f64>, min: f64) {
+    let mut v = value.unwrap_or(0.0).clamp(min, 100.0);
+    let resp = widgets::slider(ui, egui::Slider::new(&mut v, min..=100.0).suffix("%"));
+    let phase = if resp.drag_stopped() || (resp.changed() && !resp.dragged()) {
+        Live::Released
+    } else if resp.changed() {
+        Live::Dragging
+    } else {
+        return;
+    };
+    crate::panels::live_run(app, "Blend Options", "object.blend.options", json!({ key: v }), phase);
 }
 
 /// Spacing and Orientation, as `object.blend.info` reports them; a change runs
@@ -108,8 +133,9 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     let selected = info["target"] == "blend";
     // Position easing needs a spine to run along: a replaced one, or Align to Path. A blend made
-    // without a spine has none.
-    let spined = info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path");
+    // without a spine has none, and easing is refused while one is selected.
+    let spined =
+        info["hasSpine"] != false && (info["spine"]["explicit"] == true || info["orientation"] == "path") && !selects_blend_without_spine(app);
     ui.add_enabled_ui(selected && spined, |ui| {
         let modes = ["easeIn", "easeOut", "easeInOut", "easeOutIn"];
         let labels = [tl!("Ease In"), tl!("Ease Out"), tl!("Ease In Out"), tl!("Ease Out In")];
@@ -122,20 +148,10 @@ fn settings(app: &mut VectorcraftApp, ui: &mut Ui) {
                 change = Some(json!({"easingType": mode}));
             }
         });
-        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| {
-            let mut ramp = info["ramp"].as_f64().unwrap_or(0.0);
-            if ui.add(egui::Slider::new(&mut ramp, 0.0..=100.0).suffix("%")).changed() {
-                change = Some(json!({"ramp": ramp}));
-            }
-        });
+        widgets::label_row(ui, tl!("Ramp:"), LABEL_W, |ui| percent_slider(app, ui, "ramp", info["ramp"].as_f64(), 0.0));
     });
     ui.add_enabled_ui(selected, |ui| {
-        widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| {
-            let mut shift = info["colorShift"].as_f64().unwrap_or(0.0);
-            if ui.add(egui::Slider::new(&mut shift, -100.0..=100.0).suffix("%")).changed() {
-                change = Some(json!({"colorShift": shift}));
-            }
-        });
+        widgets::label_row(ui, tl!("Shift:"), LABEL_W, |ui| percent_slider(app, ui, "colorShift", info["colorShift"].as_f64(), -100.0));
     });
     if let Some(p) = change {
         app.run("object.blend.options", p).ok();

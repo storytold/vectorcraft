@@ -1555,6 +1555,20 @@ fn headless_backend_methods() {
         let selected = h.call("ui.tool.select", json!({"tool": tool.id})).unwrap();
         assert_eq!(selected["tool"], tool.id);
     }
+    // The Trim at Crossings Tool is listed once, in the Scissors tool's group after the Knife.
+    let trim = vectorcraft_tools::addons::trim::ID;
+    let with_trim: Vec<_> =
+        groups.iter().map(|group| group.as_array().unwrap()).filter(|group| group.iter().any(|entry| entry["id"] == trim)).collect();
+    assert_eq!(with_trim.len(), 1, "{trim} is in one group");
+    let ids: Vec<_> = with_trim[0].iter().map(|entry| entry["id"].clone()).collect();
+    let knife = ids.iter().position(|id| *id == "knife").expect("the Knife in the same group");
+    assert!(ids.contains(&json!("scissors")), "the Scissors tool's group: {ids:?}");
+    assert_eq!(ids.get(knife + 1), Some(&json!(trim)));
+    assert_eq!(ids.iter().filter(|id| **id == trim).count(), 1);
+    let entry = with_trim[0].iter().find(|entry| entry["id"] == trim).unwrap();
+    assert_eq!(entry["label"], "Trim at Crossings Tool");
+    assert!(entry["shortcut"].is_null());
+    assert_eq!(h.call("ui.tool.select", json!({"tool": trim})).unwrap()["tool"], trim);
     let polygonal = groups.iter().flat_map(|group| group.as_array().unwrap()).find(|entry| entry["id"] == "polygonalLasso");
     assert_eq!(polygonal.map(|entry| entry["label"].clone()), Some(json!("Polygonal Lasso Tool")));
     assert!(h.call("ui.resize", json!({})).is_err());

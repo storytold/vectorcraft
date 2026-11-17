@@ -16,6 +16,9 @@
 //!
 //! Brush Options' Key Color eyedropper sets `brushKeyColor` and `stop`: the next click samples into
 //! the open dialog (`brushKeyColor` UI request) and switches back.
+//!
+//! Escape ends either pick without sampling and switches back to that tool. With neither pick
+//! armed, Escape is left to the application.
 
 use std::collections::HashSet;
 
@@ -28,7 +31,7 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use super::paint_owner;
 use crate::params::color_json;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Default)]
 pub struct EyedropperTool {
@@ -530,6 +533,38 @@ impl Tool for EyedropperTool {
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
         Cursor::Eyedropper
     }
+
+    /// Escape ends a gradient stop's or Key Color's pick without sampling and switches back to the
+    /// tool that armed it.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape || !self.picking() {
+            return vec![];
+        }
+        let back = self.stop.take().unwrap_or_else(|| "selection".to_string());
+        self.brush_key_color = false;
+        vec![Action::SwitchTool(back)]
+    }
+
+    /// A dropped press (a long or canceled touch) leaves an armed pick waiting for its click.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
+
+    /// Escape is the tool's while a pick is armed, so it switches back and ends nothing else.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.picking()
+    }
+
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
+        self.picking()
+    }
+}
+
+impl EyedropperTool {
+    /// Is a one-shot pick armed (a gradient stop's or Brush Options' Key Color)?
+    fn picking(&self) -> bool {
+        self.stop.is_some() || self.brush_key_color
+    }
 }
 
 #[cfg(test)]
@@ -617,6 +652,41 @@ mod tests {
             ]
         );
         assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}), "one sample only");
+    }
+
+    /// #8024: Escape ends a gradient stop's pick and a Key Color pick without sampling and
+    /// switches back; the plain Eyedropper leaves Escape alone.
+    #[test]
+    fn escape_ends_a_pick_and_switches_back() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let mut cx = cx(&d, &s, &p);
+        cx.gradient_stop = Some(1);
+        let none = Mods::default();
+        let mut t = EyedropperTool::default();
+        assert!(!t.claims_key(&cx, ToolKey::Escape) && !t.ends_on_escape(&cx), "nothing armed");
+        assert!(t.key(&cx, ToolKey::Escape, none).is_empty());
+
+        t.set_option("stop", &json!("gradient"));
+        assert!(t.claims_key(&cx, ToolKey::Escape) && t.ends_on_escape(&cx));
+        assert!(!t.claims_key(&cx, ToolKey::Enter));
+        assert!(t.drop_press(&cx).is_empty(), "a dropped press leaves the pick armed");
+        assert_eq!(t.key(&cx, ToolKey::Escape, none), vec![Action::SwitchTool("gradient".into())]);
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+        assert!(!t.claims_key(&cx, ToolKey::Escape) && t.key(&cx, ToolKey::Escape, none).is_empty(), "one cancel only");
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+        assert!(!a.iter().any(|a| matches!(a, Action::Exec(_, v) if v.get("stop").is_some())), "no stop sample after the cancel: {a:?}");
+
+        t.set_option("brushKeyColor", &json!(true));
+        t.set_option("stop", &json!("paintbrush"));
+        assert!(t.claims_key(&cx, ToolKey::Escape));
+        assert_eq!(t.key(&cx, ToolKey::Escape, none), vec![Action::SwitchTool("paintbrush".into())]);
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+
+        // A Key Color pick with no tool to return to goes back to the Selection tool.
+        t.set_option("brushKeyColor", &json!(true));
+        assert_eq!(t.key(&cx, ToolKey::Escape, none), vec![Action::SwitchTool("selection".into())]);
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
     }
 
     #[test]

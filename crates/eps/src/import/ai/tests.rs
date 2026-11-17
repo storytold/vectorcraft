@@ -6462,6 +6462,30 @@ fn a_brushs_opacity_mask_art_takes_ids_of_the_document() {
     assert_eq!(unique.len(), all.len(), "{all:?}");
 }
 
+/// An Art brush's art is turned over with the art of its opacity mask, whether the mask moves with
+/// its object or not: the mask's art stays over the part of the object it is over in the section.
+#[test]
+fn an_art_brushs_opacity_mask_art_turns_over_with_its_object() {
+    let mut read = vec![];
+    for linked in [true, false] {
+        let mask_art: String = format!("1 g\n{}f\n", rect_path(0.0, 0.0, 40.0, 3.0)).lines().map(|l| format!("%_{l}\n")).collect();
+        let options = format!("%_1 /Bool (Clipping) ,\n%_{} /Bool (Linked) ,\n", u8::from(linked));
+        let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n{mask_art}%_X+\n%_(Art) ,\n{options}%_; (AI9_Mask) ,\n%_;\n");
+        let section = format!("%AI8_BeginBrushPattern\n(Ribbon art)\n0 A\n0 g\n{}f\n{mask}%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 40.0, 8.0));
+        let shape = format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+        let r = read_ok(&format!("{section}{}{}", plugin_object(ART_BRUSH, "Ribbon", RIBBON), layer(&shape)));
+        let lib = vectorcraft_brush::library(&r.doc);
+        let vectorcraft_brush::BrushKind::Art(brush) = brush_named(&lib, "Ribbon") else { panic!("art: {:?}", r.warnings) };
+        let m = brush.art.extras().mask.as_deref().unwrap_or_else(|| panic!("the mask is read: {:#?}", brush.art));
+        assert_eq!(m.linked, linked);
+        let (object, over) = (brush.art.geometric_bounds().unwrap(), m.art.geometric_bounds().unwrap());
+        assert!((object.height() - 8.0).abs() < 1e-6 && (over.height() - 3.0).abs() < 1e-6, "linked {linked}: {over:?} over {object:?}");
+        assert!(over.y0 > object.y0 - 1e-6 && over.y1 < object.y1 + 1e-6, "linked {linked}: {over:?} over {object:?}");
+        read.push((object, over));
+    }
+    assert_eq!(read[0], read[1], "a mask is in the same place whether it moves with its object or not");
+}
+
 /// An art styles section inside a symbol's, a pattern's or a brush's art is skipped: the file's own
 /// art styles still style the layers' objects read after the definition.
 #[test]
@@ -9354,8 +9378,10 @@ fn a_blend_comes_in_as_a_live_blend() {
 }
 
 /// A blend whose spine was never edited has no spine written, only its keys: its spine is the
-/// straight line between the keys' centres, in the record's order (here the left key, named `B`,
-/// first), and the blend comes in live.
+/// straight line between the keys' centers, in the record's order, and the blend comes in live.
+/// With the record naming the keys in their order (here the left key, named `B`, first) the blend
+/// has no spine of its own, which runs the same way; in the other order its spine is that line,
+/// from the right key to the left one.
 #[test]
 fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let spine_part = format!("%_N\n{}", blend_part("S", None));
@@ -9365,12 +9391,20 @@ fn a_blend_with_no_spine_written_runs_straight_between_its_keys() {
     let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
     assert!(!warnings.iter().any(|w| w == super::blend::DRAWN), "{warnings:?}");
     assert_eq!(spec.spacing, vectorcraft_doc::live::BlendSpacing::Steps(3));
-    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
-    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert_eq!((&spec.spine, &spec.key_anchors), (&None, &vec![]), "a blend with no spine of its own");
+    let (spine, _) = vectorcraft_doc::blend::blend_spine(children, spec).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
     assert_eq!(points.len(), 2, "{points:?}");
     assert!((points[0].0 - 10.0).abs() < 0.01 && (points[1].0 - 110.0).abs() < 0.01, "from the left key to the right one: {points:?}");
-    assert_eq!(spec.key_anchors, vec![0, 1]);
     assert_eq!(vectorcraft_doc::blend::blend_expand(children, spec).len(), 5);
+
+    let body = blend_file("", [Some("B"), Some("A")], &blend_record(&['A', 'B']));
+    let (blend, warnings) = read_blend(&body.replace(&spine_part, ""));
+    let NodeKind::Blend { spec, .. } = &blend.kind else { panic!("a live blend: {:?} {warnings:?}", blend.kind) };
+    let spine = spec.spine.as_ref().and_then(|p| p.subpaths.first()).expect("a spine");
+    let points: Vec<(f64, f64)> = spine.anchors.iter().map(|a| (a.p.x, a.p.y)).collect();
+    assert!((points[0].0 - 110.0).abs() < 0.01 && (points[1].0 - 10.0).abs() < 0.01, "from the right key to the left one: {points:?}");
+    assert_eq!(spec.key_anchors, vec![1, 0]);
 }
 
 /// The tags after a blend's drawn steps are the live blend's.
