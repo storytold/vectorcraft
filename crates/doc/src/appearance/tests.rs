@@ -356,6 +356,7 @@ fn arrowhead_names_are_stable_and_every_one_is_listed_once() {
         "TriangleBar",
         "Oval",
         "LineArrow",
+        "NotchedArrow",
     ];
     for name in SAVED {
         let a: Arrowhead = serde_json::from_value(serde_json::json!(name)).unwrap();

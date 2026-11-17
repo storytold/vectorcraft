@@ -160,4 +160,11 @@ fn arrowhead_dropdown_offers_the_new_heads() {
     let t = frame_events(&ctx, &mut app, vec![], stroke::show);
     click(&ctx, &mut app, text_rect(&t, "Barbed").center(), stroke::show);
     assert_eq!(current_stroke(&app).and_then(|s| s.end_arrow), Some(vectorcraft_doc::Arrowhead::Barbed));
+    // The notched arrow is listed under its name, right after Arrow.
+    click(&ctx, &mut app, egui::pos2(label.right() + 2.0 * sp + 64.0 + 32.0, label.center().y), stroke::show);
+    let t = frame_events(&ctx, &mut app, vec![], stroke::show);
+    let (arrow, notched, open) = (text_rect(&t, "Arrow"), text_rect(&t, "Notched Arrow"), text_rect(&t, "Arrow (open)"));
+    assert!(arrow.center().y < notched.center().y && notched.center().y < open.center().y, "{arrow:?} {notched:?} {open:?}");
+    click(&ctx, &mut app, notched.center(), stroke::show);
+    assert_eq!(current_stroke(&app).and_then(|s| s.end_arrow), Some(vectorcraft_doc::Arrowhead::NotchedArrow));
 }

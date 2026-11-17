@@ -2,7 +2,7 @@
 //! the width-profile presets.
 
 use serde_json::json;
-use vectorcraft_doc::{ArrowAlign, StrokeLayer, WidthProfile};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, StrokeLayer, WidthProfile};
 
 use crate::*;
 
@@ -56,6 +56,19 @@ fn profiles_come_from_the_preset_catalogue() {
         s.execute("stroke.set", &json!({"endArrow": name})).unwrap();
         assert_eq!(stroke(&s, id).end_arrow, Some(a));
     }
+}
+
+#[test]
+fn the_notched_arrow_survives_the_native_format() {
+    let (mut s, id) = session_with_line();
+    s.execute("stroke.set", &json!({"startArrow": "NotchedArrow", "endArrow": "NotchedArrow"})).unwrap();
+    let st = stroke(&s, id);
+    assert_eq!((st.start_arrow, st.end_arrow), (Some(Arrowhead::NotchedArrow), Some(Arrowhead::NotchedArrow)));
+    let doc = &s.doc().unwrap().doc;
+    let text = String::from_utf8(vectorcraft_format::save(doc, true)).unwrap();
+    assert_eq!(text.matches("\"NotchedArrow\"").count(), 2, "saved by name");
+    let back = vectorcraft_format::load(text.as_bytes()).unwrap();
+    assert_eq!(back.node(id).unwrap().appearance.stroke().unwrap(), &stroke(&s, id));
 }
 
 #[test]
