@@ -785,6 +785,71 @@ fn optimize_to_file_size_takes_the_settings_that_fit() {
     assert!(!shown(&app));
 }
 
+/// Enter while the Optimize to File Size rows are open runs the search and writes nothing; once the
+/// search has closed the rows, Enter saves with the settings it found.
+#[test]
+fn enter_in_the_optimize_rows_runs_the_search_and_saves_nothing() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-enter");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "quality", json!(100));
+    frame(&mut app);
+    let full = app.session.execute("document.exportForWeb.preview", &json!({"format": "jpg", "quality": 100})).unwrap()["bytes"].as_u64().unwrap();
+    set(&mut app, "__optimizeK", json!(full as f64 * 0.8 / 1024.0));
+    set(&mut app, "__optimizeStart", json!("current"));
+    let files = |dir: &std::path::Path| std::fs::read_dir(dir).map_or(0, |r| r.count());
+    let enter_with = |app: &mut VectorcraftApp, modifiers: egui::Modifiers| {
+        let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers };
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let enter = |app: &mut VectorcraftApp| enter_with(app, egui::Modifiers::NONE);
+    // Ctrl+Enter, which the size field does not commit, neither searches nor saves.
+    enter_with(&mut app, egui::Modifiers::CTRL);
+    frame(&mut app);
+    assert_eq!(kind(&app), Some(save_for_web::KIND), "Ctrl+Enter in the rows does not save");
+    assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key("__optimizeK"), "the rows stay open");
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("__optimized"));
+    assert_eq!(files(&dir), 0);
+    enter(&mut app);
+    assert_eq!(kind(&app), Some(save_for_web::KIND), "Enter in the rows does not save");
+    assert_eq!(files(&dir), 0);
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    let found = d.fields.get("__optimized").cloned().unwrap();
+    assert_eq!(found["achieved"], json!(true), "{found}");
+    assert!(!d.fields.contains_key("__optimizeK"), "the search closed the rows");
+    enter(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(files(&dir), 1);
+}
+
+/// An Enter in the Optimize to File Size rows runs no search when a field of the dialog, one drawn
+/// after the rows included, refused the value typed in it on that press, or when a control drawn
+/// after the rows (an open dropdown) took the press.
+#[test]
+fn enter_in_the_optimize_rows_runs_nothing_when_a_later_control_refused_or_took_it() {
+    // `before` stands for the controls drawn after the rows, which act on the press first.
+    let go = |before: fn(&egui::Context)| {
+        let mut d = Dialog::new(save_for_web::KIND, json!({"__optimizeK": 10}));
+        let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| {
+            before(ui.ctx());
+            save_for_web::optimize_on_enter(ui.ctx(), &mut d);
+        });
+        out.textures_delta.clear();
+        assert!(d.fields.contains_key("__optimizeK"), "the rows stay open");
+        d.fields.contains_key("__optimizeGo")
+    };
+    assert!(go(|_| {}), "a plain Enter runs the search");
+    assert!(!go(crate::widgets::reject_dialog_commit), "a refused value runs nothing");
+    assert!(!go(|ctx| ctx.input_mut(|i| _ = i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))), "a taken press runs nothing");
+}
+
 #[test]
 fn optimize_to_file_size_starts_at_the_size_of_the_slices_files() {
     let dir = vectorcraft_testkit::temp_dir("sfw-optimize-slices");

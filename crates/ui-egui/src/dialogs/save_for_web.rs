@@ -542,6 +542,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             side(app, ui, d, settings.as_ref().ok());
         });
     });
+    optimize_on_enter(ui.ctx(), d);
     if browser && let Err(e) = app.run("file.saveForWeb.browser", params(d)) {
         app.status(e);
     }
@@ -842,7 +843,7 @@ fn previewed_bytes(app: &VectorcraftApp, ui: &egui::Ui, s: &WebSettings) -> Opti
 }
 
 /// Optimize to File Size…: the button opens rows ([`open_optimize_rows`]) for the desired size in
-/// K, Start With and, with slices, Use; OK runs [`optimize_to_size`] and Cancel
+/// K, Start With and, with slices, Use; OK or Enter runs [`optimize_to_size`] and Cancel
 /// closes the rows. A line gives the size it found and whether that is within the desired size
 /// ([`optimized_result`]).
 fn optimize_rows(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, art: &str) {
@@ -885,6 +886,25 @@ fn optimize_rows(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>, art
         widgets::label_row(ui, "", LABEL_W, |ui| {
             widgets::dim_label(ui, &text);
         });
+    }
+}
+
+/// An Enter while the Optimize to File Size rows ([`optimize_rows`]) are open is their OK: it does
+/// not save. Run after every control of the dialog has drawn, it runs the search unless a control
+/// took the press (an open dropdown), a field refused the value typed in it, or Ctrl, Cmd or Alt was
+/// held, which the size field does not commit.
+pub(super) fn optimize_on_enter(ctx: &egui::Context, d: &mut Dialog) {
+    if !d.fields.contains_key("__optimizeK") || !crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
+        return;
+    }
+    let held = ctx.input(|i| {
+        i.events.iter().any(|e| matches!(e, egui::Event::Key { key: egui::Key::Enter, pressed: true, modifiers, .. } if modifiers.ctrl || modifiers.command || modifiers.alt))
+    });
+    let refused = ctx.data(|m| m.get_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    widgets::reject_dialog_commit(ctx);
+    if !held && !refused {
+        d.fields.insert("__optimizeGo".into(), json!(true));
+        ctx.request_repaint();
     }
 }
 
