@@ -196,6 +196,9 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
 fn artistic_library_strokes_are_editable_and_reopen_from_a_saved_library() {
     let mut s = session();
     let (_, lib) = cmd::brushlib::library(&s, "artistic").unwrap();
+    let (_, alias) = cmd::brushlib::library(&s, "Artistic").unwrap();
+    assert_eq!(alias.brushes, lib.brushes);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Artistic"}))["id"], "artistic");
     let names = ["Orbit Lines", "Petal Garland", "Lattice Braid", "Facet Sweep"];
     assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
     let line = run(&mut s, "shape.line", json!({"x1": 10, "y1": 50, "x2": 190, "y2": 50}))["id"].as_u64().unwrap();

@@ -179,7 +179,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
     BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
-    BuiltinBrushLibrary { id: "artistic", name: "Artistic", make: artistic },
+    BuiltinBrushLibrary { id: "artistic", name: "Artistic Brushes", make: artistic },
 ];
 
 /// Built-in library `id`, made once.
@@ -258,7 +258,7 @@ fn artistic() -> BrushLibrary {
         facets.push(black(polygon(&[(x, -high), (x + 11.0, -high / 2.0), (x + 12.5, 0.0), (x + 11.0, high / 2.0), (x, high)])));
     }
     built(
-        "Artistic",
+        "Artistic Brushes",
         Document::new(100.0, 100.0),
         vec![
             art("Orbit Lines", orbit, Colorization::Tints),
@@ -822,8 +822,8 @@ pub fn library(s: &Session, key: &str) -> Option<(LibraryInfo, Arc<BrushLibrary>
     if let Some(found) = concealed_library_id(s, key).and_then(|id| s.brush_libraries.get(&id)) {
         return Some(found);
     }
-    if let Some(b) = BUILTIN.iter().find(|b| b.id == key) {
-        return Some((builtin_info(b), builtin_library(key)?));
+    if let Some(b) = BUILTIN.iter().find(|b| b.id == key || (b.id == "artistic" && key.eq_ignore_ascii_case("Artistic"))) {
+        return Some((builtin_info(b), builtin_library(b.id)?));
     }
     let id = libraries(s).into_iter().find(|l| l.name.eq_ignore_ascii_case(key))?.id;
     library(s, &id)

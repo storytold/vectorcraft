@@ -5053,10 +5053,11 @@ error.
 
 Brush libraries are read-only sets of brushes: eleven generated in code (Art Ribbons, Ink and Wash, Calligraphic Nibs, Bristle
 Brushes with one bristle brush for each tip shape, Pattern Borders, Scatter Shapes, Game Trails, Energy Beams, and Dry Media with the Chalk Grain, Graphite Pencil, Wax Crayon and
-Charcoal Dust art brushes, id `dry-media`, and Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`, and Artistic with four original vector art brushes, id `artistic`), the `.vectorcraft` files in the user library folder of the desktop app (User
+Charcoal Dust art brushes, id `dry-media`, and Tech Circuit with Circuit Trace (art), Bus Lines and Terminal Nodes (pattern), id `tech-circuit`, and Artistic Brushes with four original vector art brushes, id `artistic`), the `.vectorcraft` files in the user library folder of the desktop app (User
 Defined) and the brushes of any document loaded with `brush.loadLibrary` (a document without brushes of its own has
 the default ones). `brush.libraries` lists them (`id`, `name`, `category`: `builtIn`, `user` or `loaded`, `count`) and
-`brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name).
+`brush.library {library}` returns one's brushes (`name`, `type`; `library` is an id or a name). The
+built-in Artistic Brushes library also accepts `Artistic` as a lookup name.
 `brush.addFromLibrary {library, name? | names?}` copies brushes into the document's Brushes as one undo step (no
 names: the whole library), with the resources their art uses: patterns, symbols, swatches (`swatchConflict` as for
 `edit.paste`), graphic styles and images. Brushes the document already has (same name and definition) are reported
