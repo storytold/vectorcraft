@@ -2277,6 +2277,7 @@ digits	Malayalam	Malayalam
 	Rule:	Regel:
 	Save changes to {name}	Wijzigingen opslaan in {name}
 	Save theme to My Themes	Thema opslaan in Mijn thema's
+	Set the current fill or stroke to the selected color	De huidige vulling of contour op de geselecteerde kleur instellen
 	Set the selected color to the current color	De geselecteerde kleur op de huidige kleur instellen
 	Copy All Styles	Alle stijlen kopiëren
 	Exported {path}	{path} geëxporteerd

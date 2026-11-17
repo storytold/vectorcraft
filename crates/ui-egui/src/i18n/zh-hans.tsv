@@ -3331,6 +3331,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Set Slice Rectangle	设置切片矩形
 	Set Tab Stops	设置制表位
 	Set Text	设置文本
+	Set the current fill or stroke to the selected color	将当前填色或描边设为选择的颜色
 	Set the selected color to the current color	将选择的颜色设为当前颜色
 	Set Zoom	设置缩放
 	Settings…	设置…

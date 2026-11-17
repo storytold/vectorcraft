@@ -10,7 +10,7 @@ use vectorcraft_color::Color;
 use vectorcraft_color::harmony::{Harmony, THEME_SIZE, move_on_wheel};
 use vectorcraft_engine::cmd::colortheme::ColorTheme;
 
-use super::{active_paint, c32, color_json, empty_state, pstate, set_pstate};
+use super::{active_paint, c32, color_json, empty_state, proxy_cmd, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::{self, Tokens};
 use crate::widgets::{self, menu_item};
@@ -126,6 +126,15 @@ fn add_draft_to_swatches(app: &mut VectorcraftApp, ctx: &egui::Context) {
     app.run("swatch.newGroup", json!({ "name": name, "colors": colors_json(&d.colors), "keepModel": true })).ok();
 }
 
+/// Paint the active proxy (Fill or Stroke) with the selected colour of the theme being made, in its
+/// own model: the selection and the new-art default take it in one paint command, so one undo
+/// step, and no step when the art already has it. The theme stays as it is.
+fn set_active_color(app: &mut VectorcraftApp, d: &Draft) {
+    if let Some(c) = d.colors.get(d.sel) {
+        app.run(proxy_cmd(app, false), json!({ "color": color_json(c), "keepModel": true })).ok();
+    }
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let ctx = ui.ctx().clone();
     ui.horizontal(|ui| {
@@ -191,6 +200,11 @@ fn create(app: &mut VectorcraftApp, ui: &mut Ui) {
         let hex = d.colors.get(d.sel).map(|c| c.to_hex().trim_start_matches('#').to_string()).unwrap_or_default();
         if let Some(c) = widgets::hex_field_named(ui, "ct-hex", Some(tl!("Color")), &hex).and_then(|h| Color::from_hex(&h)) {
             d.set_selected(c);
+        }
+        let can_set = app.session.active().is_some() && d.colors.get(d.sel).is_some();
+        let tip = tl!("Set the current fill or stroke to the selected color");
+        if widgets::icon_button_enabled(ui, "paint-bucket", tip, false, can_set, 24.0).clicked() {
+            set_active_color(app, &d);
         }
         let current = active_paint(app).color();
         if widgets::icon_button_enabled(ui, "pipette", tl!("Set the selected color to the current color"), false, current.is_some(), 24.0).clicked()
@@ -452,6 +466,135 @@ mod tests {
         assert_eq!(draft(&app, &ctx).editing, None);
         assert_eq!(picked(&app, &ctx), None);
         frame(&mut app, &ctx);
+    }
+
+    const SET_ACTIVE: &str = "Set the current fill or stroke to the selected color";
+
+    /// A click on the panel button that screen readers name `label`. egui finds what the pointer is
+    /// over from the frame before, so the move gets a frame of its own.
+    fn click(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        ctx.enable_accesskit();
+        let mut time = ctx.input(|i| i.time);
+        let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            time += 0.1;
+            let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(320.0, 520.0));
+            let input = egui::RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() };
+            let mut out = ctx.run_ui(input, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out
+        };
+        run(app, vec![]);
+        let out = run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
+        let b = node.unwrap_or_else(|| panic!("nothing named {label:?}")).1.bounds().expect("bounds");
+        let at = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+        run(app, vec![egui::Event::PointerMoved(at)]);
+        run(app, vec![button(true)]);
+        run(app, vec![button(false)]);
+    }
+
+    /// A Custom theme of five different colours with the third selected.
+    fn five_colors(ctx: &egui::Context) -> Draft {
+        let colors = ["#cc2200", "#22aa44", "#3355dd", "#ddbb11", "#884499"].map(|h| Color::from_hex(h).unwrap()).to_vec();
+        let d = Draft { colors, rule: None, sel: 2, name: "Mine".into(), editing: None };
+        set_draft(ctx, d.clone());
+        d
+    }
+
+    /// The fill and stroke paints of object `id`.
+    fn paints(app: &VectorcraftApp, id: vectorcraft_doc::NodeId) -> (vectorcraft_color::Paint, vectorcraft_color::Paint) {
+        let n = app.session.doc().unwrap().doc.node(id).unwrap();
+        (n.appearance.fill().unwrap().paint.clone(), n.appearance.stroke().unwrap().paint.clone())
+    }
+
+    fn undo_len(app: &VectorcraftApp) -> usize {
+        app.session.doc().unwrap().history.undo.len()
+    }
+
+    /// Screen readers name the Set Active Color button by its tool tip; it is off without a document.
+    #[test]
+    fn set_active_color_is_named_and_needs_a_document() {
+        use crate::widgets::accessibility_tests::{named, tree};
+        let mut app = app();
+        let shown = tree(|ui| show(&mut app, ui));
+        assert_eq!(named(&shown, SET_ACTIVE).role(), egui::accesskit::Role::Button);
+        assert!(!named(&shown, SET_ACTIVE).is_disabled());
+        let mut none = VectorcraftApp::new(Session::new(), Default::default());
+        let shown = tree(|ui| show(&mut none, ui));
+        assert!(named(&shown, SET_ACTIVE).is_disabled(), "no document: nothing to paint");
+    }
+
+    /// Set Active Color paints the active proxy of the selection with the selected theme colour,
+    /// one undo step a click, none when the art already has it, and leaves the theme as it is.
+    #[test]
+    fn set_active_color_paints_the_active_proxy_with_the_selected_color() {
+        let mut app = app();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let id = app.session.doc().unwrap().selection.objects[0];
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let d = five_colors(&ctx);
+        let (_, stroke) = paints(&app, id);
+        let undo = undo_len(&app);
+        click(&mut app, &ctx, SET_ACTIVE);
+        assert_eq!(paints(&app, id), (vectorcraft_color::Paint::solid(d.colors[2]), stroke.clone()), "the selected colour, not the first");
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+        click(&mut app, &ctx, SET_ACTIVE);
+        assert_eq!(undo_len(&app), undo + 1, "no step when the fill already has the colour");
+        // With the Stroke proxy in front, the stroke takes the colour and the fill stays.
+        app.run("paint.toggleActive", json!({"fill": false})).unwrap();
+        set_draft(&ctx, Draft { sel: 3, ..d.clone() });
+        click(&mut app, &ctx, SET_ACTIVE);
+        let solid = |i: usize| vectorcraft_color::Paint::solid(d.colors[i]);
+        assert_eq!(paints(&app, id), (solid(2), solid(3)));
+        assert_eq!(undo_len(&app), undo + 2);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(paints(&app, id), (solid(2), stroke.clone()), "one undo takes the stroke back");
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(paints(&app, id), (solid(2), solid(3)));
+        // The theme being made and the saved themes stay as they were.
+        assert_eq!(draft(&app, &ctx), Draft { sel: 3, ..d.clone() });
+        assert!(themes(&app).is_empty());
+        // The reverse pipette paints nothing.
+        let undo = undo_len(&app);
+        click(&mut app, &ctx, "Set the selected color to the current color");
+        assert_eq!((paints(&app, id), undo_len(&app)), ((solid(2), solid(3)), undo));
+    }
+
+    /// With nothing selected, Set Active Color sets the new-art default alone, without an undo step,
+    /// and new art takes it.
+    #[test]
+    fn set_active_color_with_nothing_selected_sets_the_default_for_new_art() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let d = five_colors(&ctx);
+        let undo = undo_len(&app);
+        click(&mut app, &ctx, SET_ACTIVE);
+        assert_eq!(app.session.paint.fill, vectorcraft_color::Paint::solid(d.colors[2]));
+        assert_eq!(undo_len(&app), undo, "no art changed");
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let id = app.session.doc().unwrap().selection.objects[0];
+        assert_eq!(paints(&app, id).0, vectorcraft_color::Paint::solid(d.colors[2]));
+    }
+
+    /// In a CMYK document Set Active Color keeps an RGB theme colour in RGB.
+    #[test]
+    fn set_active_color_keeps_the_model_in_a_cmyk_document() {
+        let mut app = app();
+        app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let id = app.session.doc().unwrap().selection.objects[0];
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let d = five_colors(&ctx);
+        click(&mut app, &ctx, SET_ACTIVE);
+        assert_eq!(paints(&app, id).0.color(), Some(d.colors[2]));
+        assert!(matches!(d.colors[2], Color::Rgb { .. }));
     }
 
     /// In a CMYK document the theme being made goes to Swatches with its colors in their own model.

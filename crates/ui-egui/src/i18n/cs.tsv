@@ -1806,6 +1806,7 @@ digits	Malayalam	Malajálamské
 	Rule:	Pravidlo:
 	Save changes to {name}	Uložit změny do {name}
 	Save theme to My Themes	Uložit motiv do Mých motivů
+	Set the current fill or stroke to the selected color	Nastavit vybranou barvu jako aktuální výplň nebo tah
 	Set the selected color to the current color	Nastavit vybranou barvu jako aktuální barvu
 	Copy All Styles	Kopírovat všechny styly
 	Exported {path}	Exportováno: {path}

@@ -1779,6 +1779,7 @@ digits	Malayalam	Malajalam
 	Rule:	Sääntö:
 	Save changes to {name}	Tallenna muutokset kohteeseen {name}
 	Save theme to My Themes	Tallenna teema Omiin teemoihin
+	Set the current fill or stroke to the selected color	Aseta nykyiseksi täytöksi tai viivaksi valittu väri
 	Set the selected color to the current color	Aseta valituksi väriksi nykyinen väri
 	Copy All Styles	Kopioi kaikki tyylit
 	Exported {path}	Viety: {path}

@@ -3370,6 +3370,7 @@ mark-style	Japanese	日本式
 	Set Text	テキストを設定
 	Set Zoom	ズーム率を設定
 	Set base color to the current color	基本カラーを現在のカラーに設定
+	Set the current fill or stroke to the selected color	現在の塗りまたは線を選択したカラーに設定
 	Set the selected color to the current color	選択したカラーを現在のカラーに設定
 	Setup…	設定…
 	Shape Builder	シェイプ形成ツール
