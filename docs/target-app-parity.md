@@ -588,6 +588,8 @@ since 2026-10-01.
 
 ## Evidence: what ships today, by area
 
+- Windows native floating palettes use the tool-window style and stay outside Alt-Tab and FancyZones (#7076). Their requested position, size, and resizing controls remain available. The main window and detached document windows keep the normal window style. Windows style: <https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles>. FancyZones filtering: <https://github.com/microsoft/PowerToys/blob/main/src/modules/fancyzones/FancyZonesLib/FancyZonesWindowProcessing.cpp>.
+
 - **Recolor picker follow-up (#8031/#4028):** native Lab numeric entry, document/loaded-library swatches in the Color Picker, and Assign-row Pick from Swatches / Limit to Library menus. #4090 provided the double-click picker and #5113 the Assign sliders. Regression tests `native_lab_entry_in_color_picker` and `row_context_menu_pick_from_swatches_and_limit_to_library` exercise the fields and menu callbacks rather than writing their result state. Area score and hours unchanged.
 
 - **Save refusal (#6146):** ordinary File > Save to its own location offers Save As after a terminal permission/read-only refusal, suggesting the original name and format, preserving options for the unchanged format and opening the chosen format’s Save options on a change. Cancel keeps the failed-save state. Busy pickers, recovery-copy errors, other failures, explicit destinations and Close/Quit keep the existing dialog. Engine, UI and MCP regression cases are in `cmd/fileio/tests_readonly.rs`, `io/tests_read_only_save.rs` and MCP `tests/fileio.rs`; focused UI regressions passed; engine regression execution and native panel acceptance pending. Scores and hours unchanged.

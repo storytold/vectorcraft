@@ -20,6 +20,8 @@ const ORIGIN: Pos2 = pos2(100.0, 50.0);
 struct Window {
     /// Desktop rect of its content.
     rect: Rect,
+    tool_window: Option<bool>,
+    resizable: Option<bool>,
     events: Vec<Event>,
     dropped: Vec<egui::DroppedFileHandle>,
     frames: usize,
@@ -85,6 +87,8 @@ impl Host {
             let rect = Rect::from_min_size(builder.position.unwrap_or_default(), builder.inner_size.unwrap_or(vec2(300.0, 200.0)));
             host.windows.entry(id).or_insert_with(|| Window {
                 rect,
+                tool_window: builder.tool_window,
+                resizable: builder.resizable,
                 events: Vec::new(),
                 dropped: Vec::new(),
                 frames: 0,
@@ -95,6 +99,8 @@ impl Host {
             let (time, focused) = (host.time, host.focus == id);
             let Some(window) = host.windows.get_mut(&id) else { return };
             window.frames += 1;
+            window.tool_window = builder.tool_window;
+            window.resizable = builder.resizable;
             egui::RawInput {
                 viewport_id: id,
                 viewports,
@@ -304,6 +310,27 @@ impl egui::DroppedFile for MockDrop {
     fn bytes(&self) -> Result<Vec<u8>, String> {
         Ok(self.0.clone())
     }
+}
+
+#[test]
+fn floating_palettes_request_tool_window_style_and_keep_their_geometry() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "swatches", "x": 240, "y": 160, "width": 320, "height": 360})).unwrap();
+    h.frames(3);
+    let viewport = h.viewport("swatches");
+    let rect = {
+        let host = h.host.borrow();
+        let window = &host.windows[&viewport];
+        assert_eq!(window.tool_window, Some(true));
+        assert_ne!(window.resizable, Some(false));
+        assert_eq!(window.rect, Rect::from_min_size(ORIGIN + vec2(240.0, 160.0), vec2(320.0, 360.0)));
+        window.rect
+    };
+    h.frames(3);
+    assert_eq!(h.host.borrow().windows[&viewport].rect, rect);
+    h.app.run("window.panel.dock", json!({"panel": "swatches"})).unwrap();
+    h.frames(3);
+    assert!(layout_of(&h.app.ui).floating.iter().all(|window| !window.panels().any(|panel| panel == "swatches")));
 }
 
 #[test]
@@ -527,8 +554,8 @@ fn reopened(saved: &craft_ui::docking::Layout<String>, monitors: &[crate::DockMo
 /// Two monitors side by side, with the main window on the left one (#5582).
 #[test]
 fn a_floating_panel_reopens_on_the_monitor_where_it_was_left() {
-    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
-    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
+    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
     let both = [left.clone(), right.clone()];
 
     let mut h = Harness::new();
