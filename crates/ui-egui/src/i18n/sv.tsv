@@ -1308,6 +1308,10 @@ font-technology	Variable	Variabla
 	Font List	Typsnittslista
 	Show Similar Fonts	Visa liknande typsnitt
 	Clear Similar Fonts	Rensa liknande typsnitt
+	Fonts used in this document	Typsnitt som används i det här dokumentet
+	This document uses no available fonts	Det här dokumentet använder inga tillgängliga typsnitt
+	Recently Added	Nyligen tillagda
+	Fonts added in the last 30 days	Typsnitt som lagts till de senaste 30 dagarna
 	Font Preview Size	Storlek på typsnittsförhandsgranskning
 	Font Size	Teckenstorlek
 	Variable Font	Variabelt typsnitt
@@ -4872,6 +4876,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no active document	inget aktivt dokument
 @msg	no active perspective plane	inget aktivt perspektivplan
 @msg	no anchor points selected	inga ankarpunkter är markerade
+@msg	`points` must be three [x, y] pairs of numbers	`points` måste vara tre talpar [x, y]
+@msg	direct-select three anchor points, or give `points`	direktmarkera tre ankarpunkter eller ange `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
 @msg	no artboard {i} (0-based; the document has {_1})	ingen rityta {i} (räknat från 0; dokumentet har {_1})
@@ -7193,6 +7200,7 @@ anchor	Points:	Punkter:
 	Open a document to check it for issues.	Öppna ett dokument för att kontrollera det efter problem.
 	Empty Text	Tom text
 	Unpainted Objects	Ofärgade objekt
+	Empty Text Paths	Tomma textbanor
 	Zero-Opacity Objects	Objekt med 0 % opacitet
 	Duplicate Objects	Dubblettobjekt
 	Off-Artboard Art	Grafik utanför ritytorna
