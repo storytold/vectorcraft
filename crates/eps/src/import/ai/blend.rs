@@ -285,48 +285,83 @@ fn drawn_as(n: &Node) -> Option<Drawn<'_>> {
     Some(Drawn { centre: centre(n)?, fill: fill(n), size, node: n })
 }
 
-/// Every subpath of more than one anchor of the paths in `n` (the members of its groups and compound
-/// paths looked through, at most eight levels down), in any order, when they have at most
-/// [`MAX_MARK_ANCHORS`] anchors together and `n` holds nothing else.
-fn outline(n: &Node) -> Option<PathData> {
-    fn add(n: &Node, depth: usize, out: &mut Vec<SubPath>, anchors: &mut usize) -> Option<()> {
-        match &n.kind {
-            NodeKind::Path { path, .. } => {
-                // A subpath of one anchor has no segment to compare with.
-                for s in path.subpaths.iter().filter(|s| s.anchors.len() > 1) {
-                    *anchors = anchors.saturating_add(s.anchors.len());
-                    if *anchors > MAX_MARK_ANCHORS {
-                        return None;
-                    }
-                    out.push(s.clone());
-                }
-                Some(())
-            }
-            NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } if depth < 8 => {
-                children.iter().try_for_each(|c| add(c, depth + 1, out, anchors))
-            }
-            // Art whose drawing isn't its members (a blend, an envelope, a repeat), and art past
-            // eight levels down: compared by the size alone.
-            _ => None,
-        }
-    }
-    let (mut subpaths, mut anchors) = (vec![], 0);
-    add(n, 0, &mut subpaths, &mut anchors)?;
-    (!subpaths.is_empty()).then(|| PathData::new(subpaths))
+/// How the check compares an object's turn.
+enum Outline {
+    /// By its outline: every subpath of more than one anchor of its paths, in any order, each with
+    /// its path's fill, so that a turn that trades the places of paths painted differently doesn't
+    /// pass.
+    Paths(Vec<(Fill, SubPath)>),
+    /// By its size alone: it holds art whose drawing isn't its members (a blend, an envelope, a
+    /// repeat), art past eight levels down, more than [`MAX_MARK_ANCHORS`] anchors or no subpath to
+    /// compare.
+    Size,
 }
 
-/// Do two outlines draw the same line: each anchor of one, and the points a quarter, half and three
-/// quarters along each of its segments (which show how a curved side bends), within `tolerance` of
-/// the other's outline? Where a path starts and how many anchors it has on a straight or curved
-/// stretch don't count.
-fn same_outline(a: &PathData, b: &PathData, tolerance: f64) -> bool {
-    let near = |to: &PathData, p: Point| to.nearest(p).is_some_and(|(.., d)| d <= tolerance);
-    let on = |from: &PathData, to: &PathData| {
-        from.subpaths.iter().all(|s| {
-            s.anchors.iter().all(|p| near(to, p.p))
+/// How the check compares `n`'s turn (the members of its groups and compound paths looked through,
+/// at most eight levels down; a compound path's members take its fill).
+fn outline(n: &Node) -> Outline {
+    /// What the walk found.
+    #[derive(Default)]
+    struct Walk {
+        subpaths: Vec<(Fill, SubPath)>,
+        anchors: usize,
+        /// Art compared by the size alone, or too many anchors.
+        size_only: bool,
+    }
+    fn add(n: &Node, depth: usize, painted: Option<Fill>, w: &mut Walk) {
+        if w.size_only {
+            return;
+        }
+        match &n.kind {
+            NodeKind::Path { path, .. } => {
+                let f = painted.unwrap_or_else(|| fill(n));
+                // A subpath of one anchor has no segment to compare with.
+                for s in path.subpaths.iter().filter(|s| s.anchors.len() > 1) {
+                    w.anchors = w.anchors.saturating_add(s.anchors.len());
+                    if w.anchors > MAX_MARK_ANCHORS {
+                        w.size_only = true;
+                        return;
+                    }
+                    w.subpaths.push((f, s.clone()));
+                }
+            }
+            NodeKind::Group { children, .. } if depth < 8 => {
+                for c in children {
+                    add(c, depth + 1, painted, w);
+                }
+            }
+            NodeKind::Compound { children, .. } if depth < 8 => {
+                let f = painted.unwrap_or_else(|| fill(n));
+                for c in children {
+                    add(c, depth + 1, Some(f), w);
+                }
+            }
+            _ => w.size_only = true,
+        }
+    }
+    let mut w = Walk::default();
+    add(n, 0, None, &mut w);
+    if w.size_only || w.subpaths.is_empty() { Outline::Size } else { Outline::Paths(w.subpaths) }
+}
+
+/// Do two outlines ([`Outline::Paths`]) draw the same lines in the same fills: each anchor of one,
+/// and the points a quarter, half and three quarters along each of its segments (which show how a
+/// curved side bends), within `tolerance` of the other's subpaths of a fill that matches its own?
+/// Where a path starts, how many anchors it has on a straight or curved stretch, and the order of
+/// the paths don't count.
+fn same_outline(a: &[(Fill, SubPath)], b: &[(Fill, SubPath)], tolerance: f64) -> bool {
+    let on = |from: &[(Fill, SubPath)], to: &[(Fill, SubPath)]| {
+        from.iter().all(|(f, s)| {
+            // Fills the check can't compare (gradients, patterns) are compared with each other by
+            // their outline alone.
+            let to = PathData::new(
+                to.iter().filter(|(g, _)| same_fill(*f, *g) || (*f == Fill::Other && *g == Fill::Other)).map(|(_, t)| t.clone()).collect(),
+            );
+            let near = |p: Point| to.nearest(p).is_some_and(|(.., d)| d <= tolerance);
+            s.anchors.iter().all(|p| near(p.p))
                 && (0..s.segment_count()).all(|i| {
                     let c = s.segment(i);
-                    [0.25, 0.5, 0.75].into_iter().all(|t| near(to, c.eval(t)))
+                    [0.25, 0.5, 0.75].into_iter().all(|t| near(c.eval(t)))
                 })
         })
     };
@@ -413,8 +448,9 @@ fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
         }
         outlines_compared.set(outlines_compared.get() + 1);
         match (outline(l.node), outline(d.node)) {
-            (Some(a), Some(b)) => same_outline(&a, &b, 2.0 * PLACE_TOLERANCE),
-            // Too many anchors, or no paths: compared by the size alone.
+            (Outline::Paths(a), Outline::Paths(b)) => same_outline(&a, &b, 2.0 * PLACE_TOLERANCE),
+            // Live art against its drawing, too many anchors, or no paths: compared by the size
+            // alone.
             _ => true,
         }
     };
@@ -425,15 +461,23 @@ fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
         let compare = compare_outline.get(k).copied().unwrap_or(false);
         let (cx, cy) = cell(c);
         // Coordinates far out saturate the cells: the neighbours' keys saturate too.
-        let (i, near) = (-1i64..=1)
+        let candidates = (-1i64..=1)
             .flat_map(|dx| (-1i64..=1).map(move |dy| (cx.saturating_add(dx), cy.saturating_add(dy))))
             .filter_map(|k| grid.get(&k))
             .flatten()
             .filter(|&&i| !used.get(i).copied().unwrap_or(true))
             .filter_map(|&i| laid.get(i).map(|l| (i, l)))
-            .filter(|(_, l)| (l.centre - c).hypot() <= PLACE_TOLERANCE && same_fill(l.fill, f) && same_turn(l, d, compare))
-            .map(|(i, l)| (i, (l.centre - c).hypot()))
-            .min_by(|a, b| a.1.total_cmp(&b.1))?;
+            .filter(|(_, l)| (l.centre - c).hypot() <= PLACE_TOLERANCE && same_fill(l.fill, f));
+        let (i, near) = if turned && compare {
+            // Outlines are tried nearest first, so that steps crowded in one place don't spend the
+            // outline comparisons on candidates farther off.
+            let mut nearest: Vec<(usize, f64)> =
+                candidates.filter(|(_, l)| close(l.size, d.size)).map(|(i, l)| (i, (l.centre - c).hypot())).collect();
+            nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
+            nearest.into_iter().find(|(i, _)| laid.get(*i).is_some_and(|l| same_turn(l, d, true)))?
+        } else {
+            candidates.filter(|(_, l)| same_turn(l, d, false)).map(|(i, l)| (i, (l.centre - c).hypot())).min_by(|a, b| a.1.total_cmp(&b.1))?
+        };
         if let Some(u) = used.get_mut(i) {
             *u = true;
         }
@@ -631,6 +675,23 @@ mod tests {
         };
         assert!(check(&laid, &[wide(0.0), wide(50.0)], false).is_some());
         assert!(check(&laid, &[wide(0.0), wide(50.0)], true).is_none());
+        // Steps on one center match by their size, in whichever order they are drawn.
+        let big = |x: f64| {
+            let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x - 5.0, -5.0, x + 15.0, 15.0));
+            Node::path(NodeId(0), path, Default::default())
+        };
+        assert!(check(&[square(0.0), big(0.0)], &[big(0.0), square(0.0)], true).is_some());
+        // A group's members in close reds match in whichever order they are drawn.
+        let reds = |x: f64, order: [usize; 3]| {
+            let member = |k: usize| {
+                let left = x + k as f64 * 10.0;
+                let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(left, 0.0, left + 8.0, 8.0));
+                let red = [0.25, 0.265, 0.28].get(k).copied().unwrap_or(0.0);
+                Arc::new(Node::path(NodeId(0), path, vectorcraft_doc::Appearance::basic(Paint::solid(Color::rgb(red, 0.0, 0.0)), Paint::None, 0.0)))
+            };
+            Node::group(NodeId(0), order.iter().map(|k| member(*k)).collect())
+        };
+        assert!(check(&[reds(0.0, [0, 1, 2]), reds(50.0, [0, 1, 2])], &[reds(0.0, [1, 0, 2]), reds(50.0, [1, 0, 2])], true).is_some());
         // A triangle turned a half turn has its anchors elsewhere.
         let polygon = |points: &[Point]| Node::path(NodeId(0), PathData::single(SubPath::polyline(points, true)), Default::default());
         let triangle = |x: f64, turn: f64| {
@@ -642,6 +703,16 @@ mod tests {
         let turned = |x: f64| triangle(x, std::f64::consts::PI);
         assert!(check(&laid, &[turned(0.0), turned(50.0)], false).is_some());
         assert!(check(&laid, &[turned(0.0), turned(50.0)], true).is_none());
+        // So has one in a group, filled with a gradient, which the check compares by its outline.
+        let graded = |x: f64, turn: f64| {
+            let mut t = triangle(x, turn);
+            let gradient = vectorcraft_color::gradient::GradientPaint::new(vectorcraft_color::gradient::Gradient::default());
+            t.appearance.set_fill(Paint::Gradient(Box::new(gradient)));
+            Node::group(NodeId(0), vec![Arc::new(t)])
+        };
+        let in_groups = [graded(0.0, 0.0), graded(50.0, 0.0)];
+        assert!(check(&in_groups, &[graded(0.0, 0.0), graded(50.0, 0.0)], true).is_some());
+        assert!(check(&in_groups, &[graded(0.0, std::f64::consts::PI), graded(50.0, std::f64::consts::PI)], true).is_none());
         // The same triangle drawn from another of its anchors matches.
         let shifted = |x: f64| polygon(&[Point::new(x + 10.0, 5.0), Point::new(x, 0.0), Point::new(x, 10.0)]);
         assert!(check(&laid, &[shifted(0.0), shifted(50.0)], true).is_some());
@@ -676,6 +747,11 @@ mod tests {
         let end = 20.0 * MAX_OUTLINE_CHECKS as f64;
         assert!(check(&row(bent(end, 0.0)), &row(bent(end, 0.0)), true).is_some());
         assert!(check(&row(bent(end, 0.0)), &row(bent(end, half)), true).is_none(), "the last one turned");
+        // A hundred steps crowded within the tolerance of each other match their drawn copies:
+        // each drawn one is compared with the nearest laid one first.
+        let crowd = |turn: f64| (0..100u32).map(|i| triangle(0.4 * f64::from(i) / 99.0, turn)).collect::<Vec<_>>();
+        assert!(check(&crowd(0.0), &crowd(0.0), true).is_some());
+        assert!(check(&crowd(0.0), &crowd(half), true).is_none(), "the crowd turned");
         // A compound path matches with its contours in another order, and not turned a half turn.
         let pair = |x: f64, flip: bool, turn: f64| {
             let a = SubPath::polyline(&[Point::new(x, 0.0), Point::new(x, 4.0), Point::new(x + 10.0, 2.0)], true);
@@ -737,6 +813,77 @@ mod tests {
             let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
             assert_eq!(spec.orientation, BlendOrientation::AlignToPage, "{named:?}");
         }
+    }
+
+    /// Triangles pointing right on a spine 1 pt long running right to left, with 998 steps drawn
+    /// unturned, so that every step sits within the tolerance of each one. Align to Path would turn
+    /// each one to point left. A record naming Align to Path doesn't make the blend Align to Path,
+    /// however many steps one step's place matches; a record naming Align to Page keeps it.
+    #[test]
+    fn the_records_orientation_is_checked_on_crowded_steps() {
+        let triangle = |id: u64, x: f64| {
+            let points = [Point::new(x, 0.0), Point::new(x, 10.0), Point::new(x + 20.0, 5.0)];
+            Arc::new(Node::path(NodeId(id), PathData::single(SubPath::polyline(&points, true)), Default::default()))
+        };
+        let spine = vectorcraft_geom::shapes::line(Point::new(11.0, 5.0), Point::new(10.0, 5.0));
+        let spine = Arc::new(Node::path(NodeId(3), spine, Default::default()));
+        let edit = Node::new(NodeId(10), NodeKind::Group { children: vec![triangle(1, 1.0), triangle(2, 0.0), spine], clip: false });
+        let steps = (0..1000u32).map(|i| triangle(20 + u64::from(i), 1.0 - f64::from(i) / 999.0)).collect();
+        let drawn = Node::new(NodeId(11), NodeKind::Group { children: steps, clip: false });
+        let roles = Roles::from([
+            (NodeId(1), ("K".to_string(), Some("A".to_string()))),
+            (NodeId(2), ("K".to_string(), Some("B".to_string()))),
+            (NodeId(3), ("S".to_string(), None)),
+        ]);
+        for named in [BlendOrientation::AlignToPath, BlendOrientation::AlignToPage] {
+            let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: Some(named) };
+            let mut budget = MAX_BLEND_OBJECTS;
+            let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
+            assert_eq!(spec.orientation, BlendOrientation::AlignToPage, "{named:?}");
+        }
+    }
+
+    /// Groups of a red square on the left and a blue one on the right, on a spine running right to
+    /// left, with their steps drawn unturned: Align to Path would give each a half turn, which keeps
+    /// the group's outline but trades the squares' places. A record naming Align to Path doesn't make
+    /// the blend Align to Path.
+    #[test]
+    fn the_records_orientation_must_keep_each_member_where_it_is_drawn() {
+        let square = |id: u64, x: f64, color: Color| {
+            let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 0.0, x + 10.0, 10.0));
+            Arc::new(Node::path(NodeId(id), path, vectorcraft_doc::Appearance::basic(Paint::solid(color), Paint::None, 0.0)))
+        };
+        let pair = |id: u64, x: f64| {
+            let children = vec![square(id * 10, x, Color::rgb(1.0, 0.0, 0.0)), square(id * 10 + 1, x + 10.0, Color::rgb(0.0, 0.0, 1.0))];
+            Arc::new(Node::new(NodeId(id), NodeKind::Group { children, clip: false }))
+        };
+        let spine = vectorcraft_geom::shapes::line(Point::new(110.0, 5.0), Point::new(10.0, 5.0));
+        let spine = Arc::new(Node::path(NodeId(3), spine, Default::default()));
+        let edit = Node::new(NodeId(4), NodeKind::Group { children: vec![pair(1, 100.0), pair(2, 0.0), spine], clip: false });
+        let steps = (0..5u32).map(|i| pair(30 + u64::from(i), 100.0 - f64::from(i) * 25.0)).collect();
+        let drawn = Node::new(NodeId(5), NodeKind::Group { children: steps, clip: false });
+        let roles = Roles::from([
+            (NodeId(1), ("K".to_string(), Some("A".to_string()))),
+            (NodeId(2), ("K".to_string(), Some("B".to_string()))),
+            (NodeId(3), ("S".to_string(), None)),
+        ]);
+        for named in [BlendOrientation::AlignToPath, BlendOrientation::AlignToPage] {
+            let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: Some(named) };
+            let mut budget = 100;
+            let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
+            assert_eq!(spec.orientation, BlendOrientation::AlignToPage, "{named:?}");
+        }
+        // Drawn turned, blue on the left: a record naming Align to Path keeps it.
+        let turned = |id: u64, x: f64| {
+            let children = vec![square(id * 10, x, Color::rgb(0.0, 0.0, 1.0)), square(id * 10 + 1, x + 10.0, Color::rgb(1.0, 0.0, 0.0))];
+            Arc::new(Node::new(NodeId(id), NodeKind::Group { children, clip: false }))
+        };
+        let steps = (0..5u32).map(|i| turned(30 + u64::from(i), 100.0 - f64::from(i) * 25.0)).collect();
+        let drawn = Node::new(NodeId(5), NodeKind::Group { children: steps, clip: false });
+        let record = Record { ids: vec!["A".into(), "B".into()], spacing: None, orientation: Some(BlendOrientation::AlignToPath) };
+        let mut budget = 100;
+        let Some(NodeKind::Blend { spec, .. }) = live_blend(&edit, &drawn, &record, &roles, &mut budget) else { panic!("a live blend") };
+        assert_eq!(spec.orientation, BlendOrientation::AlignToPath);
     }
 
     /// Rectangles 20 pt wide and 10 pt high on a vertical spine, with their steps drawn upright: Align
