@@ -191,6 +191,13 @@ fn transparency(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     widgets::subheader(ui, tl!("Transparency Grid"));
     let sizes: Vec<(&str, &str)> = GridSize::ALL.iter().map(|g| (g.id(), g.label())).collect();
     choice(ui, d, "gridSize", tl!("Grid Size:"), &sizes);
+    // A preset name in the fields (any case, as `document.setup` takes it) becomes the preset's two
+    // colors, which the hex fields and the Color Picker edit one at a time.
+    if let Some((_, pair)) =
+        d.fields.get("gridColors").and_then(Value::as_str).and_then(|n| GRID_COLOR_PRESETS.iter().find(|(p, _)| p.eq_ignore_ascii_case(n)))
+    {
+        d.fields.insert("gridColors".into(), json!(pair.map(|c| c.to_hex())));
+    }
     let colors = grid_colors(d);
     let preset = GRID_COLOR_PRESETS
         .iter()
@@ -774,6 +781,22 @@ mod tests {
             assert_eq!(app.session.active().unwrap().doc.setup.grid_colors_name(), "Light");
             assert_eq!(undo_steps(&app), 0, "cancel {cancel}");
         }
+    }
+
+    /// With a preset name in Document Setup's `gridColors` field, the grid color boxes show the
+    /// preset's colors, and the Color Picker opens on the clicked one; its OK sets that color and
+    /// keeps the preset's other one.
+    #[test]
+    fn a_grid_color_box_opens_the_picker_when_the_field_names_a_preset() {
+        let (mut app, ctx) = transparency_tab();
+        app.ui.dialog.as_mut().unwrap().fields.insert("gridColors".into(), json!("blue"));
+        dialog_frame(&mut app, &ctx, vec![]);
+        click_grid_box(&mut app, &ctx, 1);
+        assert_picker_over_setup(&app, "#c4dcff", "blue");
+        app.ui.dialog.as_mut().unwrap().fields.insert("color".into(), json!("#00ff00"));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!((d.kind.as_str(), dialog_grid(d)), (super::KIND, ["#ffffff", "#00ff00"].map(hex).to_vec()));
     }
 
     /// Clicks the hex field that shows `digits` and types `typed` over its text, leaving the edit
