@@ -109,6 +109,23 @@ fn grid_prefs_apply_to_open_documents() {
     assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
 }
 
+/// The grid preferences are not an undo step in the documents they apply to, so undo and redo
+/// leave the grid as the preferences set it.
+#[test]
+fn undo_and_redo_keep_the_grid_prefs() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 36, "gridSubdivisions": 4}})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (36.0, 4));
+    s.execute("prefs.set", &json!({"values": {"gridlineEvery": 18, "gridSubdivisions": 3}})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    let g = &s.doc().unwrap().doc.grid;
+    assert_eq!((g.spacing, g.subdivisions), (18.0, 3));
+}
+
 /// Guides & Grid › Gridline every and Subdivisions (#394): set with no document open, as the
 /// desktop app restores them at launch, they give `file.new`'s document their grid.
 #[test]

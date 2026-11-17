@@ -1182,6 +1182,40 @@ fn paintbrush_tool_uses_the_current_brush() {
     assert!(s.execute("brush.setCurrent", &json!({"name": "Nope"})).is_err());
 }
 
+/// The current brush and symbol are not undo steps, so undo and redo of other steps leave them as
+/// they are. With nothing else changed outside the history, undo back to the saved document leaves
+/// it saved.
+#[test]
+fn undo_and_redo_keep_the_current_brush_and_symbol() {
+    let mut s = session();
+    rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    s.execute("symbol.new", &json!({"name": "A"})).unwrap();
+    rect(&mut s, 40.0, 10.0, 20.0, 20.0);
+    s.execute("symbol.new", &json!({"name": "B"})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    rect(&mut s, 70.0, 10.0, 20.0, 20.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(!s.doc().unwrap().is_dirty(), "back at the saved document");
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("brush.setCurrent", &json!({"name": "Arrow"})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "A"})).unwrap();
+    let current = |s: &mut Session| {
+        let brush = s.execute("brush.list", &json!({})).unwrap()["current"].clone();
+        (brush, s.execute("symbol.list", &json!({})).unwrap()["current"].clone())
+    };
+    let want = (json!("Arrow"), json!("A"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(current(&mut s), want);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(current(&mut s), want);
+    // A symbol made current between undoing and redoing its deletion is not kept as current.
+    s.execute("symbol.delete", &json!({"name": "B"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("symbol.setCurrent", &json!({"name": "B"})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.unknown.get("currentSymbol"), Some(&json!("A")));
+}
+
 /// A Size: Pressure variant of "3 pt. Round" (3 ± 3 pt).
 fn pressure_round(s: &mut Session) {
     let params = json!({"variation": [0, 0, 3], "modes": ["fixed", "fixed", "pressure"]});

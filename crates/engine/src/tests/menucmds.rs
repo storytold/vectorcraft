@@ -5608,3 +5608,20 @@ fn crop_image_trim_leaves_a_cmyk_image_alone() {
     let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
     assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64(), r["height"].as_u64()), (Some(false), Some(4), Some(2)), "{r}");
 }
+
+/// Lock Guides is not an undo step: it adds none, and undo and redo of the steps before it leave
+/// the guides locked.
+#[test]
+fn lock_guides_is_not_an_undo_step() {
+    let mut s = session();
+    let g = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[g]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.guides_locked());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.guides_locked());
+}
