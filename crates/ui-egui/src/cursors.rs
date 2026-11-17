@@ -771,9 +771,9 @@ pub fn os_cursors(build: bool, wayland: bool) -> bool {
     build && !wayland
 }
 
-/// The cursor a panel shows where a click adds something, such as a stop under the Gradient
-/// panel's ramp: the white arrow with a plus that Group Selection shows for a click that adds the
-/// next group. Windows has no system copy cursor (winit shows the plain arrow for
+/// The cursor a panel shows where a click or a drop adds something, such as a stop under the
+/// Gradient panel's ramp or a copy of rows Alt-dragged in the Layers panel (#8217): the white arrow
+/// with a plus that Group Selection shows for a click that adds the next group. Windows has no system copy cursor (winit shows the plain arrow for
 /// `CursorIcon::Copy`), so where the window shows glyphs as OS cursors ([`os_cursors`]) the panel
 /// hands it this glyph; elsewhere (macOS, Wayland, the web, `VECTORCRAFT_SYSTEM_CURSORS`) the
 /// system's copy cursor shows (#8241). Set every frame it shows: the canvas and egui reset it.

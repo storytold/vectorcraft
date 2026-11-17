@@ -384,7 +384,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Some(drag) = egui::DragAndDrop::payload::<LayersDrag>(ui.ctx())
         && let Some(cursor) = drag_cursor(&drag, alt, over_list)
     {
-        ui.ctx().set_cursor_icon(cursor);
+        // The copy cursor is the panels' add cursor, which Windows can show (#8217, #8241).
+        if cursor == egui::CursorIcon::Copy {
+            crate::cursors::set_add_cursor(app, ui.ctx());
+        } else {
+            ui.ctx().set_cursor_icon(cursor);
+        }
     }
     // Keyboard: Delete removes the highlighted rows while the panel has the keyboard (a row was
     // clicked last, not the canvas).
