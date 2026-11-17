@@ -80,11 +80,11 @@ pub fn over_widget(cx: &ToolContext, p: Point) -> bool {
 pub fn sides_after(from: u32, steps: i64) -> u32 {
     let (min, max) = (i64::from(MIN_SIDES), i64::from(MAX_SIDES));
     let to = if from <= MAX_SIDES {
-        i64::from(from) + steps
+        i64::from(from).saturating_add(steps)
     } else if steps >= 0 {
         return from;
     } else {
-        max + 1 + steps
+        (max + 1).saturating_add(steps)
     };
     to.clamp(min, max) as u32
 }
@@ -211,6 +211,14 @@ mod tests {
         assert_eq!(sides_after(40, -1), 11);
         assert_eq!(sides_after(40, -2), 10);
         assert_eq!(sides_after(1000, -100), 3);
+    }
+
+    #[test]
+    fn the_longest_drags_stay_within_three_and_eleven() {
+        assert_eq!(sides_after(5, i64::MAX), 11);
+        assert_eq!(sides_after(5, i64::MIN), 3);
+        assert_eq!(sides_after(40, i64::MAX), 40);
+        assert_eq!(sides_after(40, i64::MIN), 3);
     }
 
     /// The widget sits 16 px right of the middle of the box's right side, at any zoom; only one
