@@ -524,3 +524,93 @@ fn kerning_reads_parentheses_around_its_text_with_a_manual_value_too() {
         assert_eq!(typed(automatic, "(1,5)"), Some(SpinPick::Value(1.5)), "a decimal comma, automatic: {automatic}");
     }
 }
+
+/// Long dropdown lists use the window's room instead of stopping at `combo_height` (200 pt), and
+/// show a solid scroll bar without hovering when the list still overflows.
+#[test]
+fn a_long_dropdown_uses_window_room_and_shows_its_scroll_bar_when_clipped() {
+    let items: Vec<String> = (0..20).map(|i| format!("Format {i:02}")).collect();
+    let labels: Vec<&str> = items.iter().map(String::as_str).collect();
+    let run = |win_h: f32| {
+        let ctx = themed(Default::default());
+        let button_rect = std::cell::Cell::new(Rect::NOTHING);
+        let mut draw = |ui: &mut Ui| {
+            ui.add_space(16.0);
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                let before = ui.next_widget_position();
+                let _ = dropdown_names(ui, "long-formats", labels[0], &labels, 160.0);
+                button_rect.set(Rect::from_min_size(before, vec2(160.0, 26.0)));
+            });
+        };
+        let mut step = |time: f64, events: Vec<egui::Event>| {
+            let raw = egui::RawInput {
+                time: Some(time),
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, win_h))),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, &mut draw);
+            out.textures_delta.clear();
+            out.shapes
+        };
+        step(0.0, vec![]);
+        let at = button_rect.get().center();
+        let click = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        step(0.1, vec![egui::Event::PointerMoved(at), click(true)]);
+        step(0.2, vec![click(false)]);
+        // Move the pointer away so the scroll bar is dormant, not hovered, and let the popup settle.
+        step(0.3, vec![egui::Event::PointerMoved(pos2(350.0, 10.0))]);
+        let mut clipped = vec![];
+        for i in 4..10 {
+            clipped = step(f64::from(i) * 0.1, vec![]);
+        }
+        (ctx, clipped)
+    };
+
+    // In a tall window, all 20 items show without stopping at the 200 pt cap.
+    let (_tall_ctx, tall_shapes) = run(720.0);
+    let mut texts = vec![];
+    fn collect_text(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect_text(s, out)),
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            _ => {}
+        }
+    }
+    for c in &tall_shapes {
+        collect_text(&c.shape, &mut texts);
+    }
+    assert!(texts.iter().any(|t| t == "Format 19"), "the 20th option is shown without scrolling: {texts:?}");
+
+    // In a short window where the list overflows, a solid scroll bar is drawn even while dormant.
+    let (short_ctx, short_shapes) = run(220.0);
+    let mut short_texts = vec![];
+    for c in &short_shapes {
+        collect_text(&c.shape, &mut short_texts);
+    }
+    assert!(!short_texts.iter().any(|t| t == "Format 19"), "the list overflows the 220 pt window");
+    let popup = short_ctx
+        .memory(|m| m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id)))
+        .expect("the popup is open");
+    let mut bar_rects = vec![];
+    fn collect_rects(s: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match s {
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect_rects(s, out)),
+            egui::Shape::Rect(r) => out.push(r.clone()),
+            _ => {}
+        }
+    }
+    for c in &short_shapes {
+        collect_rects(&c.shape, &mut bar_rects);
+    }
+    let has_scroll_bar = bar_rects.iter().any(|r| {
+        r.fill != Color32::TRANSPARENT
+            && r.rect.width() <= list_scroll_style().bar_width + 1.0
+            && r.rect.height() >= 12.0
+            && r.rect.height() < popup.height()
+            && r.rect.right() <= popup.right()
+            && r.rect.left() >= popup.right() - list_scroll_style().allocated_width() - 8.0
+    });
+    assert!(has_scroll_bar, "the overflowing dropdown draws its scroll bar without hover in {popup:?}");
+}

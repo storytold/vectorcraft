@@ -148,10 +148,15 @@ fn combo_atoms_named<'a, R>(
         .show(ui, |ui| {
             let button_id = combo_button_id(ui, &id);
             let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || craft_ui::ComboBox::is_open(ui.ctx(), button_id);
+            let max_height = (ui.ctx().content_rect().height() - MENU_GAP).max(ui.spacing().combo_height);
             let response = craft_ui::ComboBox::from_id_salt(HashOnly(&id))
                 .selected_text(current)
                 .width(width - 4.0)
-                .height(ui.spacing().combo_height)
+                .height(max_height)
+                .popup_style(egui::style::StyleModifier::new(|style| {
+                    egui::containers::menu::menu_style(style);
+                    style.spacing.scroll = list_scroll_style();
+                }))
                 .show_ui(ui, list);
             // The button or open list handles Enter before the modal can accept it.
             if enter_for_combo {
