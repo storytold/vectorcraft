@@ -684,8 +684,8 @@ fn a_key_anchor_is_chosen_named_and_aligned_to() {
         let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap();
         node.path_data().unwrap().anchors().map(|(_, _, a)| a.p.x).collect()
     };
-    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0]], "mode": "set"})).unwrap();
-    app.run("select.anchors", json!({"id": id, "anchors": [[0, 2]], "mode": "toggle"})).unwrap();
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 2]], "mode": "set"})).unwrap();
+    app.run("select.key", json!({"id": id, "anchor": [0, 2]})).unwrap();
     let ctx = egui::Context::default();
     let ([selection, key, _], left) = panel_buttons(&mut app, &ctx);
     assert_eq!((align_to(&app), chosen_align_to(&mut app, &ctx)), (AlignTo::Key, vec![key]), "chosen automatically");

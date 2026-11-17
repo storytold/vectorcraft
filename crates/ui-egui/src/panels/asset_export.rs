@@ -7,7 +7,7 @@
 //! desktop with Background Export on, on the background thread); the web downloads them. The
 //! screen button opens Export for Screens on its Assets tab.
 //!
-//! Export 3D Object (the panel menu) collects the selected objects with a 3D effect as 3D assets,
+//! Export 3D Object (the panel menu, and the 3D and Materials panel's button) collects the selected objects with a 3D effect as 3D assets,
 //! marked 3D on their tiles. While the panel's assets include 3D assets, a Format row picks their
 //! mesh format (USDA, USDZ, glTF or OBJ), and Export writes them as mesh files beside the pictures.
 //!
@@ -205,6 +205,16 @@ fn drop_zone(ui: &Ui, zone: &egui::Response, ev: &mut Events) {
 /// Run `cmd`, reporting a failure in the status bar.
 fn run(app: &mut VectorcraftApp, cmd: &str, params: Value) -> Option<Value> {
     app.run(cmd, params).map_err(|e| app.status(e)).ok()
+}
+
+/// Export 3D Object: collects objects `ids` (else the selection) as 3D assets (`assets.add3D`), and
+/// selects their assets in the panel, including those that were assets already.
+pub(crate) fn add_3d(app: &mut VectorcraftApp, ctx: &egui::Context, ids: Option<&[u64]>) -> Result<(), String> {
+    let p = ids.map_or_else(|| json!({}), |ids| json!({ "ids": ids }));
+    let r = app.run("assets.add3D", p)?;
+    let assets: Vec<u64> = r["assets"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+    set_pstate(ctx, SELECTED, assets);
+    Ok(())
 }
 
 /// Collect `ids` (else the selection) as assets (one of them all with `single`), and select them
@@ -630,10 +640,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         collect(app, &ctx, None, false);
     }
     if menu_item(ui, tl!("Export 3D Object"), has_art, false)
-        && let Some(r) = run(app, "assets.add3D", json!({}))
+        && let Err(e) = add_3d(app, &ctx, None)
     {
-        let ids: Vec<u64> = r["assets"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
-        set_pstate(&ctx, SELECTED, ids);
+        app.status(e);
     }
     ui.separator();
     if menu_item(ui, tl!("Select All Assets"), !all.is_empty(), false) {

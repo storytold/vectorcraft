@@ -156,9 +156,10 @@ use graph::Graph;
 pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
+pub(crate) use types::BLEND_BUDGET;
 pub(crate) use types::MAX_NODES;
 pub use types::PlacedPage;
-use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
+use types::{BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -581,6 +582,10 @@ struct Reader<'a> {
     blend_budget: usize,
     /// The group on `%_` lines an envelope's dictionary just took (see [`Reader::drop_envelope_art`]).
     envelope_art: Option<Node>,
+    /// The envelope dictionaries whose `AIDeformArtKey` block (`X=` … `X+`) is being read, as how
+    /// many frames were open with each one innermost, innermost last. The block's art is art: a
+    /// dictionary in it is read as it is in a container ([`Reader::end_obj`]).
+    envelope_blocks: Vec<usize>,
     /// Envelopes waiting for their drawn art, innermost last.
     envelopes: Vec<PendingEnvelope>,
     /// How many more envelopes and warped text objects this import may draw to check
@@ -813,6 +818,7 @@ impl<'a> Reader<'a> {
             blend_record: None,
             blend_budget: BLEND_BUDGET,
             envelope_art: None,
+            envelope_blocks: Vec::new(),
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),

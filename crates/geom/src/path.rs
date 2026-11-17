@@ -6,6 +6,7 @@ use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveExtrema, ParamCurve
 use serde::{Deserialize, Serialize};
 
 use crate::EPS;
+use crate::anchors::Anchors;
 
 /// Fill rule for paths and compound paths.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -224,15 +225,15 @@ pub fn with_anchor_budget<T>(max: usize, f: impl FnOnce() -> T) -> T {
 }
 
 /// A subpath's anchors read within [`with_anchor_budget`].
-fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Anchor>, D::Error> {
+fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Anchors, D::Error> {
     struct V;
     impl<'de> serde::de::Visitor<'de> for V {
-        type Value = Vec<Anchor>;
+        type Value = Anchors;
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             f.write_str("a list of anchors")
         }
-        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Vec<Anchor>, A::Error> {
-            let mut out = Vec::new();
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Anchors, A::Error> {
+            let mut out = Anchors::new();
             while let Some(anchor) = a.next_element::<Anchor>()? {
                 if let Some(left) = ANCHORS_LEFT.get() {
                     let left = left
@@ -262,13 +263,17 @@ pub fn measured_segments() -> u64 {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SubPath {
     #[serde(deserialize_with = "anchors_within")]
-    pub anchors: Vec<Anchor>,
+    pub anchors: Anchors,
     #[serde(default)]
     pub closed: bool,
 }
 
 impl SubPath {
     pub fn new(anchors: Vec<Anchor>, closed: bool) -> Self {
+        Self { anchors: anchors.into(), closed }
+    }
+    /// A subpath of `anchors`, sharing their chunks.
+    pub fn of(anchors: Anchors, closed: bool) -> Self {
         Self { anchors, closed }
     }
     /// Polyline from points.
@@ -442,7 +447,7 @@ impl SubPath {
         let (run, cuts): (Vec<Anchor>, BTreeSet<usize>) = if self.closed {
             (self.anchors.iter().cycle().skip(first).take(n + 1).copied().collect(), cuts.map(|c| (c + n - first) % n).chain([n]).collect())
         } else {
-            (self.anchors.clone(), cuts.collect())
+            (self.anchors.to_vec(), cuts.collect())
         };
         let mut pieces = vec![];
         let mut cur: Vec<Anchor> = vec![];
@@ -511,11 +516,11 @@ impl PathData {
                     {
                         subpaths.push(sp);
                     }
-                    cur = Some(SubPath { anchors: vec![Anchor::corner(p)], closed: false });
+                    cur = Some(SubPath::new(vec![Anchor::corner(p)], false));
                     last = p;
                 }
                 PathEl::LineTo(p) => {
-                    let sp = cur.get_or_insert_with(|| SubPath { anchors: vec![Anchor::corner(last)], closed: false });
+                    let sp = cur.get_or_insert_with(|| SubPath::new(vec![Anchor::corner(last)], false));
                     sp.anchors.push(Anchor::corner(p));
                     last = p;
                 }
@@ -752,7 +757,7 @@ pub fn segment_bounds(seg: PathSeg) -> Rect {
 }
 
 fn push_curve(cur: &mut Option<SubPath>, last: Point, c1: Point, c2: Point, p: Point) {
-    let sp = cur.get_or_insert_with(|| SubPath { anchors: vec![Anchor::corner(last)], closed: false });
+    let sp = cur.get_or_insert_with(|| SubPath::new(vec![Anchor::corner(last)], false));
     if let Some(a) = sp.anchors.last_mut() {
         a.h_out = c1;
     }

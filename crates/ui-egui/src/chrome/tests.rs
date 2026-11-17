@@ -159,6 +159,412 @@ fn hints_name_keys_as_the_menus_do() {
     }
 }
 
+/// The widths of the app bar's right-hand group used by the fitting tests.
+fn right_widths(room: f32, safe_mode: bool) -> super::RightWidths {
+    super::RightWidths { room, safe_mode, switcher: 150.0, field: 170.0, icon: 28.0, gap: 8.0, community: 80.0 }
+}
+
+/// What the group shows, in words, with the switcher's width as full, narrower or minimal.
+fn right_stage(g: &super::RightGroup) -> String {
+    let switcher = match g.switcher_w {
+        _ if !g.switcher => "no switcher",
+        w if w >= 150.0 => "full switcher",
+        w if w > super::MIN_SWITCHER => "narrower switcher",
+        _ => "minimal switcher",
+    };
+    format!("community {}, learn {}, {:?}, {switcher}", g.community, g.learn, g.search)
+}
+
+/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then the search
+/// field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
+/// Whatever shows fits in the room, down to the minimal switcher alone.
+#[test]
+fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
+    let mut stages: Vec<String> = Vec::new();
+    for room in (0..=700).rev().map(|r| r as f32) {
+        let w = right_widths(room, false);
+        let g = super::fit_right_group(&w);
+        let stage = right_stage(&g);
+        if stages.last() != Some(&stage) {
+            stages.push(stage);
+        }
+        let search = match g.search {
+            super::Search::Field => w.gap + w.field,
+            super::Search::Icon => w.gap + w.icon,
+            super::Search::Hidden => 0.0,
+        };
+        let learn = if g.learn { w.gap + w.icon } else { 0.0 };
+        let community = if g.community { 10.0 + w.gap + w.community } else { 0.0 };
+        let used = g.switcher_w + 8.0 + search + learn + community;
+        assert!(used <= room || g.switcher_w == super::MIN_SWITCHER && g.search == super::Search::Hidden, "{room}: {g:?} needs {used}");
+    }
+    assert_eq!(
+        stages,
+        [
+            "community true, learn true, Field, full switcher",
+            "community false, learn true, Field, full switcher",
+            "community false, learn false, Field, full switcher",
+            "community false, learn false, Icon, full switcher",
+            "community false, learn false, Icon, narrower switcher",
+            "community false, learn false, Icon, minimal switcher",
+            // Once the icon has gone, the switcher takes the room it leaves.
+            "community false, learn false, Hidden, narrower switcher",
+            "community false, learn false, Hidden, minimal switcher",
+        ]
+    );
+    // In Safe Mode the label's width is taken first (not counted in `room`), and the switcher goes
+    // when a minimal one does not fit.
+    let safe = |room| right_stage(&super::fit_right_group(&right_widths(room, true)));
+    assert_eq!(safe(700.0), "community true, learn true, Field, full switcher");
+    assert_eq!(safe(72.0), "community false, learn false, Hidden, minimal switcher");
+    assert_eq!(safe(71.0), "community false, learn false, Hidden, no switcher");
+}
+
+/// What screen readers call the app bar's search field, and the icon it becomes, before the shortcut.
+const SEARCH_NAME: &str = "Search commands";
+
+/// A native menu bar that draws nothing.
+struct NoMenus;
+impl crate::native_menu::Backend for NoMenus {
+    fn sync(&mut self, _: &crate::native_menu::MenuBar) {}
+    fn drain(&mut self) -> Vec<crate::native_menu::Event> {
+        Vec::new()
+    }
+}
+
+/// The app bar drawn alone, `width` points wide.
+struct AppBar {
+    app: crate::VectorcraftApp,
+    ctx: egui::Context,
+    width: f32,
+    /// Handle the app's keys before the bar and show the command palette after it, as the app's
+    /// frame does. Off, Tab moves the keyboard focus through the bar's controls, as with a screen
+    /// reader.
+    keys: bool,
+}
+
+/// The app bar's search control, as a screen reader and the painter see it.
+#[derive(Debug)]
+struct SearchSeen {
+    name: String,
+    rect: egui::Rect,
+    texts: Vec<String>,
+}
+
+impl AppBar {
+    fn new(width: f32) -> AppBar {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        crate::theme::install_fonts(&ctx);
+        let app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        crate::shortcut_editor::sync(&app.ui);
+        AppBar { app, ctx, width, keys: false }
+    }
+
+    /// One frame; the accessibility nodes and the texts painted, with where each is.
+    fn frame(&mut self, events: Vec<egui::Event>) -> (Vec<egui::accesskit::Node>, Vec<(String, egui::Rect)>) {
+        fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+                egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+                _ => {}
+            }
+        }
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(self.width, 600.0));
+        let (app, keys) = (&mut self.app, self.keys);
+        let mut out = self.ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| {
+            if keys {
+                crate::shortcuts::handle(app, ui.ctx());
+            }
+            super::app_bar(app, ui);
+            if keys {
+                crate::palette::show(app, ui.ctx());
+            }
+        });
+        out.textures_delta.clear();
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        (out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default(), texts)
+    }
+
+    /// The search control after two frames, if the bar shows it.
+    fn search(&mut self) -> Option<SearchSeen> {
+        self.frame(vec![]);
+        let (nodes, texts) = self.frame(vec![]);
+        let node = nodes.iter().find(|n| n.label().is_some_and(|l| l.starts_with(SEARCH_NAME)))?;
+        let b = node.bounds()?;
+        let rect = egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32));
+        // Without the icon set loaded, a test frame draws an icon as a warning sign; leave it out.
+        let mut texts: Vec<(String, egui::Rect)> =
+            texts.into_iter().filter(|(t, r)| rect.expand(0.5).contains_rect(*r) && !t.starts_with('\u{26a0}')).collect();
+        texts.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
+        let texts = texts.into_iter().map(|(t, _)| t).collect();
+        Some(SearchSeen { name: node.label().unwrap_or_default().to_string(), rect, texts })
+    }
+
+    /// Where the in-window menus end: the right edge of the Help menu's title, if the bar shows it.
+    fn menus_end(&mut self) -> Option<f32> {
+        self.frame(vec![]);
+        let nodes = self.frame(vec![]).0;
+        nodes.iter().filter(|n| n.label() == Some("Help")).filter_map(|n| n.bounds()).map(|b| b.x1 as f32).reduce(f32::max)
+    }
+
+    fn has(&mut self, name: &str) -> bool {
+        self.frame(vec![]);
+        self.frame(vec![]).0.iter().any(|n| n.label() == Some(name))
+    }
+
+    fn click(&mut self, at: egui::Pos2) {
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        self.frame(vec![egui::Event::PointerMoved(at), press(true)]);
+        self.frame(vec![press(false)]);
+    }
+
+    /// Whether the widget at `rect` has the keyboard focus.
+    fn focused_at(&self, rect: egui::Rect) -> bool {
+        self.ctx.memory(|m| m.focused()).and_then(|id| self.ctx.read_response(id)).is_some_and(|r| r.rect == rect)
+    }
+
+    /// A press and release of `key`; Space also types a space, as a keyboard does.
+    fn key(&mut self, key: egui::Key) {
+        let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        let mut press = vec![event(true)];
+        if key == egui::Key::Space {
+            press.push(egui::Event::Text(" ".into()));
+        }
+        self.frame(press);
+        self.frame(vec![event(false)]);
+    }
+}
+
+/// A wide app bar shows a search field with the palette's shortcut in it, and screen readers get a
+/// button named [`SEARCH_NAME`] with the shortcut.
+#[test]
+fn a_wide_app_bar_shows_a_search_field_with_the_palette_shortcut() {
+    let mut bar = AppBar::new(1400.0);
+    let shortcut = crate::menus::shown_shortcut("Cmd+Shift+/");
+    let seen = bar.search().expect("the search field shows");
+    assert_eq!(seen.name, format!("{SEARCH_NAME}  ({shortcut})"));
+    assert!(seen.rect.width() >= 120.0 && seen.rect.width() <= 220.0, "a field, not the 28-point icon: {seen:?}");
+    assert_eq!(seen.texts, [SEARCH_NAME.to_string(), shortcut], "{seen:?}");
+    assert!(bar.has("Explore tutorials"));
+}
+
+/// The field shows the palette's shortcut as the user set it, and no shortcut once it is cleared.
+#[test]
+fn the_search_field_follows_the_palettes_shortcut() {
+    let mut bar = AppBar::new(1400.0);
+    crate::keymap::set_override(&mut bar.app.ui.shortcut_overrides, "help.commandPalette", "Alt+F9");
+    crate::shortcut_editor::sync(&bar.app.ui);
+    let rebound = crate::menus::shown_shortcut("Alt+F9");
+    let seen = bar.search().expect("the search field shows");
+    assert_eq!(seen.name, format!("{SEARCH_NAME}  ({rebound})"));
+    assert_eq!(seen.texts, [SEARCH_NAME.to_string(), rebound], "{seen:?}");
+    crate::keymap::set_override(&mut bar.app.ui.shortcut_overrides, "help.commandPalette", "");
+    crate::shortcut_editor::sync(&bar.app.ui);
+    let seen = bar.search().expect("the search field shows");
+    assert_eq!(seen.name, SEARCH_NAME);
+    assert_eq!(seen.texts, [SEARCH_NAME], "{seen:?}");
+    bar.app.ui.shortcut_overrides.clear();
+    crate::shortcut_editor::sync(&bar.app.ui);
+}
+
+/// A shortcut too long to sit beside "Search commands" in the widest field is left to the tooltip
+/// and the screen-reader name, and "Search commands" stays readable.
+#[test]
+fn a_long_shortcut_leaves_the_search_hint_readable() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let long = format!("Ctrl+Alt+Shift+{}", "PageDown".repeat(4));
+    let mut fields = vec![];
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let t = Tokens::get(ui.ctx());
+            fields = [Some("Ctrl+Shift+/".to_string()), Some(long.clone()), None]
+                .into_iter()
+                .map(|s| {
+                    let f = super::SearchField::new(ui, &t, s);
+                    (f.width, f.hint.size().x, f.key.as_ref().map(|k| k.size().x), f.shortcut.clone())
+                })
+                .collect();
+        });
+        out.textures_delta.clear();
+    }
+    let [(short_w, hint, short_key, _), (long_w, _, long_key, long_shortcut), (none_w, _, none_key, _)] = &fields[..] else {
+        panic!("three fields: {fields:?}");
+    };
+    let short_key = short_key.expect("a short shortcut is shown");
+    assert!(*short_w <= 220.0 && 26.0 + hint + 12.0 + short_key + 8.0 <= *short_w, "the hint and the shortcut fit side by side: {fields:?}");
+    assert_eq!((*long_key, long_shortcut.as_deref()), (None, Some(long.as_str())), "a long one is left to the tooltip and the name");
+    assert!(*long_w <= 220.0 && 26.0 + hint + 8.0 <= *long_w, "{fields:?}");
+    assert!(none_key.is_none() && *none_w >= 120.0, "{fields:?}");
+}
+
+/// A click on the field, or on the icon it becomes in a narrow bar, opens the command palette with an
+/// empty query, and a second click closes it, as the palette's shortcut does. While a dialog is open
+/// neither does anything, as the shortcut does.
+#[test]
+fn a_click_on_the_search_field_opens_the_palette() {
+    for icon in [false, true] {
+        let mut bar = AppBar::new(1400.0);
+        if icon {
+            let narrow = (300..1400).rev().step_by(10).find(|w| {
+                bar.width = *w as f32;
+                bar.search().is_some_and(|s| s.rect.width() == 28.0)
+            });
+            assert!(narrow.is_some(), "a narrow bar shows the icon");
+        }
+        let at = bar.search().expect("the search control shows").rect.center();
+        bar.app.ui.palette_query = "old".into();
+        bar.click(at);
+        assert!(bar.app.ui.palette_open, "icon: {icon}");
+        assert_eq!(bar.app.ui.palette_query, "", "icon: {icon}");
+        bar.app.ui.palette_query = "typed".into();
+        bar.click(at);
+        assert!(!bar.app.ui.palette_open, "a second click closes it (icon: {icon})");
+        assert_eq!(bar.app.ui.palette_query, "", "icon: {icon}");
+        bar.app.ui.dialog = Some(crate::state::Dialog::new("about", json!({})));
+        bar.click(at);
+        assert!(!bar.app.ui.palette_open, "not over a dialog (icon: {icon})");
+    }
+}
+
+/// The icon a narrow bar shows has the field's screen-reader name, and while a dialog is open screen
+/// readers find the field and the icon disabled.
+#[test]
+fn the_search_icon_has_the_fields_name_and_both_are_disabled_under_a_dialog() {
+    let shortcut = crate::menus::shown_shortcut("Cmd+Shift+/");
+    for icon in [false, true] {
+        let mut bar = AppBar::new(1400.0);
+        if icon {
+            let narrow = (300..1400).rev().step_by(10).find(|w| {
+                bar.width = *w as f32;
+                bar.search().is_some_and(|s| s.rect.width() == 28.0)
+            });
+            assert!(narrow.is_some(), "a narrow bar shows the icon");
+        }
+        let disabled = |bar: &mut AppBar| {
+            bar.frame(vec![]);
+            let nodes = bar.frame(vec![]).0;
+            let node = nodes.iter().find(|n| n.label().is_some_and(|l| l.starts_with(SEARCH_NAME))).expect("the search control shows");
+            (node.label().unwrap_or_default().to_string(), node.is_disabled())
+        };
+        assert_eq!(disabled(&mut bar), (format!("{SEARCH_NAME}  ({shortcut})"), false), "icon: {icon}");
+        bar.app.ui.dialog = Some(crate::state::Dialog::new("about", json!({})));
+        assert_eq!(disabled(&mut bar), (format!("{SEARCH_NAME}  ({shortcut})"), true), "icon: {icon}");
+    }
+}
+
+/// The keyboard focus reaches the field, Enter or Space opens the palette and does nothing else, and
+/// Tab then moves the focus on. This holds with the app's keys handled, the palette drawn after the
+/// bar, a document open, and an object selected with the Selection tool, whose Enter otherwise
+/// opens Move. In the app, Tab with no field focused shows and hides the panels instead of moving
+/// the focus, so the focus reaches the bar the way a screen reader moves it.
+#[test]
+fn the_keyboard_opens_the_palette_from_the_search_field() {
+    let cases =
+        [(egui::Key::Enter, 0), (egui::Key::Space, 0), (egui::Key::Enter, 1), (egui::Key::Space, 1), (egui::Key::Enter, 2), (egui::Key::Space, 2)];
+    for (key, setup) in cases {
+        let document = setup > 0;
+        let mut bar = AppBar::new(1400.0);
+        let field = bar.search().expect("the search field shows").rect;
+        assert!(field.width() >= 120.0, "a field, not the icon: {field:?}");
+        let mut reached = false;
+        for _ in 0..40 {
+            bar.key(egui::Key::Tab);
+            if bar.focused_at(field) {
+                reached = true;
+                break;
+            }
+        }
+        assert!(reached, "Tab reaches the search field");
+        bar.keys = true;
+        if document {
+            bar.app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        }
+        if setup == 2 {
+            let id = bar.app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 30})).unwrap()["id"].clone();
+            bar.app.select_tool("selection");
+            bar.app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        }
+        // The app's keys leave the focus on the field.
+        bar.frame(vec![]);
+        assert!(bar.focused_at(field), "{key:?} (setup {setup})");
+        assert!(!bar.app.ui.palette_open);
+        let status = bar.app.ui.status.clone();
+        bar.key(key);
+        // The key opens the palette and goes no further: it does not pick the first result, type a
+        // space into the palette's field or open Move.
+        assert!(bar.app.ui.palette_open, "{key:?} opens the palette (setup {setup})");
+        assert!(bar.app.ui.dialog.is_none(), "{key:?} opened no dialog (setup {setup})");
+        assert_eq!(bar.app.ui.palette_query, "", "{key:?} (setup {setup})");
+        assert!(bar.app.ui.recent_commands.is_empty() && bar.app.ui.status == status, "{key:?} ran nothing (setup {setup})");
+    }
+    // Tab moves the focus off the field with the app's keys handled.
+    let mut bar = AppBar::new(1400.0);
+    let field = bar.search().expect("the search field shows").rect;
+    for _ in 0..40 {
+        if bar.focused_at(field) {
+            break;
+        }
+        bar.key(egui::Key::Tab);
+    }
+    assert!(bar.focused_at(field), "Tab reaches the search field at {field:?}");
+    bar.keys = true;
+    let panels = (bar.app.ui.dock, bar.app.ui.toolbar);
+    bar.key(egui::Key::Tab);
+    assert!(!bar.focused_at(field), "Tab leaves the field");
+    assert_eq!((bar.app.ui.dock, bar.app.ui.toolbar), panels, "Tab on the field does not hide the panels");
+}
+
+/// As the window narrows, the search field becomes the icon after Explore tutorials has gone and
+/// before the icon goes, never overlapping the menus: with a long workspace name, with the menus in
+/// the system's menu bar, and with the window's own caption buttons.
+#[test]
+fn a_narrowing_app_bar_turns_the_search_field_into_the_icon() {
+    for case in ["default", "long workspace name", "native menus", "caption buttons"] {
+        let mut bar = AppBar::new(1400.0);
+        match case {
+            "long workspace name" => bar.app.ui.workspace = "A workspace with a very long name indeed".into(),
+            "native menus" => bar.app.services.native_menu = Some(crate::native_menu::NativeMenu::new(Box::new(NoMenus))),
+            "caption buttons" => bar.app.custom_titlebar = true,
+            _ => {}
+        }
+        assert_eq!(bar.menus_end().is_some(), case != "native menus", "{case}: the in-window menus show");
+        // 0: gone, 1: icon, 2: field.
+        let mut last = 2;
+        let mut seen_icon = false;
+        for width in (300..=1400).rev().step_by(10) {
+            bar.width = width as f32;
+            let learn = bar.has("Explore tutorials");
+            let search = bar.search();
+            let now = match &search {
+                Some(s) if s.rect.width() >= 120.0 => 2,
+                Some(s) => {
+                    assert_eq!(s.rect.width(), 28.0, "{case} at {width}");
+                    assert!(s.texts.is_empty(), "the icon has no text: {case} at {width}");
+                    1
+                }
+                None => 0,
+            };
+            assert!(width < 1400 || now == 2, "{case}: a wide bar shows the field");
+            assert!(now <= last, "{case} at {width}: the search came back as the bar narrowed");
+            assert!(!learn || now == 2, "{case} at {width}: Explore tutorials outlasted the field");
+            if let Some(s) = &search {
+                assert!(s.rect.right() <= width as f32, "{case} at {width}: {s:?}");
+                if let Some(menus_end) = bar.menus_end() {
+                    assert!(s.rect.left() >= menus_end, "{case} at {width}: the search overlaps the menus ending at {menus_end}: {s:?}");
+                }
+            }
+            seen_icon |= now == 1;
+            last = now;
+        }
+        assert!(seen_icon, "{case}: the field becomes the icon before it goes");
+    }
+}
+
 #[derive(Debug)]
 struct StatusText {
     text: String,
@@ -574,6 +980,155 @@ fn a_clipped_tool_name_shows_in_full_on_hover() {
         let message = status_text(&texts, "Saved recovery data");
         assert!(message.clip.left() >= tool.bounds.right() && message.clip.width() >= 24.0, "{narrow}: the message keeps room: {texts:?}");
     }
+}
+
+/// The texts of one status bar frame after `events`, `dt` seconds after the last one.
+fn status_after(app: &mut crate::VectorcraftApp, ctx: &egui::Context, dt: f64, events: Vec<egui::Event>) -> Vec<StatusText> {
+    let t = ctx.input(|i| i.time) + dt;
+    bar_frame(app, ctx, 1400.0, Some(t), events, super::status_bar).0
+}
+
+/// A press and release of the primary button at `pos`.
+fn click_at(pos: egui::Pos2) -> Vec<egui::Event> {
+    let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    vec![egui::Event::PointerMoved(pos), button(true), button(false)]
+}
+
+/// The center of the first text that is `text`.
+fn text_center(texts: &[StatusText], text: &str) -> egui::Pos2 {
+    let at = texts.iter().find(|t| t.text == text).unwrap_or_else(|| panic!("no {text:?} in {texts:?}"));
+    at.clip.intersect(at.bounds).center()
+}
+
+/// The status bar's info field shows the readout `view.statusBarShow` chooses: the navigator's
+/// artboard name, the tool in use, the date and time, the undo and redo counts, or the document's
+/// color profile.
+#[test]
+fn the_status_bar_info_field_shows_the_chosen_readout() {
+    let (mut app, ctx) = status_readout_app();
+    let texts = status_after(&mut app, &ctx, 0.1, vec![]);
+    assert!(texts.iter().any(|t| t.text == "Selection"), "Current Tool by default: {texts:?}");
+
+    app.run("artboard.new", json!({"x": 200, "y": 0, "width": 100, "height": 100, "name": "Back Cover"})).unwrap();
+    app.run("view.statusBarShow", json!({"show": "artboardName"})).unwrap();
+    let first = app.session.active().unwrap().doc.artboards[0].name.clone();
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == first), "the first artboard's name");
+    app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == "Back Cover"), "the navigator's artboard");
+
+    app.run("view.statusBarShow", json!({"show": "undos"})).unwrap();
+    let counts = |app: &crate::VectorcraftApp| {
+        let h = &app.session.active().unwrap().history;
+        format!("Undos: {}  Redos: {}", h.undo.len(), h.redo.len())
+    };
+    let before = app.session.active().unwrap().history.undo.len();
+    app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    assert_eq!(counts(&app), format!("Undos: {}  Redos: 0", before + 1));
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == counts(&app)));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(counts(&app), format!("Undos: {before}  Redos: 1"));
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == counts(&app)), "the redo step counts");
+
+    app.run("view.statusBarShow", json!({"show": "colorProfile"})).unwrap();
+    let working = vectorcraft_color::cms::working_settings();
+    let mode_working = |app: &crate::VectorcraftApp| match app.session.active().unwrap().doc.color_mode {
+        vectorcraft_doc::ColorMode::Rgb => working.rgb.clone(),
+        vectorcraft_doc::ColorMode::Cmyk => working.cmyk.clone(),
+    };
+    let untagged = vectorcraft_color::cms::canonical_name(&mode_working(&app)).to_string();
+    assert_eq!(super::color_profile_name(&app.session.active().unwrap().doc), untagged, "untagged: the working space");
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == untagged));
+    // A profile assigned for the document's color mode shows; one that is not available shows the
+    // working space the document draws through.
+    let (key, assigned) = match app.session.active().unwrap().doc.color_mode {
+        vectorcraft_doc::ColorMode::Rgb => ("rgb", vectorcraft_color::cms::PROPHOTO_RGB),
+        vectorcraft_doc::ColorMode::Cmyk => ("cmyk", vectorcraft_color::cms::DEVICE_CMYK),
+    };
+    app.run("edit.assignProfile", json!({ key: assigned })).unwrap();
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == assigned), "the assigned profile");
+    let st = app.session.active_mut().unwrap();
+    std::sync::Arc::make_mut(&mut st.doc).color_profiles =
+        vectorcraft_doc::ColorProfiles { rgb: Some("Not Installed".into()), cmyk: Some("Not Installed".into()) };
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == untagged), "an unavailable profile: the working space");
+
+    app.run("view.statusBarShow", json!({"show": "dateTime"})).unwrap();
+    let texts = status_after(&mut app, &ctx, 0.1, vec![]);
+    let is_date = |s: &str| {
+        let b = s.as_bytes();
+        b.len() == 16
+            && b.iter().enumerate().all(|(i, c)| match i {
+                4 | 7 => *c == b'-',
+                10 => *c == b' ',
+                13 => *c == b':',
+                _ => c.is_ascii_digit(),
+            })
+    };
+    assert!(texts.iter().any(|t| is_date(&t.text)), "a date and time: {texts:?}");
+    assert_eq!(super::date_time_label([2026, 3, 7, 9, 5, 59]), "2026-03-07 09:05");
+
+    // Without a document the field shows a dash, which can still be clicked.
+    app.run("view.statusBarShow", json!({"show": "undos"})).unwrap();
+    while app.session.active().is_some() {
+        app.session.execute("file.close", &json!({})).unwrap();
+    }
+    assert!(status_after(&mut app, &ctx, 0.1, vec![]).iter().any(|t| t.text == "–"));
+}
+
+/// A click on the info field opens its Show menu, which checks the readout shown and changes it.
+#[test]
+fn a_click_on_the_info_field_opens_the_show_menu() {
+    let (mut app, ctx) = status_readout_app();
+    status_after(&mut app, &ctx, 1.0, vec![egui::Event::PointerGone]);
+    let texts = status_after(&mut app, &ctx, 0.1, vec![]);
+    let field = text_center(&texts, "Selection");
+    status_after(&mut app, &ctx, 0.1, click_at(field));
+    let texts = status_after(&mut app, &ctx, 0.1, vec![]);
+    let show = text_center(&texts, "Show");
+    status_after(&mut app, &ctx, 0.1, vec![egui::Event::PointerMoved(show)]);
+    status_after(&mut app, &ctx, 0.5, vec![]);
+    let texts = status_after(&mut app, &ctx, 0.5, vec![]);
+    for label in ["   Artboard Name", "✓ Current Tool", "   Date and Time", "   Number of Undos", "   Document Color Profile"] {
+        assert!(texts.iter().any(|t| t.text == label), "no {label:?} in {texts:?}");
+    }
+    let undos = text_center(&texts, "   Number of Undos");
+    status_after(&mut app, &ctx, 0.1, vec![egui::Event::PointerMoved(egui::pos2(undos.x, show.y)), egui::Event::PointerMoved(undos)]);
+    status_after(&mut app, &ctx, 0.1, click_at(undos));
+    assert_eq!(app.ui.status_bar_show, super::StatusBarShow::Undos);
+    assert_eq!(crate::menus::checked(&app, "view.statusBarShow", &json!({"show": "undos"})), Some(true));
+    assert_eq!(crate::menus::checked(&app, "view.statusBarShow", &json!({"show": "currentTool"})), Some(false));
+}
+
+/// `view.statusBarShow` takes only the five readouts, leaving the choice as it was otherwise, and the
+/// choice is saved with the UI state, which reads a value it does not know as Current Tool.
+#[test]
+fn the_status_bar_show_choice_is_checked_and_saved() {
+    let (mut app, _ctx) = status_readout_app();
+    assert_eq!(app.run("view.statusBarShow", json!({"show": "dateTime"})).unwrap(), json!("dateTime"));
+    for bad in [json!({}), json!({"show": "zoom"}), json!({"show": 2}), json!({"show": null}), json!({"show": "DateTime"})] {
+        let err = app.run("view.statusBarShow", bad.clone()).unwrap_err();
+        assert!(err.contains("`show` must be one of artboardName, currentTool, dateTime, undos, colorProfile"), "{bad}: {err}");
+        assert_eq!(app.ui.status_bar_show, super::StatusBarShow::DateTime, "{bad} leaves the choice");
+    }
+    let saved = serde_json::to_value(&app.ui).unwrap();
+    assert_eq!(saved["status_bar_show"], json!("dateTime"));
+    let read: crate::state::UiState = serde_json::from_value(saved.clone()).unwrap();
+    assert_eq!(read.status_bar_show, super::StatusBarShow::DateTime);
+    for (stored, shown) in [
+        (json!("colorProfile"), super::StatusBarShow::ColorProfile),
+        (json!("zoom"), super::StatusBarShow::CurrentTool),
+        (json!(7), super::StatusBarShow::CurrentTool),
+    ] {
+        let mut v = saved.clone();
+        v["status_bar_show"] = stored;
+        assert_eq!(serde_json::from_value::<crate::state::UiState>(v).unwrap().status_bar_show, shown);
+    }
+    let mut v = saved;
+    v.as_object_mut().unwrap().remove("status_bar_show");
+    assert_eq!(
+        serde_json::from_value::<crate::state::UiState>(v).unwrap().status_bar_show,
+        super::StatusBarShow::CurrentTool,
+        "state saved before it"
+    );
 }
 
 /// Busy-job transitions preserve message placement, labels and accessibility.
@@ -1357,6 +1912,155 @@ fn isolation_bar_navigation_and_back_button_steps_up() {
     // Clicking g2 isolates g2 directly.
     click_at(&mut app, egui::pos2(115.0, 12.0));
     assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(g2)));
+}
+
+/// Headless frames of the isolation bar over a 1200 × 700 canvas for one pointer gesture: a press
+/// at `from`, a move to `to` and a release there. `from == to` is a click.
+fn isolation_bar_gesture(app: &mut crate::VectorcraftApp, ctx: &egui::Context, from: egui::Pos2, to: egui::Pos2) {
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 700.0));
+    let press = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    for events in [vec![egui::Event::PointerMoved(from)], vec![press(from, true)], vec![egui::Event::PointerMoved(to)], vec![press(to, false)]] {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            super::isolation_bar(app, ui, screen);
+        });
+        out.textures_delta.clear();
+    }
+}
+
+/// A context for `isolation_bar_gesture`.
+fn isolation_bar_context() -> egui::Context {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    egui_extras::install_image_loaders(&ctx);
+    ctx
+}
+
+/// A click on the isolation bar's empty space leaves nested isolation mode altogether, selects the
+/// isolated object as Exit Isolation Mode does and adds no undo step. A drag across the bar does not
+/// leave it.
+#[test]
+fn isolation_bar_background_click_exits_nested_isolation() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let rect = |app: &mut crate::VectorcraftApp, x: f64| {
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let (a, b) = (rect(&mut app, 10.0), rect(&mut app, 50.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g1 = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    let c = rect(&mut app, 90.0);
+    app.run("select.set", json!({"ids": [g1, c]})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(700.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, egui::pos2(900.0, 14.0));
+    assert_eq!(app.session.active().unwrap().isolation, Some(NodeId(a)), "a drag across the bar stays in isolation mode");
+    let steps = app.session.doc().unwrap().history.undo.len();
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.isolation, st.selection.objects.clone()), (None, vec![NodeId(a)]), "the click leaves isolation mode");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "no undo step");
+}
+
+/// While a pattern is edited, a click on the isolation bar's empty space leaves pattern editing
+/// open; the back arrow still ends it as Done does.
+#[test]
+fn isolation_bar_background_click_leaves_pattern_edit_open() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let f = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [f]})).unwrap();
+    app.run("object.pattern.make", json!({"name": "Dots", "width": 20, "height": 20})).unwrap();
+    assert!(app.session.active().unwrap().doc.pattern_edit.is_some());
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(500.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.pattern_edit.is_some() && st.isolation.is_some(), "pattern editing stays open");
+    let back = egui::pos2(15.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, back, back);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.pattern_edit.is_none() && st.isolation.is_none(), "the back arrow ends pattern editing");
+}
+
+/// While an opacity mask is edited, a click on the isolation bar's empty space stops editing the
+/// mask as Exit Isolation Mode does: the masked object is selected again.
+#[test]
+fn isolation_bar_background_click_stops_mask_editing() {
+    use vectorcraft_doc::NodeId;
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    let obj = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 200, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    let m = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [obj, m]})).unwrap();
+    app.run("transparency.makeOpacityMask", json!({})).unwrap();
+    app.run("transparency.editOpacityMask", json!({})).unwrap();
+    assert!(app.session.active().unwrap().doc.mask_edit.is_some());
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(700.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.mask_edit.is_none() && st.isolation.is_none(), "mask editing ends");
+    assert_eq!(st.selection.objects, vec![NodeId(obj)]);
+}
+
+/// In symbol editing mode, a click on the isolation bar's empty space leaves the mode, also while a
+/// group inside the symbol's art is isolated, and the symbol keeps the art drawn while editing.
+#[test]
+fn isolation_bar_background_click_leaves_nested_symbol_editing() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    app.run("symbol.new", json!({"name": "Box"})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 130, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let g = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": g})).unwrap();
+    let ctx = isolation_bar_context();
+    let empty = egui::pos2(700.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.isolation.is_none(), "symbol editing mode ends");
+    let symbol = st.doc.symbols.iter().find(|s| s.name == "Box").expect("the symbol");
+    assert!(symbol.art.children().is_some_and(|c| c.len() >= 2), "the edit reached the symbol");
+    // Symbol editing entered while a group was isolated: the click leaves that isolation too.
+    let c = app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let d = app.run("shape.rectangle", json!({"x": 250, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [c, d]})).unwrap();
+    let h = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": h})).unwrap();
+    app.run("symbol.edit", json!({"name": "Box"})).unwrap();
+    assert!(app.session.active().unwrap().doc.symbol_edit.is_some());
+    isolation_bar_gesture(&mut app, &ctx, empty, empty);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.isolation.is_none(), "the isolation from before symbol editing ends too");
+}
+
+/// A click on the current object's name at the end of the breadcrumbs, which is not a link, leaves
+/// isolation mode as a click on the bar's empty space does.
+#[test]
+fn isolation_bar_click_on_the_current_name_exits() {
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.isolate", json!({"id": a})).unwrap();
+    let ctx = isolation_bar_context();
+    // The crumbs are "Layer 1 › <Path>"; the leaf's name starts after the layer crumb and separator.
+    let layer = app.session.active().unwrap().doc.ancestry(vectorcraft_doc::NodeId(a)).unwrap()[0];
+    let layer_name = app.session.active().unwrap().doc.node(layer).unwrap().display_name();
+    let mut start = 0.0;
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let width = |s: &str| ui.painter().layout_no_wrap(s.to_string(), egui::FontId::proportional(12.0), egui::Color32::WHITE).size().x;
+        start = 30.0 + width(&layer_name) + 6.0 + width("›") + 6.0;
+    });
+    out.textures_delta.clear();
+    let leaf = egui::pos2(start + 4.0, 12.0);
+    isolation_bar_gesture(&mut app, &ctx, leaf, leaf);
+    assert_eq!(app.session.active().unwrap().isolation, None);
 }
 
 /// Tab goes to the isolation bar's back button and breadcrumbs and does not stop on the bar
@@ -3143,7 +3847,7 @@ fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     wide(&mut app, "an embedded image", &["Unembed…", "Image Trace", "Mask", "Crop Image", "Remove Background"]);
     app.select_tool(vectorcraft_tools::cropimage::ID);
     check(&mut app, "Crop Image");
-    wide(&mut app, "Crop Image", &["X:", "Y:", "W:"]);
+    wide(&mut app, "Crop Image", &["PPI", "X:", "Y:", "W:", "H:"]);
     app.select_tool("selection");
     app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
     let trace = selected(&app);

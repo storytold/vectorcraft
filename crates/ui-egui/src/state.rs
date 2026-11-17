@@ -227,6 +227,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::panels::learn::ID, "Learn", "graduation-cap"),
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
+    (crate::addons::packaging::ID, "Fold Lines", "scissors"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
@@ -550,6 +551,10 @@ pub struct UiState {
     #[serde(default)]
     pub toolbar_right: bool,
     pub status_bar: bool,
+    /// What the status bar's info field shows (its Show menu, `view.statusBarShow`): Current Tool by
+    /// default and in state saved without it ([`crate::chrome::deserialize_status_bar_show`]).
+    #[serde(default, deserialize_with = "crate::chrome::deserialize_status_bar_show")]
+    pub status_bar_show: crate::chrome::StatusBarShow,
     pub help_bar: bool,
     pub dock: bool,
     /// The bars that Tab (`window.dock`) hid, which the next Tab shows again; none when Tab has not
@@ -687,6 +692,9 @@ pub struct UiState {
     /// Type → Recent Fonts, most recent first.
     #[serde(default)]
     pub recent_fonts: Vec<String>,
+    /// Help › Search Commands' Recent Commands list: the ids of the last picks, most recent first.
+    #[serde(default)]
+    pub recent_commands: Vec<String>,
     /// Families starred in the font menus (the ★ filter shows only these).
     #[serde(default)]
     pub favorite_fonts: Vec<String>,
@@ -713,6 +721,10 @@ pub struct UiState {
     /// saved.
     #[serde(skip)]
     pub color_guide_base: Option<vectorcraft_color::Color>,
+    /// Color Guide panel: the spot color swatch the base is a tint of, when it was chosen from one
+    /// ([`crate::panels::color_guide::SpotBase`]). Not saved.
+    #[serde(skip)]
+    pub color_guide_spot: Option<crate::panels::color_guide::SpotBase>,
     /// Align panel: the Align To choice, Selection or Artboard, which Object → Align and the align
     /// buttons follow ([`crate::panels::align::with_align_to`]).
     #[serde(default, deserialize_with = "crate::panels::align::deserialize_align_to")]
@@ -827,6 +839,9 @@ pub struct UiState {
     /// never used).
     #[serde(default)]
     pub dxf_import: Value,
+    /// The PSD Import Options chosen last (layers, hiddenLayers, importSlices; null: never used).
+    #[serde(default)]
+    pub psd_import: Value,
     /// The Home screen is shown over the open documents (`app.home`): the active document's uid
     /// and the document count when it opened. Choosing a tab, or a document opening, closing or
     /// becoming active, leaves it.
@@ -1177,6 +1192,7 @@ impl Default for UiState {
             tools_beside_canvas: false,
             toolbar_right: false,
             status_bar: true,
+            status_bar_show: crate::chrome::StatusBarShow::CurrentTool,
             help_bar: true,
             dock: true,
             tab_hid: None,
@@ -1219,6 +1235,7 @@ impl Default for UiState {
             workspace_changes: vec![],
             recent_files: vec![],
             recent_fonts: vec![],
+            recent_commands: vec![],
             favorite_fonts: vec![],
             engine_prefs: Value::Null,
             color_guide: Default::default(),
@@ -1226,6 +1243,7 @@ impl Default for UiState {
             flattener_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
+            color_guide_spot: None,
             align_to: Default::default(),
             align_spacing: 0.0,
             color_mode: None,
@@ -1255,6 +1273,7 @@ impl Default for UiState {
             transform_each: Value::Null,
             rearrange_artboards_spacing: Value::Null,
             dxf_import: Value::Null,
+            psd_import: Value::Null,
             home: None,
             trace_hold_source: None,
             layers_panel: Default::default(),

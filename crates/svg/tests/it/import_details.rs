@@ -2,6 +2,7 @@
 //! and a warning when missing), SVG images as vector art, nested clips, undisplayed objects as
 //! hidden objects, and reflected or repeated gradients.
 
+use craft_svg::tree::draw::resvg;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::{Document, ImageObject, LinkInfo, Node, NodeKind};
@@ -44,11 +45,15 @@ fn resvg_render(svg: &str, w: u32, h: u32) -> Image {
 }
 
 fn png(w: u32, h: u32) -> Vec<u8> {
-    let mut out = vec![];
-    image::RgbaImage::from_pixel(w, h, image::Rgba([10, 200, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
-    out
+    let img = craft_image_codecs::Image::from_raw(
+        w,
+        h,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [10u8, 200, 30, 255].repeat((w * h) as usize),
+    )
+    .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 /// A fresh folder for one test's files.
@@ -763,14 +768,15 @@ fn percentages_in_a_symbol_are_of_its_view_box() {
 }
 
 /// #1598: the warning for a filter that neither the live effects nor an SVG filter effect can hold
-/// (here, on turned objects) names the filter, its primitives and the object, and says it is drawn
-/// without it (not "a group": usvg wraps the element in one). Such a filter on an object that
-/// isn't turned comes in as an SVG filter effect holding the filter's XML.
+/// (here, on objects skewed past what the effect measures) names the filter, its primitives and the
+/// object, and says it is drawn without it (not "a group": usvg wraps the element in one). Such a
+/// filter on an object that isn't skewed that far comes in as an SVG filter effect holding the
+/// filter's XML.
 #[test]
 fn unsupported_filters_are_named_in_the_warning() {
     let body = r#"<filter id="f"><feColorMatrix type="saturate" values="0"/></filter><filter id="t"><feTurbulence baseFrequency="0.05"/></filter>
-        <rect x="20" y="20" width="60" height="60" fill="red" transform="rotate(10 50 50)" filter="url(#f)"/>
-        <rect id="r" x="100" y="20" width="60" height="60" fill="blue" transform="rotate(10 130 50)" filter="url(#t)"/>
+        <rect x="0.02" y="0.02" width="0.06" height="0.06" fill="red" transform="skewX(89.95)" filter="url(#f)"/>
+        <rect id="r" x="0.1" y="0.02" width="0.06" height="0.06" fill="blue" transform="skewX(89.95)" filter="url(#t)"/>
         <rect x="20" y="90" width="20" height="20" fill="red" filter="url(#f)"/>"#;
     let (d, w) = import_with_report(&svg(body)).unwrap();
     assert!(w.iter().any(|w| w == "filter 'f' (feColorMatrix) on an object isn't supported; drawn without it"), "{w:?}");
