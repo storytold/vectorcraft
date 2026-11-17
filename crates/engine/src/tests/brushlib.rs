@@ -218,6 +218,37 @@ fn black_stroke() -> vectorcraft_doc::StrokeLayer {
     vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
 }
 
+#[test]
+fn arrows_library_lists_renders_and_applies_original_brushes() {
+    let mut s = session();
+    let listed = run(&mut s, "brush.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "arrows").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Arrows"), Some("builtIn"), Some(4)));
+    let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
+    assert_eq!(
+        lib.brushes.iter().map(|b| (b.name.as_str(), b.kind.type_id())).collect::<Vec<_>>(),
+        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art")]
+    );
+    for b in &lib.brushes {
+        for length in [2.0, 200.0] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(length), &black_stroke());
+            let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{} at {length} pt", b.name);
+        }
+    }
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    let before = undo_len(&s);
+    let added = run(&mut s, "brush.addFromLibrary", json!({"library": "arrows", "name": "Double Arrow", "apply": true, "ids": [path]}));
+    assert_eq!(strs(&added["added"]), ["Double Arrow"]);
+    assert_eq!(added["applied"], json!([path]));
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some("Double Arrow"));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(vectorcraft_brush::find(doc(&s), "Double Arrow").is_none());
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(brush(&s, "Double Arrow"), lib.brushes[2]);
+}
+
 /// Original circuit art and repeat tiles survive adding, applying and saving a library.
 #[test]
 fn the_tech_circuit_library_constructs_adds_and_applies_each_brush() {
