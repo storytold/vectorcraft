@@ -414,7 +414,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             app.run(cmd, p).ok();
         }
         // Alt deletes an unused symbol without asking; a symbol with instances still asks.
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Symbol"), false, sel.is_some() || !marked.is_empty(), 24.0).clicked() {
+        let trash = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Symbol"), false, sel.is_some() || !marked.is_empty(), 24.0);
+        // A symbol dragged from the panel and dropped on Delete Symbol is deleted as a click deletes
+        // it: the dragged symbol, or every symbol Select All Unused picked when it is one of them.
+        if let Some(name) = symbol_dropped(ui, &trash, &names, uid) {
+            let picked = if marked.contains(&name) { &marked[..] } else { &[] };
+            delete(app, picked, Some(&name), super::alt_held(ui));
+        } else if trash.clicked() {
             delete(app, &marked, sel.as_deref(), super::alt_held(ui));
         }
     });
@@ -506,8 +512,9 @@ fn drag_symbol(ui: &Ui, resp: &egui::Response, name: &str, uid: Option<u64>) {
 }
 
 /// The symbol of the active document (`uid`, whose symbols are `names`) dragged from the panel and
-/// released on `button` this frame, if any; `button` is outlined while one is held over it. A
-/// symbol dragged from another document is ignored.
+/// released on `button` this frame, if any; `button` is outlined while one is held over it, also
+/// when it is disabled for clicks. A symbol dragged from another document is ignored. Only the
+/// release of the primary button drops the symbol; the release of another button ends the drag.
 fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Option<u64>) -> Option<String> {
     let held = button.dnd_hover_payload::<PanelDrag>()?;
     let PanelDrag::Symbol(name) = &*held else { return None };
@@ -515,6 +522,9 @@ fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Optio
         return None;
     }
     widgets::drop_target_outline(ui, button.rect);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return None;
+    }
     button.dnd_release_payload::<PanelDrag>().map(|_| name.clone())
 }
 
@@ -2047,6 +2057,221 @@ mod tests {
         assert_eq!(dialog_kind(&app), None);
         assert!(app.session.set_active(0));
         assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "no copy in the first document");
+    }
+
+    /// Drags the symbol at `from` in the panel onto `to` and releases it there with `modifiers`
+    /// held; returns the frame in which it is held over `to`.
+    fn drag_onto(ctx: &egui::Context, app: &mut VectorcraftApp, from: Pos2, to: Pos2, modifiers: egui::Modifiers) -> egui::FullOutput {
+        // egui finds what the press hits among the widgets of the frame before, so the panel is
+        // drawn once first (the frame before may have drawn the panel menu).
+        frame(ctx, app, vec![]);
+        frame(ctx, app, vec![egui::Event::PointerMoved(from), button(from, true)]);
+        frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(40.0, 40.0))]);
+        frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(80.0, 80.0))]);
+        let held = frame_held(ctx, app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::NONE);
+        frame_held(ctx, app, vec![button(to, false)], modifiers);
+        held
+    }
+
+    /// A symbol dragged from the panel, in Thumbnail View or a list view, and dropped on Delete
+    /// Symbol is deleted as a click on the button deletes it, though another symbol is current. The
+    /// button is outlined while the symbol is held over it. A symbol with instances asks the in-use
+    /// question, with Alt held too, and Cancel changes nothing; an unused one asks "Delete the
+    /// selected symbol?", or with Alt held is deleted at once; each deletion is one undo step.
+    #[test]
+    fn symbol_dropped_on_delete_button_deletes_the_dragged_symbol_in_both_views() {
+        for view in ["thumbnail", "smallList"] {
+            let mut app = leaf_and_dot();
+            app.run("ui.panelView", json!({"panel": "symbols", "view": view})).unwrap();
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let trash = button_rect(&ctx, &mut app, "Delete Symbol");
+            let first = |ctx: &egui::Context, app: &mut VectorcraftApp, name: &str| {
+                if view == "thumbnail" { pos2(26.0, 26.0) } else { panel_labels(ctx, app, &[name])[0].1 }
+            };
+            let before = app.session.active().unwrap().doc.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            // Leaf, which an instance uses, while Dot is current.
+            let leaf = first(&ctx, &mut app, "Leaf");
+            for alt in [egui::Modifiers::NONE, egui::Modifiers::ALT] {
+                let held = drag_onto(&ctx, &mut app, leaf, trash.center(), alt);
+                assert!(outlined(&held, trash), "{view}: outlined while Leaf is held over it");
+                assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::USED), "{view} {alt:?}");
+                assert_eq!(app.ui.dialog.as_ref().unwrap().fields["name"], json!("Leaf"), "{view}: the dragged symbol");
+                crate::dialogs::cancel(&mut app);
+                assert!(Arc::ptr_eq(&before, &app.session.active().unwrap().doc), "{view} {alt:?}: Cancel changes nothing");
+            }
+            assert_eq!(current(&app).as_deref(), Some("Dot"), "{view}");
+            drag_onto(&ctx, &mut app, leaf, trash.center(), egui::Modifiers::NONE);
+            app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert_eq!((symbols(&mut app), art(&app, "Leaf").0), (vec!["Dot".to_string()], 0), "{view}: Delete Instances");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "{view}: one undo step");
+            // Dot, which nothing uses, now comes first: Yes deletes it, and so does a drop with Alt.
+            let dot = first(&ctx, &mut app, "Dot");
+            drag_onto(&ctx, &mut app, dot, trash.center(), egui::Modifiers::NONE);
+            assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND), "{view}");
+            assert_eq!(app.ui.dialog.as_ref().unwrap().fields["name"], json!("Dot"), "{view}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            assert!(symbols(&mut app).is_empty(), "{view}: Yes deletes Dot");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 2, "{view}: one undo step");
+            app.run("edit.undo", json!({})).unwrap();
+            drag_onto(&ctx, &mut app, dot, trash.center(), egui::Modifiers::ALT);
+            assert_eq!(dialog_kind(&app), None, "{view}: Alt asks nothing for an unused symbol");
+            assert!(symbols(&mut app).is_empty(), "{view}: Alt deletes Dot");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 2, "{view}: one undo step");
+            app.run("edit.undo", json!({})).unwrap();
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!((symbols(&mut app), art(&app, "Leaf").0), (vec!["Leaf".to_string(), "Dot".to_string()], 1), "{view}");
+        }
+    }
+
+    /// A symbol Select All Unused picked, dropped on Delete Symbol, deletes every picked symbol
+    /// still unused, after one question or with Alt held at once, in one undo step; a symbol the
+    /// pick left out is asked about and deleted on its own.
+    #[test]
+    fn a_picked_symbol_dropped_on_delete_deletes_the_picked_symbols() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        for (i, name) in ["A", "B", "C"].into_iter().enumerate() {
+            app.run("shape.rectangle", json!({"x": 10.0 + 40.0 * i as f64, "y": 10, "width": 30, "height": 20})).unwrap();
+            let id = app.run("symbol.new", json!({"name": name})).unwrap()["id"].as_u64().unwrap();
+            // A and C lose their instances; B keeps its own.
+            if name != "B" {
+                app.run("edit.clear", json!({"ids": [id]})).unwrap();
+            }
+        }
+        app.run("ui.panelView", json!({"panel": "symbols", "view": "smallList"})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let trash = button_rect(&ctx, &mut app, "Delete Symbol");
+        let rows: HashMap<String, Pos2> = panel_labels(&ctx, &mut app, &["A", "B", "C"]).into_iter().collect();
+        let undo = app.session.active().unwrap().history.undo.len();
+        click_menu(&ctx, &mut app, "Select All Unused");
+        let held = drag_onto(&ctx, &mut app, rows["A"], trash.center(), egui::Modifiers::NONE);
+        assert!(outlined(&held, trash));
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::KIND));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["names"], json!(["A", "C"]), "asked once, about both");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), ["B"]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        // With Alt held, the picked symbols go without a question.
+        click_menu(&ctx, &mut app, "Select All Unused");
+        drag_onto(&ctx, &mut app, rows["C"], trash.center(), egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), None);
+        assert_eq!(symbols(&mut app), ["B"]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+        app.run("edit.undo", json!({})).unwrap();
+        // B, which the pick left out, is asked about on its own.
+        click_menu(&ctx, &mut app, "Select All Unused");
+        drag_onto(&ctx, &mut app, rows["B"], trash.center(), egui::Modifiers::ALT);
+        assert_eq!(dialog_kind(&app), Some(crate::dialogs::symbol_delete::USED));
+        let fields = &app.ui.dialog.as_ref().unwrap().fields;
+        assert_eq!((fields.get("name"), fields.get("names")), (Some(&json!("B")), None));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(symbols(&mut app), ["A", "C"]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1, "one undo step");
+    }
+
+    /// Only the release of the primary button drops a symbol: a secondary button pressed and
+    /// released while the symbol is held over New Symbol or Delete Symbol, Alt held, makes no copy,
+    /// deletes nothing, asks nothing and adds no undo step, and the later primary release does
+    /// nothing either.
+    #[test]
+    fn a_secondary_release_over_new_or_delete_symbol_drops_nothing() {
+        for label in ["New Symbol", "Delete Symbol"] {
+            let mut app = leaf_and_dot();
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let target = button_rect(&ctx, &mut app, label);
+            let undo = app.session.active().unwrap().history.undo.len();
+            let tile = pos2(26.0, 26.0);
+            frame(&ctx, &mut app, vec![]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+            frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+            let held = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(target.center())], egui::Modifiers::NONE);
+            assert!(outlined(&held, target), "{label}: outlined while Leaf is held over it");
+            let secondary = |pressed| egui::Event::PointerButton {
+                pos: target.center(),
+                button: egui::PointerButton::Secondary,
+                pressed,
+                modifiers: egui::Modifiers::ALT,
+            };
+            frame_held(&ctx, &mut app, vec![secondary(true)], egui::Modifiers::ALT);
+            frame_held(&ctx, &mut app, vec![secondary(false)], egui::Modifiers::ALT);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{label}: the secondary release");
+            assert_eq!(dialog_kind(&app), None, "{label}: the secondary release asks nothing");
+            frame_held(&ctx, &mut app, vec![button(target.center(), false)], egui::Modifiers::ALT);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{label}: the primary release");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "{label}: no undo step");
+            assert_eq!(dialog_kind(&app), None, "{label}");
+        }
+    }
+
+    /// Delete Symbol takes only a symbol of the active document's that it still has: a library
+    /// symbol, art, a name the document does not have, a symbol released elsewhere, a symbol deleted
+    /// while it is dragged and a symbol dragged from another document with a symbol of the same name
+    /// delete nothing, ask nothing and add no undo step, and the button is not outlined for them.
+    #[test]
+    fn delete_symbol_button_ignores_other_drops_and_releases_outside() {
+        let mut app = leaf_and_dot();
+        let leaf = instance_of(&app, "Leaf").expect("a Leaf instance");
+        let undo = app.session.active().unwrap().history.undo.len();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        // The payloads are set directly, as if dragged from this document's panel.
+        set_pstate(&ctx, DRAG_DOC, uid(&app));
+        let trash = button_rect(&ctx, &mut app, "Delete Symbol");
+        let elsewhere = trash.center() - vec2(0.0, 60.0);
+        let cases = [
+            ("a library symbol", PanelDrag::LibrarySymbol { library: "basic-shapes".into(), name: "Leaf".into() }, trash.center()),
+            ("art", PanelDrag::Art(vec![leaf]), trash.center()),
+            ("a stale name", PanelDrag::Symbol("Gone".into()), trash.center()),
+            ("a symbol released elsewhere", PanelDrag::Symbol("Dot".into()), elsewhere),
+        ];
+        for (case, drag, at) in cases {
+            egui::DragAndDrop::set_payload(&ctx, drag);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+            assert!(!outlined(&out, trash), "{case}: not outlined");
+            frame_held(&ctx, &mut app, vec![button(at, false)], egui::Modifiers::ALT);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{case}");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "{case}: no undo step");
+            assert_eq!(dialog_kind(&app), None, "{case}");
+            egui::DragAndDrop::clear_payload(&ctx);
+        }
+        // Leaf is deleted by command while it is dragged, then released on the button.
+        let tile = pos2(26.0, 26.0);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Leaf".into())));
+        app.run("symbol.delete", json!({"name": "Leaf"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash.center())], egui::Modifiers::NONE);
+        assert!(!outlined(&out, trash), "a deleted symbol: not outlined");
+        frame_held(&ctx, &mut app, vec![button(trash.center(), false)], egui::Modifiers::ALT);
+        assert_eq!((symbols(&mut app), dialog_kind(&app)), (vec!["Dot".to_string()], None), "a deleted symbol");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "a deleted symbol: no undo step");
+        // Dot is dragged, and a new document with a Dot of its own becomes active before the release.
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile), button(tile, true)]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(40.0, 40.0))]);
+        frame(&ctx, &mut app, vec![egui::Event::PointerMoved(tile + vec2(80.0, 80.0))]);
+        assert_eq!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).as_deref(), Some(&PanelDrag::Symbol("Dot".into())));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+        app.run("symbol.new", json!({"name": "Dot"})).unwrap();
+        app.run("edit.clear", json!({})).unwrap();
+        let other = app.session.active().unwrap().history.undo.len();
+        let trash = button_rect(&ctx, &mut app, "Delete Symbol");
+        let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(trash.center())], egui::Modifiers::NONE);
+        assert!(!outlined(&out, trash), "another document: not outlined");
+        frame_held(&ctx, &mut app, vec![button(trash.center(), false)], egui::Modifiers::ALT);
+        assert_eq!((symbols(&mut app), dialog_kind(&app)), (vec!["Dot".to_string()], None), "the active document keeps its Dot");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), other, "another document: no undo step");
+        assert!(app.session.set_active(0));
+        assert_eq!(symbols(&mut app), ["Dot"], "the first document keeps its Dot");
     }
 
     /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.

@@ -607,6 +607,7 @@ font-technology	Variable	Variables
 	Consolidate All Windows	Consolidar todas las ventanas
 	Constrain Angle	Restringir ángulo
 	Constrain Width and Height Proportions	Restringir proporciones de anchura y altura
+	Copy Width to Height	Copiar anchura en altura
 	Construction Guides	Guías de construcción
 	Contextual Alternates	Alternativas contextuales
 	Contextual Task Bar	Barra de tareas contextual
@@ -617,6 +618,8 @@ font-technology	Variable	Variables
 	Control	Control
 	Convert	Convertir
 	Convert All Spot Colors to Process	Convertir todas las tintas planas en cuatricromía
+	Convert {name} to process	Convertir {name} en cuatricromía
+	Keep {name} as spot	Mantener {name} como tinta plana
 	Convert All Strokes to Outlines	Convertir todos los trazos en contornos
 	Convert All Text to Outlines	Convertir todo el texto en contornos
 	Convert Anchor Point	Convertir punto de ancla
@@ -692,6 +695,9 @@ font-technology	Variable	Variables
 	Create from Selection	Crear a partir de la selección
 	Create From:	Crear a partir de:
 	Create Gradient Mesh…	Crear malla de degradado…
+	Flat	Plano
+	To Center	Hacia el centro
+	To Edge	Hacia el borde
 	Create Graph	Crear gráfico
 	Create New Layer	Crear capa nueva
 	Create New Sublayer	Crear subcapa nueva
@@ -1355,6 +1361,10 @@ font-technology	Variable	Variables
 	Font List	Lista de fuentes
 	Show Similar Fonts	Mostrar fuentes similares
 	Clear Similar Fonts	Borrar fuentes similares
+	Fonts used in this document	Fuentes usadas en este documento
+	This document uses no available fonts	Este documento no usa ninguna fuente disponible
+	Recently Added	Añadidas recientemente
+	Fonts added in the last 30 days	Fuentes añadidas en los últimos 30 días
 	Font Preview Size	Tamaño de vista previa de fuente
 	Font Size	Tamaño de fuente
 	Variable Font	Fuente variable
@@ -2033,7 +2043,8 @@ font-technology	Variable	Variables
 	Lock Others	Bloquear otros
 	Lock Slices	Bloquear sectores
 	Lock Station Point	Bloquear punto de estación
-	Lossless (lossy WebP isn't available yet)	Sin pérdida (WebP con pérdida aún no está disponible)
+	Lossless	Sin pérdida
+	Lossy	Con pérdida
 	Lossy:	Con pérdida:
 	Low	Baja
 	lowercase	minúsculas
@@ -2715,6 +2726,18 @@ font-technology	Variable	Variables
 	Preview:	Vista previa:
 	Preview All Layers	Previsualizar todas las capas
 	Preview in Browser	Previsualizar en el navegador
+	Optimize to File Size…	Optimizar según tamaño de archivo…
+	Optimize to File Size	Optimizar según tamaño de archivo
+	Desired File Size:	Tamaño de archivo deseado:
+	Start With:	Empezar con:
+	Use:	Usar:
+	Current Settings	Ajustes actuales
+	Auto Select GIF/JPEG	Selección automática GIF/JPEG
+	Total of All Slices	Total de todos los sectores
+	Each Slice	Cada sector
+	Current Slice	Sector actual
+	{size}, within {target}	{size}, dentro de {target}
+	No setting tried fits in {target}; the smallest is {size}	Ningún ajuste probado cabe en {target}; el menor es {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
 	Preview Mode	Modo de vista previa
 	Preview the document as it is now	Previsualizar el documento tal como está ahora
@@ -3060,12 +3083,85 @@ digits	Malayalam	Malayálam
 	Responsive	Adaptable
 	Restore	Restaurar
 	Restore every preference to its default (applied on OK)	Restaurar todas las preferencias a sus valores predeterminados (se aplica al Aceptar)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Muestra en el lienzo una barra de comandos para la selección o la herramienta; se oculta mientras arrastra y en el modo de presentación.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Cuánto mueve la selección una tecla de flecha; con Mayús, la mueve diez veces más.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	El ángulo de los ejes a lo largo de los cuales mueven las teclas de flecha y a los que Mayús restringe el dibujo y el movimiento.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	El radio de esquina con el que dibuja la herramienta Rectángulo redondeado; cambiar el radio mientras dibuja también cambia este valor.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Cuánto desplaza Pegar la copia hacia la derecha y hacia abajo cuando no se indica ninguna posición, como desde un script; Pegar en la aplicación la centra en la vista.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Impide que la herramienta Pluma elimine el punto de ancla en el que hace clic en un trazado seleccionado o añada uno donde hace clic en su segmento.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Las herramientas de dibujo muestran un puntero en cruz en lugar de su icono; Bloq Mayús hace lo mismo mientras está activado.
+	Shows a tip when the pointer rests on a button or field that has one.	Muestra una sugerencia cuando el puntero se detiene sobre un botón o campo que la tiene.
+	Shows a warning before a script you choose runs.	Muestra una advertencia antes de que se ejecute un script que elija.
+	Smooths the edges of artwork on the canvas.	Suaviza los bordes de la ilustración en el lienzo.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selección › Igual › Color de relleno, Color de trazo y Relleno y trazo solo coinciden con el mismo matiz de una muestra global o de tinta plana, no con cualquier matiz de ella.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Muestra la pantalla de inicio cuando no hay ningún documento abierto; desactivada, la ventana queda vacía hasta que hace clic en Inicio.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mide los objetos con sus trazos y los efectos que cambian su forma para el tamaño, la posición y la alineación; las sombras, los resplandores y los desenfoques no se miden.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Con un zoom del 100 %, una pulgada del documento ocupa 96 puntos de pantalla en lugar de 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Al hacer doble clic en un grupo, trazado o imagen con la herramienta Selección, se abre en modo de aislamiento.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Los rellenos y trazos de motivo se transforman con la ilustración, salvo que una transformación o el menú del panel Transformar indique otra cosa.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Los radios de esquina dinámicos se escalan con la ilustración, salvo que el escalado indique otra cosa.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Los grosores de trazo, los guiones y las distancias de los efectos se escalan con la ilustración, salvo que el escalado indique otra cosa.
+	The mouse wheel zooms the canvas instead of scrolling it.	La rueda del mouse aplica zoom al lienzo en lugar de desplazarlo.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rueda del mouse con Cmd/Ctrl pulsado desplaza el lienzo en horizontal.
+	Dragging sideways on a numeric field's label changes the field's value.	Arrastrar en horizontal sobre la etiqueta de un campo numérico cambia el valor del campo.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto de giro con dos dedos en un trackpad gira la vista del lienzo.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantener pulsado el atajo de una herramienta la elige hasta que lo suelta, y después vuelve a elegirse la herramienta anterior.
+	Shows the bounding box while you move the selection or draw a shape.	Muestra el cuadro delimitador mientras mueve la selección o dibuja una forma.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Crear marcas de recorte dibuja marcas de estilo japonés en lugar de romanas.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	La nueva ilustración toma solo el relleno y el trazo de la selección; desactivada, toma toda la apariencia del objeto seleccionado.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Cambiar el ancho o el alto en el panel Transformar, el panel Propiedades o el panel Control cambia el otro de forma proporcional.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Las propiedades de un rectángulo dinámico muestran un solo campo Radio de esquina para las cuatro esquinas; desactivada, cada esquina tiene su propio campo.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Lo que transforman los cambios del panel Transformar: el objeto, sus mosaicos de motivo o ambos; Predeterminado sigue a Transformar mosaicos de motivo.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Con una instancia de símbolo seleccionada, el panel Transformar usa el punto de registro del símbolo como punto de referencia.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Oscurece el lienzo fuera de las mesas de trabajo mientras la herramienta Mesa de trabajo está activa.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Con Atenuar región fuera de la mesa de trabajo activado, el área fuera de las mesas de trabajo sigue oscura mientras arrastra con la herramienta Mesa de trabajo.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Qué tan cerca, en píxeles, debe estar el puntero de un objeto, ancla o manejador para que un clic lo seleccione.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Si el recuadro de la herramienta Selección selecciona los objetos que toca o solo los que quedan totalmente dentro; Dirección de arrastre selecciona los de dentro al arrastrar a la derecha. E invierte la regla al arrastrar.
+	A click selects a filled object only on its path, not inside its fill.	Un clic selecciona un objeto relleno solo en su trazado, no dentro de su relleno.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Qué tan cerca, en píxeles, debe llegar un punto a un ancla o guía de regla para que Ajustar a punto lo ajuste; con las guías inteligentes activadas se aplica su tolerancia de ajuste.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Con la herramienta Selección, Cmd/Ctrl+clic selecciona el objeto que está debajo del seleccionado en el puntero; cada clic siguiente baja un objeto más.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Acercar y Alejar llevan el centro de la selección al medio de la vista.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	La ilustración bloqueada y oculta dentro de una mesa de trabajo se mueve, se escala y se copia con ella, como el resto de la ilustración.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	El tamaño de los puntos de ancla y de los extremos de los manejadores de dirección en el lienzo; las anclas más grandes también se pueden tomar desde más lejos.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Dibuja los extremos de los manejadores de dirección como puntos rellenos, puntos huecos o puntos rellenos más grandes.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Con la herramienta Selección directa, el ancla bajo el puntero se resalta.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Muestra los manejadores de dirección cuando hay más de un ancla seleccionada; desactivado, solo se muestran con una sola ancla seleccionada.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Los widgets de esquina se ocultan en las esquinas cuyo ángulo supera estos grados.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	La herramienta Pluma muestra el siguiente segmento desde la última ancla hasta el puntero antes de hacer clic.
+	The Curvature tool previews the curve to the pointer before you place the next point.	La herramienta Curvatura muestra la curva hasta el puntero antes de colocar el siguiente punto.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	La unidad de los documentos nuevos de tamaños predefinidos, salvo los tamaños en píxeles, y de los archivos abiertos que no registran ninguna unidad; si la elige aquí y hace clic en Aceptar, también pasa a ser la unidad del documento activo.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Los grosores de trazo, los guiones y los huecos se muestran en esta unidad, y los números que se escriben para ellos se leen en ella.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Los tamaños de texto, el interlineado y el desplazamiento de línea de base se muestran en esta unidad, y los números que se escriben para ellos se leen en ella.
 	The unit for East Asian type measurements, which no field uses yet.	La unidad para las medidas del texto de Asia oriental, que todavía no usa ningún campo.
 	When on, a number typed without a unit into a field in picas is read in points.	Si está activado, un número escrito sin unidad en un campo en picas se lee en puntos.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Con ID XML, los nombres de los objetos se muestran como ID XML en Capas, Variables y Opciones de capa.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Ajusta el dibujo, el desplazamiento y el escalado a las subdivisiones de la cuadrícula, aunque la cuadrícula esté oculta; mientras está activado, Ajustar a píxel no se aplica.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	El color de las guías no seleccionadas; una mesa de trabajo con una Etiqueta de las guías dibuja sus propias guías en el color de la etiqueta.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Dibuja las guías como líneas continuas o como puntos, incluidas las guías que ya están en el documento.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Con esta opción activada, las guías quedan bloqueadas al iniciar VectorCraft; cambiar la opción las bloquea o desbloquea al momento, y Ver › Guías › Bloquear guías sigue cambiando el bloqueo.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Con esta opción activada, mantener pulsada Cmd/Ctrl al empezar a arrastrar desde una regla crea una guía solo en la mesa de trabajo activa, o una guía de todo el lienzo con la herramienta Mesa de trabajo.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	El color de la cuadrícula; las líneas entre las líneas principales se dibujan en un tono más tenue de ese color.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Dibuja la cuadrícula como líneas, o como puntos a lo largo de las líneas principales en cada subdivisión.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	La distancia entre las líneas principales de la cuadrícula, en todos los documentos abiertos y en los nuevos; un documento de VectorCraft se abre con la cuadrícula con la que se guardó.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	En cuántas partes se divide cada cuadrado principal de la cuadrícula; Ajustar a cuadrícula se ajusta a esas partes, aunque el zoom oculte sus líneas.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Dibuja la cuadrícula detrás de la ilustración; desactivada, la cuadrícula se dibuja encima.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	En la vista previa de píxeles, con un zoom del 600% o más, la vista activa muestra sobre la ilustración una línea en el borde de cada píxel del documento.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	El color del borde del mosaico y de los límites discontinuos de la muestra que se ven mientras edita un motivo.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Ajusta el dibujo, el desplazamiento y la transformación a la ilustración cercana y muestra guías y etiquetas; la vista previa de píxeles las desactiva, y Ajustar a cuadrícula ajusta a la cuadrícula en su lugar.
+	The color of Smart Guide lines and labels.	El color de las líneas y etiquetas de las guías inteligentes.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Muestra una línea a lo largo del borde o el centro con el que se alinea la ilustración; desactivada, la ilustración se sigue alineando sin la línea, y Ajustar a glifo no se aplica.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Con una herramienta de selección, contornea el objeto no seleccionado bajo el puntero con el color de su capa mientras no arrastra.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Muestra el tamaño o el ángulo junto al puntero mientras escala, gira, inclina o refleja la ilustración.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Mientras dibuja, los puntos se ajustan a líneas con los ángulos elegidos que pasan por el punto donde empieza el segmento o la forma.
+	The set of angles the construction guides follow while Construction Guides is on.	El conjunto de ángulos que siguen las guías de construcción mientras Guías de construcción está activado.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Nombra a qué se ajusta un punto, como un punto de ancla, un trazado o una alineación; desactivado, los puntos se ajustan igual, sin los nombres.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Muestra junto al puntero distancias, ángulos y cuánto se ha movido la ilustración mientras dibuja o mueve.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Ajusta la ilustración movida o redimensionada a la misma separación que hay entre objetos cercanos y marca las separaciones iguales.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Con algo seleccionado, mantener pulsada Alt/Option sobre otro objeto o una mesa de trabajo muestra las distancias entre este y la selección.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Una selección arrastrada de vuelta hasta la tolerancia de ajuste del lugar donde empezó el arrastre vuelve exactamente a ese lugar; una copia no.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Cuánto debe acercarse en pantalla el puntero o un punto arrastrado a la ilustración para que las guías inteligentes se ajusten a ella; la distancia es la misma con cualquier zoom.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta el extremo de un segmento de línea, o un círculo dibujado desde su centro, para que toque una curva cercana.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta el extremo de un segmento de línea para que encuentre un segmento recto cercano en ángulo recto.
 	Reset all preferences to their defaults?	¿Restablecer todas las preferencias a sus valores predeterminados?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Los valores predeterminados se aplican al hacer clic en Aceptar en Preferencias. Cancelar ahí conserva sus preferencias actuales.
 	Restore Recovered Documents	Restaurar documentos recuperados
@@ -3298,6 +3394,7 @@ digits	Malayalam	Malayálam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
 	No recent commands	No hay comandos recientes
+	Search commands	Buscar comandos
 	Search Commands…	Buscar comandos…
 	Secondary	Secundario
 	Section Symbol	Símbolo de sección
@@ -4672,6 +4769,11 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	PDF writer error: {0}	error del escritor de PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Se empaquetó {n} archivo en {folder} ({note})|Se empaquetaron {n} archivos en {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Previsualizar en el navegador requiere la aplicación de escritorio (la versión web descarga los archivos)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	indica `desiredK`, el tamaño de archivo deseado en K (1024 bytes): un número mayor que 0 y como máximo 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` es `current` o `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` es `allSlices`, `eachSlice` o `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` es un número de sector de `slice.list`, con `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimizar según tamaño de archivo: no hay ninguna imagen que medir
 @msg	Release Guides: no guides	Soltar guías: no hay guías
 @msg	Release: no layer to put the rectangle in	Soltar: no hay ninguna capa donde poner el rectángulo
 @msg	Replace Spine: select a blend and a path	Reemplazar eje: selecciona una fusión y un trazado
@@ -4917,6 +5019,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no active document	no hay ningún documento activo
 @msg	no active perspective plane	no hay ningún plano de perspectiva activo
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
+@msg	`points` must be three [x, y] pairs of numbers	`points` debe ser tres pares de números [x, y]
+@msg	direct-select three anchor points, or give `points`	seleccione directamente tres puntos de ancla o indique `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo
 @msg	no artboard {i} (0-based; the document has {_1})	no existe la mesa de trabajo {i} (contando desde 0; el documento tiene {_1})
@@ -6261,6 +6366,19 @@ mark-style	Japanese	Japonesas
 	Transform Objects	Transformar objetos
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parámetro desconocido `{key}`; ¿quiso decir `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parámetro desconocido `{key}`; el comando no tiene parámetros
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	parámetro desconocido `{key}`; `{object}` acepta: {keys}
+@msg	unknown parameter `{key}`; {why_not}	parámetro desconocido `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	ningún formato lo acepta (consulte document.formats)
+@msg	no save format takes it (see file.formatOptions)	ningún formato de guardado lo acepta (consulte file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF no lo acepta (consulte document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS no lo acepta (consulte document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF no lo acepta (consulte document.formats)
+@msg	{name} must be {range} (got {v})	{name} debe ser {range} (se recibió {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	El procesador gráfico probado primero no pudo mostrar la ventana, así que VectorCraft se inició de nuevo con {summary} (Ajustes › Rendimiento › Procesador gráfico › Automático usa el que controla su pantalla)
+@msg	Sent “{title}” to {to}	Se envió “{title}” a {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Se envió “{title}” a {to}. Respuesta de la cola de impresión: {note}
+@msg	the default printer	la impresora predeterminada
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efectos de rasterizado en el objeto {object}: se solicitaron {requested} ppi y se alcanzaron {achieved} ppi debido al límite de 64 millones de píxeles
 @msg	unknown parameter `{key}`; the command takes: {keys}	parámetro desconocido `{key}`; el comando acepta: {keys}
 @msg	the params must be an object, not {got}	los parámetros deben ser un objeto, no {got}
 @msg	unknown parameter `{path}`; the object takes no keys	parámetro desconocido `{path}`; el objeto no acepta claves
@@ -7104,6 +7222,7 @@ anchor	Points:	Puntos:
 	Open a document to check it for issues.	Abra un documento para buscar problemas en él.
 	Empty Text	Texto vacío
 	Unpainted Objects	Objetos sin pintar
+	Empty Text Paths	Trazados de texto vacíos
 	Zero-Opacity Objects	Objetos con opacidad cero
 	Duplicate Objects	Objetos duplicados
 	Off-Artboard Art	Ilustración fuera de las mesas de trabajo
@@ -7712,6 +7831,7 @@ breakText	Glyphs	Glifos
 @msg	Too many Revolve faces for visibility evaluation	Demasiadas caras de Revolución para evaluar la visibilidad
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lee como máximo {ASE_MAX_ENTRIES} colores y grupos de un archivo de intercambio de muestras, y esta biblioteca tiene {entries}
 @msg	WebP encoding failed: {e}	Error al codificar WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Error al codificar WebP: la imagen es demasiado grande para WebP con pérdida: reduzca la resolución o elija Sin pérdida
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` es smallThumb, mediumThumb, largeThumb, smallList o largeList
@@ -7908,6 +8028,11 @@ breakText	Glyphs	Glifos
 @msg	Some islands could not be joined to the area around the art	Algunas islas no se pudieron unir al área que rodea la ilustración
 @msg	`width` must be from {lo} to {hi} pt	`width` debe estar entre {lo} y {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle` debe estar entre -180 y 180 grados
+@msg	`roundness` must be from 0 to 100%	`roundness` debe estar entre 0 y 100 %
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` debe estar entre 0.01 y 100 pt
+@msg	style must be "pencil" or "brush"	style debe ser "pencil" o "brush"
+@msg	extend end must be "start" or "end"	el extremo de extend debe ser "start" o "end"
+@msg	connect end must be "start" or "end"	el extremo de connect debe ser "start" o "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` debe estar entre 1 y 100 %
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Caja y líneas de pelado…

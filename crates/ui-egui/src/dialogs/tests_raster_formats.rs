@@ -101,13 +101,48 @@ fn text_export_options_write_the_stories() {
     assert_eq!((path.as_str(), bytes.as_slice()), ("/out/Untitled-1.txt", &b"Hello\r\nthere\r\n"[..]));
 }
 
+/// WebP Options: Lossless by default, with the Quality slider disabled; Lossy enables it, and OK
+/// writes a lossy file at that quality, without a note.
 #[test]
-fn webp_options_say_the_file_is_lossless() {
-    let (mut app, _) = app(1);
+fn webp_options_choose_lossless_or_lossy_at_a_quality() {
+    use crate::widgets::accessibility_tests::tree;
+    use egui::accesskit::Role;
+    let quality_disabled = |app: &mut VectorcraftApp| {
+        let t = tree(|ui| show(app, ui.ctx()));
+        t.iter().find(|n| n.role() == Role::Slider).expect("the Quality slider").is_disabled()
+    };
+    let (mut app, written) = app(1);
     app.run("file.exportAs", json!({"format": "webp"})).unwrap();
     confirm(&mut app).unwrap();
     assert_eq!(kind(&app), Some("webpOptions"));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((&d.fields["lossless"], &d.fields["quality"]), (&json!(true), &json!(90)));
+    assert!(quality_disabled(&mut app), "Quality applies to Lossy");
     frame(&mut app);
+    confirm(&mut app).unwrap();
+    assert_eq!(&written.borrow()[0].1[12..16], b"VP8L", "lossless by default");
+
+    app.run("file.exportAs", json!({"format": "webp"})).unwrap();
+    confirm(&mut app).unwrap();
+    set(&mut app, "lossless", json!(false));
+    set(&mut app, "quality", json!(40));
+    assert!(!quality_disabled(&mut app), "Lossy enables Quality");
+    frame(&mut app);
+    // The dialog's options, as `document.export` takes them.
+    let mut options = app.ui.dialog.as_ref().unwrap().fields.clone();
+    options.retain(|k, _| !k.starts_with("__") && k != "path");
+    let r = confirm(&mut app).unwrap();
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    let file = written.borrow().last().unwrap().1.clone();
+    assert!(file.windows(4).any(|w| w == b"VP8 ") && !file.windows(4).any(|w| w == b"VP8L"), "lossy");
+    // The file is the one `document.export` writes with those options at quality 40.
+    let at = |app: &mut VectorcraftApp, q: u8| {
+        let mut p = options.clone();
+        p.insert("quality".into(), json!(q));
+        vectorcraft_format::base64_decode(app.run("document.export", serde_json::Value::Object(p)).unwrap()["dataBase64"].as_str().unwrap()).unwrap()
+    };
+    assert_eq!(file, at(&mut app, 40));
+    assert_ne!(file, at(&mut app, 90));
 }
 
 #[test]

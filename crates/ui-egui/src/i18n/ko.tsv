@@ -261,6 +261,9 @@ digits	Malayalam	말라얄람어
 	Mask	마스크
 	Rasterize…	래스터화…
 	Create Gradient Mesh…	그레이디언트 메시 만들기…
+	Flat	평면
+	To Center	가운데로
+	To Edge	가장자리로
 	Create Object Mosaic…	개체 모자이크 만들기…
 	Vector Halftone…	벡터 하프톤…
 	Create Trim Marks	트림 마크 만들기
@@ -1110,6 +1113,8 @@ antiAlias	Sharp	날카롭게
 	Crisp	또렷하게
 	Strong	강하게
 	Anti-aliasing:	안티 앨리어싱:
+	Art Optimized	아트에 최적화
+	Type Optimized	문자에 최적화
 	Appearance Item	모양새 항목
 	Appearance Panel	모양새 패널
 	Appearance of Black	검정 표시 방식
@@ -1359,10 +1364,13 @@ antiAlias	Sharp	날카롭게
 	Conflict {n} of {count}	충돌 {n}/{count}
 	Constrain Angle	각도 제한
 	Constrain Width and Height Proportions	너비와 높이 비율 고정
+	Copy Width to Height	너비를 높이로 복사
 	Construction Guides	작도 안내선
 	Contextual Alternates	문맥 대체 글자
 	Convert	변환
 	Convert All Spot Colors to Process	모든 별색을 프로세스 색상으로 변환
+	Convert {name} to process	{name}을(를) 프로세스 색상으로 변환
+	Keep {name} as spot	{name}을(를) 별색으로 유지
 	Convert All Strokes to Outlines	모든 선을 윤곽선으로 변환
 	Convert All Text to Outlines	모든 문자를 윤곽선으로 변환
 	Convert Anchor Point	앵커 포인트 변환
@@ -1859,6 +1867,10 @@ antiAlias	Sharp	날카롭게
 	Font List	글꼴 목록
 	Show Similar Fonts	유사한 글꼴 표시
 	Clear Similar Fonts	유사한 글꼴 지우기
+	Fonts used in this document	이 문서에서 사용된 글꼴
+	This document uses no available fonts	이 문서는 사용 가능한 글꼴을 사용하지 않습니다
+	Recently Added	최근 추가됨
+	Fonts added in the last 30 days	최근 30일 동안 추가된 글꼴
 	Font Preview Size	글꼴 미리 보기 크기
 	Font:	글꼴:
 	Fonts	글꼴
@@ -2316,7 +2328,8 @@ antiAlias	Sharp	날카롭게
 	Location	위치
 	Location:	위치:
 	Lock (⌘2)	잠금 (⌘2)
-	Lossless (lossy WebP isn't available yet)	무손실 (손실 WebP는 아직 지원되지 않음)
+	Lossless	무손실
+	Lossy	손실
 	Lossy:	손실 압축:
 	Luminosity	광도
 	Magic Wand Options	마술봉 옵션
@@ -2817,6 +2830,18 @@ diagnostics	ui	UI
 	Preview All Layers	모든 레이어 미리 보기
 	Preview Mode	미리 보기 모드
 	Preview in Browser	브라우저에서 미리 보기
+	Optimize to File Size…	파일 크기에 맞게 최적화…
+	Optimize to File Size	파일 크기에 맞게 최적화
+	Desired File Size:	원하는 파일 크기:
+	Start With:	시작 설정:
+	Use:	사용:
+	Current Settings	현재 설정
+	Auto Select GIF/JPEG	GIF/JPEG 자동 선택
+	Total of All Slices	모든 분할 합계
+	Each Slice	각 분할
+	Current Slice	현재 분할
+	{size}, within {target}	{size}, {target} 이내
+	No setting tried fits in {target}; the smallest is {size}	시도한 설정 중 {target}에 맞는 것이 없습니다. 가장 작은 크기는 {size}
 	Preview the document as it is now	문서를 현재 상태로 미리 보기
 	Previous	이전
 	Previous Library	이전 라이브러리
@@ -3067,12 +3092,85 @@ mark-style	Japanese	일본식
 	Restore	복원
 	Restore Recovered Documents	복구된 문서 복원
 	Restore every preference to its default (applied on OK)	모든 환경 설정을 기본값으로 복원(확인 시 적용)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	캔버스에 선택 영역이나 도구에 맞는 명령 막대를 표시합니다. 드래그하는 동안과 프레젠테이션 모드에서는 숨겨집니다.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	화살표 키로 선택 영역을 이동하는 거리입니다. Shift 키를 누르면 10배 멀리 이동합니다.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	화살표 키로 이동하는 축과 Shift 키로 그리기와 이동을 고정하는 축의 각도입니다.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	둥근 사각형 도구로 그릴 때 쓰는 모퉁이 반지름입니다. 그리는 동안 반지름을 바꾸면 이 값도 바뀝니다.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	스크립트에서처럼 위치가 지정되지 않았을 때 붙여넣기가 사본을 오른쪽과 아래로 옮기는 거리입니다. 앱에서 붙여넣기를 하면 사본이 보기의 가운데에 놓입니다.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	펜 도구가 선택한 패스에서 클릭한 고정점을 삭제하거나 세그먼트를 클릭한 위치에 고정점을 추가하지 않게 합니다.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	그리기 도구의 포인터를 아이콘 대신 십자선으로 표시합니다. Caps Lock이 켜져 있는 동안에도 같습니다.
+	Shows a tip when the pointer rests on a button or field that has one.	도움말이 있는 버튼이나 필드에 포인터를 올려 두면 도움말을 표시합니다.
+	Shows a warning before a script you choose runs.	선택한 스크립트를 실행하기 전에 경고를 표시합니다.
+	Smooths the edges of artwork on the canvas.	캔버스에 있는 아트웍의 가장자리를 매끄럽게 표시합니다.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	선택 › 동일 › 칠 색상, 선 색상, 칠 및 선은 전역 또는 별색 견본의 같은 색조만 찾고, 다른 색조는 찾지 않습니다.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	열린 문서가 없을 때 홈 화면을 표시합니다. 끄면 홈을 클릭할 때까지 창이 비어 있습니다.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	크기, 위치, 정렬을 위해 선과 모양을 바꾸는 효과를 포함하여 개체를 측정합니다. 그림자, 광선, 흐림 효과는 측정하지 않습니다.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 확대/축소에서 문서의 1인치가 72가 아닌 96 화면 포인트를 차지합니다.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	선택 도구로 그룹, 패스 또는 이미지를 두 번 클릭하면 격리 모드로 엽니다.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	변형 명령이나 변형 패널의 메뉴에서 달리 선택하지 않는 한, 패턴 칠과 선이 아트웍과 함께 변형됩니다.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 라이브 모퉁이 반지름이 아트웍과 함께 크기 조정됩니다.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	크기 조정에서 달리 선택하지 않는 한, 선 두께, 대시, 효과 거리가 아트웍과 함께 크기 조정됩니다.
+	The mouse wheel zooms the canvas instead of scrolling it.	마우스 휠로 캔버스를 스크롤하지 않고 확대/축소합니다.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
+	Dragging sideways on a numeric field's label changes the field's value.	숫자 필드의 레이블을 옆으로 드래그하면 필드 값이 바뀝니다.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
+	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	트림 마크 만들기에서 서양식 대신 일본식 표시를 그립니다.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	새 아트웍이 선택 영역의 칠과 선만 가져옵니다. 끄면 선택한 개체의 모양 전체를 가져옵니다.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	변형 패널, 속성 패널 또는 컨트롤 패널에서 폭이나 높이를 바꾸면 다른 값도 비율에 맞게 바뀝니다.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	라이브 사각형의 속성에 네 모퉁이 모두에 쓰는 모퉁이 반지름 필드 하나를 표시합니다. 끄면 모퉁이마다 필드가 따로 있습니다.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	변형 패널에서 편집할 때 변형되는 대상으로, 개체, 패턴 타일 또는 둘 다입니다. 기본값은 패턴 타일 변형을 따릅니다.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	심볼 인스턴스 하나를 선택하면 변형 패널은 심볼의 등록 지점을 참조점으로 사용합니다.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	아트보드 도구를 사용하는 동안 아트보드 바깥의 캔버스를 어둡게 표시합니다.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	아트보드 외부 영역 어둡게 표시가 켜져 있으면 아트보드 도구로 드래그하는 동안에도 아트보드 바깥 영역이 어둡게 유지됩니다.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	클릭으로 개체, 고정점 또는 핸들을 선택하려면 포인터가 얼마나 가까이(픽셀) 있어야 하는지입니다.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	선택 도구의 상자가 닿은 개체를 선택할지, 완전히 안에 있는 개체만 선택할지입니다. 드래그 방향은 오른쪽으로 드래그하면 안쪽 개체를 선택합니다. 드래그 중 E를 누르면 규칙이 반대로 바뀝니다.
+	A click selects a filled object only on its path, not inside its fill.	칠이 있는 개체를 칠 안쪽이 아니라 패스를 클릭할 때만 선택합니다.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	포인트에 스냅이 점을 스냅하려면 점이 고정점이나 눈금자 안내선에 얼마나 가까이(픽셀) 와야 하는지입니다. 스마트 안내선이 켜져 있으면 대신 스마트 안내선의 스냅 허용 오차를 씁니다.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	선택 도구에서 Cmd/Ctrl-클릭하면 포인터 위치에서 선택한 개체 아래의 개체를 선택하며, 클릭할 때마다 한 개체씩 더 아래로 내려갑니다.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	확대와 축소가 선택 영역의 중심을 보기의 가운데로 가져옵니다.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	아트보드 안의 잠긴 아트워크와 숨겨진 아트워크도 다른 아트워크처럼 아트보드와 함께 이동, 크기 조정, 복사됩니다.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	캔버스에 표시되는 고정점과 방향 핸들 끝의 크기입니다. 고정점이 클수록 더 먼 곳에서도 잡을 수 있습니다.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	방향 핸들 끝을 채워진 점, 속이 빈 점 또는 더 큰 채워진 점으로 그립니다.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	직접 선택 도구에서 포인터 아래의 고정점을 강조 표시합니다.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	고정점을 둘 이상 선택했을 때 방향 핸들을 표시합니다. 끄면 고정점을 하나만 선택했을 때만 표시됩니다.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	각도가 이 값(도)보다 큰 모퉁이에서는 모퉁이 위젯을 숨깁니다.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	펜 도구가 클릭하기 전에 마지막 고정점에서 포인터까지 다음 세그먼트를 미리 보여 줍니다.
+	The Curvature tool previews the curve to the pointer before you place the next point.	곡률 도구가 다음 점을 놓기 전에 포인터까지 곡선을 미리 보여 줍니다.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	픽셀 크기가 아닌 기본 제공 크기의 새 문서와 단위가 기록되지 않은 열린 파일에 쓰는 단위이며, 여기서 고르고 확인을 누르면 활성 문서의 단위도 바뀝니다.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	선 두께, 대시, 간격이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	글자 크기, 행간, 기준선 이동이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
 	The unit for East Asian type measurements, which no field uses yet.	동아시아 문자 측정에 쓰는 단위로, 아직 이 단위를 쓰는 필드는 없습니다.
 	When on, a number typed without a unit into a field in picas is read in points.	켜면 파이카 필드에 단위 없이 입력한 숫자를 포인트로 읽습니다.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID를 고르면 레이어, 변수, 레이어 옵션에서 개체 이름이 XML ID로 표시됩니다.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	격자가 숨겨져 있어도 그리기, 이동, 크기 조절을 격자의 세분 위치에 스냅합니다. 켜져 있는 동안에는 픽셀에 스냅이 적용되지 않습니다.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	선택되지 않은 안내선의 색상입니다. 안내선 레이블이 있는 아트보드는 자신의 안내선을 레이블 색상으로 그립니다.
+	Draws guides as solid lines or as dots, including the guides already in the document.	문서에 이미 있는 안내선을 포함해 안내선을 실선 또는 점으로 그립니다.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	켜면 VectorCraft가 시작될 때 안내선이 잠깁니다. 이 옵션을 바꾸면 즉시 잠기거나 잠금이 풀리며, 보기 › 안내선 › 안내선 잠그기로도 계속 잠금을 바꿀 수 있습니다.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	켜면 눈금자에서 드래그를 시작할 때 Cmd/Ctrl을 누르고 있으면 활성 아트보드에만 안내선을 만들고, 아트보드 도구에서는 캔버스 전체의 안내선을 만듭니다.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	격자의 색상입니다. 주 격자선 사이의 선은 이 색상의 더 옅은 색조로 그려집니다.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	격자를 선으로, 또는 주 격자선을 따라 각 세분 위치에 점으로 그립니다.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	열려 있는 모든 문서와 새 문서의 주 격자선 간격입니다. VectorCraft 문서는 저장할 때의 격자로 열립니다.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	각 주 격자 칸을 나누는 수입니다. 확대/축소로 선이 숨겨져도 격자에 스냅은 이 위치에 스냅합니다.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	격자를 아트워크 뒤에 그립니다. 끄면 격자를 아트워크 위에 그립니다.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	픽셀 미리 보기에서 600% 이상으로 확대하면 활성 보기에서 아트워크 위에 문서의 각 픽셀 경계마다 선이 표시됩니다.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	패턴을 편집하는 동안 표시되는 타일 가장자리와 점선 견본 경계의 색상입니다.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	그리기, 이동, 변형을 가까운 아트에 스냅하고 안내선과 레이블을 표시합니다. 픽셀 미리 보기에서는 꺼지며, 격자에 스냅이 켜져 있으면 대신 격자에 스냅합니다.
+	The color of Smart Guide lines and labels.	스마트 안내선의 선과 레이블 색상입니다.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	아트가 맞춰지는 가장자리나 중심을 따라 선을 표시합니다. 끄면 선 없이도 맞춰지며, 글리프에 스냅은 적용되지 않습니다.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	선택 도구로 드래그하지 않는 동안 포인터 아래의 선택되지 않은 개체 윤곽을 레이어 색상으로 표시합니다.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	아트의 크기를 조절하거나 회전하거나 기울이거나 반사하는 동안 포인터 옆에 크기나 각도를 표시합니다.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	그리는 동안 점이 세그먼트나 모양의 시작점을 지나는 선택한 각도의 선에 스냅됩니다.
+	The set of angles the construction guides follow while Construction Guides is on.	작도 안내선이 켜져 있을 때 작도 안내선이 따르는 각도 세트입니다.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	앵커, 패스, 정렬처럼 점이 스냅되는 대상의 이름을 표시합니다. 끄면 이름 없이 같은 방식으로 스냅됩니다.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	그리거나 이동하는 동안 포인터 옆에 거리, 각도, 아트가 이동한 거리를 표시합니다.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	이동하거나 크기를 조절한 아트를 가까운 개체 사이와 같은 간격에 스냅하고 같은 간격을 표시합니다.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	무언가를 선택한 상태에서 다른 개체나 아트보드 위에서 Alt/Option 키를 누르고 있으면 그것과 선택 영역 사이의 거리를 표시합니다.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	드래그를 시작한 위치에서 스냅 허용 오차 이내로 다시 드래그한 선택 영역은 정확히 그 위치로 돌아갑니다. 복사본은 돌아가지 않습니다.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	스마트 안내선이 스냅하려면 포인터나 드래그한 점이 화면에서 아트에 얼마나 가까이 와야 하는지입니다. 이 거리는 모든 확대/축소에서 같습니다.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	선 세그먼트의 끝이나 중심에서 그린 원을 가까운 곡선에 닿도록 스냅합니다.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
@@ -3208,6 +3306,7 @@ mark-style	Japanese	일본식
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
 	Recent Commands	최근 명령
 	No recent commands	최근 명령 없음
+	Search commands	명령 검색
 	Secondary	보조
 	Select All Art on Layer	레이어의 모든 아트웍 선택
 	Select All Assets	모든 에셋 선택
@@ -4671,6 +4770,9 @@ theme	Appearance	외관
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
+@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
+@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
 @msg	no saved presets	저장된 프리셋이 없습니다
@@ -5065,6 +5167,11 @@ theme	Appearance	외관
 @msg	1 hidden object	숨겨진 개체 1개
 @msg	{n} hidden objects	숨겨진 개체 {n}개
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	브라우저에서 미리 보기는 데스크톱 앱이 필요합니다(웹에서는 파일을 다운로드합니다)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK`에 원하는 파일 크기를 K(1024바이트) 단위로 지정하세요: 0보다 크고 1048576 이하인 숫자
+@msg	`startWith` is `current` or `auto`	`startWith`는 `current` 또는 `auto`입니다
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use`는 `allSlices`, `eachSlice` 또는 `currentSlice`입니다
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`는 `slice.list`의 분할 번호이며 `use: currentSlice`와 함께 씁니다
+@msg	Optimize to File Size: there is no image to measure	파일 크기에 맞게 최적화: 측정할 이미지가 없습니다
 @msg	no file system here	여기에는 파일 시스템이 없습니다
 @msg	nothing to preview	미리 볼 항목이 없습니다
 @msg	Saved {n} files beside {path}	{path} 옆에 파일 {n}개를 저장했습니다
@@ -5870,6 +5977,19 @@ lighting	Light	광원
 	Transform Objects	개체 변형
 @msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
 @msg	unknown parameter `{key}`; the command takes no parameters	알 수 없는 매개변수 `{key}`: 이 명령에는 매개변수가 없습니다
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	알 수 없는 매개변수 `{key}`: `{object}`이(가) 받는 키: {keys}
+@msg	unknown parameter `{key}`; {why_not}	알 수 없는 매개변수 `{key}`: {why_not}
+@msg	no format takes it (see document.formats)	이 옵션을 받는 형식이 없습니다(document.formats 참조)
+@msg	no save format takes it (see file.formatOptions)	이 옵션을 받는 저장 형식이 없습니다(file.formatOptions 참조)
+@msg	PDF doesn't take it (see document.formats)	PDF는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	EPS doesn't take it (see document.formats)	EPS는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	DXF doesn't take it (see document.formats)	DXF는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	{name} must be {range} (got {v})	{name}은(는) {range}이어야 합니다({v} 입력됨)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	처음 시도한 그래픽 프로세서가 창을 표시하지 못해 {summary}에서 VectorCraft를 다시 시작했습니다(설정 › 성능 › 그래픽 프로세서 › 자동은 디스플레이를 구동하는 프로세서를 사용합니다)
+@msg	Sent “{title}” to {to}	“{title}”을(를) {to}(으)로 보냈습니다
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}”을(를) {to}(으)로 보냈습니다. 인쇄 대기열 응답: {note}
+@msg	the default printer	기본 프린터
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	개체 {object}의 래스터 효과: {requested} ppi를 요청했지만 6,400만 픽셀 한도 때문에 {achieved} ppi가 되었습니다
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 @msg	the params must be an object, not {got}	매개변수는 객체여야 합니다({got} 사용 불가)
 @msg	unknown parameter `{path}`; the object takes no keys	알 수 없는 매개변수 `{path}`: 이 객체는 키를 받지 않습니다
@@ -6721,6 +6841,7 @@ anchor	Points:	포인트:
 	Open a document to check it for issues.	문서를 열면 문제를 점검할 수 있습니다.
 	Empty Text	빈 텍스트
 	Unpainted Objects	칠하지 않은 오브젝트
+	Empty Text Paths	빈 텍스트 패스
 	Zero-Opacity Objects	불투명도 0% 오브젝트
 	Duplicate Objects	중복 오브젝트
 	Off-Artboard Art	아트보드 밖의 아트워크
@@ -7399,6 +7520,11 @@ breakText	Glyphs	글리프
 @msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
 @msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
 @msg	`angle` must be from -180 to 180 degrees	`angle`는 -180도에서 180도 사이여야 합니다
+@msg	`roundness` must be from 0 to 100%	`roundness`는 0%에서 100% 사이여야 합니다
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity`는 0.01에서 100pt 사이여야 합니다
+@msg	style must be "pencil" or "brush"	style은 "pencil" 또는 "brush"여야 합니다
+@msg	extend end must be "start" or "end"	extend 끝은 "start" 또는 "end"여야 합니다
+@msg	connect end must be "start" or "end"	connect 끝은 "start" 또는 "end"여야 합니다
 @msg	`roundness` must be from 1 to 100%	`roundness`는 1%에서 100% 사이여야 합니다
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다
 	Weed Box and Lines…	위딩 상자 및 선…
@@ -7461,6 +7587,7 @@ breakText	Glyphs	글리프
 @msg	Too many Revolve faces for visibility evaluation	회전체의 면이 너무 많아 가시성을 계산할 수 없습니다
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft는 견본 교환 파일에서 색상과 그룹을 최대 {ASE_MAX_ENTRIES}개까지 읽는데, 이 라이브러리에는 {entries}개가 있습니다
 @msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP 인코딩 실패: 이미지가 너무 커서 손실 WebP로 만들 수 없습니다: 해상도를 낮추거나 무손실을 선택하세요
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index`은(는) 정수여야 합니다
@@ -8041,7 +8168,6 @@ breakText	Glyphs	글리프
 @msg	anchor `smooth` must be true or false	앵커의 `smooth`은(는) true 또는 false여야 합니다
 @msg	anchor `{key}` must be [x, y]	앵커의 `{key}`은(는) [x, y]여야 합니다
 @msg	anchor `{key}` must be a number	앵커의 `{key}`은(는) 숫자여야 합니다
-@msg	angle and roundness must be finite	각도와 원형률은 유한해야 합니다
 @msg	angles must be a list as long as pins (degrees or null)	angles는 pins와 길이가 같은 목록이어야 합니다(도 또는 null)
 @msg	appearance must be flat|center|edge	appearance는 flat|center|edge여야 합니다
 @msg	apply is "fill" or "stroke", not `{other}`	apply는 "fill" 또는 "stroke"입니다: `{other}`
@@ -9203,8 +9329,6 @@ breakText	Glyphs	글리프
 @msg	unknown panel	알 수 없는 패널
 @msg	unknown panel `{panel}`	알 수 없는 패널 `{panel}`
 @msg	unknown parameter `{key}`	알 수 없는 매개변수 `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	알 수 없는 매개변수 `{within}settings.{format}`: {why}
-@msg	unknown parameter `{within}{key}`; {why}	알 수 없는 매개변수 `{within}{key}`: {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	알 수 없는 pieLegend `{v}`(none, standard 또는 wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	알 수 없는 piePosition `{v}`(even, ratio 또는 stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	알 수 없는 pieSort `{v}`(none, all 또는 first)
@@ -9333,7 +9457,6 @@ breakText	Glyphs	글리프
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name}은(는) 기본 제공 항목이라 삭제할 수 없습니다
 @msg	{name} must be a number	{name}은(는) 숫자여야 합니다
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name}은(는) {lo}–{hi}{unit}여야 합니다({v} 입력됨)
 @msg	{name}: CRC or size mismatch	{name}: CRC 또는 크기가 일치하지 않습니다
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: 이 Affinity 파일은 포함된 미리 보기만 읽을 수 있었습니다. 경고와 함께 보려면 파일 › 열기를 사용하거나, 가져오기 전에 Affinity에서 SVG 또는 PDF로 내보내세요
 @msg	{name}: {e}	{name}: {e}
