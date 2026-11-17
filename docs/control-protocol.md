@@ -669,7 +669,9 @@ agents) opens the `rasterEffectsSettings` dialog. Its fields are what `document.
 (`resolution`, `colorModel`, `background`, `antiAlias`, `clippingMask`, `addAround` in pt, `preserveSpotColors`);
 `ui.dialog.confirm` runs it with them as one undo step; a bad value keeps the dialog open. Object → Rasterize… opens a
 `command` dialog for `object.rasterize` whose fields (`ppi`, `colorModel`, `background`, `antiAlias`, `clippingMask`,
-`addAround`) start from these settings.
+`addAround`) start from these settings. `colorModel`, `antiAlias` (`none`, `art`, `type`) and `background` (`white`,
+`transparent`) are dropdowns; `ui.dialog.set` also takes any other value the command takes, and the dialog sends it
+unchanged.
 
 Missing linked files: `app.open` of a document whose linked images' files can't be found (`document.open`'s
 `missingLinks`) opens the `missingLinks` dialog for the first (fields `missing`: `[{name, path, ids}]`, `modified`,
