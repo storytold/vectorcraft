@@ -63,10 +63,13 @@ pub const MAX_CATALOGS: usize = 32;
 const MAX_NOTES: usize = 20;
 const MAX_NOTE_CHARS: usize = 1000;
 /// The file in a command plug-in's store folder that holds its settings.
+#[cfg(not(target_arch = "wasm32"))]
 const SETTINGS_FILE: &str = "settings.json";
 /// The file in the `Plug-ins` folder that lists the catalogs added (`plugin.catalog.add`).
+#[cfg(not(target_arch = "wasm32"))]
 const CATALOGS_FILE: &str = "catalogs.json";
 /// The largest catalogs file read.
+#[cfg(not(target_arch = "wasm32"))]
 const MAX_CATALOGS_FILE: u64 = 64 * 1024;
 
 /// The rules every command plug-in's calls follow on top of [`craft_plugin::ALWAYS_DENIED`]:
