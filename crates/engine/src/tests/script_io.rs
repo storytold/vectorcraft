@@ -908,6 +908,29 @@ fn script_file_copy_of_an_open_file_has_its_changes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Two objects that changed the same file write it in the order they were opened, so the one opened
+/// last is written last, before the file is copied, given a new length or opened again.
+#[test]
+fn script_files_changed_by_two_objects_are_written_in_the_order_they_were_opened() {
+    let base = folder("twowriters");
+    let r = run(
+        &base,
+        "var d = Folder.temp.fsName, out = [];\n\
+         function two(name) { var p = d + '/' + name, s = new File(p); s.open('w'); s.write('xx'); s.close();\n\
+           var a = new File(p), b = new File(p); a.open('e'); b.open('e'); a.write('A'); b.write('B'); return [a, b, p]; }\n\
+         function done(h) { h[0].close(); h[1].close(); }\n\
+         function text(p) { var f = new File(p); f.open('r'); var t = f.read(); f.close(); return t; }\n\
+         for (var i = 0; i < 24; i++) {\n\
+           var h = two('c' + i + '.txt'); h[0].copy(d + '/copy.txt'); out.push(text(d + '/copy.txt')); done(h);\n\
+           h = two('l' + i + '.txt'); new File(h[2]).length = 1; done(h); out.push(text(h[2]));\n\
+           h = two('o' + i + '.txt'); var c = new File(h[2]); c.open('e'); out.push(c.read()); c.close(); done(h);\n\
+         }\n\
+         vc.log(out.join(','));",
+    );
+    assert_eq!(r["log"], json!([vec!["Bx,B,Bx"; 24].join(",")]), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// An object that has a file open for reading holds what `copy` writes over the file and the length
 /// `length` sets, as an object open for writing does, also after the file is renamed, and not after
 /// it is removed.
@@ -1992,6 +2015,37 @@ fn script_files_open_under_a_withdrawn_grant_keep_their_unwritten_changes() {
     assert_eq!(report["log"], json!([["wrote", false, "Script file is not open for writing"]]), "{report}");
     let message = report["message"].as_str().unwrap();
     assert!(message.contains("the script left open files that could not be written") && message.contains("out.txt"), "{report}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Files opened for writing under a kept grant that new code withdraws are written in the order
+/// they were opened, so the object opened last is written last.
+#[test]
+fn script_files_open_under_a_withdrawn_grant_are_written_in_the_order_they_were_opened() {
+    let base = folder("grantwithdrawnorder");
+    let dir = base.join("picked");
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("out.txt");
+    let text = format!(
+        "var f = new File({:?});\n\
+         if (!f.open('w')) vc.log(['asked', !!Folder.selectDialog('p')]);\n\
+         else {{ f.write('x'); var all = [f];\n\
+           for (var i = 1; i < 64; i++) {{ var g = new File(f.fsName); g.open('e'); all.push(g); }}\n\
+           for (var i = 0; i < 64; i++) all[i].write(('0' + i).slice(-2));\n\
+           eval('1'); vc.log(['wrote']); }}",
+        out.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![dir.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([["asked", true]]));
+    start_framed(&mut s, &base, &text);
+    let r = pump_to_picker(&mut s).unwrap();
+    let report = s.script_report().unwrap();
+    assert!(r.is_ok(), "{report}");
+    assert_eq!(report["log"], json!([["wrote"]]), "{report}");
+    assert_eq!(std::fs::read(&out).unwrap(), b"63", "{report}");
     let _ = std::fs::remove_dir_all(base);
 }
 

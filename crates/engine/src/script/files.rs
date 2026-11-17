@@ -407,8 +407,10 @@ impl Disk {
                 self.writes.remove(&g.path, g.folder);
             }
         }
-        let ids: Vec<u32> =
+        let mut ids: Vec<u32> =
             self.open.iter().filter(|(_, o)| o.target.as_deref().is_some_and(|t| !self.writes.allows(t))).map(|(id, _)| *id).collect();
+        // In the order the files were opened, as `flush_all` writes them.
+        ids.sort_unstable();
         for id in ids {
             let written = self.flush(id).is_ok();
             if let Some(o) = self.open.get_mut(&id) {
@@ -701,8 +703,9 @@ impl Disk {
             return fail(NOT_FOUND);
         }
         // Changes other open objects hold for the file are written before it is opened again, so
-        // they do not later replace what this one writes.
-        let ids: Vec<u32> = self.open.iter().filter(|(_, o)| o.target.as_deref() == Some(real.as_path())).map(|(id, _)| *id).collect();
+        // they do not later replace what this one writes, in the order they were opened.
+        let mut ids: Vec<u32> = self.open.iter().filter(|(_, o)| o.target.as_deref() == Some(real.as_path())).map(|(id, _)| *id).collect();
+        ids.sort_unstable();
         if let Err(m) = ids.iter().try_for_each(|id| self.flush(*id)) {
             return fail(m);
         }
@@ -1795,8 +1798,10 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     // its open objects are written, and copying could empty it.
     let one = |t: &std::fs::Metadata| std::fs::metadata(&source).is_ok_and(|s| same_file((&source, &s), (&target, t)));
     let itself = real_of(&target).is_some_and(|t| t == source) || std::fs::metadata(&target).is_ok_and(|t| one(&t));
-    // The source's open objects write what they hold first, so the copy has it.
-    let ids: Vec<u32> = disk.open.iter().filter(|(_, o)| o.target.as_deref() == Some(source.as_path())).map(|(id, _)| *id).collect();
+    // The source's open objects write what they hold first, in the order they were opened, so the
+    // copy has it.
+    let mut ids: Vec<u32> = disk.open.iter().filter(|(_, o)| o.target.as_deref() == Some(source.as_path())).map(|(id, _)| *id).collect();
+    ids.sort_unstable();
     if let Err(m) = ids.iter().try_for_each(|id| disk.flush(*id)) {
         return Ok(error(m));
     }
@@ -1988,8 +1993,10 @@ fn set_length(host: &Host, a: &[Data]) -> Result<Data, HostError> {
             let len = usize::try_from(n).unwrap_or(usize::MAX);
             let held = disk.open.values().filter(|o| o.holds(&target)).fold(0usize, |sum, o| sum.saturating_add(len.saturating_sub(o.bytes.len())));
             disk.charge_write(usize::try_from(n.saturating_sub(m.len())).unwrap_or(usize::MAX).saturating_add(held))?;
-            // The file's open objects write what they hold first, and then hold the new length.
-            let ids: Vec<u32> = disk.open.iter().filter(|(_, o)| o.target.as_deref() == Some(target.as_path())).map(|(id, _)| *id).collect();
+            // The file's open objects write what they hold first, in the order they were opened, and
+            // then hold the new length.
+            let mut ids: Vec<u32> = disk.open.iter().filter(|(_, o)| o.target.as_deref() == Some(target.as_path())).map(|(id, _)| *id).collect();
+            ids.sort_unstable();
             ids.iter()
                 .try_for_each(|id| disk.flush(*id))
                 .and_then(|()| std::fs::OpenOptions::new().write(true).open(&target).and_then(|f| f.set_len(n)).map_err(|_| WRITE_FAILED))
