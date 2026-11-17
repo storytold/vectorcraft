@@ -38,7 +38,7 @@ pub fn parts(v: &Value) -> Vec<Part> {
     let largest = pct("largest");
     // Deterministic pseudo-random sizes (same parameters → same flare). `ringSeed` places the rings
     // along the path from a sequence of its own; their count and sizes and the other parts stay.
-    // The generator's state is odd (never 0).
+    // Xorshift64. Both streams start from a nonzero state.
     let random = |mut state: u64| {
         move || {
             state ^= state << 13;
@@ -49,7 +49,13 @@ pub fn parts(v: &Value) -> Vec<Part> {
     };
     let mut rnd = random(v.get("seed").and_then(Value::as_u64).unwrap_or(DEFAULT_SEED) | 1);
     // Each `ringSeed` below 2^53 (what a JSON number holds exactly) gets a state of its own.
-    let mut ring_at = v.get("ringSeed").and_then(Value::as_u64).filter(|r| *r < 1 << 53).map(|r| random((r << 1) | 1));
+    let mut ring_at = v.get("ringSeed").and_then(Value::as_u64).filter(|r| *r < 1 << 53).map(|r| {
+        // SplitMix64 initializes the ring-position stream.
+        let mut z = r.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        random(z ^ (z >> 31))
+    });
     let stop = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::WHITE) };
     let radial = |centre: Point, radius: f64, stops: Vec<GradientStop>| {
         let mut g = GradientPaint::new(Gradient::new(GradientKind::Radial, stops));

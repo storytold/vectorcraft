@@ -3456,6 +3456,58 @@ fn flare_ring_seed_moves_only_the_rings() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
 }
 
+#[test]
+fn flare_small_ring_seeds_spread_the_first_ring_along_the_path() {
+    let mut s = session();
+    let mut positions = Vec::new();
+    for seed in [0, 1, 2, 5, 11, (1u64 << 53) - 1] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        let ring = children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap();
+        let center = ring.geometric_bounds().unwrap().center();
+        assert!((20.0..=1020.0).contains(&center.x), "seed {seed}: {center:?}");
+        assert!((center.y - 30.0).abs() < 1e-9);
+        positions.push(center.x);
+    }
+    assert!((positions[0] - positions[1]).abs() > 1.0, "neighboring small seeds visibly move the first ring: {positions:?}");
+    let lo = positions[..5].iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = positions[..5].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(hi - lo > 250.0, "small seeds spread the first ring along the path: {positions:?}");
+}
+
+/// A flare drawn with a small `ringSeed` and then drawn again by `shape.editFlare` keeps its first
+/// ring where `shape.flare` put it: the SplitMix64-initialized Xorshift64 stream's first value
+/// along the path, for each seed.
+#[test]
+fn edit_flare_draws_the_first_ring_of_a_small_ring_seed_where_it_was() {
+    let first_t = |seed: u64| {
+        let mut z = seed.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        let mut state = z ^ (z >> 31);
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let ring_x = |s: &Session, id: NodeId| {
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap().geometric_bounds().unwrap().center().x
+    };
+    let mut s = session();
+    for seed in [0, 1, 2, 5, 11] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let expected = 20.0 + 1000.0 * first_t(seed);
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: drawn at {}, expected {expected}", ring_x(&s, id));
+        s.execute("shape.editFlare", &json!({"ids": [id.0], "opacity": 80})).unwrap();
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: drawn again at {}, expected {expected}", ring_x(&s, id));
+        s.execute("shape.editFlare", &json!({"ids": [id.0], "opacity": 40})).unwrap();
+        assert!((ring_x(&s, id) - expected).abs() < 1e-6, "seed {seed}: a second edit keeps the ring");
+    }
+}
+
 /// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
 #[test]
 fn ellipse_with_four_anchors_is_the_live_ellipse() {
