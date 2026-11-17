@@ -723,7 +723,7 @@ pub(super) fn opaque(n: &mut Node) {
 
 /// Whether `doc` has pattern fills whose image tiles need transparency flattening with `o`
 /// ([`expand_transparent_tile_images`]).
-pub fn has_transparent_tile_images(doc: &Document, o: &FlattenOptions) -> bool {
+pub(crate) fn has_transparent_tile_images(doc: &Document, o: &FlattenOptions) -> bool {
     let keys = o.no_transparency.clone().unwrap_or_default();
     let colorize = |d: &Document, n: &Node| o.counts_colorize(d, n);
     !doc.patterns.is_empty() && crate::cmd::expand::has_transparent_image_patterns(doc, &keys, &colorize)

@@ -69,14 +69,14 @@ pub(crate) fn carry(from: &Node, mut to: Node) -> Node {
 
 /// The keys of `doc`'s images that have see-through pixels (an alpha channel that isn't opaque
 /// everywhere).
-pub fn see_through_images(doc: &Document) -> BTreeSet<String> {
+pub(crate) fn see_through_images(doc: &Document) -> BTreeSet<String> {
     let see_through = |b: &ImageBlob| b.mime != "image/jpeg" && b.has_transparency();
     doc.images.iter().filter(|(_, b)| see_through(b)).map(|(k, _)| k.clone()).collect()
 }
 
 /// `n` shows an image of `keys` (itself or inside), a color-masked image's masked pixels counted as
 /// what it shows.
-pub fn draws_image(n: &Node, keys: &BTreeSet<String>) -> bool {
+pub(super) fn draws_image(n: &Node, keys: &BTreeSet<String>) -> bool {
     !keys.is_empty()
         && n.visible
         && match &n.kind {

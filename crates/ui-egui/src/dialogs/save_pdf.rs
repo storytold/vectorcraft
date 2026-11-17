@@ -44,80 +44,6 @@ pub(super) const PRESET_SPEC: DialogSpec = DialogSpec {
     ..DialogSpec::FORM
 };
 
-/// The dialog kind of the confirmation prompt when saving with transparency reduction.
-pub(crate) const CONFIRM_FLATTEN: &str = "confirmFlattenPdf";
-
-pub(crate) const CONFIRM_FLATTEN_SPEC: DialogSpec = DialogSpec {
-    heading: |d| d.str("message"),
-    body: |_, ui, d| {
-        let detail = d.str("detail");
-        if !detail.is_empty() {
-            ui.label(egui::RichText::new(detail).color(Tokens::get(ui.ctx()).text_dim));
-        }
-        false
-    },
-    confirm: confirm_flatten,
-    ok: Some("Continue"),
-    max_width: Some(440.0),
-    ..DialogSpec::FORM
-};
-
-fn confirm_flatten(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut parent = super::parent(d).filter(|p| p.kind == KIND).ok_or("the Save PDF dialog is no longer open")?;
-    parent.fields.insert("__confirmed_flatten".into(), json!(true));
-    app.ui.dialog = Some(parent.clone());
-    confirm(app, &parent)
-}
-
-fn ask_confirm_flatten(app: &mut VectorcraftApp, d: &Dialog, o: &FlattenOptions) {
-    let line_ppi = o.line_art_ppi.round() as u32;
-    let grad_ppi = o.gradient_ppi.round() as u32;
-    let message = tl!("The document contains transparency which will be flattened. Do you want to continue?");
-    let detail = crate::i18n::fmt(
-        tl!(
-            "Transparent objects will be reduced into opaque paths and images at {line_ppi} ppi (line art and text) and {grad_ppi} ppi (gradients and meshes). Reopening the PDF may not restore separate transparent objects."
-        ),
-        &[("line_ppi", &line_ppi.to_string()), ("grad_ppi", &grad_ppi.to_string())],
-    );
-    let under = serde_json::to_value(d).ok();
-    let fields = json!({
-        "message": message,
-        "detail": detail,
-        super::PARENT: under,
-    });
-    app.ui.dialog = Some(Dialog::new(CONFIRM_FLATTEN, fields));
-}
-
-fn doc_has_transparency(doc: &vectorcraft_doc::Document, include_non_printing: bool, o: &vectorcraft_engine::cmd::flatten::FlattenOptions) -> bool {
-    let mut with_images;
-    let o = match &o.no_transparency {
-        Some(_) => o,
-        None => {
-            with_images = o.clone();
-            with_images.no_transparency = Some(vectorcraft_engine::cmd::flatten::see_through_images(doc));
-            &with_images
-        }
-    };
-    if vectorcraft_engine::cmd::flatten::has_transparent_tile_images(doc, o) {
-        return true;
-    }
-    let empty = std::collections::BTreeSet::new();
-    let see_through = o.no_transparency.as_ref().unwrap_or(&empty);
-    fn check_node(n: &vectorcraft_doc::Node, see_through: &std::collections::BTreeSet<String>, include_non_printing: bool) -> bool {
-        if !n.visible {
-            return false;
-        }
-        if matches!(n.kind, vectorcraft_doc::NodeKind::Layer { printable: false, .. }) && !include_non_printing {
-            return false;
-        }
-        !n.has_default_transparency()
-            || n.shows_transparency()
-            || vectorcraft_engine::cmd::flatten::draws_image(n, see_through)
-            || n.children().into_iter().flatten().any(|c| check_node(c, see_through, include_non_printing))
-    }
-    doc.layers.iter().any(|l| check_node(l, see_through, include_non_printing))
-}
-
 /// The preset editor's field holding the name of the saved preset it edits (empty: a new one).
 const EDITING: &str = "__editing";
 /// Save PDF's field holding the name typed for Save Preset… (present while that row shows).
@@ -227,20 +153,6 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         app.ui.dialog = Some(d);
         return r;
     }
-    let flat = choice::<Compatibility>(d, "compatibility") == Some(Compatibility::Pdf13)
-        || choice::<Standard>(d, "standard").is_some_and(Standard::flattens);
-    if flat && !d.bool("__confirmed_flatten") {
-        let include_non_printing = d.bool("includeNonPrinting") || d.bool("createLayers");
-        let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
-        let mut o = FlattenOptions::for_export(Some(name), d.fields.get("flattener"), &app.session.prefs.flattener_presets).unwrap_or_default();
-        if let Some(st) = app.session.active() {
-            o.no_transparency = Some(vectorcraft_engine::cmd::flatten::see_through_images(&st.doc));
-            if doc_has_transparency(&st.doc, include_non_printing, &o) {
-                ask_confirm_flatten(app, d, &o);
-                return Ok(Value::Null);
-            }
-        }
-    }
     let r = match SaveMode::of(&d.str("__save")) {
         Some(mode) => io::save_pdf(app, mode, params(d)),
         None if d.bool(ART_BOUNDS) => export_art(app, d),
@@ -249,10 +161,6 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     // A question the write asked (replace the file the document was opened from?) stays open.
     if r.is_ok() && app.ui.dialog.as_ref().is_some_and(|o| o.kind == KIND) {
         app.ui.dialog = None;
-    }
-    // A failed write keeps the dialog open. Drop the approval so the next OK asks again.
-    if let Some(open) = app.ui.dialog.as_mut().filter(|o| o.kind == KIND && r.is_err()) {
-        open.fields.remove("__confirmed_flatten");
     }
     r
 }
@@ -826,9 +734,7 @@ fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
     if flat {
         let name = get(d, "flattenerPreset").as_str().map(str::trim).filter(|n| !n.is_empty()).unwrap_or(pdf::DEFAULT_FLATTENER);
-        let preset_opts = FlattenOptions::preset(name)
-            .or_else(|| app.session.prefs.flattener_presets.iter().find(|p| p.name.eq_ignore_ascii_case(name)).map(|p| p.options.clone()))
-            .unwrap_or_default();
+        let preset_opts = FlattenOptions::for_export(Some(name), d.fields.get("flattener"), &app.session.prefs.flattener_presets).unwrap_or_default();
         let line_ppi = preset_opts.line_art_ppi.round() as u32;
         let grad_ppi = preset_opts.gradient_ppi.round() as u32;
         note(
