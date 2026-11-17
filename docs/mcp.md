@@ -7031,8 +7031,8 @@ Guides change where a snapped point lands:
 - `anchorPathLabels` (on by default): off, no "anchor", "center", "path" or "align" label.
 - `measurementLabels` (on by default): off, no size or offset readout while drawing, moving (Free Transform's move
   too), dragging a ruler guide, drawing and resizing an artboard, or moving and resizing a slice.
-- `transformToolsGuides` (on by default): off, no readout while scaling or rotating with the Selection tool, the
-  Free Transform tool or the Rotate, Scale, Shear and Reflect tools.
+- `transformToolsGuides` (on by default): off, no readout while scaling, rotating or shearing with the Selection
+  tool, the Free Transform tool or the Rotate, Scale, Shear and Reflect tools.
 - `objectHighlighting` (on by default; desktop app): off, the Selection tools no longer outline the object under the
   pointer. The outline also needs View › Smart Guides on.
 - `snappingTolerance` (0–40 px, 4 by default): how near an anchor, edge, centre or artboard edge pulls a drawn point,
