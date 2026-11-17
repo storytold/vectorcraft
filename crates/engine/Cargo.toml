@@ -47,6 +47,7 @@ vectorcraft-js = { workspace = true }
 vectorcraft-apischema = { workspace = true }
 image = { workspace = true }
 craft-image-codecs = { workspace = true }
+tiff = { workspace = true }
 jxl-oxide = { workspace = true }
 jxl-color = { workspace = true }
 jxl-grid = { workspace = true }
@@ -88,7 +89,6 @@ craft-jxl = { workspace = true }
 # vectorcraft-doc's Group 3 TIFF reader before craft-stream-codecs, the reference
 # tests/group3_reference.rs compares it with.
 hayro-ccitt = { workspace = true }
-tiff = { workspace = true }
 craft-stream-codecs = { workspace = true }
 vectorcraft-affinity = { workspace = true, features = ["synth"] }
 crc32fast = { workspace = true }
