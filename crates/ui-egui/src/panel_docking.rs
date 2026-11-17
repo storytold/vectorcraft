@@ -1426,6 +1426,13 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
                 });
             }
         });
+        // The margin under a pinned footer hides what scrolls behind the footer (#8307) and,
+        // like the footer's blank space, keeps clicks from reaching it.
+        if let Some(bottom) = bottom {
+            let margin = egui::Rect::from_min_max(egui::pos2(back.left(), bottom), back.max);
+            ui.painter().rect_filled(margin, 0.0, t.panel);
+            let _margin = ui.interact(margin, ui.scope_id().with(("panel-footer-margin", id)), egui::Sense::CLICK);
+        }
         if field_had_keyboard {
             keep_field_ending_keys(ui);
         }

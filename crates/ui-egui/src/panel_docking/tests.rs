@@ -14,6 +14,7 @@ struct Harness {
     time: f64,
     cursor: egui::CursorIcon,
     nodes: Vec<(egui::accesskit::NodeId, egui::accesskit::Node)>,
+    shapes: Vec<egui::epaint::ClippedShape>,
 }
 
 impl Harness {
@@ -21,7 +22,7 @@ impl Harness {
     fn new() -> Self {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
-        let mut h = Self { app, ctx: egui::Context::default(), time: 0.0, cursor: egui::CursorIcon::Default, nodes: Vec::new() };
+        let mut h = Self { app, ctx: egui::Context::default(), time: 0.0, cursor: egui::CursorIcon::Default, nodes: Vec::new(), shapes: Vec::new() };
         for _ in 0..3 {
             h.frame(vec![]);
         }
@@ -53,6 +54,7 @@ impl Harness {
         out.textures_delta.clear();
         self.cursor = out.platform_output.cursor_icon;
         self.nodes = out.platform_output.accesskit_update.map_or_else(Vec::new, |update| update.nodes);
+        self.shapes = out.shapes;
     }
 
     fn hit(&self, hit: &Hit<String>) -> Option<Rect> {
@@ -326,6 +328,35 @@ fn expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists() {
             assert_eq!(h.app.session.active().unwrap().doc.artboards.len(), 2, "the pinned New button works");
         }
     }
+}
+
+/// #8307: below a pinned footer a sized panel keeps a 10 pt margin, which hides a list scrolled
+/// behind the footer instead of showing its tiles through a gap under the buttons.
+#[test]
+fn the_margin_under_a_pinned_footer_hides_a_list_scrolled_behind_it() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.dock", json!({"panel":"swatches","icon":true})).unwrap();
+    let mut layout = h.layout();
+    layout.apply(Action::ResizeGroup { panel: "swatches".into(), height: Some(120.0) }).unwrap();
+    h.app.ui.docking = Some(layout);
+    h.app.ui.open_panel = Some("swatches".into());
+    for _ in 0..5 {
+        h.frame(vec![]);
+    }
+    let edge = h.ctx.read_response(area_id().with("flyout").with("resize-bottom")).unwrap().rect;
+    let at = pos2(edge.center().x, edge.bottom() - 5.0);
+    let panel = crate::theme::Tokens::get(&h.ctx).panel;
+    // The last shape that paints over the margin is what shows there. Outlines and fully
+    // transparent meshes (a scroll area's resting fade) paint nothing inside their bounds.
+    let outline = |shape: &egui::Shape| match shape {
+        egui::Shape::Noop => true,
+        egui::Shape::Rect(r) => r.fill.a() == 0,
+        egui::Shape::Mesh(m) => m.vertices.iter().all(|v| v.color.a() == 0),
+        _ => false,
+    };
+    let top =
+        h.shapes.iter().rfind(|c| c.clip_rect.contains(at) && c.shape.visual_bounding_rect().contains(at) && !outline(&c.shape)).map(|c| &c.shape);
+    assert!(matches!(top, Some(egui::Shape::Rect(r)) if r.fill == panel), "the margin under the footer shows {top:?}, not the panel's background");
 }
 
 #[test]
