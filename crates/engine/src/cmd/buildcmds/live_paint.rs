@@ -382,7 +382,10 @@ impl LivePaintMove {
         if self.join.is_none() && self.rebuild.is_empty() {
             return Ok(moved.to_vec());
         }
-        for g in &self.rebuild {
+        // The group the rows join is made again by the merge below, from its paths as they are now
+        // and with the paint of its faces and edges as they were before the move.
+        let join_group = self.join.as_ref().map(|(g, _)| *g);
+        for g in self.rebuild.iter().filter(|g| Some(**g) != join_group) {
             rebuild_paths(d, *g)?;
         }
         let Some((g, mask)) = self.join else { return Ok(moved.iter().copied().filter(|r| d.node(*r).is_some()).collect()) };

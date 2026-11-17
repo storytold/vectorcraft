@@ -5245,6 +5245,31 @@ fn layers_drag_out_of_a_live_paint_group_makes_its_faces_again() {
     assert_eq!(faces(&node(&s, g)).len(), 1);
 }
 
+/// A path dragged from a Live Paint group's sources into the group itself stays among its paths,
+/// and the faces it bounds keep their paint, also when it is the group's only path.
+#[test]
+fn layers_drag_a_source_path_into_its_own_live_paint_group_keeps_the_paint() {
+    use vectorcraft_tools::builder::{face_at, faces, sources};
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let blue = Paint::solid(Color::from_hex("#0000ff").unwrap());
+    let mut s = session();
+    let g = live(&mut s);
+    let layer = s.doc().unwrap().doc.parent_of(g).unwrap();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "color": "#00ff00"})).unwrap();
+    let src: Vec<NodeId> = sources(&node(&s, g)).unwrap().children().unwrap().iter().map(|c| c.id).collect();
+    s.execute("layer.move", &json!({"ids": [src[0].0], "target": g.0, "place": "inside"})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(s.doc().unwrap().doc.parent_of(src[0]), Some(sources(&n).unwrap().id), "the path stays among the group's paths");
+    assert_eq!(faces(&n).len(), 3);
+    assert_eq!(face_at(&n, Point::new(25.0, 50.0)).unwrap().appearance.fill_paint(), green, "the face it bounds keeps its fill");
+    s.execute("layer.move", &json!({"ids": [src[1].0], "target": layer.0})).unwrap();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [50, 50], "color": "#0000ff"})).unwrap();
+    s.execute("layer.move", &json!({"ids": [src[0].0], "target": g.0, "place": "inside"})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(faces(&n).len(), 1);
+    assert_eq!(face_at(&n, Point::new(50.0, 50.0)).unwrap().appearance.fill_paint(), blue, "the only path's face keeps its fill");
+}
+
 /// Give Live Paint group `g` a lock, hidden state, appearance, knockout, opacity mask and
 /// graphic style link, and return it as it then is.
 fn dress_live_group(s: &mut Session, g: NodeId) -> Node {
