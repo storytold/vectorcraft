@@ -138,7 +138,9 @@ fn message(ui: &mut egui::Ui, e: &Entry, t: &Tokens) -> egui::Response {
             ui.add(egui::Label::new(galley).selectable(false));
             elided
         });
-    let r = frame.response.interact(egui::Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    // The click takes its id from the message's own scope, not from the frame's position among
+    // the messages, so a press survives an older message going.
+    let r = ui.interact(frame.response.rect, ui.scope_id().with("toast"), egui::Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     // A message cut short shows in full on hover.
     if frame.inner { r.on_hover_text(&e.toast.message) } else { r }
 }
@@ -255,6 +257,26 @@ mod tests {
         pass(&mut app, &ctx, 0.7, vec![]);
         pass(&mut app, &ctx, 0.8, vec![press(false)]);
         assert_eq!(messages(&app), vec!["top", "bottom"]);
+    }
+
+    #[test]
+    fn a_message_pressed_while_an_older_one_goes_still_closes_on_release() {
+        let (mut app, ctx) = app();
+        for (message, seconds) in [("older", 0.5), ("pressed", 60.0), ("bottom", 60.0)] {
+            app.session.toast(Toast { seconds, ..Toast::new(message, Level::Info) });
+        }
+        pass(&mut app, &ctx, 0.0, vec![]);
+        pass(&mut app, &ctx, 0.0, vec![]);
+        let at = app.toasts.list[1].rect.unwrap().center();
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        pass(&mut app, &ctx, 0.1, vec![egui::Event::PointerMoved(at)]);
+        pass(&mut app, &ctx, 0.2, vec![press(true)]);
+        // "older" goes while the button is down; the newer messages stay where they were.
+        pass(&mut app, &ctx, 0.6, vec![]);
+        assert_eq!(messages(&app), vec!["pressed", "bottom"]);
+        pass(&mut app, &ctx, 0.7, vec![]);
+        pass(&mut app, &ctx, 0.8, vec![press(false)]);
+        assert_eq!(messages(&app), vec!["bottom"]);
     }
 
     #[test]
