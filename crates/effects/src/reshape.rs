@@ -2941,6 +2941,9 @@ fn group_marks(
         NodeKind::Image(_) => (images.map_or_else(|| n.geometric_bounds(), |w| w.image_bounds(n)), false),
         NodeKind::Group { children, clip } | NodeKind::Layer { children, clip, .. } if !n.extras().type_outlines => {
             let layer = matches!(n.kind, NodeKind::Layer { .. });
+            // A clip group whose clipping type's strokes paint around it is measured as that clip
+            // group: the strokes outside the clip do not widen it ([`clip_bounds`]).
+            let clip = *clip || painted_clip_inner(n).is_some();
             let skip = children.len().saturating_sub(n.editing_children().len());
             let (mut bounds, mut held) = (None, false);
             for (i, c) in children.iter().enumerate() {
@@ -2951,7 +2954,7 @@ fn group_marks(
                 }
                 at.pop();
                 // Only members measured in the bounds hold the group's gradients in place.
-                let counts = if *clip { i == 0 } else { i >= skip && (c.visible || !layer) };
+                let counts = if clip { i == 0 } else { i >= skip && (c.visible || !layer) };
                 if counts {
                     bounds = vectorcraft_geom::union_opt(bounds, b);
                     held |= h;

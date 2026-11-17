@@ -827,3 +827,50 @@ fn a_groups_own_fill_paints_only_the_clip_of_clipping_type_whose_stroke_moves() 
         }
     }
 }
+
+#[test]
+fn a_clip_groups_placed_gradient_follows_free_distort_by_the_clip_when_its_clipping_type_strokes() {
+    // A clip group with a placed linear gradient fill of its own, in a group with Free Distort,
+    // clipped by type whose stroke has a Transform effect moving it 60 pt right, outside the clip:
+    // the gradient moves and scales from the clip's bounds, as for the same clip group whose type
+    // does not stroke. The moved stroke adds nothing to those bounds.
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: (10.0, 45.0).into(), end: (30.0, 45.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp }));
+    fn placed_geom(n: &Node) -> Option<vectorcraft_color::GradientGeom> {
+        if let Paint::Gradient(g) = n.appearance.fill_paint()
+            && g.geom.is_some()
+        {
+            return g.geom;
+        }
+        n.children().into_iter().flatten().find_map(|c| placed_geom(c))
+    }
+    let ends = |stroke: bool| {
+        let mut ty = painted_type(3, false, false);
+        if stroke {
+            ty.appearance = Appearance::basic(Paint::None, green(), 2.0).into();
+            for item in &mut ty.appearance.items {
+                if let vectorcraft_doc::AppearanceItem::Stroke(s) = item {
+                    s.effects.push(fx("distort.transform", json!({"moveH": 60})));
+                }
+            }
+        }
+        let mut group = clip_group(2, ty);
+        group.appearance = Appearance::basic(placed.clone(), Paint::None, 0.0).into();
+        let mut outer = Node::group(NodeId(1), vec![Arc::new(group)]);
+        let corners = json!({"corners": [[1.0 / 3.0, 0.0], [4.0 / 3.0, 0.0], [1.0, 1.0], [0.0, 1.0]]});
+        outer.appearance.effects.push(fx("distort.freeDistort", corners));
+        let canvas = crate::evaluate_container(None, &outer).unwrap();
+        if stroke {
+            assert!(stroke_wrapper(&canvas).is_some(), "the type's stroke paints around the clip: {canvas:?}");
+        }
+        placed_geom(&canvas).unwrap_or_else(|| panic!("no placed gradient: {canvas:?}"))
+    };
+    let (plain, stroked) = (ends(false), ends(true));
+    assert!(
+        plain.start.distance(stroked.start) < 0.5 && plain.end.distance(stroked.end) < 0.5,
+        "the gradient {stroked:?} follows the clip as {plain:?} does"
+    );
+}
