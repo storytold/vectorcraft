@@ -283,9 +283,9 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     let text_of = |k: usize| typed_by.iter().position(|by| *by == Some(k)).and_then(|j| events.get(j).map(|e| (j, e)));
     let mut taken: Vec<usize> = vec![];
     let mut stop_at = None;
-    // The press of a wait that started in this frame: when the wait also ends in this frame, the
-    // keys typed before it run first.
-    let mut started: Option<usize> = None;
+    // The press of a wait that started in this frame, and how many events were taken before it:
+    // when the wait also ends in this frame, the keys typed before it run first.
+    let mut started: Option<(usize, usize)> = None;
     for (j, e) in events.iter().enumerate() {
         if let Some(p) = app.hold_keys.pending.as_ref().filter(|p| p.viewport == viewport) {
             let overdue = now - p.since >= p.delay;
@@ -312,14 +312,15 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
                 let start = started.take();
                 // After a chord with Cmd, Ctrl or Alt pressed before it, which the frame's shortcuts
                 // run, the key goes back to the frame without waiting, so the frame handles it as it
-                // does with Hold Shortcuts off and its tap does not run before the chord.
-                if let Some(start) = start
+                // does with Hold Shortcuts off and its tap does not run before the chord. Its press,
+                // its repeats and their texts stay in the frame, and its later repeats reach later
+                // frames.
+                if let Some((start, before)) = start
                     && chord_before(&events, start, &taken)
                 {
-                    cancel(app, ctx);
-                    let text = text_of(start).map(|(t, _)| t);
-                    taken.retain(|&k| k != start && Some(k) != text);
-                } else if let Some(start) = start
+                    app.hold_keys.pending = None;
+                    taken.truncate(before);
+                } else if let Some((start, _)) = start
                     && let Some(opened) = run_typed_before(app, ctx, &events, &typed_by, start, &mut taken)
                 {
                     // A key typed before it that opened a dialog or the palette ends the wait
@@ -349,7 +350,7 @@ pub(super) fn intake(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
         if tool_takes(app, *key, text) {
             continue;
         }
-        started = Some(j);
+        started = Some((j, taken.len()));
         taken.extend([j, t]);
         // The key's repeats in this frame, and the text they type, stay out of the frame too.
         for (r, later) in events.iter().enumerate().skip(j + 1) {

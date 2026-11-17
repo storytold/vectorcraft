@@ -419,6 +419,36 @@ fn a_chord_before_a_wait_ended_in_its_frame_runs_first() {
     assert!(app.hold_keys.pending.is_none());
 }
 
+/// After a command chord before a wait that starts and ends in one frame, the key's repeats in
+/// that frame and in later ones, and the text they type, reach the frame as with Hold Shortcuts
+/// off.
+#[test]
+fn a_chord_before_a_wait_leaves_the_key_repeats_to_the_frame() {
+    let run = |app: &mut VectorcraftApp| {
+        app.run("paint.setFill", json!({"color": "#00ff00"})).unwrap();
+        let n = steps(app, 0).len();
+        let keys = Keyboard::new();
+        let mut events =
+            vec![egui::Event::Key { key: Key::Z, physical_key: Some(Key::Z), pressed: true, repeat: false, modifiers: Modifiers::COMMAND }];
+        events.extend(press(Key::X, "x", Modifiers::NONE));
+        events.extend(press(Key::X, "x", Modifiers::NONE));
+        events.extend(press(Key::D, "d", Modifiers::NONE));
+        let first = keys.frame_left(app, 0.0, events);
+        let mut events = press(Key::X, "x", Modifiers::NONE);
+        events.extend([release(Key::X), release(Key::D)]);
+        let second = keys.frame_left(app, 0.05, events);
+        (steps(app, n), first, second, fill(app))
+    };
+    let mut off = swap_on_x();
+    off.run("prefs.set", json!({"key": "holdShortcuts", "value": false})).unwrap();
+    let off = run(&mut off);
+    let mut app = swap_on_x();
+    let on = run(&mut app);
+    assert_eq!(on, off);
+    assert!(app.hold_keys.pending.is_none());
+    assert!(app.hold_keys.swallowed.is_empty());
+}
+
 /// The repeats of a key in the frame that starts its wait, and the text they type, stay out of the
 /// frame.
 #[test]
