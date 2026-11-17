@@ -59,8 +59,8 @@ pub(super) enum Drop {
     /// `target` of its kind (neither None, Registration nor a tint swatch; see [`replaces`]), it
     /// gives that swatch its paint instead of moving.
     Move { names: Vec<String>, target: Option<String>, after: bool, with: Option<String> },
-    /// A paint from elsewhere (a Fill/Stroke proxy, a Recent Colors chip, the Gradient panel's
-    /// thumbnail) dropped on row `target` (or between rows) becomes a swatch; with Alt held
+    /// A paint from elsewhere (a Fill/Stroke proxy, a Recent Colors chip, a Color Guide color, the
+    /// Gradient panel's thumbnail) dropped on row `target` (or between rows) becomes a swatch; with Alt held
     /// (`replace`) it replaces swatch `target` when that is of its kind and neither Registration
     /// nor a tint swatch.
     New { paint: Paint, target: Option<String>, replace: bool },

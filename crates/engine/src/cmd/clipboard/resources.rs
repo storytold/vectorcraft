@@ -703,7 +703,7 @@ impl Relink {
                     self.name(Res::ParaStyle, s);
                 }
             }
-            for r in [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows].into_iter().flatten() {
+            for r in [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows, &mut l.axis_rows, &mut l.ring_rows].into_iter().flatten() {
                 r.paint.fill.iter_mut().chain(r.paint.stroke.iter_mut()).for_each(|p| self.paint(p));
             }
         }

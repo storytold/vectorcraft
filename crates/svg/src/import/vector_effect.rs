@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_doc::TextObject;
 use vectorcraft_geom::Affine;
 

@@ -4,6 +4,7 @@
 //! sublayers keep their names and nesting (a one-layer file's from its root element), and the
 //! editing data notices edits made elsewhere.
 
+use craft_svg::tree::draw::resvg;
 use std::sync::Arc;
 
 use vectorcraft_color::{Color, Paint};

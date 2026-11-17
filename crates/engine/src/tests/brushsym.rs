@@ -2599,3 +2599,50 @@ fn symbol_sort_by_name_orders_the_symbols_in_one_undo_step() {
     s.execute("symbol.sortByName", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().history.undo.len(), before);
 }
+
+/// `cmd::current_symbol` answers what `symbol.list` answers as `current`, and what `rule` (the
+/// stored name while a symbol has it, else the first of all the names) answers:
+/// with no symbols, with no stored name, with a stored name that is not first, after the current
+/// symbol is deleted, with a stored name no symbol has and with a stored value that is not text.
+#[test]
+fn current_symbol_is_the_current_symbol_list_answers() {
+    fn rule(d: &Document) -> Option<String> {
+        let names: Vec<String> = d.symbols.iter().map(|s| s.name.clone()).collect();
+        let stored = d.unknown.get("currentSymbol").and_then(Value::as_str).filter(|n| d.symbols.iter().any(|s| s.name == *n)).map(str::to_string);
+        stored.or_else(|| names.into_iter().next())
+    }
+    fn check(s: &mut Session, want: Option<&str>, case: &str) {
+        let listed = s.execute("symbol.list", &json!({})).unwrap()["current"].clone();
+        let d = &s.doc().unwrap().doc;
+        let helper = crate::cmd::current_symbol(d);
+        assert_eq!(helper.as_deref(), want, "{case}");
+        assert_eq!(json!(helper), listed, "{case}: symbol.list");
+        assert_eq!(helper, rule(d), "{case}: the rule");
+    }
+    fn store(s: &mut Session, v: Value) {
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.insert("currentSymbol".into(), v);
+    }
+    let mut s = session();
+    check(&mut s, None, "no symbols");
+    store(&mut s, json!("Gone"));
+    check(&mut s, None, "no symbols and a stored name");
+    for (i, name) in ["A", "B", "C"].into_iter().enumerate() {
+        rect(&mut s, 20.0 * i as f64, 0.0, 10.0, 10.0);
+        s.execute("symbol.new", &json!({"name": name})).unwrap();
+    }
+    check(&mut s, Some("C"), "the newest symbol is current");
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).unknown.remove("currentSymbol");
+    check(&mut s, Some("A"), "no stored name");
+    s.execute("symbol.setCurrent", &json!({"name": "B"})).unwrap();
+    check(&mut s, Some("B"), "a stored name that is not first");
+    s.execute("symbol.delete", &json!({"name": "B"})).unwrap();
+    check(&mut s, Some("A"), "the current symbol deleted");
+    store(&mut s, json!("Renamed"));
+    check(&mut s, Some("A"), "a stored name no symbol has");
+    store(&mut s, json!(3));
+    check(&mut s, Some("A"), "a stored number");
+    store(&mut s, json!(["C"]));
+    check(&mut s, Some("A"), "a stored list");
+    store(&mut s, json!("C"));
+    check(&mut s, Some("C"), "a stored name that is last");
+}

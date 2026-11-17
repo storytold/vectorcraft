@@ -77,6 +77,7 @@ mod window_frame;
 mod windows_alt_codes;
 #[cfg(windows)]
 mod windows_cores;
+mod windows_screen_color;
 mod windows_stylus;
 mod xwayland;
 
