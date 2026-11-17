@@ -884,6 +884,7 @@ antiAlias	Sharp	Nítid
 	Constrain	Restringeix
 	Constrain Angle	Angle de restricció
 	Constrain Width and Height Proportions	Restringeix les proporcions d’amplada i alçada
+	Copy Width to Height	Copia l’amplada a l’alçada
 	Construction Guides	Guies de construcció
 	Contextual Alternates	Alternatives contextuals
 	Contextual Task Bar	Barra de tasques contextual
@@ -2561,7 +2562,8 @@ digits	Malayalam	Malaiàlam
 	Long Lines	Línies llargues
 	Long Strokes	Traços llargs
 	Longest:	El més llarg:
-	Lossless (lossy WebP isn't available yet)	Sense pèrdua (el WebP amb pèrdua encara no està disponible)
+	Lossless	Sense pèrdua
+	Lossy	Amb pèrdua
 	Lossy:	Amb pèrdua:
 	Low	Baix
 	Low Fidelity Photo	Foto de baixa fidelitat
@@ -3823,7 +3825,7 @@ digits	Malayalam	Malaiàlam
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Els radis de cantonada dinàmics s’escalen amb la il·lustració, tret que l’escalat triï una altra cosa.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Els gruixos de traç, els guions i les distàncies dels efectes s’escalen amb la il·lustració, tret que l’escalat triï una altra cosa.
 	The mouse wheel zooms the canvas instead of scrolling it.	La roda del ratolí fa zoom al llenç en lloc de desplaçar-lo.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Mentre Zoom amb la roda del ratolí està desactivat, la roda amb Cmd/Ctrl premut desplaça el llenç en horitzontal.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La roda del ratolí amb Cmd/Ctrl premut desplaça el llenç en horitzontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrossegar en horitzontal sobre l’etiqueta d’un camp numèric canvia el valor del camp.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
@@ -4175,6 +4177,7 @@ digits	Malayalam	Malaiàlam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
 	No recent commands	No hi ha ordres recents
+	Search commands	Cerca ordres
 	Search Commands…	Cerca ordres…
 	Search Fonts Folder	Cerca a la carpeta de tipus de lletra
 	Searching…	Cercant…
@@ -7945,6 +7948,7 @@ breakText	Glyphs	Glifs
 @msg	Too many Revolve faces for visibility evaluation	Massa cares de Revolució per avaluar-ne la visibilitat
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft llegeix com a màxim {ASE_MAX_ENTRIES} colors i grups d’un fitxer d’intercanvi de mostres, i aquesta biblioteca en té {entries}
 @msg	WebP encoding failed: {e}	La codificació WebP ha fallat: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	La codificació WebP ha fallat: la imatge és massa gran per a WebP amb pèrdua: reduïu la resolució o trieu Sense pèrdua
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` ha de ser un nombre enter

@@ -801,6 +801,7 @@ font-technology	Variable	Változó
 	Constrain	Korlátozás
 	Constrain Angle	Korlátozási szög
 	Constrain Width and Height Proportions	Szélesség és magasság arányának megtartása
+	Copy Width to Height	Szélesség másolása a magasságba
 	Construction Guides	Szerkesztési segédvonalak
 	Contextual Alternates	Környezetfüggő változatok
 	Contextual Task Bar	Helyzetérzékeny műveletsáv
@@ -2543,7 +2544,8 @@ file-filter	Templates	Sablonok
 	Long Lines	Hosszú vonalak
 	Long Strokes	Hosszú vonások
 	Longest:	Leghosszabb:
-	Lossless (lossy WebP isn't available yet)	Veszteségmentes (a veszteséges WebP még nem érhető el)
+	Lossless	Veszteségmentes
+	Lossy	Veszteséges
 	Lossy:	Veszteség:
 	Low	Alacsony
 	Low Fidelity Photo	Kis pontosságú fotó
@@ -3664,7 +3666,7 @@ mark-style	Japanese	Japán
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Az élő sarkok sugara a grafikával együtt méreteződik, hacsak a méretezés mást nem választ.
 	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	A körvonalvastagságok, a szaggatások és az effektustávolságok a grafikával együtt méreteződnek, hacsak a méretezés mást nem választ.
 	The mouse wheel zooms the canvas instead of scrolling it.	Az egérgörgő görgetés helyett nagyítja vagy kicsinyíti a vásznat.
-	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Amíg a Nagyítás egérgörgővel ki van kapcsolva, az egérgörgő lenyomott Cmd/Ctrl billentyűvel oldalirányban görgeti a vásznat.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Az egérgörgő lenyomott Cmd/Ctrl billentyűvel oldalirányban görgeti a vásznat.
 	Dragging sideways on a numeric field's label changes the field's value.	Egy számmező címkéjén oldalirányban húzva módosul a mező értéke.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Az érintőpadon végzett kétujjas forgató kézmozdulat elforgatja a vászon nézetét.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Egy eszköz billentyűparancsát lenyomva tartva az eszköz a felengedésig ki van választva, utána ismét az előző eszköz lesz kiválasztva.
@@ -3969,6 +3971,7 @@ mark-style	Japanese	Japán
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
+	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
 	Searching…	Keresés…
@@ -9729,6 +9732,7 @@ breakText	Glyphs	Glifák
 @msg	Too many Revolve faces for visibility evaluation	Túl sok lap a láthatóság kiértékeléséhez (Forgatás tengely körül)
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	A VectorCraft legfeljebb {ASE_MAX_ENTRIES} színt és csoportot olvas be egy színmintacsere-fájlból, ebben a könyvtárban pedig ennyi van: {entries}
 @msg	WebP encoding failed: {e}	A WebP-kódolás sikertelen: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	A WebP-kódolás sikertelen: a kép túl nagy a veszteséges WebP-hez: csökkentse a felbontást, vagy válassza a Veszteségmentes lehetőséget
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index`: egész szám kell
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`: smallThumb, mediumThumb, largeThumb, smallList vagy largeList lehet
