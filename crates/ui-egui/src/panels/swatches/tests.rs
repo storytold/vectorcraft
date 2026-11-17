@@ -1226,6 +1226,22 @@ fn a_cmd_dropped_tint_makes_its_spot_from_the_captured_color() {
     assert_eq!((newest.paint, newest.spot), (Paint::solid(shown), true), "{}", app.ui.status);
 }
 
+/// A tint Cmd/Ctrl+Alt-dropped on a solid swatch gives it the color the drag showed, even when the
+/// tint's base swatch changes between the drag start and the drop.
+#[test]
+fn a_tint_alt_dropped_on_a_swatch_replaces_it_with_the_captured_color() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+    let tint = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).expect("a tint of Orange");
+    let shown = tint.color().expect("a color");
+    app.run("swatch.edit", json!({"name": "Orange", "paint": {"color": "#2040c0"}})).unwrap();
+    drop_paint_on(&mut app, &ctx, "Red", tint, Modifiers::COMMAND | Modifiers::ALT, 1.0);
+    let red = app.session.doc().unwrap().doc.swatch("Red").cloned().expect("Red");
+    assert_eq!(red.paint.color(), Some(shown), "{}", app.ui.status);
+}
+
 /// A Recent Colors chip of the Color panel dragged onto the Swatches panel becomes a swatch; a click
 /// on it still paints the selected art.
 #[test]

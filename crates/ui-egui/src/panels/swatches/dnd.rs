@@ -256,6 +256,15 @@ fn replaces(d: &Document, with: &str, target: &str) -> bool {
     }
 }
 
+/// `paint` as swatch params. A solid color other than Registration is sent as the color the drag
+/// carries, not as its base swatch and tint, which the command would resolve again at the drop.
+fn shown_color_params(paint: &Paint) -> Value {
+    match paint.color() {
+        Some(c) if !paint.is_registration() => crate::panels::swatch_paint_params(&Paint::solid(c)),
+        _ => crate::panels::swatch_paint_params(paint),
+    }
+}
+
 /// Run a drop on the panel: move the swatches, give the paint of a swatch Alt-dropped on another of
 /// its kind to that one, or make a swatch of the proxy's paint (a color dropped on a folder or a
 /// grouped swatch joins that group; a color Cmd/Ctrl-dropped becomes a new spot color of the color
@@ -274,15 +283,11 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
         Drop::New { paint, target: Some(t), replace: true, .. }
             if d.swatch(&t).is_some_and(|w| !w.is_reserved() && w.tint_of().is_none() && same_kind(&w.paint, &paint)) =>
         {
-            ("swatch.edit", json!({"name": t, "paint": crate::panels::swatch_paint_params(&paint)}))
+            ("swatch.edit", json!({"name": t, "paint": shown_color_params(&paint)}))
         }
         Drop::New { paint, target, spot, .. } => {
-            // A new spot color is made from the color the drag showed, not from its base swatch as it is now.
-            let source = match paint.color() {
-                Some(c) if spot && !paint.is_registration() => Paint::solid(c),
-                _ => paint.clone(),
-            };
-            let mut p = crate::panels::swatch_paint_params(&source);
+            // Only a spot color needs a color of its own; other drops keep a tint's link to its base.
+            let mut p = if spot { shown_color_params(&paint) } else { crate::panels::swatch_paint_params(&paint) };
             if paint.color().is_some() {
                 if let Some(g) = target.and_then(|t| group_of(d, &t)) {
                     p["group"] = json!(g);
