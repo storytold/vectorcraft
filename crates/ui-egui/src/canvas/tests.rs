@@ -8661,6 +8661,11 @@ fn retype_all_of_a_copied_type(ime: bool) {
         frame(&mut app, vec![button(at, pressed, Modifiers::NONE)]);
     }
     frame(&mut app, vec![]);
+    // Without Georgia on this computer, the Type tool asks first; OK starts the edit.
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == crate::dialogs::confirm::MISSING_FONT_EDIT) {
+        crate::dialogs::confirm(&mut app).unwrap();
+        frame(&mut app, vec![]);
+    }
     assert_eq!(app.session.tool_options()["editing"], json!(copy));
     // 3. Select all of its text and type over it.
     frame(&mut app, vec![key(Key::A, true, Modifiers::COMMAND)]);
@@ -8746,6 +8751,65 @@ fn double_clicking_type_with_the_direct_selection_tool_puts_the_caret_there() {
     timed(&mut app, 1.2, vec![esc(true), esc(false)]);
     assert_eq!(app.session.tool_id(), "directSelection");
     assert!(!app.session.tool_wants_text());
+}
+
+/// Double-clicking type set in a family that isn't available asks before the Type tool edits it:
+/// Cancel leaves the document, its undo history and the selection as they were, with nothing
+/// edited; OK puts the caret where the type was clicked, and typing edits the type, which keeps
+/// the family it names.
+#[test]
+fn double_clicking_type_in_a_missing_font_asks_before_editing() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let params = json!({"x": 100, "y": 150, "text": "Hello world", "size": 24, "font": "Missing Test Family 7258"});
+    let id = app.session.execute("text.create", &params).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    timed(&mut app, 0.0, vec![]);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let node = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+    let b = node(&app).geometric_bounds().unwrap();
+    let at = xf.to_screen(b.center());
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let double_click = |app: &mut VectorcraftApp, time: f64| {
+        timed(app, time, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)]);
+        timed(app, time + 0.1, vec![]);
+    };
+    let asking = |app: &VectorcraftApp| app.ui.dialog.as_ref().filter(|d| d.kind == crate::dialogs::confirm::MISSING_FONT_EDIT).cloned();
+    double_click(&mut app, 1.0);
+    let d = asking(&app).expect("the question about the missing font");
+    assert!(d.str("detail").contains("Missing Test Family 7258 Regular"), "{}", d.str("detail"));
+    assert_eq!(app.session.tool_options()["editing"], json!(null));
+    // Cancel: nothing is edited, and the document, its undo history and the selection stay.
+    let (before, undo, selected) =
+        (node(&app), app.session.doc().unwrap().history.undo.len(), app.session.active().unwrap().selection.objects.clone());
+    crate::dialogs::cancel(&mut app);
+    timed(&mut app, 1.5, vec![]);
+    assert_eq!(app.session.tool_options()["editing"], json!(null));
+    assert!(!app.session.tool_wants_text());
+    assert_eq!(node(&app), before);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    assert_eq!(app.session.active().unwrap().selection.objects, selected);
+    // A new double-click asks again; OK edits with the caret where the type was clicked.
+    double_click(&mut app, 3.0);
+    assert!(asking(&app).is_some(), "asked again");
+    crate::dialogs::confirm(&mut app).unwrap();
+    timed(&mut app, 3.5, vec![]);
+    assert!(app.ui.dialog.is_none());
+    let o = app.session.tool_options();
+    assert_eq!(o["editing"], json!(id));
+    let caret = o["caret"].as_u64().unwrap();
+    assert!((1..11).contains(&caret), "caret {caret}");
+    app.session.tool_text("X", app.view_info()).unwrap();
+    let NodeKind::Text(t) = &node(&app).kind else { panic!("not text") };
+    assert_eq!(t.plain_text().find('X'), Some(caret as usize), "{}", t.plain_text());
+    assert!(t.runs.iter().all(|r| r.style.font_family == "Missing Test Family 7258"));
 }
 
 #[test]

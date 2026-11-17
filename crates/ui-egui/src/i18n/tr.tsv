@@ -2929,6 +2929,7 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Akıllı Kılavuzların yaslaması için işaretçinin veya sürüklenen noktanın ekranda çizime ne kadar yaklaşması gerektiği; mesafe her yakınlaştırmada aynıdır.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Bir çizgi parçasının ucunu veya merkezinden çizilen bir daireyi yakındaki bir eğriye değecek şekilde yaslar.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Bir çizgi parçasının ucunu yakındaki düz bir parçayla dik açıyla buluşacak şekilde yaslar.
+	Edit type set in fonts that aren't available?	Mevcut olmayan yazı tiplerindeki metin düzenlensin mi?
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle

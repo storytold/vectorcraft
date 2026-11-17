@@ -3197,6 +3197,7 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Наскільки близько на екрані вказівник або перетягувана точка мають підійти до об’єкта, щоб розумні напрямні їх прив’язали; відстань однакова за будь-якого масштабу.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Прив’язує кінець відрізка або коло, намальоване від центру, так, щоб воно торкалося найближчої кривої.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Прив’язує кінець відрізка так, щоб він зустрічав найближчий прямий сегмент під прямим кутом.
+	Edit type set in fonts that aren't available?	Редагувати текст, набраний недоступними шрифтами?
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи

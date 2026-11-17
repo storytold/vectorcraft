@@ -11460,6 +11460,18 @@ Copy only fonts you own or are licensed to install. `command.batch` returns befo
 `text.findFontFiles {}`. `vectorcraft-cli run` stops the search when its last step ends. The web build has no Fonts
 folder and no folder search.
 
+A Type tool click, or a Selection or Direct Selection double-click, that would start editing type whose story (every
+frame threaded with it) is drawn in a font that isn't available as named, as `text.missingFonts` reads them, opens a
+`missingFontEdit` question instead (fields `message`, `detail`, `__token`) and does not start editing. `ui.dialog.confirm`
+starts the edit with the caret where the type was clicked; `ui.dialog.cancel` leaves the document, its undo history and
+the selection as they were. Answering does not change the fonts the type names, install a font or open Find Font. The
+question comes again for each new edit, and not for a click within the type being edited or in another frame of its
+story. The Type tool's `missingFontEdit {token, ok}` option is how the question gives its answer. Commands that change
+text (`text.editRange`, `text.setRangeStyle` and the others) do not ask. This follows the help page
+https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/edit-text-without-replacing-missing-fonts.html,
+which describes a warning shown when text with missing fonts is double-clicked, and editing after OK. Cancel, asking
+again for each edit, the Type tool's single click and the style-only case are VectorCraft's own rules.
+
 ```json
 {"name":"run_command","arguments":{"command":"text.missingFonts","params":{}}}
 {"name":"run_command","arguments":{"command":"text.findFontFiles","params":{"folder":"/Users/me/Downloads"}}}

@@ -3902,6 +3902,7 @@ digits	Malayalam	Malaiàlam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Com d’a prop a la pantalla han d’arribar el punter o un punt arrossegat a l’art perquè les guies intel·ligents s’hi ajustin; la distància és la mateixa a qualsevol zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta l’extrem d’un segment de línia, o un cercle dibuixat des del centre, perquè toqui una corba propera.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta l’extrem d’un segment de línia perquè trobi un segment recte proper en angle recte.
+	Edit type set in fonts that aren't available?	Voleu editar el text en tipus de lletra que no estan disponibles?
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats

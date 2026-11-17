@@ -74,7 +74,7 @@ pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, is_generic_family};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
