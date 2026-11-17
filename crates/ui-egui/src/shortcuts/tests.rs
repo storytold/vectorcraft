@@ -324,6 +324,14 @@ fn alt_chord_text_from_the_layout_is_typed_once() {
     let mut ime_commit_after_release = alt_press(Key::R, false, None);
     ime_commit_after_release.push(egui::Event::ModifiersChanged(Modifiers::NONE));
     ime_commit_after_release.push(egui::Event::Ime(egui::ImeEvent::Commit("\u{0159}".into())));
+    // Windows sends an empty pre-edit before each commit, and an input method can delete the text
+    // around the caret between the press and its text.
+    let mut ime_commit_after_empty_preedit = alt_press(Key::G, false, None);
+    ime_commit_after_empty_preedit.extend([
+        egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { before_chars: 0, after_chars: 0 }),
+        egui::Event::Ime(egui::ImeEvent::Preedit { text: String::new(), active_range_chars: None }),
+        egui::Event::Ime(egui::ImeEvent::Commit("\u{011F}".into())),
+    ]);
     let commit_then_chord = vec![
         egui::Event::Ime(egui::ImeEvent::Commit("x".into())),
         egui::Event::Key { key: Key::Num8, physical_key: Some(Key::Num8), pressed: true, repeat: false, modifiers: Modifiers::ALT },
@@ -331,6 +339,7 @@ fn alt_chord_text_from_the_layout_is_typed_once() {
     for (events, expected) in [
         (ime_commit, "Hi\u{011F}"),
         (ime_commit_after_release, "Hi\u{0159}"),
+        (ime_commit_after_empty_preedit, "Hi\u{011F}"),
         (commit_then_chord, format!("Hix{bullet}").as_str()),
         (alt_press(Key::G, false, Some("\u{00A9}")), "Hi\u{00A9}"),
         (alt_press(Key::G, false, Some("\u{011F}")), "Hi\u{011F}"),

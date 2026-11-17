@@ -70,8 +70,7 @@ fn alt_chord_character(key: Key, m: egui::Modifiers) -> Option<(char, &'static s
 /// as it came. A press that typed no text gets its character added after it. A text's press is the
 /// one [`typing_presses`] pairs it with: the press before it, or in the web build the press after it.
 /// An input method's committed or marked text belongs to the last press before it, past modifier
-/// changes and key releases; that press is left as it came, since the input method's text is what
-/// the key typed.
+/// changes, key releases, empty pre-edits and deletions around the caret; that press is left as it came, since the input method's text is what the key typed.
 fn type_alt_chords(events: &mut Vec<egui::Event>) {
     let chord = |e: &egui::Event| match e {
         egui::Event::Key { key, pressed: true, modifiers, .. } => alt_chord_character(*key, *modifiers),
@@ -84,6 +83,14 @@ fn type_alt_chords(events: &mut Vec<egui::Event>) {
         egui::Event::Ime(egui::ImeEvent::Commit(t) | egui::ImeEvent::Preedit { text: t, .. }) => !t.is_empty(),
         _ => false,
     };
+    // Events between a press and the input method's text it typed. Windows sends an empty pre-edit
+    // before each commit, and an input method can delete the text around the caret first.
+    let between = |e: &egui::Event| match e {
+        egui::Event::ModifiersChanged(_) | egui::Event::Key { pressed: false, .. } => true,
+        egui::Event::Ime(egui::ImeEvent::Preedit { text, .. }) => text.is_empty(),
+        egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { .. } | egui::ImeEvent::DeleteSurroundingBytes { .. }) => true,
+        _ => false,
+    };
     // The press an input method's text at `j` belongs to.
     let ime_press = |j: usize| {
         events
@@ -91,7 +98,7 @@ fn type_alt_chords(events: &mut Vec<egui::Event>) {
             .enumerate()
             .take(j)
             .rev()
-            .find(|(_, e)| !matches!(e, egui::Event::ModifiersChanged(_) | egui::Event::Key { pressed: false, .. }))
+            .find(|(_, e)| !between(e))
             .filter(|(_, e)| matches!(e, egui::Event::Key { pressed: true, .. }))
             .map(|(k, _)| k)
     };
