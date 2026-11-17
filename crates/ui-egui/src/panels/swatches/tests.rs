@@ -1039,6 +1039,160 @@ fn a_color_alt_dropped_on_registration_becomes_a_new_swatch() {
     assert_eq!(d.swatch(REGISTRATION).map(|w| w.paint.clone()), registration, "Registration is unchanged");
 }
 
+/// Release a drag of `paint` from elsewhere at `at` with `m` held (a layout frame at `time`, the
+/// release at `time + 0.5`).
+fn drop_paint_at(app: &mut VectorcraftApp, ctx: &egui::Context, at: Pos2, paint: Paint, m: Modifiers, time: f64) {
+    egui::DragAndDrop::set_payload(ctx, PanelDrag::paint(paint));
+    let release = Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: m };
+    frame_with(app, ctx, vec![Event::PointerMoved(at), release], m, time + 0.5, show);
+}
+
+/// [`drop_paint_at`] on the tile of swatch `name`.
+fn drop_paint_on(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str, paint: Paint, m: Modifiers, time: f64) {
+    frame(app, ctx, vec![], time, show);
+    let at = tile_center(ctx, name);
+    drop_paint_at(app, ctx, at, paint, m, time);
+}
+
+/// The newest ungrouped swatch.
+fn newest_swatch(app: &VectorcraftApp) -> Swatch {
+    app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch")
+}
+
+/// How many swatches are spot colors.
+fn spot_count(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().doc.swatches_iter().filter(|w| w.spot).count()
+}
+
+/// A color Cmd/Ctrl-dropped on the panel becomes a global spot color swatch in the color's own
+/// model, in the group it is dropped into, as one undo step that paints no art; without the
+/// modifier it stays a process color.
+#[test]
+fn a_color_cmd_dropped_on_the_panel_becomes_a_spot_swatch() {
+    let mut app = app();
+    let ctx = context();
+    let (id, cmyk) = art_with_two_recent_colors(&mut app);
+    app.run("select.set", json!({"ids": [id.0]})).unwrap();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    let art = fill_of(&app, id);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    // A proxy's RGB color onto a grouped swatch: a spot color in that group.
+    let rgb = Color::from_hex("#123456").unwrap();
+    drop_paint_on(&mut app, &ctx, "Bright Red", Paint::solid(rgb), Modifiers::COMMAND, 1.0);
+    let d = &app.session.doc().unwrap().doc;
+    let made = names_of(&app, Some("Brights")).last().and_then(|n| d.swatch(n).cloned()).expect("a swatch");
+    assert_eq!((made.paint, made.spot, made.global), (Paint::solid(rgb), true, true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    assert_eq!(fill_of(&app, id), art, "the drop paints no art");
+    // A CMYK Recent Colors chip dragged with Cmd/Ctrl in an RGB document: a CMYK spot color.
+    frame(&mut app, &ctx, vec![], 2.0, show);
+    let chip = recent_chip(&mut app, &ctx, 1, 2.5, show, false);
+    drag_with(&mut app, &ctx, chip, tile_center(&ctx, "Red"), Modifiers::COMMAND, 3.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot), (Paint::solid(cmyk), true), "{}", app.ui.status);
+    // Without the modifier: a process color.
+    let spots = spot_count(&app);
+    drop_paint_on(&mut app, &ctx, "Red", Paint::solid(Color::from_hex("#654321").unwrap()), Modifiers::NONE, 4.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.spot, newest.global, spot_count(&app)), (false, false, spots));
+    // An RGB color in a CMYK document stays RGB; the document stays CMYK.
+    app.run("file.documentColorMode", json!({"mode": "cmyk"})).unwrap();
+    drop_paint_on(&mut app, &ctx, "Red", Paint::solid(rgb), Modifiers::COMMAND, 5.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot), (Paint::solid(rgb), true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.color_mode, vectorcraft_doc::ColorMode::Cmyk);
+    // Undo takes the spot color off.
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count - 1);
+}
+
+/// A color Cmd/Ctrl-dropped in the list's empty space becomes an ungrouped spot color swatch.
+#[test]
+fn a_color_cmd_dropped_on_empty_list_space_becomes_a_spot_swatch() {
+    let mut app = app();
+    let ctx = context();
+    // Leave Red the only ungrouped swatch besides None and Registration, so the row it ends has
+    // empty space after it (each colour group starts a new row).
+    let d = &app.session.doc().unwrap().doc;
+    let others: Vec<String> = names_of(&app, None).into_iter().filter(|n| n != "Red" && d.swatch(n).is_some_and(|w| !w.is_reserved())).collect();
+    app.run("swatch.delete", json!({"names": others})).unwrap();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    frame(&mut app, &ctx, vec![], 0.5, show);
+    let red = ctx.read_response(egui::Id::unique(("swatch-tile", "Red"))).expect("Red's tile").rect;
+    let at = pos2(red.right() + 60.0, red.center().y);
+    let d = &app.session.doc().unwrap().doc;
+    let names = d.swatches_iter().map(|w| w.name.clone()).chain(d.swatch_groups.iter().map(|g| g.name.clone())).chain([REGISTRATION.to_string()]);
+    for n in names {
+        let hit = ctx.read_response(egui::Id::unique(("swatch-tile", n.as_str()))).is_some_and(|r| r.rect.expand(8.0).contains(at));
+        assert!(!hit, "{at:?} is clear of the tile of {n}");
+    }
+    let count = d.swatches_iter().count();
+    let rgb = Color::from_hex("#123456").unwrap();
+    drop_paint_at(&mut app, &ctx, at, Paint::solid(rgb), Modifiers::COMMAND, 1.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot, newest.global), (Paint::solid(rgb), true, true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count + 1);
+    assert!(egui::DragAndDrop::payload::<PanelDrag>(&ctx).is_none());
+}
+
+/// Cmd/Ctrl makes a spot color only of a solid color dragged from elsewhere: a gradient and
+/// Registration make no spot color, and swatches dragged within the panel move.
+#[test]
+fn a_cmd_drop_of_other_paints_or_rows_makes_no_spot_color() {
+    let mut app = app();
+    let ctx = context();
+    let spots = spot_count(&app);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let stops =
+        vec![vectorcraft_color::GradientStop::new(0.0, Color::from_hex("#ff0000").unwrap()), vectorcraft_color::GradientStop::new(1.0, Color::WHITE)];
+    let grad = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::new(GradientKind::Radial, stops))));
+    drop_paint_on(&mut app, &ctx, "Red", grad, Modifiers::COMMAND, 1.0);
+    assert!(matches!(newest_swatch(&app).paint, Paint::Gradient(_)), "a gradient swatch: {}", app.ui.status);
+    assert_eq!((app.session.doc().unwrap().doc.swatches_iter().count(), spot_count(&app)), (count + 1, spots));
+    drop_paint_on(&mut app, &ctx, "Red", Paint::registration(), Modifiers::COMMAND, 2.0);
+    assert_eq!(spot_count(&app), spots, "Registration makes no spot color");
+    // A swatch dragged with Cmd/Ctrl within the panel moves.
+    frame(&mut app, &ctx, vec![], 3.0, show);
+    frame(&mut app, &ctx, vec![], 3.5, show);
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    drag_with(&mut app, &ctx, tile_center(&ctx, "Lime"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), Modifiers::COMMAND, 4.0);
+    let n = names_of(&app, None);
+    assert_eq!(n[n.iter().position(|x| x == "Red").unwrap() - 1], "Lime", "{}", app.ui.status);
+    assert_eq!((app.session.doc().unwrap().doc.swatches_iter().count(), spot_count(&app)), (count, spots));
+}
+
+/// A tint of a global color Cmd/Ctrl-dropped becomes a new spot color of the tinted color, and its
+/// base stays as it is. With Alt also held, a color dropped on a solid swatch replaces it; dropped on
+/// a tint swatch, which only takes a new name, it becomes a spot color.
+#[test]
+fn cmd_drops_of_tints_and_with_alt_follow_the_replacement_rule() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.edit", json!({"name": "Orange", "global": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Orange", "tint": 40})).unwrap();
+    let orange = app.session.doc().unwrap().doc.swatch("Orange").cloned();
+    let tint = app.session.doc().unwrap().doc.tint_paint("Orange", 0.4).expect("a tint of Orange");
+    let shown = tint.color().expect("a color");
+    drop_paint_on(&mut app, &ctx, "Red", tint, Modifiers::COMMAND, 1.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot, newest.global), (Paint::solid(shown), true, true), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.swatch("Orange").cloned(), orange, "Orange is unchanged");
+    // Cmd/Ctrl and Alt on a solid swatch: it takes the color, and no swatch is added.
+    let count = app.session.doc().unwrap().doc.swatches_iter().count();
+    let blue = Color::from_hex("#2040c0").unwrap();
+    drop_paint_on(&mut app, &ctx, "Red", Paint::solid(blue), Modifiers::COMMAND | Modifiers::ALT, 2.0);
+    let red = app.session.doc().unwrap().doc.swatch("Red").cloned().expect("Red");
+    assert_eq!((red.paint.color(), red.spot), (Some(blue), false), "{}", app.ui.status);
+    assert_eq!(app.session.doc().unwrap().doc.swatches_iter().count(), count);
+    // Cmd/Ctrl and Alt on a tint swatch: a new spot color, the tint swatch unchanged.
+    let green = Color::from_hex("#20a040").unwrap();
+    drop_paint_on(&mut app, &ctx, "Orange 40%", Paint::solid(green), Modifiers::COMMAND | Modifiers::ALT, 3.0);
+    let newest = newest_swatch(&app);
+    assert_eq!((newest.paint, newest.spot), (Paint::solid(green), true), "{}", app.ui.status);
+    assert!(app.session.doc().unwrap().doc.swatch("Orange 40%").is_some_and(|w| w.tint_of().is_some()));
+}
+
 /// A Recent Colors chip of the Color panel dragged onto the Swatches panel becomes a swatch; a click
 /// on it still paints the selected art.
 #[test]

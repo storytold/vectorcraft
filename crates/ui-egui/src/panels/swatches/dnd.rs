@@ -62,8 +62,9 @@ pub(super) enum Drop {
     /// A paint from elsewhere (a Fill/Stroke proxy, a Recent Colors chip, a Color Guide color, the
     /// Gradient panel's thumbnail) dropped on row `target` (or between rows) becomes a swatch; with Alt held
     /// (`replace`) it replaces swatch `target` when that is of its kind and neither Registration
-    /// nor a tint swatch.
-    New { paint: Paint, target: Option<String>, replace: bool },
+    /// nor a tint swatch. With Cmd/Ctrl held (`spot`), a solid color other than Registration
+    /// becomes a spot color swatch.
+    New { paint: Paint, target: Option<String>, replace: bool, spot: bool },
     /// Art dragged off the canvas becomes a pattern swatch made of a copy of it (the art stays).
     Pattern { ids: Vec<u64> },
 }
@@ -71,15 +72,15 @@ pub(super) enum Drop {
 impl Drop {
     /// What releasing `d` before or `after` row `target` (`None`: at the end) does: move the rows
     /// it carries (with Alt held, `replace`, a swatch grabbed may replace `target`), make a swatch of
-    /// a paint dragged from elsewhere, or a pattern swatch of art dragged off the canvas (appearances:
-    /// nothing).
-    fn of(d: &PanelDrag, target: Option<String>, after: bool, replace: bool) -> Option<Self> {
+    /// a paint dragged from elsewhere (a spot color with Cmd/Ctrl held, `spot`), or a pattern swatch
+    /// of art dragged off the canvas (appearances: nothing).
+    fn of(d: &PanelDrag, target: Option<String>, after: bool, replace: bool, spot: bool) -> Option<Self> {
         match d {
             PanelDrag::Paint { rows: Some(r), .. } => {
                 let with = (replace && !r.groups).then(|| r.grabbed.clone());
                 Some(Drop::Move { names: r.names.clone(), target, after, with })
             }
-            PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace }),
+            PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace, spot }),
             PanelDrag::Art(ids) => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect() }),
             _ => None,
         }
@@ -179,7 +180,7 @@ fn tile_drop(ui: &Ui, resp: &Response, e: &Entry, list: bool, ev: &mut TileEvent
         ui.painter().line_segment([pos2(x, r.top() - 1.0), pos2(x, r.bottom() + 1.0)], Stroke::new(2.0, t.accent));
     }
     if resp.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Drop::of(&d, Some(name.to_string()), after, crate::panels::alt_held(ui));
+        ev.drop = Drop::of(&d, Some(name.to_string()), after, crate::panels::alt_held(ui), command_held(ui));
     }
 }
 
@@ -191,8 +192,13 @@ pub(super) fn zone_input(ui: &Ui, zone: &Response, ev: &mut TileEvents) {
         ui.painter().rect_stroke(zone.rect, 0.0, Stroke::new(1.5, Tokens::get(ui.ctx()).accent), StrokeKind::Inside);
     }
     if zone.dnd_release_payload::<PanelDrag>().is_some() {
-        ev.drop = Drop::of(&d, None, false, false);
+        ev.drop = Drop::of(&d, None, false, false, command_held(ui));
     }
+}
+
+/// Is Cmd (macOS) or Ctrl (Windows, Linux) held?
+fn command_held(ui: &Ui) -> bool {
+    ui.input(|i| i.modifiers.command)
 }
 
 /// The colour group `name` is, or the one swatch `name` belongs to.
@@ -252,7 +258,8 @@ fn replaces(d: &Document, with: &str, target: &str) -> bool {
 
 /// Run a drop on the panel: move the swatches, give the paint of a swatch Alt-dropped on another of
 /// its kind to that one, or make a swatch of the proxy's paint (a color dropped on a folder or a
-/// grouped swatch joins that group).
+/// grouped swatch joins that group; a color Cmd/Ctrl-dropped becomes a new spot color of the color
+/// the drag shows, tints included).
 pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
     let Some(d) = app.session.active().map(|st| &st.doc) else { return };
     let (cmd, params) = match drop {
@@ -264,17 +271,20 @@ pub(super) fn apply_drop(app: &mut VectorcraftApp, drop: Drop) {
             None => return,
         },
         // Alt: an edited gradient (or colour) replaces the swatch it is dropped on.
-        Drop::New { paint, target: Some(t), replace: true }
+        Drop::New { paint, target: Some(t), replace: true, .. }
             if d.swatch(&t).is_some_and(|w| !w.is_reserved() && w.tint_of().is_none() && same_kind(&w.paint, &paint)) =>
         {
             ("swatch.edit", json!({"name": t, "paint": crate::panels::swatch_paint_params(&paint)}))
         }
-        Drop::New { paint, target, .. } => {
+        Drop::New { paint, target, spot, .. } => {
             let mut p = crate::panels::swatch_paint_params(&paint);
-            if paint.color().is_some()
-                && let Some(g) = target.and_then(|t| group_of(d, &t))
-            {
-                p["group"] = json!(g);
+            if paint.color().is_some() {
+                if let Some(g) = target.and_then(|t| group_of(d, &t)) {
+                    p["group"] = json!(g);
+                }
+                if spot && !paint.is_registration() {
+                    p["spot"] = json!(true);
+                }
             }
             ("swatch.new", p)
         }
