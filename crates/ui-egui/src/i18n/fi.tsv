@@ -1313,6 +1313,7 @@ lighting	Light	Valo
 	Search commands, tools, panels and effects	Hae komentoja, työkaluja, paneeleita ja tehosteita
 	Style:	Tyyli:
 	Switch workspace	Vaihda työtilaa
+	Search commands	Hae komentoja
 	Show all open documents	Näytä kaikki avoimet asiakirjat
 	Use 	Käytä 
 	 the object to select  |  	 objektia valitaksesi sen  |  
@@ -2860,7 +2861,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Piilota videoviivaimet
 	Client-side (.html)	Asiakaspuoli (.html)
 	Color Reduction:	Värien vähennys:
-	Lossless (lossy WebP isn't available yet)	Häviötön (häviöllinen WebP ei ole vielä käytettävissä)
+	Lossless	Häviötön
+	Lossy	Häviöllinen
 	Scans:	Läpikäynnit:
 	Server-side (.map)	Palvelinpuoli (.map)
 	{format} Options	{format}-asetukset
@@ -3660,6 +3662,10 @@ theme	Appearance	Ulkoasu
 	Font List	Fonttiluettelo
 	Show Similar Fonts	Näytä samankaltaiset fontit
 	Clear Similar Fonts	Tyhjennä samankaltaiset fontit
+	Fonts used in this document	Tässä asiakirjassa käytetyt fontit
+	This document uses no available fonts	Tämä asiakirja ei käytä saatavilla olevia fontteja
+	Recently Added	Äskettäin lisätyt
+	Fonts added in the last 30 days	Viimeisten 30 päivän aikana lisätyt fontit
 	Fonts in Document	Asiakirjan fontit
 	Refresh Font List	Päivitä fonttiluettelo
 	Replace Font	Korvaa fontti
@@ -5148,6 +5154,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no active document	ei aktiivista asiakirjaa
 @msg	no active perspective plane	ei aktiivista perspektiivitasoa
 @msg	no anchor points selected	ankkuripisteitä ei ole valittu
+@msg	`points` must be three [x, y] pairs of numbers	`points` on annettava kolmena lukuparina [x, y]
+@msg	direct-select three anchor points, or give `points`	valitse suoraan kolme ankkuripistettä tai anna `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
 @msg	no artboard {i} (0-based; the document has {_1})	ei piirtoalustaa {i} (0-pohjainen; asiakirjassa on {_1})
@@ -7200,6 +7209,7 @@ anchor	Points:	Pisteet:
 	Open a document to check it for issues.	Avaa asiakirja tarkistaaksesi sen ongelmat.
 	Empty Text	Tyhjä teksti
 	Unpainted Objects	Värittömät objektit
+	Empty Text Paths	Tyhjät tekstipolut
 	Zero-Opacity Objects	Täysin läpinäkyvät objektit
 	Duplicate Objects	Objektien kaksoiskappaleet
 	Off-Artboard Art	Piirtoalustojen ulkopuolinen grafiikka
@@ -7953,6 +7963,7 @@ breakText	Glyphs	Merkit
 @msg	Too many Revolve faces for visibility evaluation	Pyöräytä-tehosteessa on liian monta tahkoa näkyvyyden arviointiin
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lukee värimallien vaihtotiedostosta enintään {ASE_MAX_ENTRIES} väriä ja ryhmää, ja tässä kirjastossa niitä on {entries}
 @msg	WebP encoding failed: {e}	WebP-koodaus epäonnistui: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-koodaus epäonnistui: kuva on liian suuri häviölliseen WebP-muotoon: pienennä tarkkuutta tai valitse Häviötön
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` on oltava kokonaisluku

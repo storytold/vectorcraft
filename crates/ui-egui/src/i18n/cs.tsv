@@ -1335,6 +1335,7 @@ lighting	Light	Světlo
 	Search commands, tools, panels and effects	Hledat příkazy, nástroje, panely a efekty
 	Style:	Styl:
 	Switch workspace	Přepnout pracovní prostor
+	Search commands	Hledat příkazy
 	Show all open documents	Zobrazit všechny otevřené dokumenty
 	Use 	Příkazem 
 	 the object to select  |  	 na objekt jej vybere  |  
@@ -2916,7 +2917,8 @@ digits	Malayalam	Malajálamské
 	Hide Video Rulers	Skrýt video pravítka
 	Client-side (.html)	Na straně klienta (.html)
 	Color Reduction:	Redukce barev:
-	Lossless (lossy WebP isn't available yet)	Bezeztrátový (ztrátový WebP zatím není k dispozici)
+	Lossless	Bezeztrátový
+	Lossy	Ztrátový
 	Scans:	Průchody:
 	Server-side (.map)	Na straně serveru (.map)
 	{format} Options	Možnosti {format}
@@ -3722,6 +3724,10 @@ theme	Appearance	Motiv
 	Font List	Seznam písem
 	Show Similar Fonts	Zobrazit podobná písma
 	Clear Similar Fonts	Zrušit podobná písma
+	Fonts used in this document	Písma použitá v tomto dokumentu
+	This document uses no available fonts	Tento dokument nepoužívá žádná dostupná písma
+	Recently Added	Nedávno přidané
+	Fonts added in the last 30 days	Písma přidaná za posledních 30 dní
 	Fonts in Document	Písma v dokumentu
 	Refresh Font List	Obnovit seznam písem
 	Replace Font	Nahradit písmo
@@ -5219,6 +5225,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no active document	žádný aktivní dokument
 @msg	no active perspective plane	žádná aktivní perspektivní rovina
 @msg	no anchor points selected	nejsou vybrány žádné kotevní body
+@msg	`points` must be three [x, y] pairs of numbers	`points` musí být tři dvojice čísel [x, y]
+@msg	direct-select three anchor points, or give `points`	vyberte přímým výběrem tři kotevní body, nebo zadejte `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	těmito body neprochází žádná kružnice: dva jsou stejné nebo všechny tři leží na jedné přímce
 @msg	no app to open files here	zde chybí aplikace pro otevírání souborů
 @msg	no artboard	žádná pracovní plocha
 @msg	no artboard {i} (0-based; the document has {_1})	pracovní plocha {i} neexistuje (číslováno od 0; dokument jich má {_1})
@@ -7141,6 +7150,7 @@ anchor	Points:	Body:
 	Open a document to check it for issues.	Otevřete dokument a zkontrolujte jeho problémy.
 	Empty Text	Prázdný text
 	Unpainted Objects	Objekty bez barvy
+	Empty Text Paths	Prázdné textové cesty
 	Zero-Opacity Objects	Objekty s nulovým krytím
 	Duplicate Objects	Duplicitní objekty
 	Off-Artboard Art	Kresba mimo pracovní plochy
@@ -7805,6 +7815,7 @@ breakText	Glyphs	Glyfy
 @msg	Too many Revolve faces for visibility evaluation	Rotační těleso má příliš mnoho stěn pro výpočet viditelnosti
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft čte ze souboru pro výměnu vzorníku nejvýše {ASE_MAX_ENTRIES} barev a skupin a tato knihovna jich má {entries}
 @msg	WebP encoding failed: {e}	kódování WebP selhalo: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	kódování WebP selhalo: obrázek je pro ztrátový WebP příliš velký: snižte rozlišení nebo zvolte Bezeztrátový
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` je smallThumb, mediumThumb, largeThumb, smallList nebo largeList

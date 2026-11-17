@@ -1680,6 +1680,10 @@ file-filter	Templates	Sablonok
 	Font List	Betűtípuslista
 	Show Similar Fonts	Hasonló betűtípusok megjelenítése
 	Clear Similar Fonts	Hasonló betűtípusok törlése
+	Fonts used in this document	A dokumentumban használt betűtípusok
+	This document uses no available fonts	A dokumentum nem használ elérhető betűtípust
+	Recently Added	Nemrég hozzáadott
+	Fonts added in the last 30 days	Az elmúlt 30 napban hozzáadott betűtípusok
 	Font Preview Size	Betűtípus-előnézet mérete
 	Font Size	Betűméret
 	Variable Font	Változó betűtípus
@@ -2539,7 +2543,8 @@ file-filter	Templates	Sablonok
 	Long Lines	Hosszú vonalak
 	Long Strokes	Hosszú vonások
 	Longest:	Leghosszabb:
-	Lossless (lossy WebP isn't available yet)	Veszteségmentes (a veszteséges WebP még nem érhető el)
+	Lossless	Veszteségmentes
+	Lossy	Veszteséges
 	Lossy:	Veszteség:
 	Low	Alacsony
 	Low Fidelity Photo	Kis pontosságú fotó
@@ -3919,6 +3924,7 @@ mark-style	Japanese	Japán
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
 	No recent commands	Nincsenek legutóbbi parancsok
+	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
 	Searching…	Keresés…
@@ -5592,6 +5598,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no active document	nincs aktív dokumentum
 @msg	no active perspective plane	nincs aktív perspektivikus sík
 @msg	no anchor points selected	nincs kijelölt horgonypont
+@msg	`points` must be three [x, y] pairs of numbers	a `points` három [x, y] számpár legyen
+@msg	direct-select three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel három horgonypontot, vagy add meg a `points` értéket
+@msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
 @msg	no artboard {i} (0-based; the document has {_1})	nincs ilyen sorszámú rajztábla: {i} (0-tól számozva; a dokumentumban ennyi van: {_1})
@@ -7125,6 +7134,7 @@ anchor	Points:	Pontok:
 	Open a document to check it for issues.	Nyisson meg egy dokumentumot a problémák ellenőrzéséhez.
 	Empty Text	Üres szöveg
 	Unpainted Objects	Festetlen objektumok
+	Empty Text Paths	Üres szövegútvonalak
 	Zero-Opacity Objects	Nulla átlátszatlanságú objektumok
 	Duplicate Objects	Ismétlődő objektumok
 	Off-Artboard Art	Rajztáblákon kívüli grafika
@@ -9682,6 +9692,7 @@ breakText	Glyphs	Glifák
 @msg	Too many Revolve faces for visibility evaluation	Túl sok lap a láthatóság kiértékeléséhez (Forgatás tengely körül)
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	A VectorCraft legfeljebb {ASE_MAX_ENTRIES} színt és csoportot olvas be egy színmintacsere-fájlból, ebben a könyvtárban pedig ennyi van: {entries}
 @msg	WebP encoding failed: {e}	A WebP-kódolás sikertelen: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	A WebP-kódolás sikertelen: a kép túl nagy a veszteséges WebP-hez: csökkentse a felbontást, vagy válassza a Veszteségmentes lehetőséget
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index`: egész szám kell
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`: smallThumb, mediumThumb, largeThumb, smallList vagy largeList lehet

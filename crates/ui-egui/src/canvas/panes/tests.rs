@@ -376,9 +376,9 @@ fn the_arrange_documents_button_tiles_and_consolidates() {
     crate::theme::install_fonts(&ctx);
     app_bar_frame(&mut app, &ctx, vec![]);
     let nodes = app_bar_frame(&mut app, &ctx, vec![]);
-    let (arrange, search) = (app_bar_node(&nodes, "Arrange Documents"), app_bar_node(&nodes, "Search commands, tools, panels and effects"));
-    let (arrange, search) = (arrange.expect("the application bar has Arrange Documents"), search.expect("the search icon shows"));
-    assert!(arrange.x > search.x && (arrange.y - search.y).abs() < 1.0, "right of the search icon: {arrange:?}, {search:?}");
+    let (arrange, search) = (app_bar_node(&nodes, "Arrange Documents"), app_bar_node(&nodes, "Search commands"));
+    let (arrange, search) = (arrange.expect("the application bar has Arrange Documents"), search.expect("the search shows"));
+    assert!(arrange.x > search.x && (arrange.y - search.y).abs() < 1.0, "right of the search: {arrange:?}, {search:?}");
     click_app_bar(&mut app, &ctx, "Arrange Documents");
     let menu = app_bar_frame(&mut app, &ctx, vec![]);
     for item in [
@@ -400,7 +400,7 @@ fn the_arrange_documents_button_tiles_and_consolidates() {
     assert!(!app.ui.tiled);
 }
 
-/// As the application bar narrows, Arrange Documents goes before the search icon.
+/// As the application bar narrows, Arrange Documents goes before the search.
 #[test]
 fn a_narrow_application_bar_keeps_search_before_arrange_documents() {
     crate::i18n::set_current(crate::i18n::Lang::EN);
@@ -412,12 +412,11 @@ fn a_narrow_application_bar_keeps_search_before_arrange_documents() {
     for width in (200..=1400).rev().step_by(4) {
         app_bar_frame_in(&mut app, &ctx, vec![], width as f32);
         let nodes = app_bar_frame_in(&mut app, &ctx, vec![], width as f32);
-        let (arrange, search) =
-            (app_bar_node(&nodes, "Arrange Documents").is_some(), app_bar_node(&nodes, "Search commands, tools, panels and effects").is_some());
-        assert!(search || !arrange, "{width} pt: Arrange Documents shows without the search icon");
+        let (arrange, search) = (app_bar_node(&nodes, "Arrange Documents").is_some(), app_bar_node(&nodes, "Search commands").is_some());
+        assert!(search || !arrange, "{width} pt: Arrange Documents shows without the search");
         search_alone |= search && !arrange;
     }
-    assert!(search_alone, "some width shows the search icon without Arrange Documents");
+    assert!(search_alone, "some width shows the search without Arrange Documents");
 }
 
 #[test]

@@ -1355,6 +1355,10 @@ font-technology	Variable	Variables
 	Font List	Lista de fuentes
 	Show Similar Fonts	Mostrar fuentes similares
 	Clear Similar Fonts	Borrar fuentes similares
+	Fonts used in this document	Fuentes usadas en este documento
+	This document uses no available fonts	Este documento no usa ninguna fuente disponible
+	Recently Added	Añadidas recientemente
+	Fonts added in the last 30 days	Fuentes añadidas en los últimos 30 días
 	Font Preview Size	Tamaño de vista previa de fuente
 	Font Size	Tamaño de fuente
 	Variable Font	Fuente variable
@@ -2033,7 +2037,8 @@ font-technology	Variable	Variables
 	Lock Others	Bloquear otros
 	Lock Slices	Bloquear sectores
 	Lock Station Point	Bloquear punto de estación
-	Lossless (lossy WebP isn't available yet)	Sin pérdida (WebP con pérdida aún no está disponible)
+	Lossless	Sin pérdida
+	Lossy	Con pérdida
 	Lossy:	Con pérdida:
 	Low	Baja
 	lowercase	minúsculas
@@ -3298,6 +3303,7 @@ digits	Malayalam	Malayálam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
 	No recent commands	No hay comandos recientes
+	Search commands	Buscar comandos
 	Search Commands…	Buscar comandos…
 	Secondary	Secundario
 	Section Symbol	Símbolo de sección
@@ -4924,6 +4930,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no active document	no hay ningún documento activo
 @msg	no active perspective plane	no hay ningún plano de perspectiva activo
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
+@msg	`points` must be three [x, y] pairs of numbers	`points` debe ser tres pares de números [x, y]
+@msg	direct-select three anchor points, or give `points`	seleccione directamente tres puntos de ancla o indique `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo
 @msg	no artboard {i} (0-based; the document has {_1})	no existe la mesa de trabajo {i} (contando desde 0; el documento tiene {_1})
@@ -7111,6 +7120,7 @@ anchor	Points:	Puntos:
 	Open a document to check it for issues.	Abra un documento para buscar problemas en él.
 	Empty Text	Texto vacío
 	Unpainted Objects	Objetos sin pintar
+	Empty Text Paths	Trazados de texto vacíos
 	Zero-Opacity Objects	Objetos con opacidad cero
 	Duplicate Objects	Objetos duplicados
 	Off-Artboard Art	Ilustración fuera de las mesas de trabajo
@@ -7719,6 +7729,7 @@ breakText	Glyphs	Glifos
 @msg	Too many Revolve faces for visibility evaluation	Demasiadas caras de Revolución para evaluar la visibilidad
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lee como máximo {ASE_MAX_ENTRIES} colores y grupos de un archivo de intercambio de muestras, y esta biblioteca tiene {entries}
 @msg	WebP encoding failed: {e}	Error al codificar WebP: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Error al codificar WebP: la imagen es demasiado grande para WebP con pérdida: reduzca la resolución o elija Sin pérdida
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` es smallThumb, mediumThumb, largeThumb, smallList o largeList

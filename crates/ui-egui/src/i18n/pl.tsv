@@ -1265,6 +1265,7 @@ lighting	Light	Światło
 	Search commands, tools, panels and effects	Szukaj poleceń, narzędzi, paneli i efektów
 	Style:	Styl:
 	Switch workspace	Przełącz obszar roboczy
+	Search commands	Szukaj poleceń
 	Show all open documents	Pokaż wszystkie otwarte dokumenty
 	Use 	Użyj 
 	 the object to select  |  	 obiekt, aby go zaznaczyć  |  
@@ -2829,7 +2830,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Ukryj linijki wideo
 	Client-side (.html)	Po stronie klienta (.html)
 	Color Reduction:	Redukcja kolorów:
-	Lossless (lossy WebP isn't available yet)	Bezstratny (stratny WebP nie jest jeszcze dostępny)
+	Lossless	Bezstratny
+	Lossy	Stratny
 	Scans:	Skany:
 	Server-side (.map)	Po stronie serwera (.map)
 	{format} Options	Opcje: {format}
@@ -3601,6 +3603,10 @@ theme	Appearance	Wygląd
 	Font List	Lista czcionek
 	Show Similar Fonts	Pokaż podobne czcionki
 	Clear Similar Fonts	Wyczyść podobne czcionki
+	Fonts used in this document	Czcionki użyte w tym dokumencie
+	This document uses no available fonts	Ten dokument nie używa żadnych dostępnych czcionek
+	Recently Added	Ostatnio dodane
+	Fonts added in the last 30 days	Czcionki dodane w ciągu ostatnich 30 dni
 	Fonts in Document	Czcionki w dokumencie
 	Refresh Font List	Odśwież listę czcionek
 	Replace Font	Zastąp czcionkę
@@ -5042,6 +5048,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no active document	brak aktywnego dokumentu
 @msg	no active perspective plane	brak aktywnej płaszczyzny perspektywy
 @msg	no anchor points selected	nie zaznaczono punktów kontrolnych
+@msg	`points` must be three [x, y] pairs of numbers	`points` musi zawierać trzy pary liczb [x, y]
+@msg	direct-select three anchor points, or give `points`	zaznacz bezpośrednio trzy punkty kontrolne lub podaj `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji
 @msg	no artboard {i} (0-based; the document has {_1})	brak obszaru kompozycji {i} (numeracja od 0; dokument ma {_1})
@@ -6995,6 +7004,7 @@ anchor	Points:	Punkty:
 	Open a document to check it for issues.	Otwórz dokument, aby sprawdzić go pod kątem problemów.
 	Empty Text	Pusty tekst
 	Unpainted Objects	Obiekty bez koloru
+	Empty Text Paths	Puste ścieżki tekstowe
 	Zero-Opacity Objects	Obiekty o zerowym kryciu
 	Duplicate Objects	Zduplikowane obiekty
 	Off-Artboard Art	Grafika poza obszarami kompozycji
@@ -9548,6 +9558,7 @@ breakText	Glyphs	Glify
 @msg	Too many Revolve faces for visibility evaluation	Zbyt wiele ścian efektu Obrót do obliczenia widoczności
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft odczytuje z pliku wymiany próbek najwyżej {ASE_MAX_ENTRIES} kolorów i grup, a ta biblioteka ma ich {entries}
 @msg	WebP encoding failed: {e}	Kodowanie WebP nie powiodło się: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Kodowanie WebP nie powiodło się: obraz jest za duży dla stratnego WebP: zmniejsz rozdzielczość lub wybierz Bezstratny
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` ma wartość smallThumb, mediumThumb, largeThumb, smallList lub largeList

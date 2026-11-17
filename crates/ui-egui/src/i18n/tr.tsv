@@ -1304,6 +1304,10 @@ font-technology	Variable	Değişken
 	Font List	Yazı Tipi Listesi
 	Show Similar Fonts	Benzer Yazı Tiplerini Göster
 	Clear Similar Fonts	Benzer Yazı Tiplerini Temizle
+	Fonts used in this document	Bu belgede kullanılan yazı tipleri
+	This document uses no available fonts	Bu belge kullanılabilir hiçbir yazı tipini kullanmıyor
+	Recently Added	Son eklenenler
+	Fonts added in the last 30 days	Son 30 günde eklenen yazı tipleri
 	Font Preview Size	Yazı Tipi Önizleme Boyutu
 	Font Size	Yazı Tipi Boyutu
 	Font:	Yazı tipi:
@@ -1853,7 +1857,8 @@ font-technology	Variable	Değişken
 	Lock Others	Diğerlerini Kilitle
 	Lock Slices	Dilimleri Kilitle
 	Lock Station Point	Kilit İstasyon Noktası
-	Lossless (lossy WebP isn't available yet)	Kayıpsız (kayıplı WebP henüz mevcut değil)
+	Lossless	Kayıpsız
+	Lossy	Kayıplı
 	Lossy:	Kayıplı:
 	Low	Düşük
 	lowercase	küçük harf
@@ -3088,6 +3093,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
+	Search commands	Komutları arayın
 	Search Commands…	Arama Komutları…
 	Secondary	İkincil
 	Section Symbol	Bölüm Sembolü
@@ -4641,6 +4647,9 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	no active document	etkin belge yok
 @msg	no active perspective plane	aktif perspektif düzlemi yok
 @msg	no anchor points selected	bağlantı noktası seçilmedi
+@msg	`points` must be three [x, y] pairs of numbers	`points` üç [x, y] sayı çifti olmalıdır
+@msg	direct-select three anchor points, or give `points`	üç bağlantı noktasını doğrudan seçin veya `points` verin
+@msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
 @msg	no artboard {i} (0-based; the document has {_1})	çalışma yüzeyi yok {i} (0 tabanlı; belgede {_1} var)
@@ -5288,6 +5297,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa derinliği {_1}: piksel başına 16, 24 veya 32 bit olmalıdır
 @msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	WebP encoding failed: {e}	WebP kodlaması başarısız oldu: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP kodlaması başarısız oldu: görüntü kayıplı WebP için çok büyük: çözünürlüğü düşürün veya Kayıpsız seçeneğini seçin
 @msg	the pixel buffer doesn't match the image size	piksel arabelleği görüntü boyutuyla eşleşmiyor
 @msg	too many layers for PSD (at most 32767)	PSD için çok fazla katman (en fazla 32767)
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} piksel GIF için çok büyük (kenar başına en fazla 65535 piksel): çözünürlüğü düşürün
@@ -9021,6 +9031,7 @@ anchor	Points:	Noktalar:
 	Open a document to check it for issues.	Sorunlar için denetlemek üzere bir belge açın.
 	Empty Text	Boş Metin
 	Unpainted Objects	Boyanmamış Nesneler
+	Empty Text Paths	Boş Metin Yolları
 	Zero-Opacity Objects	Sıfır Opaklıklı Nesneler
 	Duplicate Objects	Yinelenen Nesneler
 	Off-Artboard Art	Çalışma Yüzeyi Dışındaki Çizimler
