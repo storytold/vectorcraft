@@ -339,6 +339,7 @@ registry! {
     Replace: [confirm::REPLACE] => confirm::REPLACE_SPEC,
     ReplaceFiles: [confirm::REPLACE_FILES] => confirm::REPLACE_FILES_SPEC,
     ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
+    ResetActions: [confirm::RESET_ACTIONS] => confirm::RESET_ACTIONS_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
@@ -654,11 +655,15 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 /// `ui.dialog.set` changed `field` of the open dialog from `old`: a choice that sets other fields
 /// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
-/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size.
+/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size. A value
+/// Composite Fonts' Show Sample can't take is refused.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
         transform_each::field_set(app, field, old);
         return Ok(());
+    }
+    if let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == composite_fonts::KIND) {
+        return composite_fonts::field_set(d, field);
     }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
     match field {
@@ -699,6 +704,12 @@ pub fn cancel(app: &mut VectorcraftApp) {
             script_run::notice_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
+        // Find Font's next open starts with an empty replacement search.
+        if d.kind == "findFont"
+            && let Some(ctx) = app.ui_ctx.clone()
+        {
+            crate::find_font::clear_search(&ctx);
+        }
         // Toolbar-only Flare options start no preview and must not cancel a gesture
         // that was already active before opening them. The generic parameter dialog has a spec
         // without a preview, yet previews some commands (Grid Repeat Options) when asked to.

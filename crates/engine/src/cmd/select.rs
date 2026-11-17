@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Document, LockedArtboards, Node, NodeId, NodeKind};
+use vectorcraft_doc::{AnchorRef, Document, LockedArtboards, Node, NodeId, NodeKind, Selection};
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::object::can_align;
@@ -82,19 +82,11 @@ pub fn specs() -> Vec<CommandSpec> {
             "Cancel Key Object",
             [],
             None,
-            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put), anchor?: [subpath, anchor] with `id` the path (an anchor point selected with Direct Selection beside at least one other point becomes the key anchor: Align and Distribute move the other points relative to it and it stays put; select.anchors add or toggle of one point makes it the key anchor, as a Shift-click does)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection, or a key anchor that is deselected, deleted or left as the only selected point; any other id, guide or anchor is an error that leaves the key as it was → {key, guide?, keyAnchor?} (the resulting key object, or null; guide: the key guide, left out without one; keyAnchor: {id, anchor}, left out without one)",
+            "{id?: a selected top-level object (not a layer, a compound-path member or an object inside another selected object); one of two or more or the only one with ruler guides selected (the Selection tool: a click on one object of a selection of several, or of one with guides; on the key again: no id), guide?: index (a selected ruler guide, guide.list, with one or more objects selected: the Selection tool's click on a selected guide; Align lines the objects up on it and the guide stays put), anchor?: [subpath, anchor] with `id` the path (an anchor point selected with Direct Selection beside at least one other point becomes the key anchor: Align and Distribute move the other points relative to it and it stays put; a click without modifiers on an already-selected anchor point makes it the key anchor)} the key object Align aligns to and Distribute Spacing spaces from; without `id` or `guide` it cancels the key, as does a selection that holds only the key and objects inside it (one object, or a group key and its own members) and no ruler guide, or a key guide with no object selected or taken out of the selection, or a key anchor that is deselected, deleted or left as the only selected point; any other id, guide or anchor is an error that leaves the key as it was → {key, guide?, keyAnchor?} (the resulting key object, or null; guide: the key guide, left out without one; keyAnchor: {id, anchor}, left out without one)",
             has_doc,
             key
         ),
-        cmd!(
-            "select.anchors",
-            "Select Anchors",
-            [],
-            None,
-            "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}; add or toggle that selects one point makes it the key anchor while another point is selected too (see select.key)",
-            has_doc,
-            anchors
-        ),
+        cmd!("select.anchors", "Select Anchors", [], None, "{id, anchors: [[subpath, anchor]…], mode: \"set\"|\"add\"|\"toggle\"}", has_doc, anchors),
         cmd!(
             "select.segments",
             "Select Segments",
@@ -734,17 +726,32 @@ fn key_anchor(s: &mut Session, id: Option<NodeId>, guide: Option<usize>, v: &Val
     let st = s.doc()?;
     let sel = &st.selection;
     let on_path = st.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.subpaths.get(r.0).is_some_and(|sp| r.1 < sp.anchors.len()));
-    if !on_path || sel.segments.contains_key(&id) || !sel.anchors.get(&id).is_some_and(|set| set.contains(&r)) {
+    let is_selected_anchor = on_path
+        && !sel.segments.contains_key(&id)
+        && (sel.anchors.get(&id).is_some_and(|set| set.contains(&r)) || (!sel.anchors.contains_key(&id) && sel.contains(id)));
+    if !is_selected_anchor {
         return Err(bad(C, format!("anchor [{}, {}] of object {id} is not a selected anchor point", r.0, r.1)));
     }
     // Check the new key on a copy first, so a request that fails leaves the key as it was.
     let mut trial = sel.clone();
+    if !trial.anchors.contains_key(&id)
+        && let Some(p) = st.doc.node(id).and_then(|n| n.path_data())
+    {
+        trial.anchors.insert(id, p.anchors().map(|(s, a, _)| (s, a)).collect());
+    }
     trial.key_anchor = Some((id, r));
     trial.prune(&st.doc);
     if trial.key_anchor.is_none() {
         return Err(bad(C, "select another anchor point to align to the key anchor"));
     }
-    s.select(|_, sel| sel.key_anchor = Some((id, r)))?;
+    s.select(|d, sel| {
+        if !sel.anchors.contains_key(&id)
+            && let Some(p) = d.node(id).and_then(|n| n.path_data())
+        {
+            sel.anchors.insert(id, p.anchors().map(|(s, a, _)| (s, a)).collect());
+        }
+        sel.key_anchor = Some((id, r));
+    })?;
     key_result(s)
 }
 
@@ -891,23 +898,15 @@ fn anchors(s: &mut Session, p: &Value) -> Result<Value> {
         if whole && let Some(path) = d.node(id).and_then(|n| n.path_data()) {
             e.extend(path.anchors().map(|(s, i, _)| (s, i)));
         }
-        // One point that add or toggle selects becomes the key anchor (a Shift-click with Direct
-        // Selection); `prune` drops it unless another point is selected too.
-        let single = refs.len() == 1;
-        let mut newest = None;
         for r in refs {
             if mode == "toggle" && e.contains(&r) {
                 e.remove(&r);
-            } else if e.insert(r) && single {
-                newest = Some(r);
+            } else {
+                e.insert(r);
             }
         }
         if e.is_empty() {
             sel.remove(id);
-        } else if mode != "set"
-            && let Some(r) = newest
-        {
-            sel.key_anchor = Some((id, r));
         }
     })?;
     ok()
@@ -931,50 +930,143 @@ fn anchors_many(s: &mut Session, p: &Value) -> Result<Value> {
         None if bool_or(p, "add", false) => "add",
         None => "set",
     };
-    s.select(|d, sel| {
-        if mode == "set" {
-            sel.clear();
-        }
-        for (id, refs) in items {
-            // A segment pick's endpoints aren't selected anchors: start from none of them.
-            let segment_pick = sel.segments.remove(&id).is_some();
-            let all: BTreeSet<(usize, usize)> =
-                d.node(id).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, i, _)| (s, i)).collect()).unwrap_or_default();
-            // Anything but a path is selected, toggled or deselected as a whole.
-            if all.is_empty() {
-                match mode {
-                    "toggle" => sel.toggle(id),
-                    "subtract" => sel.remove(id),
-                    _ => sel.add(id),
-                }
-                continue;
-            }
-            // From the anchors selected now (all of them for a path selected as a whole).
-            let now = match sel.partial(id) {
-                _ if segment_pick => BTreeSet::new(),
-                Some(a) => a.clone(),
-                None if sel.contains(id) => all.clone(),
-                None => BTreeSet::new(),
-            };
-            let refs: BTreeSet<(usize, usize)> = refs.intersection(&all).copied().collect();
-            let next: BTreeSet<(usize, usize)> = match mode {
-                "toggle" => now.symmetric_difference(&refs).copied().collect(),
-                "subtract" => now.difference(&refs).copied().collect(),
-                _ => now.union(&refs).copied().collect(),
-            };
-            if next.is_empty() {
-                sel.remove(id);
-                continue;
-            }
-            sel.add(id);
-            if next.len() < all.len() {
-                sel.anchors.insert(id, next);
-            } else {
-                sel.anchors.remove(&id);
-            }
-        }
-    })?;
+    s.select(|d, sel| select_anchor_items(d, sel, items, mode))?;
     ok()
+}
+
+/// `select.anchorsMany`'s change to `sel`: each item in order, with the selected objects kept in a
+/// [`Members`] map while the items run, so that an item's membership check and change don't go
+/// through `sel.objects`.
+fn select_anchor_items(d: &Document, sel: &mut Selection, items: Vec<(NodeId, BTreeSet<AnchorRef>)>, mode: &str) {
+    if mode == "set" {
+        sel.clear();
+    }
+    if items.is_empty() {
+        return;
+    }
+    let mut members = Members::of(sel);
+    for (id, refs) in items {
+        // A segment pick's endpoints aren't selected anchors: start from none of them.
+        let segment_pick = sel.segments.remove(&id).is_some();
+        let all: BTreeSet<AnchorRef> =
+            d.node(id).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, i, _)| (s, i)).collect()).unwrap_or_default();
+        // Anything but a path is selected, toggled or deselected as a whole.
+        if all.is_empty() {
+            match mode {
+                "toggle" => members.toggle(sel, id),
+                "subtract" => members.remove(sel, id),
+                _ => members.add(sel, id),
+            }
+            continue;
+        }
+        // From the anchors selected now (all of them for a path selected as a whole).
+        let now = match sel.partial(id) {
+            _ if segment_pick => BTreeSet::new(),
+            Some(a) => a.clone(),
+            None if members.contains(id) => all.clone(),
+            None => BTreeSet::new(),
+        };
+        let refs: BTreeSet<AnchorRef> = refs.intersection(&all).copied().collect();
+        let next: BTreeSet<AnchorRef> = match mode {
+            "toggle" => now.symmetric_difference(&refs).copied().collect(),
+            "subtract" => now.difference(&refs).copied().collect(),
+            _ => now.union(&refs).copied().collect(),
+        };
+        if next.is_empty() {
+            members.remove(sel, id);
+            continue;
+        }
+        members.add(sel, id);
+        if next.len() < all.len() {
+            sel.anchors.insert(id, next);
+        } else {
+            sel.anchors.remove(&id);
+        }
+    }
+    members.finish(sel);
+}
+
+/// The selected objects of a [`Selection`] while [`select_anchor_items`] changes them. Each
+/// selected id maps to the activation that selected it: 0 for the objects selected before, and
+/// a new number for each later [`Members::add`] of an unselected id, which `added` lists in order.
+/// [`Members::finish`] writes them back to `objects`.
+struct Members {
+    live: std::collections::HashMap<NodeId, usize>,
+    added: Vec<(NodeId, usize)>,
+    removed: bool,
+}
+
+impl Members {
+    fn of(sel: &Selection) -> Self {
+        count_objects_walk();
+        Self { live: sel.objects.iter().map(|id| (*id, 0)).collect(), added: Vec::new(), removed: false }
+    }
+
+    fn contains(&self, id: NodeId) -> bool {
+        self.live.contains_key(&id)
+    }
+
+    /// [`Selection::add`]: clears what any selection change clears, and selects `id` at the end
+    /// unless it is selected.
+    fn add(&mut self, sel: &mut Selection, id: NodeId) {
+        sel.target = None;
+        sel.slices.clear();
+        sel.symbol_part = None;
+        sel.on_path_member = None;
+        if let std::collections::hash_map::Entry::Vacant(e) = self.live.entry(id) {
+            let activation = self.added.len() + 1;
+            e.insert(activation);
+            self.added.push((id, activation));
+        }
+    }
+
+    /// [`Selection::remove`]: clears what any selection change clears, and deselects `id` with
+    /// its anchors, segments, and the key or key anchor it is.
+    fn remove(&mut self, sel: &mut Selection, id: NodeId) {
+        sel.target = None;
+        sel.slices.clear();
+        sel.symbol_part = None;
+        sel.on_path_member = None;
+        if self.live.remove(&id).is_some() {
+            self.removed = true;
+        }
+        sel.anchors.remove(&id);
+        sel.segments.remove(&id);
+        if sel.key == Some(id) {
+            sel.key = None;
+        }
+        if sel.key_anchor.is_some_and(|(k, _)| k == id) {
+            sel.key_anchor = None;
+        }
+    }
+
+    /// [`Selection::toggle`].
+    fn toggle(&mut self, sel: &mut Selection, id: NodeId) {
+        if self.contains(id) { self.remove(sel, id) } else { self.add(sel, id) }
+    }
+
+    /// Writes the selected objects to `sel.objects`: the slots of the objects selected before and
+    /// still selected by that activation, in their order, then the ids selected since and still
+    /// selected by the activation that added them, in the order they were added.
+    fn finish(self, sel: &mut Selection) {
+        if self.removed {
+            count_objects_walk();
+            sel.objects.retain(|id| self.live.get(id) == Some(&0));
+        }
+        sel.objects.extend(self.added.into_iter().filter(|(id, n)| self.live.get(id) == Some(n)).map(|(id, _)| id));
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many walks [`select_anchor_items`] made over the selected objects on this thread.
+    pub(crate) static OBJECTS_WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: count one walk over the selected objects.
+fn count_objects_walk() {
+    #[cfg(test)]
+    OBJECTS_WALKS.set(OBJECTS_WALKS.get() + 1);
 }
 
 /// Select › Same › Fill/Stroke Color: is `a` the same colour as `b`? Tints of one global or spot
@@ -1288,3 +1380,6 @@ fn not_pixel_aligned(s: &mut Session, _: &Value) -> Result<Value> {
     s.select(|_, sel| sel.set(ids))?;
     Ok(json!({ "count": s.doc()?.selection.objects.len() }))
 }
+
+#[cfg(test)]
+mod tests;
