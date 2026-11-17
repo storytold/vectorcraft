@@ -158,8 +158,9 @@
 //! art, the character and paragraph attributes the text document doesn't hold, freeform gradients, gradients
 //! along or across a stroke and gradients without stops, with more than 256 stops or without extent
 //! as their average color
-//! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
-//! to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
+//! (gradients that dither are written without dither's noise, Perceptual gradients and gradients
+//! mixed around the hue wheel as the stops on their curve in process colors, at most 256, and
+//! gradient stops linked to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
 //! the tile or is painted with patterns, and pattern fills in symbols, as their tiles cut
 //! to the shape, clipping groups and clipping layers whose clipping object isn't a path,
 //! and the clipping groups inside them, as their art cut to that object (its fill cut too, its
