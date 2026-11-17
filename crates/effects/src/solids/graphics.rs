@@ -519,6 +519,71 @@ pub(super) fn face_art(
     Some(Node::new(id, NodeKind::Group { children: vec![Arc::new(clip), Arc::new(Node::group(id, children))], clip: true }))
 }
 
+/// The graphics on one planar face of a solid's mesh ([`super::SolidMesh`]): those mapped onto
+/// `face`, placed about `center` (the center of the bounds the solids were built with), and the
+/// point of the art's plane that each corner of the mesh shows (document coordinates of the art
+/// before its 3D effect, y down).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeshGraphics {
+    pub face: PlanarFace,
+    pub graphics: Vec<MappedGraphic>,
+    pub center: Point,
+    /// One for each position of the mesh.
+    pub art: Vec<Point>,
+    /// The opacity of the fill or stroke the face is painted with, which the graphics take too, as
+    /// the canvas draws them; neither a gradient's stops nor the object's own opacity is in it.
+    pub opacity: f32,
+    /// The opacity of the object the face belongs to, which applies to the face and its graphics
+    /// together.
+    pub object: f32,
+}
+
+impl MeshGraphics {
+    /// The bounds of the art points of the mesh's corners; `None` without corners.
+    pub fn art_bounds(&self) -> Option<Rect> {
+        let first = *self.art.first()?;
+        Some(self.art.iter().fold(Rect::from_points(first, first), |r, p| r.union_pt(*p)))
+    }
+}
+
+/// The art `graphics` draws on its face, flat in the art's plane, unshaded and unclipped: each
+/// graphic's fills and stroke outlines at its place ([`MappedGraphic`]), back to front, as one
+/// group of objects with id `id`. A graphic whose symbol `doc` does not have, or whose art is past
+/// the limits of [`pieces_of`], is left out, as the canvas leaves it out. `Ok(None)` when nothing
+/// is drawn; an error when the graphics' art draws more than [`MAX_ELEMENTS`] path elements
+/// together.
+pub fn mesh_graphics_art(doc: &Document, id: NodeId, graphics: &MeshGraphics) -> Result<Option<Node>, String> {
+    let mut children = vec![];
+    let mut elements = 0usize;
+    for g in graphics.graphics.iter().filter(|g| g.face == graphics.face) {
+        let Some(symbol) = doc.symbols.iter().find(|s| s.name == g.symbol) else { continue };
+        let Ok(pieces) = pieces_of(doc, symbol) else { continue };
+        let Some(bounds) = pieces.iter().filter_map(|p| p.path.bounds()).reduce(|a, b| a.union(b)) else { continue };
+        let place = g.placement(bounds, graphics.center);
+        for piece in pieces {
+            elements = elements.saturating_add(drawn_elements(&piece.path, 1));
+            if elements > MAX_ELEMENTS {
+                return Err("The graphics are too complex: simplify the symbols' art".into());
+            }
+            let mut paint = piece.paint;
+            if let Paint::Pattern { xf, .. } = &mut paint {
+                *xf = place * *xf;
+            }
+            let mut fill = FillLayer::new(paint);
+            fill.opacity = piece.opacity;
+            fill.blend = piece.blend;
+            let mut appearance = Appearance { items: vec![AppearanceItem::Fill(fill)], ..Default::default() };
+            appearance.transform_gradients(place);
+            let mut node = Node::path(id, piece.path.transformed(place), appearance);
+            if let NodeKind::Path { rule, .. } = &mut node.kind {
+                *rule = piece.rule;
+            }
+            children.push(Arc::new(node));
+        }
+    }
+    Ok((!children.is_empty()).then(|| Node::group(id, children)))
+}
+
 /// One area of a graphic placed on Revolve's unrolled side surface, cut into straight pieces.
 struct Unrolled {
     polygons: Vec<Vec<Point>>,
