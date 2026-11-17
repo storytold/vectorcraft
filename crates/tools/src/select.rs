@@ -1678,6 +1678,10 @@ impl SelectionTool {
         if blendwidget::over_widget(cx, p) {
             return vec![];
         }
+        // A live polygon's side widget takes a plain double-click the same way.
+        if sidewidget::over_widget(cx, p) {
+            return vec![];
+        }
         if crate::rulerguide::guide_at(cx, p).is_some() {
             return vec![];
         }

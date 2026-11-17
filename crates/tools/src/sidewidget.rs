@@ -360,6 +360,40 @@ mod tests {
         assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, w.at - down * 13.0))), [4]);
     }
 
+    /// A double-click on the widget with the Selection tool does nothing: in isolation mode it does
+    /// not leave isolation, though no art is under the widget.
+    #[test]
+    fn a_double_click_on_the_widget_does_nothing() {
+        let live = LiveShape::Polygon {
+            radius: 100.0,
+            sides: 5,
+            xf: Affine::translate((300.0, 300.0)),
+            radii: vec![],
+            kinds: vec![],
+            radii_relative: false,
+        };
+        let mut d = Document::new(800.0, 800.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mut n = Node::path(id, live.to_path(), Appearance::default_art());
+        if let NodeKind::Path { live: slot, .. } = &mut n.kind {
+            *slot = Some(Box::new(live));
+        }
+        let group = d.alloc_id();
+        d.insert(Some(l), 0, Node::group(group, vec![std::sync::Arc::new(n)])).unwrap();
+        let mut s = Selection::default();
+        s.add(id);
+        let p = paint();
+        let c = ToolContext { isolation: Some(group), ..cx(&d, &s, &p) };
+        let (w, _) = SideWidget::for_tool(&c).unwrap();
+        assert!(vectorcraft_doc::hit::hit_test(&d, w.at, c.hit_options()).is_none());
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, w.at)).is_empty());
+        // Away from the widget and the art, the double-click leaves isolation.
+        let away = w.at + vectorcraft_geom::Vec2::new(40.0, 0.0);
+        assert_eq!(t.pointer(&c, &ev(PointerKind::DoubleClick, away)), vec![Action::Exec("object.exitIsolation".into(), json!({}))]);
+    }
+
     /// A polygon of more than 11 sides keeps its count on a press and a drag down; the first step
     /// up gives 11.
     #[test]
