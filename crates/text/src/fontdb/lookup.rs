@@ -368,6 +368,12 @@ impl FontDb {
         loaded.or_else(|| self.instance_by_id(id))
     }
 
+    /// The faces loaded so far (the bundled fonts and the installed ones type has used), in load
+    /// order. Installed fonts that nothing has asked for yet are not among them.
+    pub fn loaded_faces(&self) -> Vec<Arc<FontFace>> {
+        self.read_faces().clone()
+    }
+
     /// The face of character style `st`: [`Self::face_version`] of its font, instanced at its
     /// Variable Font settings ([`Self::instance`]).
     pub fn style_face(&self, st: &vectorcraft_doc::CharStyle) -> Option<Arc<FontFace>> {

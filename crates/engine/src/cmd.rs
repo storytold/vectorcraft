@@ -105,6 +105,7 @@ pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
 pub(crate) mod typecmd;
+mod retype;
 mod typemenu;
 mod variablecmds;
 pub(crate) mod views;
@@ -321,6 +322,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
+        v.extend(retype::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());
         v.extend(colorcmds::specs());
