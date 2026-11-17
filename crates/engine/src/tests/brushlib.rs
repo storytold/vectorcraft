@@ -116,7 +116,8 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "game-trails",
             "energy-beams",
             "dry-media",
-            "tech-circuit"
+            "tech-circuit",
+            "engraving"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
@@ -216,6 +217,30 @@ fn line_to(x: f64) -> vectorcraft_geom::BezPath {
 
 fn black_stroke() -> vectorcraft_doc::StrokeLayer {
     vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
+}
+
+#[test]
+fn engraving_library_draws_fine_parallel_strokes_and_survives_save() {
+    let mut s = session();
+    let listed = run(&mut s, "brush.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "engraving").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Engraving"), Some("builtIn"), Some(4)));
+    let (_, lib) = cmd::brushlib::library(&s, "Engraving").unwrap();
+    for b in &lib.brushes {
+        for length in [2.0, 200.0] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(length), &black_stroke());
+            let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{} at {length} pt", b.name);
+        }
+    }
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    let added = run(&mut s, "brush.addFromLibrary", json!({"library": "engraving", "name": "Fine Hatching", "apply": true, "ids": [path]}));
+    assert_eq!(strs(&added["added"]), ["Fine Hatching"]);
+    assert_eq!(added["applied"], json!([path]));
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": ["Fine Hatching"]}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::find(&reopened, "Fine Hatching").unwrap(), lib.brushes[0]);
 }
 
 /// Original circuit art and repeat tiles survive adding, applying and saving a library.

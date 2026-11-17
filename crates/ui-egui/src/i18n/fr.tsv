@@ -9902,3 +9902,8 @@ breakText	Glyphs	Glyphes
 @msg	A fold line is on a non-printing layer.	Une ligne de pliage se trouve sur un calque non imprimable.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	{panels} panneau(x), {hinges} charnière(s), {errors} erreur(s), {warnings} avertissement(s)
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Engraving	Gravure
+	Fine Hatching	Hachures fines
+	Dense Hatching	Hachures denses
+	Tapered Hatching	Hachures effilées
+	Broken Hatching	Hachures interrompues
