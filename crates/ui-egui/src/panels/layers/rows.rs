@@ -476,7 +476,9 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
         }
     };
     let dup_label = if is_multi { tl!("Duplicate Selection").to_string() } else { format!("{} \"{display}\"", tl!("Duplicate")) };
-    if widgets::menu_item_name(ui, &dup_label, true, false) {
+    // A copy of the isolated node goes beside it, outside the isolated art.
+    let dup_enabled = !view.root.is_some_and(|r| collect_ids.contains(&r.0));
+    if widgets::menu_item_name(ui, &dup_label, dup_enabled, false) {
         out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
         ui.close();
     }
@@ -688,6 +690,16 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
         LayersDrag::Rows(_) if inside && rel >= 0.25 && (rel <= 0.75 || open) => Place::Inside,
         LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
         LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
+    };
+    // In isolation mode the isolated row takes a drop only inside it, so nothing leaves the isolated
+    // art or lands beside it.
+    let place = if view.root == Some(n.id) {
+        if !inside {
+            return;
+        }
+        Place::Inside
+    } else {
+        place
     };
     // Beside a member of an Intertwine group (or a row in one) only what can be intertwined goes.
     if place != Place::Inside

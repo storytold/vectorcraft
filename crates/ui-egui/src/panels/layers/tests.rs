@@ -763,6 +763,163 @@ fn masks_underline_dashed_and_mask_editing_lists_only_the_mask() {
     assert!(after > before + 1, "a dashed underline: {before} → {after}");
 }
 
+// ---- isolation mode ----
+
+/// The object rows [`list_rows`] lists for the active document, top down, with their depths.
+fn listed_ids(app: &VectorcraftApp) -> Vec<(NodeId, usize)> {
+    let st = app.session.active().unwrap();
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    rows.iter().filter(|r| r.guide.is_none() && !r.spine).map(|r| (r.node.id, r.depth)).collect()
+}
+
+/// In isolation mode the panel lists only the isolated sublayer, group or object, as the top row
+/// with the open rows inside it; the other layers and groups are listed again when it ends.
+#[test]
+fn isolation_lists_only_the_isolated_art_and_exit_lists_every_layer_again() {
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let top = NodeId(run(&mut app, "layer.new", json!({"top": true, "name": "Top"}))["id"].as_u64().unwrap());
+    let all = vec![(top, 0), (layer, 0), (sub, 1), (g, 2), (b, 3), (a, 2), (c, 1)];
+    assert_eq!(listed_ids(&app), all);
+    run(&mut app, "object.isolate", json!({"id": g.0}));
+    assert_eq!(listed_ids(&app), [(g, 0), (b, 1)], "the group and its art");
+    run(&mut app, "object.exitIsolation", json!({}));
+    assert_eq!(listed_ids(&app), all, "every layer again");
+    run(&mut app, "object.isolate", json!({"id": sub.0}));
+    assert_eq!(listed_ids(&app), [(sub, 0), (g, 1), (b, 2), (a, 1)], "the sublayer and its art");
+    // Isolating an object inside lists that object alone.
+    run(&mut app, "object.isolate", json!({"id": a.0}));
+    assert_eq!(listed_ids(&app), [(a, 0)]);
+    run(&mut app, "object.exitIsolation", json!({}));
+    assert_eq!(listed_ids(&app), all);
+    // A closed isolated group lists its own row alone, and an isolated object that is gone leaves
+    // every layer listed.
+    run(&mut app, "object.isolate", json!({"id": g.0}));
+    app.session.active_mut().unwrap().layers_open.set(g, false);
+    assert_eq!(listed_ids(&app), [(g, 0)]);
+    app.session.active_mut().unwrap().isolation = Some(NodeId(999_999));
+    assert_eq!(listed_ids(&app), [(top, 0), (layer, 0), (sub, 1), (g, 2), (a, 2), (c, 1)]);
+}
+
+/// Entering isolation mode opens the isolated row and leaving it lists every row again; a drop
+/// beside the isolated row or into the empty space under it moves nothing out of the isolated art.
+#[test]
+fn isolation_opens_the_isolated_row_and_keeps_drops_inside_it() {
+    let (mut app, [layer, sub, g, _, a, _]) = nested();
+    let ctx = egui::Context::default();
+    let parent = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.parent_of(id);
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    app.session.active_mut().unwrap().layers_open.set(sub, false);
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    // Rows: Sub, g, b, a.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4, "the sublayer's row opens");
+    // Rectangle a onto the upper edge of the sublayer's row: not above it, outside the sublayer.
+    drag(&mut app, &ctx, egui::pos2(150.0, circles[3].y), egui::pos2(150.0, circles[0].y - ROW_MEDIUM * 0.4), false);
+    assert_eq!(parent(&app, a), Some(sub));
+    // The sublayer into the empty space under the rows: it stays in Layer 1.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 4);
+    drag(&mut app, &ctx, egui::pos2(150.0, circles[0].y), egui::pos2(150.0, circles[3].y + 3.0 * ROW_MEDIUM), false);
+    assert_eq!(parent(&app, sub), Some(layer));
+    // Rectangle a onto the middle of the group's row: into it.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    let at = |app: &VectorcraftApp, id: NodeId| circles[listed_ids(app).iter().position(|(n, _)| *n == id).unwrap()];
+    let (from, to) = (at(&app, a), at(&app, g));
+    drag(&mut app, &ctx, egui::pos2(150.0, from.y), egui::pos2(150.0, to.y), false);
+    assert_eq!(parent(&app, a), Some(g));
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6, "every row again");
+}
+
+/// In isolation mode the rows outside the isolated art are no longer highlighted, so Delete and the
+/// trash in the panel act only on rows it lists.
+#[test]
+fn isolation_drops_highlights_outside_the_isolated_art() {
+    let (mut app, [_, sub, _, b, _, c]) = nested();
+    let ctx = egui::Context::default();
+    app.session.execute("layer.highlight", &json!({"ids": [c.0, b.0], "mode": "set"})).unwrap();
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    frame(&mut app, &ctx, vec![], false);
+    assert_eq!(rows_of(&app), [b], "the rectangle on Layer 1, outside the sublayer, is let go");
+}
+
+/// In isolation mode Rename and the rows opened around a located object stay inside the isolated
+/// row: an object outside it has no row to rename, and opens no rows.
+#[test]
+fn isolation_keeps_rename_and_locate_to_the_rows_listed() {
+    let (mut app, [layer, sub, g, b, _, c]) = nested();
+    let ctx = egui::Context::default();
+    app.ui_ctx = Some(ctx.clone());
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    let err = app.run("ui.rename", json!({"id": c.0})).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    assert_eq!(app.run("ui.rename", json!({"id": b.0})).unwrap()["id"], json!(b.0));
+    {
+        let st = app.session.active().unwrap();
+        let listed = |id| listed_when_opened(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default(), id);
+        assert_eq!([layer, sub, g, b, c].map(listed), [false, true, true, true, false]);
+    }
+    let st = app.session.active_mut().unwrap();
+    st.layers_open.set(layer, false);
+    st.layers_open.set(g, false);
+    let doc = st.doc.clone();
+    open_around(&mut app, &doc, &[c]);
+    open_around(&mut app, &doc, &[b]);
+    let open = &app.session.active().unwrap().layers_open;
+    assert!(open.contains(g), "the group inside the sublayer opens");
+    assert!(!open.contains(layer), "the layer around the sublayer stays closed");
+}
+
+/// In isolation mode, with no row highlighted, Delete Selection and the trash do not delete the
+/// current layer when it is outside the isolated art, where the panel does not list it.
+#[test]
+fn isolation_keeps_delete_to_the_rows_listed() {
+    let (mut app, [layer, sub, g, b, a, c]) = nested();
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    // A row left highlighted outside the isolated group before the panel shows again.
+    let st = app.session.active_mut().unwrap();
+    st.layer_rows = vec![c];
+    let current = st.current_layer().unwrap();
+    assert!([layer, sub].contains(&current), "the current layer holds the isolated group");
+    let err = app.run("ui.layerDelete", json!({})).unwrap_err();
+    assert!(err.contains("the object is outside the isolated group"), "{err}");
+    let doc = &app.session.active().unwrap().doc;
+    assert!([layer, sub, g, b, a, c].iter().all(|id| doc.node(*id).is_some()), "nothing was deleted");
+    app.session.active_mut().unwrap().layer_rows = vec![b];
+    app.run("ui.layerDelete", json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.node(b).is_none(), "a highlighted row inside the isolated group is deleted");
+    assert!(doc.node(a).is_some() && doc.node(c).is_some());
+}
+
+/// In isolation mode New Layer and New Sublayer are off, and `ui.newLayer` is an error, while the
+/// layer they make would be outside the isolated art; a sublayer of an isolated sublayer is listed.
+#[test]
+fn isolation_keeps_new_layers_to_the_rows_listed() {
+    let (mut app, [_, sub, g, ..]) = nested();
+    app.session.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!([(false, false), (true, false), (false, true)].map(|(s, t)| new_layer_unlisted(st, s, t)), [true; 3]);
+    for p in [json!({}), json!({"sublayer": true})] {
+        let err = app.run("ui.newLayer", p).unwrap_err();
+        assert!(err.contains("exit isolation mode first"), "{err}");
+    }
+    assert!(app.ui.dialog.is_none());
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    app.session.execute("layer.setCurrent", &json!({"id": sub.0})).unwrap();
+    app.session.execute("object.isolate", &json!({"id": sub.0})).unwrap();
+    let st = app.session.active().unwrap();
+    assert!(new_layer_unlisted(st, false, false), "a new layer would go beside the isolated sublayer");
+    assert!(!new_layer_unlisted(st, true, false), "a new sublayer goes inside it");
+    app.run("ui.newLayer", json!({"sublayer": true})).unwrap();
+    assert!(app.ui.dialog.is_some());
+    app.session.execute("object.exitIsolation", &json!({})).unwrap();
+    assert!(!new_layer_unlisted(app.session.active().unwrap(), false, true));
+}
+
 // ---- rows at every depth (layers, sublayers, groups, objects) ----
 
 /// Layer 1 holding rectangle `c` and a sublayer holding rectangle `a` and a group of
@@ -901,7 +1058,8 @@ fn guide_rows_have_their_own_eye_and_lock() {
     };
     let dimmed = |app: &VectorcraftApp| {
         let st = app.session.active().unwrap();
-        list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default()).iter().find(|r| r.guide.is_some()).unwrap().dim
+        let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+        rows.iter().find(|r| r.guide.is_some()).unwrap().dim
     };
     click_with(&mut app, &ctx, name, egui::Modifiers::NONE);
     assert_eq!(selected(&app), [guide]);
@@ -1295,7 +1453,7 @@ fn kinds() -> (VectorcraftApp, HashMap<&'static str, NodeId>) {
 /// for a guide's row).
 fn listed(app: &VectorcraftApp, ids: &HashMap<&'static str, NodeId>, query: &str, filter: &Filter) -> Vec<&'static str> {
     let st = app.session.active().unwrap();
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), query, filter);
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), query, filter);
     let name = |r: &Row| match r.guide {
         Some(_) => "ruler guide",
         None => ids.iter().find(|(_, id)| **id == r.node.id).map_or("?", |(name, _)| *name),
@@ -2608,10 +2766,10 @@ fn a_blends_spine_is_a_row_below_its_keys_that_selects_the_blend() {
     run(&mut app, "select.none", json!({}));
     expand(&mut app, &json!({})).unwrap();
     let st = app.session.active().unwrap();
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let kinds: Vec<(u64, bool)> = rows.iter().map(|r| (r.node.id.0, r.spine)).collect();
     assert_eq!(kinds[1..], [(blend.0, false), (b, false), (a, false), (blend.0, true)], "the spine row comes last in the blend");
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "rect", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "rect", &Filter::default());
     assert!(!rows.iter().any(|r| r.spine), "no spine row while searching");
     // Rows top down: the layer, the blend, both keys (with target circles), then the spine.
     let ctx = egui::Context::default();
@@ -2642,7 +2800,7 @@ fn ruler_guide_nodes_get_no_object_row() {
         let g = Node::new(doc.alloc_id(), NodeKind::RulerGuide { vertical: true, pos: 20.0, artboard: None });
         doc.insert(Some(l), usize::MAX, g).unwrap();
     }
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let ids: Vec<NodeId> = rows.iter().filter(|r| r.guide.is_none()).map(|r| r.node.id).collect();
     assert_eq!(ids, [second, first, rect]);
     // Each guide is a guide row of its layer instead.
@@ -2668,7 +2826,7 @@ fn guide_rows_list_by_index_whatever_the_node_order() {
     doc.move_node(first, Some(layer), usize::MAX).unwrap();
     let kids: Vec<NodeId> = doc.layers[0].children().unwrap().iter().map(|c| c.id).collect();
     assert_eq!(kids.last(), Some(&first));
-    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let rows = list_rows(&st.doc, st.isolation, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
     let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
     assert_eq!(indexes, [2, 1, 0]);
 }

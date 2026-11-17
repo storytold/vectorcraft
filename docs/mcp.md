@@ -5428,7 +5428,8 @@ and `layerRows`, the rows highlighted in the panel.
   Selection, and Delete or Backspace on highlighted rows: when a layer or sublayer among the rows holds art, hidden,
   locked or nested art included, dialog `confirm` asks "Delete this layer and its artwork?" for one layer, else "Delete
   the selected items and their artwork?"; OK deletes the rows it asked about in that document, one undo step, and
-  Cancel keeps them; an empty layer, a layer with only guides, and groups or objects alone are deleted at once),
+  Cancel keeps them; an empty layer, a layer with only guides, and groups or objects alone are deleted at once; in
+  isolation mode, with no row highlighted, a current layer outside the isolated art is an error and nothing is deleted),
   `layer.locate {id?}` (highlights the selected object's row; the panel opens the rows around it)
   and `layer.clippingMask.toggle`.
 - **Panel menu**: `layer.duplicate {ids?}`, `layer.merge {ids?}` (into the layer highlighted last, keeping the
@@ -5450,7 +5451,9 @@ and `layerRows`, the rows highlighted in the panel.
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
   dimImages, dimPercent; OK is one undo step; `ui.dialog.set` of `template` also sets `locked` and `dimImages`, as the
   checkbox does, except a Dim Images set before it; for several `ids` the dialog shows the first row's settings, and OK sends only the fields set with a
-  control or `ui.dialog.set`; Cmd/Ctrl+Alt+L runs `ui.newLayer` for a new layer), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
+  control or `ui.dialog.set`; Cmd/Ctrl+Alt+L runs `ui.newLayer` for a new layer; in isolation mode `ui.newLayer` for a
+  layer that would be outside the isolated art is an error, and the Layers panel's New Layer and New Sublayer are off
+  then), `ui.layersPanelOptions` opens Panel Options (`layersPanelOptions`:
   layersOnly, locateSelected, rowSize small|medium|large|other, otherSize, thumbLayers, thumbGroups, thumbObjects), and
   `ui.layersExpand {ids?, open?}` opens or closes rows as their triangles do (Alt-click: everything inside).
   With `locateSelected` on (Locate Selected Objects, off by default), when the last selected object changes on the canvas

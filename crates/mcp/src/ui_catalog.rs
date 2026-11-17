@@ -1061,19 +1061,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.layerDelete",
         "Delete Selection",
         "",
-        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
+        "{ids?|id?, doc?, confirmed?: bool} Delete Selection as the Layers panel runs it (its trash button, rows dropped on the trash, its menu, Delete and Backspace), on the rows layer.delete takes (default: the highlighted rows, else the current layer; in isolation mode a current layer outside the isolated art is an error and nothing is deleted). When a layer or sublayer among them holds art (an object other than a guide; hidden, locked and nested objects count) it asks first: dialog `confirm` with `message`; OK deletes those rows by id with layer.delete (one undo step), Cancel keeps them. OK runs ui.layerDelete again with the rows, `doc` (the document's uid) and `confirmed: true`: with another document active then, nothing is deleted. Other rows (an empty layer, groups and objects alone) and rows layer.delete refuses go to layer.delete at once → layer.delete's {deleted}, or null while the question is open",
     ),
     (
         "ui.rename",
         "Rename",
         "",
-        "{id?} open the Layers panel's name field on the row of layer, group or object id, as double-clicking the row's name does (the panel is shown and the layers around the row open): Enter renames it with layer.setProps (one undo step), Escape keeps the name. Without id: the highlighted row when a Layers panel row was clicked last, else the one selected object or group, else the one highlighted row, else the current layer. Several rows or objects, or a row the panel's search, filter or Show Layers Only hides, is an error and nothing opens → {id, name}",
+        "{id?} open the Layers panel's name field on the row of layer, group or object id, as double-clicking the row's name does (the panel is shown and the layers around the row open): Enter renames it with layer.setProps (one undo step), Escape keeps the name. Without id: the highlighted row when a Layers panel row was clicked last, else the one selected object or group, else the one highlighted row, else the current layer. Several rows or objects, a row the panel's search, filter or Show Layers Only hides, or in isolation mode an object outside the isolated art, is an error and nothing opens → {id, name}",
     ),
     (
         "ui.newLayer",
         "New Layer Options…",
         "Cmd+Alt+L",
-        "{sublayer?: bool} open Layer Options for a new layer (or a sublayer of the current layer), named and coloured as it would be: dialog `layerOptions` with mode new|newSublayer; OK runs layer.new or layer.newSublayer with the fields",
+        "{sublayer?: bool} open Layer Options for a new layer (or a sublayer of the current layer), named and coloured as it would be: dialog `layerOptions` with mode new|newSublayer; OK runs layer.new or layer.newSublayer with the fields. In isolation mode, a layer that would be outside the isolated art is an error and nothing opens",
     ),
     (
         "ui.newArtboard",
