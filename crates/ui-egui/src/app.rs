@@ -628,6 +628,8 @@ impl VectorcraftApp {
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
+        // After every window this pass may open, and before the palette's field takes the keyboard.
+        panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);
