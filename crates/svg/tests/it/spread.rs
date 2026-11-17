@@ -3,6 +3,7 @@
 //! draws the file as the canvas draws the gradient; SVG import reads `spreadMethod` as the
 //! gradient's spread; CSS writes repeating gradients.
 
+use craft_svg::tree::draw::resvg;
 use vectorcraft_color::{Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientSpread, GradientStop, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeKind};
 use vectorcraft_geom::{Point, Rect, Vec2, shapes};

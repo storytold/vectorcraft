@@ -608,7 +608,7 @@
 	Close Path…	પાથ બંધ કરો…
 	Close or Join	બંધ કરો અથવા જોડો
 	Close paths when ends are within:	છેડા આ અંતરમાં હોય ત્યારે પાથ બંધ કરો:
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ ખુલ્લી રાખે છે.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	ખુલ્લી પ્રોફાઇલના ગોળ છેડા બંધ કરો. આંશિક સ્વીપ તેમની કાપેલી બાજુઓ પણ બંધ કરે છે.
 	Closing bracket with no opening one	ખુલતા કૌંસ વગરનો બંધ થતો કૌંસ
 	Coincidence:	સંયોગ:
 	Collapse Panel Group	પેનલ ગ્રૂપ સંકોચો
@@ -1458,6 +1458,8 @@
 	Font Family, Style & Size	ફોન્ટ ફેમિલી, સ્ટાઇલ અને સાઇઝ
 	Font Family:	ફોન્ટ ફેમિલી:
 	Font List	ફોન્ટ યાદી
+	Show Similar Fonts	સમાન ફોન્ટ બતાવો
+	Clear Similar Fonts	સમાન ફોન્ટ સાફ કરો
 	Font Preview Size	ફોન્ટ પૂર્વાવલોકન સાઇઝ
 	Font Size	ફોન્ટ સાઇઝ
 	Font Style:	ફોન્ટ સ્ટાઇલ:
@@ -1575,6 +1577,7 @@
 	Connect Data Points	ડેટા પોઇન્ટ જોડો
 	Edge-to-Edge Lines	કિનારીથી કિનારી સુધી રેખાઓ
 	Draw Filled Lines	ભરેલી રેખાઓ દોરો
+	Line Width	રેખાની પહોળાઈ
 	Tick Values	ટિક મૂલ્યો
 	Override Calculated Values	ગણતરી કરેલાં મૂલ્યો બદલો
 	Divisions	વિભાગો
@@ -1739,6 +1742,10 @@
 	ICC Profile	ICC પ્રોફાઇલ
 	ICF Bottom/Left	ICF નીચે/ડાબે
 	ICF Box	ICF બૉક્સ
+	Show Sample	નમૂનો બતાવો
+	Hide Sample	નમૂનો છુપાવો
+	Max Ascent/Descent	મહત્તમ એસેન્ટ/ડિસેન્ટ
+	Max Ascender	મહત્તમ એસેન્ડર
 	ICF Top/Right	ICF ઉપર/જમણે
 	ID: {id}	ID: {id}
 	Identify Objects By	ઑબ્જેક્ટ્સ આ રીતે ઓળખો
@@ -1851,6 +1858,7 @@
 	Isolate Blending	બ્લેન્ડિંગ અલગ કરો
 	Isolate Group	ગ્રૂપ અલગ કરો
 	Isolate Selected Group	પસંદ કરેલું ગ્રૂપ અલગ કરો
+	Isolate Selected Path	પસંદ કરેલો પાથ અલગ કરો
 	Isolate Selected Object	પસંદ કરેલી ઑબ્જેક્ટ અલગ કરો
 	Isometric Bottom	આઇસોમેટ્રિક નીચે
 	Isometric Left	આઇસોમેટ્રિક ડાબે
@@ -2044,6 +2052,10 @@
 	Live curve fitting	લાઇવ કર્વ ફિટિંગ
 	Live preview	લાઇવ પૂર્વાવલોકન
 	Load Actions…	ઍક્શન લોડ કરો…
+	Reset Actions	ઍક્શન રીસેટ કરો
+	Replace the current actions with the default set?	વર્તમાન ઍક્શનને ડિફૉલ્ટ સેટથી બદલવા છે?
+	Append adds the default set after the current sets instead.	ઉમેરો તેના બદલે ડિફૉલ્ટ સેટને વર્તમાન સેટ પછી ઉમેરે છે.
+	Append	ઉમેરો
 	Load All Styles	બધી સ્ટાઇલ લોડ કરો
 	Load All Styles…	બધી સ્ટાઇલ લોડ કરો…
 	Load Character Styles	કેરેક્ટર સ્ટાઇલ લોડ કરો
@@ -2728,6 +2740,8 @@
 	Polygon	બહુકોણ
 	Polygon Properties:	બહુકોણના ગુણધર્મો:
 	Polygon Tool	બહુકોણ ટૂલ
+	Polygonal Lasso	બહુકોણીય લાસો
+	Polygonal Lasso Tool	બહુકોણીય લાસો ટૂલ
 	Portrait	પોટ્રેટ
 	Portuguese	પોર્ટુગીઝ
 	Position	સ્થિતિ
@@ -2986,6 +3000,22 @@
 	Remove Effect	ઇફેક્ટ દૂર કરો
 	Remove Effects	ઇફેક્ટ્સ દૂર કરો
 	Remove Gaps	ગેપ દૂર કરો
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	સામાન્ય સ્પર્શરેખાઓ…
+	Common Tangents	સામાન્ય સ્પર્શરેખાઓ
+	Tangents	સ્પર્શરેખાઓ
+	Centerline	કેન્દ્ર રેખા
+	External	બાહ્ય
+	Internal	આંતરિક
+@msg	select two closed paths	બે બંધ પાથ પસંદ કરો
+@msg	a selected path is open	પસંદ કરેલો એક પાથ ખુલ્લો છે
+@msg	a selected path is not convex	પસંદ કરેલો એક પાથ બહિર્ગોળ નથી
+@msg	a selected path has no area	પસંદ કરેલા એક પાથનું કોઈ ક્ષેત્રફળ નથી
+@msg	a selected path has more than 10000 segments	પસંદ કરેલા એક પાથમાં 10000 થી વધુ ખંડ છે
+@msg	the two paths have the same outline	બંને પાથની રૂપરેખા સમાન છે
+@msg	One path lies inside the other, so they have no common tangents	એક પાથ બીજાની અંદર છે, તેથી તેમની કોઈ સામાન્ય સ્પર્શરેખા નથી
+@msg	The paths overlap, so they have no internal tangents	પાથ એકબીજા પર ચઢેલા છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
+@msg	One path lies inside the other, so they have no internal tangents	એક પાથ બીજાની અંદર છે, તેથી તેમની કોઈ આંતરિક સ્પર્શરેખા નથી
 	Remove Guide	ગાઇડ દૂર કરો
 	Remove Item	આઇટમ દૂર કરો
 	Remove JavaScript File	JavaScript ફાઇલ દૂર કરો
@@ -3371,6 +3401,8 @@
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} માંથી {shown} પરિણામ. તેમને સંકુચિત કરવા લખતા રહો.|{n} માંથી {shown} પરિણામો. તેમને સંકુચિત કરવા લખતા રહો.
 	Recent Commands	તાજેતરના આદેશો
 	No recent commands	કોઈ તાજેતરના આદેશો નથી
+	Type to search commands, tools, panels and effects	આદેશો, ટૂલ્સ, પેનલ્સ અને ઇફેક્ટ્સ શોધવા માટે લખો
+	Recent	તાજેતરના
 	Search images	છબીઓ શોધો
 	Searching…	શોધી રહ્યા છીએ…
 	Secondary	ગૌણ
@@ -3586,6 +3618,11 @@
 	Show all plates	બધી પ્લેટ બતાવો
 	Show axis	અક્ષ બતાવો
 	Show color bars	રંગ બાર બતાવો
+	Show brightness and hue on wheel	વ્હીલ પર તેજ અને હ્યૂ બતાવો
+	Show saturation and hue on wheel	વ્હીલ પર સંતૃપ્તિ અને હ્યૂ બતાવો
+	Add Color Tool	રંગ ઉમેરો સાધન
+	Remove Color Tool	રંગ દૂર કરો સાધન
+	Remove Color	રંગ દૂર કરો
 	Find the selected colors in the artwork	પસંદ કરેલા રંગો આર્ટવર્કમાં શોધો
 	Show handles when multiple anchors are selected	બહુવિધ એન્કર પસંદ હોય ત્યારે હૅન્ડલ બતાવો
 	Show in Folder	ફોલ્ડરમાં બતાવો
@@ -4822,6 +4859,26 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	No objects are selected.	કોઈ ઑબ્જેક્ટ પસંદ કરેલ નથી.
 	Open a document to mark its fold lines.	તેની ફોલ્ડ લાઇન્સ ચિહ્નિત કરવા દસ્તાવેજ ખોલો.
 	Remove Fold Line Role	લાઇન પ્રકાર દૂર કરો
+	Check	ચેક કરો
+	Check Fold Lines	ફોલ્ડ લાઇન્સ ચેક કરો
+@msg	No cut lines are in the selection.	પસંદગીમાં કોઈ કટ લાઇન નથી.
+@msg	No cut lines are in the document.	ડૉક્યુમેન્ટમાં કોઈ કટ લાઇન નથી.
+@msg	The cut lines do not enclose an area.	કટ લાઇન્સ કોઈ વિસ્તાર ઘેરતી નથી.
+@msg	A cut line ends without meeting another cut line.	એક કટ લાઇન બીજી કટ લાઇનને મળ્યા વિના પૂરી થાય છે.
+@msg	A gap between cut lines was closed.	કટ લાઇન્સ વચ્ચેનો ગેપ બંધ કરવામાં આવ્યો.
+@msg	The fold lines are too complex to check.	ફોલ્ડ લાઇન્સ ચેક કરવા માટે ખૂબ જટિલ છે.
+@msg	A cut line and a crease lie on top of each other.	એક કટ લાઇન અને એક ક્રીઝ લાઇન એકબીજા પર છે.
+@msg	No cut lines are among the given objects.	આપેલા ઑબ્જેક્ટ્સમાં કોઈ કટ લાઇન નથી.
+@msg	Two fold lines lie on top of each other.	બે ફોલ્ડ લાઇન્સ એકબીજા પર છે.
+@msg	A crease ends inside a panel.	એક ક્રીઝ લાઇન પેનલની અંદર પૂરી થાય છે.
+@msg	A crease does not divide two panels.	એક ક્રીઝ લાઇન બે પેનલને અલગ કરતી નથી.
+@msg	A crease lies outside the cut outline, wholly or in part.	એક ક્રીઝ લાઇન પૂરેપૂરી અથવા આંશિક રીતે કટ આઉટલાઇનની બહાર છે.
+@msg	The pieces of a hinge are not on one straight line.	એક હિન્જના ભાગો એક સીધી લાઇન પર નથી.
+@msg	A gap between cut lines is too narrow to tell apart.	કટ લાઇન્સ વચ્ચેનો ગેપ ઓળખવા માટે ખૂબ સાંકડો છે.
+@msg	A cut-out area holds other fold lines or another blank.	એક કટ-આઉટ વિસ્તારમાં બીજી ફોલ્ડ લાઇન્સ અથવા બીજું બ્લેન્ક છે.
+@msg	A panel is not joined to the rest by a crease.	એક પેનલ કોઈ ક્રીઝ લાઇનથી બાકીના સાથે જોડાયેલી નથી.
+@msg	A fold line is on a non-printing layer.	એક ફોલ્ડ લાઇન નોન-પ્રિન્ટિંગ લેયર પર છે.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	પેનલ: {panels}, હિન્જ: {hinges}, ભૂલો: {errors}, ચેતવણીઓ: {warnings}
 	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર

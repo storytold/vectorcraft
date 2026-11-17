@@ -1007,6 +1007,10 @@ font-technology	Variable	可變
 	Cap Height	大寫字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Show Sample	顯示樣本
+	Hide Sample	隱藏樣本
+	Max Ascent/Descent	最大上升/下降
+	Max Ascender	最大上伸部
 	Em Dash	長破折號
 	Em Space	全形空格
 	Embed	嵌入
@@ -1332,6 +1336,8 @@ file-filter	Templates	範本
 	Font Family & Style	字體家族與樣式
 	Font Family, Style & Size	字體家族、樣式與大小
 	Font List	字體清單
+	Show Similar Fonts	顯示相似字體
+	Clear Similar Fonts	清除相似字體
 	Font Preview Size	字體預覽大小
 	Font Size	字體大小
 	Variable Font	可變字體
@@ -1447,6 +1453,7 @@ file-filter	Templates	範本
 	Connect Data Points	連接資料點
 	Edge-to-Edge Lines	邊到邊線條
 	Draw Filled Lines	繪製填色線條
+	Line Width	線寬
 	Tick Values	刻度值
 	Override Calculated Values	覆寫計算值
 	Divisions	刻度數
@@ -1546,6 +1553,11 @@ file-filter	Templates	範本
 	Show smooth color wheel	顯示平滑色輪
 	Show segmented color wheel	顯示分段色輪
 	Show color bars	顯示顏色條
+	Show brightness and hue on wheel	在色輪上顯示亮度和色相
+	Show saturation and hue on wheel	在色輪上顯示飽和度和色相
+	Add Color Tool	新增顏色工具
+	Remove Color Tool	移除顏色工具
+	Remove Color	移除顏色
 	Find the selected colors in the artwork	在圖稿中尋找所選顏色
 	Harmony Sets	色彩調和組
 	Height	高度
@@ -1953,6 +1965,7 @@ file-filter	Templates	範本
 @msg	no history to clear	沒有可清除的步驟記錄
 @msg	no history state {v}	沒有步驟記錄 {v}
 @msg	Expand Appearance: the selection has a basic appearance	展開外觀：選取範圍只有基本外觀
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	部分點陣效果未轉換為影像：它們會超過 1,024 個影像或總計 256 百萬像素
 @msg	select (or target) objects whose appearance isn't basic	請選取 (或指定目標) 外觀不是基本外觀的物件
 @msg	{C}: no effect at index {from}	{C}：索引 {from} 處沒有效果
 @msg	Expand: no gradient fills	展開：沒有漸層填色
@@ -3038,6 +3051,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Lasso Tool	套索工具
 	Enclosing Lasso Tool	包圍套索工具
 	Enclosing Lasso	包圍套索
+	Polygonal Lasso Tool	多邊形套索工具
+	Polygonal Lasso	多邊形套索
 	Last Effect: {name}	最後一次效果：{name}
 	Last Effect: {}	上次效果：{}
 	Last Effect…	最後一次效果…
@@ -3809,6 +3824,10 @@ diagnostics	ui	介面
 	Play Current Selection	播放目前選取項目
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
+	Reset Actions	重設動作
+	Replace the current actions with the default set?	要用預設動作組取代目前的動作嗎？
+	Append adds the default set after the current sets instead.	「附加」會改為將預設動作組加到目前動作組之後。
+	Append	附加
 	Plug-in Info	增效模組資訊
 	Plug-ins	增效模組
 	Plug-in…	增效模組…
@@ -4447,6 +4466,7 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
 	No recent commands	沒有最近使用的指令
+	Type to search commands, tools, panels and effects	輸入以搜尋指令、工具、面板與效果
 	Search Commands…	搜尋指令…
 	Secondary	次要
 	Section Symbol	章節符號
@@ -5495,6 +5515,7 @@ imageTrace	Outline	輪廓
 	 to set spacing and orientation	可設定間距與方向
 	:	：
 	Isolate Selected Group	隔離選取的群組
+	Isolate Selected Path	隔離選取的路徑
 	Isolate Selected Object	隔離選取的物件
 	Release Clipping Mask	釋放剪裁遮色片
 	Make Compound Path	製作複合路徑
@@ -6040,7 +6061,7 @@ lighting	Light	光源
 	X:	X：
 	Y:	Y：
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	封閉開放輪廓的圓形端部。部分旋轉的切割側面保持開放。
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	封閉開放輪廓的圓形端部。部分旋轉的切割側面也會封閉。
 	Distance	距離
 	Make Image Dynamic	使影像動態化
 	Import Data Sets…	匯入資料集…
@@ -6146,6 +6167,7 @@ lighting	Light	光源
 	Single Word Justification:	單字對齊：
 	Full Justify	全部強迫齊行
 	Minimum must not exceed Desired, nor Desired Maximum.	最小值不可超過所需值，所需值不可超過最大值。
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`：最小值不可超過所需值，所需值不可超過最大值
 	Minimum	最小值
 	Justification	對齊設定
 	Add filters from the list above	從上方清單新增濾鏡
@@ -7096,6 +7118,22 @@ breakText	Glyphs	字符
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號
 @msg	select paths, or segments, to divide	請選取要分割的路徑或線段
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	公切線…
+	Common Tangents	公切線
+	Tangents	切線
+	Centerline	中心線
+	External	外部
+	Internal	內部
+@msg	select two closed paths	請選取兩條封閉路徑
+@msg	a selected path is open	所選路徑是開放的
+@msg	a selected path is not convex	所選路徑不是凸形
+@msg	a selected path has no area	所選路徑沒有面積
+@msg	a selected path has more than 10000 segments	所選路徑的線段超過 10000 條
+@msg	the two paths have the same outline	兩條路徑的輪廓相同
+@msg	One path lies inside the other, so they have no common tangents	一條路徑位於另一條之內，因此它們沒有公切線
+@msg	The paths overlap, so they have no internal tangents	路徑互相重疊，因此它們沒有內公切線
+@msg	One path lies inside the other, so they have no internal tangents	一條路徑位於另一條之內，因此它們沒有內公切線
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
@@ -7138,6 +7176,11 @@ breakText	Glyphs	字符
 	Malayalam	馬來亞拉姆文
 	Odia	歐利亞文
 	Urdu	烏都文
+	Sanskrit	梵文
+	Nepali	尼泊爾文
+	Assamese	阿薩姆文
+	Konkani	貢根文
+	Sindhi	信德文
 	VectorCraft {release} and later (version {n})	VectorCraft {release} 及更新版本 (版本 {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	將所有開啟的文件匯出為 PDF
@@ -7171,7 +7214,7 @@ breakText	Glyphs	字符
 @msg	stroke cannot be set on a symbol instance	無法為符號範例設定 stroke
 @msg	fill on a symbol instance must be a solid color or none	符號範例的 fill 必須是純色或 none
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	無法為沒有「轉換為形狀」或「外框物件」效果的影像設定 {key}
-@msg	pass newName, registration, exportType, nineSlice and/or type	請提供 newName、registration、exportType、nineSlice 和/或 type
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	請提供 newName、registration、exportType、nineSlice、type 和/或 alignToPixelGrid
 	Text Flow	文字流向
 	By Rows	依列
 	By Columns	依欄
@@ -7394,6 +7437,8 @@ breakText	Glyphs	字符
 @msg	No bridge of this width fits across the selected art	此寬度的連接橋無法放入所選圖稿
 @msg	Some islands could not be joined to the area around the art	部分孤島無法連接到圖稿周圍的區域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必須介於 {lo} 到 {hi} pt 之間
+@msg	`angle` must be from -180 to 180 degrees	`angle` 必須介於 -180 到 180 度之間
+@msg	`roundness` must be from 1 to 100%	`roundness` 必須介於 1 到 100% 之間
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必須是介於 1 到 {MAX_BRIDGES_PER_ISLAND} 的整數
 	Weed Box and Lines…	除廢框與除廢線…
 	Weed Box and Lines	除廢框與除廢線
@@ -8900,7 +8945,9 @@ breakText	Glyphs	字符
 @msg	position must be normal, superscript or subscript	position 必須是 normal、superscript 或 subscript
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position 必須是 topLeft、topRight、bottomLeft 或 bottomRight
 @msg	positions must be between 0 and 100000 pt	positions 必須介於 0 到 100000 pt 之間
+@msg	ppi can't be more than {max} for this image	此影像的 ppi 不能超過 {max}
 @msg	ppi must be a positive number, not {ppi}	ppi 必須是正數，而非 {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim 會保持影像像素不變：請勿指定 ppi
 @msg	ppi must be between 1 and 2400	ppi 必須介於 1 和 2400 之間
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` 不是 transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape 必須是 clippingMask|transparency
@@ -9360,4 +9407,24 @@ breakText	Glyphs	字符
 	No objects are selected.	未選取任何物件。
 	Open a document to mark its fold lines.	開啟文件以標記其摺線。
 	Remove Fold Line Role	移除線條類型
+	Check	檢查
+	Check Fold Lines	檢查摺線
+@msg	No cut lines are in the selection.	選取範圍中沒有切割線。
+@msg	No cut lines are in the document.	文件中沒有切割線。
+@msg	The cut lines do not enclose an area.	切割線未圍成任何區域。
+@msg	A cut line ends without meeting another cut line.	一條切割線未與其他切割線相接就結束了。
+@msg	A gap between cut lines was closed.	已封閉切割線之間的間隙。
+@msg	The fold lines are too complex to check.	摺線過於複雜，無法檢查。
+@msg	A cut line and a crease lie on top of each other.	一條切割線與一條壓痕線重疊。
+@msg	No cut lines are among the given objects.	指定的物件中沒有切割線。
+@msg	Two fold lines lie on top of each other.	兩條摺線重疊。
+@msg	A crease ends inside a panel.	一條壓痕線在面板內部結束。
+@msg	A crease does not divide two panels.	一條壓痕線沒有分隔兩個面板。
+@msg	A crease lies outside the cut outline, wholly or in part.	一條壓痕線全部或部分位於切割輪廓之外。
+@msg	The pieces of a hinge are not on one straight line.	鉸鏈的各段不在一條直線上。
+@msg	A gap between cut lines is too narrow to tell apart.	切割線之間的間隙太窄，無法區分。
+@msg	A cut-out area holds other fold lines or another blank.	一個鏤空區域包含其他摺線或另一個展開圖。
+@msg	A panel is not joined to the rest by a crease.	一個面板沒有透過任何壓痕線與其餘部分相連。
+@msg	A fold line is on a non-printing layer.	一條摺線位於不列印的圖層上。
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，鉸鏈：{hinges}，錯誤：{errors}，警告：{warnings}
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小

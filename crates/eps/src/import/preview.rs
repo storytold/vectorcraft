@@ -32,12 +32,11 @@ pub(super) fn preview(bytes: &[u8], ps: &[u8], frame: Rect) -> Option<Preview> {
 const MAX_PREVIEW_PIXELS: u64 = 1 << 26;
 
 fn tiff_rgba(tiff: &[u8]) -> Option<image::RgbaImage> {
-    let size = image::ImageReader::with_format(std::io::Cursor::new(tiff), image::ImageFormat::Tiff).into_dimensions();
-    if size.is_ok_and(|(w, h)| u64::from(w) * u64::from(h) > MAX_PREVIEW_PIXELS) {
-        return None;
-    }
-    match image::load_from_memory_with_format(tiff, image::ImageFormat::Tiff) {
-        Ok(img) => Some(img.to_rgba8()),
+    let mut opts = craft_image_codecs::DecodeOptions::default();
+    opts.limits.max_pixels = MAX_PREVIEW_PIXELS;
+    match craft_image_codecs::decode_as_with(craft_image_codecs::Format::Tiff, tiff, &opts) {
+        Ok(img) => image::RgbaImage::from_raw(img.width(), img.height(), img.to_rgba8()),
+        Err(craft_image_codecs::CodecError::LimitExceeded(_)) => None,
         Err(_) => crate::tiff::palette_rgba(tiff),
     }
 }
@@ -48,8 +47,9 @@ fn image_doc(img: image::RgbaImage, frame: Rect) -> Option<Document> {
     if w == 0 || h == 0 {
         return None;
     }
-    let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    let raw = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, img.into_raw())
+        .ok()?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
     let mut doc = Document::new(frame.width(), frame.height());
     let blob = ImageBlob::new("image/png", png);
     let key = blob.content_key();
