@@ -746,6 +746,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     sync(app, d);
     sync_theme(app, d);
     sync_weights(app, d);
+    // The fields as the dialog read the art are where Undo Changes starts, also when the pointer is
+    // down on the first frame and the first step is recorded only on release.
+    app.ui.recolor_history.start(d);
     let t = Tokens::get(ui.ctx());
     let picking = d.bool(THEME_PICKER);
     let mut stepped = None;
@@ -903,6 +906,13 @@ fn seed(app: &mut VectorcraftApp, d: &Dialog) {
 }
 
 impl History {
+    /// Take the fields of `d` as those after the last step when no step has them yet.
+    fn start(&mut self, d: &Dialog) {
+        if self.base.is_none() {
+            self.base = Some(snapshot(d));
+        }
+    }
+
     /// Whether the fields of `d` differ from those after the last step.
     fn pending(&self, d: &Dialog) -> bool {
         self.base.as_ref().is_some_and(|b| STEP_FIELDS.iter().any(|k| d.fields.get(*k) != b.get(*k)))

@@ -1742,3 +1742,25 @@ fn the_recolor_undo_and_redo_commands_step_the_open_dialog() {
     dialog_frame(&mut app, &ctx);
     assert!(!dialogs::recolor::can_step(&app, true) && !dialogs::recolor::can_step(&app, false), "a new opening");
 }
+
+/// An edit made while the pointer is held from the dialog's first frame is a step from the fields
+/// the dialog opened with, not where Undo Changes starts.
+#[test]
+fn an_edit_with_the_pointer_down_from_the_first_frame_is_a_step() {
+    let mut app = app();
+    let ctx = context();
+    art(&mut app, &["#ff0000", "#e01010", "#0000ff", "#1010e0"]);
+    app.run("ui.recolorDialog", json!({})).unwrap();
+    let at = Pos2::new(2.0, 2.0);
+    let button = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(at), button(true)], 1.0, |app, ui| dialogs::show(app, ui.ctx()));
+    let start = field(&app, "rows");
+    assert_eq!(start.as_array().unwrap().len(), 4);
+    set(&mut app, "colors", json!(2));
+    frame(&mut app, &ctx, vec![], 2.0, |app, ui| dialogs::show(app, ui.ctx()));
+    frame(&mut app, &ctx, vec![button(false)], 3.0, |app, ui| dialogs::show(app, ui.ctx()));
+    assert_eq!(field(&app, "rows").as_array().unwrap().len(), 2);
+    let r = app.run("ui.recolorUndo", json!({})).unwrap();
+    assert_eq!(r, json!({"changed": true, "canUndo": false, "canRedo": true}));
+    assert_eq!((field(&app, "colors"), field(&app, "rows")), (Value::Null, start));
+}
