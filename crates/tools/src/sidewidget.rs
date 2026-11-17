@@ -80,11 +80,11 @@ pub fn over_widget(cx: &ToolContext, p: Point) -> bool {
 pub fn sides_after(from: u32, steps: i64) -> u32 {
     let (min, max) = (i64::from(MIN_SIDES), i64::from(MAX_SIDES));
     let to = if from <= MAX_SIDES {
-        i64::from(from) + steps
+        i64::from(from).saturating_add(steps)
     } else if steps >= 0 {
         return from;
     } else {
-        max + 1 + steps
+        (max + 1).saturating_add(steps)
     };
     to.clamp(min, max) as u32
 }
@@ -116,7 +116,12 @@ impl SideDrag {
         Some(Self { widget, bx, start: ev.pos, moved: false, began: false, sides: widget.sides, at: ev.pos })
     }
 
+    /// A pointer position that is not finite leaves the count and the readout as they are. A drag
+    /// too long to measure counts as the most steps in its direction.
     pub fn drag(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        if !p.x.is_finite() || !p.y.is_finite() {
+            return vec![];
+        }
         self.at = p;
         if !self.moved {
             if p.distance(self.start) < cx.tol(3.0) {
@@ -126,7 +131,11 @@ impl SideDrag {
         }
         let down = (self.bx.to_local(p).y - self.bx.to_local(self.start).y) * cx.zoom;
         let steps = (down / STEP_PX).trunc();
-        let sides = sides_after(self.widget.sides, if steps.is_finite() { steps as i64 } else { 0 });
+        if steps.is_nan() {
+            return vec![];
+        }
+        // The cast saturates: an infinite count of steps becomes i64::MAX or i64::MIN.
+        let sides = sides_after(self.widget.sides, steps as i64);
         if sides == self.sides {
             return vec![];
         }
@@ -211,6 +220,47 @@ mod tests {
         assert_eq!(sides_after(40, -1), 11);
         assert_eq!(sides_after(40, -2), 10);
         assert_eq!(sides_after(1000, -100), 3);
+    }
+
+    #[test]
+    fn the_longest_drags_stay_within_three_and_eleven() {
+        assert_eq!(sides_after(5, i64::MAX), 11);
+        assert_eq!(sides_after(5, i64::MIN), 3);
+        assert_eq!(sides_after(3, i64::MAX), 11);
+        assert_eq!(sides_after(11, i64::MAX), 11);
+        assert_eq!(sides_after(11, i64::MIN), 3);
+        assert_eq!(sides_after(40, i64::MAX), 40);
+        assert_eq!(sides_after(40, i64::MIN), 3);
+    }
+
+    /// A drag far past the document, even one too long to measure, stops at 11 down and 3 up; a
+    /// pointer position that is not finite keeps the count it had.
+    #[test]
+    fn a_huge_or_invalid_drag_stays_within_three_and_eleven() {
+        let (d, _, s) = polygon_doc(5, Affine::translate((300.0, 300.0)));
+        let p = paint();
+        // At zoom 1 the step count is finite and past i64; at zoom 4 the distance itself is infinite.
+        for zoom in [1.0, 4.0] {
+            let c = ToolContext { zoom, ..cx(&d, &s, &p) };
+            let (w, _) = SideWidget::for_tool(&c).unwrap();
+            let far = |y: f64| Point::new(w.at.x, y);
+            let mut t = SelectionTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, w.at));
+            assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, far(1e308)))), [11], "zoom {zoom}");
+            assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, far(-1e308)))), [3], "zoom {zoom}");
+            assert_eq!(t.pointer(&c, &ev(PointerKind::Up, far(-1e308))), vec![Action::Commit]);
+        }
+        let c = cx(&d, &s, &p);
+        let (w, _) = SideWidget::for_tool(&c).unwrap();
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, w.at));
+        let shown = w.at + vectorcraft_geom::Vec2::new(0.0, 24.0);
+        assert_eq!(sides_of(&t.pointer(&c, &ev(PointerKind::Drag, shown))), [7]);
+        for bad in [Point::new(f64::NAN, w.at.y), Point::new(w.at.x, f64::INFINITY), Point::new(w.at.x, f64::NEG_INFINITY)] {
+            assert!(t.pointer(&c, &ev(PointerKind::Drag, bad)).is_empty(), "{bad:?}");
+        }
+        assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Measure { p, text } if *p == shown && text == "Sides: 7")));
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Up, shown)), vec![Action::Commit]);
     }
 
     /// The widget sits 16 px right of the middle of the box's right side, at any zoom; only one
