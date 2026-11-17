@@ -3267,7 +3267,9 @@ the results. VectorCraft limits a query to 1024 characters and rejects a longer 
 `{query, results: [{kind, id, label, path, shortcut}], selected}`. `kind` is `tool`, `command`, or
 `tutorial`; `selected` is a zero-based result index or `null`. Search matches all the query's
 words without regard to case, using translated tool and command labels as well as their English
-labels, ids, and menu paths. Tutorial text remains in English.
+labels, ids, and menu paths. Tutorial text remains in English. After a shortcut or the interface
+language changes, the kept results show the current shortcuts, labels, and menu paths, with the
+query and the selected result unchanged.
 
 `help.discover.choose {index}` shows that result. A tool result marks its toolbar location without
 choosing the tool. A command result shows its menu path and current shortcut without running it.

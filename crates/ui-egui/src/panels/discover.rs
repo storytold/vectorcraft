@@ -16,6 +16,14 @@ pub struct Hit {
     pub label: String,
     pub path: Vec<String>,
     pub shortcut: String,
+    /// The English label and menu path that `label` and `path` translate, and a command's menu
+    /// params, kept to bring a retained result up to date ([`refresh`]).
+    #[serde(skip)]
+    english_label: String,
+    #[serde(skip)]
+    english_path: Vec<String>,
+    #[serde(skip)]
+    params: Value,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -24,11 +32,42 @@ pub struct View {
     pub results: Vec<Hit>,
     pub selected: Option<usize>,
     pub focus: bool,
+    /// The shortcut generation and language the results were last brought up to date for.
+    current_for: Option<(u64, crate::i18n::Lang)>,
 }
 
 fn matches(query: &str, text: &str) -> bool {
     let text = text.to_lowercase();
     query.split_whitespace().all(|word| text.contains(word))
+}
+
+fn now() -> (u64, crate::i18n::Lang) {
+    (crate::shortcut_editor::GENERATION.load(std::sync::atomic::Ordering::Relaxed), crate::i18n::current())
+}
+
+/// Updates the retained results' labels, menu paths and shortcuts after a shortcut or the UI
+/// language changes, keeping the query, the results' order and the selected result.
+fn refresh(app: &mut VectorcraftApp) {
+    let stamp = now();
+    if app.ui.discover.current_for == Some(stamp) {
+        return;
+    }
+    let lang = stamp.1;
+    for hit in &mut app.ui.discover.results {
+        match hit.kind {
+            "tool" => {
+                hit.label = crate::i18n::tr(lang, &hit.english_label).into();
+                hit.shortcut = crate::shortcut_editor::tool_shortcut(&hit.id).unwrap_or_default().into();
+            }
+            "command" => {
+                hit.label = crate::i18n::tr(lang, &hit.english_label).into();
+                hit.path = hit.english_path.iter().map(|part| crate::i18n::tr(lang, part).into()).collect();
+                hit.shortcut = menus::item_shortcut(&hit.id, &hit.params).or_else(|| menus::shortcut_of(&hit.id)).unwrap_or_default().into();
+            }
+            _ => {}
+        }
+    }
+    app.ui.discover.current_for = Some(stamp);
 }
 
 fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
@@ -47,6 +86,9 @@ fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
                 label: label.into(),
                 path: vec![],
                 shortcut: crate::shortcut_editor::tool_shortcut(tool.id).unwrap_or_default().into(),
+                english_label: tool.label.into(),
+                english_path: vec![],
+                params: Value::Null,
             });
         }
     }
@@ -55,7 +97,16 @@ fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
         let label = crate::i18n::tr(lang, &entry.label);
         let path: Vec<String> = entry.path.iter().map(|part| crate::i18n::tr(lang, part).into()).collect();
         if matches(&query, &format!("{} {label} {} {} {id}", entry.label, entry.path.join(" "), path.join(" "))) {
-            hits.push(Hit { kind: "command", id, label: label.into(), path, shortcut: entry.shortcut });
+            hits.push(Hit {
+                kind: "command",
+                id,
+                label: label.into(),
+                path,
+                shortcut: entry.shortcut,
+                english_label: entry.label,
+                english_path: entry.path,
+                params: entry.params,
+            });
         }
     }
     for skill in super::learn::catalog::SKILLS {
@@ -67,6 +118,9 @@ fn search(app: &VectorcraftApp, query: &str) -> Vec<Hit> {
                     label: tutorial.title.into(),
                     path: vec![skill.title.into()],
                     shortcut: String::new(),
+                    english_label: tutorial.title.into(),
+                    english_path: vec![skill.title.into()],
+                    params: Value::Null,
                 });
             }
         }
@@ -79,6 +133,7 @@ fn results(app: &VectorcraftApp) -> Value {
 }
 
 fn set_query(app: &mut VectorcraftApp, query: &str) {
+    app.ui.discover.current_for = Some(now());
     app.ui.discover.results = search(app, query);
     app.ui.discover.query = query.into();
     app.ui.discover.selected = None;
@@ -89,6 +144,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
     if let Err(e) = vectorcraft_engine::cmd::params::check_keys(id, spec.3, p) {
         return Some(Err(e.to_string()));
     }
+    refresh(app);
     Some(match id {
         "help.discover" | "help.discover.search" => {
             let query = match p.get("query") {
@@ -141,6 +197,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    refresh(app);
     let mut query = app.ui.discover.query.clone();
     let field = ui.add(egui::TextEdit::singleline(&mut query).char_limit(MAX_QUERY).hint_text(tl!("Search")).desired_width(f32::INFINITY));
     if std::mem::take(&mut app.ui.discover.focus) {

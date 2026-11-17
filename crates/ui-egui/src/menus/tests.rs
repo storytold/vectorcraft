@@ -113,6 +113,41 @@ fn discover_rejects_invalid_search_and_selection_parameters() {
 }
 
 #[test]
+fn discover_results_show_the_current_shortcut_and_language_after_a_change() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let found = app.run("help.discover.search", json!({"query": "file.newDialog"})).unwrap();
+    let index = found["results"].as_array().unwrap().iter().position(|hit| hit["id"] == "file.newDialog").unwrap();
+    assert_eq!(found["results"][index]["shortcut"], "Cmd+N");
+    app.run("help.discover.choose", json!({"index": index})).unwrap();
+    app.run("window.panel.close", json!({"panel": "discover"})).unwrap();
+    app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F9"})).unwrap();
+
+    let reopened = app.run("help.discover", json!({})).unwrap();
+    assert_eq!(reopened["query"], "file.newDialog");
+    assert_eq!(reopened["selected"], index);
+    assert_eq!(reopened["results"][index]["id"], "file.newDialog");
+    assert_eq!(reopened["results"][index]["shortcut"], "Cmd+Alt+Shift+F9");
+    let picked = app.run("help.discover.choose", json!({"index": index})).unwrap();
+    assert_eq!(picked["result"]["shortcut"], "Cmd+Alt+Shift+F9");
+    assert_eq!(picked["location"]["shortcut"], "Cmd+Alt+Shift+F9");
+
+    app.run("shortcuts.set", json!({"id": "file.newDialog", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, crate::panels::discover::show);
+    assert!(text.contains(&pretty_shortcut("Cmd+Alt+Shift+F8")), "{text}");
+    assert!(!text.contains(&pretty_shortcut("Cmd+Alt+Shift+F9")), "{text}");
+
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_ne!(crate::i18n::tr(de, "New…"), "New…");
+    crate::i18n::set_current(de);
+    let back = app.run("help.discover.back", json!({})).unwrap();
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_eq!(back["query"], "file.newDialog");
+    assert_eq!(back["results"][index]["label"], crate::i18n::tr(de, "New…"));
+    assert_eq!(back["results"][index]["path"][0], crate::i18n::tr(de, "File"));
+    crate::shortcut_editor::sync(&crate::state::UiState::default());
+}
+
+#[test]
 fn help_bar_toggle_is_independent_and_saved_in_workspaces() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     assert!(app.ui.help_bar);
