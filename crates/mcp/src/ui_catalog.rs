@@ -873,6 +873,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     (
+        "help.clearRecentCommands",
+        "Clear Recent Commands",
+        "",
+        "{} empty the recent picks of Help › Search Commands (the list an empty search shows and the Recent Commands list) and the saved list; a pick of it is not kept as a recent pick. Not enabled while no picks are saved",
+    ),
+    (
         "help.safeMode",
         "Safe Mode…",
         "",
