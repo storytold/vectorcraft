@@ -78,7 +78,7 @@ impl Monitor {
         let scale = self.scale * zoom;
         let [x, y] = self.pos;
         let [w, h] = self.size;
-        DockMonitor { name, rect: [x, y, w, h].map(|v| v as f32 / scale), scale }
+        DockMonitor { name, rect: [x, y, w, h].map(|v| v as f32 / scale), scale, work_area: None }
     }
 }
 
@@ -248,13 +248,13 @@ mod tests {
     fn floating_panels_get_monitors_in_the_points_a_window_on_them_reports() {
         let dock = |m: Monitor, zoom| m.docking(Some("m".into()), zoom);
         let plain = dock(monitor(1920, 0, 1920, 1080, 1.0), 1.0);
-        assert_eq!(plain, DockMonitor { name: Some("m".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 });
+        assert_eq!(plain, DockMonitor { name: Some("m".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None });
         // A window at (3000, 200) on this monitor reports (1500, 100).
         let scaled = dock(monitor(1920, -200, 3840, 2160, 2.0), 1.0);
-        assert_eq!(scaled, DockMonitor { name: Some("m".into()), rect: [960.0, -100.0, 1920.0, 1080.0], scale: 2.0 });
+        assert_eq!(scaled, DockMonitor { name: Some("m".into()), rect: [960.0, -100.0, 1920.0, 1080.0], scale: 2.0, work_area: None });
         // The UI zoom divides what egui reports as well.
         let zoomed = dock(monitor(-2560, 0, 2560, 1440, 1.0), 1.25);
-        assert_eq!(zoomed, DockMonitor { name: Some("m".into()), rect: [-2048.0, 0.0, 2048.0, 1152.0], scale: 1.25 });
+        assert_eq!(zoomed, DockMonitor { name: Some("m".into()), rect: [-2048.0, 0.0, 2048.0, 1152.0], scale: 1.25, work_area: None });
     }
 
     #[test]

@@ -527,8 +527,8 @@ fn reopened(saved: &craft_ui::docking::Layout<String>, monitors: &[crate::DockMo
 /// Two monitors side by side, with the main window on the left one (#5582).
 #[test]
 fn a_floating_panel_reopens_on_the_monitor_where_it_was_left() {
-    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
-    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
+    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
     let both = [left.clone(), right.clone()];
 
     let mut h = Harness::new();
