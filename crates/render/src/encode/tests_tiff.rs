@@ -232,3 +232,16 @@ fn lzw_strips_read_back_as_weezl_reads_them() {
         assert!(same >= weezl.len().min(4_300), "{} bytes: the same for {same}", strip.len());
     }
 }
+
+#[test]
+fn shared_packbits_preserves_packet_bytes_and_append_contract() {
+    let mut out = vec![42];
+    t::packbits(b"aabbccc", &mut out);
+    assert_eq!(out, [42, 3, b'a', b'a', b'b', b'b', 254, b'c']);
+    let before = out.clone();
+    t::packbits(&[], &mut out);
+    assert_eq!(out, before);
+    let mut run = vec![];
+    t::packbits(&[7; 129], &mut run);
+    assert_eq!(run, [129, 7, 0, 7]);
+}

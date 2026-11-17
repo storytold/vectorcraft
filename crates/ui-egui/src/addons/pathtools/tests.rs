@@ -25,6 +25,7 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
         ("Trim at Crossings Tool", "trimAtCrossings"),
     ] {
         let e = under(label).expect(label);
+        assert_eq!(vectorcraft_tools::tool_info(tool).map(|t| t.label), Some(label), "the toolbar's label");
         assert_eq!((e.command.as_deref(), &e.params), (Some("tool.select"), &json!({ "tool": tool })));
         menus::invoke(&mut app, "tool.select", e.params.clone());
         assert_eq!(app.session.tool_id(), tool);
