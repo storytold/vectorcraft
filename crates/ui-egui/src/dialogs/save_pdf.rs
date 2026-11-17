@@ -7,7 +7,9 @@
 //! `document.pdfSettings`. Save Preset… names the settings as a preset (`pdf.preset.save`).
 //! Opened from Export As with Use Artboards off (`__artBounds`), the dialog has no Artboards
 //! section, and OK writes one page of the visible art's bounds through [`io::export`]; opened
-//! from Export Selection (`__selection` too), the page is the selection's crop.
+//! from Export Selection (`__selection` too), the page is the selection's crop. While Alt (Option
+//! on macOS) is held, Cancel reads Reset, which puts the options back to the chosen preset's
+//! settings and leaves the dialog open (`ui.dialogReset`).
 //!
 //! The same dialog edits a preset (kind `pdfPreset`, from Edit → PDF Presets): a `name` and
 //! `description` instead of the preset and artboards, and OK saves the preset.
@@ -30,8 +32,15 @@ use crate::{VectorcraftApp, io, widgets};
 
 pub(super) const KIND: &str = "savePdf";
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Save PDF").into(), body, confirm, ok: Some("Save PDF"), inputs: |_| &["path"], ..DialogSpec::FORM };
+pub(super) const SPEC: DialogSpec = DialogSpec {
+    heading: |_| tl!("Save PDF").into(),
+    body,
+    confirm,
+    ok: Some("Save PDF"),
+    inputs: |_| &["path"],
+    reset: Some(reset),
+    ..DialogSpec::FORM
+};
 
 /// The dialog kind of the preset editor (New / Edit in Edit → PDF Presets).
 pub(super) const PRESET_KIND: &str = "pdfPreset";
@@ -502,11 +511,31 @@ fn preset_rows(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 fn apply_preset(app: &mut VectorcraftApp, d: &mut Dialog, name: &str) {
     match settings_fields(app, &json!({ "preset": name })) {
         Ok(settings) => {
-            d.fields.extend(settings);
+            replace_settings(d, settings);
             d.fields.insert("preset".into(), json!(name));
         }
         Err(e) => app.status(e),
     }
+}
+
+/// The UI-only fields that stand for options: the Security section's password checkboxes.
+const OPTION_FLAGS: [&str; 2] = ["__requireOpenPassword", "__restrictPermissions"];
+
+/// Replace every option with `settings` (from [`settings_fields`]), the password checkboxes
+/// included. The preset, the artboard choice, the path and the other UI-only fields (the section,
+/// the Save Preset name) stay.
+fn replace_settings(d: &mut Dialog, settings: Map<String, Value>) {
+    d.fields.retain(|k, _| matches!(k.as_str(), "preset" | "range" | "path") || (k.starts_with("__") && !OPTION_FLAGS.contains(&k.as_str())));
+    d.fields.extend(settings);
+}
+
+/// Reset (Cancel with Alt or Option held): the options go back to the chosen preset's settings, as
+/// choosing that preset sets them, and the dialog stays open. A preset that can no longer be found
+/// (a saved one deleted while the dialog is open) is an error, and the dialog is left as it is.
+fn reset(app: &VectorcraftApp, d: &mut Dialog) -> Result<(), String> {
+    let settings = settings_fields(app, &json!({ "preset": d.str("preset") }))?;
+    replace_settings(d, settings);
+    Ok(())
 }
 
 /// General: the options, then the artboards (Save PDF) or the description (preset editor).
