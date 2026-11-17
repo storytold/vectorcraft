@@ -414,12 +414,24 @@ pub(super) fn reflect(s: &mut Session, p: &Value) -> Result<Value> {
     apply_transform(s, "Reflect", ids, about(o, m), p, true)
 }
 
+/// Angles closer than this many degrees to ±90 or ±270 count as those angles. It is far above the
+/// rounding error of an angle up to 359° and below any angle a field shows.
+const SHEAR_ANGLE_TOLERANCE: f64 = 1e-9;
+
 pub(super) fn shear(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["angle"], "object.shear")?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.shear")?;
+    let angle = f64_or(p, "angle", 0.0);
+    if !(-359.0..=359.0).contains(&angle) {
+        return Err(bad("object.shear", format!("`angle` must be from -359 to 359 degrees, not {angle}")));
+    }
+    // ±90 and ±270 slant an edge onto the shear axis: their tangent is unbounded.
+    if (angle.rem_euclid(180.0) - 90.0).abs() < SHEAR_ANGLE_TOLERANCE {
+        return Err(bad("object.shear", format!("`angle` cannot be {angle}: ±90 and ±270 degrees have no shear")));
+    }
     let ids = selected_roots_to_transform(s)?;
     let o = origin_of(s, p, &ids)?;
-    let t = f64_or(p, "angle", 0.0).clamp(-89.0, 89.0).to_radians().tan();
+    let t = angle.to_radians().tan();
     let vertical = choice(p, "object.shear", "axis", &["horizontal", "vertical"])? == Some("vertical");
     let m = if vertical { Affine::new([1.0, t, 0.0, 1.0, 0.0, 0.0]) } else { Affine::new([1.0, 0.0, -t, 1.0, 0.0, 0.0]) };
     apply_transform(s, "Shear", ids, about(o, m), p, true)

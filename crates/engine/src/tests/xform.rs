@@ -511,6 +511,52 @@ fn reflect_and_shear_reject_unknown_axes_without_changing_state() {
     assert!((b.y0 + 30.0).abs() < 1e-6 && (b.y1 + 20.0).abs() < 1e-6 && b.width() > 30.0, "along the horizontal axis: {b:?}");
 }
 
+/// Shear takes an angle from -359 to 359 degrees and shears by its tangent: 60 and -60 slant
+/// opposite ways, and 120 and 300 slant as -60 does.
+#[test]
+fn shear_angles_slant_by_their_tangent() {
+    let run = 100.0 * 60f64.to_radians().tan();
+    for (angle, want) in [
+        (60.0, Rect::new(-run, 0.0, 100.0, 100.0)),
+        (-60.0, Rect::new(0.0, 0.0, 100.0 + run, 100.0)),
+        (120.0, Rect::new(0.0, 0.0, 100.0 + run, 100.0)),
+        (300.0, Rect::new(0.0, 0.0, 100.0 + run, 100.0)),
+        (-359.0, Rect::new(-100.0 * 1f64.to_radians().tan(), 0.0, 100.0, 100.0)),
+    ] {
+        let mut s = session();
+        let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        s.execute("object.shear", &json!({"angle": angle, "origin": [0, 0]})).unwrap();
+        assert!(close(bounds(&s, a), want), "{angle}: {:?}, want {want:?}", bounds(&s, a));
+    }
+}
+
+/// Shear returns an error for an angle outside -359 to 359 and for ±90 and ±270, which have no
+/// finite shear (within a billionth of a degree too); nothing moves and no undo step is recorded.
+#[test]
+fn shear_rejects_angles_with_no_shear_or_out_of_range() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 10.0);
+    let n = undo_len(&s);
+    let none = |v: f64| format!("invalid parameters for `object.shear`: `angle` cannot be {v}: ±90 and ±270 degrees have no shear");
+    let range = |v: f64| format!("invalid parameters for `object.shear`: `angle` must be from -359 to 359 degrees, not {v}");
+    for (angle, msg) in [
+        (90.0, none(90.0)),
+        (-90.0, none(-90.0)),
+        (270.0, none(270.0)),
+        (-270.0, none(-270.0)),
+        (90.0 + 1e-12, none(90.0 + 1e-12)),
+        (360.0, range(360.0)),
+        (-359.5, range(-359.5)),
+        (1e300, range(1e300)),
+    ] {
+        let e = s.execute("object.shear", &json!({"angle": angle})).expect_err(&angle.to_string());
+        assert_eq!(e.to_string(), msg);
+    }
+    assert!(s.execute("object.shear", &json!({"angle": "45"})).is_err(), "a string is not an angle");
+    assert!(close(bounds(&s, a), Rect::new(10.0, 20.0, 40.0, 30.0)), "nothing moved: {:?}", bounds(&s, a));
+    assert_eq!(undo_len(&s), n, "no undo step");
+}
+
 #[test]
 fn distort_command_maps_corners() {
     let mut s = session();
