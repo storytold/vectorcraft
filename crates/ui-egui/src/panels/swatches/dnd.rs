@@ -147,7 +147,10 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
         }),
         _ => resp.on_hover_text(shown),
     };
-    if resp.clicked() {
+    // Only the first click of a run of quick clicks applies and selects the swatch. The second
+    // opens the editor, and the later ones (counted as triple clicks) do nothing. Pattern editing
+    // selects the tile art, and a later click would paint it with the pattern itself.
+    if resp.clicked() && !resp.double_clicked() && !resp.triple_clicked() {
         ev.clicked = Some((e.clone(), ui.input(|i| i.modifiers)));
     }
 }
