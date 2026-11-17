@@ -401,4 +401,23 @@ mod tests {
             vec![Action::Preview("object.setLiveShape".into(), json!({ "id": id.0, "sides": 7 })), Action::Commit]
         );
     }
+
+    /// A double-click on the widget with the Selection tool does nothing to the artwork under it.
+    #[test]
+    fn a_double_click_on_the_widget_leaves_the_artwork_under_it_alone() {
+        let (mut d, _, s) = polygon_doc(5, Affine::translate((300.0, 300.0)));
+        let p = paint();
+        let (w, _) = SideWidget::for_tool(&cx(&d, &s, &p)).unwrap();
+        let l = d.layers[0].id;
+        let under = d.alloc_id();
+        let at = d.layers[0].children().map_or(0, |c| c.len());
+        let r = vectorcraft_geom::Rect::new(w.at.x - 20.0, w.at.y - 20.0, w.at.x + 20.0, w.at.y + 20.0);
+        d.insert(Some(l), at, Node::path(under, vectorcraft_geom::shapes::rectangle(r), Appearance::default_art())).unwrap();
+        let c = cx(&d, &s, &p);
+        assert!(over_widget(&c, w.at));
+        let mut t = SelectionTool::default();
+        assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, w.at)).is_empty());
+        // Beside the widget, the double-click reaches the artwork.
+        assert!(!t.pointer(&c, &ev(PointerKind::DoubleClick, w.at + vectorcraft_geom::Vec2::new(0.0, 15.0))).is_empty());
+    }
 }

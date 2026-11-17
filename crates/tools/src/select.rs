@@ -1706,9 +1706,9 @@ impl SelectionTool {
         if let Some(a) = release_guide_at(cx, p, m) {
             return vec![a];
         }
-        // A selected blend's widget takes a plain double-click: the artwork under it is neither
-        // edited nor isolated.
-        if blendwidget::over_widget(cx, p) {
+        // A selected blend's widget and a selected polygon's side widget take a plain double-click:
+        // the artwork under them is neither edited nor isolated.
+        if blendwidget::over_widget(cx, p) || sidewidget::over_widget(cx, p) {
             return vec![];
         }
         if crate::rulerguide::guide_at(cx, p).is_some() {
