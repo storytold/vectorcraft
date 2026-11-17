@@ -595,11 +595,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             new_style(app, alt_held(ui));
         }
         drop_on_new(app, ui, &new, &sel);
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Graphic Style (Alt-click: without asking)"), false, !sel.is_empty(), 24.0)
-            .clicked()
-        {
+        // So is Delete Graphic Style, which deletes a style dropped on it.
+        let trash_enabled = !sel.is_empty() || dragged_style(ui.ctx(), &doc).is_some();
+        let trash = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Graphic Style (Alt-click: without asking)"), false, trash_enabled, 24.0);
+        if trash.clicked() && !sel.is_empty() {
             delete(app, &sel, alt_held(ui));
         }
+        drop_on_delete(app, ui, &trash, &sel);
     });
 }
 
@@ -670,6 +672,22 @@ fn drop_on_new(app: &mut VectorcraftApp, ui: &Ui, button: &Response, sel: &[Stri
     widgets::drop_target_outline(ui, button.rect);
     if button.dnd_release_payload::<PanelDrag>().is_some() {
         duplicate(app, ui.ctx(), &carried(&doc, sel, &name));
+    }
+}
+
+/// A style dragged onto Delete Graphic Style (`button`): the button is outlined while the style is
+/// held over it, and on release the style, with the styles highlighted with it (`sel`), is deleted
+/// as the button deletes ([`delete`]): after asking, or at once with Alt held. Other drags are left
+/// to their own targets.
+fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, sel: &[String]) {
+    let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
+    let Some(name) = dragged_style(ui.ctx(), &doc) else { return };
+    if button.dnd_hover_payload::<PanelDrag>().is_none() {
+        return;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    if button.dnd_release_payload::<PanelDrag>().is_some() {
+        delete(app, &carried(&doc, sel, &name), alt_held(ui));
     }
 }
 
@@ -1223,7 +1241,6 @@ mod tests {
 
     /// A style dropped on New Graphic Style is duplicated at the end of the list, also with no art
     /// selected; a highlighted style carries the other highlighted styles with it, in one undo step.
-    /// A style dropped on the Delete button is not moved in the list.
     #[test]
     fn a_style_dropped_on_new_graphic_style_is_duplicated_at_the_end() {
         let mut app = app();
@@ -1307,11 +1324,112 @@ mod tests {
             new_button(&mut app, release(at));
             assert_eq!(names(&app), n);
         }
-        // A style dropped on the Delete button below the list is not moved in the list.
-        let (trash, _) = button(&mut app, vec![], "Delete Graphic Style (Alt-click: without asking)");
-        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[1].clone()));
-        button(&mut app, release(trash), "Delete Graphic Style (Alt-click: without asking)");
-        assert_eq!(names(&app), n);
+    }
+
+    /// A style dropped on Delete Graphic Style is deleted as the button deletes: after asking, or at
+    /// once with Alt held, also with no style highlighted, and the button is outlined while the style
+    /// is held over it. A highlighted style carries the other highlighted styles with it, in one undo
+    /// step. Art linked to a deleted style keeps its look and is unlinked. Other drags delete nothing.
+    #[test]
+    fn a_style_dropped_on_delete_graphic_style_is_deleted_as_the_button_deletes() {
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Mine"})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 600.0)));
+        const DELETE: &str = "Delete Graphic Style (Alt-click: without asking)";
+        // One frame of the panel with `events` and `modifiers` held: the center of the Delete
+        // button, whether it is enabled, and whether a drop-target outline is drawn around it.
+        let trash = |app: &mut VectorcraftApp, events: Vec<egui::Event>, modifiers: egui::Modifiers| {
+            let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: screen, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("accessibility tree").nodes;
+            let (_, node) = nodes.iter().find(|(_, n)| n.label() == Some(DELETE)).expect("the Delete button");
+            let b = node.bounds().expect("visible button");
+            let at = pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+            let accent = Tokens::get(&ctx).accent;
+            let outlined = out.shapes.iter().any(|c| match &c.shape {
+                egui::Shape::Rect(r) => r.stroke.width == 1.5 && r.stroke.color == accent && r.rect.contains(at),
+                _ => false,
+            });
+            (at, !node.is_disabled(), outlined)
+        };
+        let release = |at: egui::Pos2, modifiers: egui::Modifiers| {
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+            vec![egui::Event::PointerMoved(at), up]
+        };
+        let none = egui::Modifiers::default();
+        let rect = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id;
+        let node = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(rect).unwrap().clone();
+        let mine_id = app.session.active().unwrap().doc.graphic_style("Mine").unwrap().id;
+        assert_eq!(node(&app).extras().graphic_style, Some(mine_id));
+        let look = node(&app).appearance;
+        for view in [View::SmallList, View::Thumbnail] {
+            app.ui.graphic_styles_view = view;
+            set_pstate(&ctx, "gs-sel", Vec::<String>::new());
+            let n = names(&app);
+            // With no style highlighted the button is off until a style is held over it.
+            let (at, on, outlined) = trash(&mut app, vec![], none);
+            assert!(!on && !outlined, "{view:?}: off with no style highlighted");
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Mine".into()));
+            let (_, on, outlined) = trash(&mut app, vec![egui::Event::PointerMoved(at)], none);
+            assert!(on && outlined, "{view:?}: on and outlined while a style is held over it");
+            assert_eq!(names(&app), n, "{view:?}: holding it there changes nothing");
+            // Released on it: the button's question, and nothing is deleted or moved until OK.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Mine".into()));
+            trash(&mut app, release(at, none), none);
+            assert_eq!(names(&app), n, "{view:?}");
+            assert_eq!(app.ui.dialog.as_ref().unwrap().str("message"), "Delete the graphic style “Mine”?", "{view:?}");
+            crate::dialogs::confirm(&mut app).unwrap();
+            let rest: Vec<String> = n.iter().filter(|s| *s != "Mine").cloned().collect();
+            assert_eq!(names(&app), rest, "{view:?}");
+            assert_eq!(node(&app).extras().graphic_style, None, "{view:?}: the art is unlinked");
+            assert_eq!(node(&app).appearance, look, "{view:?}: and keeps its look");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(names(&app), n, "{view:?}: one undo step");
+            assert_eq!(node(&app).extras().graphic_style, Some(mine_id), "{view:?}: undo links the art again");
+        }
+
+        // Two highlighted styles, one of them dragged, with Alt held: both go at once, in one step.
+        app.ui.graphic_styles_view = View::SmallList;
+        let n = names(&app);
+        let (at, _, _) = trash(&mut app, vec![], none);
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[3].clone()));
+        trash(&mut app, release(at, egui::Modifiers::ALT), egui::Modifiers::ALT);
+        assert!(app.ui.dialog.is_none(), "Alt deletes without asking");
+        let rest: Vec<String> = n.iter().filter(|s| **s != n[0] && **s != n[3]).cloned().collect();
+        assert_eq!(names(&app), rest);
+        assert!(selected(&ctx, &app.session.active().unwrap().doc.clone()).is_empty(), "the deleted styles are no longer highlighted");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(names(&app), n, "the group goes in one undo step");
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(names(&app), rest);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // A style that is not highlighted is deleted alone, and the highlight stays.
+        set_pstate(&ctx, "gs-sel", vec![n[3].clone(), n[0].clone()]);
+        egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(n[2].clone()));
+        trash(&mut app, release(at, none), none);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("message"), format!("Delete the graphic style “{}”?", n[2]));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let rest: Vec<String> = n.iter().filter(|s| **s != n[2]).cloned().collect();
+        assert_eq!(names(&app), rest);
+        assert_eq!(selected(&ctx, &app.session.active().unwrap().doc.clone()), [n[3].clone(), n[0].clone()]);
+        app.run("edit.undo", json!({})).unwrap();
+
+        // Other drags dropped on the button delete nothing and ask nothing.
+        set_pstate(&ctx, "gs-sel", Vec::<String>::new());
+        for payload in [PanelDrag::Art(vec![rect]), PanelDrag::Appearance(rect), PanelDrag::GraphicStyle("No such style".into())] {
+            egui::DragAndDrop::set_payload(&ctx, payload);
+            let (_, on, outlined) = trash(&mut app, vec![egui::Event::PointerMoved(at)], none);
+            assert!(!on && !outlined);
+            trash(&mut app, release(at, egui::Modifiers::ALT), egui::Modifiers::ALT);
+            assert_eq!(names(&app), n);
+            assert!(app.ui.dialog.is_none());
+        }
     }
 
     #[test]

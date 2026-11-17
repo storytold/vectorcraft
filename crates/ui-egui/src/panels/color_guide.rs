@@ -10,34 +10,455 @@
 //! Swatches saves as one group (without a selection, the group holds the harmony colors). The
 //! selection lasts until the guide changes. A harmony color or a cell dragged with the primary button
 //! carries its color alone, as shown, without applying it or changing the selection; the Swatches
-//! panel makes a swatch of it. Limit to Library (the library button,
+//! panel makes a swatch of it. When the base is a spot color, or a tint of one, chosen from the
+//! Swatches panel, the Color panel's tint slider or the base chip ([`SpotBase`]), the cells right of
+//! the center in the base row of Tints/Shades are tints of that spot color: a click applies the tint,
+//! a drag carries it, and saving makes tint swatches linked to the spot color. Every other cell is
+//! a process color. Limit to Library (the library button,
 //! `ui.colorGuideLimit`) snaps every colour to a swatch library or the document's swatches; Edit or
 //! Apply Colors opens Recolor Artwork with the harmony colours, limited the same way.
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::harmony::{Guide, GuideOptions, Harmony, Variation};
+use vectorcraft_color::harmony::{self, Guide, GuideOptions, Harmony, Variation};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_engine::cmd::swatchlib;
 
 use super::swatches::{self, colour_libraries, limit_key, limit_name};
-use super::{active_paint, apply_click, c32, color_json, library_panel, pstate, set_pstate};
+use super::{active_paint, apply_click, c32, color_json, library_panel, paint_params, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::widgets::{self, PanelDrag, menu_item};
 
 /// The base colour before one is set: an orange.
 const DEFAULT_BASE: Color = Color::Rgb { r: 230.0 / 255.0, g: 120.0 / 255.0, b: 40.0 / 255.0 };
 
-/// The guide's base color: the one last chosen or set with the base chip; before that, the current
-/// color.
+/// The spot color swatch the guide's base is a tint of (`UiState::color_guide_spot`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SpotBase {
+    /// The document the swatch belongs to (its `uid`).
+    pub doc: u64,
+    /// The spot color swatch's name.
+    pub swatch: String,
+    /// The base's tint of it, 0..1.
+    pub tint: f32,
+    /// The names it had before renames, oldest first (at most as many as the History panel keeps
+    /// states), for an Undo or Redo that gives it one of them back.
+    pub earlier: Vec<String>,
+    /// Its swatch went without a command the panel followed: the link waits for an Undo or Redo
+    /// ([`check_spot`]).
+    pub resting: bool,
+}
+
+/// Whether `name` is a spot color of `doc`.
+fn is_spot(doc: &vectorcraft_doc::Document, name: &str) -> bool {
+    doc.swatch(name).is_some_and(|w| w.spot) && doc.global_color(name).is_some()
+}
+
+/// The spot color the base is a tint of, while its swatch is still a spot color of the active
+/// document.
+fn live_spot(app: &VectorcraftApp) -> Option<&SpotBase> {
+    let s = app.ui.color_guide_spot.as_ref()?;
+    let st = app.session.active()?;
+    (st.uid == s.doc && !s.resting && is_spot(&st.doc, &s.swatch)).then_some(s)
+}
+
+/// The color of tint `tint` (0..1) of global swatch `name` in the active document.
+fn tint_color(app: &VectorcraftApp, name: &str, tint: f32) -> Option<Color> {
+    app.session.active()?.doc.tint_paint(name, tint)?.color()
+}
+
+/// The guide's base color: the one last chosen or set with the base chip (a spot color base
+/// follows edits to its swatch); before that, the current color.
 pub(crate) fn base_color(app: &VectorcraftApp) -> Color {
+    if let Some(c) = live_spot(app).and_then(|s| tint_color(app, &s.swatch, s.tint)) {
+        return c;
+    }
     app.ui.color_guide_base.unwrap_or_else(|| active_paint(app).color().unwrap_or(DEFAULT_BASE))
 }
 
 /// Make `c` the guide's base color: a color chosen in the Color panel, the Swatches panel or the
 /// Color Picker. A color applied from the guide itself leaves the base as it is.
 pub(crate) fn choose_base(app: &mut VectorcraftApp, c: Color) {
+    choose_linked_base(app, c, None);
+}
+
+/// [`choose_base`] for a color linked to a global swatch at a tint (0..1): when that swatch is a
+/// spot color of the active document, the base is that tint of it ([`SpotBase`]).
+pub(crate) fn choose_linked_base(app: &mut VectorcraftApp, c: Color, link: Option<(String, f32)>) {
     app.ui.color_guide_base = Some(c);
+    app.ui.color_guide_spot = link.and_then(|(swatch, tint)| {
+        let st = app.session.active()?;
+        st.doc.swatch(&swatch).filter(|w| w.spot)?;
+        Some(SpotBase { doc: st.uid, swatch, tint: tint.clamp(0.0, 1.0), earlier: Vec::new(), resting: false })
+    });
+}
+
+/// The spot color base before a command runs ([`before_command`]).
+pub(crate) struct LinkBefore {
+    /// Its document is the active one.
+    active: bool,
+    /// The color group that holds its swatch.
+    group: Option<String>,
+    /// The color the guide shows as the base.
+    color: Option<Color>,
+    /// The open documents' `uid`s in order, while there is a spot color base.
+    docs: Vec<u64>,
+    /// The active document's index.
+    active_index: Option<usize>,
+}
+
+/// The spot color base before a command runs, for [`after_command`].
+pub(crate) fn before_command(app: &VectorcraftApp) -> LinkBefore {
+    let s = app.ui.color_guide_spot.as_ref();
+    let active = app.session.active().is_some_and(|st| s.is_some_and(|s| s.doc == st.uid));
+    // Its document, active or not.
+    let st = s.and_then(|s| app.session.documents().iter().find(|d| d.uid == s.doc));
+    let group =
+        st.zip(s).and_then(|(st, s)| st.doc.swatch_groups.iter().find(|g| g.swatches.iter().any(|w| w.name == s.swatch)).map(|g| g.name.clone()));
+    let docs = if s.is_some() { app.session.documents().iter().map(|d| d.uid).collect() } else { Vec::new() };
+    // The color it shows: its swatch's tint in its document, while that is a spot color there.
+    let shown = st
+        .zip(s)
+        .filter(|(st, s)| st.doc.swatch(&s.swatch).is_some_and(|w| w.spot))
+        .and_then(|(st, s)| st.doc.tint_paint(&s.swatch, s.tint)?.color());
+    let color = s.map(|_| shown.unwrap_or_else(|| base_color(app)));
+    LinkBefore { active, group, color, docs, active_index: app.session.active_index() }
+}
+
+/// Where the steps of a `command.batch` run, as far as the steps before each one show: new
+/// documents open after the others and become the active one, and Close and Move Document shift
+/// the documents after them.
+struct BatchDocs {
+    /// The tab index of the base's document, when known.
+    base: Option<usize>,
+    /// The base's document was closed.
+    closed: bool,
+    /// The tab index of the active document, when known.
+    active: Option<usize>,
+    /// The number of open documents, when known.
+    len: Option<usize>,
+}
+
+impl BatchDocs {
+    /// Whether the next step runs in the base's document, when that is known.
+    fn in_base(&self) -> Option<bool> {
+        if self.closed {
+            return Some(false);
+        }
+        Some(self.active? == self.base?)
+    }
+
+    /// Follow step `id`, which ran with params `p` and replied `r`.
+    fn step(&mut self, id: &str, p: &Value, r: &Value) {
+        let index = |key: &str| p[key].as_u64().and_then(|i| usize::try_from(i).ok());
+        // The tab index a step that opens a document replies with: a new one after the others, or
+        // one already open made active.
+        let opened = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
+        match id {
+            "document.activate" => self.active = index("index"),
+            "file.new" | "file.newFromTemplate" | "edit.newDocumentFromState" => {
+                self.len = self.len.map(|n| n + 1);
+                self.active = opened.or(self.len.map(|n| n - 1));
+            }
+            "file.close" | "document.close" => {
+                let i = index("index").or(self.active);
+                let len = self.len.map(|n| n.saturating_sub(1));
+                match (i, self.base) {
+                    (Some(i), Some(b)) if i == b => (self.closed, self.base) = (true, None),
+                    (Some(i), Some(b)) if i < b => self.base = Some(b - 1),
+                    (Some(_), Some(_)) => {}
+                    _ => self.base = None,
+                }
+                // Closing another document keeps the active one; closing the active one makes the
+                // one at its index active (the last one when it was last).
+                self.active = match (i, self.active) {
+                    (Some(i), Some(a)) if i != a => Some(if i < a { a - 1 } else { a }),
+                    (Some(i), Some(_)) => len.and_then(|n| n.checked_sub(1)).map(|last| i.min(last)),
+                    _ => None,
+                };
+                self.len = len;
+            }
+            "file.closeAll" => self.closed = true,
+            "document.move" => {
+                let moved = |x: usize, from: usize, to: usize| {
+                    if x == from {
+                        return to;
+                    }
+                    let x = if from < x { x - 1 } else { x };
+                    if to <= x { x + 1 } else { x }
+                };
+                match (index("from").or(self.active), index("to"), self.len) {
+                    (Some(from), Some(to), Some(n)) if n > 0 => {
+                        let to = to.min(n - 1);
+                        self.base = self.base.map(|b| moved(b, from, to));
+                        self.active = self.active.map(|a| moved(a, from, to));
+                    }
+                    _ => (self.base, self.active) = (None, None),
+                }
+            }
+            _ if id.starts_with("file.open")
+                || id.starts_with("recovery.")
+                || matches!(id, "document.open" | "document.compare" | "stroke.arrowheads.edit") =>
+            {
+                match (opened, self.len) {
+                    (Some(i), Some(n)) if i <= n => (self.active, self.len) = (Some(i), Some(n.max(i + 1))),
+                    _ => (self.active, self.len) = (None, None),
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The name the spot color base's swatch `name` of document `base` has after a `command.batch`
+/// ran `steps` and replied `results`, or `None` when a step may have
+/// removed it or made it a process color ([`follow_step`]). Steps in the base's document are
+/// followed and steps in another document are skipped. A step in a document that is not known
+/// keeps the name, and a rename there adds a second name to choose from once the batch is done:
+/// the one that is a spot color of the base's document. Scripts and plug-ins may do anything, so
+/// they end the link.
+fn follow_batch(app: &VectorcraftApp, base: u64, name: String, steps: &[Value], results: &[Value], before: &LinkBefore) -> Option<String> {
+    let mut group = before.group.clone();
+    let at = before.docs.iter().position(|&u| u == base);
+    let mut docs = BatchDocs { base: at, closed: at.is_none(), active: before.active_index, len: Some(before.docs.len()) };
+    let mut names = vec![name];
+    for (i, step) in steps.iter().enumerate() {
+        let sid = step["command"].as_str().unwrap_or_default();
+        let (p, r) = (&step["params"], results.get(i).unwrap_or(&Value::Null));
+        if sid.starts_with("script.") || sid.starts_with("plugin.") {
+            return None;
+        }
+        match docs.in_base() {
+            Some(true) => {
+                let one = names.len() == 1;
+                let mut next = Vec::with_capacity(names.len());
+                for n in names {
+                    let mut scratch = group.clone();
+                    next.push(follow_step(sid, p, r, n, if one { &mut group } else { &mut scratch })?);
+                }
+                names = next;
+            }
+            Some(false) => {}
+            None => {
+                // The step may have run elsewhere, so the name stays a candidate whatever the step
+                // did; a rename adds the new name.
+                let mut next = Vec::with_capacity(names.len() + 1);
+                for n in names {
+                    if let Some(m) = follow_step(sid, p, r, n.clone(), &mut group.clone())
+                        && m != n
+                    {
+                        next.push(m);
+                    }
+                    next.push(n);
+                }
+                next.sort();
+                next.dedup();
+                names = next;
+            }
+        }
+        docs.step(sid, p, r);
+    }
+    if names.len() == 1 {
+        return names.pop();
+    }
+    // The one name that is a spot color of the base's document.
+    let st = app.session.documents().iter().find(|d| d.uid == base)?;
+    let mut spots = names.into_iter().filter(|n| is_spot(&st.doc, n));
+    let first = spots.next()?;
+    spots.next().is_none().then_some(first)
+}
+
+/// Command `id` ran with `params` and replied `reply`: a spot color base linked to a swatch that
+/// Swatch Options renamed links to the new name, and one whose swatch a command deleted or made a
+/// process color is no longer linked to it, so a later spot color of the same name does not
+/// become the base; the base keeps the color it showed. A `command.batch`'s steps are followed in
+/// order ([`follow_batch`]).
+pub(crate) fn after_command(app: &mut VectorcraftApp, id: &str, params: &Value, reply: &Value, before: LinkBefore) {
+    let Some(s) = app.ui.color_guide_spot.as_ref() else { return };
+    let (base, n) = (s.doc, s.swatch.clone());
+    let name = if id == "command.batch" {
+        let steps = params["commands"].as_array().map(Vec::as_slice).unwrap_or_default();
+        let results = reply["results"].as_array().map(Vec::as_slice).unwrap_or_default();
+        follow_batch(app, base, n, steps, results, &before)
+    } else if before.active {
+        follow_step(id, params, reply, n, &mut before.group.clone())
+    } else {
+        Some(n)
+    };
+    let keep = usize::try_from(app.session.prefs.history_states).unwrap_or(usize::MAX).max(1);
+    let Some(s) = app.ui.color_guide_spot.as_mut() else { return };
+    match name {
+        Some(n) => {
+            if n != s.swatch {
+                let old = std::mem::replace(&mut s.swatch, n);
+                s.earlier.retain(|e| *e != old && *e != s.swatch);
+                s.earlier.push(old);
+                if s.earlier.len() > keep {
+                    s.earlier.drain(..s.earlier.len() - keep);
+                }
+            }
+        }
+        None => app.ui.color_guide_spot = None,
+    }
+    let undo = |id: &str| matches!(id, "edit.undo" | "edit.redo");
+    let undone = undo(id)
+        || (id == "command.batch"
+            && params["commands"].as_array().is_some_and(|a| a.iter().any(|st| undo(st["command"].as_str().unwrap_or_default()))));
+    check_spot(app, if undone { Ran::UndoRedo } else { Ran::Command });
+    if app.ui.color_guide_spot.is_none()
+        && let Some(c) = before.color
+    {
+        app.ui.color_guide_base = Some(c);
+    }
+}
+
+/// The name swatch `name` (in color group `group`) has after command `id` ran with `params` and
+/// replied `reply` in its document, or `None` when the command may have removed it or made it a
+/// process color: Swatch Options making it a process color, Delete Swatch naming it or its group,
+/// Merge Swatches merging it into another and Edit Color Group leaving it out of its group.
+/// `group` follows the step: New Color Group, Move Swatch, Edit Color Group and Ungroup Color
+/// Group.
+fn follow_step(id: &str, p: &Value, reply: &Value, name: String, group: &mut Option<String>) -> Option<String> {
+    let ours = |v: &Value| v == name.as_str();
+    let in_group = |key: &str| group.as_deref().is_some_and(|g| p[key] == g);
+    let named = |key: &str| p[key].as_array().is_some_and(|a| a.iter().any(|n| ours(n) || group.as_deref().is_some_and(|g| n == g)));
+    let members = |key: &str| reply[key].as_array().is_some_and(|a| a.iter().any(ours));
+    let removed = match id {
+        "swatch.edit" => ours(&p["name"]) && p["spot"] == false,
+        "swatch.delete" => ours(&p["name"]) || in_group("name") || named("names"),
+        "swatch.merge" => named("names") && !ours(&p["names"][0]),
+        "swatch.editGroup" => in_group("group") && !members("swatches"),
+        _ => false,
+    };
+    if removed {
+        return None;
+    }
+    // The color group that holds it after the step.
+    let moved = match id {
+        "swatch.newGroup" | "swatch.editGroup" if members("swatches") => Some(reply["name"].as_str().map(str::to_string)),
+        "swatch.ungroup" if in_group("name") => Some(None),
+        "swatch.move" if ours(&p["name"]) || p["names"].as_array().is_some_and(|a| a.iter().any(ours)) => {
+            Some(p["group"].as_str().map(str::to_string))
+        }
+        _ => None,
+    };
+    if let Some(m) = moved {
+        *group = m;
+    }
+    // A rename by Swatch Options, or of the swatch Merge Swatches keeps.
+    let renamed = match id {
+        "swatch.edit" if p["name"] == name.as_str() => reply["name"].as_str(),
+        "swatch.merge" if p["names"][0] == name.as_str() => reply["name"].as_str(),
+        _ => None,
+    };
+    Some(renamed.map_or(name, str::to_string))
+}
+
+/// What ran before the spot color base's link is checked ([`check_spot`]).
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Ran {
+    /// Nothing the panel followed: a frame of the panel (a script's commands, for example).
+    Frame,
+    /// A command other than Undo and Redo.
+    Command,
+    /// Undo or Redo, or a batch with one of them.
+    UndoRedo,
+}
+
+/// Check the spot color base's link after `ran`. A closed document ends it. When its swatch is no
+/// longer a spot color of its document (deleted, renamed or made a process color by something the
+/// panel did not follow), after an Undo or Redo a name it had before that is one again takes its
+/// place (an Undo or Redo of a rename); otherwise the link rests until an Undo or Redo makes it a spot color again, and
+/// the next other command ends it. The base keeps the color it last showed.
+pub(crate) fn check_spot(app: &mut VectorcraftApp, ran: Ran) {
+    let Some(s) = app.ui.color_guide_spot.as_mut() else { return };
+    if !app.session.documents().iter().any(|d| d.uid == s.doc) {
+        app.ui.color_guide_spot = None;
+        return;
+    }
+    let Some(st) = app.session.active().filter(|st| st.uid == s.doc) else { return };
+    if s.resting && ran != Ran::UndoRedo {
+        if ran == Ran::Command {
+            app.ui.color_guide_spot = None;
+        }
+        return;
+    }
+    if ran == Ran::UndoRedo && !is_spot(&st.doc, &s.swatch) {
+        // An Undo or Redo of a rename gave it a name it had before.
+        if let Some(i) = s.earlier.iter().rposition(|n| is_spot(&st.doc, n)) {
+            let name = s.earlier.remove(i);
+            let gone = std::mem::replace(&mut s.swatch, name);
+            s.earlier.push(gone);
+        }
+    }
+    if is_spot(&st.doc, &s.swatch) {
+        s.resting = false;
+        // Kept for when the link ends where the color can no longer be read (a closed document).
+        if let Some(c) = st.doc.tint_paint(&s.swatch, s.tint).and_then(|p| p.color()) {
+            app.ui.color_guide_base = Some(c);
+        }
+        return;
+    }
+    if ran != Ran::Command {
+        s.resting = true;
+        return;
+    }
+    if let Some(c) = st.doc.tint_paint(&s.swatch, s.tint).and_then(|p| p.color()) {
+        app.ui.color_guide_base = Some(c);
+    }
+    app.ui.color_guide_spot = None;
+}
+
+/// The global swatch and tint (0..1) a solid paint links to.
+fn paint_link(p: &Paint) -> Option<(String, f32)> {
+    match p {
+        Paint::Solid { swatch: Some(n), tint, .. } => Some((n.clone(), *tint)),
+        _ => None,
+    }
+}
+
+/// The tint of the spot color base that cell (`row`, `col`) of the guide `g` is: a cell right of
+/// the center in the base row of Tints/Shades, without a library limit. Its tint is the base's
+/// tint less the share the cell goes towards white. → (swatch, tint 0..1)
+fn cell_tint(app: &VectorcraftApp, g: &Guide, row: usize, col: usize) -> Option<(String, f32)> {
+    let opts = app.ui.color_guide.clamped();
+    let centre = g.centre();
+    if row != 0 || col <= centre || opts.variation != Variation::TintsShades || !app.ui.color_guide_limit.is_empty() {
+        return None;
+    }
+    let s = live_spot(app)?;
+    let step = i32::try_from(col - centre).ok()?;
+    Some((s.swatch.clone(), s.tint * (1.0 - harmony::step_fraction(&opts, step))))
+}
+
+/// The paint cell (`row`, `col`) of `g` applies, carries and saves: a tint of the spot color base
+/// ([`cell_tint`]) or the color the cell shows.
+fn cell_paint(app: &VectorcraftApp, g: &Guide, row: usize, col: usize) -> Option<Paint> {
+    let color = *g.grid.get(row)?.get(col)?;
+    Some(match cell_tint(app, g, row, col) {
+        Some((name, tint)) => Paint::Solid { color, swatch: Some(name), tint },
+        None => Paint::solid(color),
+    })
+}
+
+/// The `swatch.new` / `swatch.newGroup` entry for cell (`row`, `col`) of `g`: `{swatch, tint}` for
+/// a tint of the spot color base, the color otherwise.
+fn cell_entry(app: &VectorcraftApp, g: &Guide, row: usize, col: usize) -> Option<Value> {
+    Some(match cell_paint(app, g, row, col)? {
+        p @ Paint::Solid { swatch: Some(_), .. } => paint_params(&p),
+        p => color_json(&p.color()?),
+    })
+}
+
+/// `g` with the base row's spot color tints ([`cell_tint`]) shown in their own colors.
+fn with_spot_tints(app: &VectorcraftApp, mut g: Guide) -> Guide {
+    let cols = g.grid.first().map_or(0, Vec::len);
+    let tints: Vec<(usize, Color)> =
+        (0..cols).filter_map(|col| cell_tint(app, &g, 0, col).and_then(|(n, t)| tint_color(app, &n, t)).map(|c| (col, c))).collect();
+    for (col, c) in tints {
+        g.grid[0][col] = c;
+    }
+    g
 }
 
 fn rule(ctx: &egui::Context) -> Harmony {
@@ -59,6 +480,7 @@ fn clear_selection(ctx: &egui::Context) {
 #[derive(Clone, PartialEq)]
 struct SelKey {
     base: Color,
+    spot: Option<SpotBase>,
     opts: GuideOptions,
     rule: usize,
     limit: String,
@@ -68,6 +490,7 @@ struct SelKey {
 fn sel_key(app: &VectorcraftApp, ctx: &egui::Context, g: &Guide) -> SelKey {
     SelKey {
         base: base_color(app),
+        spot: live_spot(app).cloned(),
         opts: app.ui.color_guide,
         rule: pstate(ctx, "cg-harmony"),
         limit: app.ui.color_guide_limit.clone(),
@@ -93,12 +516,13 @@ struct GuideKey {
     doc: Option<(u64, u64)>,
 }
 
-/// The guide the panel shows, limited to the Limit to Library colours.
+/// The guide the panel shows, limited to the Limit to Library colours; without a limit, a spot
+/// color base's tints show in their own colors.
 fn guide(app: &VectorcraftApp, ctx: &egui::Context) -> Guide {
     let (base, rule, opts) = (base_color(app), rule(ctx), app.ui.color_guide);
     let limit = &app.ui.color_guide_limit;
     if limit.is_empty() {
-        return Guide::new(base, rule, &opts);
+        return with_spot_tints(app, Guide::new(base, rule, &opts));
     }
     let doc = app.session.active().filter(|_| limit == swatchlib::DOCUMENT_SWATCHES).map(|d| (d.uid, d.revision));
     let key = GuideKey { base, rule, opts, limit: limit.clone(), doc };
@@ -156,10 +580,11 @@ fn edit_or_apply(app: &mut VectorcraftApp, g: &Guide) {
     app.run("ui.recolorDialog", p).ok();
 }
 
-/// Save the selected cells' colors as swatches (one undo step), each in its own model.
+/// Save the selected cells' colors as swatches (one undo step), each in its own model; a tint of a
+/// spot color base becomes a tint swatch of it.
 fn save_selected(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let g = guide(app, ctx);
-    let colors: Vec<Value> = live_selection(app, ctx, &g).into_iter().filter_map(|(r, c)| g.grid.get(r)?.get(c)).map(color_json).collect();
+    let colors: Vec<Value> = live_selection(app, ctx, &g).into_iter().filter_map(|(r, c)| cell_entry(app, &g, r, c)).collect();
     if !colors.is_empty() {
         app.run("swatch.new", json!({ "colors": colors, "keepModel": true })).ok();
     }
@@ -168,13 +593,13 @@ fn save_selected(app: &mut VectorcraftApp, ctx: &egui::Context) {
 /// Save Color Group to Swatches: the selected cells as one swatch group, in grid order (row by
 /// row, left to right), each cell once; with no cell of the shown guide selected, the harmony
 /// colors. The group is named after the harmony rule, saved in one undo step, and each color
-/// keeps its own model.
+/// keeps its own model; a tint of a spot color base becomes a tint swatch of it.
 fn save_group(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let g = guide(app, ctx);
     let mut cells = live_selection(app, ctx, &g);
     cells.sort_unstable();
     cells.dedup();
-    let mut colors: Vec<Value> = cells.into_iter().filter_map(|(r, c)| g.grid.get(r)?.get(c)).map(color_json).collect();
+    let mut colors: Vec<Value> = cells.into_iter().filter_map(|(r, c)| cell_entry(app, &g, r, c)).collect();
     if colors.is_empty() {
         colors = g.colors.iter().map(color_json).collect();
     }
@@ -184,29 +609,33 @@ fn save_group(app: &mut VectorcraftApp, ctx: &egui::Context) {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = crate::theme::Tokens::get(ui.ctx());
     let ctx = ui.ctx().clone();
+    check_spot(app, Ran::Frame);
     // The current color becomes the base when the panel first shows; selecting artwork later
     // leaves it as it is.
-    let first = base_color(app);
-    let set = *app.ui.color_guide_base.get_or_insert(first);
+    if app.ui.color_guide_base.is_none() {
+        let current = active_paint(app);
+        choose_linked_base(app, current.color().unwrap_or(DEFAULT_BASE), paint_link(&current));
+    }
     let h = rule(&ctx);
     let g = guide(app, &ctx);
     // Selected cells belong to the guide they were picked from: a new base, new options, another
     // harmony rule, another library limit or new grid colors clear them.
-    let key = SelKey { base: set, ..sel_key(app, &ctx, &g) };
+    let key = sel_key(app, &ctx, &g);
     if pstate::<Option<SelKey>>(&ctx, "cg-sel-key").as_ref() != Some(&key) {
         set_pstate(&ctx, "cg-sel-key", Some(key));
         clear_selection(&ctx);
     }
     let base = g.colors[0];
-    let mut chosen: Option<Color> = None;
+    let mut chosen: Option<Paint> = None;
     ui.horizontal(|ui| {
         let (r, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
         widgets::swatch_tile(ui, r, &Paint::solid(base), false, resp.hovered());
-        if resp.on_hover_text(tl!("Set base color to the current color")).clicked()
-            && let Some(c) = active_paint(app).color()
-        {
-            app.ui.color_guide_base = Some(c);
-            clear_selection(&ctx);
+        if resp.on_hover_text(tl!("Set base color to the current color")).clicked() {
+            let current = active_paint(app);
+            if let Some(c) = current.color() {
+                choose_linked_base(app, c, paint_link(&current));
+                clear_selection(&ctx);
+            }
         }
         let labels: Vec<&str> = Harmony::ALL.iter().map(|h| h.label()).collect();
         if let Some(i) = widgets::dropdown(ui, "cg-rule", h.label(), &labels, ui.available_width() - 4.0) {
@@ -223,7 +652,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::drag_source(ui, &resp, || PanelDrag::paint(Paint::solid(*c)));
         ui.painter().rect_filled(r, 0.0, c32(c));
         if resp.on_hover_text(c.to_hex()).clicked() {
-            chosen = Some(*c);
+            chosen = Some(Paint::solid(*c));
         }
     }
     ui.add_space(6.0);
@@ -241,7 +670,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         for (ci, v) in row.iter().enumerate() {
             let r = Rect::from_min_size(rr.min + vec2(x(ci), 0.0), vec2(x(ci + 1) - x(ci) - gap, 17.0));
             let resp = ui.interact(r, ui.scope_id().with(("cg-v", ri, ci)), Sense::click_and_drag());
-            widgets::drag_source(ui, &resp, || PanelDrag::paint(Paint::solid(*v)));
+            let paint = cell_paint(app, &g, ri, ci).unwrap_or_else(|| Paint::solid(*v));
+            widgets::drag_source(ui, &resp, || PanelDrag::paint(paint.clone()));
             ui.painter().rect_filled(r, 0.0, c32(v));
             if sel.contains(&(ri, ci)) {
                 ui.painter().rect_stroke(r.shrink(1.0), 0.0, egui::Stroke::new(1.0, egui::Color32::WHITE), egui::StrokeKind::Inside);
@@ -252,7 +682,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if resp.on_hover_text(v.to_hex()).clicked() {
                 if !multi {
                     sel.clear();
-                    chosen = Some(*v);
+                    chosen = Some(paint);
                 }
                 match sel.iter().position(|s| *s == (ri, ci)) {
                     Some(i) => {
@@ -299,8 +729,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             save_group(app, &ctx);
         }
     });
-    if let Some(c) = chosen {
-        apply_click(app, ui, json!({"color": color_json(&c)}));
+    if let Some(p) = chosen {
+        apply_click(app, ui, paint_params(&p));
     }
 }
 
@@ -701,6 +1131,493 @@ mod tests {
         assert_eq!(last_group(&app).1, g.colors);
         frame(&mut app, &ctx);
         assert!(selected(&ctx).is_empty(), "the panel clears the selection");
+    }
+
+    /// A document with a selected rectangle and the spot color swatch "Ink", made the guide's base
+    /// as clicking it in the Swatches panel makes it, at `tint` (0..1) of the spot color.
+    fn spot_app(tint: f32) -> VectorcraftApp {
+        let mut app = app();
+        app.run("swatch.new", json!({"name": "Ink", "color": "#0066cc", "spot": true})).unwrap();
+        app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+        app.run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+        choose_linked_base(&mut app, ink.tinted(tint), Some(("Ink".to_string(), tint)));
+        app
+    }
+
+    /// The selected art's fill: (the swatch it links to, its tint 0..1, its color).
+    fn fill_link(app: &VectorcraftApp) -> (Option<String>, f32, String) {
+        match crate::panels::current_paints(app).0 {
+            Paint::Solid { color, swatch, tint } => (swatch, tint, color.to_hex()),
+            other => panic!("a solid fill: {other:?}"),
+        }
+    }
+
+    /// The tint the cell `steps` right of the centre has with a base at `base` tint.
+    fn expected_tint(app: &VectorcraftApp, base: f32, steps: i32) -> f32 {
+        base * (1.0 - harmony::step_fraction(&app.ui.color_guide.clamped(), steps))
+    }
+
+    /// With a spot color base, a cell right of the centre in the base row of Tints/Shades paints the
+    /// art with a tint of the spot color, which follows an edit of the spot color; the shades, the
+    /// other rows, the other variation modes and a library limit give process colors.
+    #[test]
+    fn a_spot_color_base_gives_tints_of_that_spot_color() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        let c = g.centre();
+        let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+        assert_eq!(g.grid[0][c].to_hex(), ink.to_hex(), "the spot color in the centre");
+        let at = rect_of(&mut app, &ctx, ("cg-v", 0usize, c + 2)).center();
+        click(&mut app, &ctx, at);
+        let (swatch, tint, hex) = fill_link(&app);
+        assert_eq!(swatch.as_deref(), Some("Ink"), "a tint of the spot color");
+        let want = expected_tint(&app, 1.0, 2);
+        assert!((tint - want).abs() < 1e-4, "{tint} vs {want}");
+        assert_eq!(hex, g.grid[0][c + 2].to_hex(), "the color the cell shows");
+        assert_eq!(hex, ink.tinted(tint).to_hex());
+        // The painted tint follows an edit of the spot color, and so does the base.
+        app.run("swatch.edit", json!({"name": "Ink", "color": "#cc0000"})).unwrap();
+        let red = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+        assert_eq!(fill_link(&app).2, red.tinted(tint).to_hex(), "the art follows the spot color");
+        assert_eq!(base_color(&app), red, "the base follows the spot color");
+        frame(&mut app, &ctx);
+        // Shades, another harmony row and the harmony strip are process colors.
+        for id in [("cg-v", 0usize, c - 1), ("cg-v", 1, c + 1)] {
+            let at = rect_of(&mut app, &ctx, id).center();
+            click(&mut app, &ctx, at);
+            assert_eq!(fill_link(&app).0, None, "{id:?}");
+        }
+        let at = rect_of(&mut app, &ctx, ("cg-h", 0usize)).center();
+        click(&mut app, &ctx, at);
+        assert_eq!(fill_link(&app).0, None, "the harmony strip");
+        // Warm/Cool and a library limit: process colors.
+        app.ui.color_guide.variation = Variation::WarmCool;
+        frame(&mut app, &ctx);
+        let at = rect_of(&mut app, &ctx, ("cg-v", 0usize, c + 1)).center();
+        click(&mut app, &ctx, at);
+        assert_eq!(fill_link(&app).0, None, "Warm/Cool");
+        app.ui.color_guide.variation = Variation::TintsShades;
+        app.run("ui.colorGuideLimit", json!({"library": "web-safe-216"})).unwrap();
+        frame(&mut app, &ctx);
+        let at = rect_of(&mut app, &ctx, ("cg-v", 0usize, c + 1)).center();
+        click(&mut app, &ctx, at);
+        assert_eq!(fill_link(&app).0, None, "limited to a library");
+    }
+
+    /// A base that is already a tint of the spot color gives lighter tints of it; a plain color with
+    /// the spot color's values, a deleted swatch and a swatch that is no longer a spot color give
+    /// process colors.
+    #[test]
+    fn a_tinted_spot_base_gives_lighter_tints_and_a_lost_link_gives_process_colors() {
+        let mut app = spot_app(0.5);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let c = guide(&app, &ctx).centre();
+        let cell = |app: &VectorcraftApp, ctx: &egui::Context, col| cell_paint(app, &guide(app, ctx), 0, col).unwrap();
+        let Paint::Solid { swatch, tint, .. } = cell(&app, &ctx, c + 1) else { panic!("a solid") };
+        assert_eq!(swatch.as_deref(), Some("Ink"));
+        let want = expected_tint(&app, 0.5, 1);
+        assert!((tint - want).abs() < 1e-4 && tint < 0.5, "{tint} vs {want}");
+        // The same values without the link.
+        choose_base(&mut app, Color::from_hex("#0066cc").unwrap());
+        assert_eq!(cell(&app, &ctx, c + 1), Paint::solid(guide(&app, &ctx).grid[0][c + 1]));
+        // The spot color made a process color, then deleted.
+        let link = Some(("Ink".to_string(), 1.0));
+        let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+        choose_linked_base(&mut app, ink, link.clone());
+        assert!(matches!(cell(&app, &ctx, c + 1), Paint::Solid { swatch: Some(_), .. }));
+        app.run("swatch.edit", json!({"name": "Ink", "spot": false, "global": false})).unwrap();
+        assert!(matches!(cell(&app, &ctx, c + 1), Paint::Solid { swatch: None, .. }), "no longer a spot color");
+        choose_linked_base(&mut app, ink, link.clone());
+        assert!(app.ui.color_guide_spot.is_none(), "a process swatch gives no spot base");
+        app.run("swatch.edit", json!({"name": "Ink", "spot": true})).unwrap();
+        choose_linked_base(&mut app, ink, link);
+        app.run("swatch.delete", json!({"name": "Ink"})).unwrap();
+        assert!(matches!(cell(&app, &ctx, c + 1), Paint::Solid { swatch: None, .. }), "a deleted swatch");
+    }
+
+    /// A spot color base stays linked to its swatch when Swatch Options renames it: the tints link to
+    /// the new name and follow an edit of it.
+    #[test]
+    fn a_renamed_spot_color_stays_the_base() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let c = guide(&app, &ctx).centre();
+        app.run("swatch.edit", json!({"name": "Ink", "newName": "Deep Ink"})).unwrap();
+        let Paint::Solid { swatch, .. } = cell_paint(&app, &guide(&app, &ctx), 0, c + 1).unwrap() else { panic!("a solid") };
+        assert_eq!(swatch.as_deref(), Some("Deep Ink"));
+        app.run("swatch.edit", json!({"name": "Deep Ink", "color": "#cc0000"})).unwrap();
+        let red = app.session.active().unwrap().doc.global_color("Deep Ink").unwrap();
+        assert_eq!(base_color(&app), red, "the base follows the renamed spot color");
+        // Renames in a batch, in step order.
+        let steps = json!([
+            {"command": "swatch.edit", "params": {"name": "Deep Ink", "newName": "Ink A"}},
+            {"command": "swatch.edit", "params": {"name": "Ink A", "newName": "Ink B"}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        let Paint::Solid { swatch, .. } = cell_paint(&app, &guide(&app, &ctx), 0, c + 1).unwrap() else { panic!("a solid") };
+        assert_eq!(swatch.as_deref(), Some("Ink B"), "renamed in a batch");
+    }
+
+    /// Deleting the spot color, or making it a process color, ends the base's link: a new spot color
+    /// of the same name, or the swatch made a spot color again, gives process colors until it is
+    /// chosen again.
+    #[test]
+    fn a_deleted_spot_color_ends_the_link() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let c = guide(&app, &ctx).centre();
+        let linked = |app: &VectorcraftApp, ctx: &egui::Context| {
+            matches!(cell_paint(app, &guide(app, ctx), 0, c + 1).unwrap(), Paint::Solid { swatch: Some(_), .. })
+        };
+        assert!(linked(&app, &ctx));
+        app.run("swatch.delete", json!({"name": "Ink"})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": "#00cc66", "spot": true})).unwrap();
+        assert!(!linked(&app, &ctx), "a new spot color of the same name");
+        assert!(app.ui.color_guide_spot.is_none());
+        let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+        choose_linked_base(&mut app, ink, Some(("Ink".to_string(), 1.0)));
+        assert!(linked(&app, &ctx));
+        app.run("swatch.edit", json!({"name": "Ink", "spot": false, "global": false})).unwrap();
+        app.run("swatch.edit", json!({"name": "Ink", "spot": true})).unwrap();
+        assert!(!linked(&app, &ctx), "a spot color again");
+        // The same in a batch: a step that deletes the swatch, or one that makes it a process color.
+        let relink = |app: &mut VectorcraftApp| {
+            let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+            choose_linked_base(app, ink, Some(("Ink".to_string(), 1.0)));
+        };
+        for steps in [
+            json!([
+                {"command": "swatch.edit", "params": {"name": "Ink", "newName": "Ink 2"}},
+                {"command": "swatch.delete", "params": {"name": "Ink 2"}},
+                {"command": "swatch.new", "params": {"name": "Ink 2", "color": "#cc6600", "spot": true}},
+                {"command": "swatch.edit", "params": {"name": "Ink 2", "newName": "Ink"}},
+            ]),
+            json!([
+                {"command": "swatch.edit", "params": {"name": "Ink", "spot": false, "global": false}},
+                {"command": "swatch.edit", "params": {"name": "Ink", "spot": true}},
+            ]),
+        ] {
+            relink(&mut app);
+            assert!(linked(&app, &ctx));
+            app.run("command.batch", json!({"commands": steps})).unwrap();
+            assert!(!linked(&app, &ctx), "{steps}");
+        }
+        // A batch that edits the spot color's values and deletes another swatch keeps the link.
+        relink(&mut app);
+        app.run("swatch.new", json!({"name": "Spare", "color": "#999999"})).unwrap();
+        let steps = json!([
+            {"command": "swatch.edit", "params": {"name": "Ink", "color": "#cc0000"}},
+            {"command": "swatch.delete", "params": {"name": "Spare"}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "an unrelated batch");
+        // `global: false` leaves a spot color global, so the link stays.
+        let steps = json!([{"command": "swatch.edit", "params": {"name": "Ink", "global": false}}, {"command": "swatch.sortByName"}]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "global: false on a spot color");
+        // Closing its document ends the link, and the base keeps the color it showed.
+        app.run("swatch.edit", json!({"name": "Ink", "color": "#00aa00"})).unwrap();
+        let shown = base_color(&app);
+        // Closed the way the tab's close button closes it, outside `app.run`.
+        app.session.execute("file.new", &json!({})).unwrap();
+        app.session.execute("file.close", &json!({"index": 0})).unwrap();
+        frame(&mut app, &ctx);
+        assert_eq!(app.session.documents().len(), 1);
+        assert!(app.ui.color_guide_spot.is_none(), "its document closed");
+        assert_eq!(base_color(&app), shown, "the color it showed before the close");
+    }
+
+    /// An Undo or a Redo of a rename keeps the spot color base's link under the name the swatch has
+    /// again, also after more renames than a short list would hold and after a rename the panel did
+    /// not follow (a script's); another command after such a rename ends the link.
+    #[test]
+    fn an_undone_rename_keeps_the_link() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let c = guide(&app, &ctx).centre();
+        let linked = |app: &VectorcraftApp, ctx: &egui::Context| {
+            matches!(cell_paint(app, &guide(app, ctx), 0, c + 1).unwrap(), Paint::Solid { swatch: Some(_), .. })
+        };
+        let spot_name = |app: &VectorcraftApp| app.ui.color_guide_spot.as_ref().map(|s| s.swatch.clone());
+        app.run("swatch.edit", json!({"name": "Ink", "newName": "Ink U"})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(linked(&app, &ctx), "a rename undone");
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink"));
+        app.run("edit.redo", json!({})).unwrap();
+        assert!(linked(&app, &ctx), "a rename redone");
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink U"));
+        app.run("edit.undo", json!({})).unwrap();
+        // Forty renames undone one by one.
+        for i in 0..40 {
+            let from = if i == 0 { "Ink".to_string() } else { format!("Ink {i}") };
+            app.run("swatch.edit", json!({"name": from, "newName": format!("Ink {}", i + 1)})).unwrap();
+        }
+        for _ in 0..40 {
+            app.run("edit.undo", json!({})).unwrap();
+        }
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink"), "forty renames undone");
+        assert!(linked(&app, &ctx));
+        // A rename the panel did not follow: the link rests, and the Undo brings it back.
+        app.session.execute("swatch.edit", &json!({"name": "Ink", "newName": "Ink S"})).unwrap();
+        frame(&mut app, &ctx);
+        assert!(!linked(&app, &ctx), "resting");
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(linked(&app, &ctx), "an unfollowed rename undone");
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink"));
+        // Another command while it rests ends it.
+        app.session.execute("swatch.edit", &json!({"name": "Ink", "newName": "Ink S"})).unwrap();
+        frame(&mut app, &ctx);
+        app.run("swatch.new", json!({"name": "Spare", "color": "#999999"})).unwrap();
+        assert!(app.ui.color_guide_spot.is_none(), "another command while it rests");
+        // Outside an Undo or Redo, a new spot color with an earlier name does not take its place.
+        app.run("swatch.edit", json!({"name": "Ink S", "newName": "Ink"})).unwrap();
+        let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+        choose_linked_base(&mut app, ink, Some(("Ink".to_string(), 1.0)));
+        app.run("swatch.edit", json!({"name": "Ink", "newName": "Ink U"})).unwrap();
+        app.run("swatch.new", json!({"name": "Ink", "color": "#00cc66", "spot": true})).unwrap();
+        app.session.execute("swatch.edit", &json!({"name": "Ink U", "newName": "Ink V"})).unwrap();
+        frame(&mut app, &ctx);
+        assert!(!linked(&app, &ctx), "a new spot color with an earlier name");
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink U"));
+    }
+
+    /// A `command.batch` that switches, opens, closes or moves documents follows the spot color
+    /// base's swatch in its own document and leaves the link alone for steps in the others.
+    #[test]
+    fn a_batch_follows_the_spot_color_across_documents() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let c = guide(&app, &ctx).centre();
+        let linked = |app: &VectorcraftApp, ctx: &egui::Context| {
+            matches!(cell_paint(app, &guide(app, ctx), 0, c + 1).unwrap(), Paint::Solid { swatch: Some(_), .. })
+        };
+        let relink = |app: &mut VectorcraftApp| {
+            let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+            choose_linked_base(app, ink, Some(("Ink".to_string(), 1.0)));
+        };
+        assert!(linked(&app, &ctx));
+        // Undo, Activate Document and New in a batch keep the link while the swatch is a spot color,
+        // and the steps in the base's document are still followed.
+        app.run("swatch.new", json!({"name": "Spare 2", "color": "#777777"})).unwrap();
+        let steps = json!([
+            {"command": "edit.undo"},
+            {"command": "document.activate", "params": {"index": 0}},
+            {"command": "swatch.sortByName"},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "an undo, an activate and a sort");
+        let steps = json!([
+            {"command": "file.new"},
+            {"command": "swatch.new", "params": {"name": "Other", "color": "#123456", "spot": true}},
+            {"command": "swatch.delete", "params": {"name": "Other"}},
+            {"command": "document.activate", "params": {"index": 0}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "steps in a new document");
+        let spot_name = |app: &VectorcraftApp| app.ui.color_guide_spot.as_ref().map(|s| s.swatch.clone());
+        let steps = json!([
+            {"command": "file.new"},
+            {"command": "document.activate", "params": {"index": 0}},
+            {"command": "swatch.edit", "params": {"name": "Ink", "newName": "Ink C"}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "renamed after a new document");
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink C"));
+        // Moves and closes shift the tabs: [base, 1, 2] becomes [1, 2, base], then [2, base], then
+        // [base, 2]; the steps in tab 2 leave the link alone.
+        let steps = json!([
+            {"command": "document.move", "params": {"from": 0, "to": 2}},
+            {"command": "document.activate", "params": {"index": 2}},
+            {"command": "swatch.edit", "params": {"name": "Ink C", "newName": "Ink M"}},
+            {"command": "file.close", "params": {"index": 0}},
+            {"command": "document.activate", "params": {"index": 0}},
+            {"command": "swatch.new", "params": {"name": "Ink M", "color": "#123456", "spot": true}},
+            {"command": "swatch.delete", "params": {"name": "Ink M"}},
+            {"command": "document.activate", "params": {"index": 1}},
+            {"command": "document.move", "params": {"from": 1, "to": 0}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert_eq!(app.session.active_index(), Some(0));
+        assert!(linked(&app, &ctx), "moved and closed tabs");
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink M"));
+        app.run("swatch.edit", json!({"name": "Ink M", "newName": "Ink"})).unwrap();
+        assert!(linked(&app, &ctx), "renamed back");
+        // A batch that starts in another document follows the base's color group too.
+        app.run("swatch.newGroup", json!({"name": "Held", "swatches": ["Ink"]})).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let steps = json!([
+            {"command": "document.activate", "params": {"index": 0}},
+            {"command": "swatch.delete", "params": {"names": ["Held"]}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#cc6600", "spot": true}},
+            {"command": "document.activate", "params": {"index": 1}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(!linked(&app, &ctx), "its group deleted in a batch that started elsewhere");
+        relink(&mut app);
+        // Where an opened document's steps run is not known: deleting a swatch of the same name
+        // there keeps the link.
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>"#;
+        let steps = json!([
+            {"command": "document.open", "params": {"name": "a.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#123456", "spot": true}},
+            {"command": "swatch.delete", "params": {"name": "Ink"}},
+            {"command": "document.activate", "params": {"index": 0}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "deleted in an opened document");
+        // The opened document's tab is known from its reply: a rename there is not the base's,
+        // even when the base's document has spot colors of both names.
+        app.run("swatch.new", json!({"name": "Ink Alt", "color": "#654321", "spot": true})).unwrap();
+        let steps = json!([
+            {"command": "document.open", "params": {"name": "b.svg", "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#123456", "spot": true}},
+            {"command": "swatch.edit", "params": {"name": "Ink", "newName": "Ink Alt"}},
+            {"command": "document.activate", "params": {"index": 0}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "renamed in an opened document");
+        assert_eq!(spot_name(&app).as_deref(), Some("Ink"));
+        // Deleted by a batch that starts in another tab: the base keeps the color it showed.
+        app.run("swatch.edit", json!({"name": "Ink", "color": "#00aa00"})).unwrap();
+        let shown = base_color(&app);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let steps = json!([
+            {"command": "document.activate", "params": {"index": 0}},
+            {"command": "swatch.delete", "params": {"name": "Ink"}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(app.ui.color_guide_spot.is_none());
+        assert_eq!(base_color(&app), shown, "the edited color");
+        app.run("swatch.new", json!({"name": "Ink", "color": "#cc0000", "spot": true})).unwrap();
+        relink(&mut app);
+        let steps = json!([
+            {"command": "document.activate", "params": {"index": 1}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#123456", "spot": true}},
+            {"command": "swatch.delete", "params": {"name": "Ink"}},
+            {"command": "document.activate", "params": {"index": 0}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(linked(&app, &ctx), "a swatch of the same name deleted in another document");
+        let steps = json!([
+            {"command": "document.activate", "params": {"index": 0}},
+            {"command": "swatch.delete", "params": {"name": "Ink"}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#123456", "spot": true}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(!linked(&app, &ctx), "deleted after an activate");
+        relink(&mut app);
+        assert!(linked(&app, &ctx));
+    }
+
+    /// Deleting the color group that holds the spot color base's swatch ends the link; an Edit
+    /// Color Group that keeps it does not.
+    #[test]
+    fn a_deleted_color_group_ends_the_link() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let c = guide(&app, &ctx).centre();
+        let linked = |app: &VectorcraftApp, ctx: &egui::Context| {
+            matches!(cell_paint(app, &guide(app, ctx), 0, c + 1).unwrap(), Paint::Solid { swatch: Some(_), .. })
+        };
+        let relink = |app: &mut VectorcraftApp| {
+            let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+            choose_linked_base(app, ink, Some(("Ink".to_string(), 1.0)));
+        };
+        // Deleting the color group that holds it, then a new spot color of the same name.
+        app.run("swatch.newGroup", json!({"name": "Inks", "swatches": ["Ink"]})).unwrap();
+        assert!(linked(&app, &ctx), "moved into a group");
+        let steps = json!([
+            {"command": "swatch.delete", "params": {"names": ["Inks"]}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#cc6600", "spot": true}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(!linked(&app, &ctx), "its group deleted");
+        // Moved into a group and the group deleted in the same batch.
+        relink(&mut app);
+        let steps = json!([
+            {"command": "swatch.newGroup", "params": {"name": "Spots", "swatches": ["Ink"]}},
+            {"command": "swatch.delete", "params": {"names": ["Spots"]}},
+            {"command": "swatch.new", "params": {"name": "Ink", "color": "#336699", "spot": true}},
+        ]);
+        app.run("command.batch", json!({"commands": steps})).unwrap();
+        assert!(!linked(&app, &ctx), "moved into a group that was deleted");
+        // Edit Color Group that keeps it, with a new group name, keeps the link.
+        relink(&mut app);
+        app.run("swatch.newGroup", json!({"name": "Spots", "swatches": ["Ink"]})).unwrap();
+        let ink = app.session.active().unwrap().doc.global_color("Ink").unwrap();
+        app.run("swatch.editGroup", json!({"group": "Spots", "colors": [ink.to_hex()], "rename": "Spot Inks"})).unwrap();
+        assert!(linked(&app, &ctx), "a group edit that keeps it");
+        // A deleted base keeps the color it showed after an edit.
+        app.run("swatch.edit", json!({"name": "Ink", "color": "#cc0000"})).unwrap();
+        let shown = base_color(&app);
+        app.run("swatch.delete", json!({"name": "Ink"})).unwrap();
+        assert_eq!(base_color(&app), shown, "the color it showed");
+    }
+
+    /// Save Colors as Swatches and Save Color Group save a spot color base's tints as tint swatches
+    /// linked to it, beside process colors for the other cells, each in one undo step.
+    #[test]
+    fn saved_spot_tints_are_tint_swatches_of_the_spot_color() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        frame(&mut app, &ctx);
+        let g = guide(&app, &ctx);
+        let c = g.centre();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        set_pstate(&ctx, "cg-sel", vec![(0usize, c + 1), (0, c - 1), (0, c + 3)]);
+        save_selected(&mut app, &ctx);
+        let st = app.session.doc().unwrap();
+        assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
+        let made: Vec<_> = st.doc.swatches[st.doc.swatches.len() - 3..].to_vec();
+        let tint = |w: &vectorcraft_color::Swatch| w.tint_of().map(|(b, t)| (b.to_string(), t));
+        assert_eq!(tint(&made[0]).map(|(b, _)| b).as_deref(), Some("Ink"));
+        assert!((tint(&made[0]).unwrap().1 - expected_tint(&app, 1.0, 1)).abs() < 1e-4);
+        assert_eq!(made[1].paint, Paint::solid(g.grid[0][c - 1]), "a shade is a process color");
+        assert_eq!(tint(&made[2]).map(|(b, _)| b).as_deref(), Some("Ink"));
+        assert!(made[0].name.starts_with("Ink ") && made[0].name.ends_with('%'), "{}", made[0].name);
+        // A group of the selected cells, in grid order.
+        set_pstate(&ctx, "cg-sel", vec![(1usize, c + 1), (0, c + 2)]);
+        save_group(&mut app, &ctx);
+        let group = app.session.doc().unwrap().doc.swatch_groups.last().cloned().unwrap();
+        assert_eq!(group.swatches.len(), 2);
+        assert_eq!(tint(&group.swatches[0]).map(|(b, _)| b).as_deref(), Some("Ink"), "the base row's tint");
+        assert_eq!(group.swatches[1].paint, Paint::solid(g.grid[1][c + 1]), "another row is a process color");
+        // The saved tints follow an edit of the spot color.
+        app.run("swatch.edit", json!({"name": "Ink", "color": "#cc0000"})).unwrap();
+        let d = &app.session.active().unwrap().doc;
+        let red = d.global_color("Ink").unwrap();
+        let first = d.swatch(&made[0].name).unwrap();
+        assert_eq!(first.paint.color(), Some(red.tinted(first.tint_of().unwrap().1)));
+    }
+
+    /// A spot color base's tint dragged from the guide carries the tint, and the Swatches panel makes
+    /// a tint swatch of it.
+    #[test]
+    fn a_dragged_spot_tint_becomes_a_tint_swatch() {
+        let mut app = spot_app(1.0);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        guide_frame(&mut app, &ctx, vec![], 0.0, true, ("cg-h", 0usize));
+        let g = guide(&app, &ctx);
+        let c = g.centre();
+        let tile = |ctx: &egui::Context| ctx.read_response(egui::Id::unique(("swatch-tile", "Red"))).expect("the Red swatch is drawn").rect.center();
+        let held = drag_from(&mut app, &ctx, ("cg-v", 0, c + 1), Some(tile(&ctx)), 1.0, true);
+        let Some(PanelDrag::Paint { paint: Paint::Solid { swatch, tint, .. }, .. }) = held else { panic!("a solid paint: {held:?}") };
+        assert_eq!(swatch.as_deref(), Some("Ink"));
+        let newest = app.session.doc().unwrap().doc.swatches.last().cloned().expect("a swatch");
+        let (base, made) = newest.tint_of().unwrap_or_else(|| panic!("a tint swatch: {newest:?} {}", app.ui.status));
+        assert_eq!(base, "Ink");
+        assert!((made - tint).abs() < 1e-4, "{made} vs {tint}");
     }
 
     /// Every colour of the panel's guide.

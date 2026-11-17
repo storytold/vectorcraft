@@ -268,6 +268,9 @@ digits	Malayalam	マラヤーラム数字
 	Mask	マスク
 	Rasterize…	ラスタライズ…
 	Create Gradient Mesh…	グラデーションメッシュを作成…
+	Flat	フラット
+	To Center	中心へ
+	To Edge	エッジへ
 	Create Object Mosaic…	モザイクオブジェクトを作成…
 	Vector Halftone…	ベクターハーフトーン…
 	Create Trim Marks	トリムマークを作成
@@ -1120,6 +1123,8 @@ antiAlias	Sharp	シャープ
 	Crisp	くっきり
 	Strong	太め
 	Anti-aliasing:	アンチエイリアス:
+	Art Optimized	アートに最適化
+	Type Optimized	文字に最適化
 	Appearance Item	アピアランス項目
 	Appearance Panel	アピアランスパネル
 	Appearance of Black	ブラックのアピアランス
@@ -1369,10 +1374,13 @@ antiAlias	Sharp	シャープ
 	Conflict {n} of {count}	競合 {n} / {count}
 	Constrain Angle	角度を制限
 	Constrain Width and Height Proportions	幅と高さの縦横比を固定
+	Copy Width to Height	幅を高さにコピー
 	Construction Guides	作図ガイド
 	Contextual Alternates	前後関係に依存する字形
 	Convert	変換
 	Convert All Spot Colors to Process	すべての特色をプロセスカラーに変換
+	Convert {name} to process	{name} をプロセスカラーに変換
+	Keep {name} as spot	{name} を特色のままにする
 	Convert All Strokes to Outlines	すべての線をアウトラインに変換
 	Convert All Text to Outlines	すべてのテキストをアウトラインに変換
 	Convert Anchor Point	アンカーポイントの切り替え
@@ -1869,6 +1877,10 @@ antiAlias	Sharp	シャープ
 	Font List	フォントリスト
 	Show Similar Fonts	類似フォントを表示
 	Clear Similar Fonts	類似フォントの表示を解除
+	Fonts used in this document	このドキュメントで使用されているフォント
+	This document uses no available fonts	このドキュメントでは使用可能なフォントが使われていません
+	Recently Added	最近追加
+	Fonts added in the last 30 days	過去 30 日間に追加されたフォント
 	Font Preview Size	フォントプレビューのサイズ
 	Font:	フォント:
 	Fonts	フォント
@@ -2326,7 +2338,8 @@ antiAlias	Sharp	シャープ
 	Location	場所
 	Location:	位置:
 	Lock (⌘2)	ロック (⌘2)
-	Lossless (lossy WebP isn't available yet)	ロスレス (非可逆 WebP は未対応)
+	Lossless	ロスレス
+	Lossy	非可逆
 	Lossy:	圧縮率:
 	Luminosity	輝度
 	Magic Wand Options	自動選択オプション
@@ -2827,6 +2840,18 @@ diagnostics	ui	UI
 	Preview All Layers	すべてのレイヤーをプレビュー
 	Preview Mode	プレビューモード
 	Preview in Browser	ブラウザーでプレビュー
+	Optimize to File Size…	ファイルサイズに合わせて最適化…
+	Optimize to File Size	ファイルサイズに合わせて最適化
+	Desired File Size:	目標ファイルサイズ:
+	Start With:	開始設定:
+	Use:	対象:
+	Current Settings	現在の設定
+	Auto Select GIF/JPEG	GIF/JPEG を自動選択
+	Total of All Slices	すべてのスライスの合計
+	Each Slice	各スライス
+	Current Slice	現在のスライス
+	{size}, within {target}	{size} ({target} 以内)
+	No setting tried fits in {target}; the smallest is {size}	試したどの設定も {target} に収まりません。最小は {size}
 	Preview the document as it is now	現在のドキュメントをプレビュー
 	Previous	前へ
 	Previous Library	前のライブラリ
@@ -3078,12 +3103,85 @@ mark-style	Japanese	日本式
 	Restore	復元
 	Restore Recovered Documents	復帰したドキュメントを復元
 	Restore every preference to its default (applied on OK)	すべての環境設定を初期値に戻す (OK で適用)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	選択範囲やツールに応じたコマンドのバーをカンバスに表示します。ドラッグ中とプレゼンテーションモードでは隠れます。
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	矢印キーで選択範囲を移動する距離です。Shift キーを押すと 10 倍移動します。
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	矢印キーで移動する軸と、Shift キーで描画や移動を固定する軸の角度です。
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	角丸長方形ツールで描くときの角丸の半径です。描画中に半径を変えるとこの値も変わります。
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	スクリプトからなど位置の指定がないときに、ペーストでコピーを右と下へずらす距離です。アプリでのペーストはコピーを表示の中央に置きます。
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	選択したパスでクリックしたアンカーポイントをペンツールが削除したり、セグメントをクリックした位置に追加したりしないようにします。
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	描画ツールのポインターをアイコンではなく十字にします。Caps Lock がオンの間も同じになります。
+	Shows a tip when the pointer rests on a button or field that has one.	ヒントのあるボタンやフィールドにポインターを置くとヒントを表示します。
+	Shows a warning before a script you choose runs.	選んだスクリプトを実行する前に警告を表示します。
+	Smooths the edges of artwork on the canvas.	カンバス上のアートワークの縁を滑らかにします。
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選択 › 共通 › カラー (塗り)、カラー (線)、塗りと線は、グローバルスウォッチまたは特色スウォッチの同じ濃度だけを選び、ほかの濃度は選びません。
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	ドキュメントが開いていないときにホーム画面を表示します。オフのときは、ホームをクリックするまでウィンドウは空のままです。
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	サイズ、位置、整列のために、線と形を変える効果を含めてオブジェクトを測ります。ドロップシャドウ、光彩、ぼかしは含めません。
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 表示のとき、ドキュメントの 1 インチを 72 ではなく 96 スクリーンポイントで表示します。
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	選択ツールでグループ、パス、画像をダブルクリックすると、編集モードで開きます。
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	変形コマンドや変形パネルのメニューで別の指定をしない限り、パターンの塗りと線をアートワークと一緒に変形します。
+	Live corner radii scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、ライブコーナーの半径をアートワークと一緒に拡大・縮小します。
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、線幅、破線、効果の距離をアートワークと一緒に拡大・縮小します。
+	The mouse wheel zooms the canvas instead of scrolling it.	マウスホイールでカンバスをスクロールせずにズームします。
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl キーを押しながらマウスホイールを回すとカンバスを横にスクロールします。
+	Dragging sideways on a numeric field's label changes the field's value.	数値フィールドのラベルを横にドラッグすると、フィールドの値が変わります。
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
+	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	トリムマークを作成で、西洋式ではなく日本式のトンボを描きます。
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	新規オブジェクトに選択範囲の塗りと線だけを適用します。オフのときは、選択したオブジェクトのアピアランス全体を適用します。
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	変形パネル、プロパティパネル、コントロールパネルで幅または高さを変えると、もう一方も比率を保って変わります。
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	ライブ長方形のプロパティで、4 つの角に共通の角丸の半径フィールドを 1 つ表示します。オフのときは角ごとにフィールドを表示します。
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	変形パネルでの編集が変形する対象で、オブジェクト、パターンタイル、またはその両方です。デフォルトはパターンタイルを変形に従います。
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	シンボルインスタンスを 1 つ選択したとき、変形パネルはシンボルの基準点を基準点として使います。
+	Darkens the canvas outside the artboards while the Artboard tool is active.	アートボードツールを使っている間、アートボードの外側のカンバスを暗く表示します。
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	アートボードの外側を暗く表示がオンのとき、アートボードツールでドラッグしている間もアートボードの外側を暗いままにします。
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	クリックでオブジェクト、アンカーポイント、ハンドルを選択できる、ポインターからの距離（ピクセル）です。
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	選択ツールのボックスが、触れたオブジェクトを選択するか、完全に内側のものだけを選択するかです。ドラッグ方向では右へドラッグすると内側のものを選択します。ドラッグ中に E を押すとルールが反転します。
+	A click selects a filled object only on its path, not inside its fill.	塗りのあるオブジェクトを、塗りの内側ではなくパス上のクリックでのみ選択します。
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	ポイントにスナップでポイントがスナップされる、アンカーポイントや定規ガイドまでの距離（ピクセル）です。スマートガイドがオンのときは、代わりにスマートガイドのスナップ許容値を使います。
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	選択ツールで Cmd/Ctrl キーを押しながらクリックすると、ポインター位置で選択中のオブジェクトの下にあるオブジェクトを選択します。クリックするたびに 1 つ下へ進みます。
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	ズームインとズームアウトで、選択範囲の中心をビューの中央に移動します。
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	アートボード内のロックされたアートワークと非表示のアートワークも、ほかのアートワークと同じくアートボードと一緒に移動、拡大・縮小、複製されます。
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	カンバス上のアンカーポイントと方向ハンドルの先端のサイズです。大きいアンカーポイントは、より離れた位置からもつかめます。
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	方向ハンドルの先端を、塗りつぶしの点、中空の点、大きい塗りつぶしの点のいずれかで描きます。
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	ダイレクト選択ツールで、ポインターの下にあるアンカーポイントを強調表示します。
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	複数のアンカーポイントを選択したときに方向ハンドルを表示します。オフのときは、アンカーポイントを 1 つだけ選択したときにのみ表示します。
+	Corner widgets hide on corners whose angle is greater than this many degrees.	角度がこの値（度）より大きいコーナーでは、コーナーウィジェットを隠します。
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	クリックする前に、ペンツールで最後のアンカーポイントからポインターまでの次のセグメントをプレビューします。
+	The Curvature tool previews the curve to the pointer before you place the next point.	次のポイントを置く前に、カーブツールでポインターまでのカーブをプレビューします。
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	ピクセル以外の組み込みサイズの新規ドキュメントと、単位を記録していない開いたファイルに使う単位で、ここで選んで OK をクリックすると作業中のドキュメントの単位も変わります。
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	線幅、線分、間隔はこの単位で表示され、入力した数値もこの単位で読み取られます。
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	フォントサイズ、行送り、ベースラインシフトはこの単位で表示され、入力した数値もこの単位で読み取られます。
 	The unit for East Asian type measurements, which no field uses yet.	東アジア言語の文字の測定に使う単位で、まだどのフィールドも使っていません。
 	When on, a number typed without a unit into a field in picas is read in points.	オンのとき、パイカのフィールドに単位なしで入力した数値はポイントとして読み取られます。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID を選ぶと、レイヤー、変数、レイヤーオプションでオブジェクト名が XML ID として表示されます。
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	グリッドが非表示でも、描画、移動、拡大・縮小をグリッドの分割位置にスナップします。オンの間は「ピクセルにスナップ」は働きません。
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	選択されていないガイドの色です。ガイドのラベルを設定したアートボードは、自身のガイドをラベルの色で描きます。
+	Draws guides as solid lines or as dots, including the guides already in the document.	ドキュメントにすでにあるガイドも含め、ガイドを実線または点線で描きます。
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	オンにすると、VectorCraft の起動時にガイドがロックされます。このオプションを変更するとすぐにロックまたはロック解除され、表示 › ガイド › ガイドをロックでも引き続きロックを切り替えられます。
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	オンにすると、定規からドラッグを始めるときに Cmd/Ctrl を押していると、アクティブなアートボードだけのガイドを作成し、アートボードツールではカンバス全体のガイドを作成します。
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	グリッドの色です。主グリッド線の間の線は、この色の薄い色合いで描かれます。
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	グリッドを線で描くか、主グリッド線に沿って各分割位置に点で描きます。
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	開いているすべてのドキュメントと新規ドキュメントでの主グリッド線の間隔です。VectorCraft ドキュメントは保存時のグリッドで開きます。
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	主グリッドの各マスを分割する数です。ズームで線が隠れていても、「グリッドにスナップ」はこの分割位置にスナップします。
+	Draws the grid behind the artwork; off, the grid is drawn over it.	グリッドをアートワークの背面に描きます。オフのときは前面に描きます。
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	ピクセルプレビューで 600% 以上にズームすると、アクティブな表示でアートワークの上に、ドキュメントの各ピクセルの境界に線が表示されます。
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	パターンの編集中に表示されるタイルの境界線と、破線のスウォッチの境界の色です。
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	描画、移動、変形を近くのアートにスナップし、ガイドとラベルを表示します。ピクセルプレビューではオフになり、グリッドにスナップがオンのときは代わりにグリッドにスナップします。
+	The color of Smart Guide lines and labels.	スマートガイドの線とラベルの色です。
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	アートが揃う端または中心に沿って線を表示します。オフでも線なしで揃い、グリフにスナップは適用されません。
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	選択ツールでドラッグしていないとき、ポインターの下にある未選択のオブジェクトをレイヤーの色で囲みます。
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	アートを拡大・縮小、回転、シアー、またはリフレクトしている間、ポインターの横にサイズまたは角度を表示します。
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	描画中、セグメントまたはシェイプの始点を通る、選択した角度の線にポイントがスナップします。
+	The set of angles the construction guides follow while Construction Guides is on.	作図ガイドがオンのときに作図ガイドが従う角度のセットです。
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	アンカー、パス、整列など、ポイントのスナップ先の名前を表示します。オフでも名前なしで同じようにスナップします。
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	描画中または移動中に、距離、角度、アートの移動量をポインターの横に表示します。
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	移動またはサイズ変更したアートを近くのオブジェクト間と同じ間隔にスナップし、等しい間隔を示します。
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	何かを選択した状態で、別のオブジェクトまたはアートボードの上で Alt/Option キーを押し続けると、それと選択範囲の間の距離を表示します。
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	ドラッグの開始位置からスナップ許容値の範囲内までドラッグして戻した選択範囲は、正確にその位置に戻ります。コピーは戻りません。
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	スマートガイドがスナップするために、ポインターやドラッグしたポイントが画面上でアートにどこまで近づく必要があるかです。この距離はどのズームでも同じです。
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	直線セグメントの端、または中心から描いた円を、近くの曲線に接するようにスナップします。
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
@@ -3219,6 +3317,7 @@ mark-style	Japanese	日本式
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド
 	No recent commands	最近使ったコマンドはありません
+	Search commands	コマンドを検索
 	Secondary	セカンダリ
 	Select All Art on Layer	レイヤー上のすべてのアートを選択
 	Select All Assets	すべてのアセットを選択
@@ -4744,6 +4843,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	image would be too large; lower the resolution	画像が大きくなりすぎるため、解像度を下げてください
 @msg	clipboard is empty	クリップボードが空です
 @msg	no anchor points selected	アンカーポイントが選択されていません
+@msg	`points` must be three [x, y] pairs of numbers	`points` は 3 組の数値 [x, y] にしてください
+@msg	direct-select three anchor points, or give `points`	アンカーポイントを 3 つダイレクト選択するか、`points` を指定してください
+@msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
 @msg	exit isolation mode first	先に分離モードを終了してください
 @msg	no saved presets	保存したプリセットはありません
@@ -5138,6 +5240,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	1 hidden object	非表示のオブジェクト 1 個
 @msg	{n} hidden objects	非表示のオブジェクト {n} 個
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	「ブラウザーでプレビュー」にはデスクトップアプリが必要です (Web 版では代わりにファイルをダウンロードします)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` に目標ファイルサイズを K (1024 バイト) 単位で指定してください: 0 より大きく 1048576 以下の数値
+@msg	`startWith` is `current` or `auto`	`startWith` は `current` または `auto` です
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` は `allSlices`、`eachSlice` または `currentSlice` です
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` は `slice.list` のスライス番号で、`use: currentSlice` と一緒に使います
+@msg	Optimize to File Size: there is no image to measure	ファイルサイズに合わせて最適化: 測定する画像がありません
 @msg	no file system here	この環境にはファイルシステムがありません
 @msg	nothing to preview	プレビューするものがありません
 @msg	Saved {n} files beside {path}	{path} と同じ場所にファイルを {n} 個保存しました
@@ -5952,6 +6059,19 @@ lighting	Light	ライト
 	Transform Objects	オブジェクトの変形
 @msg	unknown parameter `{key}`; did you mean `{near}`?	`{key}` は不明なパラメーターです。`{near}` のことですか?
 @msg	unknown parameter `{key}`; the command takes no parameters	`{key}` は不明なパラメーターです。このコマンドにパラメーターはありません
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	`{key}` は不明なパラメーターです。`{object}` で使えるキー: {keys}
+@msg	unknown parameter `{key}`; {why_not}	`{key}` は不明なパラメーターです。{why_not}
+@msg	no format takes it (see document.formats)	このオプションを使う形式はありません (document.formats を参照)
+@msg	no save format takes it (see file.formatOptions)	このオプションを使う保存形式はありません (file.formatOptions を参照)
+@msg	PDF doesn't take it (see document.formats)	PDF では使えません (document.formats を参照)
+@msg	EPS doesn't take it (see document.formats)	EPS では使えません (document.formats を参照)
+@msg	DXF doesn't take it (see document.formats)	DXF では使えません (document.formats を参照)
+@msg	{name} must be {range} (got {v})	{name} は {range} にしてください (指定値: {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で VectorCraft を再起動しました (環境設定 › パフォーマンス › グラフィックプロセッサー › 自動 では、ディスプレイを駆動しているプロセッサーを使います)
+@msg	Sent “{title}” to {to}	“{title}” を {to} に送信しました
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” を {to} に送信しました。印刷キューの応答: {note}
+@msg	the default printer	デフォルトのプリンター
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	オブジェクト {object} のラスター効果: 要求は {requested} ppi ですが、6400 万ピクセルの上限により {achieved} ppi になりました
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}
 @msg	the params must be an object, not {got}	パラメーターはオブジェクトにしてください ({got} は使えません)
 @msg	unknown parameter `{path}`; the object takes no keys	`{path}` は不明なパラメーターです。このオブジェクトにはキーを指定できません
@@ -6978,8 +7098,6 @@ axis	Y Axis	Y 軸
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	`{d}` は不明なディザの指定です (diffusion、pattern、noise、none のいずれか)
 @msg	unknown panel `{panel}`	`{panel}` は不明なパネルです
 @msg	unknown parameter `{key}`	`{key}` は不明なパラメーターです
-@msg	unknown parameter `{within}settings.{format}`; {why}	`{within}settings.{format}` は不明なパラメーターです。{why}
-@msg	unknown parameter `{within}{key}`; {why}	`{within}{key}` は不明なパラメーターです。{why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	`{reduction}` は不明な減色の指定です (selective、perceptual、adaptive、web、gray、blackWhite、uniform、document のいずれか)
 @msg	unmatched ')'	対応していない ')' があります
 @msg	unterminated character class	文字クラスが閉じられていません
@@ -7349,7 +7467,6 @@ axis	Y Axis	Y 軸
 @msg	anchor `smooth` must be true or false	アンカーの `smooth` には true または false を指定してください
 @msg	anchor `{key}` must be [x, y]	アンカーの `{key}` には [x, y] を指定してください
 @msg	anchor `{key}` must be a number	アンカーの `{key}` には数値を指定してください
-@msg	angle and roundness must be finite	angle と roundness には有限の値を指定してください
 @msg	angles must be a list as long as pins (degrees or null)	angles には pins と同じ長さのリスト (度数または null) を指定してください
 @msg	appearance must be flat|center|edge	appearance には flat|center|edge のいずれかを指定してください
 @msg	apply is "fill" or "stroke", not `{other}`	apply には "fill" または "stroke" を指定してください (`{other}` は指定できません)
@@ -8401,7 +8518,6 @@ axis	Y Axis	Y 軸
 @msg	{label} must be a number from 1 to 10000	{label} には 1 から 10000 までの数値を指定してください
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} は組み込みのため、削除できません
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} には {lo}–{hi}{unit} を指定してください (指定値: {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC またはサイズが一致しません
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: この Affinity ファイルは埋め込みプレビューしか読み込めませんでした。「ファイル › 開く」で警告とともに表示するか、配置する前に Affinity から SVG または PDF を書き出してください
 @msg	{name}: {e}	{name}: {e}
@@ -8636,6 +8752,7 @@ anchor	Points:	ポイント:
 	Open a document to check it for issues.	ドキュメントを開くと問題をチェックできます。
 	Empty Text	空のテキスト
 	Unpainted Objects	塗りも線もないオブジェクト
+	Empty Text Paths	空のテキストパス
 	Zero-Opacity Objects	不透明度 0% のオブジェクト
 	Duplicate Objects	重複したオブジェクト
 	Off-Artboard Art	アートボード外のアートワーク
@@ -9314,6 +9431,10 @@ breakText	Glyphs	字形
 @msg	Some islands could not be joined to the area around the art	一部のアイランドをアートワークの周囲の領域につなげられませんでした
 @msg	`width` must be from {lo} to {hi} pt	`width` は {lo}～{hi} pt の範囲で指定してください
 @msg	`angle` must be from -180 to 180 degrees	`angle` は -180～180 度の範囲で指定してください
+@msg	`roundness` must be from 0 to 100%	`roundness` は 0～100% の範囲で指定してください
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` は 0.01～100 pt の範囲で指定してください
+@msg	style must be "pencil" or "brush"	style は "pencil" または "brush" を指定してください
+@msg	extend end must be "start" or "end"	extend の端は "start" または "end" を指定してください
 @msg	`roundness` must be from 1 to 100%	`roundness` は 1～100% の範囲で指定してください
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください
 	Weed Box and Lines…	カス取り枠とライン…
@@ -9375,6 +9496,7 @@ breakText	Glyphs	字形
 @msg	Too many Revolve faces for visibility evaluation	可視判定を行うには回転体の面が多すぎます
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft がスウォッチ交換ファイルから読み込めるカラーとグループは {ASE_MAX_ENTRIES} 個までですが、このライブラリには {entries} 個あります
 @msg	WebP encoding failed: {e}	WebP のエンコードに失敗しました: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP のエンコードに失敗しました: 画像が大きすぎて非可逆 WebP にできません: 解像度を下げるか、ロスレスを選択してください
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` には smallThumb、mediumThumb、largeThumb、smallList、largeList のいずれかを指定してください

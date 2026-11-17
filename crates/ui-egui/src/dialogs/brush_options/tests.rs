@@ -204,6 +204,27 @@ fn brush_key_color_eyedropper_updates_the_open_dialog() {
     assert_eq!(app.session.tool_id(), back);
 }
 
+/// #8024: the first Escape ends the Key Color pick and returns to the tool that armed it, leaving
+/// Brush Options open with its Key Color; a new press then cancels the dialog.
+#[test]
+fn escape_ends_the_key_color_pick_and_leaves_brush_options_open() {
+    let (mut app, ctx) = (app(), ctx());
+    app.select_tool("paintbrush");
+    app.run("ui.brushOptions", json!({"name": "Confetti"})).unwrap();
+    set(&mut app, json!({"colorization": "hueShift"}));
+    let before = app.ui.dialog.as_ref().and_then(|d| d.fields.get("keyColor").cloned());
+    app.select_tool("eyedropper");
+    app.session.set_tool_option("brushKeyColor", &json!(true));
+    app.session.set_tool_option("stop", &json!("paintbrush"));
+    frame(&ctx, &mut app, vec![], "");
+    escape(&ctx, &mut app);
+    assert!(app.ui.dialog.is_some(), "Brush Options stays open");
+    assert_eq!(app.ui.dialog.as_ref().and_then(|d| d.fields.get("keyColor").cloned()), before, "the Key Color stays");
+    assert_eq!(app.session.tool_id(), "paintbrush");
+    escape(&ctx, &mut app);
+    assert!(app.ui.dialog.is_none(), "a new press cancels Brush Options");
+}
+
 #[test]
 fn art_options_set_width_scale_direction_flips_and_colorization() {
     let mut app = app();
