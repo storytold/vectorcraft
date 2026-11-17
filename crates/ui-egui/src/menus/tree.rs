@@ -770,6 +770,7 @@ pub(super) fn transform_items() -> Vec<Item> {
         c("Transform Each…", "object.transformEach"),
         Sep,
         c("Reset Bounding Box", "object.resetBoundingBox"),
+        cp("Rotate Bounding Box…", "object.rotateBoundingBox", json!({"angle": 0})),
     ]
 }
 
