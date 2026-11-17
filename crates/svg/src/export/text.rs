@@ -86,11 +86,15 @@ impl Writer<'_> {
         // type with warichu, whose stacked lines a reader's <text> can't place either. So are
         // small capitals, superscript and subscript and tab leaders, which SVG text doesn't draw (#3869),
         // and a glyph chosen for a character, which a reader's <text> draws with the default glyph. So
-        // is type in one of the document's composite fonts, which a reader can't find by its name.
+        // is type in one of the document's composite fonts, which a reader can't find by its name,
+        // and type with an Adjust Diacritic Position, whose marks a reader's <text> draws where the
+        // font puts them.
         let unwritable = t.runs.iter().any(|r| {
             r.style.small_caps.is_some()
                 || r.style.position != vectorcraft_doc::CharPosition::Normal
                 || r.style.glyph_alternate.is_some()
+                || r.style.diacritic_horizontal != 0.0
+                || r.style.diacritic_vertical != 0.0
                 || vectorcraft_doc::CompositeFont::named(&doc.composite_fonts, &r.style.font_family).is_some()
         }) || std::iter::once(&t.para).chain(&t.paras).any(|p| p.tabs.iter().any(|tab| !tab.leader.is_empty()));
         let outlined = self.opts.outline_text
@@ -288,10 +292,20 @@ impl Writer<'_> {
                 self.warn("type on a path with Tsume is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // Justification…'s Desired word and letter spacing and glyph scaling do too.
+            if (0..t.paragraph_count()).any(|i| !t.layout_justification(t.para_at(i)).desired_is_default()) {
+                self.warn("type on a path with Justification spacing or glyph scaling is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             // A `<textPath>` holds the characters of the text, not the bullets or numbers drawn
             // before them.
             if !lay.markers.is_empty() {
                 self.warn("type on a path with bullets or numbers is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
+            // Nor the character a repeat mark is drawn as in the mark's width (Kurikaeshi Moji Shori).
+            if !lay.repeat_marks.is_empty() {
+                self.warn("type on a path that starts with a repeat mark drawn as the character it repeats is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
             return self.text_on_path(n, t, path, *start);
@@ -434,7 +448,8 @@ impl Writer<'_> {
             // reader would draw elsewhere, the next segment is placed.
             place = seg.brk || (!fewer && !base.anchored && positioned);
             if (st.h_scale - st.v_scale).abs() > 1e-9 || seg.scale != 1.0 {
-                attrs.push_str(&format!(" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\"", self.num(seg.advance * seg.scale)));
+                let length = seg.advance * seg.scale + seg.repeat_widen;
+                attrs.push_str(&format!(" textLength=\"{}\" lengthAdjust=\"spacingAndGlyphs\"", self.num(length)));
             }
             if st.rotation != 0.0 {
                 attrs.push_str(&format!(" rotate=\"{}\"", self.num(-st.rotation)));
@@ -491,7 +506,11 @@ impl Writer<'_> {
             });
             let Some(chars) = self.fonts.get_mut(at).map(|u| &mut u.chars) else { continue };
             // As written: a list marker's characters, a hyphen where a line breaks, capitals for All
-            // Caps, the style's Digits.
+            // Caps, the style's Digits, the character a repeat mark is drawn as.
+            if let Some(c) = shown_repeat(lay, i, g) {
+                chars.insert(c);
+                continue;
+            }
             let src = lay.marker_text(i).unwrap_or_else(|| if g.len == 0 { "-" } else { plain.get(g.byte..g.byte + g.len).unwrap_or("") });
             for c in src.chars().filter(|c| !c.is_control() && *c != '\u{ad}').map(|c| st.digits.map(c)) {
                 if st.all_caps {
@@ -571,6 +590,9 @@ impl Writer<'_> {
         let base = self.char_props(&drawn.first_style(), space);
         let mut props = base.clone();
         let (from, to) = t.kind.path_span().unwrap_or((start, 1.0));
+        // Type on an open path may start before the path: a negative `startOffset`, and a reader
+        // does not draw the characters before the path's start, as the layout does not.
+        let from = t.kind.path_text_start().unwrap_or(from);
         // The anchor sits where the layout aligns the line within its span.
         let at = match t.para_at(0).justify {
             Justify::Center | Justify::JustifyCenter => {
@@ -704,6 +726,9 @@ struct Segment {
     /// Glyph Scaling of the segment's one glyph (Justification…), which a reader stretches it to
     /// (`textLength`); 1 for other segments.
     scale: f64,
+    /// How much wider than the repeat mark the canvas draws the character the mark is drawn as
+    /// (Kurikaeshi Moji Shori), which a reader stretches it to (`textLength`); 0 for other segments.
+    repeat_widen: f64,
     /// A list marker's characters and tab, written in
     /// [`vectorcraft_doc::text::ParaList::marker_style`] of the run's style.
     marker: bool,
@@ -712,6 +737,41 @@ struct Segment {
 /// How far a reader may draw a character from where the layout draws it before the character is
 /// given its own position (points).
 const PLACE_TOLERANCE: f64 = 1e-6;
+
+/// Kurikaeshi Moji Shori: the character glyph `i` of `lay` shows when the layout drew a repeat mark
+/// as the character it repeats ([`vectorcraft_text::TextLayout::repeat_marks`]), or None.
+fn shown_repeat(lay: &vectorcraft_text::TextLayout, i: usize, g: &vectorcraft_text::PositionedGlyph) -> Option<char> {
+    if lay.repeat_marks.is_empty() || g.len == 0 || lay.marker_text(i).is_some() {
+        return None;
+    }
+    // The marks are in text order, one per line.
+    let at = lay.repeat_marks.binary_search_by_key(&g.byte, |&(byte, _)| byte).ok()?;
+    lay.repeat_marks.get(at).map(|&(_, c)| c)
+}
+
+/// Kurikaeshi Moji Shori: how much wider than repeat mark `cluster` the canvas draws glyph `g`, the
+/// character the mark is drawn as in the mark's place (text space), or 0 when the face or the
+/// mark's glyph is not found.
+fn repeat_widen(g: &vectorcraft_text::PositionedGlyph, cluster: &str) -> f64 {
+    let Some(face) = FontDb::global().face_by_id(g.font_id) else { return 0.0 };
+    // ゝ or ヽ with a combining voicing mark is drawn as one glyph, the voiced mark's.
+    let mark = match cluster {
+        "ゝ\u{3099}" => 'ゞ',
+        "ヽ\u{3099}" => 'ヾ',
+        _ => match cluster.chars().next() {
+            Some(c) => c,
+            None => return 0.0,
+        },
+    };
+    let mark_gid = face.glyph_for(mark);
+    if mark_gid == 0 {
+        return 0.0;
+    }
+    // Font units along the baseline → text space (size, Horizontal Scale and Glyph Scaling).
+    let [a, b, ..] = g.xf.as_coeffs();
+    let widen = (face.advance(g.gid) - face.advance(mark_gid)) * a.hypot(b);
+    if widen.is_finite() { widen } else { 0.0 }
+}
 
 /// The laid-out lines of `t` as segments: a new segment at every style change, after tabs and,
 /// on justified lines, after each word space (unless `fewer`). The text comes from the clusters
@@ -801,9 +861,16 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                 }
                 None => (g.advance, g.origin.x),
             };
-            let src: String = source(line.glyph_start + k, g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect();
+            let repeat = shown_repeat(lay, line.glyph_start + k, g);
+            let src: String = match repeat {
+                Some(c) => c.to_string(),
+                None => source(line.glyph_start + k, g).chars().filter(|c| *c != '\u{ad}').map(|c| run.style.digits.map(c)).collect(),
+            };
+            let widen = if repeat.is_some() { repeat_widen(g, source(line.glyph_start + k, g)) } else { 0.0 };
             let piece = if run.style.all_caps { src.to_uppercase() } else { src };
-            let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace));
+            // The character a repeat mark is drawn as takes the mark's width on the canvas, which a
+            // reader does not know: the text after it is placed anew.
+            let brk = piece == "\t" || (split_words && !piece.is_empty() && piece.chars().all(char::is_whitespace)) || repeat.is_some();
             // A glyph Glyph Scaling widens or narrows is a segment of its own, stretched to its width.
             let scale = if reader.is_some() && (g.scale - 1.0).abs() > 1e-9 && g.scale.is_finite() { g.scale } else { 1.0 };
             let fresh = std::mem::take(&mut after_inline) || scale != 1.0 || segs.last().is_some_and(|last| last.scale != 1.0);
@@ -817,7 +884,8 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
             let marker = lay.marker_of(line.glyph_start + k).is_some();
             let tab_apart = piece == "\t" && (run.style.h_scale - run.style.v_scale).abs() > 1e-9;
             match segs.last_mut() {
-                Some(last) if last.run == g.run && !last.brk && !fresh && !moved && last.marker == marker && !tab_apart => {
+                // The character a repeat mark is drawn as is a segment of its own, stretched to its width.
+                Some(last) if last.run == g.run && !last.brk && !fresh && !moved && last.marker == marker && !tab_apart && repeat.is_none() => {
                     last.text.push_str(&piece);
                     last.advance += advance;
                     last.brk = brk;
@@ -827,7 +895,7 @@ fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -
                         last.brk |= moved || last.marker != marker;
                         end_segment(last, tail, t, lay, &mut unkerned);
                     }
-                    segs.push(Segment { run: g.run, x, y: g.origin.y, text: piece, advance, brk, scale, marker });
+                    segs.push(Segment { run: g.run, x, y: g.origin.y, text: piece, advance, brk, scale, repeat_widen: widen, marker });
                 }
             }
             tail = set.map(|_| (g.byte, advance));

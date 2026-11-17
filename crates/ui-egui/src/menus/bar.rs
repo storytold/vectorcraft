@@ -117,7 +117,7 @@ fn switch_on_hover(ctx: &egui::Context, titles: &[egui::Response]) -> bool {
 /// it scrolls when it is taller than the window.
 pub(super) fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(230.0);
+        widgets::menu_min_width(ui, 230.0);
         render_items(app, ui, items, true, clicked);
     });
 }
@@ -137,8 +137,8 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
             Entry::Sub(label, children) => {
                 ui.menu_button(label, |ui| {
                     widgets::menu_scroll(ui, |ui| {
-                        ui.set_min_width(200.0);
-                        render_items(app, ui, children, checks || only_toggles(app, children), clicked);
+                        widgets::menu_min_width(ui, 200.0);
+                        render_items(app, ui, children, checks || shows_marks(app, children), clicked);
                     });
                 });
             }
@@ -147,8 +147,14 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
     }
 }
 
-/// Whether every item of a submenu can be on or off: a menu drawn without check marks (the canvas
-/// context menu) still shows them there, since its label alone can't say whether it is on.
+/// Whether a submenu of a menu drawn without check marks (the canvas context menu) still shows
+/// them: when every item can be on or off, or when it holds Auto Spell Check (the Spelling
+/// submenu, with Check Spelling… after it), since a toggle's label alone can't say whether it is on.
+fn shows_marks(app: &VectorcraftApp, items: &[Item]) -> bool {
+    only_toggles(app, items) || items.iter().any(|it| matches!(it, Item::Cmd(_, "edit.autoSpellCheck", _)))
+}
+
+/// Whether every item of a submenu can be on or off.
 fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
     let mut rows = items.iter().filter_map(|it| entry(app, it)).filter(|e| !matches!(e, Entry::Sep)).peekable();
     rows.peek().is_some() && rows.all(|e| matches!(e, Entry::Item(r) if r.checked.is_some()))

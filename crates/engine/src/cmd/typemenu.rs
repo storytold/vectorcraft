@@ -30,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smart Punctuation…",
             ["Type"],
             None,
-            "{quotes?: true (straight quotes become the Document Setup quotes), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), scope?: \"selection\"|\"document\"} → {changed}",
+            "{fiLigatures?: false (ff, fi, ffi → the ligatures U+FB00, U+FB01, U+FB03), flLigatures?: false (ff, fl, ffl → U+FB00, U+FB02, U+FB04), quotes?: true (straight quotes become the Document Setup quotes), spaces?: false (two or more spaces after a period → one), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), fractions?: false (1/2, 1/4, 3/4 and the other fractions Unicode encodes as one character, with no digit, slash or decimal point next to them, → ½, ¼, ¾ …), scope?: \"selection\"|\"document\"} the selected type, or every text object with scope document or nothing selected; a ligature or a fraction is written only where the run's font has a glyph for it. Nothing to replace records no undo step → {changed: text objects changed, replaced: {fiLigatures, flLigatures, quotes, spaces, dashes, ellipses, fractions}: how many of each were replaced}",
             has_doc,
             smart_punctuation
         ),
@@ -57,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: -1000000..1 (below 0 only on an open path), end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path); on an open path a start below 0 starts the text that far before the path's start, and the characters whose middle falls before it are not drawn (on a closed path it is the path's start), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -138,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs, which take a new graph's label character style and paragraph attributes (keeping their alignment); a pasted graph no longer keeps its labels' character and paragraph formats, so a later redraw sets them the same way → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -268,24 +268,227 @@ fn change_case(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Smart Punctuation ----------
 
-#[derive(Default)]
-struct PunctState {
-    prev: Option<char>,
+/// What Smart Punctuation replaces: each option of its dialog.
+struct Punct {
+    /// ff, fi and ffi become the ligatures U+FB00, U+FB01 and U+FB03.
+    fi_ligatures: bool,
+    /// ff, fl and ffl become the ligatures U+FB00, U+FB02 and U+FB04.
+    fl_ligatures: bool,
+    /// Straight quotes become these quotes (the Document Setup quotes).
+    quotes: Option<Quotes>,
+    /// Two or more spaces after a period become one.
+    spaces: bool,
+    /// `--` becomes an en dash and `---` an em dash.
+    dashes: bool,
+    /// `...` becomes an ellipsis.
+    ellipses: bool,
+    /// `1/2` and the other fractions [`FRACTIONS`] lists become their one-character forms.
+    fractions: bool,
 }
 
-/// Dashes (`--` en, `---` em), ellipses and, with `quotes`, typographer's quotes.
-pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quotes>, dashes: bool, ellipsis: bool) -> String {
-    let mut s = text.to_string();
-    if dashes {
-        s = s.replace("---", "—").replace("--", "–");
+/// How many of each replacement Smart Punctuation made.
+#[derive(Default)]
+struct PunctCounts {
+    fi_ligatures: usize,
+    fl_ligatures: usize,
+    quotes: usize,
+    spaces: usize,
+    dashes: usize,
+    ellipses: usize,
+    fractions: usize,
+}
+
+/// The text before the run being rewritten, across the runs of one text object.
+#[derive(Default)]
+struct PunctState {
+    /// The character before the run.
+    prev: Option<char>,
+    /// The number of spaces since the last period, while only spaces follow it.
+    after_period: Option<usize>,
+    /// An inline graphic comes right before the run.
+    after_graphic: bool,
+}
+
+/// The fractions Expert Fractions writes as one character: every fraction Unicode encodes as a
+/// vulgar fraction with a numerator of 1 to 7 and a denominator of 2 to 10.
+const FRACTIONS: [(&str, char); 18] = [
+    ("1/2", '½'),
+    ("1/3", '⅓'),
+    ("2/3", '⅔'),
+    ("1/4", '¼'),
+    ("3/4", '¾'),
+    ("1/5", '⅕'),
+    ("2/5", '⅖'),
+    ("3/5", '⅗'),
+    ("4/5", '⅘'),
+    ("1/6", '⅙'),
+    ("5/6", '⅚'),
+    ("1/7", '⅐'),
+    ("1/8", '⅛'),
+    ("3/8", '⅜'),
+    ("5/8", '⅝'),
+    ("7/8", '⅞'),
+    ("1/9", '⅑'),
+    ("1/10", '⅒'),
+];
+
+/// `s` with every `from` replaced by `to`, adding the number replaced to `n`.
+fn replace_counted(s: String, from: &str, to: &str, n: &mut usize) -> String {
+    let found = s.matches(from).count();
+    if found == 0 {
+        return s;
     }
-    if ellipsis {
-        s = s.replace("...", "…");
+    *n += found;
+    s.replace(from, to)
+}
+
+/// Smart Spaces: `text` without the second and later spaces after a period, adding the number of
+/// periods whose spaces it shortened to `n`. `after` carries the spaces after a period from one run
+/// to the next.
+fn smart_spaces(text: &str, after: &mut Option<usize>, n: &mut usize) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match (c, *after) {
+            (' ', Some(k)) => {
+                *after = Some(k + 1);
+                if k >= 1 {
+                    if k == 1 {
+                        *n += 1;
+                    }
+                    continue;
+                }
+            }
+            ('.', _) => *after = Some(0),
+            _ => *after = None,
+        }
+        out.push(c);
     }
-    match quotes {
-        Some(q) => q.apply(&s, prev),
+    out
+}
+
+/// The fraction `cs` starts with, and its length in characters: one of [`FRACTIONS`] that no digit,
+/// slash or decimal part follows, so `1/25`, `1/2/2026` and `1/2.5` are left as they are. A digit
+/// counts in any script.
+fn fraction_at(cs: &[char]) -> Option<(usize, char)> {
+    FRACTIONS.iter().find_map(|(text, f)| {
+        let len = text.chars().count();
+        if cs.len() < len || !cs[..len].iter().copied().eq(text.chars()) {
+            return None;
+        }
+        let ends = match &cs[len..] {
+            [c, ..] if c.is_numeric() || *c == '/' => false,
+            ['.' | ',', d, ..] if d.is_numeric() => false,
+            _ => true,
+        };
+        ends.then_some((len, *f))
+    })
+}
+
+/// Expert Fractions: `text` with each fraction [`fraction_at`] finds, and no digit, slash or
+/// decimal point before, written as one character when `covers` it. `prev` is the character before
+/// `text`, and `next` the two characters after it (in the next runs), so a fraction at the end of
+/// a run is checked against what follows it.
+fn expert_fractions(text: &str, prev: Option<char>, next: [Option<char>; 2], covers: &mut impl FnMut(char) -> bool, n: &mut usize) -> String {
+    let mut cs: Vec<char> = text.chars().collect();
+    let len_text = cs.len();
+    cs.extend(next.into_iter().flatten());
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < len_text {
+        let before = if i == 0 { prev } else { Some(cs[i - 1]) };
+        let free = !before.is_some_and(|c| c.is_numeric() || matches!(c, '/' | '.' | ','));
+        let found = fraction_at(&cs[i..]).filter(|(len, f)| i + len <= len_text && covers(*f));
+        if free && let Some((len, f)) = found {
+            out.push(f);
+            *n += 1;
+            i += len;
+            continue;
+        }
+        out.push(cs[i]);
+        i += 1;
+    }
+    out
+}
+
+/// The ligatures and their letters, longest first, with whether each comes with the ff, fi, ffi
+/// option (else with the ff, fl, ffl option). ff comes with both.
+const LIGATURES: [(&str, char, bool); 5] =
+    [("ffi", '\u{FB03}', true), ("ffl", '\u{FB04}', false), ("ff", '\u{FB00}', true), ("fi", '\u{FB01}', true), ("fl", '\u{FB02}', false)];
+
+/// The ligature options: `text` with the letters of each ligature an option `o` asks for written
+/// as the ligature, the longest first, when `covers` it.
+fn ligatures(text: &str, o: &Punct, covers: &mut impl FnMut(char) -> bool, n: &mut PunctCounts) -> String {
+    let cs: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < cs.len() {
+        let found = (cs[i] == 'f').then(|| {
+            LIGATURES.iter().find(|(letters, lig, fi)| {
+                let on = if *letters == "ff" {
+                    o.fi_ligatures || o.fl_ligatures
+                } else if *fi {
+                    o.fi_ligatures
+                } else {
+                    o.fl_ligatures
+                };
+                let len = letters.chars().count();
+                on && cs.len() - i >= len && cs[i..i + len].iter().copied().eq(letters.chars()) && covers(*lig)
+            })
+        });
+        if let Some(&(letters, lig, fi)) = found.flatten() {
+            out.push(lig);
+            // ff counts with the ff, fi, ffi option when that option is on.
+            if fi && (letters != "ff" || o.fi_ligatures) {
+                n.fi_ligatures += 1;
+            } else {
+                n.fl_ligatures += 1;
+            }
+            i += letters.chars().count();
+            continue;
+        }
+        out.push(cs[i]);
+        i += 1;
+    }
+    out
+}
+
+/// One run's text with the replacements `o` asks for, counted in `n`. Ligatures and fractions are
+/// written only where the run's font has a glyph for them. `next` holds the two characters after
+/// the run.
+fn smarten(text: &str, style: &CharStyle, next: [Option<char>; 2], o: &Punct, st: &mut PunctState, n: &mut PunctCounts) -> String {
+    let mut s = if o.spaces { smart_spaces(text, &mut st.after_period, &mut n.spaces) } else { text.to_string() };
+    if o.dashes {
+        s = replace_counted(s, "---", "—", &mut n.dashes);
+        s = replace_counted(s, "--", "–", &mut n.dashes);
+    }
+    if o.ellipses {
+        s = replace_counted(s, "...", "…", &mut n.ellipses);
+    }
+    // The run's font, looked up once and only for a ligature or a fraction.
+    let mut face = None;
+    let mut covers = |c: char| {
+        face.get_or_insert_with(|| {
+            vectorcraft_text::FontDb::global().face_version(&style.font_family, &style.font_style, style.font_version.as_deref())
+        })
+        .as_ref()
+        .is_some_and(|f| f.covers(c))
+    };
+    if o.fractions && s.contains('/') {
+        let before = if st.after_graphic { None } else { st.prev };
+        s = expert_fractions(&s, before, next, &mut covers, &mut n.fractions);
+    }
+    st.after_graphic = false;
+    if (o.fi_ligatures || o.fl_ligatures) && s.contains('f') {
+        s = ligatures(&s, o, &mut covers, n);
+    }
+    match &o.quotes {
+        Some(q) => {
+            let out = q.apply(&s, &mut st.prev);
+            n.quotes += s.chars().zip(out.chars()).filter(|(a, b)| a != b).count();
+            out
+        }
         None => {
-            *prev = s.chars().last().or(*prev);
+            st.prev = s.chars().last().or(st.prev);
             s
         }
     }
@@ -293,12 +496,20 @@ pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quote
 
 fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.smartPunctuation";
-    let (d, e) = (switch_or(p, "dashes", true, C)?, switch_or(p, "ellipsis", true, C)?);
     let quotes = switch_or(p, "quotes", true, C)?;
+    let mut o = Punct {
+        fi_ligatures: switch_or(p, "fiLigatures", false, C)?,
+        fl_ligatures: switch_or(p, "flLigatures", false, C)?,
+        quotes: None,
+        spaces: switch_or(p, "spaces", false, C)?,
+        dashes: switch_or(p, "dashes", true, C)?,
+        ellipses: switch_or(p, "ellipsis", true, C)?,
+        fractions: switch_or(p, "fractions", false, C)?,
+    };
     let document = choice(p, C, "scope", &["selection", "document"])? == Some("document");
     let st = s.doc()?;
     // Quotes in the document's style (Document Setup → Type).
-    let q = quotes.then_some(st.doc.setup.quotes);
+    o.quotes = quotes.then_some(st.doc.setup.quotes);
     let ids = if document || st.selection.is_empty() {
         let mut v = vec![];
         st.doc.walk(|n| {
@@ -310,8 +521,93 @@ fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         text_ids(&st.doc, &st.selection.objects)
     };
-    let n = edit_runs::<PunctState>(s, "Smart Punctuation", &ids, |text, st| smarten(text, &mut st.prev, q.as_ref(), d, e))?;
-    Ok(json!({ "changed": n }))
+    let mut n = PunctCounts::default();
+    let changed = super::overprint::edit_counted(s, "Smart Punctuation", |d| {
+        let mut changed = 0;
+        for id in &ids {
+            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let mut st = PunctState::default();
+            let mut any = false;
+            // The ruby spans' ends, in the plain text as it was. Each run is rewritten in pieces
+            // between them, so no replacement crosses one, and `moved` records where each end and
+            // each run's start lands in the new text.
+            let mut edges: Vec<usize> = t.ruby.iter().flat_map(|r| [r.start, r.end]).collect();
+            edges.sort_unstable();
+            edges.dedup();
+            let mut moved = vec![];
+            let (mut old_at, mut new_at) = (0, 0);
+            // Inline graphics are art, not characters to rewrite. Each run sees the first two
+            // characters of the runs after it, up to the next inline graphic, as they were.
+            for i in 0..t.runs.len() {
+                let len = t.runs[i].text.len();
+                moved.push((old_at, new_at));
+                if t.runs[i].inline.is_some() {
+                    // A graphic separates the characters on either side of it for Smart Spaces and
+                    // Expert Fractions; quotes still read the character before it.
+                    st.after_period = None;
+                    st.after_graphic = true;
+                    (old_at, new_at) = (old_at + len, new_at + len);
+                    continue;
+                }
+                let mut after = t.runs[i + 1..].iter().take_while(|r| r.inline.is_none()).flat_map(|r| r.text.chars());
+                let following = [after.next(), after.next()];
+                // Smart Spaces counts no space across a ruby span's end, so it removes no space on
+                // the other side of one.
+                if edges.binary_search(&old_at).is_ok() {
+                    st.after_period = None;
+                }
+                let r = &mut t.runs[i];
+                let mut cuts: Vec<usize> =
+                    edges.iter().filter(|&&e| e > old_at && e < old_at + len && r.text.is_char_boundary(e - old_at)).map(|e| e - old_at).collect();
+                cuts.push(len);
+                let mut new = String::with_capacity(len);
+                let mut from = 0;
+                for cut in cuts {
+                    if from > 0 {
+                        moved.push((old_at + from, new_at + new.len()));
+                        st.after_period = None;
+                    }
+                    let mut after = r.text[cut..].chars().chain(following.into_iter().flatten());
+                    let next = [after.next(), after.next()];
+                    new.push_str(&smarten(&r.text[from..cut], &r.style, next, &o, &mut st, &mut n));
+                    from = cut;
+                }
+                (old_at, new_at) = (old_at + len, new_at + new.len());
+                if new != r.text {
+                    r.text = new;
+                    any = true;
+                }
+            }
+            moved.push((old_at, new_at));
+            if any {
+                changed += 1;
+                // Each ruby end moves with the text before it; an end inside a character keeps its
+                // distance from the last place recorded before it.
+                let to_new = |v: usize| {
+                    let k = moved.partition_point(|&(old, _)| old <= v).saturating_sub(1);
+                    moved.get(k).map_or(v, |&(old, new)| new + (v - old.min(v)))
+                };
+                for span in &mut t.ruby {
+                    (span.start, span.end) = (to_new(span.start), to_new(span.end));
+                }
+                t.normalize_ruby();
+                refresh_bounds(t);
+            }
+        }
+        Ok(changed)
+    })?;
+    Ok(json!({
+        "changed": changed,
+        "replaced": {
+            "fiLigatures": n.fi_ligatures,
+            "flLigatures": n.fl_ligatures,
+            "quotes": n.quotes,
+            "spaces": n.spaces,
+            "dashes": n.dashes,
+            "ellipses": n.ellipses,
+            "fractions": n.fractions,
+        },
+    }))
 }
 
 // ---------- Area / Point conversion ----------
@@ -722,7 +1018,18 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
             Some(v) => v.as_f64().filter(|x| x.is_finite()).map(|x| Some(x.clamp(0.0, 1.0))).ok_or_else(|| bad(C, format!("`{k}` is a number 0..1"))),
         }
     };
-    let start = fraction("start")?;
+    // On an open path the text may start before the path's start (below 0, see
+    // `TextKind::path_text_start`); on a closed path a start below 0 is the path's start.
+    let start = match p.get("start") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_f64()
+                .filter(|x| x.is_finite())
+                .map(|x| x.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0))
+                .ok_or_else(|| bad(C, "`start` is a number up to 1 (below 0: before an open path's start)"))?,
+        ),
+    };
+    let start_on = |path: &vectorcraft_geom::PathData, v: f64| if path.is_closed() { v.max(0.0) } else { v };
     // `end: null` puts the end bracket back at the end of the path.
     let end = p.get("end").map(|_| fraction("end")).transpose()?;
     let flip = switch_or(p, "flip", false, C)?;
@@ -741,8 +1048,8 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     // Without a flip, when every object already has every value given, the document and its undo
     // history stay as they are.
     let has_values = |t: &TextObject| match &t.kind {
-        TextKind::OnPath { start: st, end: en, .. } => {
-            start.is_none_or(|v| v == *st)
+        TextKind::OnPath { path, start: st, end: en } => {
+            start.is_none_or(|v| start_on(path, v) == *st)
                 && end.is_none_or(|v| v == *en)
                 && effect.is_none_or(|e| t.path_effect == e)
                 && align.is_none_or(|a| t.path_align == a)
@@ -757,9 +1064,9 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Type on a Path Options", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let TextKind::OnPath { start: st, end: en, .. } = &mut t.kind else { continue };
+            let TextKind::OnPath { path, start: st, end: en } = &mut t.kind else { continue };
             if let Some(v) = start {
-                *st = v;
+                *st = start_on(path, v);
             }
             if let Some(v) = end {
                 *en = v;
@@ -1460,15 +1767,12 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
         t.set_all_paras(Default::default());
         refresh_bounds(t);
     }
-    // A graph keeps the names of its labels' character and paragraph styles for each redraw.
-    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
-        let l = &mut g.label_styles;
-        for st in [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten() {
-            st.style_name = None;
-        }
-        for pa in [&mut l.values_para, &mut l.categories_para, &mut l.legend_para].into_iter().flatten() {
-            pa.style_name = None;
-        }
+    // A graph keeps its labels' character and paragraph formats for each redraw: they go with the
+    // labels' own formatting, and the labels are set in a new graph's label formats. The graph's generated
+    // bounds follow its changed labels, so the next redraw does not read them as a move.
+    if n.extras().graph.is_some() {
+        super::graph::edit_graph_art(n, |n| super::graph::plain_labels(n, &strip_formatting));
+        return;
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
@@ -1479,6 +1783,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
 
 fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
     let saved = s.clipboard.nodes.clone();
+    // Pasted colors linked to a swatch merged with the document's show its color, so a pasted pie's legend labels take
+    // the contrast of the wedges as pasted. A `swatchConflict` the paste refuses is left to its error.
+    if let (Ok(choices), Ok(st)) = (super::clipboard::SwatchChoices::parse("edit.pasteWithoutFormatting", p), s.doc()) {
+        let same_doc = s.clipboard.source_doc == Some(st.uid);
+        let d = std::sync::Arc::clone(&st.doc);
+        s.clipboard.show_merged_colors(&d, &choices, same_doc);
+    }
     for n in &mut s.clipboard.nodes {
         strip_formatting(n);
     }

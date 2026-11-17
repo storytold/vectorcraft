@@ -269,7 +269,13 @@ capability model proposed for PhotoCraft plug-ins
   while `plugin.install` checks a module, the install is refused, before anything is written to the `Plug-ins` folder,
   if the other plug-in would need `replace: true` or the changed grant no longer approves the module. A
   `plugin.remove` in another session waits until the install has written the `Plug-ins` folder, and then removes the
-  module and its grant. Loading the `Plug-ins` folder or a plug-ins folder in another session waits for it too. When
+  module and its grant. Loading the `Plug-ins` folder or a plug-ins folder in another session waits for it too.
+  Another process using the same `Plug-ins` folder, for example `vectorcraft-cli` beside the app, waits as well: each
+  window or process locks `disabled.lock` in the folder while it reads and changes the stored modules, `grants.json`,
+  `disabled.json` and the plug-ins' settings and caches. An install therefore keeps a module with its own grant, and a
+  grant or setting written in one process does not undo one written in another. When `disabled.lock` can't be
+  locked, `plugin.install` and `plugin.remove` fail and change nothing, `plugin.setEnabled` keeps its change in the
+  process until a later change can be saved, and loading the folder writes nothing to it. When
   an install of a module that lists no permissions can't
   write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be
@@ -798,9 +804,10 @@ is a piece drawn by itself, in the order returned, with paints of its own:
   anchors, 256 fills and 256 strokes per piece, 256 stops per gradient), finite numbers in range with nothing clamped
   (color components, tints, offsets, opacities, midpoints 0.13 to 0.87, stops in order of `offset`, stroke
   widths 0 to 1,000 pt, miter limits 1 to 500), and every swatch a solid paint, gradient or stop links to and every
-  pattern named in the document. One fault refuses the whole result: that step of the stack draws its input as it was,
-  the effect record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for example `Test Tone:
-  plug-in output: objects[1].strokes[0].width: …`.
+  pattern named in the document. A gradient stop's `plates` need that stop's own link to a spot swatch of the document;
+  the gradient's `swatch` does not link its stops. One fault refuses the whole result: that step of the stack draws
+  its input as it was, the effect record stays, and `plugin.info`'s `lastError` names the plug-in and the field, for
+  example `Test Tone: plug-in output: objects[1].strokes[0].width: …`.
 - The pieces are never written into the document while it is drawn, measured, previewed, saved or exported. PDF and SVG
   export draw them as the canvas does, from a copy of the document. Object › Expand Appearance writes each piece as an
   ordinary path or compound path with its fills and strokes, as one undo step. Object › Expand of gradient and pattern

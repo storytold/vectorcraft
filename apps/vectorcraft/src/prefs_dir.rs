@@ -65,6 +65,14 @@ pub fn attach_scripts_dir(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Keep File Info's metadata templates in the `Metadata Templates` folder, which a saved template
+/// makes.
+pub fn attach_metadata_templates_dir(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Metadata Templates") {
+        session.attach_metadata_templates_dir(dir);
+    }
+}
+
 /// Have File › New start each category's documents from its profile in the `New Document
 /// Profiles` folder, which `file.newProfiles.edit` makes.
 pub fn attach_new_doc_profiles(session: &mut vectorcraft_engine::Session) {

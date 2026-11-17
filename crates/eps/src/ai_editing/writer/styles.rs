@@ -23,9 +23,11 @@ pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str = "on a large canvas, 
 pub(in crate::ai_editing) const PANEL_STYLES: &str = "graphic styles with gradient or pattern fills, with fills, strokes or effects the editing data can't hold as a graphic style, with a name another style has, with names over 1,024 bytes, or past 4,096 styles, are left out of the editing data for other apps";
 pub(in crate::ai_editing) const PANEL_EMPTY: &str =
     "a Graphic Styles panel with no style written opens from the editing data with a new document's styles";
+pub(in crate::ai_editing) const WARPED_IMAGES: &str = "images with a Warp after the first 256 envelopes and images with a Warp are written as their drawn look, without their Warp, in the editing data for other apps";
 pub(in crate::ai_editing) const STYLE_LINKS: &str = "links to graphic styles are left out of the editing data for other apps on type, images, symbol instances, knockout shapes and other objects that aren't written with their graphic style";
 
-/// How many objects of `doc`'s layers, opacity masks and symbols are linked to a graphic style.
+/// How many objects of `doc`'s layers, opacity masks, symbols and pattern tiles are linked to a
+/// graphic style.
 pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
     fn count(n: &Node) -> usize {
         // Ruler guides are not written as objects.
@@ -36,7 +38,9 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
         let mask = n.extras().mask.as_ref().map_or(0, |m| count(&m.art));
         own + mask + n.children().map_or(0, |c| c.iter().map(|m| count(m)).sum())
     }
-    doc.layers.iter().map(|l| count(l)).sum::<usize>() + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
+    doc.layers.iter().map(|l| count(l)).sum::<usize>()
+        + doc.symbols.iter().map(|s| count(&s.art)).sum::<usize>()
+        + doc.patterns.iter().flat_map(|p| p.art.iter()).map(|a| count(a)).sum::<usize>()
 }
 
 /// The objects of `doc`'s layers and of their opacity masks' art that may be written with an art
@@ -47,10 +51,30 @@ pub(in crate::ai_editing) fn style_links(doc: &Document) -> usize {
 /// Knockout Shape (the reader takes an object's transparency
 /// from its look, which doesn't carry it). A group's members are paths, compound paths or such
 /// groups, none with effects or anything baking changes.
-pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, Arc<Node>> {
-    fn walk(nodes: &[Arc<Node>], out: &mut HashMap<NodeId, Arc<Node>>) {
+pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> StyledMap {
+    styled_in(&doc.layers, true)
+}
+
+/// The objects that may be written with an art style, by id, as they are before baking.
+pub(in crate::ai_editing) type StyledMap = HashMap<NodeId, Arc<Node>>;
+
+/// The objects of the opacity masks' art in each of `doc`'s symbols' art, by symbol name, and in
+/// each of its patterns' tile art, by pattern name, that may be written with an art style, as
+/// [`styled_objects`] finds them on the layers. A definition's own objects outside its masks' art
+/// are not among them, and definitions without such objects are left out.
+pub(in crate::ai_editing) fn styled_definitions(doc: &Document) -> (HashMap<String, StyledMap>, HashMap<String, StyledMap>) {
+    let symbols = doc.symbols.iter().map(|s| (s.name.clone(), styled_in(std::slice::from_ref(&s.art), false)));
+    let patterns = doc.patterns.iter().map(|p| (p.name.clone(), styled_in(&p.art, false)));
+    let kept = |(_, m): &(String, StyledMap)| !m.is_empty();
+    (symbols.filter(kept).collect(), patterns.filter(kept).collect())
+}
+
+/// The objects of `nodes` that may be written with an art style ([`styled_objects`]): with `own`,
+/// `nodes` and their members as well as their opacity masks' art, else their masks' art only.
+fn styled_in(nodes: &[Arc<Node>], own: bool) -> StyledMap {
+    fn walk(nodes: &[Arc<Node>], own: bool, out: &mut StyledMap) {
         for n in nodes {
-            if candidate(n) {
+            if own && candidate(n) {
                 out.insert(n.id, n.clone());
             }
             if let Some(m) = n.extras().mask.as_ref() {
@@ -58,7 +82,7 @@ pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, A
                 if !art.visible {
                     Arc::make_mut(&mut art).visible = true;
                 }
-                walk(std::slice::from_ref(&art), out);
+                walk(std::slice::from_ref(&art), true, out);
             }
             // A group's members are written with a style of their own only when the group is written
             // without one. Baking a container with effects of its own changes its members, which
@@ -66,12 +90,12 @@ pub(in crate::ai_editing) fn styled_objects(doc: &Document) -> HashMap<NodeId, A
             if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &n.kind
                 && !bakes_members(n)
             {
-                walk(children, out);
+                walk(children, own, out);
             }
         }
     }
     let mut out = HashMap::new();
-    walk(&doc.layers, &mut out);
+    walk(nodes, own, &mut out);
     out
 }
 
@@ -612,7 +636,8 @@ impl Writer<'_> {
         let doc = self.doc;
         // A new document's styles are what the reader gives a file without a style list; they are
         // still written when an object is linked to one of them, so that it keeps its link.
-        let linked = self.styled.values().any(|n| n.extras().graphic_style.is_some());
+        let definitions = self.symbol_styled.values().chain(self.pattern_styled.values()).flat_map(HashMap::values);
+        let linked = self.styled.values().chain(definitions).any(|n| n.extras().graphic_style.is_some());
         if !linked && doc.graphic_styles == Document::new(1.0, 1.0).graphic_styles {
             return;
         }
@@ -719,6 +744,24 @@ impl Writer<'_> {
         items_keep && m.children().is_none_or(|c| c.iter().all(|c| self.member_keeps_outline(c)))
     }
 
+    /// Whether `orig` may be written with its art style as far as the reader's checks go: an image
+    /// with a Warp takes one of them, as an envelope does ([`Self::envelope`]); with none left, it is
+    /// written as its drawn look, with a warning. One whose pixels can't be read takes none: it is
+    /// written as its gray outline ([`Self::image`]).
+    pub(super) fn check_left(&mut self, orig: &Node) -> bool {
+        if !warped_image(orig) || self.checks_left > 0 {
+            return true;
+        }
+        let doc = self.doc;
+        if let NodeKind::Image(im) = &orig.kind
+            && !self.image_readable(&doc.shown_image(orig, im))
+        {
+            return true;
+        }
+        self.warn(WARPED_IMAGES);
+        false
+    }
+
     /// Object `n` (as baking left it; `orig` before baking) with the style `name`: its lock and
     /// hidden state; its drawn look (a group of its vector art as baking left it, without shadows,
     /// glows or feathers, the object's transparency
@@ -729,7 +772,8 @@ impl Writer<'_> {
     /// `1 (name) XW`.
     /// The look's group and the object itself are counted first ([`Self::take_objects`]): without
     /// room for them, nothing is written, and the object counts neither as written with its graphic
-    /// style nor as written with a brush on its stroke.
+    /// style nor as written with a brush on its stroke. An image written as an image takes one of
+    /// the reader's checks ([`Self::check_left`]).
     pub(super) fn styled_object(&mut self, n: &Node, orig: &Node, name: &str) {
         let own = match &orig.kind {
             NodeKind::Path { path, .. } => super::object_count(path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
@@ -787,9 +831,12 @@ impl Writer<'_> {
         match &orig.kind {
             NodeKind::Path { path, rule, .. } => self.styled_outline(orig, path, *rule, fit, xy),
             NodeKind::Compound { rule, .. } => self.styled_outline(orig, &compound_path(orig), *rule, fit, xy),
+            // The reader checks the object only when it is an image, not its gray outline.
             NodeKind::Image(im) => {
                 let was = std::mem::replace(&mut self.styled_copy, on_layers);
-                self.image(&self.doc.shown_image(orig, im), xy);
+                if self.image(&self.doc.shown_image(orig, im), xy) {
+                    self.checks_left = self.checks_left.saturating_sub(1);
+                }
                 self.styled_copy = was;
             }
             NodeKind::Group { children, .. } => {

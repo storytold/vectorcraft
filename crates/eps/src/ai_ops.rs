@@ -36,10 +36,8 @@ pub(crate) fn subpath(s: &mut String, xf: Affine, sp: &SubPath) {
             s.push_str(if smooth { "c\n" } else { "C\n" });
         }
     };
-    for pair in sp.anchors.windows(2) {
-        if let [a, b] = pair {
-            segment(s, a, b);
-        }
+    for (a, b) in sp.anchors.iter().zip(sp.anchors.iter().skip(1)) {
+        segment(s, a, b);
     }
     if sp.closed
         && sp.anchors.len() > 1

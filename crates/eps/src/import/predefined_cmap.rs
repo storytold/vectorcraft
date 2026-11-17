@@ -279,6 +279,7 @@ fn code_space(cmap: &str) -> Option<CodeSpace> {
     const CNS_EUC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\xa1", b"\xfe\xfe"), (b"\x8e\xa1\xa1\xa1", b"\x8e\xa3\xfe\xfe")];
     const KSC_PC: CodeSpace = &[(b"\x00", b"\x84"), (b"\xfe", b"\xff"), (b"\xa1\x41", b"\xfd\xfe")];
     const UHC: CodeSpace = &[(b"\x00", b"\x80"), (b"\x81\x41", b"\xfe\xfe")];
+    const JOHAB: CodeSpace = &[(b"\x00", b"\x80"), (b"\x84\x41", b"\xd3\xfe"), (b"\xd8\x31", b"\xde\xfe"), (b"\xe0\x31", b"\xf9\xfe")];
     let stem = match cmap {
         "H" | "V" => "",
         _ => cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V"))?,
@@ -301,6 +302,7 @@ fn code_space(cmap: &str) -> Option<CodeSpace> {
         "CNS-EUC" => CNS_EUC,
         "KSCpc-EUC" => KSC_PC,
         "KSCms-UHC" => UHC,
+        "KSC-Johab" => JOHAB,
         _ => return None,
     })
 }

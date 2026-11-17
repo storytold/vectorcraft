@@ -22,7 +22,7 @@ use crate::shape::{
     Punct, SGlyph, Tcy, cap_x_heights, hyphen_glyph, is_cjk, mark_word_ends, no_line_end, no_line_start, punct, run_face, shape_range, shape_runs,
     soft_line_start, style_metrics,
 };
-use crate::{Composer, FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
+use crate::{FirstBaseline, InlineGlyph, LayoutOptions, LineInfo, ListMarker, OtFeatures, PositionedGlyph, TextLayout, VerticalAlign};
 
 mod bidi;
 mod breaking;
@@ -229,11 +229,14 @@ impl Ctx<'_> {
         out
     }
 
-    /// Shape paragraph `r` (its bidi resolution `bidi`).
-    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
+    /// Shape paragraph `r` (its bidi resolution `bidi`, its attributes `para`). A Standard composer
+    /// sets a complex script glyph by glyph ([`OtFeatures::unshaped_complex`]).
+    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>, para: &ParaStyle) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &self.opts.features, levels, &mut v);
+        let standard = !self.opts.composer.unwrap_or(para.composer).shapes_complex_scripts();
+        let feats = OtFeatures { unshaped_complex: standard, ..self.opts.features };
+        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &feats, levels, &mut v);
         self.finish_shaping(&mut v, |g| self.style_at(g.byte));
         v
     }
@@ -255,18 +258,43 @@ impl Ctx<'_> {
             // of the glyph before it takes no cell of its own: it turns with that glyph (`emit`).
             for i in 0..v.len() {
                 let continues = continues_cluster(i.checked_sub(1).and_then(|p| v.get(p)), v.get(i));
-                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0 && !continues && stands_upright(g)) else { continue };
-                let extra = upright_cell(g) - g.face.advance(g.gid) * g.sx;
+                if continues || !v.get(i).is_some_and(stands_upright) {
+                    continue;
+                }
+                // Tsume measured the cluster across its glyphs' widths when it was shaped: an
+                // upright glyph's blank space runs down its cell, so that is taken back first.
+                let measured_down = v.get(i).is_some_and(|g| g.tcy.is_none());
+                if measured_down {
+                    let end = (i + 1..v.len()).find(|&j| !continues_cluster(v.get(j - 1), v.get(j))).unwrap_or(v.len());
+                    let tsume = v.get(end - 1).map_or(0.0, |g| g.tsume);
+                    for g in v.get_mut(i..end).unwrap_or_default() {
+                        g.dx += g.tsume_shift;
+                        g.tsume_shift = 0.0;
+                    }
+                    if let Some(g) = v.get_mut(end - 1) {
+                        g.adv += tsume;
+                        g.tsume = 0.0;
+                    }
+                }
+                let Some(g) = v.get_mut(i).filter(|g| g.adv > 0.0) else { continue };
+                let cell = upright_cell(g);
+                let extra = cell - g.face.advance(g.gid) * g.sx;
                 g.dx += extra * 0.5;
                 g.adv += extra;
                 // Proportional Metrics: `vpal` (and the vertical kerning with it) moves it and
                 // changes its length down the column, in fonts with vertical metrics (else the cell
                 // stays as it is, #966).
+                let mut length = cell;
                 if let Some(a) = g.vpal.filter(|_| g.tcy.is_none() && g.face.vertical_glyph(g.gid).is_some()) {
                     g.dx += a.dx;
                     g.dy += a.dy;
                     g.adv += a.advance;
                     g.proportional = a.proportional;
+                    length += a.advance;
+                }
+                let st = style(g);
+                if measured_down && st.tsume > 0.0 {
+                    self.tighten_upright(g, cell, length, st.size, st.tsume);
                 }
             }
         }
@@ -281,6 +309,25 @@ impl Ctx<'_> {
         if self.system_layout || !self.fractional_widths {
             whole_character_widths(v);
         }
+    }
+
+    /// Tsume `tsume` on upright glyph `g` in vertical type, in type of size `em`, its cell `cell`
+    /// long down the column and `length` long with the Proportional Metrics change to it: its share
+    /// of the blank space above and below what it paints, inside that length, comes out of its
+    /// advance, and it is drawn the share above it earlier, keeping its shape. A combining mark in
+    /// its cluster moves with it. A glyph that paints nothing keeps its place and length.
+    fn tighten_upright(&self, g: &mut SGlyph, cell: f64, length: f64, em: f64, tsume: f64) {
+        let Some(b) = crate::shape::painted_box(self.db, g) else { return };
+        // The glyph turns about the center of its cell, which is `upright_centre` above the
+        // baseline: a point of it in font units (y down) lands that far below the center, down the
+        // column from the top of the cell.
+        let centre = cell * 0.5 + upright_centre(g, cell, em) + g.dy;
+        let (a, z) = (centre + b.y0 * g.sy, centre + b.y1 * g.sy);
+        let Some((above, below)) = crate::shape::tsume_shares((a.min(z), a.max(z)), length, tsume) else { return };
+        g.kern_shift -= above;
+        g.tsume_shift = above;
+        g.adv -= above + below;
+        g.tsume = above + below;
     }
 
     /// Bullets and numbered lists: put marker `text` (the bullet, or the number and its period;
@@ -336,6 +383,8 @@ impl Ctx<'_> {
         tab.kern_shift = 0.0;
         tab.aki_shift = 0.0;
         tab.aki = 0.0;
+        tab.tsume_shift = 0.0;
+        tab.tsume = 0.0;
         tab.tcy = None;
         tab.wari = None;
         tab.vpal = None;
@@ -371,7 +420,8 @@ impl Ctx<'_> {
         // Only the glyph right after an upright glyph can continue its cluster.
         let cluster = self.upright_cluster.take();
         // Control characters (tabs) and soft hyphens draw nothing (fonts map them to .notdef).
-        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}';
+        // Joiners and direction marks are format controls: no ink either, whatever glyph the font maps.
+        let blank = g.is_soft_hyphen() || g.ch.is_control() || g.ch == '\u{2028}' || crate::justify::is_format_control(g.ch);
         // A colour glyph draws its art (COLR layers, an SVG document) or its image (a bitmap, or
         // COLR paints documents have no form for), not its outline; COLR, then SVG, then bitmaps.
         // Art in the text's colours takes the run's fill (black when it isn't a colour) and
@@ -624,6 +674,7 @@ impl Ctx<'_> {
             width_start,
             warichu: g.wari.map(|w| w.start),
             warichu_line: g.wari.map_or(0.0, |w| w.across),
+            off_path: false,
         });
     }
 
@@ -653,6 +704,8 @@ impl Ctx<'_> {
         k.kern_shift = 0.0;
         k.aki_shift = 0.0;
         k.aki = 0.0;
+        k.tsume_shift = 0.0;
+        k.tsume = 0.0;
         k.len = 0;
         k.lead = 0.0;
         k.ch = kashida::TATWEEL;
@@ -713,6 +766,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,
@@ -779,6 +834,8 @@ mod emit_kashida_mark_last {
             kern_shift: 0.0,
             aki_shift: 0.0,
             aki: 0.0,
+            tsume_shift: 0.0,
+            tsume: 0.0,
             sx: face.upem.recip() * 48.0,
             sy: face.upem.recip() * 48.0,
             bshift: 0.0,

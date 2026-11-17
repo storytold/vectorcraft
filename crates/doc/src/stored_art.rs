@@ -20,6 +20,8 @@ pub enum StoredRoot {
     GraphDesign(usize),
     /// Object `art` of pattern swatch `pattern` of [`Document::patterns`].
     Pattern { pattern: usize, art: usize },
+    /// Root `index` of [`Document::mounted_art`].
+    Mounted(usize),
 }
 
 /// Where a stored object is: its root and, inside opacity-mask art, the object that mask belongs
@@ -170,10 +172,12 @@ impl Document {
             .iter()
             .enumerate()
             .flat_map(|(p, def)| def.art.iter().enumerate().map(move |(a, n)| (n, StoredRoot::Pattern { pattern: p, art: a })));
-        symbols.chain(designs).chain(patterns)
+        let mounted = self.mounted_art.iter().enumerate().map(|(i, (n, _))| (n, StoredRoot::Mounted(i)));
+        symbols.chain(designs).chain(patterns).chain(mounted)
     }
 
-    /// Every root of stored art: the layers, then the art of symbols, graph designs and patterns.
+    /// Every root of stored art: the layers, then the art of symbols, graph designs and patterns,
+    /// then [`Document::mounted_art`].
     fn stored_roots(&self) -> impl Iterator<Item = (&Arc<Node>, StoredRoot)> {
         self.layers.iter().enumerate().map(|(i, l)| (l, StoredRoot::Layer(i))).chain(self.definition_roots())
     }
@@ -185,12 +189,13 @@ impl Document {
             StoredRoot::Symbol(i) => self.symbols.get_mut(i).map(|s| &mut s.art),
             StoredRoot::GraphDesign(i) => self.graph_designs.get_mut(i).map(|g| &mut g.art),
             StoredRoot::Pattern { pattern, art } => self.patterns.get_mut(pattern)?.art.get_mut(art),
+            StoredRoot::Mounted(i) => self.mounted_art.get_mut(i).map(|(n, _)| n),
         }
     }
 
     /// Visit every stored object with its place: the layer tree with the opacity-mask art of its
     /// objects, then the art of symbols, graph designs and pattern swatches (their definitions,
-    /// once each, never the copies instances and tiles draw).
+    /// once each, never the copies instances and tiles draw), then [`Document::mounted_art`].
     pub fn visit_stored<'a>(&'a self, mut f: impl FnMut(&'a Node, StoredPlace)) {
         self.visit_stored_arcs(|n, place| f(n, place));
     }
@@ -238,6 +243,29 @@ impl Document {
     /// visited before them (the layer tree's own objects first) a new id, so every stored object
     /// can be named by its id. Returns how many changed; the id counter then stands above them.
     pub(crate) fn renumber_stored_duplicates(&mut self) -> usize {
+        self.renumber_duplicates_in(|_| true)
+    }
+
+    /// Raises the id counter above the ids of [`Document::mounted_art`]'s objects, then gives those
+    /// objects whose id is 0, past the id range, or already taken by an object visited before them
+    /// (every other stored object first) a new id, as [`Self::renumber_stored_duplicates`] gives
+    /// them. Returns how many changed.
+    pub fn number_mounted_art(&mut self) -> usize {
+        let mut max = 0;
+        for (i, (root, _)) in self.mounted_art.iter().enumerate() {
+            visit(root, StoredPlace { root: StoredRoot::Mounted(i), mask_of: None }, &mut |n, _| {
+                if n.id.0 < MAX_NEXT_ID {
+                    max = max.max(n.id.0);
+                }
+            });
+        }
+        self.raise_next_id(max.saturating_add(1));
+        self.renumber_duplicates_in(|r| matches!(r, StoredRoot::Mounted(_)))
+    }
+
+    /// [`Self::renumber_stored_duplicates`] for the roots `pick` holds for only; the objects of the
+    /// others still count as taken.
+    fn renumber_duplicates_in(&mut self, pick: impl Fn(StoredRoot) -> bool) -> usize {
         let mut seen: HashSet<NodeId> = HashSet::new();
         for l in &self.layers {
             l.walk(&mut |n| {
@@ -250,9 +278,9 @@ impl Document {
         // Per root, the visiting indices of the nodes that take a new id.
         let mut fresh: Vec<(StoredRoot, HashSet<usize>)> = vec![];
         for (root, r) in self.stored_roots() {
-            let (mut i, mut here) = (0, HashSet::new());
+            let (mut i, mut here, take) = (0, HashSet::new(), pick(r));
             visit(root, StoredPlace { root: r, mask_of: None }, &mut |n, place| {
-                if !place.in_layers() && (n.id.0 == 0 || n.id.0 >= MAX_NEXT_ID || !seen.insert(n.id)) {
+                if !place.in_layers() && (n.id.0 == 0 || n.id.0 >= MAX_NEXT_ID || !seen.insert(n.id)) && take {
                     here.insert(i);
                 }
                 i += 1;
@@ -353,6 +381,30 @@ mod tests {
         let again = d.clone();
         assert_eq!(d.renumber_stored_duplicates(), 0);
         assert_eq!(d, again);
+    }
+
+    /// Mounted art is found and changed by id after the other stored art, and numbering it gives
+    /// its objects that repeat another stored object's id, or have none, new ids above the counter,
+    /// leaving every other object's id and its own unique ones as they are.
+    #[test]
+    fn mounted_art_is_found_and_numbered_after_the_rest() {
+        let mut d = doc([12, 13, 14]);
+        let owner = serde_json::json!({ "kind": "brush" });
+        d.mounted_art = vec![(Arc::new(masked(10, rect(0))), owner.clone()), (Arc::new(rect(15)), owner)];
+        assert_eq!(d.stored_node(NodeId(15)).map(|(_, p)| p.root), Some(StoredRoot::Mounted(1)));
+        let before = d.clone();
+        assert_eq!(d.number_mounted_art(), 2);
+        let mut ids = vec![];
+        d.visit_stored(|n, _| ids.push(n.id.0));
+        let unique: HashSet<u64> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len(), "{ids:?}");
+        assert_eq!(&ids[..6], &[d.layers[0].id.0, 10, 11, 12, 13, 14], "the other art keeps its ids");
+        assert_eq!(ids[8], 15, "a unique id is kept");
+        assert!(ids.iter().all(|id| *id < d.peek_next_id()), "{ids:?} {}", d.peek_next_id());
+        assert!(Arc::ptr_eq(&d.symbols[0].art, &before.symbols[0].art) && Arc::ptr_eq(&d.mounted_art[1].0, &before.mounted_art[1].0));
+        d.stored_node_mut(NodeId(15)).unwrap().name = Some("changed".into());
+        assert_eq!(d.mounted_art[1].0.name.as_deref(), Some("changed"));
+        assert_eq!(d.number_mounted_art(), 0, "a second pass changes nothing");
     }
 
     #[test]

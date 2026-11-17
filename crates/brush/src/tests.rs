@@ -1017,6 +1017,159 @@ fn repeated_brush_names_are_numbered_when_read() {
     assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len());
 }
 
+/// Art of `w`×`h` points holding a linked image: a group of [`rect_art`] and the image, both with id 0.
+fn linked_art(w: f64, h: f64) -> Node {
+    let image = Node::new(
+        NodeId(0),
+        NodeKind::Image(Box::new(vectorcraft_doc::ImageObject {
+            key: "k".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::IDENTITY,
+            link: Some(vectorcraft_doc::LinkInfo::new("/art/a.png")),
+            placement: Default::default(),
+            pixels: None,
+        })),
+    );
+    Node::group(NodeId(0), vec![std::sync::Arc::new(rect_art(w, h)), std::sync::Arc::new(image)])
+}
+
+/// The art of the stored brushes that holds images mounts on the document as stored art, each tile
+/// with the brush, its place in the library and the tile as owner, its objects with ids of their
+/// own; writing it back changes only the entries whose art changed, and leaves an entry that does
+/// not read as a brush, a brush without art and a brush whose art holds no image as they were stored.
+#[test]
+fn stored_brush_art_mounts_and_writes_back_only_what_changed() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let layer_object = d.layers[0].id;
+    let mut side = linked_art(10.0, 4.0);
+    side.id = layer_object;
+    let pattern =
+        Brush { name: "Frame".into(), kind: BrushKind::Pattern(PatternBrush { side, start: Some(linked_art(4.0, 4.0)), ..Default::default() }) };
+    let scatter = Brush {
+        name: "Dots".into(),
+        kind: BrushKind::Scatter(Scatter { art: linked_art(2.0, 2.0), colorization: Colorization::None, ..Default::default() }),
+    };
+    // Written as a file holds it, without the ids `store` gives.
+    let lib = [calli(0.0, 100.0, 3.0), pattern, scatter, art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)];
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap());
+    let odd = serde_json::json!({ "name": "Odd", "type": "unknown" });
+    if let Some(list) = d.unknown.get_mut(DOC_KEY).and_then(serde_json::Value::as_array_mut) {
+        list.insert(1, odd.clone());
+    }
+    let stored = d.unknown[DOC_KEY].clone();
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    let owners: Vec<&serde_json::Value> = d.mounted_art.iter().map(|(_, o)| o).collect();
+    assert_eq!(
+        owners,
+        [
+            &serde_json::json!({ "kind": "brush", "name": "Frame", "index": 1, "tile": "side" }),
+            &serde_json::json!({ "kind": "brush", "name": "Frame", "index": 1, "tile": "start" }),
+            &serde_json::json!({ "kind": "brush", "name": "Dots", "index": 2 }),
+        ]
+    );
+    let ids: Vec<NodeId> = d.mounted_art.iter().map(|(n, _)| n.id).collect();
+    let mut all = vec![];
+    d.visit_stored(|n, _| all.push(n.id));
+    assert!(all.iter().all(|id| id.0 != 0) && !all[1..].contains(&layer_object), "{all:?}");
+    assert_eq!(all.iter().collect::<std::collections::HashSet<_>>().len(), all.len(), "{all:?}");
+    // The scatter brush's art changes; the pattern brush's tiles keep the ids mounting gave them.
+    d.stored_node_mut(ids[2]).unwrap().name = Some("changed".into());
+    art.write_back(&mut d);
+    assert!(d.mounted_art.is_empty());
+    let now = d.unknown[DOC_KEY].as_array().unwrap();
+    assert_eq!(now.len(), 5);
+    assert_eq!((&now[0], &now[1], &now[4]), (&stored[0], &odd, &stored[4]), "the entries without images stay as stored");
+    assert_ne!(now[2], stored[2], "the pattern brush keeps the ids its art was given");
+    let lib = library(&d);
+    let Some(BrushKind::Pattern(p)) = lib.iter().find(|b| b.name == "Frame").map(|b| &b.kind) else { panic!("no pattern brush") };
+    assert_eq!((p.side.id, p.start.as_ref().map(|n| n.id)), (ids[0], Some(ids[1])));
+    assert_eq!(find(&d, "Dots").unwrap().art()[0].name.as_deref(), Some("changed"));
+    // Mounting again gives the same ids and changes nothing, so writing back leaves the library as it is.
+    let again = d.unknown[DOC_KEY].clone();
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    assert_eq!(d.mounted_art.iter().map(|(n, _)| n.id).collect::<Vec<_>>(), ids);
+    art.write_back(&mut d);
+    assert_eq!(d.unknown[DOC_KEY], again);
+}
+
+/// A brush whose stored name repeats an earlier brush's is named in its art's owner as the Brushes
+/// panel lists it, numbered.
+#[test]
+fn stored_brush_art_owner_names_a_repeated_name_as_listed() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let scatter = Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: linked_art(2.0, 2.0), ..Default::default() }) };
+    store(&mut d, &[scatter.clone(), scatter]);
+    StoredArt::read(&d).mount(&mut d);
+    let names: Vec<&serde_json::Value> = d.mounted_art.iter().map(|(_, o)| &o["name"]).collect();
+    assert_eq!(names, ["Dots", "Dots 2"]);
+}
+
+/// Storing a library whose brush art holds an image gives that art ids of its own, so mounting it
+/// later gives the same ids whatever the document allocated in between; art without images keeps
+/// the ids it was stored with.
+#[test]
+fn storing_brush_art_with_images_keeps_ids_of_its_own() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = linked_art(2.0, 2.0);
+    art.id = d.layers[0].id;
+    let scatter = Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art, ..Default::default() }) };
+    store(&mut d, &[scatter, art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)]);
+    let lib = library(&d);
+    let stored = lib[0].art()[0].id;
+    assert_ne!(stored, d.layers[0].id);
+    assert_eq!(lib[1].art()[0].id, NodeId(0), "art without images is stored as it was");
+    d.alloc_id();
+    StoredArt::read(&d).mount(&mut d);
+    assert_eq!(d.mounted_art[0].0.id, stored);
+}
+
+/// When the library is written again while the art is mounted, numbering a repeated name and
+/// adding a brush (as placing a document's brushes into it does), writing back changes the entry
+/// at its own place that reads as the brush apart from its new name, keeping that name, even when
+/// an earlier brush is the same as the one it was, and gives the added brush's art ids of its own.
+#[test]
+fn brush_art_written_back_finds_its_renamed_entry_and_numbers_added_art() {
+    use stored_art::StoredArt;
+    /// `n` with ids from `next` on, in paint order.
+    fn numbered(mut n: Node, next: &mut u64) -> Node {
+        n.id = NodeId(*next);
+        *next += 1;
+        for c in n.children_mut().into_iter().flatten() {
+            *c = std::sync::Arc::new(numbered((**c).clone(), next));
+        }
+        n
+    }
+    let mut d = Document::new(100.0, 100.0);
+    let scatter =
+        |n: &str| Brush { name: n.into(), kind: BrushKind::Scatter(Scatter { art: numbered(linked_art(2.0, 2.0), &mut 50), ..Default::default() }) };
+    // Two brushes the same apart from the ids mounting gives the second.
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value([scatter("Dots"), scatter("Dots")]).unwrap());
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    assert_eq!(d.mounted_art[0].0.id, NodeId(50));
+    let second = d.mounted_art[1].0.id;
+    // The library is written again: the repeated name numbered, a brush whose art repeats an id added.
+    let mut added = scatter("New");
+    if let BrushKind::Scatter(s) = &mut added.kind {
+        s.art.id = d.layers[0].id;
+    }
+    let lib = [library(&d), vec![added]].concat();
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value(&lib).unwrap());
+    assert_eq!(lib[1].name, "Dots 2");
+    d.stored_node_mut(second).unwrap().name = Some("changed".into());
+    art.write_back(&mut d);
+    let lib = library(&d);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Dots", "Dots 2", "New"]);
+    assert_eq!((lib[0].art()[0].name.as_deref(), lib[1].art()[0].name.as_deref()), (None, Some("changed")));
+    assert_ne!(lib[2].art()[0].id, d.layers[0].id, "the added brush's art has ids of its own");
+}
+
 #[test]
 fn brushes_serde_round_trip() {
     let lib = defaults().to_vec();

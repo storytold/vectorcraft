@@ -82,8 +82,10 @@ pub struct TraceParams {
     pub paths: f64,
     /// Corners 0–100: higher keeps more corners.
     pub corners: f64,
-    /// Noise: areas smaller than this many pixels are ignored. (Flat Logo mode: areas smaller than
-    /// `noise / 10` pixels of the source image.)
+    /// Noise: areas smaller than this many pixels are ignored: each joins the color it shares the
+    /// longest border with, or, when that color is far from its own, the color beside it nearest
+    /// its source pixels. (Flat Logo mode: areas smaller than `noise / 10` pixels of the source
+    /// image.)
     pub noise: u32,
     pub method: Method,
     /// Ignore Color: drop the areas of one colour (no background shape): white, unless
@@ -241,19 +243,19 @@ pub fn preset(name: &str) -> Option<TraceParams> {
         // many as its tones need where it is not.
         // (Color detail 85: a colour on a hundredth of the picture is still one of its colours.)
         "auto color" => TraceParams { palette: Palette::Automatic, color_detail: 85.0, ..color(6, 65.0, 60.0, 16, Method::Abutting) },
-        "high fidelity photo" => color(64, 90.0, 25.0, 4, Method::Overlapping),
-        "low fidelity photo" => color(20, 60.0, 50.0, 12, Method::Overlapping),
-        "3 colors" => color(3, 60.0, 60.0, 20, Method::Abutting),
-        "6 colors" => color(6, 65.0, 60.0, 16, Method::Abutting),
-        "16 colors" => color(16, 70.0, 55.0, 10, Method::Abutting),
-        "shades of gray" => TraceParams { mode: Mode::Grayscale, colors: 8, paths: 60.0, corners: 50.0, noise: 10, method: Method::Overlapping, ..d },
-        "black and white logo" => bw(128, 95.0, 80.0, 8, true),
-        "sketched art" => bw(150, 50.0, 50.0, 100, false),
-        "silhouettes" => bw(200, 40.0, 60.0, 30, false),
-        "line art" => bw(128, 80.0, 70.0, 10, false),
-        "technical drawing" => bw(128, 95.0, 90.0, 4, true),
+        "high fidelity photo" => color(64, 50.0, 50.0, 5, Method::Overlapping),
+        "low fidelity photo" => color(20, 50.0, 50.0, 10, Method::Overlapping),
+        "3 colors" => color(3, 50.0, 50.0, 15, Method::Abutting),
+        "6 colors" => color(6, 50.0, 50.0, 8, Method::Abutting),
+        "16 colors" => color(16, 50.0, 50.0, 8, Method::Abutting),
+        "shades of gray" => TraceParams { mode: Mode::Grayscale, colors: 8, paths: 50.0, corners: 50.0, noise: 15, method: Method::Overlapping, ..d },
+        "black and white logo" => bw(128, 50.0, 75.0, 5, true),
+        "sketched art" => bw(150, 50.0, 50.0, 20, false),
+        "silhouettes" => bw(200, 50.0, 50.0, 90, false),
+        "line art" => bw(128, 50.0, 75.0, 20, false),
+        "technical drawing" => bw(128, 50.0, 100.0, 1, true),
         // Black outlines: lines as stroked centre lines, wider areas as stroked outlines.
-        "outline" => TraceParams { fills: false, strokes: true, ..bw(128, 80.0, 70.0, 10, false) },
+        "outline" => TraceParams { fills: false, strokes: true, ..bw(128, 50.0, 75.0, 20, false) },
         // Flat-colour logos: colours found automatically, edges placed to a fraction of a pixel.
         "flat logo" => TraceParams { mode: Mode::Logo, colors: 8, paths: 60.0, corners: 50.0, noise: 6, snap_curves_to_lines: true, ..d },
         _ => return None,

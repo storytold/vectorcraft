@@ -1,7 +1,6 @@
 //! Save PDF › Output: colours converted to the destination (or their numbers preserved), ICC
 //! profiles tagging them, images converted too, and the output intent and Trapped entries.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use craft_pdf::syntax::Pdf;
@@ -159,6 +158,36 @@ fn spot_alternates_and_device_n_gradient_inks_are_written_as_the_document_holds_
     assert!(spaces > 0 && text.matches(exact).count() == spaces, "K10 is 0.1, not 26/255, in every Gold space: {text}");
     assert!(text.contains("[/DeviceN[/Cyan/Black/Gold]"), "{text}");
     assert!(text.contains("/C0[0 0 0.75]/C1[0.75 0.04 0]"), "the stops' C75, K4 and 75% Gold are written as they are");
+}
+
+#[test]
+fn blend_steps_between_spot_gradients_with_process_plates_print_both_inks() {
+    let stop = |offset: f32, tint: f32, plates: Option<[f32; 4]>| {
+        let mut s = GradientStop::new(offset, Color::cmyk(0.0, 0.2, 0.8, 0.1).tinted(tint));
+        s.swatch = Some("Gold".into());
+        s.tint = tint;
+        s.plates = plates;
+        s
+    };
+    let gradient = |tint: f32, plates: Option<[f32; 4]>| {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![stop(0.0, tint, plates), stop(1.0, tint, plates)]))))
+    };
+    let step_pdf = |a: &Paint, b: &Paint| {
+        let mut d = doc(ColorMode::Cmyk, &[]);
+        d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+        let step = vectorcraft_doc::blend::lerp_paint(a, b, 0.5);
+        let l = d.layers[0].id;
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 30.0)), Appearance::basic(step, Paint::None, 0.0));
+        d.insert(Some(l), 0, n).unwrap();
+        String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned()
+    };
+    // The middle step prints 60% Gold over 30% Cyan, in one DeviceN shading of both inks.
+    let text = step_pdf(&gradient(0.2, Some([0.2, 0.0, 0.0, 0.0])), &gradient(1.0, Some([0.4, 0.0, 0.0, 0.0])));
+    assert!(text.contains("[/DeviceN[/Cyan/Gold]"), "{text}");
+    assert!(text.contains("/C0[0.3 0.6]/C1[0.3 0.6]"), "{text}");
+    // Without plates the step is a Separation shading of Gold alone.
+    let text = step_pdf(&gradient(0.2, None), &gradient(1.0, None));
+    assert!(!text.contains("/DeviceN") && text.contains("[/Separation/Gold/"), "{text}");
 }
 
 /// A spot swatch's Separation space with alternate C0 M20 Y80 K10 under `colorant` (a PDF name).
@@ -399,11 +428,9 @@ fn tagged_cmyk_documents_blend_in_the_cmyk_profile_space() {
 
 /// A 4 × 4 PNG of one colour.
 fn png(rgb: [u8; 3]) -> Vec<u8> {
-    let mut out = Vec::new();
-    image::DynamicImage::from(image::RgbImage::from_pixel(4, 4, image::Rgb(rgb)))
-        .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, rgb.repeat(16))
         .unwrap();
-    out
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 fn image_doc(bytes: Vec<u8>) -> Document {
@@ -421,7 +448,26 @@ fn image_doc(bytes: Vec<u8>) -> Document {
 fn first_pixel(bytes: &[u8]) -> [u8; 3] {
     let back = import(bytes).unwrap();
     let blob = back.images.values().next().unwrap();
-    image::load_from_memory(&blob.bytes).unwrap().to_rgb8().get_pixel(0, 0).0
+    craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8()
+        .get_pixel(0, 0)
+        .0
 }
 
 #[test]

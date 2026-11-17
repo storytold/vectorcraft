@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\" (the space after each character), kerningBefore?: 1/1000 em -1000..10000 (the space before a character that starts a line by itself: the first character of the text, of a paragraph or after a forced line break; no effect elsewhere; 0 by default), baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", \"salt=2\", …] (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; the range is shaped with its word, so a letter's alternate keeps it joined to its neighbours), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; on a vertical path a positive Up/Down moves it toward the path's start and a positive Left/Right to the path's left; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), warichu?: bool (Character panel menu › Warichu, with Show East Asian Options: the characters are set at warichuScale percent of their size and stacked on warichuLines lines inside their line, one above the other in horizontal type and side by side in vertical type, the first line above or to the right; a stretch of them is one block with the settings of its first character that stays whole on one line and may run past its end; type on a path sets them at their own size), warichuLines?: 1..6 (default 2), warichuGap?: pt 0..100 (the space between the lines, default 0), warichuScale?: % 10..100 (default 50), warichuAlign?: \"auto\"|\"left\"|\"center\"|\"right\"|\"justifyLeft\"|\"justifyCenter\"|\"justifyRight\"|\"justifyAll\" (Warichu Settings: how the lines line up along the block, which is as long as its longest line; the justify values spread every line but the last, which is set left, centered or right, or spread with justifyAll; auto, the default, sets them as justifyLeft; left and right are top and bottom in vertical type; none of them turns warichu on), akiLeft?, akiRight?: 1/1000 em 0..1000 (Character panel › Insert Aki Left and Right, with Show East Asian Options: space before and after each character in reading order, on its left and right in left-to-right type, on its right and left in right-to-left type, above and below it in vertical type; a ligature or a letter with its marks takes the values of its first character; line wrapping counts it, alignment keeps it at a line's ends and justification does not stretch or narrow it; 0 by default; a value that is not a number or is outside the range is refused, naming the key), tsume?: % 0..100 (Character panel › Tsume, with Show East Asian Options: the share of the blank space on each side of each character's ink, inside its own width, that is taken away in horizontal type, the glyph keeping its shape; 100 sets the ink edge to edge; a character without ink, such as a space, keeps its width; a ligature or a letter with its marks takes the value of its first character; tracking, kerning and Insert Aki are added after it, and justification keeps it; vertical type keeps the characters' spacing; 0 by default; a value that is not a number or is outside the range is refused), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes), glyphAlternate?: null (takes away the glyph choice text.setGlyphAlternate made on the characters, in the same undo step as the other attributes; any other value is refused)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\" (the space after each character), kerningBefore?: 1/1000 em -1000..10000 (the space before a character that starts a line by itself: the first character of the text, of a paragraph or after a forced line break; no effect elsewhere; 0 by default), baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", \"salt=2\", …] (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; \"hkna\" is H or V Style, kana in the font's forms for the writing direction, shaped as `vkna` in vertical type, and \"ital\" is Roman Italics, half-width alphanumerics in the font's italic forms, both on or off only; the range is shaped with its word, so a letter's alternate keeps it joined to its neighbours), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; on a vertical path a positive Up/Down moves it toward the path's start and a positive Left/Right to the path's left; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), warichu?: bool (Character panel menu › Warichu, with Show East Asian Options: the characters are set at warichuScale percent of their size and stacked on warichuLines lines inside their line, one above the other in horizontal type and side by side in vertical type, the first line above or to the right; a stretch of them is one block with the settings of its first character that stays whole on one line and may run past its end; type on a path sets them at their own size), warichuLines?: 1..6 (default 2), warichuGap?: pt 0..100 (the space between the lines, default 0), warichuScale?: % 10..100 (default 50), warichuAlign?: \"auto\"|\"left\"|\"center\"|\"right\"|\"justifyLeft\"|\"justifyCenter\"|\"justifyRight\"|\"justifyAll\" (Warichu Settings: how the lines line up along the block, which is as long as its longest line; the justify values spread every line but the last, which is set left, centered or right, or spread with justifyAll; auto, the default, sets them as justifyLeft; left and right are top and bottom in vertical type; none of them turns warichu on), akiLeft?, akiRight?: 1/1000 em 0..1000 (Character panel › Insert Aki Left and Right, with Show East Asian Options: space before and after each character in reading order, on its left and right in left-to-right type, on its right and left in right-to-left type, above and below it in vertical type; a ligature or a letter with its marks takes the values of its first character; line wrapping counts it, alignment keeps it at a line's ends and justification does not stretch or narrow it; 0 by default; a value that is not a number or is outside the range is refused, naming the key), tsume?: % 0..100 (Character panel › Tsume, with Show East Asian Options: the share of the blank space on each side of each character's ink, inside its own width, that is taken away, the glyph keeping its shape; 100 sets the ink edge to edge; a color glyph's ink is its color art or bitmap; a character without ink, such as a space, keeps its width; a ligature or a letter with its marks takes the value of its first character; tracking, kerning and Insert Aki are added after it, and justification keeps it; in vertical type an upright character is measured above and below its ink inside its cell down the column, a character lying on its side along its own width, and a tate-chu-yoko block's characters across the column, the block keeping its one em; 0 by default; a value that is not a number or is outside the range is refused), diacriticHorizontal?, diacriticVertical?: 1/1000 em -1000..1000 (Character panel › Adjust Horizontal and Vertical Diacritic Position, with Show Indic Options: the font's mark glyphs among the characters, those its GDEF table classes as marks such as Arabic harakat and Hebrew points, move right by a positive horizontal value and up by a positive vertical one, relative to their letters, in thousandths of the size; a harakat or Hebrew point styled apart from its letter takes its own values and stays attached to it, and another mark takes its letter's; letters and fonts without mark classes do not move; 0 by default; a value that is not a number or is outside the range is refused, naming the key), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), glyphForm?: \"traditional\"|\"expert\"|\"jis04\"|\"jis90\"|\"jis78\"|\"jis83\"|\"fullWidth\"|\"halfWidth\"|\"thirdWidth\"|\"quarterWidth\"|\"default\" (Glyphs panel menu, with Show East Asian Options: the characters are drawn in that form of the font, the OpenType feature trad, expt, jp04, jp90, jp78, jp83, fwid, hwid, twid or qwid, one form at a time; a character the font has no such glyph for keeps its own; \"default\", Revert To Default Forms, draws the font's default glyphs; a form other than \"default\" takes away the characters' glyph choice (text.setGlyphAlternate); with fullWidth, halfWidth, thirdWidth or quarterWidth, proportionalMetrics is kept but `palt` is not applied, and the font's pair kerning is turned off; another value is refused), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes), glyphAlternate?: null (takes away the glyph choice text.setGlyphAlternate made on the characters, in the same undo step as the other attributes; any other value is refused)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -49,7 +49,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Touch Type",
             [],
             None,
-            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright)} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first logical character of a line or at a reading-direction boundary; supported in either reading direction; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width → {id, start, end} (the character's bytes)",
+            "{id, start: byte (a character of it), dx?: pt, dy?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright)} change one character (a ligature, one glyph for several characters, as a whole) as a Touch Type tool drag does, as one undo step: dx moves it along its line in reading order by changing the kerning of the character before it on the line and its own kerning, and the characters after it stay where they are (an error for the first logical character of a line or at a reading-direction boundary; supported in either reading direction; limited to what kerning from -1000 to 10000 can give); dy raises it (baseline shift, up from its line whatever its rotation, also for the first character of a line and a right-to-left character); dx and dy are document points; hScale (including the object transform), vScale and rotation set its scales and rotation as text.setRangeStyle does. The kerning of the two characters also keeps the character and the ones after it where they were along the line when the font kerned them with their neighbors; a wider or narrower character moves the ones after it by the change in its width. An error for a character of type on an open path that is not drawn because it falls before the path's start → {id, start, end} (the character's bytes)",
             has_doc,
             touch_type
         ),
@@ -470,9 +470,13 @@ pub(crate) struct CharChange {
     aki_right: Option<f64>,
     /// Tsume, in percent.
     tsume: Option<f64>,
+    /// Adjust Horizontal and Vertical Diacritic Position, in 1/1000 em.
+    diacritic_horizontal: Option<f64>,
+    diacritic_vertical: Option<f64>,
     standard_vertical_roman: Option<bool>,
     no_break: Option<bool>,
     digits: Option<vectorcraft_doc::Digits>,
+    glyph_form: Option<vectorcraft_doc::GlyphForm>,
     /// The language to set: a tag, or `None` for the default.
     language: Option<Option<String>>,
     font_axes: Option<AxisChange>,
@@ -547,6 +551,16 @@ pub(crate) fn aki_param(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> 
     if (lo..=hi).contains(&v) { Ok(Some(v)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
 }
 
+/// `diacriticHorizontal` or `diacriticVertical` (Adjust Horizontal and Vertical Diacritic
+/// Position): a number of thousandths of an em within
+/// [`vectorcraft_doc::text::MAX_DIACRITIC_POSITION`] either way. Any other value is an error.
+pub(crate) fn diacritic_param(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    let v = v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
+    let (lo, hi) = (-vectorcraft_doc::text::MAX_DIACRITIC_POSITION, vectorcraft_doc::text::MAX_DIACRITIC_POSITION);
+    if (lo..=hi).contains(&v) { Ok(Some(v)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
+}
+
 /// `tsume` (Tsume): a percentage from 0 to [`vectorcraft_doc::text::MAX_TSUME`]. Any other value is
 /// an error.
 pub(crate) fn tsume_param(p: &Value, cmd: &str) -> Result<Option<f64>> {
@@ -569,6 +583,20 @@ pub(crate) fn digits_param(p: &Value, cmd: &str) -> Result<Option<vectorcraft_do
         return Err(bad(cmd, format!("`digits` must be one of {}", ids.join(", "))));
     };
     Ok(Some(d))
+}
+
+/// `glyphForm: "traditional"|"expert"|"jis04"|…|"default"` ([`GlyphForm::id`]) → the East Asian
+/// glyph form the characters are drawn in.
+///
+/// [`GlyphForm::id`]: vectorcraft_doc::GlyphForm::id
+pub(crate) fn glyph_form_param(p: &Value, cmd: &str) -> Result<Option<vectorcraft_doc::GlyphForm>> {
+    use vectorcraft_doc::GlyphForm;
+    let Some(v) = p.get("glyphForm").filter(|v| !v.is_null()) else { return Ok(None) };
+    let Some(f) = v.as_str().and_then(GlyphForm::from_id) else {
+        let ids: Vec<String> = GlyphForm::ALL.iter().map(|f| format!("\"{}\"", f.id())).collect();
+        return Err(bad(cmd, format!("`glyphForm` must be one of {}", ids.join(", "))));
+    };
+    Ok(Some(f))
 }
 
 /// `language: name|tag` (one of Document Setup's languages, case-insensitive) → the language to
@@ -644,7 +672,7 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
         return Err(bad(
             cmd,
             format!(
-                "unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {}, as `salt=2`)",
+                "unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {}, as `salt=2`)",
                 vectorcraft_text::MAX_FEATURE_VALUE
             ),
         ));
@@ -837,9 +865,12 @@ impl CharChange {
             aki_left: aki_param(p, "akiLeft", cmd)?,
             aki_right: aki_param(p, "akiRight", cmd)?,
             tsume: tsume_param(p, cmd)?,
+            diacritic_horizontal: diacritic_param(p, "diacriticHorizontal", cmd)?,
+            diacritic_vertical: diacritic_param(p, "diacriticVertical", cmd)?,
             standard_vertical_roman: flag("standardVerticalRoman"),
             no_break: flag("noBreak"),
             digits: digits_param(p, cmd)?,
+            glyph_form: glyph_form_param(p, cmd)?,
             language: language_param(p, cmd)?,
             font_axes: font_axes_param(p, cmd)?,
             font_height_reference: font_height_reference_param(p, cmd)?,
@@ -902,9 +933,12 @@ impl CharChange {
             && self.aki_left.is_none()
             && self.aki_right.is_none()
             && self.tsume.is_none()
+            && self.diacritic_horizontal.is_none()
+            && self.diacritic_vertical.is_none()
             && self.standard_vertical_roman.is_none()
             && self.no_break.is_none()
             && self.digits.is_none()
+            && self.glyph_form.is_none()
             && self.language.is_none()
             && self.font_axes.is_none()
             && self.font_height_reference.is_none()
@@ -946,7 +980,8 @@ impl CharChange {
         }
     }
 
-    /// The character alignment, direction and East Asian settings of [`Self::apply`].
+    /// The character alignment, direction, diacritic positions and East Asian settings of
+    /// [`Self::apply`].
     fn apply_cjk(&self, st: &mut CharStyle) {
         if let Some(v) = self.char_align {
             st.char_align = v;
@@ -992,6 +1027,12 @@ impl CharChange {
         }
         if let Some(v) = self.tsume {
             st.tsume = v;
+        }
+        if let Some(v) = self.diacritic_horizontal {
+            st.diacritic_horizontal = v;
+        }
+        if let Some(v) = self.diacritic_vertical {
+            st.diacritic_vertical = v;
         }
         if let Some(v) = self.standard_vertical_roman {
             st.standard_vertical_roman = v;
@@ -1069,6 +1110,9 @@ impl CharChange {
         }
         if let Some(v) = self.digits {
             st.digits = v;
+        }
+        if let Some(v) = self.glyph_form {
+            st.set_glyph_form(v);
         }
         if let Some(v) = self.font_height_reference {
             st.font_height_reference = v;
@@ -1530,8 +1574,21 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
     change.localize(&t, C)?;
     let points = t.style_scale().ok_or_else(|| bad(C, "text transform is collapsed or unrepresentable"))?.points;
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t);
-    let g = lay.glyphs.iter().find(|g| g.byte <= start && start < g.byte + g.len).ok_or_else(|| bad(C, format!("no character at byte {start}")))?;
+    let holds = |g: &&vectorcraft_text::PositionedGlyph| g.byte <= start && start < g.byte + g.len;
+    lay.glyphs.iter().find(holds).ok_or_else(|| bad(C, format!("no character at byte {start}")))?;
+    // A character before an open path's start is not drawn; one whose glyphs straddle the start
+    // is changed by its first drawn glyph.
+    let g = lay
+        .glyphs
+        .iter()
+        .filter(holds)
+        .find(|g| !g.off_path)
+        .ok_or_else(|| bad(C, format!("the character at byte {start} is not drawn: it falls before its path's start")))?;
     let (a, b) = (g.byte, g.byte + g.len);
+    // The same glyph of the character in another layout of the type: its place among the glyphs
+    // of the character.
+    let nth = lay.glyphs.iter().filter(|h| h.byte == a && h.len > 0).position(|h| std::ptr::eq(h, g)).unwrap_or(0);
+    let same = |l: &vectorcraft_text::TextLayout| l.glyphs.iter().filter(|h| h.byte == a && h.len > 0).nth(nth).cloned();
     // The line's direction in reading order.
     let d = Vec2::new(g.angle.cos(), g.angle.sin());
     let along = if g.rtl { -d } else { d };
@@ -1603,7 +1660,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
             // rises, which would make its horizontal drift count as baseline movement.
             touch(&mut trial, pr.map(|_| 0.0), Some(0.0), to - shift);
             let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &trial);
-            l.glyphs.iter().find(|h| h.byte == a && h.len > 0).map(|h| h.xf * Point::ZERO)
+            same(&l).map(|h| h.xf * Point::ZERO)
         };
         let (per_step, across) = match (pen_at(from + step), pen_at(from + 2.0 * step)) {
             (Some(p), Some(q)) => (linear(t.xf, q - p).hypot() / step.abs(), (q - p).dot(up) / step),
@@ -1633,7 +1690,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
         touch(&mut trial, None, None, 0.0);
         let l = vectorcraft_text::layout(db, &trial);
         let intrinsic = |h: &vectorcraft_text::PositionedGlyph| h.xf * Point::ZERO - h.xf * h.pivot;
-        l.glyphs.iter().find(|h| h.byte == a && h.len > 0).map_or(Vec2::ZERO, |h| intrinsic(h) - intrinsic(g))
+        same(&l).map_or(Vec2::ZERO, |h| intrinsic(&h) - intrinsic(g))
     } else {
         Vec2::ZERO
     };
@@ -1661,7 +1718,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
         let mut trial = t.clone();
         touch(&mut trial, k.0, k.1, raise);
         let l = vectorcraft_text::layout(db, &trial);
-        let h = l.glyphs.iter().find(|h| h.byte == a && h.len > 0).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
+        let h = same(&l).ok_or_else(|| bad(C, "the character's size can't be measured"))?;
         let across_goal = (g.xf * Point::ZERO).to_vec2().dot(up) + dy / doc_len(up) + intrinsic_delta.dot(up);
         raise += (across_goal - (h.xf * Point::ZERO).to_vec2().dot(up)) / baseline_step;
         if !raise.is_finite() {
@@ -1675,7 +1732,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
         let mut trial = t.clone();
         touch(&mut trial, k.0, k.1, raise);
         let l = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &trial);
-        let h = l.glyphs.iter().find(|h| h.byte == a && h.len > 0)?;
+        let h = same(&l)?;
         let next = match (l.glyphs.iter().find(|n| n.byte == b && n.len > 0 && n.line == h.line), next_goal) {
             (Some(n), Some(at)) => pen(n) - at,
             _ => 0.0,
@@ -1684,7 +1741,7 @@ fn touch_type(s: &mut Session, p: &Value) -> Result<Value> {
             (Some(n), Some(at)) => pen(n) - at,
             _ => 0.0,
         };
-        Some([pen(h) - goal, next, previous])
+        Some([pen(&h) - goal, next, previous])
     };
     let placed = |m: [f64; 3]| m.iter().all(|v| v.abs() <= 1e-9);
     // A manual kerning value turns off the font's kerning for its character, each style run is
@@ -1773,6 +1830,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
         para: super::create::new_type_para(),
         paras: Vec::new(),
         first_para_continues: false,
+        first_para_lead: None,
         area: Default::default(),
         path_effect: Default::default(),
         path_align: Default::default(),
@@ -2079,6 +2137,7 @@ fn headline_tracking(t: &TextObject, target: f64) -> Option<f64> {
             para: Default::default(),
             paras: Vec::new(),
             first_para_continues: false,
+            first_para_lead: None,
             area: Default::default(),
             path_effect: Default::default(),
             path_align: Default::default(),

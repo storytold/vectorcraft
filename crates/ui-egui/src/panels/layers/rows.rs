@@ -5,6 +5,7 @@ use super::{
     Arc, COLUMN, Color32, ColumnDrag, Document, INDENT, LayersDrag, Node, NodeId, NodeKind, Out, PanelDrag, ROW_KEYS, SQUARE_X, Sense, Stroke,
     StrokeKind, TARGET_X, Tokens, Ui, Value, View, icons, json, vec2, widgets,
 };
+use vectorcraft_tools::intertwine::{in_intertwine, refused_member};
 
 /// Stable id for the layers panel's per-name UI state.
 pub(super) fn key(name: &str) -> egui::Id {
@@ -81,7 +82,9 @@ pub(super) fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
 }
 
 /// Resolve the row clicked this frame: plain (highlight it), Ctrl/Cmd (toggle it) or Shift
-/// (highlight the rows from the last one clicked down to it).
+/// (highlight the rows from the last one clicked down to it). A plain click also lets go of the
+/// selected ruler guides, keeping the selected art (#7340): a guide's row picks it the way a
+/// highlight picks a row, so picking another row alone drops it.
 pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     let Some((id, m)) = out.click.take() else { return };
     let anchor: Option<NodeId> = ui.data(|d| d.get_temp(key("anchor")));
@@ -95,6 +98,10 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     widgets::apply_row_click(&mut rows, &click);
     out.rows_after_click = Some(rows);
     let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    if matches!(click, widgets::RowClick::Only(_)) && !view.guides.is_empty() {
+        // Toggled out of the selection, so the selected art stays.
+        out.actions.push(("guide.select".into(), json!({"indexes": view.guides, "toggle": true})));
+    }
     out.actions.push(match click {
         widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),
         widgets::RowClick::Toggle(id) => ("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})),
@@ -103,15 +110,20 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     });
 }
 
-/// Whether row `n` can take `drag` inside it.
-fn takes(n: &Node, drag: &LayersDrag, doc: &Document) -> bool {
+/// Whether row `n` can take `drag` (the rows or objects `moving`) inside it. A group or an
+/// Intertwine group takes objects; an Intertwine group, or a group in one, only objects that can
+/// be intertwined.
+fn takes(n: &Node, drag: &LayersDrag, moving: &[NodeId], doc: &Document) -> bool {
     match n.kind {
         NodeKind::Layer { .. } => true,
-        NodeKind::Group { .. } => match drag {
-            LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
-            LayersDrag::Art => true,
-            LayersDrag::Guides(_) => false,
-        },
+        NodeKind::Group { .. } | NodeKind::Intertwine { .. } => {
+            let objects = match drag {
+                LayersDrag::Rows(ids) => !ids.iter().any(|i| doc.node(*i).is_some_and(Node::is_layer)),
+                LayersDrag::Art => true,
+                LayersDrag::Guides(_) => false,
+            };
+            objects && (!in_intertwine(doc, n.id) || moving.iter().filter_map(|i| doc.node(*i)).all(|m| refused_member(m).is_none()))
+        }
         _ => false,
     }
 }
@@ -434,9 +446,7 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             d.insert_temp(key("grabbed"), n.id);
         });
     }
-    if resp.dragged_by(egui::PointerButton::Primary) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    }
+    // The cursor of a row drag is the panel's ([`super::drag_cursor`]): Alt can change it on any frame.
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
 }
 
@@ -671,7 +681,7 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
     }
     let Some(p) = ui.input(|i| i.pointer.hover_pos()) else { return };
     let rel = (p.y - r.top()) / r.height().max(1.0);
-    let inside = takes(n, &drag, doc);
+    let inside = takes(n, &drag, &moving, doc);
     let place = match &*drag {
         LayersDrag::Art if inside => Place::Inside,
         LayersDrag::Art => Place::Above,
@@ -679,6 +689,13 @@ fn drop_target(ui: &Ui, view: &View, n: &Node, r: egui::Rect, indent: f32, open:
         LayersDrag::Rows(_) if rel < 0.5 => Place::Above,
         LayersDrag::Rows(_) | LayersDrag::Guides(_) => Place::Below,
     };
+    // Beside a member of an Intertwine group (or a row in one) only what can be intertwined goes.
+    if place != Place::Inside
+        && doc.parent_of(n.id).is_some_and(|p| in_intertwine(doc, p))
+        && moving.iter().filter_map(|i| doc.node(*i)).any(|m| refused_member(m).is_some())
+    {
+        return;
+    }
     let stroke = Stroke::new(2.0, view.t.accent);
     match place {
         Place::Above => {

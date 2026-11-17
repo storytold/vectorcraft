@@ -671,10 +671,11 @@ fn a_document_replaced_in_the_back_is_measured_before_it_comes_to_the_front() {
 }
 
 /// Type a document replaced in the back sets in a composite font that only the front document
-/// defines is measured in that font while the front one is registered, and again, as missing, when
-/// the replaced document comes to the front.
+/// defines is measured as missing, though the front one is registered, also when the replaced
+/// document defines no composite font, and still as missing when it comes to the front.
 #[test]
-fn a_document_replaced_in_the_back_measures_a_font_it_lacks_again_in_front() {
+fn a_document_replaced_in_the_back_measures_a_font_it_lacks_as_missing() {
+    let db = vectorcraft_text::FontDb::global();
     let mut s = session();
     let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Lacked"})).unwrap()["id"].as_u64().unwrap();
     let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
@@ -682,8 +683,16 @@ fn a_document_replaced_in_the_back_measures_a_font_it_lacks_again_in_front() {
     s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Lacked")]})).unwrap();
     assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
     let back = text_in(&s, 0, id);
-    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &back).bounds;
-    assert_eq!(back.cached_bounds, Some(expected));
+    assert!(s.documents()[0].doc.composite_fonts.is_empty());
+    let in_front = vectorcraft_text::layout(db, &back).bounds;
+    // The same type set in a family nothing defines.
+    let mut nowhere = back.clone();
+    for r in &mut nowhere.runs {
+        r.style.font_family = "No Such Family CF Lacked".into();
+    }
+    let missing = vectorcraft_text::layout(db, &nowhere).bounds;
+    assert!((in_front.width() - missing.width()).abs() > 1e-6, "the front document's font draws otherwise");
+    assert_eq!(back.cached_bounds, Some(missing));
     assert!(s.set_active(0));
     assert!(vectorcraft_text::FontDb::global().composite_font("CF Lacked").is_none());
     let actual = text(&s, id);
@@ -846,4 +855,128 @@ fn composite_fonts_export_and_import() {
     assert!(s.execute("type.compositeFonts.export", &json!({"fonts": []})).is_err());
     assert!(s.execute("type.compositeFonts.export", &json!({"path": " "})).is_err());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `font(name)` with two custom character sets: "Marks" (x and A) in Inter at 150%, and "A only"
+/// (A) in Source Sans 3, which sets A since it comes later.
+fn font_with_sets(name: &str) -> Value {
+    let mut v = font(name);
+    v["custom"] = json!([
+        {"name": " Marks ", "characters": "xA", "font": "Inter", "size": 150, "hScale": 90},
+        {"name": "A only", "characters": "A"},
+    ]);
+    v
+}
+
+/// Custom character sets are set with the font as one undo step, take values they leave out from
+/// the Kanji part, set the characters they list ahead of their class (the later set winning), are
+/// saved with the document, and measure type again when they change.
+#[test]
+fn custom_character_sets_set_their_characters() {
+    let mut s = session();
+    let before = steps(&s);
+    let r = s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets")]})).unwrap();
+    assert_eq!(r["fonts"][0]["custom"][0]["name"], "Marks");
+    assert_eq!(steps(&s), before + 1);
+    let f = s.doc().unwrap().doc.composite_fonts[0].clone();
+    assert_eq!(f.custom.len(), 2);
+    assert_eq!((f.custom[0].part.font.as_str(), f.custom[0].part.size, f.custom[0].part.h_scale), ("Inter", 150.0, 90.0));
+    assert_eq!((f.custom[1].part.font.as_str(), f.custom[1].part.size), ("Source Sans 3", 100.0));
+    // The same sets again change nothing.
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets")]})).unwrap();
+    assert_eq!(steps(&s), before + 1);
+    let back = vectorcraft_format::load(&vectorcraft_format::save_file(&s.doc().unwrap().doc)).unwrap();
+    assert_eq!(*back.composite_fonts, *s.doc().unwrap().doc.composite_fonts);
+
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "xAB", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.setStyle", &json!({"ids": [id], "font": "CF Sets"})).unwrap();
+    let db = vectorcraft_text::FontDb::global();
+    let face = |family: &str| db.face(family, "Regular").unwrap().id();
+    let lay = vectorcraft_text::layout(db, &text(&s, id));
+    let fonts: Vec<u32> = lay.glyphs.iter().map(|g| g.font_id).collect();
+    assert_eq!(fonts, [face("Inter"), face("Source Sans 3"), face("JetBrains Mono")]);
+    // Taking x out of Marks sets it in its class's font again, measured in the same step.
+    let wide = text(&s, id).cached_bounds.unwrap().width();
+    let mut fewer = font_with_sets("CF Sets");
+    fewer["custom"][0]["characters"] = json!("A");
+    s.execute("type.compositeFonts.set", &json!({"fonts": [fewer]})).unwrap();
+    assert!(text(&s, id).cached_bounds.unwrap().width() < wide - 1.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!((text(&s, id).cached_bounds.unwrap().width() - wide).abs() < 1e-6);
+}
+
+/// Bad custom character sets are refused with an error and no undo step.
+#[test]
+fn bad_custom_character_sets_are_refused() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets Base")]})).unwrap();
+    let before = steps(&s);
+    let with = |f: &dyn Fn(&mut Value)| {
+        let mut v = font_with_sets("CF Sets Refused");
+        f(&mut v);
+        json!({"fonts": [v]})
+    };
+    let many: String = (0x4E00u32..).filter_map(char::from_u32).take(8193).collect();
+    let sets: Vec<Value> = (0..65).map(|i| json!({"name": format!("S{i}")})).collect();
+    for bad in [
+        with(&|v| v["custom"] = json!("Marks")),
+        with(&|v| v["custom"] = Value::Null),
+        with(&|v| v["custom"][0]["characters"] = Value::Null),
+        with(&|v| v["custom"][0] = json!("Marks")),
+        with(&|v| v["custom"][0]["name"] = json!("  ")),
+        with(&|v| {
+            v["custom"][0].as_object_mut().unwrap().remove("name");
+        }),
+        with(&|v| v["custom"][1]["name"] = json!("marks")),
+        with(&|v| v["custom"][0]["characters"] = json!(["※"])),
+        with(&|v| v["custom"][0]["characters"] = json!("※※")),
+        with(&|v| v["custom"][0]["characters"] = json!("A\n")),
+        with(&|v| v["custom"][0]["characters"] = json!("😀")),
+        with(&|v| v["custom"][0]["characters"] = json!(many.clone())),
+        with(&|v| v["custom"] = json!(sets.clone())),
+        with(&|v| v["custom"][0]["size"] = json!(5)),
+        with(&|v| v["custom"][0]["size"] = json!("50")),
+        with(&|v| v["custom"][0]["scaleAtCenter"] = json!(true)),
+        with(&|v| v["custom"][0]["scaleAtCenter"] = json!(false)),
+        with(&|v| v["custom"][0]["font"] = json!("")),
+        with(&|v| v["custom"][0]["font"] = json!("CF Sets Base")),
+        with(&|v| v["custom"][0]["width"] = json!(3)),
+    ] {
+        let e = s.execute("type.compositeFonts.set", &bad);
+        assert!(e.is_err(), "accepted {bad}");
+        assert_eq!(names(&s), ["CF Sets Base"]);
+        assert_eq!(steps(&s), before);
+    }
+    // A set without characters is kept: it sets nothing.
+    let ok = with(&|v| v["custom"][0]["characters"] = json!(""));
+    s.execute("type.compositeFonts.set", &ok).unwrap();
+    assert_eq!(s.doc().unwrap().doc.composite_fonts[0].custom[0].characters, "");
+}
+
+/// Export writes the custom character sets and Import reads them back; a file whose set is bad is
+/// refused.
+#[test]
+fn custom_character_sets_export_and_import() {
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font_with_sets("CF Sets IO")]})).unwrap();
+    let data = s.execute("type.compositeFonts.export", &json!({})).unwrap();
+    let mut t = session();
+    t.execute("type.compositeFonts.import", &json!({"data": data["data"]})).unwrap();
+    assert_eq!(*t.doc().unwrap().doc.composite_fonts, *s.doc().unwrap().doc.composite_fonts);
+    let text = data["data"].as_str().unwrap().replace("\"A only\"", "\"marks\"");
+    let mut u = session();
+    assert!(u.execute("type.compositeFonts.import", &json!({"data": text})).is_err());
+    assert!(names(&u).is_empty());
+    // Fonts whose file would be larger than Import reads are refused.
+    let full: String = (0x4E00u32..).filter_map(char::from_u32).take(8192).collect();
+    let sets: Vec<Value> = (0..64).map(|i| json!({"name": format!("S{i}"), "characters": full})).collect();
+    let big: Vec<Value> = (0..3)
+        .map(|i| {
+            let mut f = font(&format!("CF Sets Big {i}"));
+            f["custom"] = json!(sets);
+            f
+        })
+        .collect();
+    let e = s.execute("type.compositeFonts.export", &json!({"fonts": big})).unwrap_err();
+    assert!(e.to_string().contains("4 MB"), "{e}");
 }

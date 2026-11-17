@@ -13,13 +13,14 @@
 //!   lines or gradients, so clipped art is written whole, images over white, dashes as separate
 //!   lines and gradients and patterns as one colour (each loss comes back as a warning).
 //!
-//! [`import`] reads either format back into a document of one artboard (the picture's frame) and
-//! one layer: paths with fills and strokes, clipping, images and text. Records it doesn't read are
-//! skipped, with one warning. [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2)
-//! into the same kind of document.
+//! [`import`] reads either format (an EMF with its EMF+ records too, through `craft_metafile`)
+//! into a document of one artboard (the picture's frame) and one layer: paths with fills and
+//! strokes, clipping, images and text. Records it doesn't read are skipped, with one warning.
+//! [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2) into the same kind of
+//! document.
 //!
-//! - `bytes`: little-endian writing and bounds-checked reading.
-//! - `dib`: device-independent bitmaps, both ways.
+//! - `bytes`: little-endian writing.
+//! - `dib`: device-independent bitmaps for the writers.
 //! - `scene`: the document walk both writers share.
 //! - `emf`, `wmf`: the writers.
 //! - `import`: the readers.
@@ -73,15 +74,18 @@ pub struct Output {
 }
 
 /// Write the visible art of `doc` over `region` (document space: its top-left corner is the
-/// picture's origin, its size the picture's) as `kind`. Live geometry effects are applied first;
-/// template layers, hidden objects and guides are left out. Raster effects should be turned into
-/// images before (the engine does); the ones left are reported and left out.
+/// picture's origin, its size the picture's) as `kind`. Live geometry effects are applied first,
+/// in symbols' art too, where each instance places that art (EMF clips 9-slice cells, WMF does
+/// not); template layers, hidden objects and guides are left out. Raster effects should be turned
+/// into images before (the engine does); the ones left are reported and left out.
 pub fn export(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String> {
     let r = region.abs();
     if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
         return Err("the export region is empty".into());
     }
-    let baked = vectorcraft_effects::bake_document(doc);
+    // The scene writes layers that do not print and leaves hidden layers and objects out.
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     let (ops, mut warnings) = scene::Scene::new(doc, r, kind == Kind::Emf).run();
     let bytes = match kind {

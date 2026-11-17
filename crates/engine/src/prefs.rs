@@ -111,6 +111,9 @@ pub struct Prefs {
     pub recent_fonts_count: u32,
     pub missing_glyph_protection: bool,
     pub highlight_alternate_glyphs: bool,
+    /// Type › Show Character Alternates: with a Type tool and one character selected, the canvas
+    /// shows that character's alternate glyphs beside it (on by default).
+    pub show_character_alternates: bool,
     /// Type › Highlight Substituted Fonts: on screen, text drawn in a substitute for a missing
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
@@ -442,6 +445,7 @@ impl Default for Prefs {
             recent_fonts_count: 10,
             missing_glyph_protection: true,
             highlight_alternate_glyphs: false,
+            show_character_alternates: true,
             highlight_substituted_fonts: true,
             placeholder_text: true,
             typed_lists: true,

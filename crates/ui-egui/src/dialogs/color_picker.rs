@@ -16,16 +16,18 @@
 
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Lab};
+use vectorcraft_color::cms;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::ColorMode;
 use vectorcraft_engine::cmd::color_value;
+use vectorcraft_engine::cmd::swatchlib;
 
 use super::form::PREVIEWED;
 use super::{DialogAction, DialogSpec};
 use crate::panels::color::{
     GAMUT_WARNING, WEB_WARNING, gamut_fix, hex_digits, is_web_safe, parse_hex, warning_chip, web_safe, working_hsb, working_rgb,
 };
+use crate::panels::swatches::{DOCUMENT_SWATCHES, colour_libraries};
 use crate::panels::{c32, color_json};
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -290,11 +292,22 @@ const RECOLOR_ROW: &str = "__recolorRow";
 /// The Color Picker over the Recolor Artwork dialog `parent`, on `color`, the new color of row
 /// `row`: it previews nothing itself, its OK goes back to `parent` with the row's new color set
 /// ([`super::recolor::with_new_color`]) and its Cancel goes back to `parent` as it was.
-pub(super) fn over_recolor(parent: &Dialog, color: Color, row: usize) -> Dialog {
-    let mut d = Dialog::new(
-        KIND,
-        json!({"original": color_json(&color), "channel": Channel::default().id(), "webOnly": false, "swatches": false, RECOLOR_ROW: row}),
-    );
+/// When `swatches` is true, the picker opens showing the Swatches view.
+pub(super) fn over_recolor(parent: &Dialog, color: Color, row: usize, swatches: bool) -> Dialog {
+    let mut fields = json!({
+        "original": color_json(&color),
+        "channel": Channel::default().id(),
+        "webOnly": false,
+        "swatches": swatches,
+        RECOLOR_ROW: row,
+    });
+    let lib = parent.str("limitTo");
+    if !lib.is_empty()
+        && let Some(object) = fields.as_object_mut()
+    {
+        object.insert("library".into(), json!(lib));
+    }
+    let mut d = Dialog::new(KIND, fields);
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     store(&mut d, &Picked::of(color));
     d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
@@ -378,10 +391,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
             ui.with_layout(layout, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 ui.allocate_ui_with_layout(vec2(side + SLIDER_GAP + SLIDER_W, side), egui::Layout::top_down(egui::Align::Min), |ui| {
-                    ui.horizontal_top(|ui| {
-                        if swatches {
-                            pick = swatch_list(app, ui, &p.color, side).map(Picked::of);
-                        } else {
+                    if swatches {
+                        pick = swatch_list(app, ui, d, &p.color, side).map(Picked::of);
+                    } else {
+                        ui.horizontal_top(|ui| {
                             let (z, x, y) = field_pos(channel, &p);
                             let at = |x: f32, y: f32| c32(&field_pick(channel, z, x, y).snapped(web).color);
                             if let (Some((x, y)), _) =
@@ -398,8 +411,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                             {
                                 pick = Some(field_pick(channel, z, x, y));
                             }
-                        }
-                    });
+                        });
+                    }
                     ui.add_space(8.0);
                     if widgets::check(ui, tl!("Only Web Colors"), web, true) {
                         d.fields.insert("webOnly".into(), json!(!web));
@@ -612,7 +625,7 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
                     edit = Some(Picked::of(if i < 3 {
                         let mut l = [lab.l, lab.a, lab.b];
                         l[i] = if i == 0 { nv.clamp(0.0, 100.0) } else { nv.clamp(-128.0, 127.0) };
-                        cms.from_lab(Lab::new(l[0], l[1], l[2]))
+                        Color::lab(l[0], l[1], l[2])
                     } else {
                         let mut k = cmyk;
                         k[i - 3] = (nv / 100.0).clamp(0.0, 1.0);
@@ -626,37 +639,77 @@ fn value_fields(ui: &mut Ui, p: &Picked, channel: Channel) -> (Option<Picked>, O
     (edit, chosen)
 }
 
-/// The document's colour swatches as a list; returns the clicked swatch's colour.
-fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, current: &Color, side: f32) -> Option<Color> {
+/// The document's colour swatches or a swatch library as a list; returns the clicked swatch's colour.
+fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Color, side: f32) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     let mut chosen = None;
-    ui.allocate_ui(vec2(side + SLIDER_GAP + SLIDER_W, side), |ui| {
-        ui.set_min_size(vec2(side + SLIDER_GAP + SLIDER_W, side));
+    let list_w = side + SLIDER_GAP + SLIDER_W;
+    ui.allocate_ui_with_layout(vec2(list_w, side), egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_min_size(vec2(list_w, side));
+        let libs = colour_libraries(app);
+        let keys: Vec<&str> = [swatchlib::DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.id.as_str())).collect();
+        let names: Vec<&str> = [DOCUMENT_SWATCHES].into_iter().chain(libs.iter().map(|l| l.name.as_str())).collect();
+        let builtin = |k: usize| k.checked_sub(1).is_none_or(|i| libs.get(i).is_some_and(|l| l.submenu.is_none()));
+        let shown = super::shown_names(crate::i18n::current(), &names, builtin);
+        let cur = d.str("library");
+        let cur = if cur.is_empty() { swatchlib::DOCUMENT_SWATCHES } else { &cur };
+        let at = keys.iter().position(|k| *k == cur).unwrap_or(0);
+        let current_label = shown.get(at).copied().unwrap_or_default();
+        if let Some(i) = widgets::dropdown_names(ui, "cp-library", current_label, &shown, list_w)
+            && let Some(&k) = keys.get(i)
+        {
+            d.fields.insert("library".into(), json!(k));
+        }
+        ui.add_space(4.0);
         widgets::list_box(ui, |ui| {
-            egui::ScrollArea::vertical().id_salt("cp-swatches").max_height((side - 8.0).max(1.0)).show(ui, |ui| {
-                ui.set_width(side + SLIDER_GAP + SLIDER_W - 8.0);
-                let Some(st) = app.session.active() else {
-                    widgets::dim_label(ui, tl!("Open a document to see its swatches."));
-                    return;
-                };
-                let doc = &st.doc;
-                for s in doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|g| g.swatches.iter())) {
-                    let Paint::Solid { color, .. } = &s.paint else { continue };
-                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
-                    if resp.hovered() {
-                        ui.painter().rect_filled(r, 0.0, t.hover);
+            let max_h = (side - 28.0).max(1.0);
+            egui::ScrollArea::vertical().id_salt("cp-swatches").max_height(max_h).show(ui, |ui| {
+                ui.set_width(list_w - 8.0);
+                let cur = d.str("library");
+                if cur.is_empty() || cur == swatchlib::DOCUMENT_SWATCHES {
+                    let Some(st) = app.session.active() else {
+                        widgets::dim_label(ui, tl!("Open a document to see its swatches."));
+                        return;
+                    };
+                    let doc = &st.doc;
+                    for s in doc.swatches.iter().chain(doc.swatch_groups.iter().flat_map(|g| g.swatches.iter())) {
+                        let Some(color) = s.paint.color() else { continue };
+                        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
+                        if resp.hovered() {
+                            ui.painter().rect_filled(r, 0.0, t.hover);
+                        }
+                        let chip = Rect::from_min_size(r.left_center() + vec2(4.0, -7.0), vec2(14.0, 14.0));
+                        widgets::swatch_tile(ui, chip, &s.paint, color == *current, false);
+                        ui.painter().text(
+                            egui::pos2(chip.right() + 8.0, r.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            &s.name,
+                            egui::FontId::proportional(12.0),
+                            t.text,
+                        );
+                        if resp.clicked() {
+                            chosen = Some(color);
+                        }
                     }
-                    let chip = Rect::from_min_size(r.left_center() + vec2(4.0, -7.0), vec2(14.0, 14.0));
-                    widgets::swatch_tile(ui, chip, &s.paint, color == current, false);
-                    ui.painter().text(
-                        egui::pos2(chip.right() + 8.0, r.center().y),
-                        egui::Align2::LEFT_CENTER,
-                        &s.name,
-                        egui::FontId::proportional(12.0),
-                        t.text,
-                    );
-                    if resp.clicked() {
-                        chosen = Some(*color);
+                } else if let Some((_, lib)) = swatchlib::library(&app.session, &cur) {
+                    for s in lib.swatches.iter().chain(lib.groups.iter().flat_map(|g| g.swatches.iter())) {
+                        let Some(color) = s.paint.color() else { continue };
+                        let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
+                        if resp.hovered() {
+                            ui.painter().rect_filled(r, 0.0, t.hover);
+                        }
+                        let chip = Rect::from_min_size(r.left_center() + vec2(4.0, -7.0), vec2(14.0, 14.0));
+                        widgets::swatch_tile(ui, chip, &s.paint, color == *current, false);
+                        ui.painter().text(
+                            egui::pos2(chip.right() + 8.0, r.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            &s.name,
+                            egui::FontId::proportional(12.0),
+                            t.text,
+                        );
+                        if resp.clicked() {
+                            chosen = Some(color);
+                        }
                     }
                 }
             });

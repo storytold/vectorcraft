@@ -443,7 +443,9 @@ fn popup_anchor(ui: &Ui) -> Option<(Rect, bool)> {
 /// reachable on small windows and in a floating panel's short OS window. Its scroll bar has a column
 /// of its own, so it never covers the shortcuts or the submenu arrows (#2086, #5347). When the list
 /// scrolls, that column widens the popup instead of narrowing the items, so their labels stay on one
-/// line.
+/// line. In a window too narrow for the items, the list is as wide as the window allows, and a row
+/// that does not fit ends in an ellipsis and shows its full text in a tooltip. Screen readers and
+/// keyboard selection still use the full text.
 ///
 /// The list's height comes from the room below and above the button, row or point the popup opens
 /// from. A popup with an id of its own measures from its own top instead.
@@ -463,14 +465,13 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
         menu_room(floor, top, tallest)
     };
     // The items' width on the first frame of this showing, when the scroll area does not yet show
-    // its bar. Later frames lay the items out at least that wide, and the bar's column is added to
-    // the popup's width. The width is kept until the popup closes.
+    // its bar. Later frames lay the items out that wide, up to the widest the window allows, and
+    // the bar's column is added to the popup's width. The width is kept until the popup closes.
     let key = ui.next_auto_id().with("menu-scroll-width");
     let frame = ctx.cumulative_frame_nr();
     let first = ctx.data(|d| d.get_temp::<(u64, f32)>(key)).filter(|(shown, _)| shown + 1 >= frame).map(|(_, width)| width);
     let scroll = list_scroll_style();
-    // The widest the items can be with the popup's margins and the bar's column inside the window.
-    let widest = (ctx.content_rect().width() - margins.x - scroll.allocated_width()).max(0.0);
+    let widest = menu_list_widest(ui);
     ui.scope(|ui| {
         ui.spacing_mut().scroll = scroll;
         // The minimum lets the list grow past a popup's default 400 pt size; it still shrinks to
@@ -479,15 +480,84 @@ pub fn menu_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R
         let out = area.show(ui, |ui| {
             // Always the same child, so the items' ids stay the same on the frame the width changes.
             let max = ui.max_rect();
-            let width = first.map_or(max.width(), |first| first.min(widest).max(max.width()));
+            let width = first.map_or(max.width(), |first| first.max(max.width()).min(widest));
             let rect = egui::Rect::from_min_size(max.min, egui::vec2(width, max.height()));
-            ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(*ui.layout()), add_contents).inner
+            let painted = ctx.graphics(|g| g.get(ui.layer_id()).map_or(0, |list| list.all_entries().len()));
+            let inner = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(rect).layout(*ui.layout()), |ui| {
+                    // The first frame measures the items at their full width.
+                    if first.is_some() {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    }
+                    add_contents(ui)
+                })
+                .inner;
+            show_shortened_rows(ui, painted);
+            inner
         });
         let width = first.unwrap_or(out.content_size.x);
         ctx.data_mut(|d| d.insert_temp(key, (frame, width)));
         out.inner
     })
     .inner
+}
+
+/// The widest the items of a [`menu_scroll`] list can be with the popup's margins and the scroll
+/// bar's column inside the window.
+fn menu_list_widest(ui: &Ui) -> f32 {
+    let margins = egui::Frame::popup(ui.style()).total_margin().sum();
+    (ui.ctx().content_rect().width() - margins.x - list_scroll_style().allocated_width()).max(0.0)
+}
+
+/// Makes a menu at least `width` wide, or as wide as the window allows the items of a
+/// [`menu_scroll`] list when that is less, so the menu stays inside a narrow window.
+pub(crate) fn menu_min_width(ui: &mut Ui, width: f32) {
+    ui.set_min_width(width.min(menu_list_widest(ui)));
+}
+
+/// For each text that `ui`'s layer drew after its first `painted` shapes and that ends in an
+/// ellipsis, the clickable row it is drawn in shows the full text in a tooltip that wraps to fit
+/// inside the window.
+fn show_shortened_rows(ui: &Ui, painted: usize) {
+    let ctx = ui.ctx();
+    let layer = ui.layer_id();
+    let shortened: Vec<(egui::Pos2, egui::text::LayoutJob)> = ctx.graphics(|g| {
+        let Some(list) = g.get(layer) else { return vec![] };
+        list.all_entries()
+            .skip(painted)
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.elided => {
+                    let job = egui::text::LayoutJob {
+                        sections: text.galley.job.sections.clone(),
+                        text: text.galley.job.text.clone(),
+                        language: text.galley.job.language.clone(),
+                        ..Default::default()
+                    };
+                    Some((Rect::from_min_size(text.pos, text.galley.size()).center(), job))
+                }
+                _ => None,
+            })
+            .collect()
+    });
+    if shortened.is_empty() {
+        return;
+    }
+    let rows: Vec<(egui::Id, Rect)> =
+        ctx.viewport(|vp| vp.this_pass.widgets.get_layer(layer).filter(|w| w.sense.senses_click()).map(|w| (w.id, w.rect)).collect());
+    for (at, job) in shortened {
+        let Some(response) = rows.iter().rfind(|(_, rect)| rect.contains(at)).and_then(|(id, _)| ctx.read_response(*id)) else { continue };
+        let tip = |ui: &mut Ui| {
+            let margins = ui.spacing().menu_margin.sum().x + 2.0 * ui.spacing().item_spacing.x;
+            ui.set_max_width(ui.spacing().tooltip_width.min(ui.ctx().content_rect().width() - margins).max(0.0));
+            ui.add(egui::Label::new(job).wrap());
+        };
+        // A dimmed row shows its full text too.
+        if response.enabled() {
+            response.on_hover_ui(tip);
+        } else {
+            response.on_disabled_hover_ui(tip);
+        }
+    }
 }
 
 /// A column of tool or panel buttons (the toolbar, the dock's icon column) that scrolls when the
