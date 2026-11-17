@@ -3124,12 +3124,53 @@ mark-style	Japanese	일본식
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	심볼 인스턴스 하나를 선택하면 변형 패널은 심볼의 등록 지점을 참조점으로 사용합니다.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	아트보드 도구를 사용하는 동안 아트보드 바깥의 캔버스를 어둡게 표시합니다.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	아트보드 외부 영역 어둡게 표시가 켜져 있으면 아트보드 도구로 드래그하는 동안에도 아트보드 바깥 영역이 어둡게 유지됩니다.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	클릭으로 개체, 고정점 또는 핸들을 선택하려면 포인터가 얼마나 가까이(픽셀) 있어야 하는지입니다.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	선택 도구의 상자가 닿은 개체를 선택할지, 완전히 안에 있는 개체만 선택할지입니다. 드래그 방향은 오른쪽으로 드래그하면 안쪽 개체를 선택합니다. 드래그 중 E를 누르면 규칙이 반대로 바뀝니다.
+	A click selects a filled object only on its path, not inside its fill.	칠이 있는 개체를 칠 안쪽이 아니라 패스를 클릭할 때만 선택합니다.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	포인트에 스냅이 점을 스냅하려면 점이 고정점이나 눈금자 안내선에 얼마나 가까이(픽셀) 와야 하는지입니다. 스마트 안내선이 켜져 있으면 대신 스마트 안내선의 스냅 허용 오차를 씁니다.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	선택 도구에서 Cmd/Ctrl-클릭하면 포인터 위치에서 선택한 개체 아래의 개체를 선택하며, 클릭할 때마다 한 개체씩 더 아래로 내려갑니다.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	확대와 축소가 선택 영역의 중심을 보기의 가운데로 가져옵니다.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	아트보드 안의 잠긴 아트워크와 숨겨진 아트워크도 다른 아트워크처럼 아트보드와 함께 이동, 크기 조정, 복사됩니다.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	캔버스에 표시되는 고정점과 방향 핸들 끝의 크기입니다. 고정점이 클수록 더 먼 곳에서도 잡을 수 있습니다.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	방향 핸들 끝을 채워진 점, 속이 빈 점 또는 더 큰 채워진 점으로 그립니다.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	직접 선택 도구에서 포인터 아래의 고정점을 강조 표시합니다.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	고정점을 둘 이상 선택했을 때 방향 핸들을 표시합니다. 끄면 고정점을 하나만 선택했을 때만 표시됩니다.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	각도가 이 값(도)보다 큰 모퉁이에서는 모퉁이 위젯을 숨깁니다.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	펜 도구가 클릭하기 전에 마지막 고정점에서 포인터까지 다음 세그먼트를 미리 보여 줍니다.
+	The Curvature tool previews the curve to the pointer before you place the next point.	곡률 도구가 다음 점을 놓기 전에 포인터까지 곡선을 미리 보여 줍니다.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	픽셀 크기가 아닌 기본 제공 크기의 새 문서와 단위가 기록되지 않은 열린 파일에 쓰는 단위이며, 여기서 고르고 확인을 누르면 활성 문서의 단위도 바뀝니다.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	선 두께, 대시, 간격이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	글자 크기, 행간, 기준선 이동이 이 단위로 표시되며, 입력한 숫자도 이 단위로 읽습니다.
 	The unit for East Asian type measurements, which no field uses yet.	동아시아 문자 측정에 쓰는 단위로, 아직 이 단위를 쓰는 필드는 없습니다.
 	When on, a number typed without a unit into a field in picas is read in points.	켜면 파이카 필드에 단위 없이 입력한 숫자를 포인트로 읽습니다.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID를 고르면 레이어, 변수, 레이어 옵션에서 개체 이름이 XML ID로 표시됩니다.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	격자가 숨겨져 있어도 그리기, 이동, 크기 조절을 격자의 세분 위치에 스냅합니다. 켜져 있는 동안에는 픽셀에 스냅이 적용되지 않습니다.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	선택되지 않은 안내선의 색상입니다. 안내선 레이블이 있는 아트보드는 자신의 안내선을 레이블 색상으로 그립니다.
+	Draws guides as solid lines or as dots, including the guides already in the document.	문서에 이미 있는 안내선을 포함해 안내선을 실선 또는 점으로 그립니다.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	켜면 VectorCraft가 시작될 때 안내선이 잠깁니다. 이 옵션을 바꾸면 즉시 잠기거나 잠금이 풀리며, 보기 › 안내선 › 안내선 잠그기로도 계속 잠금을 바꿀 수 있습니다.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	켜면 눈금자에서 드래그를 시작할 때 Cmd/Ctrl을 누르고 있으면 활성 아트보드에만 안내선을 만들고, 아트보드 도구에서는 캔버스 전체의 안내선을 만듭니다.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	격자의 색상입니다. 주 격자선 사이의 선은 이 색상의 더 옅은 색조로 그려집니다.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	격자를 선으로, 또는 주 격자선을 따라 각 세분 위치에 점으로 그립니다.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	열려 있는 모든 문서와 새 문서의 주 격자선 간격입니다. VectorCraft 문서는 저장할 때의 격자로 열립니다.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	각 주 격자 칸을 나누는 수입니다. 확대/축소로 선이 숨겨져도 격자에 스냅은 이 위치에 스냅합니다.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	격자를 아트워크 뒤에 그립니다. 끄면 격자를 아트워크 위에 그립니다.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	픽셀 미리 보기에서 600% 이상으로 확대하면 활성 보기에서 아트워크 위에 문서의 각 픽셀 경계마다 선이 표시됩니다.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	패턴을 편집하는 동안 표시되는 타일 가장자리와 점선 견본 경계의 색상입니다.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	그리기, 이동, 변형을 가까운 아트에 스냅하고 안내선과 레이블을 표시합니다. 픽셀 미리 보기에서는 꺼지며, 격자에 스냅이 켜져 있으면 대신 격자에 스냅합니다.
+	The color of Smart Guide lines and labels.	스마트 안내선의 선과 레이블 색상입니다.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	아트가 맞춰지는 가장자리나 중심을 따라 선을 표시합니다. 끄면 선 없이도 맞춰지며, 글리프에 스냅은 적용되지 않습니다.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	선택 도구로 드래그하지 않는 동안 포인터 아래의 선택되지 않은 개체 윤곽을 레이어 색상으로 표시합니다.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	아트의 크기를 조절하거나 회전하거나 기울이거나 반사하는 동안 포인터 옆에 크기나 각도를 표시합니다.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	그리는 동안 점이 세그먼트나 모양의 시작점을 지나는 선택한 각도의 선에 스냅됩니다.
+	The set of angles the construction guides follow while Construction Guides is on.	작도 안내선이 켜져 있을 때 작도 안내선이 따르는 각도 세트입니다.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	앵커, 패스, 정렬처럼 점이 스냅되는 대상의 이름을 표시합니다. 끄면 이름 없이 같은 방식으로 스냅됩니다.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	그리거나 이동하는 동안 포인터 옆에 거리, 각도, 아트가 이동한 거리를 표시합니다.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	이동하거나 크기를 조절한 아트를 가까운 개체 사이와 같은 간격에 스냅하고 같은 간격을 표시합니다.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	무언가를 선택한 상태에서 다른 개체나 아트보드 위에서 Alt/Option 키를 누르고 있으면 그것과 선택 영역 사이의 거리를 표시합니다.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	드래그를 시작한 위치에서 스냅 허용 오차 이내로 다시 드래그한 선택 영역은 정확히 그 위치로 돌아갑니다. 복사본은 돌아가지 않습니다.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	스마트 안내선이 스냅하려면 포인터나 드래그한 점이 화면에서 아트에 얼마나 가까이 와야 하는지입니다. 이 거리는 모든 확대/축소에서 같습니다.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	선 세그먼트의 끝이나 중심에서 그린 원을 가까운 곡선에 닿도록 스냅합니다.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
@@ -7466,6 +7507,11 @@ breakText	Glyphs	글리프
 @msg	Some islands could not be joined to the area around the art	일부 섬을 아트워크 주변 영역에 연결할 수 없습니다
 @msg	`width` must be from {lo} to {hi} pt	`width`는 {lo}에서 {hi}pt 사이여야 합니다
 @msg	`angle` must be from -180 to 180 degrees	`angle`는 -180도에서 180도 사이여야 합니다
+@msg	`roundness` must be from 0 to 100%	`roundness`는 0%에서 100% 사이여야 합니다
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity`는 0.01에서 100pt 사이여야 합니다
+@msg	style must be "pencil" or "brush"	style은 "pencil" 또는 "brush"여야 합니다
+@msg	extend end must be "start" or "end"	extend 끝은 "start" 또는 "end"여야 합니다
+@msg	connect end must be "start" or "end"	connect 끝은 "start" 또는 "end"여야 합니다
 @msg	`roundness` must be from 1 to 100%	`roundness`는 1%에서 100% 사이여야 합니다
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`는 1에서 {MAX_BRIDGES_PER_ISLAND} 사이의 정수여야 합니다
 	Weed Box and Lines…	위딩 상자 및 선…
@@ -8109,7 +8155,6 @@ breakText	Glyphs	글리프
 @msg	anchor `smooth` must be true or false	앵커의 `smooth`은(는) true 또는 false여야 합니다
 @msg	anchor `{key}` must be [x, y]	앵커의 `{key}`은(는) [x, y]여야 합니다
 @msg	anchor `{key}` must be a number	앵커의 `{key}`은(는) 숫자여야 합니다
-@msg	angle and roundness must be finite	각도와 원형률은 유한해야 합니다
 @msg	angles must be a list as long as pins (degrees or null)	angles는 pins와 길이가 같은 목록이어야 합니다(도 또는 null)
 @msg	appearance must be flat|center|edge	appearance는 flat|center|edge여야 합니다
 @msg	apply is "fill" or "stroke", not `{other}`	apply는 "fill" 또는 "stroke"입니다: `{other}`
