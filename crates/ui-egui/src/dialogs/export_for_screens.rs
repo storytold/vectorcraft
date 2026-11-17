@@ -189,9 +189,9 @@ pub fn open(app: &mut VectorcraftApp) {
 }
 
 /// The options format `id` starts with in Format Settings: the raster options dialogs' defaults
-/// (without quality and image maps: the rows choose quality, a map is another file), the SVG
-/// Options' first-use ones (without artboards and images: a linked image is another file), or the
-/// default PDF preset.
+/// (without image maps, a map being another file, and without quality but WebP's: JPEG rows choose
+/// their quality), the SVG Options' first-use ones (without artboards and images: a linked image is
+/// another file), or the default PDF preset.
 fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
     let mut o = match (id, fileio::format(id)) {
         ("svg", _) => svg_options::first_use(),
@@ -199,8 +199,11 @@ fn defaults(app: &VectorcraftApp, id: &str) -> Map<String, Value> {
         (_, Some(f)) => png_options::defaults(app, f),
         _ => Map::new(),
     };
-    for k in ["quality", "imageMap", "useArtboards", "images"] {
+    for k in ["imageMap", "useArtboards", "images"] {
         o.remove(k);
+    }
+    if id != "webp" {
+        o.remove("quality");
     }
     o
 }

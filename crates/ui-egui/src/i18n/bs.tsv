@@ -384,7 +384,7 @@
 	Insert Whitespace Character	Umetni znak razmaka
 	Em Space	Široki razmak (em)
 	En Space	Polu-široki razmak (en)
-	Hair Space	Tanki razmak
+	Hair Space	Najtanji razmak
 	Sixth Space	Šestina razmaka
 	Thin Space	Tanki razmak
 	Nonbreaking Space	Neprelomivi razmak
@@ -1304,6 +1304,7 @@ lighting	Light	Svjetlo
 	Search commands, tools, panels and effects	Pretraži naredbe, alate, panele i efekte
 	Style:	Stil:
 	Switch workspace	Promijeni radni prostor
+	Search commands	Pretraži naredbe
 	Show all open documents	Prikaži sve otvorene dokumente
 	Use 	Koristite 
 	 the object to select  |  	 objekat za odabir  |  
@@ -2825,7 +2826,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Sakrij video ravnala
 	Client-side (.html)	Na strani klijenta (.html)
 	Color Reduction:	Smanjenje boja:
-	Lossless (lossy WebP isn't available yet)	Bez gubitaka (WebP s gubicima još nije dostupan)
+	Lossless	Bez gubitaka
+	Lossy	S gubicima
 	Scans:	Skenovi:
 	Server-side (.map)	Na strani servera (.map)
 	{format} Options	Opcije za {format}
@@ -2839,6 +2841,7 @@ digits	Malayalam	Malajalam
 	Collate	Složi po kopijama
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitne boje se pretvaraju u njega; separacije se razdvajaju njime kad je CMYK profil.
 	Convert All Spot Colors to Process	Pretvori sve spot boje u procesne
+	Overprint Black	Pretisak crne
 	Default Printer	Zadani štampač
 	Document Ink Options	Opcije tinti dokumenta
 	Download:	Preuzimanje:
@@ -3612,6 +3615,10 @@ theme	Appearance	Izgled
 	Font List	Lista fontova
 	Show Similar Fonts	Prikaži slične fontove
 	Clear Similar Fonts	Očisti slične fontove
+	Fonts used in this document	Fontovi korišteni u ovom dokumentu
+	This document uses no available fonts	Ovaj dokument ne koristi dostupne fontove
+	Recently Added	Nedavno dodani
+	Fonts added in the last 30 days	Fontovi dodani u posljednjih 30 dana
 	Fonts in Document	Fontovi u dokumentu
 	Refresh Font List	Osvježi listu fontova
 	Replace Font	Zamijeni font
@@ -6498,6 +6505,7 @@ anchor	Points:	Tačke:
 	Open a document to check it for issues.	Otvorite dokument da ga provjerite na probleme.
 	Empty Text	Prazan tekst
 	Unpainted Objects	Neobojeni objekti
+	Empty Text Paths	Prazne tekstualne putanje
 	Zero-Opacity Objects	Objekti s nultom neprozirnošću
 	Duplicate Objects	Duplirani objekti
 	Off-Artboard Art	Grafika izvan radne ploče

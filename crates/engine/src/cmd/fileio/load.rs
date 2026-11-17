@@ -286,16 +286,24 @@ fn editing_copy(opened: &vectorcraft_pdf::Opened, opts: &LoadOptions) -> Option<
 
 /// A `.ai`, or a PDF saved with the editing data, whose PDF part can't be read (`e`, the import's
 /// error) from the editor's own copy of its art alone, as a file saved without PDF compatibility
-/// is read, its first note saying why: `None` when pages are picked, layers or the editing data
-/// are off, or the file has no editing data that reads. Its type is outlines when `opts` asks.
-fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: &EngineError) -> Option<(Document, Vec<String>)> {
+/// is read, its first note saying why. Else `e`: as it is when pages are picked, layers or the
+/// editing data are off, or the file has no editing data, and followed by why when the file has
+/// editing data that can't be read. Its type is outlines when `opts` asks.
+fn without_pdf_part(bytes: &[u8], opts: &LoadOptions, e: EngineError) -> Result<(Document, Vec<String>)> {
     if opts.pages.is_some() || !opts.layers || !opts.editing_data {
-        return None;
+        return Err(e);
     }
-    let private = vectorcraft_pdf::illustrator_data_without_pdf_part(bytes, opts.password.as_deref())?;
-    let (doc, warnings) = vectorcraft_eps::ai_alone_on_page(&private.data, private.trim, private.user_unit, opts.legacy_names).ok()?;
-    let notes = std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
-    Some(outlined_if_asked(doc, notes, opts))
+    let read = vectorcraft_pdf::read_illustrator_data_without_pdf_part(bytes, opts.password.as_deref())
+        .and_then(|private| private.map(|p| vectorcraft_eps::ai_alone_on_page(&p.data, p.trim, p.user_unit, opts.legacy_names)).transpose());
+    match read {
+        Ok(Some((doc, warnings))) => {
+            let notes =
+                std::iter::once(format!("the PDF part couldn't be read ({e}): the file opened from its editing data")).chain(warnings).collect();
+            Ok(outlined_if_asked(doc, notes, opts))
+        }
+        Ok(None) => Err(e),
+        Err(why) => Err(err(format!("{e}; its editing data couldn't be read either ({why})"))),
+    }
 }
 
 /// Is `w` a note on the PDF part as a page, which says nothing was skipped: that the art off the
@@ -497,7 +505,7 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
                         .inspect(|_| editing_data = true),
                     // A PDF part that can't be read (a stream the import refuses): the editing copy
                     // alone where it reads, else the error.
-                    Err(e) => without_pdf_part(bytes, opts, &e).inspect(|_| editing_data = true).ok_or(e),
+                    Err(e) => without_pdf_part(bytes, opts, e).inspect(|_| editing_data = true),
                 }
             })?;
             // The File Info of a file read from its pages or its editing copy.

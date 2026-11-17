@@ -2,13 +2,15 @@
 //! ruler numbered in the General unit on which a click adds a stop, dragging moves one and dragging
 //! it off the ruler deletes it. Ctrl-dragging a stop (Command on macOS) moves all the stops by the
 //! same distance. A stop placed or dragged on the ruler lands on the nearest whole point. With Snap
-//! to Unit on, or Shift held, it lands on the ruler's nearest tick.
+//! to Unit on, or Shift held, it lands on the ruler's nearest tick. While a stop is dragged, the
+//! canvas draws a guide through the selected text where the stop would land.
 
 use std::collections::HashSet;
 
 use egui::{Sense, Stroke, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, ParaStyle, TabAlign, TabStop, TextKind, TextObject};
+use vectorcraft_geom::{Point, Vec2};
 
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
@@ -340,7 +342,7 @@ fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
         None => super::character::first_selected_text_node(app)?.clone(),
     };
     let NodeKind::Text(t) = &n.kind else { return None };
-    let para = editing.map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start);
+    let para = shown_paragraph(app, t);
     let span = match &t.kind {
         TextKind::Area { frame } => frame.bounds().map_or(360.0, |b| b.width()),
         _ => 360.0,
@@ -348,6 +350,12 @@ fn current_para(app: &VectorcraftApp) -> Option<(Node, ParaStyle, f64)> {
     let para = t.para_at(para);
     let para = ParaStyle { left_indent: para.laid_out_left_indent(), ..para.clone() };
     Some((n, para, span.max(72.0)))
+}
+
+/// The index of the paragraph of text `t` whose stops the panel shows: the paragraph of the Type
+/// tool's insertion point, else the first.
+fn shown_paragraph(app: &VectorcraftApp, t: &TextObject) -> usize {
+    super::character::text_editing(app).map_or(0, |(_, a, _)| t.paragraphs_in(a, a).start)
 }
 
 /// [`above_text`], then note the active document and text `n`. A floating panel is
@@ -475,6 +483,94 @@ fn apply_moved_all(app: &mut VectorcraftApp, ctx: &egui::Context, stops: &mut Ve
         set_pstate(ctx, "tabs-sel", i);
         i
     })
+}
+
+/// While a tab stop is dragged on the ruler: the document and text whose stops the ruler shows, the
+/// paragraph it shows them for, where the dragged stop would land (points from the ruler's 0), and
+/// the main window's frame in which [`show`] last set it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct StopGuide {
+    doc: u64,
+    id: NodeId,
+    para: usize,
+    position: f64,
+    frame: u64,
+}
+
+/// The guide through text `t` for paragraph `para`'s stop at 0 on the ruler, in document space:
+/// its two ends and how far it moves per point of stop position. For area type it crosses the frame
+/// cell the paragraph starts in, and the ruler's 0 is where the frame lets the paragraph's first
+/// line start (the cell's edge inside the inset, or past a wrap object); for point
+/// type it crosses the paragraph's lines, and the ruler's 0 is the type's origin. In vertical type
+/// it runs across the columns. `None` for type on a path and for a paragraph that does not fit in
+/// the frame.
+fn guide_axis(t: &TextObject, para: usize) -> Option<(Point, Point, Vec2)> {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    if lay.on_path {
+        return None;
+    }
+    let text = t.plain_text();
+    let start = if para == 0 { 0 } else { text.match_indices('\n').nth(para - 1)?.0 + 1 };
+    let end = text.get(start..)?.find('\n').map_or(text.len(), |i| start + i);
+    let mut lines = lay.lines.iter().filter(|l| l.start >= start && l.start <= end);
+    let to_doc = |x: f64, y: f64| t.xf * lay.physical_point(Point::new(x, y));
+    let (x, top, bottom) = match &t.kind {
+        TextKind::Area { .. } => {
+            // The layout measures a line's stops from where the frame lets the line start (past a
+            // wrap object, or in a frame that is not a rectangle): the paragraph's first line's
+            // room less its indent, mirrored for a right-to-left list.
+            let first = lines.next()?;
+            let style = t.para_at(para);
+            let indent = if first.rtl && style.list.is_some() {
+                style.right_indent
+            } else {
+                style.laid_out_left_indent() + if para == 0 && t.first_para_continues { 0.0 } else { style.first_line_indent }
+            };
+            let cell = lay.line_xf.inverse().transform_rect_bbox(*lay.frames.get(first.region)?);
+            (first.avail.0 - indent, cell.y0, cell.y1)
+        }
+        TextKind::Point => {
+            let (top, bottom) =
+                lines.fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), l| (a.min(l.baseline - l.ascent), b.max(l.baseline + l.descent)));
+            (0.0, top, bottom)
+        }
+        _ => return None,
+    };
+    let (a, b) = (to_doc(x, top), to_doc(x, bottom));
+    let along = to_doc(x + 1.0, top) - a;
+    [a.x, a.y, b.x, b.y, along.x, along.y].iter().all(|v| v.is_finite()).then_some((a, b, along))
+}
+
+/// The guide [`show`] keeps through the selected text while a tab stop is dragged on the ruler, as
+/// two document points: set in this frame of the main window or the one before, for text in the
+/// active document. A drag that ends while the panel is not drawn leaves no guide behind.
+pub(crate) fn stop_guide(app: &VectorcraftApp, ctx: &egui::Context) -> Option<(Point, Point)> {
+    let g = pstate::<Option<StopGuide>>(ctx, "tabs-guide")?;
+    let doc = app.session.active()?;
+    if doc.uid != g.doc || g.frame + 1 < ctx.cumulative_frame_nr_for(egui::ViewportId::ROOT) {
+        return None;
+    }
+    let NodeKind::Text(t) = &doc.doc.node(g.id)?.kind else { return None };
+    // Lay the text out once per document change, not in every frame of the drag.
+    let key = (doc.uid, g.id, g.para, doc.revision);
+    type Axis = Option<((u64, NodeId, usize, u64), Option<(Point, Point, Vec2)>)>;
+    let (a, b, along) = match pstate::<Axis>(ctx, "tabs-guide-axis") {
+        Some((k, axis)) if k == key => axis,
+        _ => {
+            let axis = guide_axis(t, g.para);
+            set_pstate::<Axis>(ctx, "tabs-guide-axis", Some((key, axis)));
+            axis
+        }
+    }?;
+    Some((a + along * g.position, b + along * g.position))
+}
+
+/// Draw [`stop_guide`] on the canvas in the theme's accent.
+pub(crate) fn paint_stop_guide(app: &VectorcraftApp, painter: &egui::Painter, xf: &crate::canvas::Xf) {
+    let ctx = painter.ctx();
+    if let Some((a, b)) = stop_guide(app, ctx) {
+        painter.line_segment([xf.to_screen(a), xf.to_screen(b)], Stroke::new(1.0, Tokens::get(ctx).accent));
+    }
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -643,7 +739,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The stop within 5 px of `x`.
     let hit_at = |x: f32| stops.iter().position(|s| (to_x(s.position) - x).abs() <= 5.0);
     let cancel_drag = ui.input(|i| i.key_pressed(egui::Key::Escape));
-    if cancel_drag || (marker_drag.is_some() && !resp.drag_stopped() && !ui.input(|i| i.pointer.any_down())) {
+    // A stop or marker drag also ends when no button is down and the ruler reports no release.
+    if cancel_drag || ((marker_drag.is_some() || drag.is_some()) && !resp.drag_stopped() && !ui.input(|i| i.pointer.any_down())) {
         set_pstate::<Option<(IndentMarker, bool)>>(ui.ctx(), "tabs-marker-drag", None);
         set_pstate::<Option<usize>>(ui.ctx(), "tabs-drag", None);
     }
@@ -728,6 +825,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     }
+    // While a stop is dragged, a guide through the selected text shows where it would land: the
+    // grabbed stop's place in a Ctrl-drag (Command on macOS), and none while a release would delete it.
+    let drag: Option<usize> = pstate(ui.ctx(), "tabs-drag");
+    let drag_all = pstate::<bool>(ui.ctx(), "tabs-drag-all");
+    let pointer = ui.input(|i| i.pointer.any_down().then(|| i.pointer.interact_pos()).flatten());
+    let guide = drag.zip(pointer).filter(|(_, at)| at.y <= rect.bottom() + 20.0).and_then(|(i, at)| {
+        let position = if drag_all { moved_all(&stops, i, place(at.x))?.get(i)?.position } else { (i < stops.len()).then(|| place(at.x))? };
+        let NodeKind::Text(text) = &node.kind else { return None };
+        let frame = ui.ctx().cumulative_frame_nr_for(egui::ViewportId::ROOT);
+        Some(StopGuide { doc: app.session.active()?.uid, id: node.id, para: shown_paragraph(app, text), position, frame })
+    });
+    if guide.is_some() || pstate::<Option<StopGuide>>(ui.ctx(), "tabs-guide").is_some() {
+        // The canvas may be drawn before the panel in a frame: draw it again with the guide moved.
+        ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
+    }
+    set_pstate(ui.ctx(), "tabs-guide", guide);
     resp.on_hover_text(tl!("Click to add a tab stop, drag to move it, drag it off the ruler to delete it"));
 }
 

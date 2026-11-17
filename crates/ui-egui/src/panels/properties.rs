@@ -1015,11 +1015,13 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         dim_label(ui, tl!("Select a text object"));
         return;
     };
-    let NodeKind::Text(tx) = &n.kind else {
+    let NodeKind::Text(_) = &n.kind else {
         dim_label(ui, tl!("Select a text object"));
         return;
     };
-    let s = tx.first_style();
+    // The style of the Type tool's selection (or caret) when it edits text, else of the selected
+    // text's first run, as the Character panel shows it (#8189).
+    let Some((s, para)) = super::character::text_style(app) else { return };
     section_header(ui, tl!("Character"));
     // The font, Font Size, Leading, Kerning and Tracking as in the Character panel.
     let w = ui.available_width();
@@ -1029,25 +1031,23 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     section_header(ui, tl!("Paragraph"));
     // As in the Paragraph panel: the seven alignments and Hyphenate (#775), and area type's
     // vertical alignment (#3759); the rest is there.
-    if let Some((_, para)) = super::character::text_style(app) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        super::paragraph::alignment_buttons(app, ui, &para, 24.0);
+        if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
+            app.ui.open_panel = Some("paragraph".into());
+        }
+    });
+    // Area type: its vertical alignment in the frame (#3759).
+    if vertical_align::shown(app).is_some() {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
-            super::paragraph::alignment_buttons(app, ui, &para, 24.0);
-            if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
-                app.ui.open_panel = Some("paragraph".into());
-            }
+            vertical_align::buttons(app, ui, 24.0);
         });
-        // Area type: its vertical alignment in the frame (#3759).
-        if vertical_align::shown(app).is_some() {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 3.0;
-                vertical_align::buttons(app, ui, 24.0);
-            });
-        }
-        super::paragraph::hyphenate_check(app, ui, &para);
-        // Area type: Dynamic Text's Block and its gaps.
-        dynamic_text::rows(app, ui);
     }
+    super::paragraph::hyphenate_check(app, ui, &para);
+    // Area type: Dynamic Text's Block and its gaps.
+    dynamic_text::rows(app, ui);
 }
 
 pub(crate) mod dynamic_text;

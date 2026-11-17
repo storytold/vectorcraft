@@ -1308,6 +1308,10 @@ font-technology	Variable	Variabla
 	Font List	Typsnittslista
 	Show Similar Fonts	Visa liknande typsnitt
 	Clear Similar Fonts	Rensa liknande typsnitt
+	Fonts used in this document	Typsnitt som används i det här dokumentet
+	This document uses no available fonts	Det här dokumentet använder inga tillgängliga typsnitt
+	Recently Added	Nyligen tillagda
+	Fonts added in the last 30 days	Typsnitt som lagts till de senaste 30 dagarna
 	Font Preview Size	Storlek på typsnittsförhandsgranskning
 	Font Size	Teckenstorlek
 	Variable Font	Variabelt typsnitt
@@ -1968,7 +1972,8 @@ font-technology	Variable	Variabla
 	Lock Others	Lås övriga
 	Lock Slices	Lås skivor
 	Lock Station Point	Lås betraktarpunkt
-	Lossless (lossy WebP isn't available yet)	Förlustfri (förlustbehäftad WebP är inte tillgänglig än)
+	Lossless	Förlustfri
+	Lossy	Förlustbehäftad
 	Lossy:	Förlust:
 	Low	Låg
 	lowercase	gemener
@@ -3216,6 +3221,7 @@ digits	Malayalam	Malayalam
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
 	No recent commands	Inga senaste kommandon
+	Search commands	Sök kommandon
 	Search Commands…	Sök kommandon…
 	Secondary	Sekundär
 	Section Symbol	Paragraftecken
@@ -4814,6 +4820,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no active document	inget aktivt dokument
 @msg	no active perspective plane	inget aktivt perspektivplan
 @msg	no anchor points selected	inga ankarpunkter är markerade
+@msg	`points` must be three [x, y] pairs of numbers	`points` måste vara tre talpar [x, y]
+@msg	direct-select three anchor points, or give `points`	direktmarkera tre ankarpunkter eller ange `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
 @msg	no artboard {i} (0-based; the document has {_1})	ingen rityta {i} (räknat från 0; dokumentet har {_1})
@@ -5501,7 +5510,7 @@ effect	Soft	Mjuk
 	On Both Sides	På båda sidor
 	Short	Kort
 	Full Width	Full bredd
-	Distort	Förvräng
+	Distort	Förvrängning
 	Diffuse Glow…	Diffus glöd…
 	Glass…	Glas…
 	Ocean Ripple…	Havskrusning…
@@ -5717,6 +5726,25 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en grupps fyllning eller linje ritar ingenting
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
+@msg	give one <filter> element	ange ett <filter>-element
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementet behöver ett id, filtrets namn
+@msg	an SVG filter's id is at most {MAX_NAME} characters	ett SVG-filters id har högst {MAX_NAME} tecken
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> är inte ett element i ett SVG-filter
+@msg	an SVG filter has no event attributes such as {_1}	ett SVG-filter har inga händelseattribut som {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	ett SVG-filters bilder är data:-URL:er i PNG, JPEG, GIF eller WebP
+@msg	the SVG filter isn't valid XML: {e}	SVG-filtret är inte giltig XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves för feTurbulence är högst {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} är högst {max}
+@msg	feConvolveMatrix's order	order för feConvolveMatrix
+@msg	feMorphology's radius	radius för feMorphology
+@msg	a blur's stdDeviation	stdDeviation för en oskärpa
+@msg	the SVG filter has no primitives	SVG-filtret har inga primitiver
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	ett SVG-filter har högst {MAX_PRIMITIVES} primitiver
+@msg	the SVG filter is too large once its attributes are written out	SVG-filtret blir för stort när dess attribut skrivs ut
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	ett SVG-filters bilder har högst {MAX_IMAGE_PIXELS} pixlar sammanlagt
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-filtret kan inte ritas: kontrollera dess primitiver och deras indata
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	ett SVG-filters element kapslas högst {MAX_DEPTH} nivåer djupt
+@msg	an SVG filter is at most {_1} KB	ett SVG-filter är högst {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Extrudera och fasa, Rotera runt axel, Blås upp eller Rotera)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` måste vara ett objekt som bara innehåller `mode`, med värdet shaded eller wireframe
 @msg	its 3D effect builds no solid	dess 3D-effekt bygger ingen solid
@@ -7116,6 +7144,7 @@ anchor	Points:	Punkter:
 	Open a document to check it for issues.	Öppna ett dokument för att kontrollera det efter problem.
 	Empty Text	Tom text
 	Unpainted Objects	Ofärgade objekt
+	Empty Text Paths	Tomma textbanor
 	Zero-Opacity Objects	Objekt med 0 % opacitet
 	Duplicate Objects	Dubblettobjekt
 	Off-Artboard Art	Grafik utanför ritytorna
@@ -9352,6 +9381,7 @@ digits	Hindi	Hindi
 @msg	Too many Revolve faces for visibility evaluation	För många ytor i Rotera runt axel för synlighetsberäkningen
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft läser högst {ASE_MAX_ENTRIES} färger och grupper från en fil för färgruteutbyte, och det här biblioteket har {entries}
 @msg	WebP encoding failed: {e}	WebP-kodningen misslyckades: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-kodningen misslyckades: bilden är för stor för förlustbehäftad WebP: sänk upplösningen eller välj Förlustfri
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index` måste vara ett heltal
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` är smallThumb, mediumThumb, largeThumb, smallList eller largeList
