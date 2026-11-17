@@ -783,6 +783,15 @@ fn optimize_to_file_size_takes_the_settings_that_fit() {
     assert!(!st.selection.objects.is_empty());
     st.selection.objects.clear();
     assert!(!shown(&app));
+    // And a change to the selected slices alone (the Slice Selection tool).
+    let mut current = found.clone();
+    current["art"] = json!(save_for_web::art_key(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), current);
+    assert!(shown(&app));
+    let st = app.session.active_mut().unwrap();
+    let any = st.doc.layers[0].id;
+    st.selection.slices.push(any);
+    assert!(!shown(&app));
 }
 
 /// Enter while the Optimize to File Size rows are open runs the search and writes nothing; once the

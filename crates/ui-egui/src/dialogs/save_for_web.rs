@@ -914,11 +914,12 @@ pub(super) fn optimized_result<'a>(d: &'a Dialog, s: Option<&WebSettings>, art: 
     d.fields.get("__optimized").filter(|r| r["art"] == json!(art) && s.is_some_and(|s| r["settings"] == s.to_json()))
 }
 
-/// The active document, its revision and its selected objects, which an Optimize to File Size result
-/// was measured on. The selection decides the slices Save writes with `slices: selected` and the
-/// slice Current Slice measures, and a selection made on the canvas leaves the revision as it is.
+/// The active document, its revision and its selected objects and slices, which an Optimize to File
+/// Size result was measured on. The selection decides the slices Save writes with `slices: selected`
+/// and the slice Current Slice measures, and a selection made on the canvas or with the Slice
+/// Selection tool leaves the revision as it is.
 pub(super) fn art_key(app: &VectorcraftApp) -> String {
-    app.session.active().map_or_else(String::new, |st| format!("{}:{}:{:?}", st.uid, st.revision, st.selection.objects))
+    app.session.active().map_or_else(String::new, |st| format!("{}:{}:{:?}:{:?}", st.uid, st.revision, st.selection.objects, st.selection.slices))
 }
 
 /// `bytes` in K, rounded up to the Desired File Size field's 0.001 K so the size it asks for holds
