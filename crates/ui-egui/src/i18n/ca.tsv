@@ -2561,7 +2561,8 @@ digits	Malayalam	Malaiàlam
 	Long Lines	Línies llargues
 	Long Strokes	Traços llargs
 	Longest:	El més llarg:
-	Lossless (lossy WebP isn't available yet)	Sense pèrdua (el WebP amb pèrdua encara no està disponible)
+	Lossless	Sense pèrdua
+	Lossy	Amb pèrdua
 	Lossy:	Amb pèrdua:
 	Low	Baix
 	Low Fidelity Photo	Foto de baixa fidelitat
@@ -7899,6 +7900,7 @@ breakText	Glyphs	Glifs
 @msg	Too many Revolve faces for visibility evaluation	Massa cares de Revolució per avaluar-ne la visibilitat
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft llegeix com a màxim {ASE_MAX_ENTRIES} colors i grups d’un fitxer d’intercanvi de mostres, i aquesta biblioteca en té {entries}
 @msg	WebP encoding failed: {e}	La codificació WebP ha fallat: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	La codificació WebP ha fallat: la imatge és massa gran per a WebP amb pèrdua: reduïu la resolució o trieu Sense pèrdua
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` ha de ser un nombre enter

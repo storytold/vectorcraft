@@ -1007,6 +1007,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Trap: mere end {_1} par objekter ligger tæt nok til overfyldning, eller for mange objekter deler et vandret område; anvend Trap på færre objekter ad gangen
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft læser højst {ASE_MAX_ENTRIES} farver og grupper fra en farveprøveudvekslingsfil, og dette bibliotek har {entries}
 @msg	WebP encoding failed: {e}	WebP-kodning mislykkedes: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	WebP-kodning mislykkedes: billedet er for stort til WebP med tab: sænk opløsningen, eller vælg Tabsfri
 @msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Lugeramme og lugelinjer: ingen lugelinje passer uden for grafikken, og lugerammen er slået fra
 @msg	\\ at end of pattern	\\ i slutningen af mønsteret
 @msg	`alignOn` cannot be empty	`alignOn` må ikke være tom
@@ -5376,7 +5377,8 @@ digits	Malayalam	Malayalam
 	Hide Video Rulers	Skjul videolinealer
 	Client-side (.html)	Klientbaseret (.html)
 	Color Reduction:	Farvereduktion:
-	Lossless (lossy WebP isn't available yet)	Tabsfri (WebP med tab er ikke tilgængelig endnu)
+	Lossless	Tabsfri
+	Lossy	Med tab
 	Scans:	Scanninger:
 	Server-side (.map)	Serverbaseret (.map)
 	{format} Options	Indstillinger for {format}

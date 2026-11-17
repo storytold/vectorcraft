@@ -2822,7 +2822,8 @@ digits	Malayalam	Malajalam
 	Hide Video Rulers	Ukryj linijki wideo
 	Client-side (.html)	Po stronie klienta (.html)
 	Color Reduction:	Redukcja kolorów:
-	Lossless (lossy WebP isn't available yet)	Bezstratny (stratny WebP nie jest jeszcze dostępny)
+	Lossless	Bezstratny
+	Lossy	Stratny
 	Scans:	Skany:
 	Server-side (.map)	Po stronie serwera (.map)
 	{format} Options	Opcje: {format}
@@ -9549,6 +9550,7 @@ breakText	Glyphs	Glify
 @msg	Too many Revolve faces for visibility evaluation	Zbyt wiele ścian efektu Obrót do obliczenia widoczności
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft odczytuje z pliku wymiany próbek najwyżej {ASE_MAX_ENTRIES} kolorów i grup, a ta biblioteka ma ich {entries}
 @msg	WebP encoding failed: {e}	Kodowanie WebP nie powiodło się: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Kodowanie WebP nie powiodło się: obraz jest za duży dla stratnego WebP: zmniejsz rozdzielczość lub wybierz Bezstratny
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` ma wartość smallThumb, mediumThumb, largeThumb, smallList lub largeList
