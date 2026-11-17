@@ -527,7 +527,8 @@ fn home_text(app: &VectorcraftApp, e: &Entry) -> String {
 
 /// Where `tool` is in the current layout: "Toolbar" for its button on the Tools panel, or the name
 /// of the toolbar made with New Toolbar that holds it, followed by ", in the <tool> group", naming
-/// the tool its slot's button shows, when the tool is hidden in that slot's group; "All Tools"
+/// the tool its slot's button shows, when the tool is hidden in that slot's group and the group is
+/// not torn off into a strip; "All Tools"
 /// when no toolbar holds it. A toolbar shown now comes first: the Tools panel, then the toolbars
 /// made with New Toolbar; then a hidden Tools panel, then hidden toolbars made with New Toolbar.
 /// Toolbars are hidden in Presentation Mode and while Tab hides the panels.
@@ -540,12 +541,19 @@ fn tool_home(app: &VectorcraftApp, tool: &str) -> String {
     };
     let toolbars_shown = app.ui.screen_mode < 3 && app.ui.tab_hid.is_none();
     let main = crate::toolbar::slots(app).into_iter().map(|(_, s)| s).find(|s| s.contains(&tool));
-    let main = main.map(|slot| place(tl!("Toolbar"), Some(crate::toolbar::shown_tool(app, &slot))));
+    // A group torn off into a strip shows each of its tools on its own button.
+    let main = main.map(|slot| {
+        let torn_off = slot.len() > 1 && crate::toolbar::is_floating(app, None, slot[0]);
+        place(tl!("Toolbar"), if torn_off { None } else { Some(crate::toolbar::shown_tool(app, &slot)) })
+    });
     let active = app.session.tool_id();
     let custom = |shown: bool| {
         app.ui.custom_toolbars.iter().filter(|b| b.shown == shown).find_map(|bar| {
             let slot = bar.slots.iter().find(|s| s.iter().any(|t| t == tool))?;
             let tools: Vec<&'static str> = slot.iter().filter_map(|id| vectorcraft_tools::tool_info(id).map(|t| t.id)).collect();
+            if tools.len() > 1 && tools.first().is_some_and(|first| crate::toolbar::is_floating(app, Some(&bar.name), first)) {
+                return Some(place(&bar.name, None));
+            }
             Some(place(&bar.name, crate::custom_toolbars::shown_tool(bar, active, &tools)))
         })
     };
@@ -3543,6 +3551,8 @@ mod tests {
         assert!(callout.is_some());
         assert_eq!(outlined, bounds_of(&nodes, "Pen Tool"));
         assert!(outlined.left() >= 100.0, "on the toolbar made with New Toolbar: {outlined:?}");
+        let bar = window.app.ui.custom_toolbars[0].name.clone();
+        assert_eq!(tool_home(&window.app, "curvature"), format!("{bar}, in the Pen Tool group"));
         // The group torn off into a strip.
         window.app.ui.custom_toolbars[0]
             .floating
@@ -3552,6 +3562,8 @@ mod tests {
         let (outlined, _, text) = window.callout().expect("a callout");
         assert_eq!(text, "Pen Tool");
         assert!(outlined.left() >= 600.0 && outlined.top() >= 500.0, "on the strip: {outlined:?}");
+        // The row's home names no group: the strip shows each tool on its own button.
+        assert_eq!(tool_home(&window.app, "curvature"), bar);
     }
 
     /// A group torn off the Tools panel into a strip has the tool's own button on the strip
@@ -3569,6 +3581,8 @@ mod tests {
         assert_eq!(text, "Group Selection Tool");
         assert!(callout.is_some());
         assert!(outlined.left() >= 600.0 && outlined.top() >= 500.0, "on the strip: {outlined:?}");
+        // The row's home names no group: the strip shows each tool on its own button.
+        assert_eq!(tool_home(&window.app, "groupSelection"), "Toolbar");
     }
 
     /// Two viewports that note controls in turn keep one pass each in the list, whichever noted
