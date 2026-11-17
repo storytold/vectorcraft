@@ -158,11 +158,12 @@ fn set_fn(obj: &js_sys::Object, name: &str, f: JsValue) -> Result<(), JsValue> {
 }
 
 /// `addFonts`'s argument, `[{name, bytes}]` (`bytes` a `Uint8Array` or an `ArrayBuffer`, from this
-/// window or the embedding page's), as `text.addFonts`'s `fonts`. Files larger in all than the
-/// command takes are refused before their bytes are copied; the command checks the rest.
+/// window or the embedding page's), as `text.addFonts`'s `fonts`. Every font is checked, and fonts
+/// larger in all than the command takes are refused, before any bytes are copied; the command
+/// checks the rest.
 fn font_files(fonts: &JsValue) -> Result<Vec<Value>, String> {
     let list = fonts.dyn_ref::<js_sys::Array>().ok_or("addFonts takes an array of {name, bytes}")?;
-    let (mut out, mut total) = (Vec::new(), 0u64);
+    let (mut checked, mut total) = (Vec::new(), 0u64);
     for (i, font) in list.iter().enumerate() {
         let get = |key: &str| js_sys::Reflect::get(&font, &key.into()).unwrap_or(JsValue::UNDEFINED);
         // A name given must be a string, as `text.addFonts` requires: refused, not dropped.
@@ -172,30 +173,38 @@ fn font_files(fonts: &JsValue) -> Result<Vec<Value>, String> {
         } else {
             Some(name.as_string().ok_or_else(|| format!("addFonts: font {i}'s name must be its file name, a string"))?)
         };
-        // Read by `byteLength` and `new Uint8Array(bytes)`, not checked with `dyn_ref`: that is
-        // `instanceof`, which refuses the arrays of a page that embeds the app in an iframe, made in
-        // that page's window.
         let bytes = get("bytes");
-        let size = Some(&bytes)
-            .filter(|b| b.is_object())
-            .and_then(|b| js_sys::Reflect::get(b, &"byteLength".into()).ok())
-            .and_then(|n| n.as_f64())
-            .filter(|n| *n >= 1.0);
-        let Some(size) = size else {
+        let Some(size) = byte_length(&bytes).filter(|n| *n >= 1.0) else {
             return Err(format!("addFonts: font {i}'s bytes must be a Uint8Array or an ArrayBuffer of the font file"));
         };
         total = total.saturating_add(size as u64);
         if total > MAX_FONT_FILE {
             return Err("addFonts: the fonts come to more than 256 MB: add fewer at a time".into());
         }
-        let bytes = js_sys::Uint8Array::new(&bytes);
-        let mut file = json!({"dataBase64": vectorcraft_format::base64_encode(&bytes.to_vec())});
+        checked.push((name, bytes));
+    }
+    let encode = |(name, bytes): (Option<String>, JsValue)| {
+        let mut file = json!({"dataBase64": vectorcraft_format::base64_encode(&js_sys::Uint8Array::new(&bytes).to_vec())});
         if let Some(name) = name {
             file["name"] = json!(name);
         }
-        out.push(file);
-    }
-    Ok(out)
+        file
+    };
+    Ok(checked.into_iter().map(encode).collect())
+}
+
+/// The size in bytes of `bytes` when it is a typed array (a `Uint8Array`) or an `ArrayBuffer`, read
+/// with the built-in `byteLength` getters → None for anything else. They check what `bytes` is, so
+/// they take another window's arrays, which `instanceof` (`dyn_ref`) refuses, and an object's own
+/// `byteLength` or `length` can't make `new Uint8Array(bytes)` copy more than was counted.
+fn byte_length(bytes: &JsValue) -> Option<f64> {
+    let typed_arrays = js_sys::Object::get_prototype_of(&js_sys::Object::get_prototype_of(&js_sys::Uint8Array::new_with_length(0).into()));
+    let buffers = js_sys::Object::get_prototype_of(&js_sys::ArrayBuffer::new(0).into());
+    [typed_arrays, buffers].iter().find_map(|proto| {
+        let descriptor = js_sys::Reflect::get_own_property_descriptor(proto, &"byteLength".into()).ok()?;
+        let getter = js_sys::Reflect::get(&descriptor, &"get".into()).ok()?;
+        js_sys::Reflect::apply(getter.dyn_ref::<js_sys::Function>()?, bytes, &js_sys::Array::new()).ok()?.as_f64()
+    })
 }
 
 /// Install `window.vectorcraft`: the crate's functions, then VectorCraft's own (`inspect` is its

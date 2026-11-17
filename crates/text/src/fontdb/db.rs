@@ -278,7 +278,8 @@ impl FontDb {
 
     /// Add user fonts (the bytes of TTF, OTF, TTC or OTC files) as [`FontDb::add_font`] adds one,
     /// all of them at once → the faces added, as (family, style), in the order the files hold them.
-    /// A face already loaded (the same family, style and version) is not added again.
+    /// A face already loaded (the same family, style and version) is not added again; one loaded
+    /// from an installed file is the session's from then on, so it stays when that file is removed.
     pub fn add_font_files(&self, files: Vec<Vec<u8>>) -> Vec<(String, String)> {
         self.add_faces(files.into_iter().map(|bytes| (bytes, None)))
     }
@@ -316,7 +317,10 @@ impl FontDb {
             for (i, spec) in enumerate_faces(&data) {
                 let version = skrifa::FontRef::from_index(&data, i).ok().and_then(|f| name(&f, &[StringId::VERSION_STRING])).unwrap_or_default();
                 let present = |f: &FontFace| same(f, &spec.family, &spec.style, &version);
-                if self.read_faces().iter().any(|f| present(f)) || made.iter().any(present) {
+                // Bytes without a file (the session's) for a face loaded from an installed file
+                // are not skipped: they take its place below, so it stays when the file goes.
+                let loaded = |f: &FontFace| present(f) && (path.is_some() || f.path.is_none());
+                if self.read_faces().iter().any(|f| loaded(f)) || made.iter().any(present) {
                     continue;
                 }
                 if let Some(f) = make_face(FontBytes::Owned(data.clone()), i, spec, path.clone()) {
@@ -326,11 +330,20 @@ impl FontDb {
         }
         let mut faces = self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut added = Vec::new();
-        for f in made {
-            // Another thread may have added the same face meanwhile.
-            if !faces.iter().any(|g| same(g, &f.family, &f.style, &f.version)) {
-                added.push((f.family.clone(), f.style.clone()));
-                faces.push(Arc::new(f));
+        for mut f in made {
+            match faces.iter().position(|g| same(g, &f.family, &f.style, &f.version)) {
+                None => {
+                    added.push((f.family.clone(), f.style.clone()));
+                    faces.push(Arc::new(f));
+                }
+                // Loaded from an installed file: the session's face takes its place and its id
+                // (lookups and cached outlines stay), and a rescan without the file keeps it.
+                Some(at) if f.path.is_none() && faces[at].path.is_some() => {
+                    f.id = faces[at].id;
+                    faces[at] = Arc::new(f);
+                }
+                // Another thread may have added the same face meanwhile.
+                Some(_) => {}
             }
         }
         drop(faces);
