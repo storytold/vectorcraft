@@ -8289,6 +8289,7 @@ breakText	Glyphs	Гліфи
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	складені фігури приймають контури, складені контури, групи, складені фігури, текст, переходи й оболонки
 @msg	compound {_1} must contain exactly one open path to join	складений об’єкт {_1} має містити рівно один відкритий контур для з’єднання
 @msg	connect needs a path other than the one extended	для connect потрібен контур, відмінний від того, що продовжується
+@msg	connect needs extend	для connect потрібен extend
 @msg	connect needs id	для connect потрібен id
 @msg	connect path has no open end	контур для connect не має відкритого кінця
 @msg	continuation must be an array of path chunks	continuation має бути масивом частин контуру

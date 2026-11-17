@@ -1071,6 +1071,29 @@ fn brush_freehand_continued_by_one_point_follows_keep_selected() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "the same brush again: no undo step");
 }
 
+/// A `brush.freehand` call that continues a path by one point with a bad `connect` is refused
+/// before the path's brush changes: the brush, the selection and the undo history stay as they were.
+#[test]
+fn brush_freehand_continued_by_one_point_refuses_a_bad_connect() {
+    let mut s = session();
+    let r = s.execute("brush.freehand", &json!({"points": [[10, 10], [60, 40], [120, 10]], "style": "brush", "brush": "Charcoal"})).unwrap();
+    let p = NodeId(r["id"].as_u64().unwrap());
+    let a = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    select(&mut s, &[a]);
+    let undo = undo_steps(&s);
+    let one = json!({"points": [[120, 10]], "extend": {"id": p.0, "end": "end"}, "brush": "Dots"});
+    for connect in
+        [json!({"id": p.0, "end": "end"}), json!({"id": a.0, "end": "middle"}), json!({"end": "end"}), json!({"id": 999_999, "end": "end"})]
+    {
+        let mut params = one.clone();
+        params["connect"] = connect;
+        assert!(s.execute("brush.freehand", &params).is_err(), "{params}");
+        assert_eq!(brush_of(&s, p).as_deref(), Some("Charcoal"), "{params}: the brush stays");
+        assert_eq!(selected(&s), [a], "{params}: the selection stays");
+        assert_eq!(undo_steps(&s), undo, "{params}: no undo step");
+    }
+}
+
 /// `brush.freehand` refuses a brush for a path with no stroke (a continued path, a redrawn one
 /// and a new filled pencil path while the stroke is None) instead of reporting it painted: the
 /// document, the selection and the undo history stay as they were. Without a brush the path is

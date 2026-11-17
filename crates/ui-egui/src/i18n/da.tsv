@@ -1610,6 +1610,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammensatte figurer tager kurver, sammensatte kurver, grupper, sammensatte figurer, tekst, blandinger og konvolutter
 @msg	compound {_1} must contain exactly one open path to join	sammensat {_1} skal indeholde præcis én åben kurve at sammenføje
 @msg	connect needs a path other than the one extended	connect kræver en anden kurve end den, der forlænges
+@msg	connect needs extend	connect kræver extend
 @msg	connect needs id	connect kræver id
 @msg	connect path has no open end	connect-kurven har ingen åben ende
 @msg	continuation must be an array of path chunks	continuation skal være et array af kurvestykker

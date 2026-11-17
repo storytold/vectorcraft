@@ -8369,6 +8369,7 @@ breakText	Glyphs	Glyphen
 @msg	compound {_1} must contain exactly one open path to join	zusammengesetzter Pfad {_1} muss genau einen offenen Pfad zum Zusammenfügen enthalten
 @msg	connect end must be "start" or "end"	connect end muss „start“ oder „end“ sein
 @msg	connect needs a path other than the one extended	connect braucht einen anderen Pfad als den verlängerten
+@msg	connect needs extend	connect braucht extend
 @msg	connect needs id	connect braucht id
 @msg	connect path has no open end	der connect-Pfad hat kein offenes Ende
 @msg	copy needs path: the file to copy into the document's folder	copy braucht path: die Datei, die in den Ordner des Dokuments kopiert werden soll

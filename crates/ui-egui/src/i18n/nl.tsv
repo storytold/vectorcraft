@@ -6533,6 +6533,7 @@ imageTrace	Outline	Contour
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	samengestelde vormen accepteren paden, samengestelde paden, groepen, samengestelde vormen, tekst, mengsels en omvormingen
 @msg	compound {_1} must contain exactly one open path to join	samengesteld object {_1} moet precies één open pad bevatten om te verbinden
 @msg	connect needs a path other than the one extended	connect heeft een ander pad nodig dan het pad dat wordt verlengd
+@msg	connect needs extend	connect heeft extend nodig
 @msg	connect needs id	connect heeft id nodig
 @msg	connect path has no open end	het pad van connect heeft geen open uiteinde
 @msg	continuation must be an array of path chunks	continuation moet een array van padstukken zijn

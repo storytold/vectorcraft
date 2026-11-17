@@ -8689,6 +8689,7 @@ breakText	Glyphs	Glyfy
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	složené tvary přijímají cesty, složené cesty, skupiny, složené tvary, text, prolnutí a obálky
 @msg	compound {_1} must contain exactly one open path to join	složený objekt {_1} musí ke spojení obsahovat právě jednu otevřenou cestu
 @msg	connect needs a path other than the one extended	connect vyžaduje jinou cestu než tu prodlužovanou
+@msg	connect needs extend	connect vyžaduje extend
 @msg	connect needs id	connect vyžaduje id
 @msg	connect path has no open end	cesta v connect nemá žádný otevřený konec
 @msg	continuation must be an array of path chunks	continuation musí být pole úseků cesty

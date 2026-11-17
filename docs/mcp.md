@@ -6063,7 +6063,10 @@ in `path.curvatureEdit`; `perpendicular` in `path.reshapeSegment`; and `keepSele
 `path.freehand` (and `brush.freehand`, which runs it) refuses a `style` other than "pencil" or "brush" with
 `style must be "pencil" or "brush"`, and an `end` of `extend` other than "start" or "end" with
 `extend end must be "start" or "end"`; the document does not change and no undo step is recorded. Left out or null,
-`style` is "pencil" and the `end` of `extend` is "end".
+`style` is "pencil" and the `end` of `extend` is "end". It refuses a `connect` without `extend` with
+`connect needs extend`, and checks a `connect` given with `extend` (its `id`, a path other than the one extended with
+an open end, and an `end` of "start" or "end") before a stroke of one point returns, so a bad `connect` is refused
+there too and a `brush.freehand` call does not change the path's brush or the selection.
 
 A `pointer_gesture` with `mods: {cmd: true}` held at the press, with any tool but the selection tools (Command on
 macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`), or Direct Selection with the Pen,

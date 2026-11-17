@@ -731,6 +731,7 @@
 @msg	compound {_1} must contain exactly one open path to join	შედგენილი {_1} შესაერთებლად ზუსტად ერთ ღია ტრაექტორიას უნდა შეიცავდეს
 @msg	connect end must be "start" or "end"	connect-ის end უნდა იყოს "start" ან "end"
 @msg	connect needs a path other than the one extended	connect-ს სჭირდება ტრაექტორია, რომელიც გაგრძელებულისგან განსხვავდება
+@msg	connect needs extend	connect-ს სჭირდება extend
 @msg	connect needs id	connect-ს სჭირდება id
 @msg	connect path has no open end	connect-ის ტრაექტორიას ღია ბოლო არ აქვს
 @msg	continuation must be an array of path chunks	continuation უნდა იყოს ტრაექტორიის ნაწილების მასივი
