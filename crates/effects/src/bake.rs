@@ -720,7 +720,9 @@ fn moved_type_group(n: &Node) -> Option<Node> {
 /// Type in a clipping path, other type that [`moved_type`] doesn't copy, and type inside live
 /// objects or inside groups with Pathfinder or geometry effects or fills and strokes that paint, is
 /// outlined as [`evaluate_container`] outlines it, and the other members become what it makes of
-/// them. `None` when no type stays type.
+/// them. `None` when no type stays type, and for a group or layer whose copies each carry the raster
+/// effects listed before their Transform effect ([`crate::outer_effects`]), which is baked as the
+/// canvas draws it ([`evaluate_container`]).
 fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     fn keep(d: &Document, n: &mut Node, moves: &[serde_json::Value], clipping: bool, kept: &mut bool) {
         if !clipping {
@@ -756,7 +758,11 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
             }
         }
     }
-    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) || has_pathfinder(n) || has_own_paint(n) {
+    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. })
+        || has_pathfinder(n)
+        || has_own_paint(n)
+        || crate::reshape::copied_container_raster_at(n).is_some()
+    {
         return None;
     }
     let fx = geometry_effects(n);

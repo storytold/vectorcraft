@@ -361,6 +361,25 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en gruppes udfyldning eller streg tegner intet
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
 @msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
+@msg	give one <filter> element	angiv ét <filter>-element
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementet skal have et id, filterets navn
+@msg	an SVG filter's id is at most {MAX_NAME} characters	et SVG-filters id er højst {MAX_NAME} tegn
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> er ikke et element i et SVG-filter
+@msg	an SVG filter has no event attributes such as {_1}	et SVG-filter har ingen hændelsesattributter som {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	et SVG-filters billeder er data:-URL'er i PNG, JPEG, GIF eller WebP
+@msg	the SVG filter isn't valid XML: {e}	SVG-filteret er ikke gyldig XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves for feTurbulence er højst {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} er højst {max}
+@msg	feConvolveMatrix's order	order for feConvolveMatrix
+@msg	feMorphology's radius	radius for feMorphology
+@msg	a blur's stdDeviation	stdDeviation for en sløring
+@msg	the SVG filter has no primitives	SVG-filteret har ingen filterprimitiver
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	et SVG-filter har højst {MAX_PRIMITIVES} filterprimitiver
+@msg	the SVG filter is too large once its attributes are written out	SVG-filteret er for stort, når dets attributter er skrevet ud
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	et SVG-filters billeder har i alt højst {MAX_IMAGE_PIXELS} pixels
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-filteret kan ikke tegnes: kontrollér dets filterprimitiver og deres input
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	et SVG-filters elementer er højst indlejret {MAX_DEPTH} niveauer dybt
+@msg	an SVG filter is at most {_1} KB	et SVG-filter er højst {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` skal være et objekt, der kun indeholder `mode` med værdien shaded eller wireframe
 @msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
@@ -719,7 +738,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Clear Recent Files	Ryd seneste filer
 	Show in Folder	Vis i mappe
 	Close	Luk
-@id	file.close	file.close
+@id	file.close	Luk
 	Close All	Luk alle
 	Save	Gem
 	Save As…	Gem som…
@@ -3187,7 +3206,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Zig Zag…	Zigzag…
 	Pathfinder	Pathfinder
 	Add	Foren
-@id	pathfinder.add	pathfinder.add
+@id	pathfinder.add	Foren
 	Intersect	Skæring
 	Exclude	Udeluk
 	Subtract	Træk fra
@@ -3500,6 +3519,7 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Auto Color	Autofarve
 	Automatic	Automatisk
 	Isolate Selected Group	Isolér valgt gruppe
+	Isolate Selected Path	Isolér valgt kurve
 	Exit Isolation Mode	Afslut isoleringstilstand
 	Make Clipping Mask	Opret beskæringsmask
 	Release Clipping Mask	Frigør beskæringsmask
@@ -3901,7 +3921,7 @@ lighting	Light	Lys
 	Name* @ 66.67% (RGB/Preview)	Navn* @ 66.67% (RGB/forhåndsvisning)
 	No Document	Intet dokument
 	Press 	Tryk på 
-	Search commands and tools	Søg i kommandoer og værktøjer
+	Search commands, tools, panels and effects	Søg i kommandoer, værktøjer, paneler og effekter
 	Style:	Typografi:
 	Switch workspace	Skift arbejdsområde
 	Show all open documents	Vis alle åbne dokumenter
@@ -4103,6 +4123,10 @@ lighting	Light	Lys
 	Play Current Selection	Afspil aktuel markering
 	Save Actions…	Gem handlinger…
 	Load Actions…	Indlæs handlinger…
+	Reset Actions	Nulstil handlinger
+	Replace the current actions with the default set?	Vil du erstatte de aktuelle handlinger med standardsættet?
+	Append adds the default set after the current sets instead.	Tilføj tilføjer i stedet standardsættet efter de aktuelle sæt.
+	Append	Tilføj
 	Reflect Horizontal	Spejl vandret
 	Rotate 90° CW	Rotér 90° med uret
 	Set 1	Sæt 1
@@ -5460,6 +5484,8 @@ digits	Malayalam	Malayalam
 	Show smooth color wheel	Vis glat farvehjul
 	Show segmented color wheel	Vis segmenteret farvehjul
 	Show color bars	Vis farvebjælker
+	Show brightness and hue on wheel	Vis lysstyrke og farvetone på hjulet
+	Show saturation and hue on wheel	Vis mætning og farvetone på hjulet
 	Add Color Tool	Værktøjet Tilføj farve
 	Remove Color Tool	Værktøjet Fjern farve
 	Remove Color	Fjern farve
@@ -6860,7 +6886,11 @@ font-technology	Variable	Variable
 	Saved {path}	Gemte {path}
 	Saving	Gemmer
 	Saving {}	Gemmer {}
-	Search commands and tools…	Søg i kommandoer og værktøjer…
+	Search commands, tools, panels and effects…	Søg i kommandoer, værktøjer, paneler og effekter…
+	No commands match	Ingen kommandoer passer
+	{pos} of {total}: {name}	{pos} af {total}: {name}
+@plural	{n} result|{n} results	{n} resultat|{n} resultater
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} af {n} resultat. Skriv videre for at indsnævre dem.|{shown} af {n} resultater. Skriv videre for at indsnævre dem.
 	Recent Commands	Seneste kommandoer
 	No recent commands	Ingen seneste kommandoer
 	Dashed Line	Stiplet linje
@@ -9567,6 +9597,11 @@ breakText	Glyphs	Glyffer
 	Malayalam	Malayalam
 	Odia	Oriya
 	Urdu	Urdu
+	Sanskrit	Sanskrit
+	Nepali	Nepalesisk
+	Assamese	Assamesisk
+	Konkani	Konkani
+	Sindhi	Sindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} og nyere (version {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Eksportér alle åbne dokumenter som PDF
@@ -9844,4 +9879,24 @@ breakText	Glyphs	Glyffer
 	No objects are selected.	Ingen objekter er markeret.
 	Open a document to mark its fold lines.	Åbn et dokument for at markere dets foldelinjer.
 	Remove Fold Line Role	Fjern linjetype
+	Check	Kontrollér
+	Check Fold Lines	Kontrollér foldelinjer
+@msg	No cut lines are in the selection.	Der er ingen skærelinjer i markeringen.
+@msg	No cut lines are in the document.	Der er ingen skærelinjer i dokumentet.
+@msg	The cut lines do not enclose an area.	Skærelinjerne omslutter ikke et område.
+@msg	A cut line ends without meeting another cut line.	En skærelinje slutter uden at møde en anden skærelinje.
+@msg	A gap between cut lines was closed.	Et mellemrum mellem skærelinjer blev lukket.
+@msg	The fold lines are too complex to check.	Foldelinjerne er for komplekse til at kontrollere.
+@msg	A cut line and a crease lie on top of each other.	En skærelinje og en rillelinje ligger oven på hinanden.
+@msg	No cut lines are among the given objects.	Der er ingen skærelinjer blandt de angivne objekter.
+@msg	Two fold lines lie on top of each other.	To foldelinjer ligger oven på hinanden.
+@msg	A crease ends inside a panel.	En rillelinje slutter inde i et panel.
+@msg	A crease does not divide two panels.	En rillelinje deler ikke to paneler.
+@msg	A crease lies outside the cut outline, wholly or in part.	En rillelinje ligger helt eller delvist uden for skærekonturen.
+@msg	The pieces of a hinge are not on one straight line.	Delene af et hængsel ligger ikke på én ret linje.
+@msg	A gap between cut lines is too narrow to tell apart.	Et mellemrum mellem skærelinjer er for smalt til at skelne.
+@msg	A cut-out area holds other fold lines or another blank.	Et udskåret område indeholder andre foldelinjer eller et andet emne.
+@msg	A panel is not joined to the rest by a crease.	Et panel er ikke forbundet med resten af en rillelinje.
+@msg	A fold line is on a non-printing layer.	En foldelinje ligger på et lag, der ikke udskrives.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, hængsler: {hinges}, fejl: {errors}, advarsler: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"

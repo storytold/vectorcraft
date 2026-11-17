@@ -72,7 +72,7 @@
 	3D and Materials	3D ve Malzemeler
 	Plane	Düzlem
 	Extrude	Ekstrüzyon
-	Revolve	Döndür
+	Revolve	Eksen Etrafında Döndür
 	Inflate	Şişir
 	Select objects, then pick an object type to give them a 3D effect.	Nesneleri seçin, ardından onlara 3D efekti vermek için bir nesne türü seçin.
 	3D Ribbon	3D Şerit
@@ -1168,8 +1168,8 @@ font-technology	Variable	Değişken
 	Extrude & Bevel…	Ekstrüzyon ve Eğim…
 	3D (Classic)	3D (Klasik)
 	Extrude & Bevel (Classic)…	Ekstrüzyon ve Eğim (Klasik)…
-	Revolve (Classic)…	Döndür (Klasik)…
-	Rotate (Classic)…	Çevir (Klasik)…
+	Revolve (Classic)…	Eksen Etrafında Döndür (Klasik)…
+	Rotate (Classic)…	Döndür (Klasik)…
 	Surface	Yüzey
 	Wireframe	Tel Kafes
 	Render Settings	Oluşturma Ayarları
@@ -1479,6 +1479,8 @@ font-technology	Variable	Değişken
 	Show smooth color wheel	Kesintisiz renk tekerleğini göster
 	Show segmented color wheel	Bölümlü renk tekerleğini göster
 	Show color bars	Renk çubuklarını göster
+	Show brightness and hue on wheel	Tekerlekte parlaklık ve renk tonunu göster
+	Show saturation and hue on wheel	Tekerlekte doygunluk ve renk tonunu göster
 	Add Color Tool	Renk Ekle aracı
 	Remove Color Tool	Renk Kaldır aracı
 	Remove Color	Rengi kaldır
@@ -2432,6 +2434,10 @@ shape	Open	Açık
 	Play Current Selection	Geçerli Seçimi Oynat
 	Save Actions…	Eylemleri Kaydet…
 	Load Actions…	Eylemleri Yükle…
+	Reset Actions	Eylemleri Sıfırla
+	Replace the current actions with the default set?	Geçerli eylemler varsayılan setle değiştirilsin mi?
+	Append adds the default set after the current sets instead.	Ekle bunun yerine varsayılan seti geçerli setlerin sonuna ekler.
+	Append	Ekle
 	Plug-in Info	Eklenti Bilgisi
 	Plug-ins	Eklentiler
 	Plug-in…	Eklenti…
@@ -2843,7 +2849,7 @@ digits	Malayalam	Malayalam
 	Revert to the saved version of “{name}”?	“{name}”nin kayıtlı sürümüne dönülsün mü?
 	Replace “{name}”, the file this document was opened from?	Bu belgenin açıldığı dosya olan "{name}" değiştirilsin mi?
 	Opening it left out what VectorCraft can't read yet ({what}), so replacing it loses that for good. Save under another name to keep it.	Bunu açmak, VectorCraft'ın henüz okuyamadığı şeyi ({what}) dışarıda bıraktı, bu nedenle onu değiştirmek onu tamamen kaybeder. Saklamak için başka bir adla kaydedin.
-	Revolve…	Döndür…
+	Revolve…	Eksen Etrafında Döndür…
 	RGB Color	RGB Rengi
 	Right	Sağ
 	Right Grid:	Sağ Izgara:
@@ -3074,8 +3080,12 @@ digits	Malayalam	Malayalam
 	Redefine {name}	“{name}” Stilini Yeniden Tanımla
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` değiştirilmiş ayarları ifade eder: ön ayarı başka bir adla kaydedin
 @msg	`{key}` must be an array of these names: {_1}	`{key}` şu adlardan oluşan bir dizi olmalıdır: {_1}
-	Search commands and tools	Komutları ve araçları arayın
-	Search commands and tools…	Komutları ve araçları arayın…
+	Search commands, tools, panels and effects	Komutları, araçları, panelleri ve efektleri arayın
+	Search commands, tools, panels and effects…	Komutları, araçları, panelleri ve efektleri arayın…
+	No commands match	Eşleşen komut yok
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} sonuç
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} sonuçtan {shown} tanesi. Daraltmak için yazmaya devam edin.
 	Recent Commands	Son komutlar
 	No recent commands	Son komut yok
 	Search Commands…	Arama Komutları…
@@ -3736,7 +3746,7 @@ digits	Malayalam	Malayalam
 	Reverse Traps	Tuzakları Tersine Çevir
 	Precision	Hassasiyet
 	Remove Redundant Points	Gereksiz Noktaları Kaldır
-	Trim	Kırpma
+	Trim	Budama
 	Trim mark weight:	Trim işareti ağırlığı:
 	Trim marks	Kırpma işaretleri
 	Trim View	Görünümü Kırp
@@ -4078,6 +4088,7 @@ imageTrace	Outline	Kontur
 	 to set spacing and orientation	 aralığı ve yönlendirmeyi ayarlamak için
 	:	:
 	Isolate Selected Group	Seçili Grubu İzole Et
+	Isolate Selected Path	Seçili Yolu İzole Et
 	Isolate Selected Object	Seçili Nesneyi Ayır
 	Release Clipping Mask	Kırpma Maskesini Serbest Bırakın
 	Make Compound Path	Bileşik Yol Yap
@@ -5519,24 +5530,42 @@ lighting	Light	Işık
 @msg	{label} requires a shape with at least two anchors	{label} en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	The shape is too complex for a 3D effect	Şekli 3 boyutlu bir efekt için fazla karmaşık
 @msg	Extrude & Bevel	Ekstrüzyon ve Eğim
-@msg	Revolve	Döndür
+@msg	Revolve	Eksen Etrafında Döndür
 @msg	Inflate	Şişir
 @msg	Rotate	Döndür
 @msg	Extrude & Bevel (Classic)	Ekstrüzyon ve Eğim (Klasik)
-@msg	Revolve (Classic)	Döndür (Klasik)
-@msg	Rotate (Classic)	Çevir (Klasik)
+@msg	Revolve (Classic)	Eksen Etrafında Döndür (Klasik)
+@msg	Rotate (Classic)	Döndür (Klasik)
 @msg	This effect	Bu efekt
 @msg	clipping paths	kırpma yolları
 @msg	other objects	diğer nesneler
 @msg	{label} requires a group holding a shape with at least two anchors	{label}, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
-@msg	Revolve requires a group holding a shape with at least two anchors	Döndür, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
-@msg	Revolve requires a shape with at least two anchors	Döndür, en az iki bağlantı noktasına sahip bir şekil gerektirir
+@msg	Revolve requires a group holding a shape with at least two anchors	Eksen Etrafında Döndür, en az iki bağlantı noktasına sahip bir şekil içeren bir grup gerektirir
+@msg	Revolve requires a shape with at least two anchors	Eksen Etrafında Döndür, en az iki bağlantı noktasına sahip bir şekil gerektirir
 @msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	Bir gruptaki {label}; yollar, bileşik yollar, metin, gruplar, kırpma grupları, karışımlar ve sembol örnekleri gerektirir: önce şunları serbest bırak veya genişlet: {what}.
 @msg	{label} on a group takes at most {MAX_MEMBERS} objects	Bir gruptaki {label} en fazla {MAX_MEMBERS} nesne alır
 @msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Bir grup veya katmandaki 3 boyutlu efekt, dolgusuna veya konturuna değil, grubun kendisine uygulanır
 @msg	a 3D effect on a group's fill or stroke draws nothing	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt hiçbir şey çizmez
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	bir grubun dolgusundaki veya konturundaki 3 boyutlu efekt dışa aktarılacak hiçbir şey çizmez
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
+@msg	the <filter> element needs an id, the filter's name	<filter> öğesinin, filtrenin adı olan bir id değeri olmalıdır
+@msg	an SVG filter's id is at most {MAX_NAME} characters	bir SVG filtresinin id değeri en fazla {MAX_NAME} karakterdir
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> bir SVG filtresi öğesi değildir
+@msg	an SVG filter has no event attributes such as {_1}	bir SVG filtresinde {_1} gibi olay öznitelikleri olmaz
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	bir SVG filtresinin görüntüleri PNG, JPEG, GIF veya WebP data: URL'leridir
+@msg	the SVG filter isn't valid XML: {e}	SVG filtresi geçerli bir XML değil: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence için numOctaves en fazla {MAX_OCTAVES} olur
+@msg	{what} is at most {max}	{what} en fazla {max} olur
+@msg	feConvolveMatrix's order	feConvolveMatrix için order
+@msg	feMorphology's radius	feMorphology için radius
+@msg	a blur's stdDeviation	bir bulanıklaştırmanın stdDeviation değeri
+@msg	the SVG filter has no primitives	SVG filtresinde temel öğe yok
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	bir SVG filtresinde en fazla {MAX_PRIMITIVES} temel öğe olur
+@msg	the SVG filter is too large once its attributes are written out	SVG filtresi, öznitelikleri yazıldığında çok büyük oluyor
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	bir SVG filtresinin görüntüleri toplamda en fazla {MAX_IMAGE_PIXELS} pikseldir
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG filtresi çizilemiyor: temel öğelerini ve bunların girdilerini denetle
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	bir SVG filtresinin öğeleri en fazla {MAX_DEPTH} düzey iç içe geçer
+@msg	an SVG filter is at most {_1} KB	bir SVG filtresi en fazla {_1} KB olur
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Döndür, Şişir veya Döndür)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render`, yalnızca değeri shaded veya wireframe olan `mode` içeren bir nesne olmalıdır
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
@@ -5546,9 +5575,9 @@ lighting	Light	Işık
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: kırpma yolu resmi kesmek için çok karmaşık
 @msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} en fazla {MAX_MEMBERS} nesne alır
 @msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}, {MAX_DEPTH} düzeyden daha derin iç içe geçmiş resimden katı oluşturamaz
-@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Döndür boyası bu yüzey için çok karmaşık; Segmentler değerini azalt veya degradeyi basitleştir
-@msg	Revolve edge must be left or right	Döndür: edge, left veya right olmalıdır
-@msg	Revolve cap must be a boolean	Döndür: cap bir boole değeri olmalıdır
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Eksen Etrafında Döndür boyası bu yüzey için çok karmaşık; Segmentler değerini azalt veya degradeyi basitleştir
+@msg	Revolve edge must be left or right	Eksen Etrafında Döndür: edge, left veya right olmalıdır
+@msg	Revolve cap must be a boolean	Eksen Etrafında Döndür: cap bir boole değeri olmalıdır
 @msg	the revolved object has no fill or stroke	döndürülen nesnenin dolgusu veya konturu yok
 @msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor, #rrggbb biçiminde opak bir RGB rengi olmalıdır
 @msg	lights must contain one to ten lights	lights bir ile on arasında ışık içermelidir
@@ -5566,8 +5595,8 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` face değeri front veya back olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Döndür nesne türlerine eşlenir
-@msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Eksen Etrafında Döndür nesne türlerine eşlenir
+@msg	Revolve maps graphics onto its side: map them onto the front	Eksen Etrafında Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
@@ -6017,7 +6046,7 @@ lighting	Light	Işık
 	▾ Default Actions	▾ Varsayılan Eylemler
 	⚠ {chord} was already used by {names} — it has been removed there.	⚠ {chord} zaten {names} tarafından kullanılmıştı — oradan kaldırıldı.
 @id	file.close	Kapat
-@id	pathfinder.add	Birleştir
+@id	pathfinder.add	Birleşim
 @msg	give corners of the path: anchors between two straight sides	yolun köşelerini verin: iki düz kenar arasındaki çapalar
 @msg	this kind of brush has no options dialog yet	bu tür bir fırçanın henüz seçenekler iletişim kutusu yok
 @plural	{n} PR|{n} PRs	{n} PR
@@ -9394,6 +9423,11 @@ breakText	Glyphs	Glifler
 	Malayalam	Malayalam dili
 	Odia	Oriya dili
 	Urdu	Urduca
+	Sanskrit	Sanskrit
+	Nepali	Nepalce
+	Assamese	Assamca
+	Konkani	Konkani dili
+	Sindhi	Sindhi dili
 	VectorCraft {release} and later (version {n})	VectorCraft {release} ve sonrası (sürüm {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Tüm Açık Belgeleri PDF Olarak Dışa Aktar
@@ -9696,3 +9730,23 @@ breakText	Glyphs	Glifler
 	No objects are selected.	Hiçbir nesne seçili değil.
 	Open a document to mark its fold lines.	Katlama çizgilerini işaretlemek için bir belgeyi açın.
 	Remove Fold Line Role	Çizgi Türünü Kaldır
+	Check	Denetle
+	Check Fold Lines	Katlama Çizgilerini Denetle
+@msg	No cut lines are in the selection.	Seçimde kesim çizgisi yok.
+@msg	No cut lines are in the document.	Belgede kesim çizgisi yok.
+@msg	The cut lines do not enclose an area.	Kesim çizgileri bir alanı çevrelemiyor.
+@msg	A cut line ends without meeting another cut line.	Bir kesim çizgisi başka bir kesim çizgisiyle buluşmadan bitiyor.
+@msg	A gap between cut lines was closed.	Kesim çizgileri arasındaki bir boşluk kapatıldı.
+@msg	The fold lines are too complex to check.	Katlama çizgileri denetlenemeyecek kadar karmaşık.
+@msg	A cut line and a crease lie on top of each other.	Bir kesim çizgisi ile bir pilyaj çizgisi üst üste.
+@msg	No cut lines are among the given objects.	Belirtilen nesneler arasında kesim çizgisi yok.
+@msg	Two fold lines lie on top of each other.	İki katlama çizgisi üst üste.
+@msg	A crease ends inside a panel.	Bir pilyaj çizgisi bir panelin içinde bitiyor.
+@msg	A crease does not divide two panels.	Bir pilyaj çizgisi iki paneli ayırmıyor.
+@msg	A crease lies outside the cut outline, wholly or in part.	Bir pilyaj çizgisi tamamen veya kısmen kesim konturunun dışında.
+@msg	The pieces of a hinge are not on one straight line.	Bir menteşenin parçaları tek bir düz çizgi üzerinde değil.
+@msg	A gap between cut lines is too narrow to tell apart.	Kesim çizgileri arasındaki bir boşluk ayırt edilemeyecek kadar dar.
+@msg	A cut-out area holds other fold lines or another blank.	Kesilip çıkarılmış bir alan başka katlama çizgileri veya başka bir açınım içeriyor.
+@msg	A panel is not joined to the rest by a crease.	Bir panel geri kalanlara hiçbir pilyaj çizgisiyle bağlı değil.
+@msg	A fold line is on a non-printing layer.	Bir katlama çizgisi yazdırılmayan bir katmanda.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneller: {panels}, menteşeler: {hinges}, hatalar: {errors}, uyarılar: {warnings}

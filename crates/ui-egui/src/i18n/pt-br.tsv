@@ -227,7 +227,7 @@ antiAlias	Sharp	Nítido
 	Arc Lower…	Arco Inferior…
 	Arc Tool	Ferramenta Arco
 	Arc Upper…	Arco Superior…
-	Arch…	Arco…
+	Arch…	Abóbada…
 	Arc…	Arco…
 	Area / Path Type	Texto de Área / Caminho
 	Area Graph Tool	Ferramenta Gráfico de Área
@@ -1335,7 +1335,7 @@ antiAlias	Sharp	Nítido
 	Guides & Grid	Guias e Grade
 	H Spacing:	Espaçamento H:
 	H:	H:
-	Hair Space	Espaço Fino
+	Hair Space	Espaço Ultrafino
 	Hand Tool	Ferramenta Mão
 	Hand-Drawn	Desenhado à Mão
 	Painted and Sketched	Pintado e Esboçado
@@ -1354,6 +1354,8 @@ antiAlias	Sharp	Nítido
 	Show smooth color wheel	Mostrar roda de cores contínua
 	Show segmented color wheel	Mostrar roda de cores segmentada
 	Show color bars	Mostrar barras de cores
+	Show brightness and hue on wheel	Mostrar brilho e tom na roda
+	Show saturation and hue on wheel	Mostrar saturação e tom na roda
 	Add Color Tool	Ferramenta Adicionar cor
 	Remove Color Tool	Ferramenta Remover cor
 	Remove Color	Remover cor
@@ -1573,6 +1575,7 @@ antiAlias	Sharp	Nítido
 	Isolate Blending	Isolar Mesclagem
 	Isolate Group	Isolar Grupo
 	Isolate Selected Group	Isolar Grupo Selecionado
+	Isolate Selected Path	Isolar Caminho Selecionado
 	Isolate Selected Object	Isolar Objeto Selecionado
 	Italian	Italiano
 	Join	Unir
@@ -2194,6 +2197,10 @@ antiAlias	Sharp	Nítido
 	Play Current Selection	Reproduzir Seleção Atual
 	Save Actions…	Salvar Ações…
 	Load Actions…	Carregar Ações…
+	Reset Actions	Redefinir Ações
+	Replace the current actions with the default set?	Substituir as ações atuais pelo conjunto padrão?
+	Append adds the default set after the current sets instead.	Anexar adiciona o conjunto padrão depois dos conjuntos atuais.
+	Append	Anexar
 	Plug-in Info	Informações do Plug-in
 	Plug-ins	Plug-ins
 	Plug-in…	Plug-in…
@@ -2742,8 +2749,12 @@ digits	Malayalam	Malaiala
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` representa configurações alteradas: salve a predefinição com outro nome
 @msg	`{key}` must be an array of these names: {_1}	`{key}` deve ser uma matriz destes nomes: {_1}
 	Search Commands…	Pesquisar Comandos…
-	Search commands and tools	Pesquisar comandos e ferramentas
-	Search commands and tools…	Pesquisar comandos e ferramentas…
+	Search commands, tools, panels and effects	Pesquisar comandos, ferramentas, painéis e efeitos
+	Search commands, tools, panels and effects…	Pesquisar comandos, ferramentas, painéis e efeitos…
+	No commands match	Nenhum comando corresponde
+	{pos} of {total}: {name}	{pos} de {total}: {name}
+@plural	{n} result|{n} results	{n} resultado|{n} resultados
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Recent Commands	Comandos recentes
 	No recent commands	Nenhum comando recente
 	Secondary	Secundária
@@ -3218,7 +3229,7 @@ digits	Malayalam	Malaiala
 	Trim mark weight:	Peso da marca de corte:
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	A cor verdadeira requer a versão 2004 ou posterior: a cor mais próxima das 256 cores é escrita.
 	Turn off Data Recovery for complex documents	Desligar Recuperação de Dados para documentos complexos
-	Tweak…	Torcer…
+	Tweak…	Ajustar…
 	Twirl Rate:	Taxa de Redemoinho:
 	Twirl Tool	Ferramenta Redemoinho
 	Twist…	Torcer…
@@ -3366,7 +3377,7 @@ digits	Malayalam	Malaiala
 	Viewing Distance:	Distância de Visualização:
 	W:	W:
 	Warnings	Avisos
-	Warp	Distorcer
+	Warp	Deformar
 	Warp Options	Opções de Distorção
 	Warp Tool	Ferramenta Distorcer
 	Wave…	Onda…
@@ -6169,6 +6180,24 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada para exportar
 @msg	The 3D object is too complex to export	O objeto 3D é complexo demais para ser exportado
+@msg	the <filter> element needs an id, the filter's name	o elemento <filter> precisa de um id, o nome do filtro
+@msg	an SVG filter's id is at most {MAX_NAME} characters	o id de um filtro SVG tem no máximo {MAX_NAME} caracteres
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> não é um elemento de filtro SVG
+@msg	an SVG filter has no event attributes such as {_1}	um filtro SVG não tem atributos de evento como {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	as imagens de um filtro SVG são URLs data: em PNG, JPEG, GIF ou WebP
+@msg	the SVG filter isn't valid XML: {e}	o filtro SVG não é um XML válido: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence é no máximo {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} é no máximo {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation de um desfoque
+@msg	the SVG filter has no primitives	o filtro SVG não tem primitivas
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	um filtro SVG tem no máximo {MAX_PRIMITIVES} primitivas
+@msg	the SVG filter is too large once its attributes are written out	o filtro SVG fica grande demais depois que seus atributos são escritos
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	as imagens de um filtro SVG têm no máximo {MAX_IMAGE_PIXELS} pixels no total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	não é possível desenhar o filtro SVG: verifique suas primitivas e as entradas delas
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	os elementos de um filtro SVG se aninham em no máximo {MAX_DEPTH} níveis
+@msg	an SVG filter is at most {_1} KB	um filtro SVG tem no máximo {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	o objeto não tem efeito 3D (Extrusão e Bisel, Revolver, Inflar ou Girar)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` deve ser um objeto que contenha apenas `mode`, com o valor shaded ou wireframe
 @msg	its 3D effect builds no solid	seu efeito 3D não constrói nenhum sólido
@@ -7545,6 +7574,11 @@ breakText	Glyphs	Glifos
 	Malayalam	Malaiala
 	Odia	Oriá
 	Urdu	Urdu
+	Sanskrit	Sânscrito
+	Nepali	Nepalês
+	Assamese	Assamês
+	Konkani	Concani
+	Sindhi	Sindi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} e posteriores (versão {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Exportar todos os documentos abertos como PDF
@@ -9813,3 +9847,23 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+	Check	Verificar
+	Check Fold Lines	Verificar Linhas de Dobra
+@msg	No cut lines are in the selection.	Não há linhas de corte na seleção.
+@msg	No cut lines are in the document.	Não há linhas de corte no documento.
+@msg	The cut lines do not enclose an area.	As linhas de corte não delimitam nenhuma área.
+@msg	A cut line ends without meeting another cut line.	Uma linha de corte termina sem encontrar outra linha de corte.
+@msg	A gap between cut lines was closed.	Uma lacuna entre linhas de corte foi fechada.
+@msg	The fold lines are too complex to check.	As linhas de dobra são complexas demais para verificar.
+@msg	A cut line and a crease lie on top of each other.	Uma linha de corte e uma de vinco estão sobrepostas.
+@msg	No cut lines are among the given objects.	Não há linhas de corte entre os objetos indicados.
+@msg	Two fold lines lie on top of each other.	Duas linhas de dobra estão sobrepostas.
+@msg	A crease ends inside a panel.	Uma linha de vinco termina dentro de um painel.
+@msg	A crease does not divide two panels.	Uma linha de vinco não divide dois painéis.
+@msg	A crease lies outside the cut outline, wholly or in part.	Uma linha de vinco está total ou parcialmente fora do contorno de corte.
+@msg	The pieces of a hinge are not on one straight line.	As partes de uma dobradiça não estão em uma única linha reta.
+@msg	A gap between cut lines is too narrow to tell apart.	Uma lacuna entre linhas de corte é estreita demais para ser distinguida.
+@msg	A cut-out area holds other fold lines or another blank.	Uma área recortada contém outras linhas de dobra ou outra planificação.
+@msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
+@msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}

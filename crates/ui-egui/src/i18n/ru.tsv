@@ -1579,6 +1579,8 @@ file-filter	Templates	Шаблоны
 	Show smooth color wheel	Показать плавный цветовой круг
 	Show segmented color wheel	Показать сегментированный цветовой круг
 	Show color bars	Показать цветовые полосы
+	Show brightness and hue on wheel	Показать яркость и оттенок на круге
+	Show saturation and hue on wheel	Показать насыщенность и оттенок на круге
 	Add Color Tool	Инструмент «Добавить цвет»
 	Remove Color Tool	Инструмент «Удалить цвет»
 	Remove Color	Удалить цвет
@@ -2117,7 +2119,7 @@ file-filter	Templates	Шаблоны
 	Medium Thumbnail View	Средние миниатюры
 	Medium Thumbnails	Средние миниатюры
 	Menu Dialog	Диалоговое окно меню
-	Merge	Объединить
+	Merge	Слить
 	Merge colors into one row	Объединить цвета в одну строку
 	New Row	Новая строка
 	Merge Graphic Styles	Объединить графические стили
@@ -2687,6 +2689,10 @@ diagnostics	ui	интерфейс
 	Play Current Selection	Воспроизвести текущее выделение
 	Save Actions…	Сохранить действия…
 	Load Actions…	Загрузить действия…
+	Reset Actions	Сбросить действия
+	Replace the current actions with the default set?	Заменить текущие действия набором по умолчанию?
+	Append adds the default set after the current sets instead.	Кнопка «Добавить» вместо этого добавляет набор по умолчанию после текущих наборов.
+	Append	Добавить
 	Plug-in Info	Сведения о модуле
 	Plug-ins	Модули
 	Plug-in…	Модуль…
@@ -3316,8 +3322,12 @@ digits	Malayalam	Малаялам
 	Filter Layers Panel Rows	Фильтровать строки панели «Слои»
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` обозначает изменённые параметры: сохраните набор под другим именем
 @msg	`{key}` must be an array of these names: {_1}	`{key}` должно быть массивом из этих имён: {_1}
-	Search commands and tools	Поиск команд и инструментов
-	Search commands and tools…	Поиск команд и инструментов…
+	Search commands, tools, panels and effects	Поиск команд, инструментов, панелей и эффектов
+	Search commands, tools, panels and effects…	Поиск команд, инструментов, панелей и эффектов…
+	No commands match	Нет подходящих команд
+	{pos} of {total}: {name}	{pos} из {total}: {name}
+@plural	{n} result|{n} results	{n} результат|{n} результата|{n} результатов
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} из {n} результата. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.|{shown} из {n} результатов. Продолжайте вводить, чтобы сузить их.
 	Recent Commands	Недавние команды
 	No recent commands	Нет недавних команд
 	Search Commands…	Поиск команд…
@@ -4343,6 +4353,7 @@ imageTrace	Outline	Контур
 	 to set spacing and orientation	 для задания интервала и ориентации
 	:	:
 	Isolate Selected Group	Изолировать выбранную группу
+	Isolate Selected Path	Изолировать выбранный контур
 	Isolate Selected Object	Изолировать выбранный объект
 	Release Clipping Mask	Освободить маску обрезки
 	Make Compound Path	Создать составной контур
@@ -5830,6 +5841,24 @@ lighting	Light	Свет
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D-эффект на заливке или обводке группы ничего не рисует
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D-эффект на заливке или обводке группы не рисует ничего для экспорта
 @msg	The 3D object is too complex to export	3D-объект слишком сложен для экспорта
+@msg	the <filter> element needs an id, the filter's name	элементу <filter> нужен id, имя фильтра
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id фильтра SVG содержит не более {MAX_NAME} символов
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> не является элементом фильтра SVG
+@msg	an SVG filter has no event attributes such as {_1}	у фильтра SVG нет атрибутов событий, таких как {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	изображения фильтра SVG задаются URL data: в формате PNG, JPEG, GIF или WebP
+@msg	the SVG filter isn't valid XML: {e}	фильтр SVG не является допустимым XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves у feTurbulence не больше {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}: не больше {max}
+@msg	feConvolveMatrix's order	order у feConvolveMatrix
+@msg	feMorphology's radius	radius у feMorphology
+@msg	a blur's stdDeviation	stdDeviation размытия
+@msg	the SVG filter has no primitives	у фильтра SVG нет примитивов
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	у фильтра SVG не более {MAX_PRIMITIVES} примитивов
+@msg	the SVG filter is too large once its attributes are written out	фильтр SVG становится слишком большим после записи его атрибутов
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	изображения фильтра SVG содержат в сумме не более {MAX_IMAGE_PIXELS} пикселей
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	не удается нарисовать фильтр SVG: проверьте его примитивы и их входы
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	элементы фильтра SVG вкладываются не глубже {MAX_DEPTH} уровней
+@msg	an SVG filter is at most {_1} KB	размер фильтра SVG не более {_1} КБ
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	у объекта нет 3D-эффекта (Выдавливание и фаска, Вращение, Надувание или Повернуть)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` должен быть объектом только с полем `mode` со значением shaded или wireframe
 @msg	its 3D effect builds no solid	его 3D-эффект не строит тела
@@ -7504,6 +7533,11 @@ breakText	Glyphs	Глифы
 	Malayalam	Малаялам
 	Odia	Ория
 	Urdu	Урду
+	Sanskrit	Санскрит
+	Nepali	Непальский
+	Assamese	Ассамский
+	Konkani	Конкани
+	Sindhi	Синдхи
 	VectorCraft {release} and later (version {n})	VectorCraft {release} и новее (версия {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Экспортировать все открытые документы в PDF
@@ -9834,5 +9868,25 @@ shape	Open	Открытый
 	No objects are selected.	Объекты не выделены.
 	Open a document to mark its fold lines.	Откройте документ, чтобы отметить его линии сгиба.
 	Remove Fold Line Role	Убрать тип линии
+	Check	Проверить
+	Check Fold Lines	Проверить линии сгиба
+@msg	No cut lines are in the selection.	В выделении нет линий реза.
+@msg	No cut lines are in the document.	В документе нет линий реза.
+@msg	The cut lines do not enclose an area.	Линии реза не ограничивают никакую область.
+@msg	A cut line ends without meeting another cut line.	Линия реза заканчивается, не встречая другую линию реза.
+@msg	A gap between cut lines was closed.	Зазор между линиями реза закрыт.
+@msg	The fold lines are too complex to check.	Линии сгиба слишком сложны для проверки.
+@msg	A cut line and a crease lie on top of each other.	Линия реза и линия биговки лежат друг на друге.
+@msg	No cut lines are among the given objects.	Среди указанных объектов нет линий реза.
+@msg	Two fold lines lie on top of each other.	Две линии сгиба лежат друг на друге.
+@msg	A crease ends inside a panel.	Линия биговки заканчивается внутри панели.
+@msg	A crease does not divide two panels.	Линия биговки не разделяет две панели.
+@msg	A crease lies outside the cut outline, wholly or in part.	Линия биговки целиком или частично лежит за пределами контура реза.
+@msg	The pieces of a hinge are not on one straight line.	Части шарнира не лежат на одной прямой.
+@msg	A gap between cut lines is too narrow to tell apart.	Зазор между линиями реза слишком узок, чтобы его различить.
+@msg	A cut-out area holds other fold lines or another blank.	Вырезанная область содержит другие линии сгиба или другую развёртку.
+@msg	A panel is not joined to the rest by a crease.	Панель не соединена с остальными ни одной линией биговки.
+@msg	A fold line is on a non-printing layer.	Линия сгиба находится на непечатаемом слое.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, шарниры: {hinges}, ошибки: {errors}, предупреждения: {warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
