@@ -11,7 +11,7 @@ workspace = true
 
 [features]
 default = ["wgpu", "accessibility"]
-wgpu = ["eframe/wgpu", "dep:winsafe"]
+wgpu = ["eframe/wgpu"]
 accessibility = ["eframe/accesskit"]
 
 [dependencies]
@@ -42,8 +42,9 @@ craft-update = { workspace = true }
 clipboard-win = { workspace = true }
 # Which GPU drives which display (EnumDisplayDevices, src/gpu.rs), so the window is drawn on the
 # GPU that shows it: drawing on a GPU without a monitor reset the display driver. Safe wrappers over
-# Win32 (MIT); the `user` feature is User32.dll only. Only the wgpu renderer chooses an adapter.
-winsafe = { version = "0.0.29", default-features = false, features = ["user"], optional = true }
+# Win32 (MIT); the `user` feature is User32.dll only. Also reads the file-drag position
+# (src/file_drag.rs) for both renderers. Only the wgpu renderer chooses an adapter.
+winsafe = { version = "0.0.29", default-features = false, features = ["user"] }
 # Waits for Direct3D 12's adapter list before the window starts (src/gpu.rs, #4150). MIT OR
 # Apache-2.0, already in the build through eframe.
 pollster = "1"

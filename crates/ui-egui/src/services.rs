@@ -197,6 +197,10 @@ pub struct Services {
     /// bar's open menu) for floating panels in OS windows of their own: eframe runs the host's
     /// `raw_input_hook` for the main window only.
     pub native_input_hook: Option<NativeInputHook>,
+    /// Current file-drag position in the main window's client area, in physical pixels. The
+    /// desktop host supplies this where file drags do not deliver pointer-move events. Never
+    /// substitute an old egui pointer position when this service is unavailable.
+    pub native_file_drag_position: Option<NativeFileDragPosition>,
     /// The connected monitors, kept current by the desktop host: floating panels in OS windows of
     /// their own store the monitor they are on and reopen on it. The rects are in the points egui
     /// reports for a window on that monitor. Empty on the web, and where the host cannot place a
@@ -210,3 +214,6 @@ pub struct Services {
 
 /// Rewrites one window's raw input before egui reads it ([`Services::native_input_hook`]).
 pub type NativeInputHook = std::sync::Arc<dyn Fn(&mut egui::RawInput) + Send + Sync>;
+
+/// Samples the current native file drag; see [`Services::native_file_drag_position`].
+pub type NativeFileDragPosition = std::sync::Arc<dyn Fn() -> Option<[f64; 2]> + Send + Sync>;
