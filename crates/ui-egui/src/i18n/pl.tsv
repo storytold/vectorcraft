@@ -9770,3 +9770,8 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Stipple	Kropkowanie
+	Fine Stipple	Drobne kropkowanie
+	Dense Stipple	Gęste kropkowanie
+	Soft Stipple	Miękkie kropkowanie
+	Bold Stipple	Grube kropkowanie

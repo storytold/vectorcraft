@@ -8183,3 +8183,8 @@ breakText	Glyphs	Merkit
 @msg	A fold line is on a non-printing layer.	Taittoviiva on tasolla, jota ei tulosteta.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneelit: {panels}, saranat: {hinges}, virheet: {errors}, varoitukset: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
+	Stipple	Pistetys
+	Fine Stipple	Hieno pistetys
+	Dense Stipple	Tiheä pistetys
+	Soft Stipple	Pehmeä pistetys
+	Bold Stipple	Vahva pistetys

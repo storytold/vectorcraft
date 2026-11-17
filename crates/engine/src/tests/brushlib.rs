@@ -113,6 +113,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "bristle-brushes",
             "pattern-borders",
             "scatter-shapes",
+            "stipple",
             "game-trails",
             "energy-beams",
             "dry-media",
@@ -131,19 +132,19 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
-    assert_eq!(libs[6]["count"].as_u64(), Some(4));
+    assert_eq!(libs[7]["count"].as_u64(), Some(4));
     let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
     assert_eq!(
         beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
     );
-    assert_eq!(libs[7]["count"].as_u64(), Some(4));
+    assert_eq!(libs[8]["count"].as_u64(), Some(4));
     let dry = run(&mut s, "brush.library", json!({"library": "Dry Media"}));
     assert_eq!(
         dry["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
-    assert_eq!((libs[8]["name"].as_str(), libs[8]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    assert_eq!((libs[9]["name"].as_str(), libs[9]["count"].as_u64()), (Some("Dry Media"), Some(4)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
@@ -157,6 +158,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("bristle-brushes", "bristle"),
         ("pattern-borders", "pattern"),
         ("scatter-shapes", "scatter"),
+        ("stipple", "scatter"),
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
@@ -216,6 +218,32 @@ fn line_to(x: f64) -> vectorcraft_geom::BezPath {
 
 fn black_stroke() -> vectorcraft_doc::StrokeLayer {
     vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
+}
+
+#[test]
+fn stipple_library_draws_dot_textures_and_survives_save() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "stipple").unwrap();
+    let names: Vec<&str> = lib.brushes.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Fine Stipple", "Dense Stipple", "Soft Stipple", "Bold Stipple"]);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    for b in &lib.brushes {
+        let BrushKind::Scatter(scatter) = &b.kind else { panic!("{} is not a scatter brush", b.name) };
+        assert_eq!(scatter.colorization, vectorcraft_brush::Colorization::Tints);
+        assert!(scatter.spacing.0 > 0.0 && scatter.spacing.1 >= scatter.spacing.0);
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(200.0), &black_stroke());
+        let points = anchors(&pieces.iter().collect::<Vec<_>>());
+        assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        let before = undo_len(&s);
+        let result = run(&mut s, "brush.addFromLibrary", json!({"library": "stipple", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&result["added"]), [b.name.as_str()]);
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
 }
 
 /// Original circuit art and repeat tiles survive adding, applying and saving a library.
