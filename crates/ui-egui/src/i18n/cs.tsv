@@ -9830,7 +9830,6 @@ breakText	Glyphs	Glyfy
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	soubory {kind} nemají průhlednost a soubor by obsahoval {what}: nejprve ji slučte (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	obrázky {kind} nelze otevřít (viz document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` není jedna z nabízených voleb
-@msg	{k} has control characters{_1}	{k} obsahuje řídicí znaky{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} je příliš dlouhé (nejvýše {MAX_TEXT} znaků)
 @msg	{k} must be > 0	{k} musí být > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} musí být číslo (pt) nebo délka jako "210 mm"

@@ -8502,7 +8502,6 @@ axis	Y Axis	Y 軸
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} ファイルは透明に対応していませんが、ファイルに {what} が含まれます: 先に分割・統合してください (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} 画像は開けません (document.formats を参照)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` は選択肢にありません
-@msg	{k} has control characters{_1}	{k} に制御文字{_1} が含まれています
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} が長すぎます (最大 {MAX_TEXT} 文字)
 @msg	{k} must be > 0	{k} には 0 より大きい値を指定してください
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} には数値 (pt)、または "210 mm" のような長さを指定してください

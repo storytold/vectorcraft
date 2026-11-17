@@ -2517,6 +2517,19 @@ fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
     }
 }
 
+/// No catalog keeps a row for `{k} has control characters{_1}`, the single message that
+/// `file.info`'s two control character refusals replaced.
+#[test]
+fn no_catalog_keeps_the_old_file_info_control_character_row() {
+    let literals = message_literals_in(&["engine"]);
+    let old = "{k} has control characters{_1}";
+    assert!(!literals.contains(old), "the engine still makes {old:?}");
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        assert!(!entries.iter().any(|(ctx, src, _)| ctx.starts_with("@msg") && src.split('|').any(|s| s == old)), "{}: {old:?}", l.code);
+    }
+}
+
 /// Every complete-message catalog has a row for each error that `type.compositeFonts.set`,
 /// `.export` and `.import`, the composite font checks behind them and the Composite Fonts dialog
 /// give, and translates them with the font name, the key and the class key kept, and the reason
