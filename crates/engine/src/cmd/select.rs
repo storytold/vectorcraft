@@ -1,6 +1,6 @@
 //! Select menu.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
@@ -466,7 +466,8 @@ fn reselect(s: &mut Session, _: &Value) -> Result<Value> {
 
 fn inverse(s: &mut Session, _: &Value) -> Result<Value> {
     let st = s.doc()?;
-    let ids: Vec<NodeId> = selectable(&st.doc, st.isolation).into_iter().filter(|id| !st.selection.contains(*id)).collect();
+    let selected: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+    let ids: Vec<NodeId> = selectable(&st.doc, st.isolation).into_iter().filter(|id| !selected.contains(id)).collect();
     s.select(|_, sel| sel.set(ids.iter().copied()))?;
     ok()
 }
@@ -497,11 +498,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = checked_ids_param(s, p, "ids", "select.add")?;
-    s.select(|_, sel| {
-        for i in ids {
-            sel.add(i);
-        }
-    })?;
+    s.select(|_, sel| sel.add_all(ids))?;
     selection_result(s)
 }
 
@@ -512,11 +509,7 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
         let value = p.get("id").ok_or_else(|| bad("select.toggle", "missing id or ids"))?;
         vec![checked_id(s, value, "select.toggle")?]
     };
-    s.select(|_, sel| {
-        for id in ids {
-            sel.toggle(id);
-        }
-    })?;
+    s.select(|_, sel| sel.toggle_all(ids))?;
     selection_result(s)
 }
 
