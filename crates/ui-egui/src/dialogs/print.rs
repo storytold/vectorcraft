@@ -746,12 +746,18 @@ fn general(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
         let on = scaling == PrintScaling::Custom || tiles;
         let linked = get(d, SCALE_LINKED).as_bool() == Some(true);
         ui.label(tl!("W:"));
-        if let Some(w) = percent(ui, d, "scale.width", on).filter(|_| linked) {
+        let w = percent(ui, d, "scale.width", on);
+        if let Some(w) = w.filter(|_| linked) {
             set(d, "scale.height", json!(w));
         }
         ui.label(tl!("H:"));
-        if let Some(h) = percent(ui, d, "scale.height", on).filter(|_| linked) {
+        let h = percent(ui, d, "scale.height", on);
+        if let Some(h) = h.filter(|_| linked) {
             set(d, "scale.width", json!(h));
+        }
+        // A typed W or H is what the next `ui.dialog.set` changes from.
+        if w.is_some() || h.is_some() {
+            see_scale(&mut d.fields);
         }
         ui.add_enabled_ui(on, |ui| scale_link(ui, d, linked));
     });
