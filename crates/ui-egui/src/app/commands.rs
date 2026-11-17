@@ -236,6 +236,7 @@ impl VectorcraftApp {
         let ime_target = crate::ime::target(&mut self.session, ime_view);
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
         let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
+        let spot_base = panels::color_guide::before_command(self);
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         let r = panels::actions::after_recorded_command(self, r);
         if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
@@ -267,6 +268,8 @@ impl VectorcraftApp {
                 {
                     self.ui.status = w.to_string();
                 }
+                // A renamed spot color swatch stays the Color Guide's base; a deleted one ends the link.
+                panels::color_guide::after_command(self, id, &params, v, spot_base);
                 if id == "file.new" {
                     self.ui.status.clear();
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).

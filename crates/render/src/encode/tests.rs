@@ -202,6 +202,84 @@ fn backgrounds_are_opaque_or_transparent() {
     assert_eq!(webp.get_pixel(0, 0).0, [0, 0, 0, 255]);
 }
 
+/// The chunk types of RIFF WebP file `file`, in order.
+fn webp_chunks(file: &[u8]) -> Vec<[u8; 4]> {
+    assert_eq!((&file[..4], &file[8..12]), (&b"RIFF"[..], &b"WEBP"[..]));
+    let mut chunks = Vec::new();
+    let mut at = 12;
+    while at + 8 <= file.len() {
+        let len = u32::from_le_bytes([file[at + 4], file[at + 5], file[at + 6], file[at + 7]]) as usize;
+        chunks.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+        at += 8 + len + len % 2;
+    }
+    chunks
+}
+
+/// Lossy WebP is a `VP8 ` picture; transparent pixels stay transparent through an `ALPH` chunk
+/// in a `VP8X` file, and opaque art stays opaque.
+#[test]
+fn lossy_webp_keeps_transparent_pixels_transparent() {
+    let d = circle_doc();
+    let lossless = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &RasterExportOptions::default()).unwrap();
+    assert_eq!(webp_chunks(&lossless), [*b"VP8L"], "lossless by default");
+    let o = RasterExportOptions { webp_lossless: false, quality: 75, ..Default::default() };
+    let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &o).unwrap();
+    assert_eq!(webp_chunks(&file), [*b"VP8X", *b"ALPH", *b"VP8 "]);
+    let img = export(&d, RasterFormat::WebP, &o);
+    assert_eq!(img.dimensions(), (40, 30));
+    assert_eq!(img.get_pixel(0, 0)[3], 0, "a corner outside the circle");
+    let middle = img.get_pixel(20, 15);
+    assert!(middle[3] == 255 && middle[0] < 24, "{middle:?}");
+    // Opaque art on a background is a plain `VP8 ` file.
+    let opaque = RasterExportOptions { background: Some([255; 3]), ..o };
+    let file = Renderer::new().export_region(&d, d.artboards[0].rect, RasterFormat::WebP, &opaque).unwrap();
+    assert_eq!(webp_chunks(&file), [*b"VP8 "]);
+}
+
+/// A lossy frame's tag (RFC 6386 §9.1) holds its first partition's size in 19 bits. A frame whose
+/// size field is at that limit may hold a larger partition, so it is refused; frames below it
+/// decode with another decoder at every quality, a 1 × 1 image and transparent pixels included.
+#[test]
+fn lossy_webp_refuses_a_first_partition_at_the_size_limit() {
+    let circle = circle_doc();
+    let dot = Document::new(1.0, 1.0);
+    for (d, background) in [(&circle, None), (&circle, Some([255; 3])), (&dot, Some([40, 80, 120]))] {
+        for quality in [0, 50, 100] {
+            let o = RasterExportOptions { webp_lossless: false, quality, background, ..Default::default() };
+            let mut file = Renderer::new().export_region(d, d.artboards[0].rect, RasterFormat::WebP, &o).unwrap();
+            let decoded = image::load_from_memory_with_format(&file, image::ImageFormat::WebP).unwrap();
+            let rect = d.artboards[0].rect;
+            assert_eq!((decoded.width(), decoded.height()), (rect.width() as u32, rect.height() as u32), "quality {quality}");
+            assert!(!vp8_partition_at_limit(&file), "quality {quality}");
+            let vp8 = chunk_offset(&file, b"VP8 ") + 8;
+            let tag = u32::from(file[vp8]) | (u32::from(file[vp8 + 1]) << 8) | (u32::from(file[vp8 + 2]) << 16);
+            let len = u32::from_le_bytes(file[vp8 - 4..vp8].try_into().unwrap());
+            assert_eq!((tag & 1, &file[vp8 + 3..vp8 + 6]), (0, &[0x9d, 0x01, 0x2a][..]), "a key frame with its start code");
+            assert!((tag >> 5) + 10 <= len, "the first partition fits in the chunk");
+            // The size field at its limit.
+            let at_limit = (tag & 0x1f) | (VP8_FIRST_PARTITION_LIMIT << 5);
+            file[vp8..vp8 + 3].copy_from_slice(&at_limit.to_le_bytes()[..3]);
+            assert!(vp8_partition_at_limit(&file), "quality {quality}");
+        }
+    }
+    let lossless = Renderer::new().export_region(&circle, circle.artboards[0].rect, RasterFormat::WebP, &RasterExportOptions::default()).unwrap();
+    assert!(!vp8_partition_at_limit(&lossless));
+    // Cut short or with a chunk length past the end, the scan stops without a frame.
+    for bad in [&b"RIFF\0\0\0\0WEBP"[..], b"RIFF\0\0\0\0WEBPVP8 ", b"RIFF\0\0\0\0WEBPXXXX\xff\xff\xff\xffVP8 \x04\0\0\0\xff\xff\xff\0", b""] {
+        assert!(!vp8_partition_at_limit(bad), "{bad:?}");
+    }
+}
+
+/// The offset of the first chunk of type `ty` in RIFF WebP `file`.
+fn chunk_offset(file: &[u8], ty: &[u8; 4]) -> usize {
+    let mut at = 12;
+    while &file[at..at + 4] != ty {
+        let len = u32::from_le_bytes(file[at + 4..at + 8].try_into().unwrap()) as usize;
+        at += 8 + len + len % 2;
+    }
+    at
+}
+
 /// #787: translucent art over opaque art (or a background) stays exactly opaque, its anti-aliased
 /// edges too, so the file is written as RGB.
 #[test]
