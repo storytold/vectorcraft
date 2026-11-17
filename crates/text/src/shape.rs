@@ -600,7 +600,7 @@ pub(crate) fn shape_runs(
         // Split into segments by font coverage (and case, for Small Caps).
         let mut seg = Segment { range: a..a, runs, source_runs, st, face: primary.clone(), small: false, level: level_at(a) };
         let mut cache: std::collections::HashMap<&str, Arc<FontFace>> = std::collections::HashMap::new();
-        let mut script = Script::Common;
+        let mut boundary = craft_font_catalog::SegmentBoundary::new(primary.id(), level_at(a));
         // A grapheme cluster (a letter and its marks, an emoji sequence) is set in one face.
         for (i, cluster) in text[a..b].grapheme_indices(true) {
             let i = a + i;
@@ -620,19 +620,15 @@ pub(crate) fn shape_runs(
             };
             let small = small_caps && c.is_lowercase();
             let next_script = shaping_script(c);
-            let strong_script = !matches!(next_script, Script::Common | Script::Inherited);
-            let script_change = strong_script && script != Script::Common && script != next_script;
+            let strong_script = (!matches!(next_script, Script::Common | Script::Inherited)).then_some(next_script);
             // Combining marks, zero width joiners and non-joiners, and variation selectors stay
             // with the character before them.
-            if (face.id() != seg.face.id() || small != seg.small || level != seg.level || script_change) && !is_mark(c) {
+            if boundary.advance(face.id(), level, small, strong_script, is_mark(c)) {
                 if i > seg.range.start {
                     seg.range.end = i;
                     shape_segment(text, &range, &seg, feats, out);
                 }
                 seg = Segment { range: i..i, face, small, level, ..seg };
-            }
-            if strong_script {
-                script = next_script;
             }
         }
         if b > seg.range.start {
@@ -1221,10 +1217,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// `digits`: not what the layout handles itself (tab, line and paragraph breaks), joiners or
 /// variation selectors.
 fn drawn_chars(cluster: &str, digits: Digits) -> impl Iterator<Item = char> + '_ {
-    cluster
-        .chars()
-        .map(move |c| digits.map(c))
-        .filter(|&c| !(c.is_control() || matches!(c, '\u{200C}' | '\u{200D}' | '\u{2028}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}')))
+    craft_font_catalog::drawable_characters(cluster, move |c| digits.map(c))
 }
 
 /// Does the face with charmap `map` have a glyph for `c` (any face does when it has no charmap)?
@@ -1236,11 +1229,14 @@ fn in_face(map: Option<&Charmap<'_>>, c: char) -> bool {
 /// first fallback face with all of them, so that a letter's marks are shaped with it and attach to
 /// it (#4491); when there is none, the face its first character takes on its own.
 fn fallback_face(db: &FontDb, primary: &Arc<FontFace>, pmap: Option<&Charmap<'_>>, cluster: &str, digits: Digits) -> Arc<FontFace> {
-    let fallback = |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic);
-    drawn_chars(cluster, digits)
-        .find_map(|c| fallback(c).filter(|f| drawn_chars(cluster, digits).all(|c| f.covers(c))))
-        .or_else(|| drawn_chars(cluster, digits).next().filter(|&c| !in_face(pmap, c)).and_then(fallback))
-        .unwrap_or_else(|| primary.clone())
+    craft_font_catalog::cluster_face(
+        cluster,
+        primary,
+        |c| digits.map(c),
+        |c| in_face(pmap, c),
+        |c| db.fallback_for_style(c, primary.id(), primary.weight, primary.italic),
+        |face, c| face.covers(c),
+    )
 }
 
 /// The script `c` is shaped in: Japanese and Chinese text mixes Han, Hiragana, Katakana and
