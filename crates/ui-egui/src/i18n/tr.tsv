@@ -597,6 +597,8 @@ font-technology	Variable	Değişken
 	Control	Kontrol
 	Convert	Dönüştür
 	Convert All Spot Colors to Process	Tüm Spot Renkleri Proses Renklere Dönüştür
+	Convert {name} to process	{name} Rengini Prosese Dönüştür
+	Keep {name} as spot	{name} Rengini Spot Olarak Koru
 	Convert All Strokes to Outlines	Tüm Konturları Anahatlara Dönüştür
 	Convert All Text to Outlines	Tüm Metni Ana Hatlara Dönüştür
 	Convert Anchor Point	Bağlantı Noktasını Dönüştür
@@ -672,6 +674,9 @@ font-technology	Variable	Değişken
 	Create from Selection	Seçimden Oluştur
 	Create From:	Şuradan Oluştur:
 	Create Gradient Mesh…	Degrade Kafes Oluştur…
+	Flat	Düz
+	To Center	Merkeze Doğru
+	To Edge	Kenara Doğru
 	Create Graph	Grafik Oluştur
 	Create New Layer	Yeni Katman Oluştur
 	Create New Sublayer	Yeni Alt Katman Oluştur
@@ -2493,6 +2498,18 @@ shape	Open	Açık
 	Preview:	Önizleme:
 	Preview All Layers	Tüm Katmanları Önizle
 	Preview in Browser	Tarayıcıda Önizleme
+	Optimize to File Size…	Dosya Boyutuna Göre Optimize Et…
+	Optimize to File Size	Dosya Boyutuna Göre Optimize Et
+	Desired File Size:	İstenen Dosya Boyutu:
+	Start With:	Başlangıç:
+	Use:	Kullan:
+	Current Settings	Geçerli Ayarlar
+	Auto Select GIF/JPEG	GIF/JPEG Otomatik Seç
+	Total of All Slices	Tüm Dilimlerin Toplamı
+	Each Slice	Her Dilim
+	Current Slice	Geçerli Dilim
+	{size}, within {target}	{size}, {target} sınırında
+	No setting tried fits in {target}; the smallest is {size}	Denenen hiçbir ayar {target} içine sığmıyor; en küçüğü {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
 	Preview Mode	Önizleme Modu
 	Preview the document as it is now	Belgeyi şu anki haliyle önizleyin
@@ -2865,6 +2882,20 @@ digits	Malayalam	Malayalam
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Bir sembol örneği seçiliyken Dönüştür paneli, sembolün kayıt noktasını referans noktası olarak kullanır.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Çalışma Yüzeyi aracı etkinken çalışma yüzeylerinin dışındaki tuvali karartır.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Çalışma Yüzeyi Dışındaki Bölgeyi Karart açıkken, Çalışma Yüzeyi aracıyla sürüklerken çalışma yüzeylerinin dışındaki alan karanlık kalır.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Bir tıklamanın nesneyi, bağlantı noktasını veya tutamacı seçmesi için işaretçinin ona piksel cinsinden ne kadar yakın olması gerektiği.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Seçim Aracı kutusunun dokunduğu nesneleri mi yoksa yalnızca tamamen içindekileri mi seçtiği; Sürükleme yönü sağa sürüklerken içindekileri seçer. Sürüklerken E kuralı tersine çevirir.
+	A click selects a filled object only on its path, not inside its fill.	Tıklama, dolgulu bir nesneyi dolgusunun içinden değil, yalnızca yolundan seçer.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Noktaya Yasla'nın bir noktayı yaslaması için noktanın bir bağlantı noktasına veya cetvel kılavuzuna piksel cinsinden ne kadar yaklaşması gerektiği; Akıllı Kılavuzlar açıkken onların Yapışma Toleransı geçerlidir.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Seçim Aracı ile Cmd/Ctrl-tıklama, işaretçideki seçili nesnenin altındaki nesneyi seçer; sonraki her tıklama bir nesne daha derine iner.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Yakınlaştır ve Uzaklaştır, seçimin merkezini görünümün ortasına getirir.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Bir çalışma yüzeyinin içindeki kilitli ve gizli resimler, diğer resimler gibi çalışma yüzeyiyle birlikte taşınır, ölçeklenir ve kopyalanır.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Tuvaldeki bağlantı noktalarının ve yön tutamacı uçlarının boyutu; daha büyük bağlantı noktaları daha uzaktan da tutulabilir.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Yön tutamaçlarının uçlarını dolu noktalar, içi boş noktalar veya daha büyük dolu noktalar olarak çizer.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Doğrudan Seçim Aracı ile işaretçinin altındaki bağlantı noktası vurgulanır.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Birden fazla bağlantı noktası seçildiğinde yön tutamaçlarını gösterir; kapalıyken yalnızca tek bir bağlantı noktası seçiliyken görünürler.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Açısı bu dereceden büyük olan köşelerde köşe widget'ları gizlenir.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Kalem Aracı, tıklamadan önce son bağlantı noktasından işaretçiye kadar sonraki parçanın önizlemesini gösterir.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Kavis Aracı, sonraki noktayı yerleştirmeden önce işaretçiye kadar eğrinin önizlemesini gösterir.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Piksel boyutları dışındaki yerleşik boyutlardaki yeni belgelerin ve birim kaydetmeyen açılan dosyaların birimi; burada seçip Tamam'a tıkladığınızda etkin belgenin birimi de bu olur.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Kontur kalınlıkları, kısa çizgiler ve boşluklar bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Yazı boyutları, satır aralığı ve taban çizgisi kayması bu birimde gösterilir ve bunlar için yazılan sayılar bu birimde okunur.
@@ -2894,6 +2925,33 @@ digits	Malayalam	Malayalam
 	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Hizala ve Dağıt nokta yazısını em kutusu yerine gliflerinin mürekkebine göre ölçer.
 	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Hizala ve Dağıt alan yazısını çerçevesi yerine gliflerinin mürekkebine göre ölçer.
 	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Sınırlayıcı kutu ve Dönüştür paneli nokta yazısını em kutusu yerine gliflerinin mürekkebine göre ölçer.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Izgara gizliyken bile çizmeyi, taşımayı ve ölçeklemeyi ızgaranın alt bölümlerine yaslar; açık olduğu sürece Piksel'e Yapış uygulanmaz.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Seçili olmayan kılavuzların rengi; Kılavuz Etiketi olan bir çalışma yüzeyi kendi kılavuzlarını etiketin renginde çizer.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Belgede zaten bulunan kılavuzlar da dahil olmak üzere kılavuzları düz çizgi ya da nokta olarak çizer.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Açıkken VectorCraft başladığında kılavuzlar kilitlidir; bu seçeneği değiştirmek onları hemen kilitler ya da kilidini açar, Görünüm › Kılavuzlar › Kilit Kılavuzları ise kilidi değiştirmeye devam eder.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Açıkken bir cetvelden sürüklemeye başlarken Cmd/Ctrl basılı tutulursa yalnızca etkin çalışma yüzeyinde bir kılavuz, Çalışma Yüzeyi Aracı ile ise tüm tuvali kaplayan bir kılavuz oluşturulur.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Izgaranın rengi; ana ızgara çizgileri arasındaki çizgiler bu rengin daha soluk bir tonuyla çizilir.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Izgarayı çizgi olarak ya da her alt bölümde ana ızgara çizgileri boyunca nokta olarak çizer.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Her açık belgede ve yeni belgelerde ana ızgara çizgileri arasındaki uzaklık; bir VectorCraft belgesi kaydedildiği ızgarayla açılır.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Her ana ızgara karesinin kaç parçaya bölündüğü; Izgaraya Yasla, yakınlaştırma çizgilerini gizlese bile bu parçalara yaslar.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Izgarayı resmin arkasına çizer; kapalıyken ızgara resmin üstüne çizilir.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Piksel Önizlemesi'nde %600 veya daha fazla yakınlaştırmada etkin görünüm, resmin üstünde belgenin her pikselinin kenarında bir çizgi gösterir.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Bir deseni düzenlerken gösterilen döşeme kenarının ve kesik çizgili renk örneği sınırlarının rengi.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Çizmeyi, taşımayı ve dönüştürmeyi yakındaki çizime yaslar, kılavuzları ve etiketleri gösterir; Piksel Önizlemesi bunları kapatır, Izgaraya Yasla ise onların yerine ızgaraya yaslar.
+	The color of Smart Guide lines and labels.	Akıllı Kılavuz çizgilerinin ve etiketlerinin rengi.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Çizimin hizalandığı kenar veya merkez boyunca bir çizgi gösterir; kapalıyken çizim çizgi olmadan da hizalanır ve Glif'e Yapış uygulanmaz.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Bir seçim aracıyla, siz sürüklemezken işaretçinin altındaki seçili olmayan nesnenin çevresini katmanının rengiyle çizer.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Çizimi ölçeklerken, döndürürken, eğerken veya yansıtırken işaretçinin yanında boyutu veya açıyı gösterir.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Siz çizerken noktalar, parçanın veya şeklin başladığı noktadan geçen seçili açılardaki çizgilere yaslanır.
+	The set of angles the construction guides follow while Construction Guides is on.	İnşaat Kılavuzları açıkken inşaat kılavuzlarının izlediği açı kümesi.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Bir noktanın neye yaslandığını adlandırır, örneğin bir bağlantı noktası, bir yol veya bir hizalama; kapalıyken noktalar adlar olmadan aynı şekilde yaslanır.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Siz çizerken veya taşırken işaretçinin yanında mesafeleri, açıları ve çizimin ne kadar taşındığını gösterir.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Taşınan veya yeniden boyutlandırılan çizimi yakındaki nesneler arasındakiyle aynı boşluğa yaslar ve eşit boşlukları işaretler.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Bir şey seçiliyken, başka bir nesnenin veya çalışma yüzeyinin üzerinde Alt/Option tuşunu basılı tutmak onunla seçim arasındaki mesafeleri gösterir.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Sürüklemenin başladığı yere yapışma toleransı içinde geri sürüklenen seçim tam olarak o yere döner; kopya dönmez.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Akıllı Kılavuzların yaslaması için işaretçinin veya sürüklenen noktanın ekranda çizime ne kadar yaklaşması gerektiği; mesafe her yakınlaştırmada aynıdır.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Bir çizgi parçasının ucunu veya merkezinden çizilen bir daireyi yakındaki bir eğriye değecek şekilde yaslar.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Bir çizgi parçasının ucunu yakındaki düz bir parçayla dik açıyla buluşacak şekilde yaslar.
 	Reset all preferences to their defaults?	Tüm tercihler varsayılanlarına sıfırlansın mı?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Varsayılanlar, Tercihler'de Tamam'a tıkladığınızda uygulanır. Oradaki İptal, mevcut tercihlerinizi korur.
 	Restore Recovered Documents	Kurtarılan Belgeleri Geri Yükle
@@ -4473,6 +4531,11 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	PDF writer error: {0}	PDF yazıcı hatası: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} dosya {folder} klasörüne paketlendi ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Tarayıcıdaki önizleme için masaüstü uygulaması gerekir (bunun yerine web, dosyaları indirir)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	`desiredK` değerini verin, K cinsinden istenen dosya boyutu (1024 bayt): 0'dan büyük ve en çok 1048576 olan bir sayı
+@msg	`startWith` is `current` or `auto`	`startWith` değeri `current` veya `auto` olmalıdır
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` değeri `allSlices`, `eachSlice` veya `currentSlice` olmalıdır
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice`, `slice.list` içindeki bir dilim numarasıdır ve `use: currentSlice` ile kullanılır
+@msg	Optimize to File Size: there is no image to measure	Dosya Boyutuna Göre Optimize Et: ölçülecek görüntü yok
 @msg	Release Guides: no guides	Sürüm Kılavuzları: kılavuz yok
 @msg	Release: no layer to put the rectangle in	Serbest bırakma: dikdörtgeni yerleştirecek katman yok
 @msg	Replace Spine: select a blend and a path	Omurgayı Değiştir: bir karışım ve yol seçin

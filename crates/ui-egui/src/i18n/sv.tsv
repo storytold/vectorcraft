@@ -605,6 +605,8 @@ font-technology	Variable	Variabla
 	Control	Kontroll
 	Convert	Konvertera
 	Convert All Spot Colors to Process	Konvertera alla dekorfärger till process
+	Convert {name} to process	Konvertera {name} till process
+	Keep {name} as spot	Behåll {name} som dekorfärg
 	Convert All Strokes to Outlines	Konvertera alla konturer till konturbanor
 	Convert All Text to Outlines	Konvertera all text till konturbanor
 	Convert Anchor Point	Konvertera ankarpunkt
@@ -680,6 +682,9 @@ font-technology	Variable	Variabla
 	Create from Selection	Skapa från markering
 	Create From:	Skapa från:
 	Create Gradient Mesh…	Skapa gradientnät…
+	Flat	Platt
+	To Center	Mot mitten
+	To Edge	Mot kanten
 	Create Graph	Skapa diagram
 	Create New Layer	Skapa nytt lager
 	Create New Sublayer	Skapa nytt underlager
@@ -2652,6 +2657,18 @@ font-technology	Variable	Variabla
 	Preview:	Förhandsgranskning:
 	Preview All Layers	Förhandsgranska alla lager
 	Preview in Browser	Förhandsgranska i webbläsare
+	Optimize to File Size…	Optimera till filstorlek…
+	Optimize to File Size	Optimera till filstorlek
+	Desired File Size:	Önskad filstorlek:
+	Start With:	Börja med:
+	Use:	Använd:
+	Current Settings	Aktuella inställningar
+	Auto Select GIF/JPEG	Välj GIF/JPEG automatiskt
+	Total of All Slices	Alla skivor totalt
+	Each Slice	Varje skiva
+	Current Slice	Aktuell skiva
+	{size}, within {target}	{size}, inom {target}
+	No setting tried fits in {target}; the smallest is {size}	Ingen provad inställning ryms i {target}; den minsta är {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filerna i stället)
 	Preview Mode	Förhandsgranskningsläge
 	Preview the document as it is now	Förhandsgranska dokumentet som det ser ut nu
@@ -3028,6 +3045,20 @@ digits	Malayalam	Malayalam
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	När en symbolinstans är markerad använder panelen Transformera symbolens registreringspunkt som referenspunkt.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Gör arbetsytan utanför ritytorna mörkare medan verktyget Rityta är aktivt.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	När Tona ned området utanför ritytan är på förblir området utanför ritytorna mörkt medan du drar med verktyget Rityta.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hur nära, i pixlar, pekaren måste vara ett objekt, en ankarpunkt eller ett handtag för att ett klick ska markera det.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Om markeringsverktygets ram markerar objekt den rör vid eller bara de som ligger helt inuti; Dragriktning markerar de inuti när du drar åt höger. E vänder regeln medan du drar.
+	A click selects a filled object only on its path, not inside its fill.	Ett klick markerar ett fyllt objekt bara på dess bana, inte inuti fyllningen.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Hur nära, i pixlar, en punkt måste komma en ankarpunkt eller en linjalstödlinje för att Fäst mot punkt ska fästa den; med smarta stödlinjer på gäller deras fästtolerans i stället.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Med markeringsverktyget markerar Cmd/Ctrl-klick objektet under det markerade vid pekaren; varje nytt klick går ett objekt djupare.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Zooma in och Zooma ut flyttar markeringens mitt till mitten av vyn.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Låst och dold grafik inuti en rityta flyttas, skalas och kopieras med ritytan, precis som övrig grafik.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Storleken på ankarpunkter och riktningshandtagens ändar på arbetsytan; större ankarpunkter kan också fångas längre ifrån.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Ritar riktningshandtagens ändar som fyllda prickar, ihåliga prickar eller större fyllda prickar.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Med direktmarkeringsverktyget framhävs ankarpunkten under pekaren.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Visar riktningshandtag när mer än en ankarpunkt är markerad; avstängt visas de bara när en enda ankarpunkt är markerad.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Hörnwidgetar döljs på hörn vars vinkel är större än så här många grader.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Pennverktyget förhandsvisar nästa segment från den sista ankarpunkten till pekaren innan du klickar.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Krökningsverktyget förhandsvisar kurvan till pekaren innan du placerar nästa punkt.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Enheten för nya dokument i de inbyggda storlekarna, utom storlekar i pixlar, och för öppnade filer som inte anger någon enhet; om du väljer den här och klickar på OK får även det aktiva dokumentet den enheten.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Konturtjocklekar, streck och mellanrum visas i den här enheten, och tal som skrivs för dem läses i den.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Teckenstorlekar, radavstånd och baslinjeförskjutning visas i den här enheten, och tal som skrivs för dem läses i den.
@@ -3057,6 +3088,33 @@ digits	Malayalam	Malayalam
 	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Justera och Fördela mäter punkttext efter glyfernas bläck i stället för dess em-ruta.
 	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Justera och Fördela mäter områdestext efter glyfernas bläck i stället för dess ram.
 	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Begränsningsramen och panelen Transformera mäter punkttext efter glyfernas bläck i stället för dess em-ruta.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Fäster ritande, flyttning och skalning mot rutnätets underindelningar, även när rutnätet är dolt; medan det är på gäller inte Fäst mot pixel.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Färgen på stödlinjer som inte är markerade; en rityta med en stödlinjeetikett ritar sina egna stödlinjer i etikettens färg.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Ritar stödlinjer som heldragna linjer eller som punkter, även stödlinjer som redan finns i dokumentet.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	När det är på är stödlinjerna låsta när VectorCraft startar; att ändra alternativet låser eller låser upp dem direkt, och Visa › Stödlinjer › Lås stödlinjer ändrar fortfarande låsningen.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	När det är på skapar Cmd/Ctrl, nedtryckt i början av en dragning från en linjal, en stödlinje bara på den aktiva ritytan, eller med ritytsverktyget en stödlinje över hela arbetsytan.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Rutnätets färg; linjerna mellan huvudlinjerna ritas i en blekare nyans av den.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Ritar rutnätet som linjer, eller som punkter längs huvudlinjerna vid varje underindelning.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Avståndet mellan rutnätets huvudlinjer i varje öppet dokument och i nya; ett VectorCraft-dokument öppnas med det rutnät det sparades med.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Hur många delar varje huvudruta i rutnätet delas i; Fäst mot rutnät fäster mot dessa delar, även när zoomen döljer deras linjer.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Ritar rutnätet bakom grafiken; av ritas rutnätet ovanpå den.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	I pixelförhandsgranskning vid 600 % zoom eller mer visar den aktiva vyn en linje vid kanten av varje dokumentpixel ovanpå grafiken.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Färgen på rutkanten och de streckade provrutegränserna som visas medan du redigerar ett mönster.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Fäster ritande, flyttning och transformering mot närliggande teckningar och visar stödlinjer och etiketter; Pixelförhandsgranskning stänger av dem, och Fäst mot rutnät fäster mot rutnätet i stället.
+	The color of Smart Guide lines and labels.	Färgen på de smarta stödlinjernas linjer och etiketter.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Visar en linje längs den kant eller mitt som teckningen linjerar med; avstängd linjerar teckningen ändå utan linjen, och Fäst mot glyf gäller inte.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Med ett markeringsverktyg får det omarkerade objektet under pekaren en kontur i lagrets färg medan du inte drar.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Visar storleken eller vinkeln bredvid pekaren medan du skalar, roterar, skjuvar eller speglar teckningar.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Medan du ritar fästs punkter mot linjer i de valda vinklarna genom punkten där segmentet eller formen börjar.
+	The set of angles the construction guides follow while Construction Guides is on.	Uppsättningen vinklar som konstruktionsstödlinjerna följer medan Konstruktionsstödlinjer är på.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Namnger det som en punkt fäster mot, till exempel en ankarpunkt, en bana eller en justering; avstängd fäster punkterna på samma sätt utan namnen.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Visar avstånd, vinklar och hur långt teckningen har flyttats bredvid pekaren medan du ritar eller flyttar.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Fäster flyttade teckningar eller teckningar med ändrad storlek mot samma mellanrum som mellan närliggande objekt och markerar de lika mellanrummen.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	När något är markerat visar Alt/Option nedhållen över ett annat objekt eller en rityta avstånden mellan det och markeringen.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	En markering som dras tillbaka till inom fästtoleransen från där dragningen började återgår exakt dit; en kopia gör det inte.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hur nära på skärmen pekaren eller en dragen punkt måste komma teckningen för att de smarta stödlinjerna ska fästa mot den; avståndet är detsamma vid alla zoomnivåer.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fäster änden av ett linjesegment, eller en cirkel ritad från sin mitt, så att den rör en närliggande kurva.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fäster änden av ett linjesegment så att det möter ett närliggande rakt segment i rät vinkel.
 	Reset all preferences to their defaults?	Återställa alla inställningar till standard?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Standardvärdena verkställs när du klickar på OK i Inställningar. Avbryt där behåller dina nuvarande inställningar.
 	Restore Recovered Documents	Återställ återskapade dokument
@@ -4640,6 +4698,11 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	PDF writer error: {0}	fel i PDF-skrivaren: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Paketerade {n} fil i {folder} ({note})|Paketerade {n} filer i {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Förhandsgranska i webbläsare kräver skrivbordsappen (webbversionen hämtar filer i stället)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	ange `desiredK`, önskad filstorlek i K (1024 byte): ett tal över 0 och högst 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` är `current` eller `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` är `allSlices`, `eachSlice` eller `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` är ett skivnummer från `slice.list`, med `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimera till filstorlek: det finns ingen bild att mäta
 @msg	Release Guides: no guides	Släpp stödlinjer: inga stödlinjer
 @msg	Release: no layer to put the rectangle in	Släpp: inget lager att placera rektangeln i
 @msg	Replace Spine: select a blend and a path	Ersätt ryggrad: markera en blandning och en bana

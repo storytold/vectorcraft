@@ -5066,6 +5066,81 @@ proptest! {
         survive("mutated .ai brushes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         survive("mutated .ai brushes, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
     }
+
+    /// A `.ai` whose blends, as the writer writes them, are damaged: the keys and spine on `%_`
+    /// lines with their dictionaries, the drawn steps, the record's `XP` and its hex, and the
+    /// blend's transparency, cut short or edited.
+    #[test]
+    fn ai_written_blends_never_panic(cut in 0usize..BLENDS_FUZZ_CHARS, edits in prop::collection::vec((0usize..BLENDS_FUZZ_CHARS, prop::sample::select(vec!['0', '1', '2', '8', '9', 'A', 'F', '-', '.', ' ', '\n', '(', ')', '/', ',', ';', '%', '_', 'u', 'U', 'K', 'S', 'X', 'P'])), 0..12)) {
+        let text = mutate_text(blends_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai blends", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai blends, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0).0))?;
+    }
+}
+
+/// The range of [`ai_written_blends_never_panic`]'s cuts and edits: past the end of [`blends_text`].
+const BLENDS_FUZZ_CHARS: usize = 24_000;
+
+/// The editing data VectorCraft writes for a document with two blends: red to blue squares with
+/// three steps and no spine of its own, at half opacity; and three squares 25 pt apart on a spine
+/// edited on the canvas, aligned to the path.
+fn blends_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use std::sync::Arc;
+        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec};
+        use vectorcraft_doc::{Appearance, Node, NodeKind};
+        use vectorcraft_geom::{PathData, Point, Rect, SubPath, shapes};
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let square = |doc: &mut Document, x: f64, y: f64, c: Color| {
+            Arc::new(Node::path(
+                doc.alloc_id(),
+                shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)),
+                Appearance::basic(Paint::solid(c), Paint::None, 0.0),
+            ))
+        };
+        let (red, blue, green) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0));
+        let keys = vec![square(&mut doc, 20.0, 20.0, red), square(&mut doc, 120.0, 20.0, blue)];
+        let mut fade = Node::new(
+            doc.alloc_id(),
+            NodeKind::Blend { children: keys, spec: Box::new(BlendSpec { spacing: BlendSpacing::Steps(3), ..BlendSpec::default() }) },
+        );
+        fade.opacity = 0.5;
+        doc.insert(Some(layer), usize::MAX, fade).unwrap();
+        let keys = vec![square(&mut doc, 20.0, 80.0, red), square(&mut doc, 120.0, 80.0, blue), square(&mut doc, 170.0, 80.0, green)];
+        let centers: Vec<Point> = [30.0, 130.0, 180.0].iter().map(|x| Point::new(*x, 90.0)).collect();
+        let spec = BlendSpec {
+            spacing: BlendSpacing::Distance(25.0),
+            orientation: BlendOrientation::AlignToPath,
+            spine: Some(PathData::single(SubPath::polyline(&centers, false))),
+            key_anchors: vec![0, 1, 2],
+            ..BlendSpec::default()
+        };
+        let path = Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) });
+        doc.insert(Some(layer), usize::MAX, path).unwrap();
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_blends_never_panic`] damages, as it is, opens with both blends live, and
+/// the property's cuts and edits reach all of it.
+#[test]
+fn the_written_blends_fuzz_data_opens_live() {
+    use vectorcraft_doc::NodeKind;
+    let text = blends_text();
+    assert!(text.chars().count() < BLENDS_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in ["%AI5_BeginLayer", "%_(K) /String (ShapeBlendPathType) ,", "%_(S) /String (ShapeBlendPathType) ,", "1 0 92 XP", "1 0 116 XP"] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art.iter().map(|n| matches!(n.kind, NodeKind::Blend { .. })).collect::<Vec<_>>(), [true, true], "{warnings:?}");
 }
 
 /// The range of [`ai_written_styles_never_panic`]'s cuts and edits: past the end of [`styles_text`].

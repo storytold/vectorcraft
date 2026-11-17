@@ -224,6 +224,9 @@
 	Mask	Maska
 	Rasterize…	Rastrovat…
 	Create Gradient Mesh…	Vytvořit přechodovou síť…
+	Flat	Ploché
+	To Center	Ke středu
+	To Edge	K okraji
 	Create Object Mosaic…	Vytvořit mozaiku objektů…
 	Vector Halftone…	Vektorový polotón…
 	Create Trim Marks	Vytvořit značky ořezu
@@ -1191,6 +1194,18 @@ lighting	Light	Světlo
 	Placement Options…	Možnosti umístění…
 	Plug-in…	Zásuvný modul…
 	Preview in Browser	Náhled v prohlížeči
+	Optimize to File Size…	Optimalizovat na velikost souboru…
+	Optimize to File Size	Optimalizovat na velikost souboru
+	Desired File Size:	Požadovaná velikost souboru:
+	Start With:	Začít s:
+	Use:	Použít:
+	Current Settings	Aktuální nastavení
+	Auto Select GIF/JPEG	Automaticky vybrat GIF/JPEG
+	Total of All Slices	Součet všech řezů
+	Each Slice	Každý řez
+	Current Slice	Aktuální řez
+	{size}, within {target}	{size}, v rámci {target}
+	No setting tried fits in {target}; the smallest is {size}	Žádné vyzkoušené nastavení se nevejde do {target}; nejmenší má {size}
 	Printer Setup…	Nastavení tiskárny…
 	Printers	Tiskárny
 	Recent File	Nedávný soubor
@@ -2925,6 +2940,8 @@ digits	Malayalam	Malajálamské
 	Collate	Kompletovat
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Kompozitní barvy se na něj převádějí; separace podle něj separují, pokud je to profil CMYK.
 	Convert All Spot Colors to Process	Převést všechny přímé barvy na procesní
+	Convert {name} to process	Převést {name} na procesní
+	Keep {name} as spot	Ponechat {name} jako přímou barvu
 	Default Printer	Výchozí tiskárna
 	Document Ink Options	Možnosti inkoustů dokumentu
 	Download:	Stahování:
@@ -4549,6 +4566,20 @@ font-technology	Variable	Variabilní
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Když je vybraná jedna instance symbolu, panel Transformace použije registrační bod symbolu jako referenční bod.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Ztmaví plátno mimo pracovní plochy, dokud je aktivní nástroj Pracovní plocha.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Když je zapnuto Ztmavit oblast mimo pracovní plochu, zůstane oblast mimo pracovní plochy tmavá i při tažení nástrojem Pracovní plocha.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Jak blízko v obrazových bodech musí být ukazatel k objektu, kotevnímu bodu nebo úchytu, aby jej kliknutí vybralo.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Zda rámeček nástroje Výběr vybírá objekty, kterých se dotkne, nebo jen ty zcela uvnitř; Směr tažení vybírá ty uvnitř při tažení doprava. E pravidlo během tažení obrátí.
+	A click selects a filled object only on its path, not inside its fill.	Kliknutí vybere vyplněný objekt jen na jeho cestě, ne uvnitř výplně.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Jak blízko v obrazových bodech se musí bod dostat ke kotevnímu bodu nebo vodítku pravítka, aby jej Přichytávat k bodům přichytilo; se zapnutými chytrými vodítky platí jejich tolerance přichytávání.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	S nástrojem Výběr vybere Cmd/Ctrl+kliknutí objekt pod vybraným v místě ukazatele; každé další kliknutí jde o objekt hlouběji.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Zvětšit a Zmenšit přesunou střed výběru doprostřed zobrazení.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Zamknutá a skrytá kresba uvnitř pracovní plochy se s ní přesouvá, mění velikost a kopíruje jako ostatní kresba.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Velikost kotevních bodů a konců směrových úchytů na plátně; větší kotevní body lze zachytit i z větší vzdálenosti.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Kreslí konce směrových úchytů jako plné tečky, duté tečky nebo větší plné tečky.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	S nástrojem Přímý výběr se kotevní bod pod ukazatelem zvýrazní.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Zobrazuje směrové úchyty, když je vybráno více kotevních bodů; vypnuto, zobrazí se jen při jednom vybraném kotevním bodu.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Ovladače rohů se skryjí u rohů, jejichž úhel je větší než tento počet stupňů.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Nástroj Pero ukazuje náhled dalšího segmentu od posledního kotevního bodu k ukazateli, než kliknete.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Nástroj Zakřivení ukazuje náhled křivky k ukazateli, než umístíte další bod.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Jednotka nových dokumentů z vestavěných velikostí kromě velikostí v obrazových bodech a otevřených souborů bez uložené jednotky; když ji zde zvolíte a kliknete na OK, nastaví se i jako jednotka aktivního dokumentu.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Tloušťky tahů, čárky a mezery se zobrazují v této jednotce a čísla pro ně zadaná se v ní čtou.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Velikosti písma, proklad a posun účaří se zobrazují v této jednotce a čísla pro ně zadaná se v ní čtou.
@@ -4578,6 +4609,33 @@ font-technology	Variable	Variabilní
 	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Zarovnat a Rozmístit měří bodový text podle inkoustu jeho glyfů místo podle jeho čtverce em.
 	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Zarovnat a Rozmístit měří plošný text podle inkoustu jeho glyfů místo podle jeho rámečku.
 	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Ohraničovací rámeček a panel Transformace měří bodový text podle inkoustu jeho glyfů místo podle jeho čtverce em.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Přichytává kreslení, přesouvání a změnu velikosti k dělení mřížky, i když je mřížka skrytá; dokud je zapnuto, Přichytávat k obrazovým bodům se neuplatní.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Barva vodítek, která nejsou vybraná; pracovní plocha se Štítkem vodítek kreslí svá vodítka v barvě štítku.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Kreslí vodítka jako plné čáry nebo jako tečky, včetně vodítek, která už v dokumentu jsou.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Je-li zapnuto, vodítka jsou při spuštění VectorCraftu zamknutá; změna této volby je hned zamkne nebo odemkne a Zobrazení › Vodítka › Zamknout vodítka zámek dál mění.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Je-li zapnuto, podržení Cmd/Ctrl na začátku tažení z pravítka vytvoří vodítko jen na aktivní pracovní ploše, nebo s nástrojem Pracovní plocha vodítko celého plátna.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Barva mřížky; čáry mezi hlavními čarami mřížky se kreslí ve slabším odstínu této barvy.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Kreslí mřížku jako čáry, nebo jako tečky podél hlavních čar mřížky v každém dělení.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Vzdálenost mezi hlavními čarami mřížky ve všech otevřených dokumentech i v nových; dokument VectorCraftu se otevře s mřížkou, se kterou byl uložen.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Na kolik dílů se dělí každý hlavní čtverec mřížky; Přichytávat k mřížce přichytává k těmto dílům, i když jejich čáry při daném zvětšení nejsou vidět.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Kreslí mřížku za kresbou; je-li vypnuto, kreslí se mřížka přes ni.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	V náhledu obrazových bodů při zvětšení 600 % a více ukazuje aktivní zobrazení přes kresbu čáru na okraji každého obrazového bodu dokumentu.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Barva okraje dlaždice a přerušovaných hranic položky vzorníku, které se ukazují při úpravě vzorku.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Přichytává kreslení, přesouvání a transformace k blízké kresbě a ukazuje vodítka a popisky; Náhled obrazových bodů je vypíná a Přichytávat k mřížce místo nich přichytává k mřížce.
+	The color of Smart Guide lines and labels.	Barva čar a popisků chytrých vodítek.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Ukazuje čáru podél okraje nebo středu, ke kterému se kresba zarovnává; když je vypnuto, kresba se zarovnává i bez čáry a Přichytávat ke glyfům neplatí.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	S nástrojem pro výběr obtáhne nevybraný objekt pod ukazatelem barvou jeho vrstvy, dokud netáhnete.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Ukazuje u ukazatele velikost nebo úhel, když měníte velikost kresby nebo ji otáčíte, zkosujete či zrcadlíte.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Při kreslení se body přichytávají k čarám ve zvolených úhlech procházejícím bodem, kde začíná segment nebo tvar.
+	The set of angles the construction guides follow while Construction Guides is on.	Sada úhlů, které konstrukční vodítka sledují, když jsou Konstrukční vodítka zapnutá.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Pojmenuje, k čemu se bod přichytí, například kotevní bod, cestu nebo zarovnání; když je vypnuto, body se přichytávají stejně, jen bez názvů.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Ukazuje u ukazatele vzdálenosti, úhly a o kolik se kresba posunula, když kreslíte nebo přesouváte.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Přichytí přesunutou kresbu nebo kresbu se změněnou velikostí na stejnou mezeru jako mezi blízkými objekty a vyznačí stejné mezery.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Když je něco vybráno, podržení Alt/Option nad jiným objektem nebo pracovní plochou ukáže vzdálenosti mezi ním a výběrem.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Výběr přetažený zpět do tolerance přichytávání od místa, kde tažení začalo, se vrátí přesně na to místo; kopie ne.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blízko na obrazovce musí ukazatel nebo tažený bod přijít ke kresbě, aby se chytrá vodítka přichytila; vzdálenost je stejná při každém zvětšení.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Přichytí konec úsečky nebo kružnici kreslenou od středu tak, aby se dotýkala blízké křivky.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Přichytí konec úsečky tak, aby se s blízkým rovným segmentem setkal v pravém úhlu.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
@@ -5030,6 +5088,11 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	PDF writer error: {0}	chyba zápisu PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Zabalen {n} soubor do {folder} ({note})|Zabaleny {n} soubory do {folder} ({note})|Zabaleno {n} souborů do {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Náhled v prohlížeči vyžaduje desktopovou aplikaci (webová verze místo toho stahuje soubory)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	zadejte `desiredK`, požadovanou velikost souboru v K (1024 bajtů): číslo větší než 0 a nejvýše 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` je `current` nebo `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` je `allSlices`, `eachSlice` nebo `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` je číslo řezu ze `slice.list`, s `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimalizovat na velikost souboru: není žádný obraz k měření
 @msg	Release Guides: no guides	Uvolnit vodítka: žádná vodítka
 @msg	Release: no layer to put the rectangle in	Uvolnit: chybí vrstva, do které by šel obdélník umístit
 @msg	Replace Spine: select a blend and a path	Nahradit páteř: vyberte prolnutí a cestu

@@ -211,6 +211,9 @@
 	Mask	Masker
 	Rasterize…	Rasterisasi…
 	Create Gradient Mesh…	Buat mesh gradien…
+	Flat	Datar
+	To Center	Ke tengah
+	To Edge	Ke tepi
 	Create Object Mosaic…	Buat mozaik objek…
 	Vector Halftone…	Halftone vektor…
 	Create Trim Marks	Buat tanda potong
@@ -1094,6 +1097,18 @@ lighting	Light	Cahaya
 	Placement Options…	Opsi penempatan…
 	Plug-in…	Plug-in…
 	Preview in Browser	Pratinjau di browser
+	Optimize to File Size…	Optimalkan ke Ukuran File…
+	Optimize to File Size	Optimalkan ke Ukuran File
+	Desired File Size:	Ukuran File yang Diinginkan:
+	Start With:	Mulai Dengan:
+	Use:	Gunakan:
+	Current Settings	Pengaturan Saat Ini
+	Auto Select GIF/JPEG	Pilih Otomatis GIF/JPEG
+	Total of All Slices	Total Semua Slice
+	Each Slice	Setiap Slice
+	Current Slice	Slice Saat Ini
+	{size}, within {target}	{size}, dalam batas {target}
+	No setting tried fits in {target}; the smallest is {size}	Tidak ada pengaturan yang dicoba yang muat dalam {target}; yang terkecil {size}
 	Printer Setup…	Pengaturan printer…
 	Printers	Printer
 	Recent File	File terbaru
@@ -2650,6 +2665,8 @@ digits	Malayalam	Malayalam
 	Collate	Susun
 	Composite colours are converted to it; separations separate with it when it is a CMYK profile.	Warna komposit dikonversi ke profil ini; separasi memisah dengannya bila merupakan profil CMYK.
 	Convert All Spot Colors to Process	Konversi semua warna spot menjadi proses
+	Convert {name} to process	Konversi {name} menjadi proses
+	Keep {name} as spot	Pertahankan {name} sebagai spot
 	Default Printer	Printer default
 	Document Ink Options	Opsi tinta dokumen
 	Download:	Unduh:
@@ -4200,6 +4217,20 @@ font-technology	Variable	Variabel
 	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Saat satu instans simbol dipilih, panel Transformasi memakai titik registrasi simbol sebagai titik referensi.
 	Darkens the canvas outside the artboards while the Artboard tool is active.	Menggelapkan kanvas di luar artboard selama alat Artboard aktif.
 	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Saat Redupkan wilayah di luar artboard aktif, area di luar artboard tetap gelap selama Anda menyeret dengan alat Artboard.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Seberapa dekat, dalam piksel, penunjuk harus berada dari objek, titik jangkar, atau pegangan agar klik memilihnya.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Apakah kotak alat seleksi memilih objek yang disentuhnya atau hanya yang sepenuhnya di dalam; Arah seret memilih yang di dalam saat diseret ke kanan. E membalik aturan saat menyeret.
+	A click selects a filled object only on its path, not inside its fill.	Klik memilih objek berisi hanya pada jalurnya, bukan di dalam isiannya.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Seberapa dekat, dalam piksel, sebuah titik harus mendekati titik jangkar atau panduan penggaris agar Snap ke titik menempelkannya; saat panduan cerdas aktif, toleransi kancingnya yang berlaku.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Dengan alat seleksi, Cmd/Ctrl-klik memilih objek di bawah objek terpilih pada penunjuk; setiap klik berikutnya turun satu objek lebih dalam.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Perbesar dan Perkecil membawa pusat seleksi ke tengah tampilan.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Karya seni terkunci dan tersembunyi di dalam artboard ikut dipindah, diskalakan, dan disalin bersama artboard seperti karya seni lainnya.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Ukuran titik jangkar dan ujung pegangan arah di kanvas; titik jangkar yang lebih besar juga dapat diambil dari jarak lebih jauh.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Menggambar ujung pegangan arah sebagai titik penuh, titik berongga, atau titik penuh yang lebih besar.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Dengan alat seleksi langsung, titik jangkar di bawah penunjuk disorot.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Menampilkan pegangan arah saat lebih dari satu titik jangkar dipilih; jika nonaktif, pegangan hanya tampil saat satu titik jangkar dipilih.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Widget sudut disembunyikan pada sudut yang besarnya melebihi derajat ini.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Alat pena menampilkan pratinjau segmen berikutnya dari titik jangkar terakhir ke penunjuk sebelum Anda mengklik.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Alat kelengkungan menampilkan pratinjau kurva ke penunjuk sebelum Anda menempatkan titik berikutnya.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Satuan untuk dokumen baru dari ukuran bawaan selain ukuran piksel dan untuk file yang dibuka tanpa satuan tercatat; jika Anda memilihnya di sini lalu mengklik OK, satuan dokumen aktif juga menjadi satuan ini.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Ketebalan stroke, putus-putus, dan jarak ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Ukuran teks, leading, dan pergeseran garis dasar ditampilkan dalam satuan ini, dan angka yang diketik untuknya dibaca dalam satuan ini.
@@ -4229,6 +4260,33 @@ font-technology	Variable	Variabel
 	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Sejajarkan dan Distribusikan mengukur teks titik menurut tinta glifnya, bukan kotak em-nya.
 	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Sejajarkan dan Distribusikan mengukur teks area menurut tinta glifnya, bukan bingkainya.
 	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Kotak pembatas dan panel Transformasi mengukur teks titik menurut tinta glifnya, bukan kotak em-nya.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Menempelkan penggambaran, pemindahan, dan penskalaan ke subdivisi kisi, bahkan saat kisi disembunyikan; selama opsi ini aktif, Snap ke piksel tidak berlaku.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Warna panduan yang tidak dipilih; artboard yang memiliki Label panduan menggambar panduannya sendiri dengan warna label tersebut.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Menggambar panduan sebagai garis utuh atau sebagai titik, termasuk panduan yang sudah ada di dokumen.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Jika aktif, panduan terkunci saat VectorCraft dimulai; mengubah opsi ini langsung mengunci atau membuka kuncinya, dan Tampilan › Panduan › Kunci panduan tetap dapat mengubah kunci.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Jika aktif, menahan Cmd/Ctrl saat mulai menyeret dari penggaris membuat panduan hanya di artboard aktif, atau panduan seluruh kanvas dengan alat artboard.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Warna kisi; garis di antara garis kisi utama digambar dengan nuansa yang lebih pudar dari warna itu.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Menggambar kisi sebagai garis, atau sebagai titik di sepanjang garis kisi utama pada setiap subdivisi.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Jarak antara garis kisi utama di setiap dokumen yang terbuka dan di dokumen baru; dokumen VectorCraft dibuka dengan kisi yang disimpan bersamanya.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Berapa bagian setiap kotak kisi utama dibagi; Snap ke kisi menempel ke bagian-bagian ini, bahkan saat zoom menyembunyikan garisnya.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Menggambar kisi di belakang karya seni; jika nonaktif, kisi digambar di atasnya.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Di Pratinjau piksel dengan zoom 600% atau lebih, tampilan aktif menunjukkan garis di tepi setiap piksel dokumen di atas karya seni.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Warna tepi ubin dan batas swatch putus-putus yang ditampilkan saat Anda mengedit pola.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Menjepretkan penggambaran, pemindahan, dan transformasi ke karya di dekatnya serta menampilkan panduan dan label; Pratinjau piksel mematikannya, dan Snap ke kisi menjepretkan ke kisi sebagai gantinya.
+	The color of Smart Guide lines and labels.	Warna garis dan label panduan cerdas.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Menampilkan garis di sepanjang tepi atau pusat yang sejajar dengan karya; saat mati, karya tetap sejajar tanpa garis, dan Snap ke glif tidak berlaku.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Dengan alat seleksi, menggaris tepi objek yang tidak dipilih di bawah penunjuk dengan warna lapisannya selama Anda tidak menyeret.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Menampilkan ukuran atau sudut di samping penunjuk saat Anda menskalakan, memutar, memiringkan atau memantulkan karya.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Saat Anda menggambar, titik menjepret ke garis pada sudut yang dipilih melalui titik awal segmen atau bentuk.
+	The set of angles the construction guides follow while Construction Guides is on.	Kumpulan sudut yang diikuti panduan konstruksi selama Panduan konstruksi aktif.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Menamai tempat titik menjepret, misalnya jangkar, jalur, atau perataan; saat mati, titik menjepret dengan cara yang sama tanpa nama.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Menampilkan jarak, sudut, dan seberapa jauh karya berpindah di samping penunjuk saat Anda menggambar atau memindahkan.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Menjepretkan karya yang dipindahkan atau diubah ukurannya ke celah yang sama dengan celah antarobjek di dekatnya, dan menandai celah yang sama.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Dengan sesuatu yang dipilih, menahan Alt/Option di atas objek lain atau artboard menampilkan jarak antara objek itu dan seleksi.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Seleksi yang diseret kembali hingga dalam toleransi kancing dari tempat seretan dimulai kembali tepat ke tempat itu; salinan tidak.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Seberapa dekat penunjuk atau titik yang diseret harus mendekati karya di layar agar panduan cerdas menjepret; jaraknya sama pada setiap zoom.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Menjepretkan ujung segmen garis, atau lingkaran yang digambar dari pusatnya, agar menyentuh kurva di dekatnya.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Menjepretkan ujung segmen garis agar bertemu segmen lurus di dekatnya pada sudut siku-siku.
 	Reset all preferences to their defaults?	Atur ulang semua preferensi ke defaultnya?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Nilai default diterapkan saat Anda mengklik OK di Preferensi. Batal di sana mempertahankan preferensi Anda saat ini.
 	Smaller ↔ Larger	Lebih kecil ↔ Lebih besar
@@ -4517,6 +4575,11 @@ imageTrace	Outline	Kontur
 @msg	PDF writer error: {0}	Kesalahan penulis PDF: {0}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Berhasil mengemas {n} file di {folder} ({note})
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Pratinjau di Peramban memerlukan aplikasi desktop (versi web mengunduh file sebagai gantinya)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	berikan `desiredK`, ukuran file yang diinginkan dalam K (1024 byte): angka di atas 0 dan paling banyak 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` adalah `current` atau `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` adalah `allSlices`, `eachSlice` atau `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` adalah nomor slice dari `slice.list`, dengan `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Optimalkan ke Ukuran File: tidak ada gambar untuk diukur
 @msg	Release Guides: no guides	Lepaskan panduan: tidak ada panduan
 @msg	Release: no layer to put the rectangle in	Lepaskan: tidak ada lapisan untuk menaruh persegi panjangnya
 @msg	Replace Spine: select a blend and a path	Ganti rangka: pilih satu blend dan satu jalur

@@ -46,7 +46,7 @@ pub(crate) use libraries::{
 };
 #[cfg(test)]
 pub(crate) use tiles::describe;
-pub(crate) use tiles::{draw_folder, folder_tile, global_mark, list_row, list_row_name, tile_grid};
+pub(crate) use tiles::{CMYK_INKS, draw_folder, folder_tile, global_mark, list_row, list_row_name, tile_grid};
 
 /// View modes of the swatch list (and of the library panels: `ui.libraryPanel {view}`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
