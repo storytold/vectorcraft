@@ -360,7 +360,7 @@ fn shape_builder_merge_keeps_a_clip_groups_clipping_path() {
     let merged = NodeId(r["merged"].as_u64().unwrap());
     let gn = node(&s, g);
     let NodeKind::Group { children, clip: true } = &gn.kind else { panic!("a clip group: {:?}", gn.kind) };
-    assert_eq!(children.first().map(|c| c.id), Some(m), "the clipping path");
+    assert_eq!(vectorcraft_doc::split_clipping_path(children).map(|(c, _)| c.id), Some(m), "the clipping path");
     assert_eq!(parent(&s, merged), Some(g));
 }
 

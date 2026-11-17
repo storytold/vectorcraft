@@ -380,8 +380,9 @@ mod native {
             assert_eq!(names, ["Board", "Shapes"]);
             let NodeKind::Layer { children, .. } = &d.layers[0].kind else { panic!() };
             let NodeKind::Group { children: clipped, clip: true } = &children[0].kind else { panic!("{:?}", children[0].kind) };
-            let NodeKind::Path { clipping: true, .. } = &clipped[0].kind else { panic!() };
-            let tri = &clipped[1];
+            // The clipping path on top, as opening puts it.
+            let NodeKind::Path { clipping: true, .. } = &clipped[1].kind else { panic!() };
+            let tri = &clipped[0];
             assert_eq!(tri.name.as_deref(), Some("Triangle"));
             let NodeKind::Path { path, .. } = &tri.kind else { panic!() };
             let pts: Vec<_> = path.subpaths[0].anchors.iter().map(|a| (a.p.x, a.p.y)).collect();

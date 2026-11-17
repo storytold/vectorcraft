@@ -236,9 +236,9 @@ fn insert_look_turned(
 }
 
 /// Draw Inside's clip group for `target`, the object new art goes inside: the clip group
-/// [mask copy, target, …] `target` already is the clipped object of, else one made where `target`
-/// was, holding an unpainted clipping copy of it and then `target`. New art and pastes go on top
-/// of its children.
+/// `target` already is the first clipped object of, else one made where `target` was, holding
+/// `target` and over it an unpainted clipping copy of it, as Make Clipping Mask leaves one. New art
+/// and pastes go on top of its children, over the clipping path, which clips them too.
 pub(crate) fn draw_inside_group(d: &mut vectorcraft_doc::Document, target: NodeId) -> Result<NodeId> {
     if let Some(p) = d.parent_of(target)
         && d.node(p).is_some_and(|pn| {
@@ -253,12 +253,10 @@ pub(crate) fn draw_inside_group(d: &mut vectorcraft_doc::Document, target: NodeI
     let original = d.node(target).cloned().ok_or(crate::EngineError::NoNode(target))?;
     let mut mask = d.reid(&original);
     mask.appearance = Appearance::basic(vectorcraft_color::Paint::None, vectorcraft_color::Paint::None, 0.0).into();
-    if let NodeKind::Path { clipping, .. } = &mut mask.kind {
-        *clipping = true;
-    }
+    mask.set_clipping_path(true);
     let gid = d.alloc_id();
     d.insert(par, idx + 1, Node::new(gid, NodeKind::Group { children: vec![std::sync::Arc::new(mask)], clip: true }))?;
-    d.move_node(target, Some(gid), usize::MAX)?;
+    d.move_node(target, Some(gid), 0)?;
     // Copied type whose layout caches `reid` dropped has them again.
     super::typecmd::refresh_bounds_of(d, &[gid]);
     Ok(gid)

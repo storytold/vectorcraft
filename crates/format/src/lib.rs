@@ -256,6 +256,10 @@ fn body(doc: &Document, o: &SaveOptions) -> Result<Body, FormatError> {
         }
         d.linked_only_images()
     });
+    // A clip's clipping path is saved first, under its art (the art placed documents became too):
+    // versions that take a clip's first member as its clipping path read it there, and a compound
+    // path or type, whose mark isn't saved, is found there again.
+    d.put_clipping_paths(vectorcraft_doc::ClippingPathAt::First);
     // The art placed documents became for older versions is rounded too.
     if let Some(decimals) = o.precision {
         d.round_geometry(decimals.min(MAX_PRECISION));
@@ -634,6 +638,9 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     // The saved ruler guides become nodes on their layers (after the guides beyond the canvas are
     // dropped, and after `fix_next_id`: new ids start above the file's).
     doc.guides_into_nodes();
+    // A clip's clipping path, first in the file, goes on top of its art, marked (after the ruler
+    // guides become nodes: it goes under them).
+    doc.put_clipping_paths(vectorcraft_doc::ClippingPathAt::Top);
     // Untrusted: the type's sizes, leading, baseline shifts and scales, its indents and paragraph
     // spacing, and its tab stops, each within its range (after the depth limit: the walk recurses).
     doc.keep_type_values_in_range();

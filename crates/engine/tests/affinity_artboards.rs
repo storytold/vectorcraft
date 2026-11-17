@@ -90,7 +90,10 @@ fn nested_boards_keep_order_and_negative_origins_at_document_resolution() {
         assert_eq!(boards[2].rect, Rect::new(75.0, 0.0, 95.0, 40.0));
         let reopened = vectorcraft_format::load_file(&vectorcraft_format::save_file(&loaded.doc)).unwrap();
         assert_eq!(reopened.doc.artboards, loaded.doc.artboards);
-        assert_eq!(reopened.doc.layers, loaded.doc.layers);
+        // Opening puts each clipping path on top of its clip's art, marked.
+        let mut opened = loaded.doc.clone();
+        opened.put_clipping_paths(vectorcraft_doc::ClippingPathAt::Top);
+        assert_eq!(reopened.doc.layers, opened.layers);
     }
 }
 

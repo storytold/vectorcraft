@@ -1810,7 +1810,7 @@ fn paste_in_back_of_a_clipping_path_keeps_it_the_clipping_path() {
     sel(&mut s, &[art2, c]);
     let g2 = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
     for (g, clipping, target, copies) in [(g, mask, mask, vec![loose, group]), (g2, c, a, vec![group])] {
-        assert_eq!(children(&s, g)[0], clipping);
+        assert_eq!(children(&s, g).last(), Some(&clipping), "on top");
         for copied in copies {
             copy(&mut s, &[copied]);
             sel(&mut s, &[target]);

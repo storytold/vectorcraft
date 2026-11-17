@@ -346,10 +346,15 @@ fn triangle_resources() -> Vec<u8> {
 }
 
 /// The clip group a PSD file comes in as: its clipping path's anchors (pt), whether that path
-/// uses the even-odd rule, and the image it clips.
+/// uses the even-odd rule, and the image it clips. The clipping path is first when placed, and on
+/// top when opened.
 fn clip_group(d: &Document, id: NodeId) -> (Vec<[f64; 2]>, bool, NodeId) {
     let Some(NodeKind::Group { children, clip: true }) = d.node(id).map(|n| &n.kind) else { panic!("not a clip group: {:?}", d.node(id)) };
-    let [path, image] = &children[..] else { panic!("{} children", children.len()) };
+    let (path, image) = match &children[..] {
+        [a, b] if a.is_clipping_path() => (a, b),
+        [a, b] => (b, a),
+        _ => panic!("{} children", children.len()),
+    };
     let NodeKind::Path { path: p, rule, clipping: true, .. } = &path.kind else { panic!("not a clipping path") };
     assert!(matches!(image.kind, NodeKind::Image(_)));
     let anchors = p.anchors().map(|(_, _, a)| [a.p.x, a.p.y]).collect();

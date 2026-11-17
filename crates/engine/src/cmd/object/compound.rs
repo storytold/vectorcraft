@@ -179,11 +179,8 @@ pub(super) fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
     let gid = s.edit("Make Clipping Mask", |d, sel| {
         make_clipping_path(d, top)?;
         let gid = d.alloc_id();
-        // The topmost object, the clipping path, goes first, and the others follow in paint order.
-        d.wrap(&ids, |mut children| {
-            children.rotate_right(1);
-            Node::new(gid, NodeKind::Group { children, clip: true })
-        })?;
+        // The objects keep their paint order: the clipping path stays on top.
+        d.wrap(&ids, |children| Node::new(gid, NodeKind::Group { children, clip: true }))?;
         sel.set([gid]);
         Ok(gid)
     })?;

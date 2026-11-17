@@ -6160,7 +6160,7 @@ fn totals_inside_a_group_with_a_look_of_its_own_show_the_value_where_they_are() 
         let mut out = vec![];
         n.walk(&mut |c| {
             if let NodeKind::Group { clip: true, children } = &c.kind {
-                out.push(children.first().map(|m| texts_in(m)).unwrap_or_default());
+                out.push(vectorcraft_doc::split_clipping_path(children).map(|(m, _)| texts_in(m)).unwrap_or_default());
             }
         });
         out

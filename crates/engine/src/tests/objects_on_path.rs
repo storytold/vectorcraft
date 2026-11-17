@@ -437,7 +437,7 @@ fn paths_and_objects_that_are_part_of_live_art_or_a_clipping_path_stay_where_the
     let clip = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
     assert!(err(&mut s, json!({"path": mask.0, "ids": [left.0]})).contains("a clipping path can't take objects"));
     assert!(err(&mut s, json!({"path": path.0, "ids": [mask.0]})).contains("a clipping path can't be attached to a path"));
-    assert_eq!(s.doc().unwrap().doc.node(clip).unwrap().children().unwrap().first().map(|c| c.id), Some(mask));
+    assert_eq!(s.doc().unwrap().doc.node(clip).unwrap().clipping_path().map(|c| c.id), Some(mask));
     // The art the clipping path clips, and a compound path's member as an object, still attach.
     let g = attach(&mut s, path, &[left, middle, member, art], json!({}));
     let rec = s.doc().unwrap().doc.node(g).unwrap().extras().objects_on_path.as_deref().cloned().unwrap();

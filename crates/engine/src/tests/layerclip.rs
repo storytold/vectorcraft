@@ -34,8 +34,9 @@ fn the_top_object_clips_the_layer_and_pressing_again_releases_it() {
     assert!(toggle(&mut s));
     let l = layer(&s);
     assert!(l.clips());
-    // The clipping path loses its paint and goes to the bottom, so art added on top is clipped.
-    let c = &l.children().unwrap()[0];
+    // The clipping path loses its paint and stays on top; art added later goes over it and is
+    // clipped too.
+    let c = l.children().unwrap().last().unwrap();
     assert_eq!(c.id, clip);
     assert!(c.appearance.fill_paint().is_none() && matches!(c.kind, NodeKind::Path { clipping: true, .. }));
     let r = render(&s);
@@ -50,7 +51,7 @@ fn the_top_object_clips_the_layer_and_pressing_again_releases_it() {
     assert!(!toggle(&mut s));
     let l = layer(&s);
     assert!(!l.clips());
-    let c = &l.children().unwrap()[0];
+    let c = l.children().unwrap().iter().find(|c| c.id == clip).unwrap();
     assert!(c.appearance.fill_paint().is_none() && matches!(c.kind, NodeKind::Path { clipping: false, .. }));
     let r = render(&s);
     assert!(opaque(&r, 10, 10) && opaque(&r, 50, 90));
@@ -66,7 +67,7 @@ fn making_a_layer_clipping_mask_is_one_undo_step() {
     assert_eq!(layer(&s), before, "the clip path is back on top with its paint");
     s.execute("edit.redo", &json!({})).unwrap();
     assert!(layer(&s).clips());
-    assert_eq!(layer(&s).children().unwrap()[0].id, clip);
+    assert_eq!(layer(&s).children().unwrap().last().unwrap().id, clip);
 }
 
 #[test]
@@ -95,7 +96,7 @@ fn a_selected_group_becomes_a_clip_group() {
     assert!(toggle(&mut s));
     let n = s.doc().unwrap().doc.node(g).unwrap().clone();
     assert!(matches!(n.kind, NodeKind::Group { clip: true, .. }));
-    assert_eq!(n.children().unwrap()[0].id, clip);
+    assert_eq!(n.children().unwrap().last().unwrap().id, clip);
     assert!(!layer(&s).clips(), "the layer is left alone");
     assert!(!opaque(&render(&s), 10, 10));
     assert!(!toggle(&mut s));
@@ -132,7 +133,7 @@ fn send_to_back_in_a_clipping_layer_goes_below_the_clipping_path_which_still_cli
     select(&mut s, &[top]);
     s.execute("object.arrange.sendToBack", &json!({})).unwrap();
     let ids: Vec<NodeId> = layer(&s).children().unwrap().iter().map(|n| n.id).collect();
-    assert_eq!(ids, [top, clip, art]);
+    assert_eq!(ids, [top, art, clip]);
     assert_eq!(layer(&s).clipping_path().map(|c| c.id), Some(clip));
     let r = render(&s);
     assert!(opaque(&r, 50, 50) && opaque(&r, 30, 30), "the art inside the clip still shows");

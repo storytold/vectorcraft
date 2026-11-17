@@ -243,7 +243,10 @@ fn pasting_in_draw_inside_puts_the_copies_inside_the_object() {
     assert_eq!(all.len(), 2);
     let children: Vec<u64> = s.doc().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
     assert_eq!(children.len(), 6, "{children:?}");
-    assert_eq!(children[1..], [a, ids[0], in_place[0], all[0], all[1]]);
+    // The object, its clipping copy over it, then the pastes over that, clipped too.
+    assert_eq!(children[0], a);
+    assert_eq!(s.doc().unwrap().doc.node(g).unwrap().clipping_path().map(|c| c.id.0), Some(children[1]));
+    assert_eq!(children[2..], [ids[0], in_place[0], all[0], all[1]]);
     // Paste Remembers Layers doesn't take the copy out of the object.
     s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
     let remembered = pasted(s.execute("edit.paste", &json!({})).unwrap());

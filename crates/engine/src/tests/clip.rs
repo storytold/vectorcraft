@@ -78,8 +78,8 @@ fn compound_clip_keeps_its_hole_and_release_gives_the_compound_back() {
     let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
     let d = &s.doc().unwrap().doc;
     let NodeKind::Group { children, clip: true } = &d.node(g).unwrap().kind else { panic!("a clip group") };
-    assert_eq!(children[0].id, donut);
-    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children[0].appearance.fill_paint().is_none());
+    assert_eq!(children[1].id, donut, "on top");
+    assert!(matches!(children[1].kind, NodeKind::Compound { .. }) && children[1].appearance.fill_paint().is_none());
     let r = render(&s);
     assert!(opaque(&r, 20, 50), "the ring shows the art");
     assert!(!opaque(&r, 50, 50), "the hole stays transparent");
@@ -93,7 +93,7 @@ fn compound_clip_keeps_its_hole_and_release_gives_the_compound_back() {
     s.execute("object.clippingMask.release", &json!({})).unwrap();
     let d = &s.doc().unwrap().doc;
     let NodeKind::Group { children, clip: false } = &d.node(g).unwrap().kind else { panic!("a plain group") };
-    assert!(matches!(children[0].kind, NodeKind::Compound { .. }) && children[0].id == donut);
+    assert!(matches!(children[1].kind, NodeKind::Compound { .. }) && children[1].id == donut);
     assert!(opaque(&render(&s), 50, 50), "nothing clips any more");
 }
 
@@ -262,7 +262,7 @@ fn arranging_inside_a_clip_group_moves_the_art_and_the_clipping_path_and_the_cli
     let clip = ellipse(&mut s, 20.0, 60.0);
     select(&mut s, &[a, b, clip]);
     let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
-    assert_eq!(child_ids(&s, g), [clip, a, b]);
+    assert_eq!(child_ids(&s, g), [a, b, clip], "the clipping path on top");
     let send = |s: &mut Session, ids: &[NodeId], cmd: &str| {
         select(s, ids);
         s.execute(cmd, &json!({})).unwrap();
@@ -276,15 +276,15 @@ fn arranging_inside_a_clip_group_moves_the_art_and_the_clipping_path_and_the_cli
     assert!(clipped(&s));
 
     send(&mut s, &[b], "object.arrange.sendToBack");
-    assert_eq!(child_ids(&s, g), [b, clip, a], "the art goes to the back, below the clipping path");
-    assert_eq!(clips_by(&s, g), Some(clip));
-    assert!(clipped(&s));
-    send(&mut s, &[clip], "object.arrange.bringForward");
-    assert_eq!(child_ids(&s, g), [b, a, clip], "the clipping path goes over the art");
+    assert_eq!(child_ids(&s, g), [b, a, clip], "the art goes to the back");
     assert_eq!(clips_by(&s, g), Some(clip));
     assert!(clipped(&s));
     send(&mut s, &[clip], "object.arrange.sendToBack");
-    assert_eq!(child_ids(&s, g), [clip, b, a]);
+    assert_eq!(child_ids(&s, g), [clip, b, a], "the clipping path goes under the art");
+    assert_eq!(clips_by(&s, g), Some(clip));
+    assert!(clipped(&s));
+    send(&mut s, &[clip], "object.arrange.bringForward");
+    assert_eq!(child_ids(&s, g), [b, clip, a]);
     send(&mut s, &[a, b], "object.arrange.bringToFront");
     assert_eq!(child_ids(&s, g), [clip, b, a], "several pieces of art keep their order");
     send(&mut s, &[clip, a], "object.arrange.bringToFront");
@@ -381,8 +381,8 @@ fn shows_the_ring(s: &Session) -> bool {
 }
 
 /// The clipping path stays the clipping path wherever it goes among the members of its clip group
-/// (the Layers panel's moves), and so does one read from a file without a mark (a compound path)
-/// when art goes below it.
+/// (the Layers panel's moves), and so does one without a mark, first among the members (as a clip
+/// built in code has it), when art goes below it.
 #[test]
 fn the_clipping_path_stays_the_clipping_path_wherever_it_goes_among_the_members() {
     let mut s = session();
@@ -390,32 +390,91 @@ fn the_clipping_path_stays_the_clipping_path_wherever_it_goes_among_the_members(
     select(&mut s, &[art, donut]);
     let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
     assert!(shows_the_ring(&s));
-    s.execute("layer.move", &json!({"ids": [donut.0], "target": art.0, "place": "above"})).unwrap();
-    assert_eq!(child_ids(&s, g), [art, donut], "over the art");
+    s.execute("layer.move", &json!({"ids": [donut.0], "target": art.0, "place": "below"})).unwrap();
+    assert_eq!(child_ids(&s, g), [donut, art], "under the art");
     assert_eq!(clips_by(&s, g), Some(donut));
     assert!(shows_the_ring(&s));
-    s.execute("layer.move", &json!({"ids": [donut.0], "target": art.0, "place": "below"})).unwrap();
-    assert_eq!(child_ids(&s, g), [donut, art], "back below it");
+    s.execute("layer.move", &json!({"ids": [donut.0], "target": art.0, "place": "above"})).unwrap();
+    assert_eq!(child_ids(&s, g), [art, donut], "back over it");
     assert!(shows_the_ring(&s));
 
-    // A compound path keeps no mark in a file: the clip opened again clips by its first member.
-    let saved = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
-    let mut s = Session::new();
-    s.execute("document.open", &json!({"name": "clip.vectorcraft", "dataBase64": saved})).unwrap();
-    let (g, donut, art) = {
-        let d = &s.doc().unwrap().doc;
-        let g = d.layers[0].children().unwrap()[0].clone();
-        let ch = g.children().unwrap();
-        (g.id, ch[0].id, ch[1].id)
-    };
-    assert!(!s.doc().unwrap().doc.node(donut).unwrap().is_clipping_path(), "no mark");
-    assert!(shows_the_ring(&s));
+    // Without its mark, first: the clip clips by its first member.
+    s.execute("layer.move", &json!({"ids": [donut.0], "target": art.0, "place": "below"})).unwrap();
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(donut).unwrap().set_clipping_path(false);
+    assert_eq!(clips_by(&s, g), Some(donut));
     // Art moved below it: it stays the clipping path, now marked.
     s.execute("layer.move", &json!({"ids": [art.0], "target": donut.0, "place": "below"})).unwrap();
     assert_eq!(child_ids(&s, g), [art, donut]);
     assert_eq!(clips_by(&s, g), Some(donut));
     assert!(s.doc().unwrap().doc.node(donut).unwrap().is_clipping_path());
     assert!(shows_the_ring(&s));
+}
+
+/// The ids of the members of object `id` in saved native JSON `v`, in the file's order.
+fn saved_members(v: &Value, id: NodeId) -> Vec<u64> {
+    fn find(v: &Value, id: u64) -> Option<&Value> {
+        match v {
+            Value::Object(o) if o.get("id").and_then(Value::as_u64) == Some(id) && o.contains_key("kind") => Some(v),
+            Value::Object(o) => o.values().find_map(|c| find(c, id)),
+            Value::Array(a) => a.iter().find_map(|c| find(c, id)),
+            _ => None,
+        }
+    }
+    fn children(v: &Value) -> Option<&Vec<Value>> {
+        let o = v.as_object()?;
+        o.get("children").and_then(Value::as_array).or_else(|| o.get("kind").and_then(children))
+    }
+    children(find(v, id.0).unwrap()).unwrap().iter().map(|c| c["id"].as_u64().unwrap()).collect()
+}
+
+/// Make Clipping Mask leaves the clipping path on top of the clip group. A file keeps it first,
+/// under the art, wherever it is in the document (a compound path too, whose mark files don't keep),
+/// and opening the file puts it back on top, marked: the clip clips as it did. A document opened
+/// from another format has its clipping paths on top too.
+#[test]
+fn the_clipping_path_is_on_top_in_a_document_and_first_in_its_file() {
+    let mut s = session();
+    let (art, donut) = art_and_donut(&mut s);
+    let small = id_of(&s.execute("shape.rectangle", &json!({"x": 40, "y": 40, "width": 20, "height": 20})).unwrap());
+    select(&mut s, &[donut]);
+    s.execute("object.arrange.bringToFront", &json!({})).unwrap();
+    select(&mut s, &[art, small, donut]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert_eq!(child_ids(&s, g), [art, small, donut], "the clipping path stays on top");
+    // Moved between the art.
+    s.execute("layer.move", &json!({"ids": [donut.0], "target": small.0, "place": "below"})).unwrap();
+    assert_eq!(child_ids(&s, g), [art, donut, small]);
+    assert!(shows_the_ring(&s));
+    let saved: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, true)).unwrap();
+    assert_eq!(saved_members(&saved, g), [donut.0, art.0, small.0], "first in the file");
+    assert_eq!(child_ids(&s, g), [art, donut, small], "the document stays as it is");
+
+    // Opened again: on top, marked.
+    let data = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "clip.vectorcraft", "dataBase64": data})).unwrap();
+    assert_eq!(child_ids(&o, g), [art, small, donut]);
+    assert_eq!(clips_by(&o, g), Some(donut));
+    assert!(o.doc().unwrap().doc.node(donut).unwrap().is_clipping_path());
+    assert!(shows_the_ring(&o));
+
+    // From SVG.
+    let data = s.execute("document.export", &json!({"format": "svg"})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "clip.svg", "dataBase64": data})).unwrap();
+    let mut clips = vec![];
+    o.doc().unwrap().doc.walk(|n| {
+        if n.clips() {
+            clips.push(n.clone());
+        }
+    });
+    assert!(!clips.is_empty());
+    for c in clips {
+        let last = c.children().unwrap().len() - 1;
+        assert_eq!(c.clipping_path_index(), Some(last), "on top");
+        assert!(c.children().unwrap()[last].is_clipping_path(), "marked");
+    }
+    assert!(shows_the_ring(&o));
 }
 
 /// Deleting the clipping path, or moving it out of its clip group (into the layer, or into a group

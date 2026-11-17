@@ -336,6 +336,9 @@ impl Session {
         doc.resolve_inline_art();
         // Ruler guides a reader left in the saved list become nodes on their layers.
         doc.guides_into_nodes();
+        // Clipping paths go on top of their art, where Make Clipping Mask leaves them, whatever
+        // file the document came from (after the ruler guides: they go under them).
+        doc.put_clipping_paths(vectorcraft_doc::ClippingPathAt::Top);
         cmd::dimension::conform(&mut doc);
         // A plane held by Automatic Plane Positioning when the file was saved is back in its place.
         vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
@@ -366,6 +369,7 @@ impl Session {
         cmd::compositefonts::filter_loaded(&mut doc);
         doc.resolve_inline_art();
         doc.guides_into_nodes();
+        doc.put_clipping_paths(vectorcraft_doc::ClippingPathAt::Top);
         cmd::dimension::conform(&mut doc);
         vectorcraft_tools::distort::perspective::PerspectiveGrid::end_positioning(&mut doc);
         // In the back, type set in a font named like a composite font is measured again below, in

@@ -364,15 +364,26 @@ fn flattened(src: &Document, at: usize, id: NodeId) -> Result<Option<Flat>> {
 }
 
 /// `n` without the nodes after the `last`th in paint order (`i` counts them, as
-/// [`Document::walk`] does); `None` when `n` itself comes after it.
+/// [`Document::walk`] does); `None` when `n` itself comes after it. A clip group or clipping layer
+/// keeps its clipping path wherever it is among its members (on top, as Make Clipping Mask leaves
+/// it): it clips what is kept, and its fill is painted under it.
 fn up_to(n: &Node, last: usize, i: &mut usize) -> Option<Node> {
     if *i > last {
         return None;
     }
     *i += 1;
     let mut n = n.clone();
+    let clip = n.clipping_path_index();
     if let Some(ch) = n.children_mut() {
-        let kept: Vec<Arc<Node>> = ch.iter().filter_map(|c| up_to(c, last, i)).map(Arc::new).collect();
+        let kept: Vec<Arc<Node>> = ch
+            .iter()
+            .enumerate()
+            .filter_map(|(k, c)| match up_to(c, last, i) {
+                Some(c) => Some(Arc::new(c)),
+                None if Some(k) == clip => Some(c.clone()),
+                None => None,
+            })
+            .collect();
         *ch = kept;
     }
     Some(n)

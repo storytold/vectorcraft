@@ -2856,7 +2856,7 @@ rulers back in the General unit from the ruler origin; they stay shown. It retur
 ## Clipping masks
 
 `object.clippingMask.make` clips the selected objects by the topmost one, which may be a path, a compound path or a
-text object (it loses its paint). Compound holes, even-odd fills, glyph outlines and the union of a group's members
+text object (it loses its paint and stays on top of the clip group). Compound holes, even-odd fills, glyph outlines and the union of a group's members
 clip alike on screen, in raster export and in SVG and PDF. `object.clippingMask.release` turns the clip group into a
 plain group and keeps the clipping path with whatever paint it has.
 
@@ -2865,6 +2865,10 @@ The clipping path stays the clipping path wherever it goes among the members of 
 or moving it out (into another layer or group, or into a group made of it and art inside the clip), releases the clip
 as `object.clippingMask.release` does; the path it moved is a plain path, and stays one if it goes back. A copy of a
 clipping path alone (pasted or duplicated) is a plain object too.
+
+Files keep each clipping path first among its clip's members, under the art, where versions that take a clip's first
+member as its clipping path find it. Opening a document, from any format, puts every clipping path back on top of its
+art.
 
 A clipping path can be painted after Make (`paint.setFill`, `paint.setStroke`, `stroke.set` with its `ids`): its fill
 paints behind the clipped art and its stroke over it, not clipped, on screen and in SVG and PDF.
@@ -2875,8 +2879,8 @@ paints behind the clipped art and its stroke over it, not clipped, on screen and
 ```
 
 `layer.clippingMask.toggle {id?}` is the Layers panel's clipping mask button: the top object of the layer `id` (default:
-the one highlighted layer or group row, else the one selected group, else the current layer) becomes its clipping path (unpainted, moved to the bottom of the layer,
-so art added later is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
+the one highlighted layer or group row, else the one selected group, else the current layer) becomes its clipping path (unpainted, staying on top of the layer;
+art added later, over it, is clipped too); called again it releases the mask. It returns `{clip}`, and the Layers panel
 underlines clipping-path names.
 
 ## Object selection

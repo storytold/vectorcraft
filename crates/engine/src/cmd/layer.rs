@@ -182,7 +182,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make/Release Clipping Mask",
             ["Window", "Layers"],
             None,
-            "{id?: layer or group (default: the one highlighted layer or group row, else the one selected group, else the current layer)} make: its top object (a path, compound path or text, which loses its paint) clips the rest and moves to the bottom (new art added on top is clipped); release: it stops clipping, the clipping path stays unpainted → {clip}",
+            "{id?: layer or group (default: the one highlighted layer or group row, else the one selected group, else the current layer)} make: its top object (a path, compound path or text, which loses its paint) clips the rest and stays on top (new art added over it is clipped too); release: it stops clipping, the clipping path stays unpainted → {clip}",
             has_doc,
             clip_toggle
         ),
@@ -491,8 +491,8 @@ fn clip_toggle(s: &mut Session, p: &Value) -> Result<Value> {
             .and_then(|c| c.iter().rev().find(|c| !c.is_ruler_guide()))
             .map(|c| c.id)
             .ok_or_else(|| EngineError::Other("the layer has no objects to clip by".into()))?;
+        // It stays on top; art added later goes over it and is clipped too.
         super::object::make_clipping_path(d, top)?;
-        d.move_node(top, Some(id), 0)?;
         if let Some(n) = d.node_mut(id) {
             n.set_clips(true);
         }
@@ -1342,14 +1342,14 @@ mod tests {
         fn has(c: &Node, s: &SymbolBoxes, rect: Rect) -> bool {
             match &c.kind {
                 NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
-                    let Some((clip, rest)) = children.split_first() else { return false };
+                    let Some((clip, mut rest)) = vectorcraft_doc::split_clipping_path(children) else { return false };
                     let paint = clip.clip_paint();
                     if (paint.fill.is_some() || paint.stroke.is_some()) && meets(clip.visual_bounds_with(s), rect) {
                         return true;
                     }
                     let Some(b) = c.visual_bounds_with(s).filter(|b| meets(Some(*b), rect)) else { return false };
                     let inside = Rect::new(b.x0.max(rect.x0), b.y0.max(rect.y0), b.x1.min(rect.x1), b.y1.min(rect.y1));
-                    rest.iter().any(|m| has(m, s, inside))
+                    rest.any(|m| has(m, s, inside))
                 }
                 NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().any(|m| has(m, s, rect)),
                 NodeKind::Path { guide: true, .. } => false,

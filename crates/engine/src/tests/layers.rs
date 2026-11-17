@@ -476,9 +476,9 @@ fn new_layers_go_below_the_current_one_and_sublayers_under_the_contents() {
     let layer = s.doc().unwrap().doc.layers[0].id;
     let (back, front) = (rect(&mut s, 0.0), rect(&mut s, 100.0));
     run(&mut s, "layer.clippingMask.toggle", json!({"id": layer.0}));
-    assert_eq!(children(&s, layer), vec![front, back], "the top object clips");
+    assert_eq!(children(&s, layer), vec![back, front], "the top object clips, on top");
     let under = id(&run(&mut s, "layer.newSublayer", json!({"parent": layer.0, "bottom": true})));
-    assert_eq!(children(&s, layer), vec![under, front, back]);
+    assert_eq!(children(&s, layer), vec![under, back, front]);
     assert_eq!(s.doc().unwrap().doc.node(layer).unwrap().clipping_path().map(|c| c.id), Some(front));
 }
 

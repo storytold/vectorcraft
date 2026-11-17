@@ -104,7 +104,9 @@ pub fn check_session(s: &Session) -> Result<(), String> {
 }
 
 /// `.vectorcraft` save → load → the JSON of the document and of what loaded, without `images`: a
-/// save keeps only the images in use, which must come back byte for byte.
+/// save keeps only the images in use, which must come back byte for byte. The document is compared
+/// as opening it puts it: each clipping path on top of its clip's art, marked
+/// ([`Document::put_clipping_paths`]).
 fn native_roundtrip(doc: &Document) -> Result<(Value, Value), String> {
     let bytes = vectorcraft_format::save(doc, false);
     let back = vectorcraft_format::load(&bytes).map_err(|e| format!("load: {e}"))?;
@@ -134,7 +136,9 @@ fn native_roundtrip(doc: &Document) -> Result<(Value, Value), String> {
         }
         v
     };
-    Ok((strip(doc_json(doc)), strip(doc_json(&back))))
+    let mut opened = doc.clone();
+    opened.put_clipping_paths(vectorcraft_doc::ClippingPathAt::Top);
+    Ok((strip(doc_json(&opened)), strip(doc_json(&back))))
 }
 
 /// `.vectorcraft` save → load must reproduce the document (numbers compared to 1e-12 relative —
