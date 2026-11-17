@@ -828,6 +828,8 @@ pub(crate) fn humanize(k: &str) -> String {
         "Create" => "Create New Fields by:".into(),
         "Height Width" => "Height/Width:".into(),
         "Traps With Process Color" => "Traps with Process Color:".into(),
+        "Cols" => "Columns:".into(),
+        "Flip Cols" => "Flip Columns:".into(),
         _ => format!("{s}:"),
     }
 }

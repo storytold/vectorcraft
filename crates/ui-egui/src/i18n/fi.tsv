@@ -2761,6 +2761,7 @@ digits	Malayalam	Malajalam
 	BLANK DOCUMENT PRESETS	TYHJÄN ASIAKIRJAN ESIASETUKSET
 	Bleed	Leikkuuvara
 	Change to Right-to-Left Layout	Vaihda oikealta vasemmalle -asetteluun
+	Columns	Sarakkeet
 	Columns:	Sarakkeet:
 	Documents you create appear here.	Luomasi asiakirjat näkyvät tässä.
 	More Settings	Lisää asetuksia
@@ -2948,6 +2949,7 @@ digits	Malayalam	Malajalam
 	Layout Order:	Asettelujärjestys:
 	Change to Left-to-Right Layout	Vaihda vasemmalta oikealle -asetteluun
 	Artboards: {n}	Piirtoalustat: {n}
+	Rows	Rivit
 	Rows:	Rivit:
 	Assign	Määritä
 	Color Group:	Väriryhmä:

@@ -1341,6 +1341,7 @@ antiAlias	Sharp	날카롭게
 	Colors	색상
 	Colors:	색상:
 	Column Graph Tool	세로 막대 그래프 도구
+	Columns	열
 	Columns:	열:
 	Coming soon — tracked in the parity plan	곧 제공 예정 — 기능 동등성 계획에서 관리 중
 	Command Click to Select Objects Behind	Command-클릭으로 뒤쪽 개체 선택
@@ -3108,6 +3109,7 @@ mark-style	Japanese	일본식
 	Rounded Rectangle	둥근 사각형
 	Rounded Rectangle Tool	둥근 사각형 도구
 	Row Size:	행 크기:
+	Rows	행
 	Rows:	행:
 	Rule:	규칙:
 	Rulers & Grids	눈금자 및 격자

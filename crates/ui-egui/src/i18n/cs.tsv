@@ -2817,6 +2817,7 @@ digits	Malayalam	Malajálamské
 	BLANK DOCUMENT PRESETS	PŘEDNASTAVENÍ PRÁZDNÝCH DOKUMENTŮ
 	Bleed	Spadávka
 	Change to Right-to-Left Layout	Změnit na rozvržení zprava doleva
+	Columns	Sloupce
 	Columns:	Sloupce:
 	Documents you create appear here.	Zde se zobrazí dokumenty, které vytvoříte.
 	More Settings	Další nastavení
@@ -3004,6 +3005,7 @@ digits	Malayalam	Malajálamské
 	Layout Order:	Pořadí rozvržení:
 	Change to Left-to-Right Layout	Změnit na rozvržení zleva doprava
 	Artboards: {n}	Pracovní plochy: {n}
+	Rows	Řádky
 	Rows:	Řádky:
 	Assign	Přiřadit
 	Color Group:	Skupina barev:

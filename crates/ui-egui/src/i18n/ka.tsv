@@ -4599,6 +4599,7 @@ digits	Malayalam	მალაიალამური
 	BLANK DOCUMENT PRESETS	ცარიელი დოკუმენტის პრესეტები
 	Bleed	ჭრისპირა არე
 	Change to Right-to-Left Layout	მარჯვნიდან მარცხნივ განლაგებაზე გადასვლა
+	Columns	სვეტები
 	Columns:	სვეტები:
 	Documents you create appear here.	თქვენ მიერ შექმნილი დოკუმენტები აქ გამოჩნდება.
 	More Settings	მეტი პარამეტრი
@@ -4782,6 +4783,7 @@ digits	Malayalam	მალაიალამური
 	Layout Order:	განლაგების რიგი:
 	Change to Left-to-Right Layout	მარცხნიდან მარჯვნივ განლაგებაზე გადასვლა
 	Artboards: {n}	სამუშაო დაფა: {n}
+	Rows	სტრიქონები
 	Rows:	სტრიქონები:
 	Assign	მინიჭება
 	Color Group:	ფერთა ჯგუფი:
