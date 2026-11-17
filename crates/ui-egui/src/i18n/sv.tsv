@@ -219,6 +219,10 @@ font-technology	Variable	Variabla
 	Arc	Båge
 	Arc Lower…	Nedre båge…
 	Arc Tool	Bågverktyg
+	Three-Point Arc Tool	Verktyg för trepunktsbåge
+	Three-Point Arc	Trepunktsbåge
+	Arc too large	Bågen är för stor
+	Third Point Sets Direction	Tredje punkten anger riktningen
 	Arc Upper…	Övre båge…
 	Arch…	Valv…
 	Arc…	Båge…
@@ -4919,6 +4923,10 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`points` must be three [x, y] pairs of numbers	`points` måste vara tre talpar [x, y]
 @msg	direct-select three anchor points, or give `points`	direktmarkera tre ankarpunkter eller ange `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
+@msg	`at` must be "start" or "end"	`at` måste vara "start" eller "end"
+@msg	give exactly one of `through` and `toward`	ange exakt en av `through` och `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	ingen båge passar de här punkterna: två är samma punkt eller så ligger alla tre på en linje
+@msg	give `at` only with `toward`	ange `at` endast tillsammans med `toward`
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
 @msg	no artboard {i} (0-based; the document has {_1})	ingen rityta {i} (räknat från 0; dokumentet har {_1})

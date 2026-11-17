@@ -1404,6 +1404,10 @@ lighting	Light	Svjetlo
 	Add Anchor Point Tool	Alat za dodavanje sidrene tačke
 	Anchor Point Tool	Alat sidrena tačka
 	Arc Tool	Alat luk
+	Three-Point Arc Tool	Alat luk kroz tri tačke
+	Three-Point Arc	Luk kroz tri tačke
+	Arc too large	Luk je prevelik
+	Third Point Sets Direction	Treća tačka određuje smjer
 	Area Graph Tool	Alat za površinski grafikon
 	Area Type Tool	Alat za tekst u području
 	Artboard Tool	Alat radna ploča
@@ -7291,3 +7295,7 @@ shape	Open	Otvoren
 @msg	A fold line is on a non-printing layer.	Linija savijanja je na sloju koji se ne štampa.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneli: {panels}, šarke: {hinges}, greške: {errors}, upozorenja: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+@msg	`at` must be "start" or "end"	`at` mora biti "start" ili "end"
+@msg	give exactly one of `through` and `toward`	navedite tačno jedno od `through` i `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	nijedan luk ne odgovara ovim tačkama: dvije su iste ili sve tri leže na jednoj pravoj
+@msg	give `at` only with `toward`	navedite `at` samo uz `toward`

@@ -1904,6 +1904,10 @@ lighting	Light	Licht
 	Add Anchor Point Tool	Ankerpunt toevoegen
 	Anchor Point Tool	Ankerpunt-gereedschap
 	Arc Tool	Boog-gereedschap
+	Three-Point Arc Tool	Driepuntsboog-gereedschap
+	Three-Point Arc	Driepuntsboog
+	Arc too large	Boog te groot
+	Third Point Sets Direction	Derde punt geeft de richting aan
 	Area Graph Tool	Vlakdiagram-gereedschap
 	Area Type Tool	Vlaktype-gereedschap
 	Artboard Tool	Tekengebied-gereedschap
@@ -5379,6 +5383,10 @@ imageTrace	Outline	Contour
 @msg	`points` must be three [x, y] pairs of numbers	`points` moet uit drie getallenparen [x, y] bestaan
 @msg	direct-select three anchor points, or give `points`	selecteer met directe selectie drie ankerpunten of geef `points` op
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	`at` must be "start" or "end"	`at` moet "start" of "end" zijn
+@msg	give exactly one of `through` and `toward`	geef precies één van `through` en `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	er past geen boog bij deze punten: twee zijn gelijk of alle drie liggen op één lijn
+@msg	give `at` only with `toward`	geef `at` alleen samen met `toward`
 @msg	no app to open files here	hier is geen app om bestanden mee te openen
 @msg	no artboard	geen tekengebied
 @msg	no artboard {i} (0-based; the document has {_1})	geen tekengebied {i} (vanaf 0; het document heeft er {_1})

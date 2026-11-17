@@ -1142,6 +1142,10 @@ antiAlias	Sharp	シャープ
 @plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	すべてに適用 (ほかに {n} 個が見つかりません)
 	Arc	円弧
 	Arc Tool	円弧ツール
+	Three-Point Arc Tool	3 点円弧ツール
+	Three-Point Arc	3 点円弧
+	Arc too large	円弧が大きすぎます
+	Third Point Sets Direction	3 点目で方向を指定
 	Area / Path Type	エリア内文字／パス上文字
 	Area Graph Tool	面グラフツール
 	Area Type Tool	エリア内文字ツール
@@ -4846,6 +4850,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`points` must be three [x, y] pairs of numbers	`points` は 3 組の数値 [x, y] にしてください
 @msg	direct-select three anchor points, or give `points`	アンカーポイントを 3 つダイレクト選択するか、`points` を指定してください
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
+@msg	`at` must be "start" or "end"	`at` には "start" または "end" を指定してください
+@msg	give exactly one of `through` and `toward`	`through` と `toward` のどちらか一方だけを指定してください
+@msg	no arc fits these points: two are the same or all three lie on one line	これらの点に合う円弧はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
+@msg	give `at` only with `toward`	`at` は `toward` と一緒にだけ指定してください
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
 @msg	exit isolation mode first	先に分離モードを終了してください
 @msg	no saved presets	保存したプリセットはありません

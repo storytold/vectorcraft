@@ -210,6 +210,10 @@ font-technology	Variable	Μεταβλητές
 	Arc	Τόξο
 	Arc Lower…	Κάτω τόξο…
 	Arc Tool	Τόξο (Arc Tool)
+	Three-Point Arc Tool	Εργαλείο τόξου τριών σημείων
+	Three-Point Arc	Τόξο τριών σημείων
+	Arc too large	Το τόξο είναι πολύ μεγάλο
+	Third Point Sets Direction	Το τρίτο σημείο ορίζει την κατεύθυνση
 	Arc Upper…	Πάνω τόξο…
 	Arch…	Αψίδα…
 	Arc…	Τόξο…
@@ -4976,6 +4980,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	`points` must be three [x, y] pairs of numbers	το `points` πρέπει να είναι τρία ζεύγη αριθμών [x, y]
 @msg	direct-select three anchor points, or give `points`	επιλέξτε άμεσα τρία σημεία αγκύρωσης ή δώστε `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
+@msg	`at` must be "start" or "end"	το `at` πρέπει να είναι "start" ή "end"
+@msg	give exactly one of `through` and `toward`	δώστε ακριβώς ένα από τα `through` και `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	κανένα τόξο δεν ταιριάζει σε αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
+@msg	give `at` only with `toward`	δώστε το `at` μόνο μαζί με το `toward`
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης
 @msg	no artboard {i} (0-based; the document has {_1})	δεν υπάρχει πίνακας σχεδίασης {i} (αρίθμηση από 0· το έγγραφο περιέχει {_1})

@@ -227,6 +227,10 @@ font-technology	Variable	Варіативні
 	Arc	Дуга
 	Arc Lower…	Дуга знизу…
 	Arc Tool	Інструмент «Дуга»
+	Three-Point Arc Tool	Інструмент «Дуга за трьома точками»
+	Three-Point Arc	Дуга за трьома точками
+	Arc too large	Дуга завелика
+	Third Point Sets Direction	Третя точка задає напрямок
 	Arc Upper…	Дуга зверху…
 	Arch…	Арка…
 	Arc…	Дуга…
@@ -5036,6 +5040,10 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
 @msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
+@msg	`at` must be "start" or "end"	`at` має бути "start" або "end"
+@msg	give exactly one of `through` and `toward`	вкажіть рівно один із параметрів `through` і `toward`
+@msg	no arc fits these points: two are the same or all three lie on one line	жодна дуга не підходить до цих точок: дві точки збігаються або всі три лежать на одній прямій
+@msg	give `at` only with `toward`	вказуйте `at` лише разом із `toward`
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
 @msg	no artboard {i} (0-based; the document has {_1})	немає монтажної області {i} (рахунок з 0; у документі {_1})

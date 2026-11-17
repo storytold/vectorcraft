@@ -216,6 +216,10 @@ font-technology	Variable	Değişken
 	Arc	Yay
 	Arc Lower…	Ark Alt…
 	Arc Tool	Yay Aracı
+	Three-Point Arc Tool	Üç Noktalı Yay Aracı
+	Three-Point Arc	Üç Noktalı Yay
+	Arc too large	Yay çok büyük
+	Third Point Sets Direction	Üçüncü Nokta Yönü Belirler
 	Arc Upper…	Ark Üst…
 	Arch…	Kemer…
 	Arc…	Yay…
@@ -4739,6 +4743,10 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`points` must be three [x, y] pairs of numbers	`points` üç [x, y] sayı çifti olmalıdır
 @msg	direct-select three anchor points, or give `points`	üç bağlantı noktasını doğrudan seçin veya `points` verin
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	`at` must be "start" or "end"	`at` "start" veya "end" olmalıdır
+@msg	give exactly one of `through` and `toward`	`through` ve `toward` değerlerinden tam olarak birini verin
+@msg	no arc fits these points: two are the same or all three lie on one line	bu noktalara uyan bir yay yok: ikisi aynı ya da üçü de aynı doğru üzerinde
+@msg	give `at` only with `toward`	`at` değerini yalnızca `toward` ile birlikte verin
 @msg	no app to open files here	burada dosyaları açacak uygulama yok
 @msg	no artboard	çalışma yüzeyi yok
 @msg	no artboard {i} (0-based; the document has {_1})	çalışma yüzeyi yok {i} (0 tabanlı; belgede {_1} var)

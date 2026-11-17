@@ -43,6 +43,7 @@ pub mod shaperwidget;
 pub mod slice;
 pub mod symbolism;
 pub mod text;
+pub mod three_point_arc;
 pub mod touchtype;
 pub mod typewidget;
 pub mod xform;
@@ -366,6 +367,7 @@ pub fn create(id: &str) -> Box<dyn Tool> {
         "rectangle" | "roundedRectangle" | "ellipse" | "polygon" | "star" | "lineSegment" => Box::new(shape::ShapeTool::new(id)),
         // Not in the toolbar: `file.place.queue` loads it.
         "place" => Box::new(place::PlaceTool::default()),
+        three_point_arc::ID => Box::new(three_point_arc::ThreePointArcTool::default()),
         other => symbolism::create(other)
             .or_else(|| builder::create(other))
             .or_else(|| draw2::create(other))

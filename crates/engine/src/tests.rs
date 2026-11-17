@@ -203,6 +203,7 @@ mod targeting;
 mod textcombos;
 mod textedit;
 pub(super) mod textimport;
+mod three_point_arc;
 mod tileedge;
 mod tints;
 mod toolsettings;
