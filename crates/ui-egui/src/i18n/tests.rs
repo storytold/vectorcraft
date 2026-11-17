@@ -668,6 +668,16 @@ fn painted_and_sketched_style_names_are_in_every_catalog() {
     }
 }
 
+#[test]
+fn paper_cutout_style_names_are_in_every_catalog() {
+    let lib = vectorcraft_doc::style_libs::builtin_style_library("paper-cutouts").expect("built in");
+    for lang in LANGUAGES.iter().filter(|lang| !lang.source.is_empty()) {
+        for label in std::iter::once(lib.name.as_str()).chain(lib.styles.iter().map(|g| g.name.as_str())) {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The names the EPS options' menus show (preview, overprints, flattener preset and PostScript
 /// level), and Save As's Preview label.
 #[test]

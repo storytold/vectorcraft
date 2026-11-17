@@ -10011,3 +10011,10 @@ shape	Open	Открытый
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, шарниры: {hinges}, ошибки: {errors}, предупреждения: {warnings}
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Paper Cutouts	Бумажные вырезки
+	Coral Layers	Коралловые слои
+	Mint Layers	Мятные слои
+	Midnight Layers	Полуночные слои
+	Sunflower Sheet	Лист подсолнуха
+	Rose Layers	Розовые слои
+	Monochrome Stack	Монохромная стопка

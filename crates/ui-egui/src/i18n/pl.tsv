@@ -9770,3 +9770,10 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Paper Cutouts	Wycinanki papierowe
+	Coral Layers	Warstwy koralowe
+	Mint Layers	Warstwy miętowe
+	Midnight Layers	Warstwy północy
+	Sunflower Sheet	Arkusz słonecznika
+	Rose Layers	Warstwy różowe
+	Monochrome Stack	Monochromatyczny stos

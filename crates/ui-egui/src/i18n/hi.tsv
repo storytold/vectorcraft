@@ -9524,3 +9524,10 @@ theme	Appearance	अपीयरेंस
 @msg	A panel is not joined to the rest by a crease.	कोई पैनल किसी क्रीज़ लाइन से बाकी से जुड़ा नहीं है।
 @msg	A fold line is on a non-printing layer.	एक फ़ोल्ड लाइन नॉन-प्रिंटिंग लेयर पर है।
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	पैनल: {panels}, हिंज: {hinges}, एरर: {errors}, वॉर्निंग: {warnings}
+	Paper Cutouts	कागज़ की कतरनें
+	Coral Layers	कोरल परतें
+	Mint Layers	मिंट परतें
+	Midnight Layers	आधी रात की परतें
+	Sunflower Sheet	सूरजमुखी शीट
+	Rose Layers	गुलाबी परतें
+	Monochrome Stack	मोनोक्रोम स्टैक

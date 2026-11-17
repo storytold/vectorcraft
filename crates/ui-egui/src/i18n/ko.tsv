@@ -9514,3 +9514,10 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Paper Cutouts	종이 오려내기
+	Coral Layers	산호색 레이어
+	Mint Layers	민트색 레이어
+	Midnight Layers	한밤중 레이어
+	Sunflower Sheet	해바라기 시트
+	Rose Layers	장미색 레이어
+	Monochrome Stack	단색 쌓기

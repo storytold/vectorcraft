@@ -9917,3 +9917,10 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Paper Cutouts	Papírové výřezy
+	Coral Layers	Korálové vrstvy
+	Mint Layers	Mátové vrstvy
+	Midnight Layers	Půlnoční vrstvy
+	Sunflower Sheet	Slunečnicový list
+	Rose Layers	Růžové vrstvy
+	Monochrome Stack	Jednobarevná sada

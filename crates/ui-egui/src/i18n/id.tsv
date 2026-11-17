@@ -7252,3 +7252,10 @@ breakText	Glyphs	Glif
 @msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"
+	Paper Cutouts	Potongan Kertas
+	Coral Layers	Lapisan Koral
+	Mint Layers	Lapisan Mint
+	Midnight Layers	Lapisan Tengah Malam
+	Sunflower Sheet	Lembar Bunga Matahari
+	Rose Layers	Lapisan Mawar
+	Monochrome Stack	Tumpukan Monokrom

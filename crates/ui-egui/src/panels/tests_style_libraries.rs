@@ -126,6 +126,24 @@ fn painted_and_sketched_opens_from_the_window_menu_and_a_click_applies_its_style
 }
 
 #[test]
+fn paper_cutouts_opens_from_the_window_menu_and_applies_a_layered_style() {
+    let mut app = app();
+    let entry = crate::menus::menu_entries(&app)
+        .into_iter()
+        .find(|e| e.path == ["Window", "Graphic Style Libraries"] && e.label == "Paper Cutouts")
+        .expect("a Window menu item");
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run(entry.command.as_deref().unwrap(), entry.params.clone()).unwrap();
+    assert_eq!(last_open(&app.ui).map(|p| p.id.as_str()), Some("paper-cutouts"));
+    let undo = undo_len(&app);
+    click(&mut app, &context(), "Coral Layers", Modifiers::NONE, 0.0);
+    assert_eq!(undo_len(&app), undo + 1);
+    let appearance = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().appearance;
+    assert_eq!(appearance.items.len(), 3);
+    assert_eq!(appearance.effects[0].id, "stylize.dropShadow");
+}
+
+#[test]
 fn the_window_menu_and_the_panel_open_every_library() {
     let mut app = app();
     let entries = crate::menus::menu_entries(&app);

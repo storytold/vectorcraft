@@ -8100,3 +8100,10 @@ breakText	Glyphs	Γλύφοι
 @msg	A fold line is on a non-printing layer.	Μια γραμμή δίπλωσης βρίσκεται σε επίπεδο που δεν εκτυπώνεται.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Πάνελ: {panels}, μεντεσέδες: {hinges}, σφάλματα: {errors}, προειδοποιήσεις: {warnings}
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"
+	Paper Cutouts	Χάρτινα αποκόμματα
+	Coral Layers	Στρώσεις κοραλλί
+	Mint Layers	Στρώσεις μέντας
+	Midnight Layers	Στρώσεις μεσονυκτίου
+	Sunflower Sheet	Φύλλο ηλιοτρόπιου
+	Rose Layers	Στρώσεις ροζ
+	Monochrome Stack	Μονόχρωμη στοίβα

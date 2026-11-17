@@ -7759,3 +7759,10 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Paper Cutouts	Hình cắt giấy
+	Coral Layers	Lớp san hô
+	Mint Layers	Lớp bạc hà
+	Midnight Layers	Lớp nửa đêm
+	Sunflower Sheet	Tờ hướng dương
+	Rose Layers	Lớp hoa hồng
+	Monochrome Stack	Chồng đơn sắc
