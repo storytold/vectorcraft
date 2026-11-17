@@ -12285,10 +12285,12 @@ type and evening out horizontal scales are not there yet.
 Path Precision Tools is a built-in add-on for exact anchor and path work: its commands are `addon.pathtools.*`, and in
 the desktop app it lives in Object › Plug-ins › Path Precision Tools, in its Anchor Inspector panel
 (`window.panel {panel: "anchorInspector"}`), in its Parametric Shape panel (`window.panel {panel: "parametricShape"}`)
-and in eight tools that the toolbars don't show until they are added from the All Tools drawer (or chosen with
-`tool.select`): `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
-`sharedEdge` and `trimAtCrossings`.
-None has a shortcut. Each edit is one undo step, and an edit that changes nothing makes no step.
+and in eight tools: `anchorEraserBrush`, `extendPath`, `measureInspect`, `parametricShape`, `cornerTool`, `slideAnchor`,
+`sharedEdge` and `trimAtCrossings`. The toolbars don't show the first seven until they are added from the All Tools
+drawer (or chosen with `tool.select`); `trimAtCrossings` is in the Scissors tool's group in both shipped toolbars,
+after the Knife, and `ui.tool.list` lists it there. A toolbar edited before it joined keeps its saved layout until
+Reset Toolbar. None has a shortcut; one can be set in Edit › Keyboard Shortcuts › Tools. Each edit is one undo step,
+and an edit that changes nothing makes no step.
 
 Tools:
 
@@ -12349,7 +12351,7 @@ Tools:
   line has at most 4,096 points; past those limits it draws none. Once finding the crossings takes more than a
   twentieth of the work a release may do, or checking the line against the paths' segments takes more than 1,000,000
   box tests, the drag draws none until the next press. A click or a release still removes what it reaches. The tool
-  has no options.
+  has no options. Its cursor is the Knife's (`Knife`): a knife whose blade's point is the hotspot.
 
 Commands:
 
