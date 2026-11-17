@@ -1247,8 +1247,9 @@ fn search_format(t: &mut Trials, start: &WebSettings, target: usize) -> std::res
 
 /// The format Auto Select GIF/JPEG starts with, and whether the files (`[x0, y0, x1, y1]` of `r`)
 /// are opaque: GIF for files with transparent pixels (when `transparency` keeps them) or at most
-/// 256 colors, else JPEG.
-fn auto_format(r: &WebRender, files: &[[u32; 4]], transparency: bool) -> (WebFormat, bool) {
+/// 256 colors, else JPEG. The colors counted are the ones the files are written with: without
+/// `transparency`, the pixels blended over `matte`.
+fn auto_format(r: &WebRender, files: &[[u32; 4]], transparency: bool, matte: [u8; 3]) -> (WebFormat, bool) {
     let stride = r.width as usize * 4;
     let row =
         move |y: u32, x0: u32, x1: u32| r.rgba.get(y as usize * stride + x0 as usize * 4..y as usize * stride + x1 as usize * 4).unwrap_or_default();
@@ -1258,8 +1259,9 @@ fn auto_format(r: &WebRender, files: &[[u32; 4]], transparency: bool) -> (WebFor
         return (WebFormat::Gif, false);
     }
     let mut seen = HashSet::new();
+    // An opaque pixel blends to itself.
     let few = pixels().all(|p| {
-        seen.insert([p[0], p[1], p[2]]);
+        seen.insert(flatten(p, matte).next().unwrap_or_default());
         seen.len() <= 256
     });
     (if few { WebFormat::Gif } else { WebFormat::Jpg }, true)
@@ -1283,7 +1285,7 @@ pub fn optimize_to_size(
         _ if files.is_empty() => None,
         StartWith::Current => search_format(&mut t, s, target)?,
         StartWith::Auto => {
-            let (first, opaque) = auto_format(r, files, s.transparency);
+            let (first, opaque) = auto_format(r, files, s.transparency, s.matte_rgb()?.unwrap_or([255; 3]));
             let other = if first == WebFormat::Gif { WebFormat::Jpg } else { WebFormat::Gif };
             match search_format(&mut t, &with(first), target)? {
                 Some(a) if !a.achieved && opaque => match search_format(&mut t, &with(other), target)? {

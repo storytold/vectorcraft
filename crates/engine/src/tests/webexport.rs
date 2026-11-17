@@ -609,6 +609,22 @@ fn optimize_to_file_size_auto_selects_gif_or_jpeg_by_content() {
 }
 
 #[test]
+fn optimize_to_file_size_auto_counts_the_colors_blended_over_the_matte() {
+    // Three colors at 100 opacities: without transparency, 300 colors once blended over the matte.
+    let mut s = session(20.0, 15.0);
+    for i in 0..300 {
+        let (x, y) = ((i % 20) as f64, (i / 20) as f64);
+        let id = rect(&mut s, [x, y, 1.0, 1.0], ["#000000", "#ff0000", "#0000ff"][i % 3]);
+        run(&mut s, "transparency.set", json!({"ids": [id], "opacity": i / 3 + 1}));
+    }
+    let r = optimize_to(&mut s, json!({"format": "gif", "desiredK": 100, "startWith": "auto", "transparency": false, "antiAlias": "none"}));
+    assert_eq!((r["format"].as_str(), r["achieved"].as_bool()), (Some("jpg"), Some(true)), "{r}");
+    // With transparency the pixels stay transparent: GIF.
+    let r = optimize_to(&mut s, json!({"format": "jpg", "desiredK": 100, "startWith": "auto", "antiAlias": "none"}));
+    assert_eq!(r["format"].as_str(), Some("gif"), "{r}");
+}
+
+#[test]
 fn optimize_to_file_size_says_when_no_setting_fits() {
     let mut s = many_colours();
     for format in ["jpg", "gif", "png8"] {

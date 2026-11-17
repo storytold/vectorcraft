@@ -8972,7 +8972,8 @@ measured by encoding. A lower value can give a larger file, so the search measur
 range, from the top down, and then narrows the step above the first one that fits. When no value measured fits, GIF
 tries lossy 100 with the most colors that fit. PNG-24 has no
 setting to lower. `startWith: auto` takes GIF for art with transparent pixels or at most 256 colors and JPEG
-otherwise, and for opaque art tries the other format when the first one cannot reach the size. `use: allSlices` (the
+otherwise. With `transparency: false` it counts the colors the pixels have once blended over the matte, as the file
+is written. For opaque art it tries the other format when the first one cannot reach the size. `use: allSlices` (the
 default) measures the image, or the image slices' files together; `eachSlice` measures the largest slice file;
 `currentSlice` measures `slice` (a number from `slice.list`), else the selected image slice, else the first. The
 slices share one setting, so every `use` changes the setting of all of them. The search encodes at most 32 trial
