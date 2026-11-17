@@ -152,7 +152,7 @@ impl Writer {
         // readers (CoreGraphics) drop most of a page in a non-isolated group (#2156).
         let doc = ex.doc;
         let page_group = fits && !self.pdf13 && (doc.page_isolate || doc.page_knockout);
-        let cmyk_page_group = fits && self.cmyk && !page_group && ex.shows_transparency();
+        let cmyk_page_group = fits && !self.pdf13 && self.cmyk && !page_group && ex.shows_transparency();
         // Each copy draws within an equal share of the symbol objects the export has left
         // ([`vectorcraft_doc::MAX_SYMBOL_NODES`]), so every copy leaves out the same instances.
         let limit = ex.symbol_limit;

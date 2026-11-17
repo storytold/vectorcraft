@@ -409,43 +409,61 @@ fn match_param(p: &Value, c: &str, allowed: bool, scopes: &str) -> Result<Option
     serde_json::from_value::<super::Paint>(v.clone()).map(Some).map_err(|_| bad(c, "match must be a paint as the document stores it"))
 }
 
-pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
-    const C: &str = "livePaint.fill";
-    let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
-    let scope = scope_param(p, C)?;
-    let like = match_param(p, C, scope == LpScope::SamePaint, "\"samePaint\"")?;
+/// The drag path of `livePaint.fill` or `livePaint.strokeEdge` (command `c`) pressed at `start`:
+/// `points` followed by each chunk of `continuation`, where every chunk holds 1 to
+/// [`b::LP_FILL_CHUNK_POINTS`] finite canvas points and starts at the last point of the chunk
+/// before it (`points` at `start`). None when `points` is left out. With a `scope` other than
+/// `one`, `points` is an error.
+fn path_param(p: &Value, c: &str, start: Point, scope: LpScope) -> Result<Option<Vec<Vec<Point>>>> {
     if scope != LpScope::One && p.get("points").is_some() {
-        return Err(bad(C, "scope applies to a click: leave out points"));
+        return Err(bad(c, "scope applies to a click: leave out points"));
     }
     let parse_chunk = |input: &Value, start: Point| -> Result<Vec<Point>> {
         let values = input
             .as_array()
             .filter(|points| !points.is_empty() && points.len() <= b::LP_FILL_CHUNK_POINTS)
-            .ok_or_else(|| bad(C, "each path chunk must contain 1 to 4096 points"))?;
+            .ok_or_else(|| bad(c, "each path chunk must contain 1 to 4096 points"))?;
         let points: Vec<_> = values
             .iter()
             .map(|point| {
-                let pair = point.as_array().filter(|pair| pair.len() == 2).ok_or_else(|| bad(C, "points must be [x,y] pairs"))?;
-                let x = pair.first().and_then(Value::as_f64).ok_or_else(|| bad(C, "point x must be a number"))?;
-                let y = pair.get(1).and_then(Value::as_f64).ok_or_else(|| bad(C, "point y must be a number"))?;
+                let pair = point.as_array().filter(|pair| pair.len() == 2).ok_or_else(|| bad(c, "points must be [x,y] pairs"))?;
+                let x = pair.first().and_then(Value::as_f64).ok_or_else(|| bad(c, "point x must be a number"))?;
+                let y = pair.get(1).and_then(Value::as_f64).ok_or_else(|| bad(c, "point y must be a number"))?;
                 let point = Point::new(x, y);
                 if !finite(point) {
-                    return Err(bad(C, "points must be finite canvas points"));
+                    return Err(bad(c, "points must be finite canvas points"));
                 }
                 Ok(point)
             })
             .collect::<Result<_>>()?;
         if points.first() != Some(&start) {
-            return Err(bad(C, "path chunks must share their boundary point"));
+            return Err(bad(c, "path chunks must share their boundary point"));
         }
         Ok(points)
     };
-    let points = p.get("points");
+    let Some(points) = p.get("points") else {
+        return if p.get("continuation").is_some() { Err(bad(c, "continuation requires points")) } else { Ok(None) };
+    };
     let continuation = match p.get("continuation") {
         None => &[][..],
-        Some(input) if points.is_some() => input.as_array().ok_or_else(|| bad(C, "continuation must be an array of path chunks"))?.as_slice(),
-        Some(_) => return Err(bad(C, "continuation requires points")),
+        Some(input) => input.as_array().ok_or_else(|| bad(c, "continuation must be an array of path chunks"))?.as_slice(),
     };
+    let mut chunks: Vec<Vec<Point>> = Vec::with_capacity(continuation.len() + 1);
+    let mut last = start;
+    for input in std::iter::once(points).chain(continuation) {
+        let chunk = parse_chunk(input, last)?;
+        last = chunk.last().copied().unwrap_or(last);
+        chunks.push(chunk);
+    }
+    Ok(Some(chunks))
+}
+
+pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "livePaint.fill";
+    let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
+    let scope = scope_param(p, C)?;
+    let like = match_param(p, C, scope == LpScope::SamePaint, "\"samePaint\"")?;
+    let path = path_param(p, C, pt, scope)?;
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone());
     let group = object_param(p, "group", C)?;
@@ -472,7 +490,7 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
                 targets.extend(b::faces(n).into_iter().filter(|f| f.visible && f.appearance.fill_paint() == like).map(|f| f.id));
             }
         }
-        if let Some(points) = points {
+        if let Some(chunks) = &path {
             let n = d.node(gid).ok_or(EngineError::NoNode(gid))?;
             // Use the existing region-crossing probes, so even a face narrower than the distance
             // between pointer events is filled. Reversing matches visible_face_at's front first.
@@ -488,11 +506,8 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             let map = b::BuilderMap { regions, ..Default::default() };
-            let mut last = pt;
-            for input in std::iter::once(points).chain(continuation) {
-                let chunk = parse_chunk(input, last)?;
-                last = chunk.last().copied().unwrap_or(last);
-                targets.extend(map.hits_along(&chunk, None).regions.iter().filter_map(|i| face_ids.get(*i).copied()));
+            for chunk in chunks {
+                targets.extend(map.hits_along(chunk, None).regions.iter().filter_map(|i| face_ids.get(*i).copied()));
             }
         }
         Ok((fid, targets))
@@ -567,6 +582,7 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     let tol = number_or(p, "tolerance", 4.0, C)?.clamp(0.0, 1000.0);
     let scope = scope_param(p, C)?;
     let like = match_param(p, C, scope != LpScope::One, "\"connected\" or \"samePaint\"")?;
+    let path = path_param(p, C, pt, scope)?;
     let through: Vec<NodeId> = match p.get("through") {
         None => vec![],
         Some(_) if scope != LpScope::Connected => return Err(bad(C, "through applies to scope \"connected\"")),
@@ -590,7 +606,18 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
         let eid = start.id;
         let like = like.unwrap_or_else(|| b::lp_stroke_paint(start));
         let targets = match scope {
-            LpScope::One => vec![eid],
+            // A drag also reaches every edge of the group that is not hidden and that its path
+            // crosses or touches.
+            LpScope::One => std::iter::once(eid)
+                .chain(
+                    path.as_deref()
+                        .map(|chunks| b::visible_edges_along(n, chunks))
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|e| e.id)
+                        .filter(|id| *id != eid),
+                )
+                .collect(),
             LpScope::Connected => b::connected_edges_through(n, eid, &like, &through),
             LpScope::SamePaint => std::iter::once(eid)
                 .chain(b::edges(n).into_iter().filter(|e| e.visible && e.id != eid && b::lp_stroke_paint(e) == like).map(|e| e.id))

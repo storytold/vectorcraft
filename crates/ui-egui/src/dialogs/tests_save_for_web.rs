@@ -289,6 +289,76 @@ fn save_remembers_and_writes_and_done_only_remembers() {
     assert!(!dir.join("Untitled-1.png").exists());
 }
 
+/// `ui.dialogReset` puts the remembered settings back (the defaults when none are remembered) on
+/// the document's active artboard, drops a pending preset, the preset name being typed and the
+/// selected color, keeps the view, zoom, speed and path, writes and remembers nothing, and leaves
+/// the dialog open; settings changed after it are remembered as usual.
+#[test]
+fn reset_puts_the_remembered_settings_back() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset");
+    let (mut app, _) = app(&dir, false);
+    let defaults = vectorcraft_engine::cmd::webexport::WebSettings::default().to_json();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [
+        ("format", json!("jpg")),
+        ("quality", json!(20)),
+        ("colorTable", json!({"locked": ["nope"]})),
+        ("preset", json!("PNG-24")),
+        ("__presetName", json!("Mine")),
+        ("__color", json!("#cc3300")),
+        ("__zoom", json!("200")),
+        ("__kbps", json!(1024)),
+        ("path", json!("elsewhere.png")),
+    ] {
+        set(&mut app, k, v);
+    }
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    for (k, v) in defaults.as_object().unwrap() {
+        let want = if k == "artboard" { &json!(0) } else { v };
+        assert_eq!(d.fields.get(k), Some(want), "{k}");
+    }
+    for k in ["preset", "__presetName", "__color"] {
+        assert!(!d.fields.contains_key(k), "{k}");
+    }
+    assert_eq!((d.str("__zoom"), d.f64("__kbps", 0.0), d.str("path")), ("200".into(), 1024.0, "elsewhere.png".into()));
+    assert_eq!(app.session.last_web_settings().to_json(), defaults, "Reset remembers nothing");
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "Reset writes nothing");
+    set(&mut app, "quality", json!(55));
+    set(&mut app, "discard", json!(true));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.last_web_settings().quality, 55);
+
+    // Remembered on another document's second artboard: Reset keeps this document's active one.
+    let mut app = two_artboards(&vectorcraft_testkit::temp_dir("sfw-reset-artboard"));
+    app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+    app.run("webExport.settings", json!({"artboard": 1, "quality": 40})).unwrap();
+    app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "quality", json!(90));
+    set(&mut app, "artboard", json!(3));
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.fields["artboard"].clone(), d.f64("quality", 0.0)), (json!(0), 40.0));
+}
+
+/// A Done that failed on a bad setting leaves `discard` in the dialog; Reset drops it, so Save…
+/// after Reset writes the file instead of only remembering the settings.
+#[test]
+fn reset_drops_a_done_that_failed() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset-done");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "colorTable", json!({"locked": ["nope"]}));
+    set(&mut app, "discard", json!(true));
+    assert!(confirm(&mut app).is_err());
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("discard"));
+    let r = confirm(&mut app).unwrap();
+    let path = r["path"].as_str().expect("Save… writes a file");
+    assert!(std::path::Path::new(path).exists(), "{path}");
+}
+
 #[test]
 fn html_output_with_slices_saves_the_page_and_images() {
     let dir = vectorcraft_testkit::temp_dir("sfw-html");
@@ -590,9 +660,41 @@ fn saving_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
     const NOTE: &str = "with 1 note: an image couldn't be decoded and is missing from the picture";
     // A PNG whose header reads but whose pixel data is cut short: the renderer draws nothing for it.
     let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let place = |app: &mut VectorcraftApp| vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({"at": [30, 20]}));
     let dir = vectorcraft_testkit::temp_dir("sfw-undecoded");
     let (mut desktop, _) = app(&dir, false);

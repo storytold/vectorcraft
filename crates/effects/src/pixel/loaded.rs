@@ -6,7 +6,6 @@
 //! lies one pixel per point at 100 %, centered on the object's center and repeated in both
 //! directions.
 
-use std::io::Cursor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -85,9 +84,15 @@ impl LoadedTexture {
     /// Its [`TEXTURE_IMAGE`] value: the gray levels as a grayscale PNG, base64; `None` when the
     /// PNG can't be written.
     pub fn to_stored(&self) -> Option<String> {
-        let img = image::GrayImage::from_raw(self.width, self.height, self.gray.clone())?;
-        let mut png = Vec::new();
-        img.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let img = craft_image_codecs::Image::from_raw(
+            self.width,
+            self.height,
+            craft_image_codecs::ChannelLayout::Gray,
+            craft_image_codecs::SampleType::U8,
+            self.gray.clone(),
+        )
+        .ok()?;
+        let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         Some(base64_encode(&png))
     }
 
@@ -95,21 +100,38 @@ impl LoadedTexture {
     /// `None` when `png` isn't a PNG or holds no pixels.
     /// `None` too when its gray levels would take the live textures past [`MAX_LIVE`].
     fn from_png(png: &[u8]) -> Option<Self> {
-        let reader = || {
-            let mut reader = image::ImageReader::with_format(Cursor::new(png), image::ImageFormat::Png);
-            let mut limits = image::Limits::default();
-            limits.max_alloc = Some(vectorcraft_doc::MAX_RASTER_ALLOC);
-            reader.limits(limits);
-            reader
-        };
-        let (w, h) = reader().into_dimensions().ok()?;
+        let (w, h) = Self::png_ihdr_size(png)?;
         let gray = (w as usize).checked_mul(h as usize)?;
         if LIVE.load(Ordering::Relaxed).saturating_add(gray) > MAX_LIVE {
             return None;
         }
-        let img = reader().decode().ok()?.to_luma8();
+        let mut opts = craft_image_codecs::DecodeOptions::default();
+        opts.limits.max_alloc = vectorcraft_doc::MAX_RASTER_ALLOC;
+        // The codec default caps each side at 2^18; a stored texture can be longer than that and
+        // still fit the live and allocation budgets.
+        opts.limits.max_width = u32::MAX;
+        opts.limits.max_height = u32::MAX;
+        let img = craft_image_codecs::decode_as_with(craft_image_codecs::Format::Png, png, &opts).ok()?;
         let (width, height) = img.dimensions();
-        (width > 0 && height > 0).then(|| Self::new(width, height, img.into_raw()))
+        if width == 0 || height == 0 {
+            return None;
+        }
+        use craft_image_codecs::{ChannelLayout as L, SampleType as S};
+        let luma = match (img.layout(), img.sample_type()) {
+            (L::Gray, S::U8) => img.into_data(),
+            _ => image::RgbaImage::from_raw(width, height, img.to_rgba8()).map(image::DynamicImage::ImageRgba8)?.into_luma8().into_raw(),
+        };
+        Some(Self::new(width, height, luma))
+    }
+
+    /// Read `(width, height)` from a PNG's IHDR chunk without decoding pixels.
+    fn png_ihdr_size(png: &[u8]) -> Option<(u32, u32)> {
+        if png.len() < 24 || &png[..8] != b"\x89PNG\r\n\x1a\n" || &png[12..16] != b"IHDR" {
+            return None;
+        }
+        let w = u32::from_be_bytes(png[16..20].try_into().ok()?);
+        let h = u32::from_be_bytes(png[20..24].try_into().ok()?);
+        Some((w, h))
     }
 
     /// The surface's height (points) at `p` (points at 100 %, from the object's center): the gray

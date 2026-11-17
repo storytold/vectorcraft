@@ -1,7 +1,6 @@
 //! Save PDF › Output: colours converted to the destination (or their numbers preserved), ICC
 //! profiles tagging them, images converted too, and the output intent and Trapped entries.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use craft_pdf::syntax::Pdf;
@@ -429,11 +428,9 @@ fn tagged_cmyk_documents_blend_in_the_cmyk_profile_space() {
 
 /// A 4 × 4 PNG of one colour.
 fn png(rgb: [u8; 3]) -> Vec<u8> {
-    let mut out = Vec::new();
-    image::DynamicImage::from(image::RgbImage::from_pixel(4, 4, image::Rgb(rgb)))
-        .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, rgb.repeat(16))
         .unwrap();
-    out
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 fn image_doc(bytes: Vec<u8>) -> Document {
@@ -451,7 +448,26 @@ fn image_doc(bytes: Vec<u8>) -> Document {
 fn first_pixel(bytes: &[u8]) -> [u8; 3] {
     let back = import(bytes).unwrap();
     let blob = back.images.values().next().unwrap();
-    image::load_from_memory(&blob.bytes).unwrap().to_rgb8().get_pixel(0, 0).0
+    craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8()
+        .get_pixel(0, 0)
+        .0
 }
 
 #[test]

@@ -983,18 +983,19 @@ impl Drawn {
     fn filter_rows(&self) -> Vec<(f32, f32)> {
         use crate::i18n::{current, t, tr_ctx};
         let variable = tr_ctx(current(), "font-technology", "Variable");
-        [(t("All Scripts"), t("Thai")), ("★", t("Rounded")), (t("Script / Brush"), t("Decorative")), (t("Font Technology"), variable)]
+        let added = t("Recently Added");
+        [(t("All Scripts"), t("Thai")), ("★", t("Rounded")), (t("Script / Brush"), t("Decorative")), (t("Font Technology"), variable), (added, added)]
             .map(|(first, last)| (self.text(first).center().y, self.text(last).center().y))
             .to_vec()
     }
 
-    /// The filters lie on their four rows, none wrapped.
+    /// The filters lie on their five rows, none wrapped.
     fn assert_filter_rows(&self) {
         let rows = self.filter_rows();
         for (i, (first, last)) in rows.iter().enumerate() {
             assert!((first - last).abs() < 1.0, "filter row {i} wraps: its first chip at {first}, its last at {last}");
         }
-        assert!(rows.windows(2).all(|w| w[1].0 > w[0].0 + 4.0), "four rows of filters, in order: {rows:?}");
+        assert!(rows.windows(2).all(|w| w[1].0 > w[0].0 + 4.0), "five rows of filters, in order: {rows:?}");
     }
 }
 
@@ -1149,7 +1150,7 @@ fn a_narrow_field_opens_a_menu_wide_enough_for_the_filters_and_names() {
     }
 }
 
-/// In every UI language the filters keep their four rows unwrapped when the window has room for
+/// In every UI language the filters keep their five rows unwrapped when the window has room for
 /// them: the longest translated labels set the menu's width.
 #[test]
 fn the_filter_rows_stay_whole_in_every_language() {
