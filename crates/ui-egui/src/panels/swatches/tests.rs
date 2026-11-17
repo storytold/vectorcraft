@@ -178,6 +178,23 @@ fn a_clicked_color_swatch_becomes_the_color_guides_base() {
     assert_eq!(base(&app), "#2050a0");
 }
 
+/// A clicked spot color swatch, or a tint swatch of one, becomes the Color Guide's base linked to
+/// that spot color at the swatch's tint; a process color swatch clears the link.
+#[test]
+fn a_clicked_spot_color_swatch_becomes_a_linked_color_guide_base() {
+    let mut app = app();
+    let ctx = context();
+    app.run("swatch.new", json!({"name": "Ink", "color": "#0066cc", "spot": true})).unwrap();
+    app.run("swatch.new", json!({"swatch": "Ink", "tint": 40})).unwrap();
+    let spot = |app: &VectorcraftApp| app.ui.color_guide_spot.as_ref().map(|s| (s.swatch.clone(), (s.tint * 100.0).round()));
+    click_tile(&mut app, &ctx, "Ink", Modifiers::NONE, 0.0);
+    assert_eq!(spot(&app), Some(("Ink".to_string(), 100.0)));
+    click_tile(&mut app, &ctx, "Ink 40%", Modifiers::NONE, 2.0);
+    assert_eq!(spot(&app), Some(("Ink".to_string(), 40.0)), "a tint swatch: its tint of the spot color");
+    click_tile(&mut app, &ctx, "Red", Modifiers::NONE, 4.0);
+    assert_eq!(spot(&app), None, "a process color");
+}
+
 /// The hex colors of the stops of the selection's gradient fill, and its stroke's color.
 fn stops_and_stroke(app: &VectorcraftApp) -> (Vec<String>, String) {
     let (fill, stroke) = crate::panels::current_paints(app);
