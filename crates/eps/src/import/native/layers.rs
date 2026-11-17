@@ -1,5 +1,5 @@
 use super::build::{
-    PAGE_MOVE, Page, alone_scale, build, build_from, build_on_page, build_weighing, build_without_page, reid_page_art, scale_symbol_art,
+    PAGE_MOVE, Page, ReadText, alone_scale, build, build_from, build_on_page, build_weighing, build_without_page, reid_page_art, scale_symbol_art,
 };
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
@@ -13,12 +13,16 @@ use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect
 /// ([`use_symbols`]) and its variable library ([`use_variables`]) when it could be read, and with
 /// its layer tree, empty, below the page's layer when that could be read (#2033). A program in the
 /// legacy format without layers (`illustrator`, see [`program_alone`]) is read with its art on one
-/// layer; when that can't be used, the file is `visible` as it was. `names`: the encoding of names
-/// that aren't UTF-8.
-pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool, names: ai::NameEncoding) -> Imported {
+/// layer; when that can't be used, the file is `visible` as it was. The program of a `.ai`
+/// (`ai_file`) in the legacy format keeps the artboard its header gives ([`Page::Program`]).
+/// `names`: the encoding of names that aren't UTF-8.
+pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illustrator: bool, ai_file: bool, names: ai::NameEncoding) -> Imported {
+    let program_page = if ai_file { Page::Program } else { Page::Art };
     let Some(data) = editing_copy(ps) else {
-        let read =
-            illustrator.then(|| one_layer(ps)).flatten().and_then(|p| build(&p, Some(&visible.document), Page::Art, false, trust, 1.0, names).ok());
+        let read = illustrator
+            .then(|| one_layer(ps))
+            .flatten()
+            .and_then(|p| build(&p, Some(&visible.document), program_page, false, trust, 1.0, names).ok());
         return match read {
             Some((document, warnings)) => with_page_notes(document, warnings, &visible),
             None => visible,
@@ -28,11 +32,17 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
     // can't be used.
     // Private data kept apart from the program: the program's own header gives the author and
     // custom colors the private data's header may lack.
-    let read =
-        |d: &[u8]| if matches!(data, Ok(Cow::Owned(_))) { ai::read_beside(d, true, ps, true, names) } else { ai::read_over_page(d, true, names) };
+    let private = matches!(data, Ok(Cow::Owned(_)));
+    let read = |d: &[u8]| match (private, program_page) {
+        (true, _) => ai::read_beside(d, true, ps, true, names),
+        (false, Page::Program) => ai::read_program(d, true, true, names),
+        (false, _) => ai::read_over_page(d, true, names),
+    };
+    // Private data is an EPS's editing copy, whatever the file is named.
+    let page = if private { Page::Art } else { program_page };
     let (tree, result) = match data.as_deref() {
         Ok(d) => match read(d) {
-            Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), Page::Art, false, trust, 1.0)),
+            Ok(s) => (layer_tree(&s.doc.layers), build_from(s, d, Some(&visible.document), page, false, trust, 1.0)),
             Err(why) => (vec![], Err(why)),
         },
         Err(why) => (vec![], Err(why.clone())),
@@ -139,7 +149,7 @@ pub fn layered_ai_from(
         all.push(format!("{LAYERS_UNREAD} from its editing data ({why}): they come from its PDF part"));
         all
     };
-    let AiLayers { data, structure, alone } = layers;
+    let AiLayers { data, structure, alone, mut text } = layers;
     let data = match data {
         Ok(data) => data,
         Err(why) => return (visible, unread(warnings, &why), false),
@@ -184,7 +194,7 @@ pub fn layered_ai_from(
     let (mut free, mut count) = (None, 0);
     let built = structure.unwrap_or_else(|| ai::read_over_page(&data, false, names).map(Box::new)).and_then(|structure| {
         count = structure.warped_type.envelope_count();
-        build_weighing(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit, &mut free)
+        build_weighing(*structure, &data, Some(&visible), Page::Artboard, outlined, trust, unit, &mut free, &mut text)
     });
     // Layers that waited on the page only for their envelopes of type open alone, as they would
     // have without them, unless one opened live with the layers drawing as the page. Alone, each
@@ -200,7 +210,7 @@ pub fn layered_ai_from(
             if let Some(free) = free.as_deref().filter(|free| !free.is_empty()) {
                 structure.warped_type.open_alone(free, count);
             }
-            build_without_page(structure, &data, &pages, unit).ok()?.ok()
+            build_without_page(structure, &data, &pages, unit, &mut text).ok()?.ok()
         })
     {
         done.setup.bleed = visible.setup.bleed;
@@ -238,27 +248,28 @@ fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
 pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), AiLayers> {
     let data = match ai::decode_private(private) {
         Ok(data) => data,
-        Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None }),
+        Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None, text: Box::default() }),
     };
     if !has_layers(&data) {
-        return Err(AiLayers { data: Ok(data), structure: None, alone: None });
+        return Err(AiLayers { data: Ok(data), structure: None, alone: None, text: Box::default() });
     }
     // An image past the hard limits is read as an unread box, which the PDF part's art replaces.
     let structure = match ai::read_over_page(&data, false, names) {
         Ok(structure) => structure,
-        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)), alone: None }),
+        Err(why) => return Err(AiLayers { data: Ok(data), structure: Some(Err(why)), alone: None, text: Box::default() }),
     };
+    let mut text = Box::<ReadText>::default();
     // An envelope of type opens live only where the layers with it draw as the page, as the other
     // live envelopes do: the PDF part is imported to compare them with. Should none open live, the
     // layers open alone as they would have, the envelopes keeping their drawn art ([`layered_ai_from`]).
-    if structure.warped_type.has_envelopes() && alone_scale(&structure, &data, pages, unit).is_some() {
+    if structure.warped_type.has_envelopes() && alone_scale(&structure, &data, pages, unit, &mut text).is_some() {
         let alone = Some((pages.to_vec(), unit));
-        return Err(AiLayers { data: Ok(data), structure: Some(Ok(Box::new(structure))), alone });
+        return Err(AiLayers { data: Ok(data), structure: Some(Ok(Box::new(structure))), alone, text });
     }
-    match build_without_page(structure, &data, pages, unit) {
+    match build_without_page(structure, &data, pages, unit, &mut text) {
         Ok(Ok((doc, notes))) => Ok((doc, notes)),
-        Ok(_) => Err(AiLayers { data: Ok(data), structure: None, alone: None }),
-        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)), alone: None }),
+        Ok(_) => Err(AiLayers { data: Ok(data), structure: None, alone: None, text }),
+        Err(structure) => Err(AiLayers { data: Ok(data), structure: Some(Ok(structure)), alone: None, text }),
     }
 }
 
@@ -273,12 +284,14 @@ pub struct AiLayers {
     /// The pages and their unit the layers open on without the PDF part, when they wait on it only
     /// for their envelopes of type ([`ai_layers_alone`]).
     alone: Option<(Vec<(f64, f64)>, f64)>,
+    /// The text objects' frames and the text document of the editing copy, as far as they were read.
+    text: Box<ReadText>,
 }
 
 impl AiLayers {
     /// The editing copy `private` (as [`layered_ai`] takes it), decoded.
     pub fn decode(private: &[u8]) -> Self {
-        Self { data: ai::decode_private(private), structure: None, alone: None }
+        Self { data: ai::decode_private(private), structure: None, alone: None, text: Box::default() }
     }
 }
 
@@ -607,16 +620,23 @@ fn editing_copy(ps: &[u8]) -> Option<Result<Cow<'_, [u8]>, String>> {
 /// but whose program has no layers (Illustrator 3 had none; image editors still export their
 /// paths so, storytold/photocraft#6036) is read with its art on one layer. `None` when the program
 /// has no layers and isn't in the format: other PostScript isn't read as the format's operators.
+/// The program of a `.ai` (`ai_file`) has the artboard its header gives ([`Page::Program`]).
 /// `names`: the encoding of names that aren't UTF-8.
-pub(in super::super) fn program_alone(ps: &[u8], illustrator: bool, names: ai::NameEncoding) -> Option<Result<(Document, Vec<String>), String>> {
+pub(in super::super) fn program_alone(
+    ps: &[u8],
+    illustrator: bool,
+    ai_file: bool,
+    names: ai::NameEncoding,
+) -> Option<Result<(Document, Vec<String>), String>> {
     if ai::has_eps_data(ps) {
         return None;
     }
+    let page = if ai_file { Page::Program } else { Page::Art };
     if has_layers(ps) {
-        return Some(build(ps, None, Page::Art, false, false, 1.0, names));
+        return Some(build(ps, None, page, false, false, 1.0, names));
     }
     let program = illustrator.then(|| one_layer(ps)).flatten()?;
-    Some(build(&program, None, Page::Art, false, false, 1.0, names))
+    Some(build(&program, None, page, false, false, 1.0, names))
 }
 
 /// `ps` with its art (from its `%%EndSetup` to its `%%PageTrailer`, else its `%%Trailer`, else its

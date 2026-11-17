@@ -871,9 +871,15 @@ impl<'a> Reader<'a> {
     // ---- the document ----------------------------------------------------------------------
 
     /// The artboard of a file without artboards or crop marks: its size around the template
-    /// box's centre (half a point off the grid).
+    /// box's center (half a point off the grid). The program of a `.ai` of versions 3 and 4
+    /// ([`Reader::legacy_ai`], no `%AI5_FileFormat`), which don't record the artboard's size, has
+    /// VectorCraft's own default there, a US Letter artboard (612 × 792 pt); an EPS, or a newer
+    /// file without `%AI5_ArtSize`, has none (its page is its bounding box).
     fn sized_board(&self) -> Option<Rect> {
-        let ((w, h), (cx, cy)) = (self.art_size?, self.template_center?);
+        let (cx, cy) = self.template_center?;
+        let [_, _, letter_w, letter_h] = crate::import::LETTER;
+        let letter = self.legacy_ai && !self.file_format;
+        let (w, h) = self.art_size.or(letter.then_some((letter_w, letter_h)))?;
         // Rounded out, but not off a whole point the decimals in the file only just miss.
         let near = |v: f64| (v - v.round()).abs() < 1e-6;
         let (left, top) = (cx - w / 2.0, cy + h / 2.0);
@@ -926,6 +932,13 @@ impl<'a> Reader<'a> {
         } else {
             self.ensure_space()
         }
+    }
+
+    /// How many times as long [`Self::space`] makes a length in art space: a Large Canvas copy's
+    /// declared scale in the document, and 1 in a pattern's or a symbol's definition.
+    pub(super) fn space_scale(&mut self) -> f64 {
+        let k = self.space().determinant().abs().sqrt();
+        if k.is_finite() && k > 0.0 { k } else { 1.0 }
     }
 
     /// The space an image's matrix is in → where the art being read goes: [`Self::space`], and in a
@@ -1393,8 +1406,9 @@ impl<'a> Reader<'a> {
 }
 
 /// Link the objects of `links` among `nodes` to their graphic style's id, each only when it has its
-/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order). A path, which
-/// has no contents, takes the style's contents slot.
+/// style's appearance and transparency (`styles`, whose ids are 1, 2, … in order), their members
+/// and their opacity masks' art included. A path, which has no contents, takes the style's contents
+/// slot.
 fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[GraphicStyle], depth: usize) {
     if depth > MAX_DEPTH {
         return;
@@ -1412,6 +1426,11 @@ fn link_styles(nodes: &mut [Arc<Node>], links: &HashMap<NodeId, u32>, styles: &[
                 n.appearance = appearance.into();
                 n.extras_mut().graphic_style = Some(*id);
             }
+        }
+        if n.extras().mask.is_some()
+            && let Some(m) = Arc::make_mut(n).extras_mut().mask.as_mut()
+        {
+            link_styles(std::slice::from_mut(&mut m.art), links, styles, depth + 1);
         }
         if n.children().is_some_and(|c| !c.is_empty())
             && let Some(c) = Arc::make_mut(n).children_mut()

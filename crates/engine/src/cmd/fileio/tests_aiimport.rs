@@ -571,7 +571,24 @@ fn a_one_bit_rgb_image_opens_from_the_editing_data_in_its_colors() {
     assert_eq!(names(&doc.layers), ["Art"], "{r}");
     let mut found = vec![];
     doc.visit_images(|_, im| {
-        let img = image::load_from_memory(&doc.images[&im.key].bytes).unwrap().to_rgb8();
+        let img = craft_image_codecs::decode(&doc.images[&im.key].bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgb8();
         found.push(img.pixels().map(|p| p.0).collect::<Vec<_>>());
     });
     assert_eq!(found, [[[255, 0, 0], [0, 255, 0], [0, 0, 255]]], "{r}");
@@ -589,7 +606,27 @@ fn a_zero_width_stroke_in_the_editing_data_draws_a_hairline() {
         assert_eq!(names(&s.doc().unwrap().doc.layers), ["Art"], "{r}");
         let v = s.execute("document.export", &json!({"format": "png", "background": "transparent"})).unwrap();
         let png = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
-        image::load_from_memory(&png).unwrap().to_rgba8().pixels().filter(|p| p.0[3] > 0).count()
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .pixels()
+            .filter(|p| p.0[3] > 0)
+            .count()
     };
     assert!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nS\n") > 0, "the hairline draws");
     assert_eq!(drawn("0 1 1 0 1 0 0 XA\n0 w\n20 20 m\n180 80 L\nN\n"), 0, "the unstroked path draws nothing");
@@ -762,7 +799,7 @@ fn unread_pdf_part(e: &str) -> String {
 
 /// #4366: a `.ai`, or a PDF saved with the editing data, whose PDF part can't be read opens from
 /// its editing data, with a first note saying why. Pages picked, layers off or the editing data
-/// off keep the error, and so does editing data that can't be read.
+/// off keep the error. Editing data that can't be read keeps it too, followed by why.
 #[test]
 fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     let mut s = Session::new();
@@ -780,8 +817,23 @@ fn a_file_whose_pdf_part_cant_be_read_opens_from_its_editing_data() {
     }
     for (name, file) in refused_files(b"%AI12_CompressedData not zlib", ai::page_pdf()) {
         let plain = open(&mut s, name, &file, json!({"editingData": false})).unwrap_err().to_string();
-        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), plain, "{name}");
+        let both = format!("{plain}; its editing data couldn't be read either (its zlib compression is damaged)");
+        assert_eq!(open(&mut s, name, &file, json!({})).unwrap_err().to_string(), both, "{name}");
+        for p in [json!({"pages": "1"}), json!({"layers": false})] {
+            assert_eq!(open(&mut s, name, &file, p.clone()).unwrap_err().to_string(), plain, "{name}: {p}");
+        }
     }
+}
+
+/// #4366: editing data stored in a form the reader doesn't take, beside a PDF part that can't be
+/// read, is named in the error.
+#[test]
+fn the_error_says_why_the_editing_data_couldnt_be_read() {
+    let mut s = Session::new();
+    let file = ai::ai_with_private_streams(&compressed(&ai::sample_data()), ai::page_pdf(), REFUSED_CONTENT, "/Filter /Bogus ");
+    let plain = open(&mut s, "art.ai", &file, json!({"editingData": false})).unwrap_err().to_string();
+    let e = open(&mut s, "art.ai", &file, json!({})).unwrap_err().to_string();
+    assert_eq!(e, format!("{plain}; its editing data couldn't be read either (it is stored in a form that isn't read)"));
 }
 
 /// A file saved in units of 10 points (`/UserUnit 10`, as in
@@ -966,7 +1018,7 @@ fn an_ai_file_opens_its_variable_library() {
                 {"name": "v_file", "kind": "image", "bindings": 0},
                 {"name": "v_graph", "kind": "graph", "bindings": 0},
                 {"name": "v_unbound", "kind": "unknown", "bindings": 0},
-            ], "locked": true})
+            ], "locked": true, "sort": {"by": "none", "descending": false}})
         );
         let r = s.execute("dataset.list", &json!({})).unwrap();
         assert_eq!(r["active"], "ds_two", "{r}");
@@ -1158,6 +1210,91 @@ fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     assert!(e.contains("without PDF compatibility") && e.contains("zlib"), "{e}");
     let e = s.execute("file.place", &json!({"name": "plain.ai", "dataBase64": plain})).unwrap_err().to_string();
     assert!(e.contains("placeholder"), "{e}");
+}
+
+/// `document.open` with `linkPages` refuses a `.ai` saved without PDF compatibility, whose page is
+/// only a placeholder, and opens a PDF-compatible one.
+#[test]
+fn link_pages_refuses_an_ai_file_saved_without_its_pdf_part() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpages-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let file = |name: &str, page: &str| {
+        let path = d.join(name);
+        std::fs::write(&path, ai::ai(&compressed(&ai::sample_data()), page)).unwrap();
+        path.to_string_lossy().to_string()
+    };
+    let (plain, compatible) = (file("plain.ai", PLACEHOLDER), file("compatible.ai", "0 g 10 10 40 40 re f"));
+    let mut s = Session::new();
+    let e = s.execute("document.open", &json!({"path": plain, "linkPages": true})).unwrap_err().to_string();
+    assert!(e.contains("isn't a PDF or a PDF-compatible .ai file"), "{e}");
+    assert!(s.documents().is_empty(), "nothing opened");
+    s.execute("document.open", &json!({"path": compatible, "linkPages": true})).unwrap();
+    assert!(s.doc().unwrap().doc.has_placed());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// `document.open` with `linkPages` opens a PDF-compatible `.ai` asked for its crop box on its trim
+/// box, as it opens as art, showing its bleed box round the artboard, which is the document's bleed.
+#[test]
+fn link_pages_open_an_ai_file_on_its_trim_box_with_its_bleed() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagestrim-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("trimmed.ai");
+    let boxes = "/TrimBox [10 10 190 90] /BleedBox [4 2 196 98]";
+    std::fs::write(&path, ai::ai_with(&compressed(&ai::sample_data()), "0 g 10 10 40 40 re f", boxes)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let board = doc.artboards[0].rect;
+    assert_eq!((board.width(), board.height()), (180.0, 80.0), "the trim box");
+    assert_eq!(doc.setup.bleed, [8.0, 8.0, 6.0, 6.0], "top, bottom, left, right");
+    // The page shows its bleed box, so the art in the bleed is kept.
+    let placed = doc.layers[0].children().unwrap()[0].clone();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("{:?}", placed.kind) };
+    assert_eq!((p.width, p.height, p.page_box), (192.0, 96.0, vectorcraft_doc::PageBox::Bleed));
+    assert_eq!(p.xf.translation(), vectorcraft_geom::Vec2::new(-6.0, -8.0), "the trim box on the artboard");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn link_pages_on_their_trim_boxes_keep_the_bleed_between_the_artboards() {
+    // Two 100 pt trim boxes: the first with 60 pt of bleed on each side, the second with 80 pt on
+    // its left, more than the largest document bleed (72 pt).
+    let entries = format!("/PieceInfo << /Illustrator << /Private << /AIPrivateData1 {} 0 R /NumBlock 1 >> >> >>", first_extra(2));
+    let first = PdfPage {
+        bleed: Some([0.0, 0.0, 220.0, 220.0]),
+        trim: Some([60.0, 60.0, 160.0, 160.0]),
+        entries,
+        ..PdfPage::new(220.0, 220.0, "0 g 0 0 220 220 re f")
+    };
+    let second = PdfPage {
+        bleed: Some([0.0, 0.0, 240.0, 220.0]),
+        trim: Some([80.0, 60.0, 180.0, 160.0]),
+        ..PdfPage::new(240.0, 220.0, "0 g 0 0 240 220 re f")
+    };
+    let d = std::env::temp_dir().join(format!("vc-ailinkpagesgap-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("pages.ai");
+    std::fs::write(&path, pdf_with(&[first, second], &["<< /Length 4 >>\nstream\ndata\nendstream"], None)).unwrap();
+    let path = path.to_string_lossy().to_string();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path, "linkPages": true})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.setup.bleed, [60.0, 60.0, 72.0, 60.0], "top, bottom, left, right");
+    // The first page's bleed ends at 160; the second's starts 36 pt later, 80 pt left of its trim box.
+    let boards: Vec<(f64, f64)> = doc.artboards.iter().map(|a| (a.rect.x0, a.rect.x1)).collect();
+    assert_eq!(boards, [(0.0, 100.0), (276.0, 376.0)]);
+    let shown: Vec<f64> = doc
+        .layers
+        .iter()
+        .map(|l| match &l.children().unwrap()[0].kind {
+            NodeKind::PlacedDocument(p) => p.xf.translation().x,
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_eq!(shown, [-60.0, 196.0], "each page's bleed box round its artboard");
+    let _ = std::fs::remove_dir_all(&d);
 }
 
 /// A page of text alone, as text-only art has in its PDF part: no path is painted.

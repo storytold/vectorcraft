@@ -297,9 +297,10 @@ fn topmost(app: &VectorcraftApp) -> Option<vectorcraft_doc::NodeId> {
     app.session.active().and_then(|st| st.selection.in_paint_order(&st.doc).last().copied())
 }
 
-/// What Align aligns to: the key object or the key guide (#2143) while there is one (a click on
-/// an object of the selection makes it the key, and Align to Key Object makes the topmost one the
-/// key, or a guide selected with a single object), else the stored Align To choice, Selection or
+/// What Align aligns to: the key object, the key guide (#2143) or the key anchor while there is one
+/// (a click on an object of the selection makes it the key, and Align to Key Object makes the
+/// topmost one the key, or a guide selected with a single object; a Shift-click with Direct
+/// Selection makes the point it adds the key anchor), else the stored Align To choice, Selection or
 /// Artboard. The Distribute Objects and Distribute Spacing buttons send it as their `to`.
 fn align_to(app: &VectorcraftApp) -> AlignTo {
     if has_key(app) { AlignTo::Key } else { app.ui.align_to }
@@ -308,13 +309,21 @@ fn align_to(app: &VectorcraftApp) -> AlignTo {
 /// The Align To choices of the Align panel and of the Control bar's Align To menu, in their order.
 const ALIGN_TO: [AlignTo; 3] = [AlignTo::Selection, AlignTo::Key, AlignTo::Artboard];
 
-/// The icon and the translated name of Align To choice `v`.
-fn align_to_icon_name(v: AlignTo) -> (&'static str, &'static str) {
+/// The icon and the translated name of Align To choice `v`; `anchor`: the key is an anchor point
+/// (Direct Selection), and the key choice is named Align to Key Anchor.
+fn align_to_icon_name(v: AlignTo, anchor: bool) -> (&'static str, &'static str) {
     match v {
         AlignTo::Selection => ("dc-alignto-selection", tl!("Align to Selection")),
+        AlignTo::Key if anchor => ("dc-alignto-key", tl!("Align to Key Anchor")),
         AlignTo::Key => ("dc-alignto-key", tl!("Align to Key Object")),
         AlignTo::Artboard => ("dc-alignto-artboard", tl!("Align to Artboard")),
     }
+}
+
+/// Whether the key is an anchor point: the last of two or more anchor points that a Shift-click
+/// with Direct Selection added ([`vectorcraft_doc::Selection::key_anchor`]).
+fn key_is_anchor(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| st.selection.key_anchor.is_some())
 }
 
 /// The Align To choice that the Align panel and the Control bar show chosen: Artboard while one
@@ -386,7 +395,8 @@ const ALIGN_TO_ARROW: f32 = 14.0;
 pub(crate) fn align_to_menu(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     let t = crate::theme::Tokens::get(ui.ctx());
     let shown = shown_align_to(app);
-    let (icon, name) = align_to_icon_name(shown);
+    let anchor = key_is_anchor(app);
+    let (icon, name) = align_to_icon_name(shown, anchor);
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(align_to_menu_width(size), size), egui::Sense::click());
     if resp.hovered() {
         ui.painter().rect_filled(rect, egui::CornerRadius::same(5), t.hover);
@@ -403,7 +413,7 @@ pub(crate) fn align_to_menu(app: &mut VectorcraftApp, ui: &mut Ui, size: f32) {
     let picked = egui::Popup::menu(&resp).show(|ui| {
         let mut picked = None;
         for v in ALIGN_TO {
-            if menu_item(ui, align_to_icon_name(v).1, can_choose(app, v), shown == v) {
+            if menu_item(ui, align_to_icon_name(v, anchor).1, can_choose(app, v), shown == v) {
                 picked = Some(v);
             }
         }
@@ -485,9 +495,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             widgets::subheader(ui, tl!("Align To:"));
             // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
             let shown = shown_align_to(app);
+            let anchor = key_is_anchor(app);
             ui.horizontal(|ui| {
                 for v in ALIGN_TO {
-                    let (icon, tip) = align_to_icon_name(v);
+                    let (icon, tip) = align_to_icon_name(v, anchor);
                     if widgets::icon_button_enabled(ui, icon, tip, shown == v, can_choose(app, v), 28.0).clicked() {
                         choose_align_to(app, v);
                     }

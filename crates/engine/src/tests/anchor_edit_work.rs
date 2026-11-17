@@ -1,6 +1,7 @@
 //! An edit of one anchor of a long selected path does not measure the path's segments
-//! ([`vectorcraft_geom::path::measured_segments`]) to check that it stays within the canvas, and
-//! an edit that leaves the anchor as it was records no undo step.
+//! ([`vectorcraft_geom::path::measured_segments`]) to check that it stays within the canvas, its
+//! undo step keeps the chunk of anchors it changed rather than a copy of every anchor, and an edit
+//! that leaves the anchor as it was records no undo step.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -71,6 +72,46 @@ fn one_anchor_edit_of_a_long_path_measures_few_segments() {
             s.execute("edit.undo", &json!({})).unwrap();
         }
         assert_eq!(anchor(&s, id, 5), a);
+    }
+}
+
+/// Most bytes the undo step of one anchor edit may keep, however many anchors the path has: about
+/// one chunk of anchors and the node, with room for the chunk tables of 200,000 anchors.
+const MOST_STEP_BYTES: usize = 48 * 1024;
+
+#[test]
+fn one_anchor_edit_of_a_long_path_keeps_one_chunk_in_its_undo_step() {
+    for n in [10_000, 200_000] {
+        let (mut s, id) = long_path(n);
+        let original = s.doc().unwrap().doc.clone();
+        let edits = [
+            ("path.moveAnchor", json!({"id": id.0, "anchor": 5, "x": 3, "y": 50})),
+            ("path.setHandle", json!({"id": id.0, "anchor": 5, "which": "out", "x": 4, "y": 40})),
+            ("path.moveAnchors", json!({"dx": 1, "dy": 0})),
+            ("object.nudge", json!({"dx": 1, "dy": 0})),
+        ];
+        let mut docs = vec![];
+        for (cmd, p) in &edits {
+            s.execute(cmd, p).unwrap();
+            let step = s.doc().unwrap().history.undo.last().unwrap().bytes;
+            assert!(step <= MOST_STEP_BYTES, "{cmd} on {n} anchors kept {step} bytes in its undo step");
+            docs.push(s.doc().unwrap().doc.clone());
+        }
+        assert_eq!(anchor(&s, id, 5).p, Point::new(5.0, 50.0));
+        assert_eq!(anchor(&s, id, 5).h_out, Point::new(6.0, 40.0));
+        assert_eq!(anchor(&s, id, n - 1), original.node(id).unwrap().path_data().unwrap().subpaths[0].anchors[n - 1]);
+        // Undo gives back each version exactly, and redo the edits, each step as small.
+        for k in (0..edits.len()).rev() {
+            s.execute("edit.undo", &json!({})).unwrap();
+            let expected = if k == 0 { &original } else { &docs[k - 1] };
+            assert!(s.doc().unwrap().doc == *expected, "undo of {} on {n} anchors", edits[k].0);
+            let redo = s.doc().unwrap().history.redo.last().unwrap().bytes;
+            assert!(redo <= MOST_STEP_BYTES, "redo of {} on {n} anchors keeps {redo} bytes", edits[k].0);
+        }
+        for (k, doc) in docs.iter().enumerate() {
+            s.execute("edit.redo", &json!({})).unwrap();
+            assert!(s.doc().unwrap().doc == *doc, "redo of {} on {n} anchors", edits[k].0);
+        }
     }
 }
 

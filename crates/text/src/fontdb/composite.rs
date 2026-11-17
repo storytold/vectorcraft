@@ -1,21 +1,31 @@
 //! Composite fonts (Type › Composite Fonts…) in the font database: each is listed first in the
 //! font menus and resolves to its base (Kanji) font, and layout sets each character of type in one
-//! in the font of the character's class ([`FontDb::composite_split`]).
+//! in the font of the custom character set that lists it, else of its class
+//! ([`FontDb::composite_split`]).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::marker::PhantomData;
+use std::sync::Weak;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use unicode_segmentation::UnicodeSegmentation;
-use vectorcraft_doc::{CharClass, CompositeFont, TextObject, TextRun};
+use vectorcraft_doc::text::CompositeClasses;
+use vectorcraft_doc::{CharClass, CompositeClass, CompositeFont, CompositePart, TextObject, TextRun};
 
 use super::face::FALLBACK_FAMILY;
 use super::{Arc, FontDb, FontFace, FontMatch};
 
 /// A face [`FontDb::resolve`] found and how it matched.
 type Resolved = Option<(Arc<FontFace>, FontMatch)>;
+
+/// The base class: type without characters and anything no part names takes its part.
+const KANJI: CompositeClass = CompositeClass::Fixed(CharClass::Kanji);
+
+/// Lookups of the custom character sets of composite fonts, by the address of the font's `Arc`,
+/// each with a weak reference that tells when that font has gone and the address may be reused.
+pub(super) type CustomClasses = HashMap<usize, (Weak<CompositeFont>, Arc<CompositeClasses>)>;
 
 thread_local! {
     /// The composite fonts the guards of this thread lend ([`FontDb::lend_composite_fonts`]), the
@@ -41,15 +51,25 @@ struct Loan {
     print: u64,
 }
 
-/// Feed composite font `f`'s name and parts to `h`.
+/// Feed composite font `f`'s name, parts and custom character sets to `h`.
 fn hash_font(f: &CompositeFont, h: &mut DefaultHasher) {
     f.name.hash(h);
     let p = &f.parts;
     for part in [&p.kanji, &p.kana, &p.punctuation, &p.symbols, &p.roman, &p.numerals] {
-        (&part.font, &part.style, part.scale_at_center).hash(h);
-        for v in [part.size, part.baseline, part.h_scale, part.v_scale] {
-            v.to_bits().hash(h);
-        }
+        hash_part(part, h);
+    }
+    f.custom.len().hash(h);
+    for s in &f.custom {
+        (&s.name, &s.characters).hash(h);
+        hash_part(&s.part, h);
+    }
+}
+
+/// Feed part `part`'s font and values to `h`.
+fn hash_part(part: &CompositePart, h: &mut DefaultHasher) {
+    (&part.font, &part.style, part.scale_at_center).hash(h);
+    for v in [part.size, part.baseline, part.h_scale, part.v_scale] {
+        v.to_bits().hash(h);
     }
 }
 
@@ -136,8 +156,8 @@ impl FontDb {
         .unwrap_or(g)
     }
 
-    /// The face composite font `name` sets character `c` in (its class's part's), and whether
-    /// that part's font is missing. `None` when `name` is no composite font.
+    /// The face composite font `name` sets character `c` in (its custom set's or its class's
+    /// part's), and whether that part's font is missing. `None` when `name` is no composite font.
     pub fn composite_face(&self, name: &str, c: char) -> Option<(bool, u32)> {
         self.composite_resolve(name, c).map(|(face, m)| (m == FontMatch::Missing, face.id()))
     }
@@ -149,13 +169,40 @@ impl FontDb {
         self.composite_resolve(name, first)
     }
 
-    /// The face composite font `name` sets character `c` in (its class's part's), and how that
-    /// part's font matched ([`FontDb::resolve`]). `None` when `name` is no composite font, or no
-    /// font at all is loaded.
+    /// The face composite font `name` sets character `c` in (its custom set's or its class's
+    /// part's), and how that part's font matched ([`FontDb::resolve`]). `None` when `name` is no
+    /// composite font, or no font at all is loaded.
     pub fn composite_resolve(&self, name: &str, c: char) -> Option<(Arc<FontFace>, FontMatch)> {
         let f = self.composite_font(name)?;
-        let (family, style) = self.part_font(&f, CharClass::of(c));
+        let (family, style) = self.part_font(&f, self.composite_class(&f, c));
         self.resolve(&family, &style)
+    }
+
+    /// Where composite font `f` sets character `c`: the last custom set that lists it, else its
+    /// class. The lookup of `f`'s sets is built once and kept while `f` lives.
+    fn composite_class(&self, f: &Arc<CompositeFont>, c: char) -> CompositeClass {
+        if f.custom.is_empty() {
+            return CompositeClass::Fixed(CharClass::of(c));
+        }
+        self.custom_lookup(f).of(c)
+    }
+
+    /// The lookup of composite font `f`'s custom character sets, built when first asked for.
+    fn custom_lookup(&self, f: &Arc<CompositeFont>) -> Arc<CompositeClasses> {
+        if f.custom.is_empty() {
+            return Arc::default();
+        }
+        let key = Arc::as_ptr(f) as usize;
+        let mut cache = self.custom_classes.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((font, lookup)) = cache.get(&key)
+            && font.upgrade().is_some_and(|g| Arc::ptr_eq(&g, f))
+        {
+            return lookup.clone();
+        }
+        cache.retain(|_, (font, _)| font.strong_count() > 0);
+        let lookup = Arc::new(f.classes());
+        cache.insert(key, (Arc::downgrade(f), lookup.clone()));
+        lookup
     }
 
     /// The fonts (family, style) composite font `name` sets `text` in: those of the parts its
@@ -164,15 +211,16 @@ impl FontDb {
     /// no composite font.
     pub fn composite_fonts_for(&self, name: &str, text: &str) -> Option<Vec<(String, String)>> {
         let f = self.composite_font(name)?;
-        let mut classes: Vec<CharClass> = Vec::new();
+        let lookup = self.custom_lookup(&f);
+        let mut classes: Vec<CompositeClass> = Vec::new();
         for g in text.graphemes(true) {
-            let c = g.chars().next().map_or(CharClass::Kanji, CharClass::of);
+            let c = g.chars().next().map_or(KANJI, |c| lookup.of(c));
             if !classes.contains(&c) {
                 classes.push(c);
             }
         }
         if classes.is_empty() {
-            classes.push(CharClass::Kanji);
+            classes.push(KANJI);
         }
         let mut fonts: Vec<(String, String)> = Vec::with_capacity(classes.len());
         for c in classes {
@@ -196,8 +244,9 @@ impl FontDb {
             FontMatch::Style => 1,
             FontMatch::Missing => 2,
         };
-        let mut faces: Vec<(CharClass, Resolved)> = Vec::new();
-        let mut face_of = |class: CharClass| {
+        let lookup = self.custom_lookup(&f);
+        let mut faces: Vec<(CompositeClass, Resolved)> = Vec::new();
+        let mut face_of = |class: CompositeClass| {
             if let Some((_, found)) = faces.iter().find(|(c, _)| *c == class) {
                 return found.clone();
             }
@@ -213,7 +262,7 @@ impl FontDb {
             graphemes.push("");
         }
         for g in graphemes {
-            let class = g.chars().next().map_or(CharClass::Kanji, CharClass::of);
+            let class = g.chars().next().map_or(KANJI, |c| lookup.of(c));
             let found = face_of(class);
             let m = found.as_ref().map_or(FontMatch::Missing, |(_, m)| *m);
             if worst.as_ref().is_none_or(|(w, _)| rank(m) > rank(*w)) {
@@ -307,10 +356,11 @@ impl FontDb {
         LentCompositeFonts { number: pushed.then_some(number), thread: PhantomData }
     }
 
-    /// The family and style composite font `f` sets characters of `class` in: its part's, or the
-    /// fallback font's when that part names a composite font.
-    fn part_font(&self, f: &CompositeFont, class: CharClass) -> (String, String) {
-        let p = f.parts.get(class);
+    /// The family and style composite font `f` sets characters of `class` in: its part's (the
+    /// Kanji part's for a custom set it doesn't have), or the fallback font's when that part names
+    /// a composite font.
+    fn part_font(&self, f: &CompositeFont, class: CompositeClass) -> (String, String) {
+        let p = f.part(class).unwrap_or(&f.parts.kanji);
         if self.composite_font(&p.font).is_some() { (FALLBACK_FAMILY.to_string(), "Regular".to_string()) } else { (p.font.clone(), p.style.clone()) }
     }
 
@@ -326,11 +376,13 @@ impl FontDb {
     /// names a composite font too. `None` when `name` is no composite font.
     pub(super) fn composite_base(&self, name: &str) -> Option<(String, String)> {
         let f = self.composite_font(name)?;
-        Some(self.part_font(&f, CharClass::Kanji))
+        Some(self.part_font(&f, KANJI))
     }
 
-    /// `t` with each run set in a composite font split into runs of one [`CharClass`] each, set in
-    /// that class's font: its size and baseline shift from the part's size and baseline (in
+    /// `t` with each run set in a composite font split into runs of one custom character set or
+    /// [`CharClass`] each (a set listing a character takes it ahead of its class, the font's last
+    /// such set when several do), set in that set's or class's font: its size and baseline shift
+    /// from the part's size and baseline (in
     /// percent of the run's size), its scales multiplied by the part's, and Kana scaled at the
     /// center raised so the em box's center stays where it was. Each grapheme cluster goes with
     /// its first character. Also the index of the run of `t` each run came from. `None` when no run
@@ -352,10 +404,11 @@ impl FontDb {
                 from.push(i);
                 continue;
             };
+            let lookup = self.custom_lookup(font);
             let mut start = 0;
             let mut class = None;
             for (at, g) in r.text.grapheme_indices(true) {
-                let c = g.chars().next().map_or(CharClass::Kanji, CharClass::of);
+                let c = g.chars().next().map_or(KANJI, |c| lookup.of(c));
                 if let Some(k) = class
                     && k != c
                 {
@@ -365,16 +418,16 @@ impl FontDb {
                 }
                 class = Some(c);
             }
-            runs.push(self.composite_run(r.text.get(start..).unwrap_or_default(), r, font, class.unwrap_or(CharClass::Kanji)));
+            runs.push(self.composite_run(r.text.get(start..).unwrap_or_default(), r, font, class.unwrap_or(KANJI)));
             from.push(i);
         }
         Some((TextObject { runs, ..t.clone() }, from))
     }
 
-    /// Characters `text` of run `r` (set in composite font `font`), all of class `class`, as a run
-    /// set in that class's part.
-    fn composite_run(&self, text: &str, r: &TextRun, font: &CompositeFont, class: CharClass) -> TextRun {
-        let p = font.parts.get(class);
+    /// Characters `text` of run `r` (set in composite font `font`), all of class or set `class`,
+    /// as a run set in that class's or set's part.
+    fn composite_run(&self, text: &str, r: &TextRun, font: &CompositeFont, class: CompositeClass) -> TextRun {
+        let p = font.part(class).unwrap_or(&font.parts.kanji);
         let mut st = r.style.clone();
         let base = st.size;
         let (family, style) = self.part_font(font, class);
@@ -386,7 +439,7 @@ impl FontDb {
         st.baseline_shift += base * p.baseline / 100.0;
         st.h_scale *= p.h_scale / 100.0;
         st.v_scale *= p.v_scale / 100.0;
-        if class == CharClass::Kana && p.scale_at_center && p.v_scale != 100.0 {
+        if class == CompositeClass::Fixed(CharClass::Kana) && p.scale_at_center && p.v_scale != 100.0 {
             let centre = self.style_face(&st).map_or(0.38, |f| f.ideographic_centre());
             st.baseline_shift += st.size * centre * (1.0 - p.v_scale / 100.0);
         }

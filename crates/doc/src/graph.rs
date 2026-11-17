@@ -140,7 +140,7 @@ impl crate::Document {
 /// the text in graphs): the value axis numbers, the category labels (category axis, radar spokes, pie names) and the
 /// legend labels (beside or across the top, or in pie wedges). `None` draws the default 9 pt black. The `*_para`
 /// fields are the paragraph attributes each kind keeps the same way (`None`: the defaults); the graph still sets each
-/// label's alignment.
+/// label's alignment. [`Self::axis_rows`] and [`Self::ring_rows`] are the rows the graph's lines keep the same way.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LabelStyles {
@@ -180,6 +180,14 @@ pub struct LabelStyles {
     /// The object fill and stroke rows the legend labels keep, as [`Self::values_rows`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub legend_rows: Option<LabelRows>,
+    /// The object rows the axis lines and tick marks keep once set with the paint, stroke or Appearance controls
+    /// ([`LabelRows`]). They replace the default 0.5 pt black stroke; kept rows without paint draw none. `None`: the
+    /// default stroke.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub axis_rows: Option<LabelRows>,
+    /// The object rows the rings of a radar graph keep, as [`Self::axis_rows`]. `None`: the default 0.25 pt gray stroke.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ring_rows: Option<LabelRows>,
 }
 
 impl LabelStyles {
@@ -483,6 +491,10 @@ pub struct GraphSpec {
     pub first_column_in_front: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub filled_lines: bool,
+    /// Graph Type › Line Width: how wide Draw Filled Lines draws a line, in points. `None` draws
+    /// [`DEFAULT_FILLED_LINE_WIDTH`]; see [`Self::filled_line_width`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_width: Option<f64>,
     /// Graph Type › Add Drop Shadow (behind columns, bars, lines and pie wedges) and Add Legend Across Top (the
     /// legend in rows above the plot instead of a column on its right).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -555,6 +567,24 @@ fn at_most_one(n: &usize) -> bool {
 
 fn is_zero(n: &usize) -> bool {
     *n == 0
+}
+
+/// Graph Type › Line Width: the width Draw Filled Lines draws a line at when the graph sets none, and the least and
+/// greatest widths a graph takes, in points.
+pub const DEFAULT_FILLED_LINE_WIDTH: f64 = 3.0;
+pub const MIN_FILLED_LINE_WIDTH: f64 = 0.01;
+pub const MAX_FILLED_LINE_WIDTH: f64 = 1000.0;
+
+/// The weight of the black outline Draw Filled Lines draws around each band, in points.
+pub const FILLED_LINE_OUTLINE_WIDTH: f64 = 0.25;
+
+impl GraphSpec {
+    /// How wide Draw Filled Lines draws a line, in points: [`Self::line_width`], else [`DEFAULT_FILLED_LINE_WIDTH`]. A
+    /// width a file gives outside [`MIN_FILLED_LINE_WIDTH`] to [`MAX_FILLED_LINE_WIDTH`], or not finite, draws the
+    /// default.
+    pub fn filled_line_width(&self) -> f64 {
+        self.line_width.filter(|w| (MIN_FILLED_LINE_WIDTH..=MAX_FILLED_LINE_WIDTH).contains(w)).unwrap_or(DEFAULT_FILLED_LINE_WIDTH)
+    }
 }
 
 /// Edge-to-Edge Lines for a graph saved before the option existed: on, as it was drawn then.
@@ -696,6 +726,7 @@ impl Default for GraphSpec {
             first_row_in_front: false,
             first_column_in_front: false,
             filled_lines: false,
+            line_width: None,
             drop_shadow: false,
             legend_across_top: false,
             pie_legend_in_wedges: false,

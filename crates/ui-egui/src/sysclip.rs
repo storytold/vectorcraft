@@ -189,7 +189,10 @@ impl VectorcraftApp {
             }
             return;
         }
-        let (clip, svg, pdf) = (self.session.clipboard.clone(), self.session.prefs.copy_as_svg, self.session.prefs.copy_as_pdf);
+        // An SVG that would name a linked image's file outside the read roots of the automation
+        // that asked for the Copy is left out (decided now: the formats are made later).
+        let svg = self.session.prefs.copy_as_svg && !self.session.clipboard_svg_refused();
+        let (clip, pdf) = (self.session.clipboard.clone(), self.session.prefs.copy_as_pdf);
         let latest = self.clipboard_publishing.latest.clone();
         let n = latest.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
         self.clipboard_publishing.pending = true;

@@ -205,11 +205,13 @@ fn show_in_folder_needs_a_saved_document_and_a_file_manager() {
     assert_eq!(*shown.borrow(), ["/art/a.vectorcraft"]);
 }
 
+/// The palette lists neither the old alias nor `file.documentColorMode`, which a pick can't run
+/// without a mode; the CMYK and RGB menu items run the one command.
 #[test]
-fn the_palette_lists_document_color_mode_once() {
+fn document_color_mode_is_one_command() {
     let items = palette::items();
     let ids: Vec<&str> = items.iter().map(|(_, id, _)| id.as_str()).filter(|id| id.to_ascii_lowercase().contains("documentcolormode")).collect();
-    assert_eq!(ids, ["file.documentColorMode"]);
+    assert!(ids.is_empty(), "{ids:?}");
     let mut app = app();
     app.run("file.new", json!({})).unwrap();
     let entries = menus::menu_entries(&app);
@@ -352,6 +354,37 @@ fn a_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_
     assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::confirm::REPLACE_FILES));
     assert_eq!(std::fs::read(&sibling).unwrap(), saved);
     assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+fn file_save_does_not_replace_the_file_read_from_through_a_file_written_beside_the_path() {
+    let d = dir("lossy-beside-save");
+    let path = d.join("Art.eps").to_string_lossy().to_string();
+    let mut app = app();
+    checks_files_there(&mut app);
+    app.run("file.new", json!({"width": 200, "height": 100, "artboards": 2})).unwrap();
+    rect(&mut app);
+    let options = json!({"useArtboards": true, "previewFormat": "none", "thumbnails": false});
+    let _ = app.run("file.saveAs", json!({"path": path, "options": options}));
+    crate::background::wait_all(&mut app);
+    let siblings = artboard_files(&d);
+    assert_eq!(siblings.len(), 2, "{siblings:?}");
+    let sibling = siblings[0].clone();
+    let saved = std::fs::read(&sibling).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(sibling.clone());
+    st.import_losses = vec!["hidden type".into()];
+    rect(&mut app);
+    // File > Save to the document's own file reuses its options, so it writes the artboard files
+    // again; the one the document was read from is refused, as on Save As.
+    let _ = app.run("file.save", json!({}));
+    crate::background::wait_all(&mut app);
+    assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::confirm::REPLACE_FILES));
+    assert_eq!(std::fs::read(&sibling).unwrap(), saved);
+    assert!(!std::path::Path::new(&path).exists(), "no file of the set is written when one is refused");
+    assert!(app.session.active().unwrap().is_dirty());
     let _ = std::fs::remove_dir_all(d);
 }
 

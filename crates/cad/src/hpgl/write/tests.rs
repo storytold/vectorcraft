@@ -747,6 +747,86 @@ fn a_clipping_path_is_drawn_where_it_paints() {
     });
     let t = text(&plot(&open_doc, &opts(&open_doc)));
     assert!(t.ends_with("SP2;PU282,1129;PD564,1129,564,847,282,1129;PU;SP0;"), "{t}");
+    // A stroke with a geometry effect of its own is drawn once, over the art it clips, in its color.
+    let moved = doc_with(|d| {
+        let (blue, red) = (Paint::solid(Color::rgb8(0, 0, 255)), Paint::solid(Color::rgb8(255, 0, 0)));
+        let mut clip = Node::path(d.alloc_id(), rect(20.0, 20.0, 40.0, 40.0), Appearance::basic(blue, red, 1.0));
+        for item in &mut clip.appearance.items {
+            if let AppearanceItem::Stroke(s) = item {
+                let params = serde_json::json!({"moveH": 5});
+                s.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+            }
+        }
+        let clipped = Node::path(d.alloc_id(), line((0.0, 30.0), (200.0, 30.0)), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0));
+        let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(clipped)]);
+        if let NodeKind::Group { clip, .. } = &mut group.kind {
+            *clip = true;
+        }
+        vec![group]
+    });
+    assert_eq!(plot(&moved, &opts(&moved)).pens, [[0, 0, 0], [255, 0, 0]]);
+    // So are the stroke's pieces when an effect around them put them in a group of their own.
+    let grouped = |opacity: f32| {
+        doc_with(|d| {
+            // One path for each, carrying only that fill or stroke.
+            let piece = |d: &mut Document, fill: bool| {
+                let mut a = Appearance::basic(Paint::solid(Color::rgb8(0, 0, 255)), Paint::solid(Color::rgb8(255, 0, 0)), 1.0);
+                a.items.retain(|i| matches!(i, AppearanceItem::Fill(_)) == fill);
+                Arc::new(Node::path(d.alloc_id(), rect(20.0, 20.0, 40.0, 40.0), a))
+            };
+            let (fill, stroke) = (piece(d, true), piece(d, false));
+            let mut copies = Node::group(d.alloc_id(), vec![stroke]);
+            copies.opacity = opacity;
+            let mut clip = Node::group(d.alloc_id(), vec![fill, Arc::new(copies)]);
+            clip.extras_mut().clip_pieces = true;
+            let black = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+            let clipped = Node::path(d.alloc_id(), line((0.0, 30.0), (200.0, 30.0)), black);
+            let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(clipped)]);
+            if let NodeKind::Group { clip, .. } = &mut group.kind {
+                *clip = true;
+            }
+            vec![group]
+        })
+    };
+    let shown = grouped(1.0);
+    assert_eq!(plot(&shown, &opts(&shown)).pens, [[0, 0, 0], [255, 0, 0]]);
+    // In a group at 0% opacity they are not drawn, and the clipping path is drawn in its fill.
+    let faded = grouped(0.0);
+    assert_eq!(plot(&faded, &opts(&faded)).pens, [[0, 0, 255], [0, 0, 0]]);
+    // An open clipping path with a fill is drawn closed also where its stroke's effect moved it.
+    let open_moved = |fill_opacity: f32| {
+        doc_with(|d| {
+            let mut open = BezPath::new();
+            open.move_to((20.0, 20.0));
+            open.line_to((40.0, 20.0));
+            open.line_to((40.0, 40.0));
+            let a = Appearance::basic(Paint::solid(Color::rgb8(0, 0, 255)), Paint::solid(Color::rgb8(255, 0, 0)), 1.0);
+            let mut clip = Node::path(d.alloc_id(), PathData::from_bezpath(&open), a);
+            for item in &mut clip.appearance.items {
+                match item {
+                    AppearanceItem::Fill(f) => f.opacity = fill_opacity,
+                    AppearanceItem::Stroke(s) => {
+                        let params = serde_json::json!({"moveH": 5});
+                        s.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+                    }
+                }
+            }
+            let black = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+            let clipped = Node::path(d.alloc_id(), line((0.0, 30.0), (200.0, 30.0)), black);
+            let mut group = Node::group(d.alloc_id(), vec![Arc::new(clip), Arc::new(clipped)]);
+            if let NodeKind::Group { clip, .. } = &mut group.kind {
+                *clip = true;
+            }
+            vec![group]
+        })
+    };
+    let filled = open_moved(1.0);
+    let t = text(&plot(&filled, &opts(&filled)));
+    assert!(t.ends_with("SP2;PU353,1129;PD635,1129,635,847,353,1129;PU;SP0;"), "{t}");
+    // A fill at 0% opacity does not close it.
+    let unfilled = open_moved(0.0);
+    let t = text(&plot(&unfilled, &opts(&unfilled)));
+    assert!(t.ends_with("SP2;PU353,1129;PD635,1129,635,847;PU;SP0;"), "{t}");
 }
 
 /// A symbol `art` and an instance of it at its place.

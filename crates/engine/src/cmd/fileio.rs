@@ -39,7 +39,7 @@ pub mod jxlread;
 mod legacy_ai;
 mod load;
 mod mesh3d;
-pub(crate) use load::{MAX_RASTER_ALLOC, size_note};
+pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, png_clip, size_note};
 mod heifread;
 mod hpgl;
 mod jp2read;
@@ -54,6 +54,7 @@ pub mod ppi;
 pub mod progress;
 mod psdlayers;
 pub mod psdread;
+mod psdslices;
 mod pxrread;
 mod save;
 mod screens;
@@ -91,7 +92,11 @@ pub(crate) use mesh3d::{mesh_file_names, mesh_files};
 pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, render as render_file_name};
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
+pub(crate) use pdfimport::opened_page_document;
 pub use pdfimport::{LoadOptions, page_document};
+pub(crate) use psdlayers::import_active as psd_layers;
+pub use psdlayers::{PsdInfo, info as psd_info};
+pub(crate) use psdslices::over as psd_slices;
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
 pub use save::{
@@ -126,7 +131,8 @@ mod formats;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::list_dir;
-pub use access::{check_linked_scripts, write_file_with, write_save_file, write_save_file_with};
+pub(crate) use access::{check_images_in, check_scripts_of};
+pub use access::{check_linked_images, check_linked_scripts, write_file_with, write_save_file, write_save_file_with};
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests_readonly;
@@ -238,6 +244,8 @@ mod tests_psd;
 mod tests_psdlayers;
 #[cfg(test)]
 mod tests_psdread;
+#[cfg(test)]
+mod tests_psdslices;
 
 #[cfg(test)]
 mod tests_heifread;

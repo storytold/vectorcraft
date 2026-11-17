@@ -995,7 +995,7 @@ pub(crate) fn preview(app: &mut crate::VectorcraftApp, ui: &mut egui::Ui, d: &mu
 
 /// As [`preview`], returning the command's result only when a new preview succeeds.
 /// A dialog can retain a small summary (such as point counts) in its private fields.
-pub(super) fn preview_result(
+pub(crate) fn preview_result(
     app: &mut crate::VectorcraftApp,
     ui: &mut egui::Ui,
     d: &mut Dialog,

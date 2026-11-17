@@ -538,8 +538,8 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
 /// live-effect plug-in) with parameters it takes, filled in to their defaults. A record the object
 /// already had stays as it was. An object takes one 3D effect (its fills' and strokes' own
 /// counted), which must fit it, and the `textureImage` of an effect with Load Texture (Glass,
-/// Texturizer) comes as the effect stores it, never as a file to read: a plug-in can't have the
-/// host read one.
+/// Texturizer, Rough Pastels) comes as the effect stores it, never as a file to read: a plug-in
+/// can't have the host read one.
 fn admit_effects(fx: &[Effect], n: &Node) -> std::result::Result<Vec<Effect>, String> {
     admit_effects_for("plugin.run", fx, n)
 }

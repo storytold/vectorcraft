@@ -4,7 +4,8 @@
 //! Fields: `mode` (`open` | `place`), `name`, `path?`, `pageCount`, `page` (the page shown, and the
 //! one placed; 1-based), `allPages`, `range` and `linkPages` (open: Import PDF Pages as Links, for
 //! a file read from a path and opened without a password), `cropTo` and `password`. `__locked` is set
-//! until the password is accepted: OK then unlocks the file. `__place` keeps the other `file.place`
+//! until the password is accepted: OK then unlocks the file, and with `__passwordOnly` (Place with
+//! Show Import Options off) places its first page at once. `__place` keeps the other `file.place`
 //! params (Link, Template, `at`…). The file's bytes stay out of the fields, in
 //! [`crate::state::UiState::dialog_file`].
 
@@ -168,6 +169,33 @@ pub fn offer_place(app: &mut VectorcraftApp, p: &Value) -> bool {
     offer(app, &name, &bytes, path, Some(p))
 }
 
+/// [`offer_place`] when Show Import Options is off: asks (true) only for the password of an
+/// encrypted PDF given no `password`, which nothing else opens, and places its first page (or
+/// `page`) and crop box once it is unlocked; any other PDF is placed that way without asking.
+pub fn offer_place_password(app: &mut VectorcraftApp, p: &Value) -> bool {
+    // A `page` that isn't a page number is left for `file.place` to refuse.
+    if p.get("password").is_some() || p.get("page").is_some_and(|v| v.as_u64().is_none_or(|n| n == 0)) {
+        return false;
+    }
+    let Some((name, bytes, path)) = place_source(app, p, |ext| matches!(ext, "pdf" | "ai" | "ait")) else { return false };
+    if !matches!(vectorcraft_pdf::open_pdf(&bytes, None).map(|_| ()), Err(PdfError::NeedsPassword)) {
+        return false;
+    }
+    let offered = offer(app, &name, &bytes, path, Some(p));
+    if let (true, Some(d)) = (offered, app.ui.dialog.as_mut()) {
+        d.fields.insert("__passwordOnly".into(), json!(true));
+        // A `page` and `crop` given are placed as given, for `file.place` to check.
+        if let Some(place) = d.fields.get_mut("__place").and_then(Value::as_object_mut) {
+            for k in ["page", "crop"] {
+                if let Some(v) = p.get(k) {
+                    place.insert(k.into(), v.clone());
+                }
+            }
+        }
+    }
+    offered
+}
+
 fn page_count(d: &Dialog) -> usize {
     d.fields.get("pageCount").and_then(Value::as_u64).unwrap_or(0) as usize
 }
@@ -204,7 +232,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         let info = vectorcraft_pdf::info(&file.bytes, password(&d).as_deref()).map_err(|e| e.to_string())?;
         d.fields.insert("__locked".into(), json!(false));
         d.fields.insert("pageCount".into(), json!(info.pages.len()));
-        if info.pages.len() > 1 {
+        if info.pages.len() > 1 && !d.bool("__passwordOnly") {
             // Unlocked: now pick the pages.
             app.ui.dialog = Some(d);
             return Ok(Value::Null);
@@ -214,8 +242,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let path = d.fields.get("path").and_then(Value::as_str).map(str::to_string);
     let r = if d.str("mode") == "place" {
         let mut p = with_file(d.fields.get("__place"), &d, &file);
-        p["page"] = json!(page(&d));
-        p["crop"] = json!(crop(&d).id());
+        // Asked only for the password: a `page` and `crop` given with the file stand.
+        let [page_given, crop_given] = ["page", "crop"].map(|k| d.bool("__passwordOnly") && p.get(k).is_some());
+        if !page_given {
+            p["page"] = json!(page(&d));
+        }
+        if !crop_given {
+            p["crop"] = json!(crop(&d).id());
+        }
         if let Some(pw) = password(&d) {
             p["password"] = json!(pw);
         }
