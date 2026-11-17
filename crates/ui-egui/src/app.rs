@@ -85,9 +85,11 @@ impl VectorcraftApp {
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
                 selection_marks: Default::default(),
+                shared_paths: Default::default(),
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                pixel_aligned: None,
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 cursors: Default::default(),
@@ -98,6 +100,7 @@ impl VectorcraftApp {
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
             },
+            display_profile: Default::default(),
             perf: Perf::default(),
             dock_rt: Default::default(),
             titlebar_inset: 0.0,
@@ -133,7 +136,9 @@ impl VectorcraftApp {
             hover_doc: None,
             titlebar_from_env: false,
             custom_titlebar: false,
+            caption_layout: Default::default(),
             desktop_frame: false,
+            desktop_keeps_frame: false,
             last_window_title: String::new(),
             fullscreen_for_mode: false,
             graphics_adapter: None,
@@ -181,6 +186,8 @@ impl VectorcraftApp {
             host_iteration: 0,
             #[cfg(test)]
             now_override: None,
+            #[cfg(test)]
+            fail_next_tool_choice: None,
             tick_iteration: None,
             input_frames: vec![],
             shortcuts_frames: vec![],
@@ -344,6 +351,8 @@ impl VectorcraftApp {
         screen_color::poll(self, ctx);
         self.poll_finished_work();
         crate::script_runs::poll(self);
+        // A panel's, a dialog's or the text input's commit journaled in the frame before.
+        crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
         if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
             // A script in `$.sleep` goes on when its time is up; until then the app can idle.
@@ -487,12 +496,14 @@ impl VectorcraftApp {
 
     /// The canvas panel's body: the document tabs, the canvas (a pane for each document while
     /// Window › Arrange › Tile is on) and the isolation bar over it. While the current document is
-    /// in a floating window, the tab strip's document draws as a pane.
+    /// in a floating window, the tab strip's document draws as a pane, which a Selection drag's
+    /// artwork can be released in ([`canvas::note_drop`]).
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let t = theme::Tokens::get(ui.ctx());
         // Tools may already occupy the left side of this panel.
         ui.painter().rect_filled(ui.available_rect_before_wrap(), 0.0, t.pasteboard);
         self.canvas.windows.strip = None;
+        self.canvas.windows.drops.clear();
         if self.ui.screen_mode < 3 {
             chrome::doc_tabs(self, ui);
         }
@@ -501,10 +512,15 @@ impl VectorcraftApp {
         if !canvas::tiled_area(self, ui) {
             if floats {
                 let rect = ui.available_rect_before_wrap();
-                if let Some(w) = crate::doc_windows::tab_window(self)
-                    && canvas::pane(self, ui, w, rect)
-                {
-                    crate::doc_windows::show_window(self, w);
+                if let Some(w) = crate::doc_windows::tab_window(self) {
+                    let pressed = canvas::pane(self, ui, w, rect);
+                    // A drag from a current window that is an OS window ends in that window.
+                    if !crate::doc_windows::native(self, ui.ctx()) {
+                        canvas::note_drop(self, ui, w, rect);
+                    }
+                    if pressed {
+                        crate::doc_windows::show_window(self, w);
+                    }
                 }
             } else {
                 canvas::show(self, ui);
@@ -599,6 +615,8 @@ impl VectorcraftApp {
             // Toolbar too.
             toolbar::show_custom(self, ui.ctx());
         }
+        // The lanes along the window's edges where toolbars made with New Toolbar dock.
+        crate::custom_toolbars::lanes(self, ui);
         panels::library_panel::tidy(self);
         // The canvas and the panels: one docking layout. Tab hides the panels but not the canvas.
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| panel_docking::show(self, ui));

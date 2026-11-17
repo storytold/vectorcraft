@@ -141,6 +141,50 @@ fn art_brush_proportional_keeps_aspect() {
     assert!(near(bounds(&out).height(), 8.0, 1e-6));
 }
 
+/// Scale Proportionately art is scaled across by the stroke weight and the Width, as Stretch art
+/// is, on top of the scale the path length gives it.
+#[test]
+fn art_brush_proportional_grows_with_weight() {
+    let brush = |width: f64, overlap: bool| {
+        let mut b = art_brush(rect_art(100.0, 4.0), ArtScale::Proportional);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.overlap) = (width, overlap);
+        }
+        b
+    };
+    let draw = |b: &Brush, bp: &BezPath, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, bp, st);
+    // 3 pt stroke → 3× wider than at 1 pt (8 pt); the length still follows the path.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 24.0, 1e-6) && near(b.x0, 0.0, 1e-6) && near(b.x1, 200.0, 1e-6), "{b:?}");
+    // The Width (50 %) applies on top of the stroke weight.
+    let b = bounds(&draw(&brush(50.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 12.0, 1e-6), "{b:?}");
+    // A path twice as long at twice the weight (as Scale Strokes & Effects at 200 % leaves it):
+    // 2× from the length and 2× from the weight.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 400.0, 0.0), &stroke(2.0)));
+    assert!(near(b.height(), 32.0, 1e-6), "{b:?}");
+    // With Overlap, each run between corners is scaled by its own length and by the weight: the
+    // 100 pt run 4 pt × 3 across, the 50 pt run 2 pt × 3.
+    let mut bent = BezPath::new();
+    bent.move_to((0.0, 0.0));
+    bent.line_to((100.0, 0.0));
+    bent.line_to((100.0, 50.0));
+    let out = draw(&brush(100.0, true), &bent, &stroke(3.0));
+    assert_eq!(out.len(), 2);
+    let (r0, r1) = (out[0].geometric_bounds().unwrap(), out[1].geometric_bounds().unwrap());
+    assert!(near(r0.height(), 12.0, 1e-6) && near(r1.width(), 6.0, 1e-6), "{r0:?} {r1:?}");
+    // A width that follows the pen: 50 % at the lightest pressure, 300 % at the heaviest, times
+    // the 2 pt weight (4 pt art on a 100 pt path: 4 pt across at 100 %, 1 pt either side).
+    let mut pen = brush(50.0, false);
+    if let BrushKind::Art(a) = &mut pen.kind {
+        (a.width_mode, a.width_max) = (Some(Variation::Pressure), Some(300.0));
+    }
+    let ramp = StrokeLayer { width: 2.0, ..pressed(vec![(0.0, 0.0), (1.0, 1.0)]) };
+    let out = draw(&pen, &line(0.0, 0.0, 100.0, 0.0), &ramp);
+    assert!(near(half_width(&out, 0.0, 1.0), 2.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 12.0, 0.2), "{}", half_width(&out, 99.0, 100.0));
+}
+
 #[test]
 fn art_brush_between_guides_keeps_ends() {
     // Head (last 20 % of a 100 pt art) keeps its 20 pt length on a 300 pt path.
@@ -945,6 +989,187 @@ fn library_defaults_store_and_find() {
     assert_eq!(unique_name(&lib, "Arrow"), "Arrow 2");
 }
 
+/// A stored library that repeats a name reads with the first brush of that name as stored and each
+/// later one numbered, past every name the library already has; strokes of the name keep drawing
+/// the first brush.
+#[test]
+fn repeated_brush_names_are_numbered_when_read() {
+    let mut d = Document::new(100.0, 100.0);
+    let named = |name: &str, size: f64| Brush { name: name.into(), ..calli(0.0, 100.0, size) };
+    store(&mut d, &[named("Nib", 1.0), named("Nib 2", 2.0), named("Nib", 3.0), named("Other", 4.0), named("Nib", 5.0), named("Nib 2", 6.0)]);
+    let lib = library(&d);
+    let names: Vec<&str> = lib.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Nib", "Nib 2", "Nib 3", "Other", "Nib 4", "Nib 2 2"]);
+    let size = |b: &Brush| if let BrushKind::Calligraphic(c) = &b.kind { c.size } else { 0.0 };
+    assert_eq!(lib.iter().map(size).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    assert_eq!(find(&d, "Nib").map(|b| size(&b)), Some(1.0));
+    assert_eq!(find(&d, "Nib 3").map(|b| size(&b)), Some(3.0));
+    // Reading again gives the same names, and the numbered library stored again reads as stored.
+    assert_eq!(library(&d), lib);
+    store(&mut d, &lib);
+    assert_eq!(library(&d), lib);
+    // Many brushes of one name take the numbers in order, past the numbered names the file has.
+    let many: Vec<Brush> = (0..5000).map(|i| named(if i == 1 { "Nib 3" } else { "Nib" }, 1.0)).collect();
+    store(&mut d, &many);
+    let names: Vec<String> = library(&d).into_iter().map(|b| b.name).collect();
+    assert_eq!(names[..5], ["Nib", "Nib 3", "Nib 2", "Nib 4", "Nib 5"]);
+    assert_eq!(names.last().map(String::as_str), Some("Nib 5000"));
+    assert_eq!(names.iter().collect::<std::collections::HashSet<_>>().len(), names.len());
+}
+
+/// Art of `w`×`h` points holding a linked image: a group of [`rect_art`] and the image, both with id 0.
+fn linked_art(w: f64, h: f64) -> Node {
+    let image = Node::new(
+        NodeId(0),
+        NodeKind::Image(Box::new(vectorcraft_doc::ImageObject {
+            key: "k".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::IDENTITY,
+            link: Some(vectorcraft_doc::LinkInfo::new("/art/a.png")),
+            placement: Default::default(),
+            pixels: None,
+        })),
+    );
+    Node::group(NodeId(0), vec![std::sync::Arc::new(rect_art(w, h)), std::sync::Arc::new(image)])
+}
+
+/// The art of the stored brushes that holds images mounts on the document as stored art, each tile
+/// with the brush, its place in the library and the tile as owner, its objects with ids of their
+/// own; writing it back changes only the entries whose art changed, and leaves an entry that does
+/// not read as a brush, a brush without art and a brush whose art holds no image as they were stored.
+#[test]
+fn stored_brush_art_mounts_and_writes_back_only_what_changed() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let layer_object = d.layers[0].id;
+    let mut side = linked_art(10.0, 4.0);
+    side.id = layer_object;
+    let pattern =
+        Brush { name: "Frame".into(), kind: BrushKind::Pattern(PatternBrush { side, start: Some(linked_art(4.0, 4.0)), ..Default::default() }) };
+    let scatter = Brush {
+        name: "Dots".into(),
+        kind: BrushKind::Scatter(Scatter { art: linked_art(2.0, 2.0), colorization: Colorization::None, ..Default::default() }),
+    };
+    // Written as a file holds it, without the ids `store` gives.
+    let lib = [calli(0.0, 100.0, 3.0), pattern, scatter, art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)];
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap());
+    let odd = serde_json::json!({ "name": "Odd", "type": "unknown" });
+    if let Some(list) = d.unknown.get_mut(DOC_KEY).and_then(serde_json::Value::as_array_mut) {
+        list.insert(1, odd.clone());
+    }
+    let stored = d.unknown[DOC_KEY].clone();
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    let owners: Vec<&serde_json::Value> = d.mounted_art.iter().map(|(_, o)| o).collect();
+    assert_eq!(
+        owners,
+        [
+            &serde_json::json!({ "kind": "brush", "name": "Frame", "index": 1, "tile": "side" }),
+            &serde_json::json!({ "kind": "brush", "name": "Frame", "index": 1, "tile": "start" }),
+            &serde_json::json!({ "kind": "brush", "name": "Dots", "index": 2 }),
+        ]
+    );
+    let ids: Vec<NodeId> = d.mounted_art.iter().map(|(n, _)| n.id).collect();
+    let mut all = vec![];
+    d.visit_stored(|n, _| all.push(n.id));
+    assert!(all.iter().all(|id| id.0 != 0) && !all[1..].contains(&layer_object), "{all:?}");
+    assert_eq!(all.iter().collect::<std::collections::HashSet<_>>().len(), all.len(), "{all:?}");
+    // The scatter brush's art changes; the pattern brush's tiles keep the ids mounting gave them.
+    d.stored_node_mut(ids[2]).unwrap().name = Some("changed".into());
+    art.write_back(&mut d);
+    assert!(d.mounted_art.is_empty());
+    let now = d.unknown[DOC_KEY].as_array().unwrap();
+    assert_eq!(now.len(), 5);
+    assert_eq!((&now[0], &now[1], &now[4]), (&stored[0], &odd, &stored[4]), "the entries without images stay as stored");
+    assert_ne!(now[2], stored[2], "the pattern brush keeps the ids its art was given");
+    let lib = library(&d);
+    let Some(BrushKind::Pattern(p)) = lib.iter().find(|b| b.name == "Frame").map(|b| &b.kind) else { panic!("no pattern brush") };
+    assert_eq!((p.side.id, p.start.as_ref().map(|n| n.id)), (ids[0], Some(ids[1])));
+    assert_eq!(find(&d, "Dots").unwrap().art()[0].name.as_deref(), Some("changed"));
+    // Mounting again gives the same ids and changes nothing, so writing back leaves the library as it is.
+    let again = d.unknown[DOC_KEY].clone();
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    assert_eq!(d.mounted_art.iter().map(|(n, _)| n.id).collect::<Vec<_>>(), ids);
+    art.write_back(&mut d);
+    assert_eq!(d.unknown[DOC_KEY], again);
+}
+
+/// A brush whose stored name repeats an earlier brush's is named in its art's owner as the Brushes
+/// panel lists it, numbered.
+#[test]
+fn stored_brush_art_owner_names_a_repeated_name_as_listed() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let scatter = Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: linked_art(2.0, 2.0), ..Default::default() }) };
+    store(&mut d, &[scatter.clone(), scatter]);
+    StoredArt::read(&d).mount(&mut d);
+    let names: Vec<&serde_json::Value> = d.mounted_art.iter().map(|(_, o)| &o["name"]).collect();
+    assert_eq!(names, ["Dots", "Dots 2"]);
+}
+
+/// Storing a library whose brush art holds an image gives that art ids of its own, so mounting it
+/// later gives the same ids whatever the document allocated in between; art without images keeps
+/// the ids it was stored with.
+#[test]
+fn storing_brush_art_with_images_keeps_ids_of_its_own() {
+    use stored_art::StoredArt;
+    let mut d = Document::new(100.0, 100.0);
+    let mut art = linked_art(2.0, 2.0);
+    art.id = d.layers[0].id;
+    let scatter = Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art, ..Default::default() }) };
+    store(&mut d, &[scatter, art_brush(rect_art(10.0, 4.0), ArtScale::Stretch)]);
+    let lib = library(&d);
+    let stored = lib[0].art()[0].id;
+    assert_ne!(stored, d.layers[0].id);
+    assert_eq!(lib[1].art()[0].id, NodeId(0), "art without images is stored as it was");
+    d.alloc_id();
+    StoredArt::read(&d).mount(&mut d);
+    assert_eq!(d.mounted_art[0].0.id, stored);
+}
+
+/// When the library is written again while the art is mounted, numbering a repeated name and
+/// adding a brush (as placing a document's brushes into it does), writing back changes the entry
+/// at its own place that reads as the brush apart from its new name, keeping that name, even when
+/// an earlier brush is the same as the one it was, and gives the added brush's art ids of its own.
+#[test]
+fn brush_art_written_back_finds_its_renamed_entry_and_numbers_added_art() {
+    use stored_art::StoredArt;
+    /// `n` with ids from `next` on, in paint order.
+    fn numbered(mut n: Node, next: &mut u64) -> Node {
+        n.id = NodeId(*next);
+        *next += 1;
+        for c in n.children_mut().into_iter().flatten() {
+            *c = std::sync::Arc::new(numbered((**c).clone(), next));
+        }
+        n
+    }
+    let mut d = Document::new(100.0, 100.0);
+    let scatter =
+        |n: &str| Brush { name: n.into(), kind: BrushKind::Scatter(Scatter { art: numbered(linked_art(2.0, 2.0), &mut 50), ..Default::default() }) };
+    // Two brushes the same apart from the ids mounting gives the second.
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value([scatter("Dots"), scatter("Dots")]).unwrap());
+    let art = StoredArt::read(&d);
+    art.mount(&mut d);
+    assert_eq!(d.mounted_art[0].0.id, NodeId(50));
+    let second = d.mounted_art[1].0.id;
+    // The library is written again: the repeated name numbered, a brush whose art repeats an id added.
+    let mut added = scatter("New");
+    if let BrushKind::Scatter(s) = &mut added.kind {
+        s.art.id = d.layers[0].id;
+    }
+    let lib = [library(&d), vec![added]].concat();
+    d.unknown.insert(DOC_KEY.into(), serde_json::to_value(&lib).unwrap());
+    assert_eq!(lib[1].name, "Dots 2");
+    d.stored_node_mut(second).unwrap().name = Some("changed".into());
+    art.write_back(&mut d);
+    let lib = library(&d);
+    assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Dots", "Dots 2", "New"]);
+    assert_eq!((lib[0].art()[0].name.as_deref(), lib[1].art()[0].name.as_deref()), (None, Some("changed")));
+    assert_ne!(lib[2].art()[0].id, d.layers[0].id, "the added brush's art has ids of its own");
+}
+
 #[test]
 fn brushes_serde_round_trip() {
     let lib = defaults().to_vec();
@@ -1007,6 +1232,26 @@ fn half_width(nodes: &[Node], x0: f64, x1: f64) -> f64 {
 
 fn pressed(points: Vec<(f64, f64)>) -> StrokeLayer {
     StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points }), ..stroke(1.0) }
+}
+
+/// A nib that follows the pen is sampled between the vertices of the flattened path too. Along a
+/// curve those samples sit on the curve, and the outline keeps its distance from it.
+#[test]
+fn pen_driven_nib_outline_follows_the_curve_between_vertices() {
+    // The top half of a circle of radius 50; a round nib 20 pt across, the same at any pressure.
+    let (r, half) = (50.0, 10.0);
+    let c = Point::new(r, r);
+    let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+    let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &pressure_calli(20.0, 0.0), &half_circle, &pressed(vec![(0.0, 0.5), (1.0, 0.5)]));
+    let mut pts = vec![];
+    for n in &out {
+        all_points(n, &mut pts);
+    }
+    // Away from the round caps at the two ends, every outline point is `half` from the curve.
+    let middle = pts.iter().filter(|p| ((p.y - c.y).atan2(p.x - c.x).abs() - std::f64::consts::FRAC_PI_2).abs() <= 1.2);
+    let worst = middle.map(|p| ((p.distance(c) - (r + half)).abs()).min((p.distance(c) - (r - half)).abs())).fold(0.0, f64::max);
+    assert!(worst < 0.05, "an outline point strays {worst:.4} pt from the nib's reach");
 }
 
 /// #852: with Size on Pressure the nib goes from size − variation at the lightest pressure to
@@ -1656,6 +1901,35 @@ fn an_ordinary_stroke_is_unaffected_by_the_budget() {
     let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &sq, &stroke(1.0));
     assert_eq!(out.len(), 40, "ten tiles on each of the four sides, as before the budget");
     assert!(anchors(&out) < 2_000_000);
+}
+
+/// A straight-sided art brush on a smooth curve draws smooth edges: they do not turn at the smooth
+/// anchors the fit puts along them.
+#[test]
+fn art_brush_edges_stay_smooth_along_a_curve() {
+    for &(r, w, h, sw) in &[(100.0, 100.0, 10.0, 1.0), (300.0, 100.0, 10.0, 2.0), (30.0, 100.0, 10.0, 1.0), (2000.0, 100.0, 10.0, 1.0)] {
+        // The top half of a circle, as one open path of two curves.
+        let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+        let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &art_brush(rect_art(w, h), ArtScale::Stretch), &half_circle, &stroke(sw));
+        let NodeKind::Path { path, .. } = &out[0].kind else { panic!("an art brush on a path draws a path") };
+
+        // The turn at each smooth anchor of the edges: the angle between the incoming and the
+        // outgoing direction. Real corners (the ends of the art) turn by far more than 60°.
+        let mut kink = 0.0f64;
+        for sp in &path.subpaths {
+            for (k, a) in sp.anchors.iter().enumerate().skip(1).take(sp.anchors.len().saturating_sub(2)) {
+                let h_in = if a.h_in != a.p { a.h_in } else { sp.anchors[k - 1].p };
+                let h_out = if a.h_out != a.p { a.h_out } else { sp.anchors[k + 1].p };
+                let (u, v) = (a.p - h_in, h_out - a.p);
+                if u.hypot() < 1e-9 || v.hypot() < 1e-9 || u.dot(v) < 0.5 * u.hypot() * v.hypot() {
+                    continue;
+                }
+                kink = kink.max(u.cross(v).atan2(u.dot(v)).abs().to_degrees());
+            }
+        }
+        assert!(kink < 0.5, "r={r} art={w}x{h} weight {sw}: an edge turns by {kink:.3}° at a smooth anchor");
+    }
 }
 
 /// Anchors under `n`, and how many of them keep a handle (so the segment is a curve).

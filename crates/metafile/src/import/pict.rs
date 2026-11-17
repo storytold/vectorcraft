@@ -20,11 +20,10 @@
 //! nothing VectorCraft reads are skipped; a picture cut short keeps what came before.
 
 use std::collections::HashMap;
-use std::io::Cursor;
 
 use vectorcraft_geom::{Affine, BezPath, FillRule, Point, Rect, Shape, Vec2, shapes};
 
-use super::{BAD_IMAGE, BrushObj, FontObj, PS_GEOMETRIC, PenObj, Player, SRCCOPY, TOO_MANY_PIXELS, crop, round_rect};
+use super::{BAD_IMAGE, FontObj, PS_GEOMETRIC, PenObj, Player, SRCCOPY, TOO_MANY_PIXELS, crop, round_rect};
 use crate::dib::{self, Rgba};
 use crate::{Imported, Kind};
 
@@ -600,7 +599,7 @@ impl Pict {
         let base = Affine::translate(-frame.origin().to_vec2());
         let artboard = Rect::new(0.0, 0.0, frame.width(), frame.height());
         // A picture's coordinates map straight onto the document, as a WMF's do.
-        let p = Player::new(Kind::Wmf, base, 25.4 / 72.0, artboard);
+        let p = Player::new(Kind::Wmf, base, artboard);
         Self {
             p,
             frame,
@@ -783,7 +782,7 @@ impl Pict {
     /// Fill `bp` (picture space) with `color`.
     fn fill(&mut self, mut bp: BezPath, color: [u8; 3], rule: FillRule) {
         bp.apply_affine(self.p.xf());
-        self.p.dc.brush = BrushObj::Solid(color);
+        self.p.dc.brush = color;
         self.p.dc.fill_rule = rule;
         self.p.draw(bp, true, false);
     }
@@ -1097,14 +1096,18 @@ impl Pict {
 
     /// A JPEG stream's pixels, taken from the file's pixel budget.
     fn jpeg(&mut self, data: &[u8]) -> Result<Rgba, &'static str> {
-        let reader = || image::ImageReader::with_format(Cursor::new(data), image::ImageFormat::Jpeg);
-        let (w, h) = reader().into_dimensions().map_err(|_| BAD_IMAGE)?;
-        if w > dib::MAX_READ_SIDE || h > dib::MAX_READ_SIDE || u64::from(w) * u64::from(h) > dib::MAX_READ_PIXELS {
-            return Err(TOO_MANY_PIXELS);
-        }
+        let mut opts = craft_image_codecs::DecodeOptions::default();
+        opts.limits.max_width = dib::MAX_READ_SIDE;
+        opts.limits.max_height = dib::MAX_READ_SIDE;
+        opts.limits.max_pixels = dib::MAX_READ_PIXELS.min(self.p.pixels_left);
+        let img = match craft_image_codecs::decode_as_with(craft_image_codecs::Format::Jpeg, data, &opts) {
+            Ok(img) => img,
+            Err(craft_image_codecs::CodecError::LimitExceeded(_)) => return Err(TOO_MANY_PIXELS),
+            Err(_) => return Err(BAD_IMAGE),
+        };
+        let (w, h) = img.dimensions();
         dib::charge(w, h, &mut self.p.pixels_left).map_err(|_| TOO_MANY_PIXELS)?;
-        let img = reader().decode().map_err(|_| BAD_IMAGE)?.to_rgba8();
-        Ok(Rgba { width: img.width(), height: img.height(), pixels: img.into_raw() })
+        Ok(Rgba { width: w, height: h, pixels: img.to_rgba8() })
     }
 }
 

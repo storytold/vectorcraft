@@ -22,7 +22,8 @@ fn revision(s: &Session) -> u64 {
 
 #[test]
 fn a_pdf_export_cancelled_between_pages_stops_writes_nothing_and_changes_nothing() {
-    let path = vectorcraft_testkit::temp_dir("cancel-pdf").join("out.pdf");
+    let dir = vectorcraft_testkit::TempDir::new("cancel-pdf");
+    let path = dir.join("out.pdf");
     std::fs::remove_file(&path).ok();
     let mut s = session(5);
     let before = (revision(&s), s.doc().unwrap().history.undo.len());
@@ -66,7 +67,7 @@ fn a_cancelled_flattening_export_stops_before_the_pages() {
 
 #[test]
 fn raster_exports_and_svg_stop_when_cancelled_too() {
-    let dir = vectorcraft_testkit::temp_dir("cancel-formats");
+    let dir = vectorcraft_testkit::TempDir::new("cancel-formats");
     let mut s = session(3);
     let token = CancelToken::new();
     token.cancel();

@@ -3,11 +3,18 @@ use super::{
     Color32, Point, PointerEvent, PointerKind, Pos2, RULER, Rect, Sense, Shape, Stroke, Tokens, Ui, Unit, VectorcraftApp, Xf, json, pos2, vec2,
 };
 
-/// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), cached per
-/// look, and its cell size in screen points.
-pub(crate) fn checker_texture(ctx: &egui::Context, setup: &vectorcraft_doc::DocSetup) -> (egui::TextureHandle, f32) {
-    let colors = setup.grid_colors.map(|c| crate::panels::c32(&c));
-    let id = egui::Id::unique("transparency-grid-tile");
+/// The transparency grid's 2 × 2-cell tile in the document's colours (Document Setup), converted
+/// into the display profile `display` when there is one, cached per look, and its cell size in
+/// screen points.
+pub(crate) fn checker_texture(
+    ctx: &egui::Context,
+    setup: &vectorcraft_doc::DocSetup,
+    display: Option<&vectorcraft_color::cms::display::DisplayTransform>,
+) -> (egui::TextureHandle, f32) {
+    let colors = setup.grid_colors.map(|c| crate::display_profile::color32(display, crate::panels::c32(&c)));
+    // A tile of its own with a display profile, so a preview drawn in sRGB beside the canvas
+    // doesn't make the canvas's tile again each frame.
+    let id = egui::Id::unique("transparency-grid-tile").with(display.is_some());
     let cached = ctx.data(|d| d.get_temp::<([Color32; 2], egui::TextureHandle)>(id)).filter(|(c, _)| *c == colors);
     let tex = cached.map(|(_, t)| t).unwrap_or_else(|| {
         let [a, b] = colors;

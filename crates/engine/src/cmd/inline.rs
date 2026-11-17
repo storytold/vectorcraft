@@ -6,6 +6,7 @@ use vectorcraft_doc::text::INLINE_MAX_SCALE;
 use vectorcraft_doc::{Document, InlineArt, NodeId, NodeKind, TextRun};
 use vectorcraft_text::edit;
 
+use super::brushsym::current_symbol;
 use super::typecmd::refresh_bounds;
 use super::{CommandSpec, EngineError, Result, Session, bad, cmd, has_doc, id_param, str_param};
 
@@ -22,16 +23,14 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// Inline graphics follow their symbols: after an edit of a document that has (or had) symbols,
-/// resolve the inline art of every text again (only texts whose art changed are touched).
+/// resolve the inline art of every text again, in the layers and in the art of symbols, graph
+/// designs, pattern tiles and opacity masks, and lay out again the texts whose art changed (a
+/// symbol's type before the type that shows that symbol inline).
 pub(crate) fn refresh(before: &Document, d: &mut Document) {
     if before.symbols.is_empty() && d.symbols.is_empty() {
         return;
     }
-    for id in d.resolve_inline_art() {
-        if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) {
-            refresh_bounds(t);
-        }
-    }
+    d.resolve_inline_art_with(&mut refresh_bounds);
 }
 
 fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
@@ -85,7 +84,7 @@ fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let caret = s.edit("Insert Inline Symbol", |d, _| {
         let mut art = InlineArt { scale, baseline_shift: shift, ..InlineArt::new(symbol.clone()) };
-        art.bounds = d.symbol_art_bounds(&symbol);
+        art.bounds = d.inline_art_bounds(&symbol);
         let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
         let style = edit::insertion_style(&t.runs, a, b);
         let caret = edit::replace_range_styled(&mut t.runs, a, b, &[TextRun::inline(art, style)]);
@@ -98,14 +97,4 @@ fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
         s.set_tool_option("select", &json!({"start": caret, "end": caret}));
     }
     Ok(json!({"id": id.0, "caret": caret}))
-}
-
-/// The Symbols panel's current symbol, else the first one.
-fn current_symbol(d: &Document) -> Option<String> {
-    d.unknown
-        .get("currentSymbol")
-        .and_then(Value::as_str)
-        .filter(|n| d.symbols.iter().any(|s| s.name == *n))
-        .map(str::to_string)
-        .or_else(|| d.symbols.first().map(|s| s.name.clone()))
 }

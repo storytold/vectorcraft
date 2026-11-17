@@ -29,6 +29,9 @@ pub enum PointerKind {
     /// Moved with no button (hover).
     Move,
     DoubleClick,
+    /// The third click of a triple-click, after its press and release (the second click's
+    /// release sends [`PointerKind::DoubleClick`]).
+    TripleClick,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]

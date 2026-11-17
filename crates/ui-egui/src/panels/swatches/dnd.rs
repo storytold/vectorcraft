@@ -59,8 +59,8 @@ pub(super) enum Drop {
     /// `target` of its kind (neither None, Registration nor a tint swatch; see [`replaces`]), it
     /// gives that swatch its paint instead of moving.
     Move { names: Vec<String>, target: Option<String>, after: bool, with: Option<String> },
-    /// A paint from elsewhere (a Fill/Stroke proxy, a Recent Colors chip, the Gradient panel's
-    /// thumbnail) dropped on row `target` (or between rows) becomes a swatch; with Alt held
+    /// A paint from elsewhere (a Fill/Stroke proxy, a Recent Colors chip, a Color Guide color, the
+    /// Gradient panel's thumbnail) dropped on row `target` (or between rows) becomes a swatch; with Alt held
     /// (`replace`) it replaces swatch `target` when that is of its kind and neither Registration
     /// nor a tint swatch.
     New { paint: Paint, target: Option<String>, replace: bool },
@@ -117,14 +117,15 @@ pub(super) struct TileEvents {
 }
 
 /// Clicks, double-clicks, tooltips and drag and drop of the tile or row `resp` of entry `e`
-/// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A drag from it
-/// starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held over it.
+/// (`items`: the panel's rows, `sel`: its selection, `list`: rows stack downwards). A primary-button
+/// drag from it starts a [`PanelDrag`] carrying the rows it moves; see [`tile_drop`] for drags held
+/// over it.
 pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], sel: &[String], list: bool, ev: &mut TileEvents) {
     let name = e.name();
     if matches!(e, Entry::Swatch { .. } | Entry::Folder(_)) && resp.double_clicked() {
         ev.edit = Some(e.clone());
     }
-    if resp.drag_started() {
+    if resp.drag_started_by(egui::PointerButton::Primary) {
         let with_sel = sel.iter().any(|s| s == name);
         let names = items
             .iter()

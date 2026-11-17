@@ -26,7 +26,8 @@
 //! Before a run starts, its preprocessor lines are read ([`include`]): included files take the
 //! place of their lines, and an error in one is reported at its own file, line and column.
 //! `$.evalFile(path)` runs another file in the same global environment and gives its last value,
-//! `$.fileName` is the file being run and `$.includePath` the `#includepath` list.
+//! `$.fileName` is the file of the code that reads it (the file being run for code that `eval` or
+//! `Function` compiled) and `$.includePath` the `#includepath` list.
 //!
 //! A run writes to the Script Console with `$.write` and `$.writeln`, and `vc.log` adds a line
 //! there too. The session's console gets a start line, the run's output, its uncaught error, an end
@@ -162,6 +163,9 @@ pub(crate) struct Request {
     pub name_given: bool,
     /// The file the script was read from, which its included files are read beside.
     pub file: Option<String>,
+    /// The real path of `file` as the read of `source` found it, which the included files are then
+    /// read beside instead of looking `file` up again.
+    pub checked_real: Option<std::path::PathBuf>,
     pub source: String,
     pub args: Map<String, Value>,
     pub fuel: u64,
@@ -428,7 +432,7 @@ struct World {
 }
 
 /// The choices outside the documents that a script's commands can change: the preferences, the
-/// global edit options, the recent URLs, the chosen gradient stop, freeform point and appearance
+/// global edit options, the Select Similar Objects attribute, the recent URLs, the chosen gradient stop, freeform point and appearance
 /// item, the Eyedropper's sample, the envelope defaults and the Caps Lock state.
 #[derive(Clone)]
 struct Choices {
@@ -436,6 +440,7 @@ struct Choices {
     caps_lock: bool,
     eyedropper_sample: Option<Arc<vectorcraft_doc::Node>>,
     global_edit_options: cmd::globaledit::Options,
+    select_similar: &'static str,
     recent_urls: Vec<String>,
     gradient_stop: Option<(usize, cmd::gradient::StopOwner)>,
     freeform_point: Option<(usize, cmd::gradient::StopOwner)>,
@@ -450,6 +455,7 @@ impl Choices {
             caps_lock: s.caps_lock,
             eyedropper_sample: s.eyedropper_sample.clone(),
             global_edit_options: s.global_edit_options.clone(),
+            select_similar: s.select_similar,
             recent_urls: s.recent_urls.clone(),
             gradient_stop: s.gradient_stop,
             freeform_point: s.freeform_point,
@@ -463,6 +469,7 @@ impl Choices {
         s.caps_lock = self.caps_lock;
         s.eyedropper_sample = self.eyedropper_sample;
         s.global_edit_options = self.global_edit_options;
+        s.select_similar = self.select_similar;
         s.recent_urls = self.recent_urls;
         s.gradient_stop = self.gradient_stop;
         s.freeform_point = self.freeform_point;
@@ -476,6 +483,7 @@ impl Choices {
         swap(&mut self.caps_lock, &mut s.caps_lock);
         swap(&mut self.eyedropper_sample, &mut s.eyedropper_sample);
         swap(&mut self.global_edit_options, &mut s.global_edit_options);
+        swap(&mut self.select_similar, &mut s.select_similar);
         swap(&mut self.recent_urls, &mut s.recent_urls);
         swap(&mut self.gradient_stop, &mut s.gradient_stop);
         swap(&mut self.freeform_point, &mut s.freeform_point);
@@ -672,6 +680,7 @@ impl Savepoint {
         s.pending_paint = self.pending_paint;
         self.choices.put(s);
         s.journal.truncate(self.journal);
+        s.sync_front_profiles();
         exact
     }
 }
@@ -818,6 +827,57 @@ impl Host {
             match u32::try_from(n + 1).ok().and_then(|n| tag.checked_add(n)).filter(|t| *t != vectorcraft_js::UNKNOWN_SOURCE) {
                 Some(t) => kept.keep(t, map, None),
                 None => break,
+            }
+        }
+    }
+
+    /// The file and line that line `line` of the source with tag `tag` came from, as `$.line` and
+    /// `$.stack` give them: the run's script, a file it included or a file `$.evalFile` gave, in
+    /// this run or in an earlier run of its named engine, with the run's name standing for a script
+    /// given as text. Code that `eval` or `Function` compiled has no map and keeps its own line,
+    /// named `[eval]`; code whose map is gone, such as one the named engine let go to stay within
+    /// [`KEPT_MAP_BYTES`], is at line 0 of `[unknown]`.
+    fn source_place(&self, tag: u32, line: u32) -> (String, u32) {
+        if tag == vectorcraft_js::UNKNOWN_SOURCE {
+            return ("[eval]".to_string(), line);
+        }
+        let named = |map: &include::SourceMap, script: Option<&Arc<str>>| {
+            let (index, file, line, _) = map.locate(line, 1);
+            match script {
+                Some(name) if index == 0 && file.is_empty() => (name.to_string(), line),
+                _ => (file.to_string(), line),
+            }
+        };
+        let script = self.script_tag.get();
+        let placed = match tag.checked_sub(script).filter(|_| script != vectorcraft_js::UNKNOWN_SOURCE) {
+            Some(0) => self.script_map.try_borrow().ok().map(|m| named(&m, Some(&self.report_name))),
+            Some(n) => self.eval_maps.try_borrow().ok().and_then(|maps| maps.get(n as usize - 1).map(|m| named(m, None))),
+            None => {
+                self.kept_maps.as_ref().and_then(|k| k.try_borrow().ok()).and_then(|k| k.get(tag).map(|kept| named(&kept.map, kept.script.as_ref())))
+            }
+        };
+        placed.unwrap_or_else(|| ("[unknown]".to_string(), 0))
+    }
+
+    /// `$.fileName` read by the code at `site`: the file that code is in, by the source map of the
+    /// source it came from (this run's script, a file `$.evalFile` gave, or code an earlier run of
+    /// the named engine compiled), so a function keeps the file it was defined in. Code from a file
+    /// `#include` inserted is in that file. A script given as text has no name, and neither has
+    /// code whose map the named engine no longer keeps. Code that `eval` or `Function` compiled has
+    /// no map, and is given the file being run now.
+    fn file_name_at(&self, site: vectorcraft_js::CallSite) -> String {
+        let name = |m: &include::SourceMap| m.locate(site.line, site.column).1.to_string();
+        let tag = site.source;
+        if tag == vectorcraft_js::UNKNOWN_SOURCE {
+            return self.files.borrow().file_name();
+        }
+        let script = self.script_tag.get();
+        match tag.checked_sub(script).filter(|_| script != vectorcraft_js::UNKNOWN_SOURCE) {
+            Some(0) => name(&self.script_map.borrow()),
+            Some(n) => self.eval_maps.borrow().get(n as usize - 1).map(name).unwrap_or_default(),
+            None => {
+                let kept = self.kept_maps.as_ref().map(|k| k.borrow());
+                kept.as_ref().and_then(|k| k.get(tag)).map(|k| name(&k.map)).unwrap_or_default()
             }
         }
     }
@@ -1254,9 +1314,9 @@ fn each_line(text: &str, mut done: impl FnMut(String, bool)) {
 
 /// The `$` object: `$.write(...values)` writes the values to the Script Console as `String(value)`
 /// gives them, one after another, and `$.writeln(...values)` does the same and ends the line.
-/// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file
-/// being run and `$.includePath` the `#includepath` list. Its other members are
-/// [`dollar::members`].
+/// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file the
+/// code reading it is in ([`Host::file_name_at`]) and `$.includePath` the `#includepath` list. Its
+/// other members are [`dollar::members`].
 fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcraft_js::Localization>) -> Vec<(String, HostItem)> {
     let writer = |end: bool| {
         let l = link.clone();
@@ -1278,6 +1338,15 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
             Ok(Data::String(text))
         }))
     };
+    let file_name = {
+        let l = link.clone();
+        HostItem::SiteGetter(Rc::new(move |site| {
+            let h = current(&l)?;
+            let text = h.file_name_at(site);
+            h.charge_call(text.len() as u64 + 2)?;
+            Ok(Data::String(text))
+        }))
+    };
     let eval_file = {
         let (l, end, strict) = (link.clone(), link.clone(), link.clone());
         HostItem::Evaluator {
@@ -1294,7 +1363,7 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
         ("write".into(), writer(false)),
         ("writeln".into(), writer(true)),
         ("evalFile".into(), eval_file),
-        ("fileName".into(), getter(include::Files::file_name)),
+        ("fileName".into(), file_name),
         ("includePath".into(), getter(include::Files::include_path)),
     ];
     items.extend(dollar::members(link, info, localization));
@@ -1752,7 +1821,7 @@ impl Session {
         self.script_high_water.retain(|uid, _| open.contains(uid));
         self.script_stop.clear();
         self.script_report = None;
-        let mut files = include::Files::new(request.file.as_deref(), include::Files::jsinclude_env());
+        let mut files = include::Files::new(request.file.as_deref(), request.checked_real, include::Files::jsinclude_env());
         let expanded = files.expand_script(&request.source);
         let name = match &expanded {
             Ok(include::Expanded { name: Some(name), .. }) if !request.name_given => name.clone(),
@@ -1858,6 +1927,13 @@ impl Session {
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
                 realm.set_strict_writes(expanded.strict == Some(true));
+                if fresh {
+                    let l = link.clone();
+                    realm.set_source_locator(Rc::new(move |tag, line| match current(&l) {
+                        Ok(h) => h.source_place(tag, line),
+                        Err(_) => ("[unknown]".to_string(), 0),
+                    }));
+                }
                 (if fresh { realm.add_script_extensions() } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
@@ -1936,7 +2012,11 @@ impl Session {
             Ok(Ok(Progress::Done(_))) if job.host.dialogs.unused() > 0 => {
                 let n = job.host.dialogs.unused();
                 let kind = LimitKind::Host;
-                let message = format!("`answers` has {n} answer{} the script did not use", if n == 1 { "" } else { "s" });
+                let message = if n == 1 {
+                    format!("`answers` has {n} answer the script did not use")
+                } else {
+                    format!("`answers` has {n} answers the script did not use")
+                };
                 Some(self.script_failed(job, &RunError { kind: RunErrorKind::Limit(kind), message, line: 0, column: 0 }))
             }
             Ok(Ok(Progress::Done(_))) => {
@@ -2199,6 +2279,9 @@ fn failure_text(report: &Value) -> String {
 fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
     let depth = std::mem::replace(&mut s.depth, 0);
     job.world.swap(s);
+    // The run's front document draws and converts through its own profiles, and the interface's
+    // again after the slice.
+    s.sync_front_profiles();
     s.script_in_run = true;
     let cell = job.host.session.clone();
     std::mem::swap(s, &mut *cell.borrow_mut());
@@ -2221,6 +2304,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     s.script_in_run = false;
     job.world.swap(s);
     s.depth = depth;
+    s.sync_front_profiles();
     r
 }
 

@@ -532,7 +532,7 @@ fn simplify_slider_and_dialog_simplify_only_the_direct_selected_part_of_a_path()
     let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 20 + i * 8, "y": 150.0 + 60.0 * (f64::from(i) / 6.0).sin()})).collect();
     let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
     let path = |app: &VectorcraftApp| {
-        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.clone()
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.to_vec()
     };
     let original = path(&app);
     let run: Vec<_> = (10..=30).map(|i| json!([0, i])).collect();

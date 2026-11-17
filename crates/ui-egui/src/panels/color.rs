@@ -248,8 +248,9 @@ pub(crate) fn warning_chip(ui: &mut Ui, (icon, warning): (&str, &str), fix: &Col
     .inner
 }
 
-/// The printable colour closest to `c` (its working-CMYK reproduction, back in RGB) when `c` is out
-/// of the CMYK gamut, through `color.convert`.
+/// The printable color closest to `c` (its reproduction in the active CMYK space, the document's
+/// assigned CMYK profile or else the working CMYK space, back in RGB) when `c` is out of that
+/// space's gamut, through `color.convert`.
 pub(crate) fn in_gamut(app: &mut VectorcraftApp, c: &Color) -> Option<Color> {
     let r = app.run("color.convert", json!({"color": color_json(c), "to": "cmyk"})).ok()?;
     if !r["outOfGamut"].as_bool()? {
@@ -261,17 +262,24 @@ pub(crate) fn in_gamut(app: &mut VectorcraftApp, c: &Color) -> Option<Color> {
     Some(Color::rgb(v(&rgb, 0)? as f32, v(&rgb, 1)? as f32, v(&rgb, 2)? as f32))
 }
 
-/// [`in_gamut`], cached under `key` for the last colour asked (panels ask every frame).
+/// [`in_gamut`], cached under `key` for the last color asked (panels ask every frame) together with
+/// the active color settings and profiles generation it was asked under, so a change of Color
+/// Settings or of the document's assigned profiles updates the warning while the color stays the same.
 pub(crate) fn gamut_fix(app: &mut VectorcraftApp, ctx: &egui::Context, key: &str, c: &Color) -> Option<Color> {
-    match pstate::<Option<(Color, Option<Color>)>>(ctx, key) {
-        Some((k, fix)) if k == *c => fix,
+    let under = (cms::active_settings(), cms::profiles_generation());
+    match pstate::<Option<GamutFix>>(ctx, key) {
+        Some((k, at, fix)) if k == *c && at == under => fix,
         _ => {
             let fix = in_gamut(app, c);
-            set_pstate(ctx, key, Some((*c, fix)));
+            set_pstate(ctx, key, Some((*c, under, fix)));
             fix
         }
     }
 }
+
+/// A [`gamut_fix`] cache entry: the color, the active color settings and profiles generation it was
+/// asked under, and its correction.
+pub(crate) type GamutFix = (Color, (cms::ColorSettings, u64), Option<Color>);
 
 /// Serde reader for the saved panel mode ([`crate::UiState::color_mode`]): a menu mode, else none,
 /// so an unknown value doesn't lose the rest of the preferences.
@@ -666,6 +674,12 @@ fn spectrum(ui: &mut Ui, mode: Mode, size: egui::Vec2) -> Option<SpectrumHit> {
 
 /// Draw numeric paint controls, retaining live components while the color and settings match.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    show_sized(app, ui, 0.0);
+}
+
+/// Draw the Color panel in a sized dock body; compact mixers use [`show`].
+pub(crate) fn show_sized(app: &mut VectorcraftApp, ui: &mut Ui, height: f32) {
+    let top = ui.next_widget_position().y;
     let t = Tokens::get(ui.ctx());
     let tgt = target(app, ui);
     let color = tgt.color();
@@ -676,7 +690,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let hit = ui
             .horizontal(|ui| {
                 super::proxy(app, ui, 40.0);
-                spectrum(ui, mode, vec2(ui.available_width(), 40.0))
+                spectrum(ui, mode, vec2(ui.available_width(), height.max(40.0)))
             })
             .inner;
         match hit {
@@ -698,7 +712,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Show Recent Colors draws the Recent Colors row; the Swatches panel's row does not read it.
     let mut recent = None;
     if app.ui.color_show_recent_colors {
-        recent = super::recent_colors_row(app, ui);
+        recent = super::recent_colors_row(app, ui, true);
         widgets::divider(ui);
     }
     // An edit of the active colour with its displayed components (`new`), or a colour clicked with
@@ -843,7 +857,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     ui.add_space(4.0);
-    match spectrum(ui, mode, vec2(ui.available_width(), 46.0)) {
+    // Measure from the content origin so scrolling moves the ramp without stretching it.
+    let remaining = height - (ui.next_widget_position().y - top);
+    match spectrum(ui, mode, vec2(ui.available_width(), remaining.max(46.0))) {
         Some(SpectrumHit::Pick(c, phase)) => pick(c, phase, &mut new),
         Some(SpectrumHit::Cycle) => set_mode(app, &tgt, mode.next()),
         Some(SpectrumHit::Recolor { invert }) => recolor(app, ui, &tgt, invert, alt),
@@ -854,7 +870,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let (Some((t, phase)), Some(tint)) = (tinted, tgt.tint()) {
         if phase == Live::Released {
-            super::color_guide::choose_base(app, tint.base.tinted(t));
+            super::color_guide::choose_linked_base(app, tint.base.tinted(t), Some((tint.swatch.clone(), t)));
         }
         apply_tint(app, &tgt, tint, t, phase);
     }

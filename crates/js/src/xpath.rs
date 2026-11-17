@@ -1472,13 +1472,14 @@ impl<'p> Ev<'p> {
         let xml = key("xml");
         let mut at = 0u32;
         let mut has_xml = false;
-        for ns in scope_of(interp, Some(*x))? {
-            let Some(prefix) = ns.prefix else { continue };
+        let scope = scope_of(interp, Some(*x))?;
+        for ns in &scope.list {
+            let Some(prefix) = ns.prefix.clone() else { continue };
             if prefix.is_empty() && ns.uri.is_empty() {
                 continue;
             }
             has_xml |= prefix == xml;
-            self.add(interp, out, axis, test, XNode::Ns { owner: *x, at, prefix, uri: ns.uri })?;
+            self.add(interp, out, axis, test, XNode::Ns { owner: *x, at, prefix, uri: ns.uri.clone() })?;
             at += 1;
         }
         if !has_xml {
@@ -1867,7 +1868,7 @@ impl<'p> Ev<'p> {
                     prefix
                 }
             }
-            Some(XNode::Node(x)) => node_name(interp, f, x)?,
+            Some(XNode::Node(x)) => return node_name(interp, f, x),
         };
         Ok(Text::plain(interp, units))
     }
@@ -2179,7 +2180,7 @@ impl<'p> Ev<'p> {
             let uri = if units_are(p, "xml") {
                 key(XML_URI)
             } else {
-                match scope.iter().find(|ns| ns.prefix.as_ref() == Some(p)) {
+                match scope.list.iter().find(|ns| ns.prefix.as_ref() == Some(p)) {
                     Some(ns) if !ns.uri.is_empty() => ns.uri.clone(),
                     _ => {
                         let shown = String::from_utf16_lossy(p);
@@ -2213,24 +2214,26 @@ impl<'p> Ev<'p> {
     }
 }
 
-fn node_name(interp: &mut Interp, f: Func, x: ObjId) -> JsResult<Key> {
+fn node_name(interp: &mut Interp, f: Func, x: ObjId) -> JsResult<Text> {
     let node = interp.xml_node(x)?;
     let (kind, parent) = (node.kind, node.parent);
-    let Some(name) = node.name.clone() else { return Ok(empty()) };
-    match (f, kind) {
-        (_, XmlKind::Text | XmlKind::Comment) => Ok(empty()),
-        (Func::NamespaceUri, XmlKind::Pi) => Ok(empty()),
-        (Func::NamespaceUri, _) => Ok(Rc::from(name_uri(&name))),
-        (Func::LocalName, _) | (_, XmlKind::Pi) => Ok(name.local),
-        _ => qualified_name(interp, x, parent, &name, kind == XmlKind::Attribute),
-    }
+    let Some(name) = node.name.clone() else { return Ok(Text::plain(interp, empty())) };
+    let units = match (f, kind) {
+        (_, XmlKind::Text | XmlKind::Comment) => empty(),
+        (Func::NamespaceUri, XmlKind::Pi) => empty(),
+        (Func::NamespaceUri, _) => Rc::from(name_uri(&name)),
+        (Func::LocalName, _) | (_, XmlKind::Pi) => name.local,
+        _ => return qualified_name(interp, x, parent, &name, kind == XmlKind::Attribute),
+    };
+    Ok(Text::plain(interp, units))
 }
 
-/// An element's or attribute's name as a QName, with a prefix declared for its namespace.
-fn qualified_name(interp: &mut Interp, x: ObjId, parent: Option<ObjId>, name: &XmlName, attribute: bool) -> JsResult<Key> {
+/// An element's or attribute's name as a QName, with a prefix declared for its namespace. The units
+/// of a prefixed name are held against the heap limit while the text lives.
+fn qualified_name(interp: &mut Interp, x: ObjId, parent: Option<ObjId>, name: &XmlName, attribute: bool) -> JsResult<Text> {
     let uri = name_uri(name);
     if uri.is_empty() {
-        return Ok(name.local.clone());
+        return Ok(Text::plain(interp, name.local.clone()));
     }
     let prefix = if units_are(uri, XML_URI) {
         key("xml")
@@ -2240,17 +2243,18 @@ fn qualified_name(interp: &mut Interp, x: ObjId, parent: Option<ObjId>, name: &X
             _ => {
                 let scope = scope_of(interp, if attribute { parent } else { Some(x) })?;
                 let usable = |ns: &XmlNs| *ns.uri == *uri && ns.prefix.as_ref().is_some_and(|p| !(attribute && p.is_empty()));
-                scope.into_iter().find(usable).and_then(|ns| ns.prefix).unwrap_or_else(empty)
+                scope.list.iter().find(|ns| usable(ns)).and_then(|ns| ns.prefix.clone()).unwrap_or_else(empty)
             }
         }
     };
     if prefix.is_empty() {
-        return Ok(name.local.clone());
+        return Ok(Text::plain(interp, name.local.clone()));
     }
-    let mut units = prefix.to_vec();
-    units.push(COLON);
-    units.extend_from_slice(&name.local);
-    Ok(Rc::from(units))
+    let mut buf = TextBuf::new(interp);
+    buf.push(interp, &prefix)?;
+    buf.push(interp, &[COLON])?;
+    buf.push(interp, &name.local)?;
+    Ok(buf.finish())
 }
 
 /// The first index where `needle` occurs in `hay`. Every position tried takes fuel.

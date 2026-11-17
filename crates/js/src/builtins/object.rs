@@ -166,10 +166,11 @@ fn create(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
 /// `Object.defineProperty` (section 15.2.3.6).
 fn define_property(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let o = require_object(interp, &arg(args, 0), "defineProperty")?;
-    let k = interp.to_key(&arg(args, 1))?;
-    let desc = to_desc(interp, &arg(args, 2))?;
-    let roots = desc_values(&desc);
-    interp.rooted(&roots, |interp| interp.define_own_property(o, k, &desc, true))?;
+    interp.with_key(&arg(args, 1), |interp, k| {
+        let desc = to_desc(interp, &arg(args, 2))?;
+        let roots = desc_values(&desc);
+        interp.rooted(&roots, |interp| interp.define_own_property(o, k, &desc, true))
+    })?;
     Ok(Value::Object(o))
 }
 

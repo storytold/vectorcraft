@@ -64,7 +64,24 @@ fn one(s: &mut Session, p: Value) -> Vec<u8> {
 }
 
 fn pixels(file: &[u8]) -> image::RgbaImage {
-    image::load_from_memory(file).unwrap().to_rgba8()
+    craft_image_codecs::decode(file)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 fn distinct(img: &image::RgbaImage) -> usize {
@@ -294,7 +311,7 @@ fn files_named_after_the_title_follow_windows_naming_rules() {
 
 #[test]
 fn files_are_written_beside_the_path() {
-    let dir = vectorcraft_testkit::temp_dir("webexport");
+    let dir = vectorcraft_testkit::TempDir::new("webexport");
     let mut s = two_colours();
     let path = dir.join("art.gif").to_string_lossy().to_string();
     let r = run(&mut s, "document.exportForWeb", json!({"path": path}));
@@ -324,7 +341,7 @@ fn an_export_says_when_an_image_could_not_be_decoded() {
         let r = run(&mut s, "document.exportForWeb.preview", json!({"format": format}));
         assert!(undecoded(&r), "{format} preview: {}", r["warnings"]);
     }
-    let dir = vectorcraft_testkit::temp_dir("webexport-undecoded");
+    let dir = vectorcraft_testkit::TempDir::new("webexport-undecoded");
     let page = dir.join("page.html").to_string_lossy().to_string();
     let r = run(&mut s, "document.exportForWeb", json!({"path": page, "output": "html"}));
     assert!(undecoded(&r), "{r}");

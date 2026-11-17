@@ -2041,3 +2041,40 @@ fn soft_return_breaks_line_even_inside_no_break() {
     let lay = layout(db(), &t);
     assert_eq!(lay.lines.len(), 2, "soft return honors line break despite no_break");
 }
+
+/// An East Asian glyph form (the Glyphs panel menu's Traditional Forms, JIS 78 Forms, …) draws
+/// the characters with the font's glyphs of that form, and Default with its default glyphs. Needs
+/// craft-fonts' BIZ UDMincho, which has traditional, expert, JIS 78, 83 and 90, full-width and
+/// half-width forms and no JIS 04 forms (skipped without it). A form on one character of a run
+/// changes that character only.
+#[test]
+fn glyph_forms_draw_the_fonts_east_asian_forms() {
+    use vectorcraft_doc::GlyphForm;
+    const FAMILY: &str = "BIZ UDMincho";
+    if db().face(FAMILY, "Regular").is_none_or(|f| f.family != FAMILY) {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let st = |form| CharStyle { size: 20.0, font_family: FAMILY.into(), glyph_form: form, ..CharStyle::default() };
+    let glyphs = |text: &str, form| layout(db(), &TextObject::point(Point::ZERO, text, st(form))).glyphs;
+    let gids = |text: &str, form| glyphs(text, form).iter().map(|g| g.gid).collect::<Vec<_>>();
+    for (form, text) in
+        [(GlyphForm::Traditional, "亜"), (GlyphForm::Expert, "唖"), (GlyphForm::Jis78, "唖"), (GlyphForm::Jis83, "芦"), (GlyphForm::Jis90, "芦")]
+    {
+        assert_ne!(gids(text, form), gids(text, GlyphForm::Default), "{form:?} {text}");
+    }
+    // The font has no JIS 04 forms, so the characters keep their glyphs.
+    assert_eq!(gids("亜唖芦", GlyphForm::Jis04), gids("亜唖芦", GlyphForm::Default));
+    // Full-width Latin takes a whole em, half-width punctuation half of one.
+    let advance = |text: &str, form| glyphs(text, form).first().map_or(0.0, |g| g.advance);
+    assert!(advance("A", GlyphForm::Default) < 15.0, "{}", advance("A", GlyphForm::Default));
+    assert!((advance("A", GlyphForm::FullWidth) - 20.0).abs() < 0.01, "{}", advance("A", GlyphForm::FullWidth));
+    assert!((advance("、", GlyphForm::Default) - 20.0).abs() < 0.01, "{}", advance("、", GlyphForm::Default));
+    assert!((advance("、", GlyphForm::HalfWidth) - 10.0).abs() < 0.01, "{}", advance("、", GlyphForm::HalfWidth));
+    // Traditional Forms on the middle character only.
+    let mut t = TextObject::point(Point::ZERO, "亜亜亜", st(GlyphForm::Default));
+    edit::style_range(&mut t.runs, 3, 6, |s| s.glyph_form = GlyphForm::Traditional);
+    let ids: Vec<u32> = layout(db(), &t).glyphs.iter().map(|g| g.gid).collect();
+    let (plain, traditional) = (gids("亜", GlyphForm::Default), gids("亜", GlyphForm::Traditional));
+    assert_eq!(ids, [plain[0], traditional[0], plain[0]]);
+}

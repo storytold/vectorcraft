@@ -8,7 +8,8 @@
 //!
 //! When it is done, what it traced is handed to its command with the same parameters
 //! ([`Traced::hand_in`]), so the edit is one undo step like any trace, unless the image or the
-//! settings changed meanwhile: then nothing changes and the status bar says to trace it again. The
+//! settings changed meanwhile or File › Revert replaced the document's content: then nothing
+//! changes and the status bar says to trace it again. The
 //! control channel, MCP and scripts run the commands at once, and so does every trace on the web,
 //! in unit tests that don't set `off_the_ui_thread`, and with `VECTORCRAFT_SYNC_OPEN` set
 //! ([`available`]).
@@ -44,7 +45,8 @@ pub struct Running {
     token: CancelToken,
     /// A newer trace of the same object took its place: it ends without a word.
     superseded: bool,
-    /// Colour layers traced and in all (0 while the image is prepared).
+    /// How far the trace has got and in all, as the trace counts it (color layers, or finer steps for Overlapping
+    /// with Fills; 0 in all while the image is prepared).
     steps: Arc<[AtomicU64; 2]>,
     /// The Image Trace panel started it, and takes its result ([`crate::panels::image_trace::traced`]).
     from_panel: bool,
@@ -59,7 +61,7 @@ impl Running {
         !self.hidden && !self.token.is_cancelled()
     }
 
-    /// The share of its colour layers traced, once they are known.
+    /// The share of the trace done, once its steps are known.
     fn fraction(&self) -> Option<f32> {
         let [done, total] = &*self.steps;
         let (done, total) = (done.load(Ordering::Relaxed), total.load(Ordering::Relaxed));
@@ -157,8 +159,8 @@ pub fn poll(app: &mut VectorcraftApp) {
 }
 
 /// Applies trace `r`'s result in its document, which becomes the active one again, as its command
-/// would while the object, its image and the settings are as they were; else why it has none, in
-/// the status bar.
+/// would while the object, its image and the settings are as they were and the document was not
+/// reverted; else why it has none, in the status bar.
 fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
     // Cancel changes nothing, even when the trace ended just before it.
     if r.token.is_cancelled() {
@@ -183,6 +185,10 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
         return;
     };
     app.session.set_active(i);
+    if run.reverted(&app.session) {
+        app.status("Image Trace finished, but its document was reverted: trace it again");
+        return;
+    }
     if !run.current(&app.session) {
         app.status("Image Trace finished, but the image or its settings changed meanwhile: trace it again");
         return;

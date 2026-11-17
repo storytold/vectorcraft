@@ -79,6 +79,21 @@ fn odd_text_reads_as_nothing_without_panicking() {
     }
 }
 
+/// Text from a command or a file can be any length: a sum of thousands of terms reads as nothing
+/// instead of exhausting the stack. Up to 128 `+ - * /` signs read; 129 read as nothing.
+#[test]
+fn a_very_long_expression_reads_as_nothing() {
+    let sum = |terms: usize| format!("1{}", "+1".repeat(terms - 1));
+    assert_eq!(Unit::Points.parse(&sum(129)), Some(129.0));
+    assert_eq!(Unit::Points.parse(&format!("10{} mm", "*1".repeat(128))), Some(Unit::Millimeters.to_pt(10.0)));
+    // Long text with no signs still reads.
+    assert_eq!(Unit::Points.parse(&format!("{}5", " ".repeat(2_000))), Some(5.0));
+    for text in [sum(200_000), format!("1{}", "*1".repeat(200_000)), sum(130), format!("10{} mm", "*1".repeat(129))] {
+        assert_eq!(Unit::Points.parse(&text), None, "{} bytes", text.len());
+        assert_eq!(crate::parse_number(&text), None, "{} bytes", text.len());
+    }
+}
+
 proptest! {
     /// Field text made of digits, operators, `%`, spaces and unit letters reads as a finite value
     /// or as nothing and does not panic.

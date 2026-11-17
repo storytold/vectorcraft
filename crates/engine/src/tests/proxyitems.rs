@@ -52,6 +52,39 @@ fn invert_and_complement_recolour_the_active_item() {
     assert_eq!((item_hex(&s, id, 0), item_hex(&s, id, 2)), ("#ff0000".into(), "#0000ff".into()));
 }
 
+/// With a mixed selection, Invert on the Appearance panel's active row remembers the color of the row it recolors in the
+/// first object, the row equal to the active one, which need not have the active row's index.
+#[test]
+fn invert_of_the_active_row_remembers_the_equal_row_it_recolors() {
+    let mut s = session();
+    let rect = |s: &mut Session, x: f64| {
+        let r = s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 50, "height": 50})).unwrap();
+        NodeId(r["id"].as_u64().unwrap())
+    };
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 100.0));
+    // `a` paints first: [red Fill, Stroke, blue Fill]. `b`, selected first: [green Fill, red Fill, Stroke].
+    let look = Appearance::basic(Paint::solid(Color::from_hex("#ff0000").unwrap()), Paint::solid(Color::BLACK), 1.0);
+    let (mut a_look, mut b_look) = (look.clone(), look.clone());
+    let (mut green, mut blue) = (look.items[0].clone(), look.items[0].clone());
+    *green.paint_mut() = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    *blue.paint_mut() = Paint::solid(Color::from_hex("#0000ff").unwrap());
+    b_look.items.insert(0, green);
+    a_look.items.push(blue);
+    s.edit("Looks", |d, _| {
+        d.node_mut(a).unwrap().appearance = vectorcraft_doc::Shared::new(a_look.clone());
+        d.node_mut(b).unwrap().appearance = vectorcraft_doc::Shared::new(b_look.clone());
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [b.0, a.0]})).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": 1})).unwrap();
+    s.last_solid = Color::from_hex("#808080").unwrap();
+    s.execute("paint.invert", &json!({})).unwrap();
+    let hexes = (item_hex(&s, a, 0), item_hex(&s, a, 2), item_hex(&s, b, 0), item_hex(&s, b, 1));
+    assert_eq!(hexes, ("#00ffff".into(), "#0000ff".into(), "#00ff00".into(), "#00ffff".into()));
+    assert_eq!(s.last_solid.to_hex(), "#00ffff", "the last color is the inverted red, not row 1 of the first object");
+}
+
 #[test]
 fn the_mixed_proxy_compares_the_active_item() {
     let mut s = session();
