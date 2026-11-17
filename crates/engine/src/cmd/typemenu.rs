@@ -786,8 +786,9 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
             // Soft wraps → explicit breaks (replace the space before the wrap when there is one).
-            let mut breaks: Vec<usize> =
-                lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && plain.as_bytes().get(b - 1) != Some(&b'\n')).collect();
+            // A line after a paragraph return or a forced line break (U+2028) already starts there.
+            let hard = |b: usize| plain.get(..b).is_some_and(|s| s.ends_with(['\n', '\u{2028}']));
+            let mut breaks: Vec<usize> = lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && !hard(b)).collect();
             breaks.sort_unstable();
             breaks.dedup();
             for b in breaks.into_iter().rev() {

@@ -4088,6 +4088,17 @@ fn area_to_point_turns_wraps_into_breaks() {
     assert_eq!(txt.replace('\n', " "), "one two three four five six");
 }
 
+/// Convert To Point Type keeps the lines that a paragraph return or a forced line break (U+2028)
+/// starts as they are: neither gets a paragraph return added after it.
+#[test]
+fn area_to_point_keeps_forced_line_breaks() {
+    let mut s = session();
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 0, "text": "ab\u{2028}c\nd", "area": {"width": 300, "height": 200}})).unwrap());
+    sel(&mut s, &[a]);
+    s.execute("type.convertToPointType", &json!({})).unwrap();
+    assert_eq!(plain(&s, a), "ab\u{2028}c\nd");
+}
+
 #[test]
 fn placeholder_and_insert_characters() {
     let mut s = session();
