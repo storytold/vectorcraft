@@ -266,7 +266,7 @@ fn signature(path: &BezPath) -> Option<Signature> {
         let lens: Vec<f64> = c.iter().map(|s| s.arclen(accuracy)).collect();
         let len: f64 = lens.iter().sum();
         // A contour with no length (a lone move) draws nothing.
-        if !(len > size * 1e-9) || !len.is_finite() {
+        if !len.is_finite() || len <= size * 1e-9 {
             continue;
         }
         total += len;
@@ -292,7 +292,7 @@ fn signature(path: &BezPath) -> Option<Signature> {
         *p = Point::new(p.x - centre.x, p.y - centre.y);
     }
     let spread = (pts.iter().map(|p| p.x * p.x + p.y * p.y).sum::<f64>() / n).sqrt();
-    if !(spread > 0.0) || !spread.is_finite() {
+    if !spread.is_finite() || spread <= 0.0 {
         return None;
     }
     Some(Signature { contours: contours_n, pts, centre, spread, invariant: spread / total })
