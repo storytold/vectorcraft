@@ -423,6 +423,43 @@ fn a_dcs_spot_plate_printing_as_process_takes_the_documents_swatch() {
     assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
 }
 
+/// A DCS image's spot plate converted to process on its own prints as the document's swatch of
+/// its ink, while its other spot plate keeps printing on its ink.
+#[test]
+fn a_dcs_image_converts_only_the_spot_ink_chosen() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(
+        2,
+        1,
+        vec![
+            plate("Cyan", [0.0; 4], [0, 0]),
+            plate("Spot Orange", [0.0, 0.6, 1.0, 0.0], [128, 0]),
+            plate("Spot Green", [0.0, 0.0, 1.0, 0.0], [0, 128]),
+        ],
+    )
+    .unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.6, 1.0, 0.0)), global: true, spot: true });
+    // The document's Spot Green is cyan, where its file says yellow.
+    d.swatches.push(Swatch { name: "Spot Green".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+    let settings: PrintSettings =
+        serde_json::from_value(json!({"output": {"mode": "separations", "inks": [{"name": "Spot Green", "convertToProcess": true}]}})).unwrap();
+    let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+    assert_eq!(names, ["Cyan", "Magenta", "Yellow", "Black", "Spot Orange"]);
+    let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+    let coverage = job.plates.iter().map(|p| {
+        let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+        p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+    });
+    let all: Vec<(String, Vec<u8>)> = names.into_iter().zip(coverage).collect();
+    let get = |name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    assert_eq!(get("Cyan"), Some(vec![0, 128]), "the swatch's cyan");
+    assert_eq!(get("Yellow"), Some(vec![0, 0]), "not the file's yellow");
+    assert_eq!(get("Magenta"), Some(vec![0, 0]), "Spot Orange stays on its own plate");
+    assert_eq!(get("Spot Orange"), Some(vec![128, 0]));
+}
+
 #[test]
 fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_cmyk() {
     let ink = [0u8, 102, 255, 0];
