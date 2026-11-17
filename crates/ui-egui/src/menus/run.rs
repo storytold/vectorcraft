@@ -733,7 +733,7 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             app.ui.palette_query.clear();
             Ok(Value::Null)
         }
-        // A pick of it in the search is recorded first and then cleared with the rest.
+        // A pick of it in the search is recorded and counted first, and then cleared with the rest.
         "help.clearRecentCommands" => {
             app.ui.recent_commands.clear();
             app.ui.command_uses = Default::default();

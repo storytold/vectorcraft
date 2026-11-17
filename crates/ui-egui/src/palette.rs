@@ -1854,6 +1854,27 @@ mod tests {
         assert_eq!(open.app.ui.command_uses.grade(id), 1);
     }
 
+    /// A refused pick leaves the recent picks and the pick counts saved before it as they were.
+    #[test]
+    fn a_refused_pick_leaves_the_earlier_counts_as_they_were() {
+        let id = "edit.findReplace";
+        let mut open = Open::new("find and replace", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into()];
+        for _ in 0..2 {
+            open.app.ui.command_uses.count("paint.swap");
+        }
+        open.app.ui.command_uses.count("object.group");
+        let (recent, uses) = (open.app.ui.recent_commands.clone(), open.app.ui.command_uses.clone());
+        let k = open.listed().iter().position(|c| c == id).expect("the search finds Find and Replace…");
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, k);
+        open.press(egui::Key::Enter, 1);
+        assert!(open.app.ui.dialog.is_none(), "no document: the pick is refused");
+        assert_eq!(open.app.ui.recent_commands, recent);
+        assert_eq!(open.app.ui.command_uses, uses);
+        assert_eq!(open.app.ui.command_uses.grade(id), 0);
+    }
+
     /// #6376: with nothing picked yet, Recent Commands shows a dimmed No recent commands row.
     #[test]
     fn recent_commands_without_picks_show_a_dimmed_row() {
