@@ -1575,11 +1575,11 @@ fn direct_selected_corners_show_their_kind_and_radius() {
     // The whole path selected.
     app.run("select.set", json!({"ids": [star]})).unwrap();
     assert!(!shows(&tall(&mut app, &ctx, vec![]), "Corner:"), "no corner selected");
-    // A live rectangle's corner: its own Corner Radius row, once.
+    // A live rectangle's corner: its own Corner Radius row and Corner menu, once each.
     let r = rect(&mut app, 20.0, 20.0, 60.0, 40.0).as_u64().unwrap();
     app.run("select.anchors", json!({"id": r, "anchors": [[0, 1]], "mode": "set"})).unwrap();
     let texts = tall(&mut app, &ctx, vec![]);
-    assert!(!shows(&texts, "Corner:"), "{texts:?}");
+    assert_eq!(texts.iter().filter(|(t, _)| t == "Corner:").count(), 1, "{texts:?}");
     assert_eq!(texts.iter().filter(|(t, _)| t == "Corner Radius:").count(), 1, "{texts:?}");
 }
 
