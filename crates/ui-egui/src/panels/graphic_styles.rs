@@ -2,13 +2,14 @@
 //! (Small and Large List View), shown on a square or on type; a style with no fill and no stroke
 //! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
-//! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one;
-//! double-click opens Graphic Style Options. Dragging a style moves it in the list, applies it
-//! to the art it is dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a
-//! copy of it and of the styles highlighted with it at the end of the list; art dragged off the
-//! canvas or the Appearance panel's thumbnail dropped on the panel becomes a new style. Holding the right button on a style
-//! shows it large, on the selected object when there is one. The Control bar's Style picker lists
-//! the same tiles ([`picker`]). Graphic style libraries open in library panels
+//! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one. The
+//! style last clicked into the selection is the one the Symbol Styler applies. Double-click opens
+//! Graphic Style Options. Dragging a style moves it in the list, applies it to the art it is
+//! dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a copy of it and of
+//! the styles highlighted with it at the end of the list; art dragged off the canvas or the
+//! Appearance panel's thumbnail dropped on the panel becomes a new style. Holding the right button
+//! on a style shows it large, on the selected object when there is one. The Control bar's Style
+//! picker lists the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
 
 use std::cell::RefCell;
@@ -513,6 +514,10 @@ fn act(app: &mut VectorcraftApp, ui: &Ui, s: &Shown, ev: Events, picker: bool) {
         Some(Click::Pick(name, m)) => {
             let order: Vec<&str> = s.d.graphic_styles.iter().map(|g| g.name.as_str()).collect();
             let sel = super::swatches::click_selection(ui, "gs-anchor", selected(ui.ctx(), s.d), &order, &name, m);
+            // The style clicked into the selection is the one the Symbol Styler applies.
+            if sel.contains(&name) {
+                app.run("tool.setOption", json!({"tool": "symbolStyler", "values": {"style": name}})).ok();
+            }
             set_pstate(ui.ctx(), "gs-sel", sel);
             // A plain click also applies the style (with nothing selected the next object drawn
             // takes it); Shift and Cmd/Ctrl clicks only select.
@@ -1460,15 +1465,21 @@ mod tests {
             selected(&ctx, &app.session.active().unwrap().doc.clone())
         };
         let linked = |app: &VectorcraftApp| app.session.selection_graphic_style().map(|(g, _)| g.name.clone());
-        // A plain click applies the style and selects it alone.
+        let styler = |app: &VectorcraftApp| app.session.tool_options_of("symbolStyler")["style"].as_str().map(str::to_string);
+        // A plain click applies the style and selects it alone; the Symbol Styler takes it.
         assert_eq!(click(&mut app, 0, egui::Modifiers::NONE), [n[0].clone()]);
         assert_eq!(linked(&app).as_ref(), Some(&n[0]));
+        assert_eq!(styler(&app).as_ref(), Some(&n[0]));
         // Shift-click selects from that style to the clicked one, and applies nothing.
         assert_eq!(click(&mut app, 3, egui::Modifiers::SHIFT), n[..4]);
         assert_eq!(linked(&app).as_ref(), Some(&n[0]));
-        // Cmd/Ctrl-click removes a selected style and adds it back.
+        assert_eq!(styler(&app).as_ref(), Some(&n[3]));
+        // Cmd/Ctrl-click removes a selected style and adds it back; the Styler keeps its style
+        // while one is removed.
         assert_eq!(click(&mut app, 2, egui::Modifiers::COMMAND), [n[0].clone(), n[1].clone(), n[3].clone()]);
+        assert_eq!(styler(&app).as_ref(), Some(&n[3]));
         assert_eq!(click(&mut app, 2, egui::Modifiers::COMMAND), [n[0].clone(), n[1].clone(), n[3].clone(), n[2].clone()]);
+        assert_eq!(styler(&app).as_ref(), Some(&n[2]));
         // Shift-click extends from the style Cmd/Ctrl-clicked last.
         click(&mut app, 0, egui::Modifiers::NONE);
         click(&mut app, 2, egui::Modifiers::COMMAND);

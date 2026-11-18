@@ -893,6 +893,10 @@ pub use buildcmds::live_paint_gaps;
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
 
+/// Whether an object is a symbol set (the Symbolism Tools Options' Symbol Set Density applies to
+/// the selected ones).
+pub use brushsym::is_symbol_set;
+
 /// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
 /// frame without running the command).
 pub use brushsym::current_symbol;

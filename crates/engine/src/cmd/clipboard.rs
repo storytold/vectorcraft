@@ -100,6 +100,9 @@ pub struct Clipboard {
     /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
     /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
     pub guides: Vec<vectorcraft_doc::Guide>,
+    /// The Symbol Set Density recorded at Copy for each copied symbol set, by its id in
+    /// [`Self::nodes`]: a pasted set packs from it.
+    pub set_densities: BTreeMap<NodeId, Value>,
 }
 
 /// The layer an object was copied from, as Paste Remembers Layers finds it again: the top-level

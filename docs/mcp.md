@@ -2166,7 +2166,7 @@ and `text.createInPath`; `underline`, `strikethrough`, `allCaps`, `proportionalM
 in `text.setRangeStyle` and `text.setFormat`, which also checks `hyphenate`, `hyphenateCapitalized` and
 `romanHangingPunctuation`; `effective` and `story` in `text.getRange`; `story` in `text.setRangeStyle`; `on` in `type.opticalMarginAlignment`, `type.dynamicText`, `type.systemLayout`
 and `type.fractionalWidths`; `flip` in `type.dynamicTextPreset`; `remove` and `overhang` in `type.ruby`; `expandInstances` in `symbol.delete`; `alt` in
-`symbol.spray` and `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
+`symbol.spray` and `symbol.adjust`; `usePressure`, `proportional` and `affectsDensity` in `symbol.adjust`; `spot` and `global` in `swatch.new` and `swatch.edit`; `unlink` in
 `swatch.delete`; `fromArtwork`, `toGlobal` and `includeTints` in `swatch.newGroup`; `global` and `selection` in
 `swatch.addUsedColors`; `visible` in `appearance.setItem`; `copy` in `appearance.transfer`; `reverse` and `append` in
 `appearance.copyFrom`; `reverse` and `stroke` in `paint.editGradient`; `stroke` in `paint.setGradientGeom` and in
@@ -3494,6 +3494,58 @@ already walks Image Trace. Short agent entry points:
   symbol's scale are left as they are, and no undo step is added when nothing changes; an id that names no object, or
   objects without a symbol instance, is an error. It returns `{ids}`, the instances it changed. The menu item and the
   button are enabled only while a selected instance would change.
+- The symbolism tools' options ([Symbolism tool options](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/symbolism-tool-options.html),
+  [the archived manual](https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=118)):
+  `symbol.adjust` takes `method` (`userDefined`, `average` or `random`; not used by `shift`), `usePressure` with
+  `points` as `[x, y, pressure]` (each point's pen pressure, 0..1, is the intensity there), and for `size`
+  `proportional` (true) and `affectsDensity` (false). With `tool: style`, the style goes on by the brush's strength at
+  each instance, in full only at the brush's center at intensity 10 or full pressure, and a `style` name the document
+  has no graphic style for counts as none (the document's first style after the default one). The Symbol Styler sends
+  the style last clicked into the Graphic Styles panel's selection. `tool.setOption` on a symbolism tool refuses a `method` or
+  Symbol Sprayer option that is not one of its names, a non-number `diameter`, `intensity` or `density`, a
+  non-boolean switch, and a `symbol` or `style` that is neither a name nor null, and sets none of the values.
+  `symbol.spray` takes `attributes`
+  `{scrunch?, size?, spin?, screen?, stain?, style?}`, each `average` or `userDefined`, with `color`, `keepModel` and
+  `style` for the User Defined stain and style. `symbol.setDensity {from, to, ids?|id?}` gives the selected symbol
+  sets a new Symbol Set Density. VectorCraft's own rules:
+  - `random` gives each instance its own share of the tool's change for the whole stroke, from none of it to twice
+    it (the Spinner: a turn either way), the same each time the stroke is applied.
+  - `average` moves each instance's value toward the mean of the instances within the brush at that point: the
+    Scruncher its distance from their middle toward their mean distance, the Sizer the geometric mean of their sizes,
+    the Spinner their mean direction, the Stainer and the Styler their mean amount, the Screener their mean opacity.
+    `alt` does not reverse it. An instance already at the mean is left as it is, and no undo step is added when
+    no instance changes.
+  - With `proportional` false a drag resizes along its own direction (a level drag the width, an upright one the
+    height) and one point resizes both. With `affectsDensity` an instance also moves away from the point as it grows
+    and toward it as it shrinks.
+  - A sprayed instance's `average` values are the means of the selected set's instances within `radius` of the
+    stroke point: their spacing, size, rotation and opacity, and the stain or style of the nearest one that has one,
+    at the mean amount. With no instance there it has the symbol's size, no rotation, full opacity and no stain or
+    style. `attributes` left out means `average` for all six.
+  - `symbol.setDensity` moves each instance of a set along the line from the middle of the set's instances, to
+    (1.15 − 0.1·`to`) / (1.15 − 0.1·`from`) of its distance from it (each factor at least 0.1), as one undo step, and
+    adds none when no instance moves. `from` is the density each set was created at or last given (a set
+    duplicated has its source's, and a pasted set the one its source had at Copy), and the
+    `from` passed applies only to a set without one (a group named "Symbol Set" by hand); the sets moved then have
+    density `to`. A locked or hidden instance stays where it is. It returns `{ids, count}`: the sets changed and the
+    instances moved.
+  - A `method`, an attribute or a density outside these values, a pressure that isn't a number, or no symbol set
+    among the objects of `symbol.setDensity`, is an error and changes nothing.
+- The symbolism tools with Shift held ([the manual](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=199),
+  [the CS6 reference](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=136)) send
+  `shift: true` with `symbol.adjust`: a Shift-click with the Symbol Shifter brings the instances under the brush
+  forward in the stacking order and Alt+Shift sends them backward; the Symbol Sizer keeps the set's density while it
+  resizes; the Symbol Stainer and the Symbol Styler keep the amount of stain or style and move the color or style
+  toward the current fill or the selected style. VectorCraft's own rules:
+  - The Shifter moves each instance within `radius` of any stroke point one place forward among its siblings (with
+    `alt`, one place backward), past the next one that is not under the brush, once for the whole stroke. It does not
+    move them on the canvas. It returns `{count}`, the instances that moved.
+  - The Sizer keeps each instance's center where it is, even with `affectsDensity`.
+  - The Stainer moves an instance's paint toward `color` by the tool's amount at its distance from the point, and the
+    Styler toward the style by the brush's strength there, whatever `method` is. A paint with no form between it and
+    the new one (a solid color and a pattern) takes the new one at once. An instance without a stain or style is left
+    as it is, and `alt` has no effect.
+  - No undo step is added when nothing moves or changes.
 - Dynamic symbols: an instance of a symbol whose `type` is `dynamic` changes the appearance of objects in the symbol's
   art for itself only and stays linked. `symbol.instance.setAppearance {id?, path, fill?, stroke?, opacity?, blend?}`
   names the object by `path`, child indices in paint order from the art's root down through its groups (`[]` is the
@@ -11595,7 +11647,11 @@ tool keeps last across tool switches (and documents) and are saved with the pref
 `prefs.get`'s full object), as the reference app keeps them: the Liquify tools' brush and tool options, Mirror & Cut's
 axis and side, Puppet Warp's mesh, the Symbolism brush, the line, grid, pencil, brush and eraser tools' options,
 polygon sides and star points, the Flare Tool Options and the Shape Builder Tool Options. The Liquify tools share one set of Global Brush Dimensions (width, height, angle,
-intensity), and the Symbolism tools one brush. Interaction state (pins, a reference point) starts afresh. In the
+intensity), and the Symbolism tools one brush: `diameter` (80), `intensity` (5), `density` (5), `usePressure` (false),
+`method` (`userDefined`), `showBrush` (true), `sprayScrunch`, `spraySize`, `spraySpin`, `sprayScreen`, `sprayStain`
+and `sprayStyle` (each `average`), `proportional` (true) and `affectsDensity` (false); these starting values are
+VectorCraft's own. With `showBrush` the brush's outline follows the pointer, with a dashed ring inside it at
+`intensity`/10 of its radius (no ring at 10 or with `usePressure`). Interaction state (pins, a reference point) starts afresh. In the
 desktop app, while the Artboard tool is in use, a change to its `selected` or `active` makes the artboard it then has
 active the active artboard (the navigator's and the Artboards panel's).
 
@@ -11636,7 +11692,12 @@ options' counts and growth, without a `ringSeed`. The Artboard tool's are the ac
 are the artboard's top-left corner in document points, while the dialog shows X and Y at the reference point the
 Transform panel uses, counted from the ruler origin), a graph tool's
 the selected graph's Graph Type (dialog `graphType`, described below; an error without one), a Symbolism tool's the Symbolism Tools Options (dialog
-`symbolismOptions`: `diameter` in points, `intensity` and `density` 1–10, one brush for the eight tools) and the
+`symbolismOptions`: `tool` (the tool whose options show, which the Tool row changes), `diameter` in points,
+`intensity` and `density` 1–10, `usePressure`, `method` (`userDefined`, `average` or `random`), `showBrush`, the
+Symbol Sprayer's `sprayScrunch`, `spraySize`, `spraySpin`, `sprayScreen`, `sprayStain` and `sprayStyle` (each
+`average` or `userDefined`) and the Symbol Sizer's `proportional` and `affectsDensity`: one brush for the eight
+tools. OK runs `tool.setOption {tool, values}`, and with symbol sets selected and a new `density` it first runs
+`symbol.setDensity` from the density the dialog opened with) and the
 Magic Wand tool's its panel. `ui.newArtboard` (Alt-click on the Artboards panel's New Artboard) opens Artboard Options
 for a new artboard, with `new: true` and the name, position and size that `artboard.new {}` would give it. OK runs
 `artboard.new` with the fields and makes the new artboard the active one, and Cancel adds no artboard.

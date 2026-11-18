@@ -27,11 +27,15 @@ use crate::EngineError;
 /// Whether Reset Transformation changes a symbol instance.
 pub use symbols::reset_transformation_changes;
 
+/// Whether an object is a symbol set.
+pub use symbols::is_symbol_set;
+
 /// The Symbols panel's current symbol, as `symbol.list` answers it.
 pub use symbols::current_symbol;
 
 mod brushes;
 mod dynamic;
+mod symbolism;
 mod symbols;
 
 pub(crate) use brushes::{apply_brush, brush_targets, stroke_paint};
@@ -41,6 +45,7 @@ use brushes::{
 };
 pub(crate) use dynamic::{edit_part, fit_parts, part_only, selected_part};
 use dynamic::{symbol_instance_reset, symbol_instance_select_part, symbol_instance_set_appearance};
+use symbolism::symbol_set_density;
 use symbols::selected_instances;
 pub(crate) use symbols::{
     expand_instances_under, expandable_instances, instance_in_place, natural_size, normalize, place_xf, set_natural_size, store_symbol,
@@ -348,16 +353,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Sprayer",
             [],
             None,
-            "{points: [[x,y]…], name?, radius?: 40, density?: 1..10 (5), scale?: 1, alt?: bool (remove instances)} spray instances into a symbol set → {id, count}",
+            "{points: [[x,y]…], name?, radius?: 40, density?: 1..10 (5), scale?: 1, alt?: bool (remove instances), attributes?: {scrunch?, size?, spin?, screen?, stain?, style?: average|userDefined (average)}, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name} spray instances into a symbol set → {id, count}. Each of `attributes` says what a new instance takes: average, the mean of the selected set's instances within `radius` of the stroke point (their spacing along the stroke, size, rotation, opacity, and the stain or style of the nearest one that has one at the mean amount), and with none there the symbol's size, no rotation, full opacity and no stain or style; or userDefined: spacing from the symbol's size and `density`, the symbol's size times `scale`, turned the way the stroke runs there (not turned for one point), full opacity, stained in full with `color` (default: the fill color), and the fill of graphic style `style` (default: the first style after the default one) in full. The stain and the style are both the instance's fill, and the style replaces the stain. Another key or value in `attributes` is an error",
             has_doc,
             symbol_spray
+        ),
+        cmd!(
+            "symbol.setDensity",
+            "Symbol Set Density",
+            [],
+            None,
+            "{from: 1..10, to: 1..10, ids?|id?} space the instances of the selected symbol sets (or those in `ids`) as Symbol Set Density `to` packs them, from the density each set was created at or last given (`from` for a set without one, such as one grouped by hand): each instance moves along the line from the middle of its set's instances, to (1.15 − 0.1·to) / (1.15 − 0.1·from) of its distance from it (each factor at least 0.1), as one undo step, and the sets moved then have density `to`; a higher density packs them closer, and a locked or hidden instance stays where it is. No undo step is added when no instance moves (a set already at `to`, or sets of one instance). A `from` or `to` left out, not a number or outside 1..10, an id naming no object, or no symbol set among the objects is an error → {ids: the sets changed, count: the instances moved}",
+            has_doc,
+            symbol_set_density
         ),
         cmd!(
             "symbol.adjust",
             "Symbolism Tool",
             [],
             None,
-            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y]…], radius?: 40, intensity?: 1..10 (5), alt?: bool, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name} adjust instances near the points (selection, else all) → {count}",
+            "{tool: shift|scrunch|size|spin|stain|screen|style, points: [[x,y,pressure?]…] (pen pressure 0..1, default 1), radius?: 40, intensity?: 1..10 (5), usePressure?: bool (each point's pressure is the intensity there, in place of `intensity`), method?: userDefined|average|random (userDefined; not used by shift), proportional?: bool (size; true), affectsDensity?: bool (size; false), alt?: bool, shift?: bool (shift, size, stain and style; false), color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), style?: name (a graphic style's; left out, or naming no style in the document, the first style after the default one)} adjust instances near the points (selection, else all) → {count}. `method` userDefined changes each instance by the tool's amount at its distance from the point; random gives each instance its own share of that amount for the whole stroke, from none to twice it (spin: a turn either way); average moves each instance's value toward the mean of the instances within `radius` of the point (scrunch: its distance from their middle toward their mean distance; size: the geometric mean of their sizes; spin: their mean direction; stain and style: their mean amount; screen: their mean opacity), and `alt` does not reverse it. With `proportional` false a drag resizes along its own direction (a level drag the width, an upright one the height; the first point takes the direction to the second) and one point resizes both; average resizes both whatever `proportional` is. With `affectsDensity` an instance also moves away from the point as it grows and toward it as it shrinks. `shift` is the tool's Shift form: shift brings the instances within `radius` of any point one place forward among their siblings (with `alt`, one place backward), once for the stroke, and does not move them; size keeps the instances where they are, `affectsDensity` included; stain and style keep each instance's amount and move its paint toward `color` or the style (stain by the tool's amount at its distance from the point, style by the brush's strength there), whatever `method` is, and leave an instance without a stain or style as it is, and `alt` has no effect. No undo step is added when no instance changes (none under the brush, average with each already at the mean, or shift with nothing to move or change). A `method` that is none of the three, or a pressure that isn't a number, is an error",
             has_doc,
             symbol_adjust
         ),

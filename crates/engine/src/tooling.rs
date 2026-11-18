@@ -1372,6 +1372,7 @@ impl Session {
         }
         // Every value is checked before any is set, so an invalid one changes nothing.
         vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
+        vectorcraft_tools::symbolism::check_options(tool.unwrap_or(self.tool.id()), &values)?;
         if tool.unwrap_or(self.tool.id()) == vectorcraft_tools::cropimage::ID {
             use vectorcraft_tools::cropimage as crop;
             // The most the selected image can be cropped to, when one is selected.
