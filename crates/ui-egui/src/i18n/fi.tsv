@@ -4288,6 +4288,7 @@ theme	Appearance	Ulkoasu
 	Set Tab Stops	Aseta sarkainkohdat
 	Tab Stops	Sarkainkohdat
 	Flare	Häikäisy
+	Edit Flare	Muokkaa häikäisyä
 	Rays	Säteet
 	Rectangle	Suorakulmio
 	Paintbrush	Maalaussivellin
@@ -5606,6 +5607,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	select a blend	valitse sulautus
 @msg	select a blend or give `id`	valitse sulautus tai anna sen `id`
 @msg	select a clip group	valitse leikkausryhmä
+@msg	select a flare	valitse häikäisy
 @msg	select a gradient mesh	valitse liukuväriverkko
 @msg	select a linked image: an embedded one has no file	valitse linkitetty kuva: upotetulla kuvalla ei ole tiedostoa
 @msg	select a repeat	valitse toisto

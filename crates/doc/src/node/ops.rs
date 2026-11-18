@@ -520,6 +520,12 @@ impl Node {
         {
             dimension.transform(a);
         }
+        // So does a flare's center and end point.
+        if let Some(e) = self.extras_if_any()
+            && let Some(flare) = &mut e.flare
+        {
+            flare.transform(a);
+        }
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
         if !self.is_layer() {
