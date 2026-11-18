@@ -452,7 +452,8 @@ pub(super) fn section_list(ui: &mut egui::Ui, d: &mut Dialog, sections: &[&str],
 
 /// What choosing `standard` changes: the compatibility, to its version unless it allows the one
 /// chosen, and off what files of a standard can't have (editing data, passwords; layers in PDF/X-1a
-/// and PDF/X-3).
+/// and PDF/X-3). In PDF/X-3 and PDF/X-4, Profile inclusion goes back to unset: the picker is
+/// disabled there, and `none` would write every CMYK color as DeviceCMYK.
 fn standard_chosen(d: &mut Dialog, standard: Standard) {
     if choice::<Compatibility>(d, "compatibility").is_some_and(|c| !standard.allows(c)) {
         set(d, "compatibility", json!(standard.version().id()));
@@ -465,6 +466,9 @@ fn standard_chosen(d: &mut Dialog, standard: Standard) {
     }
     if !standard.allows_layers() {
         set(d, "createLayers", json!(false));
+    }
+    if standard.is_pdfx() && !standard.cmyk_only() {
+        set(d, "output.profiles", json!(vectorcraft_pdf::UNSET_CHOICE));
     }
 }
 
@@ -712,6 +716,22 @@ fn output(ui: &mut egui::Ui, d: &mut Dialog) {
     });
     if standard.cmyk_only() {
         note(ui, tl!("PDF/X-1a files are CMYK: every colour is converted to the destination (blank: the output intent's CMYK profile), untagged."));
+    } else if standard.is_pdfx() {
+        note(
+            ui,
+            tl!(
+                "Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK."
+            ),
+        );
+        // A preset or the dialog's params can bring `none` with the standard; the picker can't change it.
+        if choice::<ProfileInclusion>(d, "output.profiles") == Some(ProfileInclusion::None) {
+            note(
+                ui,
+                tl!(
+                    "With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile."
+                ),
+            );
+        }
     } else if standard != Standard::None {
         note(ui, tl!("Files of this standard tag their colours with ICC profiles."));
     }

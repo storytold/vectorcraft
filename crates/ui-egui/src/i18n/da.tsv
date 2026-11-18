@@ -5693,6 +5693,8 @@ antiAlias	Sharp	Skarp
 	Every option matches {base}.	Alle indstillinger matcher {base}.
 	Files of a PDF standard can't be password-protected.	Filer med en PDF-standard kan ikke beskyttes med adgangskode.
 	Files of this standard tag their colours with ICC profiles.	Filer med denne standard mærker deres farver med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer med denne standard mærker deres farver med ICC-profiler, undtagen CMYK-farver i outputintentens profil, som skrives som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med »Medtag ikke profiler« og en CMYK-outputintent skrives alle CMYK-farver som DeviceCMYK, medmindre de konverteres til en CMYK-destination med en anden profil.
 	Flattener preset:	Forudindstilling til fladgøring:
 	General › Thumbnails	Generelt › Miniaturer
 	Grayscale images	Gråtonebilleder

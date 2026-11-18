@@ -1587,6 +1587,8 @@ digits	Malayalam	Malajálam
 	Files	Fájlok
 	Files of a PDF standard can't be password-protected.	A PDF-szabványnak megfelelő fájlok nem védhetők jelszóval.
 	Files of this standard tag their colours with ICC profiles.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket, kivéve a kimeneti cél profiljában lévő CMYK-színeket, amelyek DeviceCMYK-ként íródnak.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„Profilok nélkül” beállítással és CMYK kimeneti céllal minden CMYK-szín DeviceCMYK-ként íródik, kivéve, ha egy másik profil CMYK-céljába konvertálódik.
 	Fill	Kitöltés
 	Fill & Stroke	Kitöltés és körvonal
 	Fill (X), double-click for the Color Picker	Kitöltés (X), dupla kattintás: Színválasztó

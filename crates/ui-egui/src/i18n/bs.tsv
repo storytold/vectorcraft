@@ -3116,6 +3116,8 @@ antiAlias	Sharp	Oštro
 	Every option matches {base}.	Sve opcije odgovaraju {base}.
 	Files of a PDF standard can't be password-protected.	Datoteke PDF standarda ne mogu se zaštititi lozinkom.
 	Files of this standard tag their colours with ICC profiles.	Datoteke ovog standarda označavaju svoje boje ICC profilima.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Datoteke ovog standarda označavaju svoje boje ICC profilima, osim CMYK boja u profilu izlazne namjene, koje se zapisuju kao DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Uz „Ne uključuj profile“ i CMYK izlaznu namjenu, svaka CMYK boja zapisuje se kao DeviceCMYK, osim ako se ne pretvori u CMYK odredište s drugim profilom.
 	Flattener preset:	Predložak spljoštavanja:
 	General › Thumbnails	Općenito › Sličice
 	Grayscale images	Slike u nijansama sive
