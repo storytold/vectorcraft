@@ -14,7 +14,7 @@ use crate::VectorcraftApp;
 use crate::theme::Tokens;
 use crate::widgets::{self, menu_item};
 
-/// Colour values in the colour's own model, like Illustrator's Info panel.
+/// Color values in the color's own model, for the Info panel.
 pub fn color_values(c: &Color) -> Vec<(&'static str, String)> {
     match *c {
         Color::Rgb { r, g, b } => vec![("R", format!("{:.0}", r * 255.0)), ("G", format!("{:.0}", g * 255.0)), ("B", format!("{:.0}", b * 255.0))],

@@ -11,7 +11,7 @@
 # Coverage: the whole interface — every menu string and every `tl!` literal (`complete_menus`,
 # `untranslated_report` lists gaps). Left in English on purpose (`MENU_KEEP_AS_IS` in the tests): the product name, language
 # names, OpenType, the built-in workspace names and the bracketed perspective grid preset names.
-# Photoshop-style raster effects (Effect menu, their dialogs).
+# Raster effects (Effect menu, their dialogs).
 	Glowing Edges…	Bordes resplandecientes…
 	Glowing Edges	Bordes resplandecientes
 	Edge Width	Ancho del borde
@@ -119,6 +119,7 @@
 	Add Anchor Point	Agregar punto de ancla
 	Add Anchor Point Tool	Herramienta Agregar punto de ancla
 	Add Anchor Points	Agregar puntos de ancla
+	Add Around	Agregar alrededor del objeto
 	Add Effect	Agregar efecto
 	Add Freeform Line	Agregar línea libre
 	Add Freeform Point	Agregar punto libre
@@ -140,8 +141,12 @@
 	Add to Swatches	Agregar a muestras
 	Add Used Colors	Agregar colores usados
 	Additional Plug-ins Folder	Carpeta de plugins adicionales
+	Plug-in Instruction Budget	Presupuesto de instrucciones de plugins
 	Additional Fonts Folder	Carpeta de fuentes adicionales
 	Adjust Adjoining Width Points	Ajustar puntos de anchura contiguos
+	Incoming	Entrante
+	Outgoing	Saliente
+	Single Width Only	Solo una anchura
 	Adjust Color Balance…	Ajustar equilibrio de color…
 	Adjust Colors	Ajustar colores
 	Adjust Options:	Opciones de ajuste:
@@ -196,6 +201,7 @@
 	Angle:	Ángulo:
 	Angles	Ángulos
 	Animated Zoom	Zoom animado
+	Anti Alias	Suavizado
 	Anti-alias	Suavizado
 	Anti-Alias	Suavizado
 	Anti-alias Rasters	Suavizar imágenes ráster
@@ -361,6 +367,12 @@ font-technology	Variable	Variables
 	Brush Definition	Definición del pincel
 	Brush Libraries	Bibliotecas de pinceles
 	Brush Options…	Opciones de pincel…
+	Options of Selected Object…	Opciones del objeto seleccionado…
+	Options of Selected Object	Opciones del objeto seleccionado
+@msg	no path painted with a brush is selected	no hay ningún trazado pintado con un pincel seleccionado
+@msg	the selected paths are painted with brushes of different types	los trazados seleccionados están pintados con pinceles de tipos distintos
+@msg	give `params` or `reset`, not both	indique `params` o `reset`, no ambos
+@msg	a bristle brush has no options of its own on a path	un pincel de cerdas no tiene opciones propias en un trazado
 	Brush Strokes	Trazos de pincel
 	Brushes	Pinceles
 	Built-in Libraries	Bibliotecas integradas
@@ -417,6 +429,12 @@ font-technology	Variable	Variables
 	Character Alignment	Alineación de caracteres
 	Character / Paragraph	Carácter / Párrafo
 	Character Rotation	Rotación de caracteres
+	Chinese Big 5	Chino Big 5
+	Cyrillic	Cirílico
+	Greek	Griego
+	Turkish	Turco
+	Baltic	Báltico
+	Central European	Centroeuropeo
 	Character Set:	Juego de caracteres:
 	Character Style	Estilo de carácter
 	Character Style Options	Opciones de estilo de carácter
@@ -479,6 +497,8 @@ font-technology	Variable	Variables
 	Choose a folder	Elige una carpeta
 	Choose…	Elegir…
 	Circle	Círculo
+	Circle Tool	Herramienta Círculo
+	Circle too large	Círculo demasiado grande
 	Classic Defaults	Valores predeterminados clásicos
 	Clean Up…	Limpiar…
 	Clear	Borrar
@@ -554,6 +574,7 @@ font-technology	Variable	Variables
 	Color Mixer (Shift-click the chip)	Mezclador de colores (Shift+clic en la muestra)
 	Color Mode	Modo de color
 	Color Mode:	Modo de color:
+	Color Model	Modelo de color
 	Color Model:	Modelo de color:
 	Color Models	Modelos de color
 	Color Picker	Selector de color
@@ -574,12 +595,18 @@ font-technology	Variable	Variables
 	Saturation and brightness	Saturación y brillo
 	Color field	Campo de color
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Vista de rueda
+	Box View	Vista de cuadro
+	Box Channel	Canal del cuadro
+	Color box	Cuadro de color
+	Color Wheel Options	Opciones de la rueda de color
 	Color Type:	Tipo de color:
 	Color:	Color:
 	Colorize	Colorear
 	Colors	Colores
 	Colors:	Colores:
 	Column Graph Tool	Herramienta Gráfico de columnas
+	Columns	Columnas
 	Columns:	Columnas:
 	Column…	Columna…
 	Combine Slices	Combinar sectores
@@ -790,6 +817,9 @@ font-technology	Variable	Variables
 	Delete Artboard	Eliminar mesa de trabajo
 	Delete Artboards	Eliminar mesas de trabajo
 	Delete Brush	Eliminar pincel
+	Delete Color	Eliminar color
+	Restore Generated Table	Restaurar tabla generada
+	Unshift All Colors	Deshacer cambio de todos los colores
 	Delete Character Style	Eliminar estilo de carácter
 	Delete Empty Artboards	Eliminar mesas de trabajo vacías
 	Delete Freeform Point	Eliminar punto libre
@@ -858,6 +888,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Herramienta Selección directa
 	Direction Handles	Manejadores de dirección
 	Disable Auto Add/Delete	Desactivar agregar/eliminar automático
+	Interpolate Control Points When Moving Anchors	Interpolar manejadores de dirección al mover puntos de ancla
 	Disable Opacity Mask	Desactivar máscara de opacidad
 	Discard	Descartar
 	Discard Empty Type	Descartar texto vacío
@@ -1074,6 +1105,7 @@ font-technology	Variable	Variables
 	Enable text access for screen readers	Permitir el acceso al texto para lectores de pantalla
 	Enable Touch Gestures	Activar gestos táctiles
 	Switch Selection and Drawing Modes	Cambiar entre modos de selección y dibujo
+	Select Last Selection Tool	Elegir la última herramienta de selección
 	Enable Touch Workspace	Activar espacio de trabajo táctil
 	Encoding	Codificación
 	Encoding:	Codificación:
@@ -1256,6 +1288,8 @@ font-technology	Variable	Variables
 	Files	Archivos
 	Files of a PDF standard can't be password-protected.	Los archivos de un estándar PDF no se pueden proteger con contraseña.
 	Files of this standard tag their colours with ICC profiles.	Los archivos de este estándar etiquetan sus colores con perfiles ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Los archivos de este estándar etiquetan sus colores con perfiles ICC, excepto los colores CMYK en el perfil de propósito de salida, que se escriben como DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Con «No incluir perfiles» y un propósito de salida CMYK, cada color CMYK se escribe como DeviceCMYK, salvo que se convierta a un destino CMYK de otro perfil.
 	Fill	Relleno
 	Fill & Stroke	Relleno y trazo
 	Fill (X), double-click for the Color Picker	Relleno (X), doble clic para el selector de color
@@ -1305,6 +1339,8 @@ font-technology	Variable	Variables
 	Reset Tracking and Kerning	Restablecer espaciado e interletraje
 	Reset Horizontal Scale	Restablecer escala horizontal
 	Highlight Font Name	Resaltar nombre de fuente
+	Highlight Font Size	Resaltar tamaño de fuente
+	Other…	Otro…
 	Highlight Kerning	Resaltar interletraje
 	Highlight Tracking	Resaltar espaciado
 	Spacing	Espaciado
@@ -2030,6 +2066,7 @@ font-technology	Variable	Variables
 	Load SVG into Clipboard	Cargar SVG en el portapapeles
 	Load Text into Clipboard	Cargar texto en el portapapeles
 	Local Libraries	Bibliotecas locales
+	Locate Layer	Localizar capa
 	Locate Object	Localizar objeto
 	Locate Selected Objects	Localizar objetos seleccionados
 	Location	Ubicación
@@ -2226,6 +2263,7 @@ font-technology	Variable	Variables
 	Scatter:	Dispersión:
 	Rotation:	Rotación:
 	Rotation relative to:	Rotación relativa a:
+	Hue Jitter:	Variación del tono:
 	Brush Scale Options	Opciones de escala del pincel
 	Scale Proportionately	Escalar proporcionalmente
 	Stretch to Fit Stroke Length	Estirar para ajustar a la longitud del trazo
@@ -2262,6 +2300,7 @@ font-technology	Variable	Variables
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	El negro pasa a ser el color del trazo y el blanco sigue siendo blanco. Los demás colores pasan a ser matices del color del trazo, y cuanto más claro es un color, más claro es su matiz.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	El negro sigue siendo negro y el blanco sigue siendo blanco. Los demás colores pasan a ser sombras del color del trazo cuando son oscuros y matices de él cuando son claros.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	El color clave pasa a ser el color del trazo. Los demás colores giran en la rueda de colores lo mismo que el color clave y conservan su saturación y su brillo.
+	Roundness	Redondez
 	Roundness:	Redondez:
 	Fixed	Fijo
 	Pressure	Presión
@@ -2567,6 +2606,9 @@ font-technology	Variable	Variables
 	Overprint	Sobreimprimir
 	Overprint and Transparency Flattener	Sobreimpresión y acoplador de transparencia
 	Overprint and Transparency Flattener Options	Opciones de sobreimpresión y acoplador de transparencia
+	Custom…	Personalizado…
+	Custom Transparency Flattener Options	Opciones personalizadas de acoplador de transparencia
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS no tiene transparencia alfa, y Sobreimpresiones determina si se conservan las sobreimpresiones.
 	Overprint Black…	Sobreimprimir negro…
 	Overprint Fill	Sobreimprimir relleno
 	Overprint Preview	Vista previa de sobreimpresión
@@ -2616,6 +2658,11 @@ font-technology	Variable	Variables
 	Pathfinders:	Buscatrazos:
 	Paths	Trazados
 	Path Length	Longitud de los trazados
+	Grid Size	Tamaño de cuadrícula
+	Grid Colors	Colores de cuadrícula
+	Flattener Preset	Preajuste del acoplador
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Trazados: {paths}    Anclas: {anchors}    Colores: {colors}
 	Pattern	Motivo
 	Pattern Editing	Edición de motivo
@@ -2673,6 +2720,7 @@ font-technology	Variable	Variables
 	Play Current Selection	Reproducir la selección actual
 	Save Actions…	Guardar acciones…
 	Load Actions…	Cargar acciones…
+	Replace Actions…	Reemplazar acciones…
 	Reset Actions	Restablecer acciones
 	Replace the current actions with the default set?	¿Reemplazar las acciones actuales por el conjunto predeterminado?
 	Append adds the default set after the current sets instead.	Añadir agrega en su lugar el conjunto predeterminado después de los conjuntos actuales.
@@ -2688,6 +2736,10 @@ font-technology	Variable	Variables
 	Polar Grid Tool	Herramienta Cuadrícula polar
 	Polygon	Polígono
 	Polygon Properties:	Propiedades del polígono:
+	Line Properties:	Propiedades de la línea:
+	Line Length:	Longitud de la línea:
+	Line Angle:	Ángulo de la línea:
+	Constrain Pie Angle	Restringir ángulo del sector
 	Polygon Tool	Herramienta Polígono
 	Portrait	Vertical
 	Power Saving (integrated)	Ahorro de energía (integrada)
@@ -2847,6 +2899,9 @@ digits	Malayalam	Malayálam
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
 	Use Monitor Profile for Canvas	Usar perfil del monitor para el lienzo
+	Refresh Monitor Profile	Actualizar perfil del monitor
+@msg	turn on Use Monitor Profile for Canvas first	activa primero «Usar perfil del monitor para el lienzo»
+@msg	this build doesn't read display profiles	esta versión no lee perfiles de pantalla
 	The canvas is drawn in sRGB.	El lienzo se dibuja en sRGB.
 	Canvas display profile:	Perfil de pantalla del lienzo:
 	The system matches the window to the display's colors.	El sistema ajusta la ventana a los colores de la pantalla.
@@ -3039,6 +3094,8 @@ digits	Malayalam	Malayálam
 	Reselect	Volver a seleccionar
 	Reset	Restablecer
 	Reset Bounding Box	Restablecer cuadro delimitador
+	Rotate Bounding Box	Rotar cuadro delimitador
+	Rotate Bounding Box…	Rotar cuadro delimitador…
 	Reset Envelope Mesh	Restablecer malla de envolvente
 	Reset Envelope Shape	Restablecer forma de envolvente
 	Reset Essentials	Restablecer Essentials
@@ -3079,6 +3136,7 @@ digits	Malayalam	Malayálam
 	Reshape Segment	Remodelar segmento
 	Reshape Tool	Herramienta Remodelar
 	Reshape Type Area	Remodelar área de texto
+	Resolution	Resolución
 	Resolution:	Resolución:
 	Responsive	Adaptable
 	Restore	Restaurar
@@ -3105,6 +3163,7 @@ digits	Malayalam	Malayálam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La rueda del mouse con Cmd/Ctrl pulsado desplaza el lienzo en horizontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrastrar en horizontal sobre la etiqueta de un campo numérico cambia el valor del campo.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gesto de giro con dos dedos en un trackpad gira la vista del lienzo.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Al mover puntos de ancla, cada curva con un extremo movido conserva su forma respecto a sus extremos.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantener pulsado el atajo de una herramienta la elige hasta que lo suelta, y después vuelve a elegirse la herramienta anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Muestra el cuadro delimitador mientras mueve la selección o dibuja una forma.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Crear marcas de recorte dibuja marcas de estilo japonés en lugar de romanas.
@@ -3135,6 +3194,29 @@ digits	Malayalam	Malayálam
 	The unit for East Asian type measurements, which no field uses yet.	La unidad para las medidas del texto de Asia oriental, que todavía no usa ningún campo.
 	When on, a number typed without a unit into a field in picas is read in points.	Si está activado, un número escrito sin unidad en un campo en picas se lee en puntos.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Con ID XML, los nombres de los objetos se muestran como ID XML en Capas, Variables y Opciones de capa.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	El paso del tamaño del texto y del interlineado: Cmd/Ctrl+Mayús+. y Cmd/Ctrl+Mayús+, cambian el tamaño un paso, o cinco con Alt también; en texto horizontal, Alt con la flecha arriba o abajo cambia el interlineado un paso, o cinco con Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	El paso del tracking y del kerning, en milésimas de em: en texto horizontal, Alt con la flecha izquierda o derecha cambia el kerning en el cursor o el tracking del texto seleccionado un paso, o cinco con Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	El paso del desplazamiento vertical: en texto horizontal, Alt y Mayús con la flecha arriba o abajo mueven la línea de base un paso, o cinco con Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Muestra las opciones del texto japonés y de otros idiomas de Asia oriental en los paneles Carácter, Párrafo, OpenType y Glifos, y el comando Fuentes compuestas.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Muestra las opciones del texto árabe, hebreo e índico en los paneles Carácter y Párrafo, como la dirección del párrafo, las kashidas y los dígitos.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Las herramientas de selección seleccionan el texto solo en su línea de base, el marco del texto de área o su trazado, no en cualquier punto dentro de su caja.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Los menús de fuentes muestran cada fuente con su nombre en inglés; desactivado, una fuente que también tiene un nombre en su propio idioma muestra ese nombre.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	El texto de área nuevo empieza con Tamaño automático activado, así que un marco rectangular de texto horizontal crece o se reduce en altura para ajustarse a su texto.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Las listas de fuentes y el menú Fuente muestran una muestra de cada fuente junto a su nombre.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Las muestras de fuentes se dibujan en texto oscuro sobre blanco, sea cual sea el brillo de la interfaz; solo se aplica mientras las previsualizaciones de fuentes en los menús están activadas.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	La altura de cada fila en las listas de los campos de fuente, como el del panel Carácter, y por tanto el tamaño de cada muestra.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Cuántas de las últimas fuentes usadas, de 1 a 15, muestran Fuentes recientes y las listas de fuentes, la más reciente primero.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Al cambiar la fuente o el estilo de fuente de un texto, los caracteres para los que la nueva fuente no tiene glifo conservan la fuente que tenían.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Un resaltado rosa en el lienzo marca los glifos que las funciones OpenType han sustituido, como las ligaduras; no se imprime ni se exporta.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Con la herramienta Texto, al seleccionar un solo carácter aparece junto a él en el lienzo una fila de sus glifos alternativos para elegir.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Un resaltado rosa en el lienzo marca el texto dibujado con una fuente sustituta porque falta su fuente; no se imprime ni se exporta.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	El texto nuevo creado con una herramienta de texto empieza con texto de relleno seleccionado, que lo que escriba sustituye.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Escribir un marcador de lista como 1. o * y luego un espacio al principio de un párrafo convierte el párrafo en una lista.
+	Fonts in this folder show in the font menus and can be used without being installed.	Las fuentes de esta carpeta aparecen en los menús de fuentes y se pueden usar sin instalarlas.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Aplicar un estilo gráfico a un texto quita a los caracteres su propio relleno o trazo donde el estilo tiene uno, para que se vea la pintura del estilo.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Alinear y Distribuir miden el texto de punto por la tinta de sus glifos en lugar de por su caja em.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Alinear y Distribuir miden el texto de área por la tinta de sus glifos en lugar de por su marco.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	El cuadro delimitador y el panel Transformar miden el texto de punto por la tinta de sus glifos en lugar de por su caja em.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Ajusta el dibujo, el desplazamiento y el escalado a las subdivisiones de la cuadrícula, aunque la cuadrícula esté oculta; mientras está activado, Ajustar a píxel no se aplica.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	El color de las guías no seleccionadas; una mesa de trabajo con una Etiqueta de las guías dibuja sus propias guías en el color de la etiqueta.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Dibuja las guías como líneas continuas o como puntos, incluidas las guías que ya están en el documento.
@@ -3162,6 +3244,8 @@ digits	Malayalam	Malayálam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Cuánto debe acercarse en pantalla el puntero o un punto arrastrado a la ilustración para que las guías inteligentes se ajusten a ella; la distancia es la misma con cualquier zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta el extremo de un segmento de línea, o un círculo dibujado desde su centro, para que toque una curva cercana.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta el extremo de un segmento de línea para que encuentre un segmento recto cercano en ángulo recto.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Muestra en el lienzo el número de cada sector en un recuadro en su esquina superior izquierda; si está desactivado, los contornos de los sectores siguen visibles.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color de los contornos de los sectores de usuario y de objeto y de los recuadros con su número; los sectores automáticos usan un tono más apagado de ese color.
 	Reset all preferences to their defaults?	¿Restablecer todas las preferencias a sus valores predeterminados?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Los valores predeterminados se aplican al hacer clic en Aceptar en Preferencias. Cancelar ahí conserva sus preferencias actuales.
 	Restore Recovered Documents	Restaurar documentos recuperados
@@ -3216,6 +3300,7 @@ digits	Malayalam	Malayálam
 	Rounded Rectangle Tool	Herramienta Rectángulo redondeado
 	Rounded Rectangle…	Rectángulo redondeado…
 	Row Size:	Tamaño de fila:
+	Rows	Filas
 	Rows:	Filas:
 	Rule:	Filete:
 	Rulers	Reglas
@@ -3390,6 +3475,12 @@ digits	Malayalam	Malayálam
 	Search commands, tools, panels and effects…	Buscar comandos, herramientas, paneles y efectos…
 	No commands match	Ningún comando coincide
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Sin elemento de menú
+	Toolbar	Barra de herramientas
+	{toolbar}, in the {tool} group	{toolbar}, en el grupo {tool}
+	In the menu bar: {path}	En la barra de menús: {path}
+	In the {group} group: press and hold to open it	En el grupo {group}: mantén pulsado para abrirlo
+	{home}, not shown now	{home}, no se muestra ahora
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
@@ -3470,6 +3561,7 @@ digits	Malayalam	Malayálam
 	Set Slice Rectangle	Definir rectángulo de sector
 	Set Tab Stops	Definir tabulaciones
 	Set Text	Definir texto
+	Set the current fill or stroke to the selected color	Asignar el color seleccionado al relleno o trazo actual
 	Set the selected color to the current color	Asignar el color actual al color seleccionado
 	Set Zoom	Definir zoom
 	Settings…	Ajustes…
@@ -3593,7 +3685,7 @@ digits	Malayalam	Malayálam
 	Show Vivid/Muted	Mostrar vivos/apagados
 	Show Warm/Cool	Mostrar cálidos/fríos
 	Show {kind} Brushes	Mostrar pinceles de {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostrar/ocultar plancha (Alt+clic: solo esta plancha)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostrar/ocultar plancha (Alt+clic: solo esta plancha; Alt+clic otra vez: todas las planchas)
 	Show:	Mostrar:
 	Shown with the optimised preview.	Se muestra con la vista previa optimizada.
 	Side 1:	Lado 1:
@@ -3900,7 +3992,7 @@ digits	Malayalam	Malayálam
 	Composite Fonts	Fuentes compuestas
 	Export Composite Fonts	Exportar fuentes compuestas
 	Import Composite Fonts	Importar fuentes compuestas
-@msg	each font must be {name, parts}	cada fuente debe ser {name, parts}
+@msg	each font must be {{name, parts}}	cada fuente debe ser {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	clave desconocida `{k}`; una fuente admite name y parts
 @msg	each font needs a name	cada fuente necesita un nombre
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no puede nombrar una fuente compuesta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sin caracteres de control)
@@ -3913,7 +4005,10 @@ digits	Malayalam	Malayálam
 @msg	two composite fonts are named `{_1}`	dos fuentes compuestas se llaman `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` es el nombre de una fuente instalada
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, una fuente compuesta
-@msg	give fonts: [{name, parts}…]	indique fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	indique fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` debe ser "document", {{artboards: [index, …]}} o {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	números desordenados en el cuantificador {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	la pintura no es un degradado de forma libre (aplique uno con paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path está vacío
 @msg	fonts must be a list of composite fonts	fonts debe ser una lista de fuentes compuestas
 @msg	names must be strings	names debe contener cadenas
@@ -3996,6 +4091,13 @@ digits	Malayalam	Malayálam
 	Thumbnail View	Vista de miniaturas
 	Thumbnails:	Miniaturas:
 	Tile	Mosaico
+	Tile All Vertically	Mosaico vertical de todo
+	Tile All Horizontally	Mosaico horizontal de todo
+	2-Up Layout	Disposición de 2
+	3-Up Layout	Disposición de 3
+	4-Up Layout	Disposición de 4
+	6-Up Layout	Disposición de 6
+	Arrange Documents	Organizar documentos
 	Tile Edge Color	Color del borde del mosaico
 	Tile Edge Color…	Color del borde del mosaico…
 	Tile Full Pages	Mosaico de páginas completas
@@ -4190,6 +4292,8 @@ digits	Malayalam	Malayálam
 	V Spacing:	Espaciado V:
 	V:	V:
 	Variable Width Profile	Perfil de anchura variable
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pincel del trazo mantiene su propio tamaño, así que un perfil de anchura no lo cambia. Quite el pincel para usar un perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pincel del trazo mantiene su propio tamaño, así que un perfil de anchura no lo cambia. Quite el pincel para usar un perfil.
 	Variables	Variables
 	New Variable	Nueva variable
 	Delete Variable	Eliminar variable
@@ -4254,7 +4358,7 @@ digits	Malayalam	Malayálam
 	Vertical:	Vertical:
 	Very High	Muy alta
 	View	Ver
-	View Artboard Only	Ver solo la mesa de trabajo
+	View Artboard Contents Only	Ver solo el contenido de la mesa de trabajo
 	View Opacity Mask	Ver máscara de opacidad
 	View PDF after saving	Ver PDF después de guardar
 	View {n}	Vista {n}
@@ -4468,6 +4572,7 @@ imageTrace	Outline	Contorno
 	Bevel	Bisel
 	Offset	Desplazamiento
 	Axis	Eje
+	Axis Angle	Ángulo del eje
 axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Ambos
@@ -4544,6 +4649,13 @@ axis	Both	Ambos
 	Show External Script Warning	Mostrar advertencia de scripts externos
 	A Script Is Running	Se está ejecutando un script
 	Script Alert	Aviso del script
+	Script File Access	Acceso del script a archivos
+	The script asks to read a file you choose.	El script pide leer un archivo que usted elija.
+	The script asks to read and write a file you choose.	El script pide leer y escribir un archivo que usted elija.
+	The script asks to read and write a folder you choose, with everything in it.	El script pide leer y escribir una carpeta que usted elija, con todo su contenido.
+	Allow Once	Permitir una vez
+	Always Allow This Script	Permitir siempre este script
+	Deny	Denegar
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script puede cambiar los documentos abiertos y escribir archivos mediante los comandos que ejecuta. Ejecute solo scripts de confianza.
 	Do not show this warning again	No volver a mostrar esta advertencia
 	Stop the script and undo what it did? Then quit again.	¿Detener el script y deshacer lo que hizo? Después, vuelva a salir.
@@ -4560,6 +4672,8 @@ axis	Both	Ambos
 @msg	the script is no longer in the Scripts folder	el script ya no está en la carpeta Scripts
 	Some scripts were not listed	Algunos scripts no se han incluido en la lista
 	The Scripts folder cannot be read	No se puede leer la carpeta Scripts
+	Loading scripts…	Cargando scripts…
+	The Scripts folder is still being read	Aún se está leyendo la carpeta Scripts
 @msg	the script's run is no longer available	la ejecución del script ya no está disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando fallido cambió pasos de deshacer que no se pudieron restaurar, así que el script se detuvo
 @msg	a recovery copy could not be written, so the script was not run	no se pudo escribir una copia de recuperación, así que el script no se ejecutó
@@ -4572,8 +4686,6 @@ axis	Both	Ambos
 @msg	Script file could not be read	No se pudo leer el archivo de script
 @msg	Script folder has more than 2,048 entries	La carpeta de script tiene más de 2048 entradas
 @msg	Script file open mode must be r, w, e or a	El modo de apertura del archivo de script debe ser r, w, e o a
-@msg	Script file writing is not available	La escritura de archivos de script no está disponible
-@msg	Script file dialogs are not available	Los cuadros de diálogo de archivos de script no están disponibles
 @msg	Script files cannot be opened in another application	Los archivos de script no se pueden abrir en otra aplicación
 @msg	Script file access is unavailable on the web	El acceso a archivos de script no está disponible en la web
 @msg	Script has 256 files open	El script tiene 256 archivos abiertos
@@ -4712,8 +4824,37 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
 @msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` solo es para una ejecución sin nadie a quien preguntar: en la aplicación, la persona responde cada cuadro de diálogo
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` debe ser un número entero de 1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` está anidado a más de 64 niveles
+@msg	`args` must be an object	`args` debe ser un objeto
+@msg	`args` is larger than 1 MiB	`args` ocupa más de 1 MiB
+@msg	`path` is empty	`path` está vacío
+@msg	`installed` takes a `path`, not a `source`	`installed` admite un `path`, no un `source`
+@msg	`path` must name a .js or .jsx file	`path` debe indicar un archivo .js o .jsx
+@msg	give exactly one of `path` and `source`	indique exactamente uno de `path` y `source`
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
+@msg	Script file access denied: {path}	Acceso del script a archivos denegado: {path}
+@msg	Script file access to the app's own folders is not allowed	El script no puede acceder a las carpetas propias de la aplicación
+@msg	Script file cannot encode the text	El archivo del script no puede codificar el texto
+@msg	Script file could not be written	No se pudo escribir el archivo del script
+@msg	Script file dialogs need a person to answer them	Los cuadros de diálogo de archivo del script necesitan que una persona los responda
+@msg	Script file is not open for writing	El archivo del script no está abierto para escritura
+@msg	Script file name is already in use	El nombre del archivo del script ya está en uso
+@msg	Script file name must be a name without a folder	El nombre del archivo del script debe ser un nombre sin carpeta
+@msg	Script file permission can be kept only for a script run from a file	El permiso de archivos solo se puede conservar para un script ejecutado desde un archivo
+@msg	Script file permission could not be saved	No se pudo guardar el permiso de archivos del script
+@msg	Script folder is not empty	La carpeta del script no está vacía
+@msg	Script files cannot make aliases	Los archivos del script no pueden crear alias
+@msg	Script file hidden setting cannot be changed	No se puede cambiar el ajuste de oculto del archivo del script
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un cuadro de diálogo de archivo no se puede abrir dentro de una devolución de llamada de una función integrada, un getter, una conversión o un archivo que ejecuta $.evalFile; llámelo desde el propio código del script
+@msg	the script wrote more file data than one run may write (32 MiB)	el script escribió más datos de archivo de los que puede escribir una ejecución (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` para el cuadro de diálogo de archivo de un script debe ser uno de: once, always, deny, stop
+@msg	choose a file or folder first, or deny	elija primero un archivo o una carpeta, o deniegue
+@msg	the script file permissions could not be saved: {e}	no se pudieron guardar los permisos de archivos de los scripts: {e}
+@msg	this script's file access can be allowed only once	el acceso a archivos de este script solo se puede permitir una vez
+@msg	Only the person at the keyboard can allow a script's file access	Solo la persona que está en el teclado puede permitir el acceso a archivos de un script
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script recibe como máximo 2.048 archivos: los archivos elegidos después de ellos se omitieron
 @msg	Copied the link info	Se copió la información del vínculo
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
 @msg	Couldn't copy to the system clipboard: {e}	No se pudo copiar al portapapeles del sistema: {e}
@@ -4789,6 +4930,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Saved {path}	Se guardó {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Selecciona texto o haz clic dentro del texto con la herramienta Texto para insertar glifos
 @msg	Shape Builder: no region under the pointer	Generador de formas: no hay ninguna región bajo el puntero
+@msg	Shape Builder: select all paths you want to merge	Generador de formas: selecciona todos los trazados que quieras combinar
 @msg	Shape Builder: select paths or compound paths	Generador de formas: selecciona trazados o trazados compuestos
 @msg	Show All Hidden Attributes: nothing is hidden	Mostrar todos los atributos ocultos: no hay nada oculto
 @msg	Split Into Grid: select paths large enough for the grid	Dividir en cuadrícula: selecciona trazados lo bastante grandes para la cuadrícula
@@ -4844,6 +4986,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` es mayor que `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	indica al menos uno de `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` debe ser grayscale, rgb, hsb, cmyk o websafe
+@msg	`view` must be wheel or box	`view` debe ser wheel o box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` debe ser hue, saturation, brightness, red, green o blue
 @msg	`{k}` must be [x, y]	`{k}` debe ser [x, y]
 @msg	`{name}` has no options	`{name}` no tiene opciones
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` es un espacio de trabajo integrado; elige otro nombre
@@ -4932,6 +5076,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	bad trailer	trailer no válido
 @msg	balance must be between 0 and 100	balance debe estar entre 0 y 100
 @msg	batch step {_1} (`{id}`) failed: {e}	falló el paso {_1} del lote (`{id}`): {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	falló el paso {_1} de la acción (`{id}`): {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness debe ser dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	no se puede codificar el documento: {0}
 @msg	can't parse shortcut `{c}`	no se puede interpretar el atajo `{c}`
@@ -4951,6 +5096,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	choose a folder to export to	elige una carpeta a la que exportar
 @msg	choose a location for the package	elige una ubicación para el paquete
 @msg	clipboard is empty	el portapapeles está vacío
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: al menos un color debe quedar en la tabla de colores
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` indica un color que también indica otra clave
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no es un color como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: como máximo {MAX_TABLE} colores
 @msg	command `{0}` is not available right now: {1}	el comando `{0}` no está disponible ahora: {1}
@@ -5018,9 +5165,15 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no PNG encoder	no hay codificador PNG
 @msg	no active document	no hay ningún documento activo
 @msg	no active perspective plane	no hay ningún plano de perspectiva activo
+@msg	the perspective grid is hidden	la cuadrícula de perspectiva está oculta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	El posicionamiento automático del plano está desactivado: activa anchorPoint o gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint debe ser true o false
+@msg	gridlineIntersection must be true or false	gridlineIntersection debe ser true o false
+@msg	tolerance must be 0 or more	tolerance debe ser 0 o más
+@msg	give `at` or `clear`, not both	indica `at` o `clear`, no ambos
 @msg	no anchor points selected	no hay puntos de ancla seleccionados
-@msg	`points` must be three [x, y] pairs of numbers	`points` debe ser tres pares de números [x, y]
-@msg	direct-select three anchor points, or give `points`	seleccione directamente tres puntos de ancla o indique `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` debe ser dos o tres pares de números [x, y]
+@msg	direct-select two or three anchor points, or give `points`	seleccione directamente dos o tres puntos de ancla o indique `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos
 @msg	no artboard	no hay mesa de trabajo
@@ -5122,12 +5275,17 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	no such user library	no existe esa biblioteca de usuario
 @msg	no such view	no existe esa vista
 @msg	no such width point	no existe ese punto de anchura
+@msg	`single` must be `incoming` or `outgoing`	`single` debe ser `incoming` u `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` y `outIndex` deben ser las dos mitades de un mismo punto de anchura discontinuo
+@msg	a discontinuous width point keeps its place	un punto de anchura discontinuo conserva su posición
 @msg	no swatch `{name}`	no existe la muestra `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	no existe la biblioteca de muestras `{l}` (consulta swatch.library.list)
 @msg	no symbol instances selected	no hay instancias de símbolo seleccionadas
 @msg	no target object has an opacity mask: select one or give `id`	ningún objeto de destino tiene máscara de opacidad: selecciona uno o indica `id`
 @msg	no threaded text selected	no hay texto enlazado seleccionado
 @msg	no user library folder here	aquí no hay ninguna carpeta de bibliotecas de usuario
+@msg	`{file}` has no swatches of its own	`{file}` no tiene muestras propias
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` tiene muestras de motivo, que un archivo .vcswatches no puede contener
 @msg	no user workspace `{from}`	no existe el espacio de trabajo de usuario `{from}`
 @msg	node {_1} is not text	el nodo {_1} no es texto
 @msg	node {_1} is on a locked artboard	el nodo {_1} está en una mesa de trabajo bloqueada
@@ -5383,6 +5541,13 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	más de {MAX_CSV_ROWS} conjuntos de datos: Importar conjuntos de datos lee como máximo {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	más de {MAX_CSV_COLS} variables: Importar conjuntos de datos lee como máximo {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	se omitieron las variables que no son de texto: {kinds}
+variable-kind	Visibility	Visibilidad
+variable-kind	Linked File	Archivo vinculado
+variable-kind	Graph Data	Datos del gráfico
+variable-kind	Unknown	Desconocido
+variable-list-two	{0}, {1}	{0} y {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} y {1}
 @msg	a new document won't read these variables back with their kind: {names}	un documento nuevo no volverá a leer estas variables con su tipo: {names}
 @msg	a new document refuses this file because of these variables: {names}	un documento nuevo rechaza este archivo por estas variables: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	el encabezado `{header}` de `{name}` se leería como la variable `{other}`: cambie el nombre de una de las dos
@@ -5408,6 +5573,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	{label}: lost track of a shape's style	{label}: se perdió el estilo de una forma
 @msg	{label}: select paths	{label}: selecciona trazados
 @msg	{label}: select paths, compound paths, groups or text	{label}: selecciona trazados, trazados compuestos, grupos o texto
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	una línea u otro trazado abierto que no encierra ningún área no cambia la forma del resultado; para incluirlo, aplícale primero Objeto › Trazado › Contornear trazo
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} produjo un resultado vacío: una línea u otro trazado abierto no encierra ningún área; para incluirlo, aplícale primero Objeto › Trazado › Contornear trazo
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: el CRC no coincide
 @msg	{name}: no local header	{name}: no hay encabezado local
@@ -5434,6 +5601,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Se descartó {n} documento recuperado|Se descartaron {n} documentos recuperados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Se restauró {n} documento recuperado: guárdalo para conservarlo|Se restauraron {n} documentos recuperados: guárdalos para conservarlos
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Se abrió con {n} nota: {first}|Se abrió con {n} notas: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Se copió con {n} nota: {first}|Se copió con {n} notas: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Se cortó con {n} nota: {first}|Se cortó con {n} notas: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Se calcó la imagen con {n} nota: {first}|Se calcó la imagen con {n} notas: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Se abrió con {n} nota: {first}|{notice}. Se abrió con {n} notas: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Se guardó {path} con {n} nota: {first}|Se guardó {path} con {n} notas: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Se incrustó {n} imagen; faltan {missing}: vuelve a vincularlas primero|Se incrustaron {n} imágenes; faltan {missing}: vuelve a vincularlas primero
@@ -5460,6 +5630,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	All colors are within the CMYK gamut	Todos los colores están dentro de la gama CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} color está fuera de la gama CMYK|{n} colores están fuera de la gama CMYK
 @msg	Unembedded to {_1}	Se desincrustó en {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Se desincrustó {n} imagen en {folder}|Se desincrustaron {n} imágenes en {folder}
+@msg	every numbered name for {name} is taken in that folder	todos los nombres numerados para {name} ya existen en esa carpeta
 @msg	Reset {_1}	Se restableció {_1}
 @msg	Sent to {_1}	Se envió a {_1}
 @msg	{_1} files	{_1} archivos
@@ -5475,6 +5647,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Vuelve a cargar la página para continuar (los cambios que aún no se guardaron podrían perderse).
 @msg	tool (a tool id) is required	se requiere tool (un id de herramienta)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no está en un grupo de la barra de herramientas con varias herramientas
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	el Modo de presentación oculta las barras de herramientas: cambie el modo de pantalla para mostrarlas
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ha ocultado las barras de herramientas: pulse Tab para mostrarlas
 @msg	onto must name a panel floating in another group	onto debe nombrar un panel que flote en otro grupo
 @msg	below and above must name a panel floating in another group	below y above deben nombrar un panel que flote en otro grupo
 @msg	give only one of onto, below and above	indica solo uno de onto, below y above
@@ -5589,6 +5763,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	automation path rejected: outside the read root {root}: {path}	ruta de automatización rechazada: fuera de la carpeta raíz de lectura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	ruta de automatización rechazada: fuera de las carpetas raíz de lectura {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	un archivo JavaScript vinculado está fuera de las carpetas raíz de lectura
+@msg	a linked image file is outside the read roots	un archivo de imagen vinculado está fuera de las carpetas raíz de lectura
+@msg	a linked file's export folder is outside the read roots	la carpeta de exportación de un archivo vinculado está fuera de las carpetas raíz de lectura
+@msg	a linked file's editing data can't be read to check it against the read roots	no se pueden leer los datos de edición de un archivo vinculado para comprobarlos con las carpetas raíz de lectura
 @msg	automation path rejected: outside the write root {root}: {path}	ruta de automatización rechazada: fuera de la carpeta raíz de escritura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ruta de automatización rechazada: fuera de las carpetas raíz de escritura {roots}: {path}
 @msg	automation path rejected: path is empty	ruta de automatización rechazada: la ruta está vacía
@@ -5816,6 +5993,7 @@ lighting	Light	Luz
 @msg	missing panel layout	Falta la distribución de paneles
 @msg	unsupported native docking operation	Operación nativa de anclaje no admitida
 	Linux Display Server	Servidor de pantalla de Linux
+	Low-Latency Drawing	Dibujo de baja latencia
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) cuando hay un lápiz conectado
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Si el lápiz de una tableta digitalizadora no dibuja, elige una opción X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
@@ -6080,6 +6258,7 @@ effect	Regular	Regular
 	Ascent	Ascendente
 	Cap Height	Altura de mayúsculas
 	x Height	Altura de la x
+	Em Box Height	Altura del cuadro eme
 	Justify	Justificar
 	First Baseline	Primera línea de base
 	Vertical Align	Alineación vertical
@@ -6249,6 +6428,7 @@ mark-style	Japanese	Japonesas
 	Cove	Cóncavo
 	Depth	Profundidad
 	Front	Frontal
+	Side	Lateral
 	Isometric Bottom	Isométrica inferior
 	Isometric Left	Isométrica izquierda
 	Isometric Right	Isométrica derecha
@@ -6344,7 +6524,7 @@ mark-style	Japanese	Japonesas
 @msg	each of `{GRAPHICS}` must be an object	cada elemento de `{GRAPHICS}` debe ser un objeto
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	los elementos de `{GRAPHICS}` admiten symbol, face, x, y, scale y rotation, no `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada elemento de `{GRAPHICS}` necesita `symbol`, el nombre de un símbolo
-@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` debe ser front o back
+@msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` debe ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` debe ser un número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` debe ser una matriz
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Los gráficos se asignan a los tipos de objeto Plano, Extrusión y Revolución
@@ -7351,6 +7531,12 @@ anchor	Points:	Puntos:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` debe ser "free", "keepAngles" o "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` debe ser [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Conversor de unidades
+	Unit Converter Panel	Panel Conversor de unidades
+	Copy with Units	Copiar con unidades
+	From Selection	Desde la selección
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Seleccionar por tipo de color
 	Objects with Spot Colors	Objetos con tintas planas
@@ -7575,6 +7761,14 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Quitar separaciones
 @msg	that makes too many pieces (at most 100000): make the dashes longer	eso da demasiados trozos (como máximo 100000): alargue los guiones
 @msg	select paths, or segments, to divide	seleccione trazados o segmentos para dividir
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Puente suave…
+	Smooth Bridge	Puente suave
+	Keep Originals	Conservar originales
+@msg	select two circles to bridge	seleccione dos círculos para unir
+@msg	one circle is inside the other	un círculo está dentro del otro
+@msg	the circles are too far apart for this radius: raise the radius	los círculos están demasiado separados para este radio: aumente el radio
+@msg	the circles are too far apart for this radius	los círculos están demasiado separados para este radio
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangentes comunes…
 	Common Tangents	Tangentes comunes
@@ -7591,6 +7785,7 @@ breakText	Glyphs	Glifos
 @msg	One path lies inside the other, so they have no common tangents	Un trazado está dentro del otro, por lo que no tienen tangentes comunes
 @msg	The paths overlap, so they have no internal tangents	Los trazados se superponen, por lo que no tienen tangentes internas
 @msg	One path lies inside the other, so they have no internal tangents	Un trazado está dentro del otro, por lo que no tienen tangentes internas
+@msg	The point lies inside the path, so it has no tangents	El punto está dentro del trazado, por lo que no tiene tangentes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir guiones en trazados
 @msg	select paths with dashed strokes to expand	seleccione trazados con trazo discontinuo para expandir
@@ -8086,4 +8281,20 @@ breakText	Glyphs	Glifos
 @msg	A panel is not joined to the rest by a crease.	Un panel no está unido al resto por ninguna línea de hendido.
 @msg	A fold line is on a non-printing layer.	Una línea de plegado está en una capa que no se imprime.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneles: {panels}, bisagras: {hinges}, errores: {errors}, advertencias: {warnings}
+	Fold Preview	Vista previa del plegado
+	Fold	Plegado
+	Show Fold Lines	Mostrar líneas de plegado
+	Three-Quarter	Tres cuartos
+	Open a document to preview its folded shape.	Abre un documento para previsualizar su forma plegada.
+@msg	Check the fold lines first.	Comprueba primero las líneas de plegado.
+@msg	Panels: {panels}, hinges: {hinges}	Paneles: {panels}, bisagras: {hinges}
+@msg	Other blanks not shown: {count}	Otros troquelados no mostrados: {count}
+@msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
+@msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Pressure Sensitive	Sensible a la presión
+	Flex Ribbon	Cinta flexible
+	Pulse Stroke	Trazo pulsante
+	Round Flow	Flujo redondo
+	Chisel Flow	Flujo biselado
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: use "{_1}" o "{_2}"

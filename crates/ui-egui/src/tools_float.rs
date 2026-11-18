@@ -1,10 +1,15 @@
 //! The Tools panel floats by its title bar and docks again on the window's left edge
 //! ([`crate::toolbar`]). It stays outside the docking layout: dragging its title bar out of the
 //! docked panel floats it under the pointer, a floating panel's title bar moves it, and a release
-//! over the strip along the window's left edge (lit up) docks it there. With Keep Tools Beside the
-//! Canvas on (`UiState::tools_beside_canvas`), a release over the canvas's left edge docks it too,
-//! and either release docks it beside the canvas. A release over the canvas's right edge (left of
-//! the panels) or the window's right edge docks it on the right, between the canvas and the panels.
+//! over the strip along the window's left edge (lit up) docks it there. A release over the strip
+//! along the canvas's left edge, right of any panels docked on the left, docks it beside the
+//! canvas. The release sets Keep Tools Beside the Canvas (`UiState::tools_beside_canvas`) to the
+//! place it docked at. With no panels docked on the left, both strips put Tools in the same
+//! place (left of any toolbars made with New Toolbar docked there), and a drop on either docks it
+//! where the setting puts it and leaves the setting as it is; so does a drop in the column both
+//! strips share when the panels are collapsed narrower than the window's strip. A release over
+//! the canvas's right edge (left of the panels) or the window's right edge docks it on the right,
+//! between the canvas and the panels.
 //! Escape or losing the window's focus puts it back where the drag began.
 //!
 //! `window.panel.float {panel: "tools"}` / `window.panel.dock {panel: "tools"}` do the same for
@@ -32,6 +37,9 @@ struct Move {
     original: Option<[f32; 2]>,
     /// The side it was docked on before the drag.
     right: bool,
+    /// The frame that floated it from the window's left edge, whose canvas-edge strip was laid out
+    /// right of the docked panel and is not a target.
+    floated_from_edge: Option<u64>,
 }
 
 fn move_id() -> Id {
@@ -53,8 +61,8 @@ pub(crate) fn mark_escape_cancelled(ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(escape_cancel_id(), frame));
 }
 
-/// The strip along the canvas's left edge where the Tools panel docks while Keep Tools Beside the
-/// Canvas is on, as last laid out.
+/// The strip along the canvas's left edge where the Tools panel docks beside the canvas, as last
+/// laid out.
 pub(crate) fn tools_zone_id() -> Id {
     Id::unique("tools-float-zone")
 }
@@ -82,10 +90,14 @@ pub(crate) fn set_dock_zones(ctx: &egui::Context, canvas: Rect, width: f32) {
     });
 }
 
-/// Forget the canvas-edge target, so a strip laid out while Keep Tools Beside the Canvas was on
-/// does not dock Tools after it is turned off.
-pub(crate) fn clear_canvas_dock_zone(ctx: &egui::Context) {
-    ctx.data_mut(|d| d.remove::<Rect>(tools_zone_id()));
+fn dock_area_id() -> Id {
+    Id::unique("tools-float-dock-area-left")
+}
+
+/// The left edge of the space the canvas and the panels share, as last laid out: right of the
+/// lane of New Toolbar toolbars docked on the left, and of Tools docked at the window's edge.
+pub(crate) fn set_dock_area_left(ctx: &egui::Context, left: f32) {
+    ctx.data_mut(|d| d.insert_temp(dock_area_id(), left));
 }
 
 /// The legacy 48-point window-edge target spans the full layout below the bars, including
@@ -113,9 +125,10 @@ pub(crate) fn cancel_move_on_escape(app: &mut VectorcraftApp, ctx: &egui::Contex
     }
 }
 
-fn start(app: &VectorcraftApp, ctx: &egui::Context, grab: Vec2) {
+fn start(app: &VectorcraftApp, ctx: &egui::Context, grab: Vec2, floated_from_edge: Option<u64>) {
     let Some(from) = ctx.input(|i| i.pointer.press_origin().or(i.pointer.interact_pos())) else { return };
-    ctx.data_mut(|d| d.insert_temp(move_id(), Move { grab, from, original: app.ui.toolbar_pos, right: app.ui.toolbar_right }));
+    let m = Move { grab, from, original: app.ui.toolbar_pos, right: app.ui.toolbar_right, floated_from_edge };
+    ctx.data_mut(|d| d.insert_temp(move_id(), m));
 }
 
 /// The Tools panel's title bar was pressed (`title`, the panel's bounds `bounds`): docked, dragging
@@ -126,11 +139,12 @@ pub(crate) fn drag_tools(app: &mut VectorcraftApp, ctx: &egui::Context, title: &
     }
     let Some(at) = ctx.input(|i| i.pointer.interact_pos()) else { return };
     match floating {
-        Some(pos) if title.drag_started() => start(app, ctx, at - pos),
+        Some(pos) if title.drag_started() => start(app, ctx, at - pos, None),
         None if title.dragged() && !bounds.contains(at) => {
             // Held where the press grabbed the title bar.
             let grab = ctx.input(|i| i.pointer.press_origin()).map_or(vec2(10.0, 7.0), |p| p - bounds.min);
-            start(app, ctx, grab);
+            let at_edge = !app.ui.tools_beside_canvas && !app.ui.toolbar_right;
+            start(app, ctx, grab, at_edge.then(|| ctx.cumulative_frame_nr_for(ctx.viewport_id())));
             let p = at - grab;
             app.ui.toolbar_pos = Some([p.x, p.y]);
         }
@@ -138,23 +152,50 @@ pub(crate) fn drag_tools(app: &mut VectorcraftApp, ctx: &egui::Context, title: &
     }
 }
 
-/// The docking strip under `at`, if any, and whether it docks the panel on the right: the window's
-/// left edge, with `beside_canvas` the canvas's left edge as well, and on the right the canvas's
-/// right edge or anywhere along the window's right edge (which lights up the strip left of the
-/// panels, where it docks).
-fn drop_zone(ctx: &egui::Context, at: Pos2, beside_canvas: bool) -> Option<(Rect, bool)> {
-    let (left, right) = ctx.data(|d| {
-        let canvas = d.get_temp::<Rect>(tools_zone_id()).filter(|_| beside_canvas);
-        let left = [canvas, d.get_temp::<Rect>(window_zone_id())].into_iter().flatten().find(|r| r.contains(at));
-        (left, d.get_temp::<Rect>(tools_zone_right_id()))
+/// Where a release docks the Tools panel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Dock {
+    /// On the left: beside the canvas (`Some(true)`), at the window's edge (`Some(false)`), or
+    /// where Keep Tools Beside the Canvas puts it (`None`, where the two strips share a column).
+    Left(Option<bool>),
+    /// On the right, between the canvas and the panels.
+    Right,
+}
+
+/// The docking strip under `at`, if any, and where it docks the panel: the window's left edge,
+/// the canvas's left edge, and on the right the canvas's right edge or anywhere along the
+/// window's right edge (which lights up the strip left of the panels, where it docks). With no
+/// panels docked on the left, both left strips put Tools in the same place, and a drop on either
+/// docks it where `beside_canvas` puts it; with panels collapsed narrower than the window's strip,
+/// so does a drop in the column the two strips share. The canvas's strip lights up where both are
+/// under `at` and `beside_canvas` is on; with no panels docked on the left, the window's strip lights
+/// up, where Tools docks. Without `canvas_laid_out`, the canvas's strip is skipped.
+fn drop_zone(ctx: &egui::Context, at: Pos2, beside_canvas: bool, canvas_laid_out: bool) -> Option<(Rect, Dock)> {
+    let (canvas, window, right, area_left) = ctx.data(|d| {
+        let canvas = d.get_temp::<Rect>(tools_zone_id()).filter(|_| canvas_laid_out);
+        (canvas, d.get_temp::<Rect>(window_zone_id()), d.get_temp::<Rect>(tools_zone_right_id()), d.get_temp::<f32>(dock_area_id()))
     });
-    if let Some(r) = left {
-        return Some((r, false));
+    let panels_left = matches!((canvas, area_left), (Some(c), Some(left)) if c.left() > left + 0.5);
+    let shared = !panels_left || matches!((canvas, window), (Some(c), Some(w)) if c.x_range().contains(at.x) && w.x_range().contains(at.x));
+    let follow = |beside: bool| Dock::Left((!shared).then_some(beside));
+    // With no panels docked on the left, Tools docks at the window's edge either way.
+    let shown = |hit: Rect| if panels_left { hit } else { window.unwrap_or(hit) };
+    match (canvas.filter(|r| r.contains(at)), window.filter(|r| r.contains(at))) {
+        (Some(c), Some(w)) => return Some((shown(if beside_canvas { c } else { w }), follow(beside_canvas))),
+        (Some(c), None) => return Some((shown(c), follow(true))),
+        (None, Some(w)) => return Some((w, follow(false))),
+        (None, None) => {}
     }
     let r = right?;
     // Read outside the data lock above: egui's context locks are not re-entrant.
     let at_edge = at.x >= ctx.content_rect().right() - crate::toolbar::WIDTH && r.y_range().contains(at.y);
-    (r.contains(at) || at_edge).then_some((r, true))
+    (r.contains(at) || at_edge).then_some((r, Dock::Right))
+}
+
+/// The strip that lights up with the pointer at `at` during a move.
+#[cfg(test)]
+pub(crate) fn drop_highlight(ctx: &egui::Context, at: Pos2, beside_canvas: bool) -> Option<Rect> {
+    drop_zone(ctx, at, beside_canvas, true).map(|(zone, _)| zone)
 }
 
 fn highlight(ctx: &egui::Context, zone: Rect) {
@@ -179,7 +220,11 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     let at = ctx.input(|i| i.pointer.interact_pos());
-    let zone = at.filter(|at| at.distance(m.from) > TRAVEL).and_then(|at| drop_zone(ctx, at, app.ui.tools_beside_canvas));
+    // The frame after Tools floated from the window's edge reads the canvas-edge strip that frame
+    // laid out right of the docked panel.
+    let frame = ctx.cumulative_frame_nr_for(ctx.viewport_id());
+    let canvas_laid_out = m.floated_from_edge.is_none_or(|f| frame > f + 1);
+    let zone = at.filter(|at| at.distance(m.from) > TRAVEL).and_then(|at| drop_zone(ctx, at, app.ui.tools_beside_canvas, canvas_laid_out));
     if ctx.input(|i| i.pointer.primary_down()) {
         if let Some(p) = at.map(|at| at - m.grab)
             && p.x.is_finite()
@@ -194,9 +239,19 @@ pub fn track(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return;
     }
     ctx.data_mut(|d| d.remove::<Move>(move_id()));
-    if let Some((_, right)) = zone {
-        app.ui.toolbar_pos = None;
-        app.ui.toolbar_right = right;
+    match zone {
+        Some((_, Dock::Left(beside))) => {
+            app.ui.toolbar_pos = None;
+            app.ui.toolbar_right = false;
+            if let Some(beside) = beside {
+                app.ui.tools_beside_canvas = beside;
+            }
+        }
+        Some((_, Dock::Right)) => {
+            app.ui.toolbar_pos = None;
+            app.ui.toolbar_right = true;
+        }
+        None => {}
     }
 }
 
