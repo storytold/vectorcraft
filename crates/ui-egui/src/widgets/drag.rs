@@ -17,7 +17,8 @@ pub enum PanelDrag {
     /// replaces the style it is dropped on with it (`graphicStyle.redefine`).
     Appearance(vectorcraft_doc::NodeId),
     /// A Graphic Styles panel style: art it is dropped on takes it (`graphicStyle.apply` with its
-    /// `ids`); the panel moves it to where it is dropped.
+    /// `ids`); the panel moves it to where it is dropped, or with Alt held replaces the style it is
+    /// dropped on with its look (`graphicStyle.redefine` with `from`).
     GraphicStyle(String),
     /// The selected art, dragged off the canvas with the Selection tool: the Graphic Styles panel
     /// makes a style of the first object (`graphicStyle.new`), or with Alt held replaces the style
