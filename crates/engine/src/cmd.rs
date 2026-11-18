@@ -32,6 +32,7 @@ pub mod expand;
 pub(crate) mod fileinfo;
 pub mod fileio;
 pub mod findfiles;
+pub mod flare;
 pub mod flatten;
 pub mod fontfiles;
 mod fonts;
@@ -99,12 +100,13 @@ pub(crate) mod symboledit;
 pub mod symbollib;
 pub(crate) mod tabs;
 mod textedit;
-mod xmlattrs;
 
 pub use textedit::effective_kerning;
+mod retype;
 pub mod textstyles;
 pub(crate) mod textwrap;
 pub(crate) mod threads;
+pub mod toast;
 pub(crate) mod typecmd;
 mod typemenu;
 mod variablecmds;
@@ -322,6 +324,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());
         v.extend(typecmd::specs());
+        v.extend(retype::specs());
         v.extend(menucmds::specs());
         v.extend(live::specs());
         v.extend(colorcmds::specs());
@@ -334,6 +337,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(compositefonts::specs());
         v.extend(fontfiles::specs());
         v.extend(help::specs());
+        v.extend(toast::specs());
         v.extend(threads::specs());
         v.extend(textwrap::specs());
         v.extend(graph::specs());
@@ -876,10 +880,14 @@ pub use xform::{AppearanceAttrs, EyedropperAttrs, EyedropperOptions, FillAttrs, 
 /// The shape modes of the selected compound-shape members (the Pathfinder panel lights theirs).
 pub use compoundshape::selected_member_modes;
 
+/// Make Compound Shape's warning when a member is an open path that encloses no area.
+pub use compoundshape::OPEN_PATHS_ADD_NO_AREA;
+
 /// Pathfinder Options (`Prefs::pathfinder`).
 pub use pathops::{PATHFINDER_PRECISION_RANGE, PathfinderOptions};
 
-/// The Attributes panel's state ([`Session::attributes_info`]).
+/// The Attributes panel's state ([`Session::attributes_info`]) and how many recent URLs it keeps.
+pub use attributes::RECENT_URLS;
 pub use overprint::AttributesInfo;
 
 /// Object → Flatten Transparency settings (`object.flattenTransparency`).
@@ -903,6 +911,8 @@ pub(crate) use buildcmds::TracePresetChanges;
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 
+/// The tile counts Create Object Mosaic would use (the dialog's Use Ratio button sets them).
+pub use menucmds::mosaic_counts;
 /// The Shape Mode commands' warning when a selected open path encloses no area.
 pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
 
