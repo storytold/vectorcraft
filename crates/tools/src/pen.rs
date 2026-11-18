@@ -29,6 +29,7 @@
 //! the other art and of the path being drawn, into line with them, onto the construction guides
 //! through the last anchor; with Shift held it slides along its 45° step into line. Hovering shows
 //! where the next one would go.
+//! While a drag pulls a handle out, the Info panel shows it from the anchor to the handle's end.
 
 use serde_json::json;
 use vectorcraft_doc::{NodeId, NodeKind};
@@ -62,6 +63,10 @@ pub struct PenTool {
     /// The pointer has moved past the drag threshold since the press: a press released inside it
     /// is a click, so the anchor stays a corner without handles.
     dragged: bool,
+    /// The handle a drag past the threshold is pulling out, from the anchor it shapes to the
+    /// handle's end as last previewed (the outgoing handle, or the incoming one of the first
+    /// anchor closing the path): what the Info panel shows ([`Tool::readout`]).
+    vector: Option<Vec2>,
     /// The last anchor of the path being drawn, while a click retracts its outgoing handle or a
     /// drag pulls a new one out: (path, subpath, anchor, its position).
     handle: Option<(NodeId, usize, usize, Point)>,
@@ -256,6 +261,12 @@ impl Tool for PenTool {
     fn ends_on_escape(&self, cx: &ToolContext) -> bool {
         self.active(cx).is_some()
     }
+    /// The handle a drag is pulling out of the anchor it shapes: the outgoing handle of a new or
+    /// added anchor or of the last anchor, or the incoming handle of the first anchor closing the
+    /// path. None for a click, a hover or an Alt gesture.
+    fn readout(&self, _cx: &ToolContext) -> Option<crate::Readout> {
+        self.vector.filter(|_| self.dragged && (self.drag.is_some() || self.handle.is_some())).map(crate::Readout::drag)
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         let tol = cx.tol(5.0).max(cx.point_tol());
         // The path a press began is the selected one by the next event.
@@ -292,6 +303,7 @@ impl Tool for PenTool {
                 self.last = ev.pos;
                 self.pressed = ev.pos;
                 self.dragged = false;
+                self.vector = None;
                 if let Some((id, si, first, last, _)) = active {
                     let end = last_anchor(cx, id, Some(si));
                     let closing_end = end.filter(|(_, ai)| *ai > 0).map(|_| first);
@@ -391,6 +403,7 @@ impl Tool for PenTool {
                     if ev.mods.shift {
                         h = a + vectorcraft_geom::constrain_angle_from(ev.pos - a, 45.0, cx.constrain_angle);
                     }
+                    self.vector = Some(h - a);
                     return vec![set_out_handle(id, si, ai, h)];
                 }
                 let Some(Place { at: mut a, path, subpath, closing, mut moved }) = self.drag else { return vec![] };
@@ -412,6 +425,8 @@ impl Tool for PenTool {
                 if ev.mods.shift {
                     out_h = a + vectorcraft_geom::constrain_angle_from(ev.pos - a, 45.0, cx.constrain_angle);
                 }
+                // A closing drag shapes the first anchor's incoming handle, which mirrors the pointer.
+                self.vector = Some(if closing { a - out_h } else { out_h - a });
                 let alt = ev.mods.alt;
                 let Some(id) = path else {
                     // First anchor of a new path: re-issue create with handles.
@@ -436,6 +451,7 @@ impl Tool for PenTool {
             }
             PointerKind::Up => {
                 self.snap.clear();
+                self.vector = None;
                 if let Some(mut t) = self.convert.take() {
                     return t.pointer(cx, ev);
                 }
@@ -458,6 +474,12 @@ impl Tool for PenTool {
             _ => vec![],
         }
     }
+    /// Choosing the Pen again (P, its toolbar button, `tool.select`) ends the path being drawn as
+    /// Escape does: the path stays open, the Pen stays chosen, and the next click starts a new
+    /// path. With no path being drawn it changes nothing.
+    fn chosen_again(&mut self, cx: &ToolContext) -> Vec<Action> {
+        self.deactivate(cx)
+    }
     /// A dropped press drops only the anchor it was placing, a handle it was dragging or the
     /// close it was making: the path being drawn goes on with the next click.
     fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
@@ -465,6 +487,7 @@ impl Tool for PenTool {
         self.first = None;
         self.handle = None;
         self.convert = None;
+        self.vector = None;
         self.snap.clear();
         vec![]
     }
@@ -476,6 +499,7 @@ impl Tool for PenTool {
         let placing = self.drag.take().is_some();
         self.first = None;
         let handling = self.handle.take().is_some();
+        self.vector = None;
         // Finish the preview as it stands; clearing state alone leaves its transaction open.
         let mut acts = self.convert.take().map(|mut t| t.deactivate(cx)).unwrap_or_default();
         if placing || handling {
@@ -501,10 +525,12 @@ impl Tool for PenTool {
             && let (Some((id, _, _, last, out)), Some(h)) = (self.active(cx), self.hover)
         {
             if cx.pen_rubber_band {
+                // The segment a click at `h` adds: it leaves the last anchor along its outgoing
+                // handle and arrives at the new corner anchor without a handle.
                 let mut bp = BezPath::new();
                 bp.move_to(last);
                 if out.distance(last) > 1e-9 {
-                    bp.quad_to(out, h);
+                    bp.curve_to(out, h, h);
                 } else {
                     bp.line_to(h);
                 }
@@ -684,7 +710,7 @@ fn auto_add_delete(cx: &ToolContext, p: Point, m: Mods, tol: f64) -> Option<Acti
 /// A click on a selected blend's spine: delete the point under `p` when no key object sits on it
 /// (a key's point does nothing), else add one where the spine passes within `tol`.
 fn spine_click(cx: &ToolContext, p: Point, tol: f64) -> Option<Vec<Action>> {
-    for (id, path) in crate::direct::spines(cx).into_iter().filter(|(id, _)| cx.selection.contains(*id)) {
+    for (id, path) in crate::direct::selected_spines(cx) {
         let Some(NodeKind::Blend { children, spec }) = cx.doc.node(id).map(|n| &n.kind) else { continue };
         let keys = vectorcraft_doc::live::blend_spine(children, spec).and_then(|(_, a)| a).unwrap_or_default();
         if let Some((_, ai, _)) = path.anchors().find(|(_, _, a)| a.p.distance(p) <= tol) {
