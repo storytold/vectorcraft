@@ -4614,6 +4614,9 @@ font-technology	Variable	Zmienne
 	Channel	Kanał
 	Circle	Okrąg
 	Circle Tool	Narzędzie Okrąg
+	Curvature Circle Tool	Narzędzie Okrąg krzywizny
+	Cusp	Ostrze
+	Straight segment	Prosty segment
 	Circle too large	Okrąg jest za duży
 	Clip to Art	Przytnij do kompozycji
 	Colorize	Koloruj
@@ -5324,6 +5327,11 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no anchor points selected	nie zaznaczono punktów kontrolnych
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` musi zawierać dwie lub trzy pary liczb [x, y]
 @msg	direct-select two or three anchor points, or give `points`	zaznacz bezpośrednio dwa lub trzy punkty kontrolne lub podaj `points`
+@msg	the path is straight there, so no circle matches its curvature	ścieżka jest w tym miejscu prosta, więc żaden okrąg nie pasuje do jej krzywizny
+@msg	the path has a cusp there, so it has no single curvature	ścieżka ma w tym miejscu ostrze, więc nie ma jednej krzywizny
+@msg	the path has a corner there, so it has no single curvature	ścieżka ma w tym miejscu narożnik, więc nie ma jednej krzywizny
+@msg	a guide has no curvature circle	linia pomocnicza nie ma okręgu krzywizny
+@msg	the circle that matches the path there would reach past the canvas	okrąg pasujący w tym miejscu do ścieżki wykroczyłby poza płótno
 @msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji

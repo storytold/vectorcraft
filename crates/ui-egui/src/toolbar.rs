@@ -38,7 +38,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         "Shapes",
         &[
             &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "spiral", "rectangularGrid", "polarGrid", "flare"],
-            &["ellipse", "circle"],
+            &["ellipse", "circle", "curvatureCircle"],
             &["polygon"],
             &["shaper"],
         ],
