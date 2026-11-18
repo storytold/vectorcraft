@@ -104,6 +104,7 @@
 	Add Anchor Point	Bağlantı Noktası Ekle
 	Add Anchor Point Tool	Bağlantı Noktası Ekleme Aracı
 	Add Anchor Points	Bağlantı Noktaları Ekle
+	Add Around	Nesnenin Etrafına Ekle
 	Add Effect	Efekt Ekle
 	Add Freeform Line	Serbest Biçimli Çizgi Ekle
 	Add Freeform Point	Serbest Biçim Noktası Ekle
@@ -181,6 +182,7 @@
 	Angle:	Açı:
 	Angles	Açılar
 	Animated Zoom	Animasyonlu Yakınlaştırma
+	Anti Alias	Kenar yumuşatma
 	Anti-alias	Kenar yumuşatma
 	Anti-Alias	Kenar Yumuşatma
 	Anti-alias Rasters	Kenar Yumuşatma Rasterleri
@@ -536,6 +538,7 @@ font-technology	Variable	Değişken
 	Color Mixer (Shift-click the chip)	Renk Karıştırıcı (Çipe Shift tuşuna basarak tıklayın)
 	Color Mode	Renk Modu
 	Color Mode:	Renk Modu:
+	Color Model	Renk Modeli
 	Color Model:	Renk Modeli:
 	Color Models	Renkli Modeller
 	Color Picker	Renk Seçici
@@ -2847,6 +2850,7 @@ digits	Malayalam	Malayalam
 	Reshape Segment	Segmenti Yeniden Şekillendir
 	Reshape Tool	Yeniden Şekillendir Aracı
 	Reshape Type Area	Yazı Alanını Yeniden Şekillendir
+	Resolution	Çözünürlük
 	Resolution:	Çözünürlük:
 	Responsive	duyarlı
 	Restore	Geri yükle

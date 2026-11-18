@@ -117,6 +117,7 @@
 	Add Anchor Point	Добавить опорную точку
 	Add Anchor Point Tool	Инструмент «Добавить опорную точку»
 	Add Anchor Points	Добавить опорные точки
+	Add Around	Добавить вокруг объекта
 	Add Effect	Добавить эффект
 	Add Freeform Line	Добавить произвольную линию
 	Add Freeform Point	Добавить произвольную точку
@@ -194,6 +195,7 @@
 	Angle:	Угол:
 	Angles	Углы
 	Animated Zoom	Анимированное масштабирование
+	Anti Alias	Сглаживание
 	Anti-alias	Сглаживание
 	Anti-Alias	Сглаживание
 	Anti-alias Rasters	Сглаживать растровые изображения
@@ -552,6 +554,7 @@ font-technology	Variable	Вариативные
 	Color Mixer (Shift-click the chip)	Смеситель цветов (Shift+щелчок по образцу)
 	Color Mode	Цветовой режим
 	Color Mode:	Цветовой режим:
+	Color Model	Цветовая модель
 	Color Model:	Цветовая модель:
 	Color Models	Цветовые модели
 	Color Picker	Палитра цветов
@@ -3110,6 +3113,7 @@ digits	Malayalam	Малаялам
 	Reshape Segment	Изменить форму сегмента
 	Reshape Tool	Инструмент «Изменение формы»
 	Reshape Type Area	Изменить форму текстовой области
+	Resolution	Разрешение
 	Resolution:	Разрешение:
 	Responsive	Адаптивный
 	Restore	Восстановить

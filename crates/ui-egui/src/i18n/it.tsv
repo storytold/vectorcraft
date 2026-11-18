@@ -119,6 +119,7 @@
 	Add Anchor Point	Aggiungi punto di ancoraggio
 	Add Anchor Point Tool	Strumento Aggiungi punto di ancoraggio
 	Add Anchor Points	Aggiungi punti di ancoraggio
+	Add Around	Aggiungi attorno all'oggetto
 	Add Effect	Aggiungi effetto
 	Add Freeform Line	Aggiungi linea libera
 	Add Freeform Point	Aggiungi punto libero
@@ -196,6 +197,7 @@
 	Angle:	Angolo:
 	Angles	Angoli
 	Animated Zoom	Zoom animato
+	Anti Alias	Anti-aliasing
 	Anti-alias	Anti-aliasing
 	Anti-Alias	Anti-aliasing
 	Anti-alias Rasters	Anti-aliasing per immagini raster
@@ -556,6 +558,7 @@ font-technology	Variable	Variabili
 	Color Mixer (Shift-click the chip)	Miscelatore colori (Shift+clic sul riquadro colore)
 	Color Mode	Metodo colore
 	Color Mode:	Metodo colore:
+	Color Model	Modello colore
 	Color Model:	Modello colore:
 	Color Models	Modelli colore
 	Color Picker	Selettore colore
@@ -3123,6 +3126,7 @@ digits	Malayalam	Malayalam
 	Reshape Segment	Rimodella segmento
 	Reshape Tool	Strumento Rimodella
 	Reshape Type Area	Rimodella area di testo
+	Resolution	Risoluzione
 	Resolution:	Risoluzione:
 	Responsive	Adattivo
 	Restore	Ripristina

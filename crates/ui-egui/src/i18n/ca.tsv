@@ -186,6 +186,7 @@
 	Add Anchor Point	Afegeix un punt d’ancoratge
 	Add Anchor Point Tool	Eina d’afegir un punt d’ancoratge
 	Add Anchor Points	Afegeix punts d’ancoratge
+	Add Around	Afegeix al voltant de l’objecte
 	Add Content	Afegeix contingut
 	Add Effect	Afegeix un efecte
 	Add Event	Afegeix un esdeveniment
@@ -296,6 +297,7 @@
 	Angles	Angles
 	Angular	Angular
 	Animated Zoom	Zoom animat
+	Anti Alias	Antialiàsing
 	Anti-alias	Antialiàsing
 	Anti-Alias	Antialiàsing
 	Anti-alias Rasters	Antialiàsing de ràsters
@@ -804,6 +806,7 @@ antiAlias	Sharp	Nítid
 	Color Mixer (Shift-click the chip)	Mesclador de colors (Maj+clic a la mostra)
 	Color Mode	Mode de color
 	Color Mode:	Mode de color:
+	Color Model	Model de color
 	Color Model:	Model de color:
 	Color Models	Models de color
 	Color Panel Options	Opcions del panell de color
@@ -3820,6 +3823,7 @@ digits	Malayalam	Malaiàlam
 	Resize panels	Redimensiona els panells
 	Resize Slice	Redimensiona el tall
 	Resize Type Area	Redimensiona l’àrea de text
+	Resolution	Resolució
 	Resolution:	Resolució:
 	Responsive	Adaptatiu
 	Restore	Restaura
