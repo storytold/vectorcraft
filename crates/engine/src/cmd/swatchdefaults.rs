@@ -3,7 +3,7 @@
 //! The ordered panel records remain authoritative. Clipboard resource placement may rename
 //! patterns, images and other definitions, but must not merge or number the panel's swatches.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use serde_json::json;
