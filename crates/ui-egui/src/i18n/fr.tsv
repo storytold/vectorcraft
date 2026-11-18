@@ -821,6 +821,7 @@ font-technology	Variable	Variables
 	Delete Brush	Supprimer la forme
 	Delete Color	Supprimer la couleur
 	Restore Generated Table	Restaurer la table générée
+	Unshift All Colors	Annuler le décalage de toutes les couleurs
 	Delete Character Style	Supprimer le style de caractère
 	Delete Empty Artboards	Supprimer les plans de travail vides
 	Delete Freeform Point	Supprimer le point libre
@@ -3231,6 +3232,8 @@ digits	Malayalam	Malayalam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	La distance à l’écran à laquelle le pointeur ou un point déplacé doit approcher une illustration pour que les repères commentés s’y aimantent. Elle est la même à tous les zooms.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Aimante l’extrémité d’un segment de droite, ou un cercle tracé depuis son centre, pour qu’il touche une courbe proche.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Aimante l’extrémité d’un segment de droite pour qu’il rencontre un segment droit proche à angle droit.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Affiche sur la zone de travail le numéro de chaque tranche dans un cadre en haut à gauche de la tranche. Désactivée, les contours des tranches restent affichés.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	La couleur des contours des tranches utilisateur et objet et de leurs cadres de numéro. Les tranches automatiques utilisent une nuance plus terne de cette couleur.
 	Reset all preferences to their defaults?	Rétablir toutes les préférences à leur valeur par défaut ?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Les valeurs par défaut sont appliquées lorsque vous cliquez sur OK dans Préférences. Annuler y conserve vos préférences actuelles.
 	Restore Recovered Documents	Restaurer les documents récupérés
@@ -3463,6 +3466,9 @@ digits	Malayalam	Malayalam
 	No menu item	Aucun élément de menu
 	Toolbar	Barre d’outils
 	{toolbar}, in the {tool} group	{toolbar}, dans le groupe {tool}
+	In the menu bar: {path}	Dans la barre des menus, sous {path}
+	In the {group} group: press and hold to open it	Dans le groupe {group}, maintenez enfoncé pour l’ouvrir
+	{home}, not shown now	{home}, non affiché pour l’instant
 @plural	{n} result|{n} results	{n} résultat|{n} résultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} sur {n} résultat. Continuez à taper pour les affiner.|{shown} sur {n} résultats. Continuez à taper pour les affiner.
 	Recent Commands	Commandes récentes
@@ -5050,6 +5056,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	choose a location for the package	choisissez un emplacement pour l’assemblage
 @msg	clipboard is empty	le presse-papiers est vide
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: au moins une couleur doit rester dans la table des couleurs
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` désigne une couleur qu’une autre clé désigne aussi
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what} : `{h}` n’est pas une couleur comme "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what} : {MAX_TABLE} couleurs au maximum
 @msg	command `{0}` is not available right now: {1}	la commande `{0}` n’est pas disponible pour le moment : {1}
@@ -7798,6 +7805,7 @@ breakText	Glyphs	Glyphes
 @msg	One path lies inside the other, so they have no common tangents	Un tracé se trouve à l’intérieur de l’autre : ils n’ont donc aucune tangente commune
 @msg	The paths overlap, so they have no internal tangents	Les tracés se chevauchent : ils n’ont donc aucune tangente interne
 @msg	One path lies inside the other, so they have no internal tangents	Un tracé se trouve à l’intérieur de l’autre : ils n’ont donc aucune tangente interne
+@msg	The point lies inside the path, so it has no tangents	Le point se trouve à l’intérieur du tracé et n’a donc aucune tangente
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Décomposer les tirets en tracés
 @msg	select paths with dashed strokes to expand	sélectionnez des tracés à contour pointillé à décomposer
@@ -10104,3 +10112,8 @@ breakText	Glyphs	Glyphes
 @msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
 @msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
+	Pressure Sensitive	Sensible à la pression
+	Flex Ribbon	Ruban souple
+	Pulse Stroke	Trait pulsé
+	Round Flow	Flux rond
+	Chisel Flow	Flux biseauté
