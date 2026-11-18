@@ -1,4 +1,4 @@
-//! Edit → Preferences (⌘K): Illustrator-style category list + fields, rendered from the engine's
+//! Edit → Preferences (⌘K): a category list + its fields, rendered from the engine's
 //! preference table ([`PREF_SPECS`]). The dialog edits a working copy in `Dialog::fields`
 //! (one field per preference key, so agents can `ui.dialog.set` any of them) and OK applies it
 //! through `prefs.set`. Also: persistence of engine prefs inside `UiState` and the per-frame
@@ -72,6 +72,7 @@ fn settings() -> impl Iterator<Item = Setting> {
         "appTitleBar" => APP_TITLE_BAR_SHOWN,
         "linuxDisplayServer" => DISPLAY_SERVER_CHOICE,
         "monitorProfileDisplay" => !cfg!(target_arch = "wasm32"),
+        "lowLatencyDrawing" => !cfg!(target_arch = "wasm32"),
         _ => true,
     };
     let prefs =
@@ -660,6 +661,9 @@ fn category_fields(ui: &mut egui::Ui, app: &mut VectorcraftApp, d: &mut Dialog, 
                     ui.label(egui::RichText::new(note).color(t.text_dim).size(11.0));
                 }
             }
+            // The desktop app only: it sets the window's present mode when it starts, so a note
+            // says the change applies at the next start.
+            PrefKind::Bool if sp.key == "lowLatencyDrawing" => desktop_startup_bool_row(ui, d, sp.key, sp.label, &t),
             PrefKind::Bool => bool_row(ui, d, sp.key, sp.label),
             PrefKind::Num { min, max, unit } => {
                 labeled(ui, sp.label, |ui, label_id| {
@@ -881,6 +885,16 @@ fn bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     if widgets::check(ui, label, on, ui.is_enabled()) {
         d.fields.insert(key.into(), json!(!on));
     }
+}
+
+/// A checkbox the desktop app reads once, when it starts (Performance › Low-Latency Drawing, which
+/// sets the window's present mode), with its restart note. The web build doesn't show it.
+fn desktop_startup_bool_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, t: &Tokens) {
+    if cfg!(target_arch = "wasm32") {
+        return;
+    }
+    bool_row(ui, d, key, label);
+    ui.label(egui::RichText::new(tl!("Applies the next time VectorCraft starts.")).color(t.text_dim).size(11.0));
 }
 
 fn labeled(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id)) {

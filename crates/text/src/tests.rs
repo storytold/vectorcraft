@@ -26,6 +26,7 @@ mod kept_layouts;
 mod kerning_before;
 mod ligature_carets;
 mod path_joins;
+mod recently_added;
 mod ruby;
 mod scripts;
 mod shape_plans;
@@ -871,6 +872,19 @@ fn on_path_align_takes_a_variable_font_instances_em_box() {
     let drops = path_align_drops(&db, &[st("Regular"), st("Bold")], false, false);
     let ascender = drops.iter().find(|(a, _)| *a == PathAlign::Ascender).map(|(_, d)| d.clone()).unwrap();
     assert!(ascender.len() == 2 && (ascender[0] - 9.0).abs() < 1e-6 && (ascender[1] - 10.0).abs() < 1e-6, "{ascender:?}");
+}
+
+/// A variable font's instance takes its Windows character cell from the `usWinAscent` and
+/// `usWinDescent` its `MVAR` table varies: 200 units taller in Bold.
+#[test]
+fn win_cell_height_takes_a_variable_font_instances_mvar() {
+    use crate::test_fonts::{PATH_ALIGN_VARIABLE_FAMILY, path_align_font};
+    let db = FontDb::with_font_dirs(vec![]);
+    db.add_font(path_align_font(PATH_ALIGN_VARIABLE_FAMILY).unwrap());
+    let st = |font_style: &str| CharStyle { font_family: PATH_ALIGN_VARIABLE_FAMILY.into(), font_style: font_style.into(), ..style(10.0) };
+    let cell = |font_style: &str| db.style_face(&st(font_style)).and_then(|f| f.win_cell_height()).unwrap();
+    let (regular, bold) = (cell("Regular"), cell("Bold"));
+    assert!((bold - regular - 200.0).abs() < 1e-6, "Regular {regular}, Bold {bold}");
 }
 
 /// In vertical type, Align to Path moves the glyphs half an em, with their horizontal scale and not

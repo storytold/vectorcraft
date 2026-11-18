@@ -419,6 +419,8 @@ impl FontDb {
             if !named && !is_font_file(&p) && !crate::suitcase::is_suitcase(&p) {
                 continue;
             }
+            // The file's creation time, once for all its faces (a collection holds several).
+            let created = std::fs::metadata(&p).and_then(|m| m.created()).ok();
             for FaceStyle { family, native_family, style, keys, weight, italic, traits, .. } in file_face_names(&p) {
                 for (k, a) in Alias::of(&family, &style, &keys) {
                     aliases.entry(k).or_default().push(a);
@@ -440,7 +442,7 @@ impl FontDb {
                     entry.native = native_family;
                 }
                 let (weight, italic) = (weight.unwrap_or_else(|| style_weight(&style)), italic || style_italic(&style));
-                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic });
+                entry.faces.push(CatalogFace { style, path: p.clone(), weight, italic, created });
                 n += 1;
             }
         }
