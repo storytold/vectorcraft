@@ -115,6 +115,7 @@ pub fn run_ui_command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         .or_else(|| crate::edit_toolbar::command(app, id, p))
         .or_else(|| crate::custom_toolbars::command(app, id, p))
         .or_else(|| crate::panels::learn::command(app, id, p))
+        .or_else(|| crate::panels::discover::command(app, id, p))
     {
         return Some(r);
     }
@@ -219,6 +220,7 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.export.svg" => io::export(app, Some("svg"), s("path"), p),
+        "file.export.svg.browser" => crate::dialogs::svg_options::browser_preview(app, p),
         "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::open_export_for_screens(app);
             Ok(Value::Null)
@@ -261,6 +263,13 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 app.session.execute(id, p).map_err(|e| e.to_string())
             })
         }
+        // Edit › Refresh Monitor Profile: the desktop app's next frame reads the display's profile.
+        "view.refreshMonitorProfile" => app.display_profile.request_read(app.session.prefs.monitor_profile_display).map(|()| {
+            if let Some(ctx) = &app.ui_ctx {
+                ctx.request_repaint();
+            }
+            json!({ "requested": true })
+        }),
         // Outline or Preview is a setting of the active document's view.
         "view.outline" => match app.view_mut() {
             Some(v) => flag(&mut v.outline),
@@ -703,9 +712,17 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.cropImage" if !selected_image(app, |_| true) => Err("select an image".into()),
         "ui.cropImage" => app.try_select_tool(vectorcraft_tools::cropimage::ID).map(|()| json!({"tool": app.session.tool_id()})),
+        // Create Object Mosaic… has a dialog of its own, opened on the selected image.
+        "ui.paramDialog" if s("command").as_deref() == Some(crate::dialogs::object_mosaic::COMMAND) => {
+            crate::dialogs::object_mosaic::open(app, p.get("params").unwrap_or(&Value::Null))
+        }
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+            // Find and Replace has a dialog of its own, which stays open from match to match.
+            if cmd == crate::dialogs::find_replace::COMMAND {
+                return Some(crate::dialogs::find_replace::open(app, &fields));
+            }
             fields.insert("__command".into(), json!(cmd));
             fields.insert("__label".into(), json!(s("label").unwrap_or(cmd.clone())));
             app.ui.dialog = Some(crate::state::Dialog { kind: "command".into(), fields });
@@ -787,10 +804,17 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Ok(edit) => edit.unwrap_or(false),
                 Err(e) => return Some(Err(e)),
             };
+            let keep_art = match opt_bool(p, "keepArt") {
+                Ok(keep) => keep.unwrap_or(false),
+                Err(e) => return Some(Err(e)),
+            };
             if edit || name.is_some() {
+                if keep_art {
+                    return Some(Err("`keepArt` applies only to a new symbol".into()));
+                }
                 crate::dialogs::symbol_options::open_edit(app, name.as_deref())
             } else {
-                crate::dialogs::symbol_options::open(app)
+                crate::dialogs::symbol_options::open(app, keep_art)
             }
         }
         "ui.newBrush" => crate::dialogs::new_brush::open(app, p.get("ids").cloned()),

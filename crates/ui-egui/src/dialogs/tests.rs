@@ -1186,8 +1186,8 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
     }
 }
 
-/// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
-/// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
+/// #1000: a count typed in Object › Create Object Mosaic…'s Number of Tiles reaches the command, so
+/// the mosaic has that many columns, not the 10 × 10 grid; Enter confirms the dialog.
 #[test]
 fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let mut app = app();
@@ -1196,14 +1196,34 @@ fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let ctx = egui::Context::default();
     theme::install_fonts(&ctx);
     theme::apply(&ctx, Default::default());
+    // A frame → the texts painted, with their centers.
     let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
         let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui.ctx()));
         out.textures_delta.clear();
+        fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                _ => {}
+            }
+        }
+        let mut texts = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        texts
     };
     let entry = crate::menus::menu_entries(&app).into_iter().find(|e| e.label == "Create Object Mosaic…").expect("menu item");
     let (cmd, params) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
     crate::menus::invoke(&mut app, &cmd, params);
-    // Its first field, Columns, is focused: type 3 over it and press Enter.
+    frame(&mut app, vec![]);
+    let texts = frame(&mut app, vec![]);
+    // Number of Tiles' Width field comes right after the row's Width caption.
+    let row = texts.iter().position(|(t, _)| t == "Number of Tiles:").expect("the Number of Tiles row");
+    let columns = texts[row..].iter().position(|(t, _)| t == "Width:").and_then(|i| texts.get(row + i + 1));
+    assert_eq!(columns.map(|(t, _)| t.as_str()), Some("10"), "{texts:?}");
+    let at = columns.map(|(_, p)| *p).unwrap();
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, vec![egui::Event::PointerMoved(at), press(true)]);
+    frame(&mut app, vec![press(false)]);
     frame(&mut app, vec![]);
     frame(&mut app, vec![egui::Event::Text("3".into())]);
     let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
@@ -2888,6 +2908,61 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     assert_eq!(angle(&app), -45.0, "the drag ends down to the right");
     f.key(&mut app, ArrowRight, M::NONE);
     assert_eq!(angle(&app), -44.0, "the drag gives the preview the focus");
+}
+
+/// A drag that starts on a black dot of the Blob Brush tip preview sets the Roundness from the
+/// pointer's distance from the center along the tip's short axis, leaves the Angle as it is, goes
+/// on past the square's edge (stopping at 100%), and gives the Roundness slider the focus, whose
+/// keys step the Roundness by 1% (10% with Shift) within 0% to 100%. A drag that starts anywhere
+/// else sets only the Angle, and Tab goes from the Angle slider to the Roundness slider.
+#[test]
+fn a_drag_on_a_blob_brush_tip_dot_sets_the_roundness() {
+    use egui::Key::{ArrowDown, ArrowRight, ArrowUp, End, Home, Tab};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let values = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().expect("Blob Brush Tool Options is open");
+        (d.f64("angle", f64::NAN), d.f64("roundness", f64::NAN))
+    };
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (_, value, text) = slider_node(&out, "Roundness");
+    assert_eq!((value, text.as_deref()), (Some(100.0), Some("100%")));
+    let center = f.control(&mut app, "Roundness", egui::accesskit::Role::Slider);
+    // At 0° the dots are straight above and below the center, 18 pt from it at 100%. A click
+    // pressed 6 pt from the upper dot and released 11 pt from it in the same frame takes the dot.
+    let (down, up) = (center + egui::vec2(0.0, -12.0), center + egui::vec2(0.0, -7.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: M::NONE };
+    f.run(&mut app, vec![egui::Event::PointerMoved(down), button(down, true), egui::Event::PointerMoved(up), button(up, false)]);
+    assert_eq!(values(&app), (0.0, 39.0), "a click that starts on the upper dot");
+    f.drag(&mut app, center + egui::vec2(0.0, -7.0), egui::vec2(1.0, -11.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the upper dot dragged out to the tip's length");
+    f.drag(&mut app, center + egui::vec2(0.0, -18.0), egui::vec2(1.0, 9.0));
+    assert_eq!(values(&app), (0.0, 50.0), "the upper dot dragged half way to the center");
+    f.drag(&mut app, center + egui::vec2(0.0, 9.0), egui::vec2(3.0, 60.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the lower dot dragged out of the square");
+    f.drag(&mut app, center + egui::vec2(0.0, 18.0), egui::vec2(0.0, -18.0));
+    assert_eq!(values(&app), (0.0, 0.0), "the lower dot dragged to the center");
+    let mut seen = vec![];
+    for (key, mods, want) in
+        [(ArrowUp, M::NONE, 1.0), (ArrowRight, M::SHIFT, 11.0), (ArrowDown, M::NONE, 10.0), (End, M::NONE, 100.0), (Home, M::NONE, 0.0)]
+    {
+        f.key(&mut app, key, mods);
+        seen.push((key, mods.shift, values(&app)));
+        assert_eq!(values(&app), (0.0, want), "{seen:?}");
+    }
+    let out = f.run(&mut app, vec![]);
+    assert_eq!(slider_node(&out, "Roundness").2.as_deref(), Some("0%"));
+    // With a 0% tip the dots are at the center; a drag that starts away from them sets the Angle.
+    f.drag(&mut app, center + egui::vec2(20.0, 0.0), egui::vec2(0.0, -20.0));
+    assert_eq!(values(&app), (45.0, 0.0), "the drag ends up to the right");
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(values(&app), (46.0, 0.0), "the drag gives the Angle slider the focus");
+    f.key(&mut app, Tab, M::NONE);
+    f.key(&mut app, ArrowUp, M::NONE);
+    assert_eq!(values(&app), (46.0, 1.0), "Tab goes on to the Roundness slider");
 }
 
 /// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the

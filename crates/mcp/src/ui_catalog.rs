@@ -143,7 +143,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
-    ("file.export.png", "Export As PNG…", "", "{path?, …document.export options}; no path: pick the file, then PNG Options"),
+    (
+        "file.export.svg.browser",
+        "Show in Browser",
+        "",
+        "{svg?: {…SVG options}, exportSelection?} SVG Options' Show in Browser: write the SVG of one page (with exportSelection the selection's crop, else the first artboard the options choose) and its linked images to a new temporary folder and open it in the default browser (desktop; refused for control and MCP requests) → {path, warnings}",
+    ),
+    (
+        "file.export.png",
+        "Export As PNG…",
+        "",
+        "{path?, …document.export options}; no path: pick the file, then PNG Options with supplied options retained and defaults for omitted options",
+    ),
     (
         "file.exportForScreens",
         "Export for Screens…",
@@ -161,6 +172,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("app.home", "Home", "", "{} shows the Home screen (new file presets, Open) over the open documents; choosing a document tab returns to it"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
+    (
+        "view.refreshMonitorProfile",
+        "Refresh Monitor Profile",
+        "",
+        "{} read the display's profile for Use Monitor Profile for Canvas (monitorProfileDisplay) again on the next frame, without waiting for the 10-second reading or the 1-second display check; while a reading runs, the request waits for it to end → {requested: true}, before the profile is read (ui.inspect › displayProfile reports the reading, and readRequested while it waits); an error while the preference is off, and where nothing reads the display's profile (the web build)",
+    ),
     (
         "edit.autoSpellCheck",
         "Auto Spell Check",
@@ -677,7 +694,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.float",
         "Float Panel",
         "",
-        "{panel: id or \"tools\", x?, y?, width?, height?, group?: bool, column?: bool or n, onto?: id, above?: id, below?: id, collapsed?: bool} float a panel (with `group`, its whole group; with `column`, its whole dock column or floating window) as a floating window with its top-left corner at x, y in window points (default: inside the dock area, cascaded), as dragging its tab out does; a whole floating window keeps its rect unless given one. `onto` makes it a tab of the floating group holding that panel instead; `above` / `below` a group of its own above or below the group holding that panel, in its floating window or dock column. `collapsed` then minimizes (true) or restores (false) its window or group. A hidden panel shows first. \"tools\" floats the Tools panel at x, y. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", x?, y?, width?, height?, group?: bool, column?: bool or n, onto?: id, above?: id, below?: id, collapsed?: bool} float a panel (with `group`, its whole group; with `column`, its whole dock column or floating window) as a floating window with its top-left corner at x, y in window points (default: inside the dock area, cascaded), as dragging its tab out does; a whole floating window keeps its rect unless given one. Supplied geometry also moves or resizes an existing native window; omitted components keep their current values. `onto` makes it a tab of the floating group holding that panel instead; `above` / `below` a group of its own above or below the group holding that panel, in its floating window or dock column. `collapsed` then minimizes (true) or restores (false) its window or group. A hidden panel shows first. \"tools\" floats the Tools panel at x, y. Returns {layout, closed, floating}",
     ),
     (
         "window.panel.dock",
@@ -846,7 +863,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.setOption",
         "Tool Option",
         "",
-        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` or no params reads them; params that are not an object are an error). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen. Every option is checked before any is set: an option the tool doesn't have, a value of the wrong type, a number out of the tool's range or an unknown choice is an error naming the tool and the option, and nothing changes. The Live Paint tools' width and the Shape Builder's gapLength are set to the nearest end of their range instead",
     ),
     (
         "tool.toggleTouchMode",
@@ -860,7 +877,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{effect: id, index?: int (edit that applied effect in place, prefilled; OK runs effect.setParams), item?: appearance item index|null (the fill/stroke whose effects, null the object's; default: the Appearance panel's active item), aligned?: bool (index and item are rows of the first selected object's stack, which OK edits in each object where it has them, as effect.setParams does)} open the effect's dialog with live preview; without `index`, an effect already in that list first opens `effectExists` (confirm edits it, discard adds another) → {pending: \"effectExists\"}",
     ),
-    ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
+    (
+        "ui.paramDialog",
+        "Command Dialog",
+        "",
+        "{command, label?, params} open a parameter dialog for any command. For edit.findReplace it opens Find and Replace (dialog `findReplace`), which stays open: fields find, replace, matchCase, wholeWord, backwards, hiddenLayers, lockedLayers, and action, which ui.dialog.confirm runs: find (the next match, edit.findNext, shown in the dialog with its place among the matches), replace (the match found, edit.replaceMatch), replaceFind (both), replaceAll (edit.findReplace) or done (close). After each one action is find again. Replace and Replace & Find change a match that find reached with the find text and options as they are now, and find one otherwise. The dialog opens on the last search, with the fields params gives in its place (a null field gives none; a field of the wrong type is an error, and ui.dialog.confirm then runs no action), and Edit › Find Next goes on from it in the same document while the dialog is closed",
+    ),
     (
         "ui.recolorDialog",
         "Recolor Artwork…",
@@ -889,6 +911,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
+    (
+        "help.discover",
+        "VectorCraft Help…",
+        "F1",
+        "{query?: string (at most 1024 characters, VectorCraft's limit)} show the Help panel without toggling it closed; a supplied query searches tools, menu commands, and built-in tutorials; omission keeps the current search. Returns {query, results: [{kind: tool|command|tutorial, id, label, path, shortcut}], selected: index|null}",
+    ),
+    (
+        "help.discover.search",
+        "Search",
+        "",
+        "{query: string (at most 1024 characters, VectorCraft's limit)} search tools, menu commands, and built-in tutorials and show the Help panel; empty or whitespace-only text clears the results. Returns the help.discover result",
+    ),
+    (
+        "help.discover.choose",
+        "Select",
+        "",
+        "{index: zero-based result index} show a tool's location, a tutorial's steps in Help, or a command's menu path and shortcut without running it; an invalid index is an error. Returns {result: chosen result, location: tool location, tutorial id, or command path}",
+    ),
+    ("help.discover.back", "Back", "", "{} return from a Help result to its search results without changing the query"),
     (
         "help.safeMode",
         "Safe Mode…",
@@ -942,7 +983,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.brushOptions",
         "Brush Options…",
         "",
-        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
+        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path, hueJitter 0..180°), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
     ),
     (
         "ui.brushObjectOptions",
@@ -996,7 +1037,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.symbolOptions",
         "Symbol Options…",
         "F8",
-        "{name?} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}. With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}",
+        "{name?, edit?, keepArt?: false} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}, with keepArt: true when it was opened with keepArt: true (the selection stays ordinary art). With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}; keepArt: true is then an error",
     ),
     (
         "tool.options",
@@ -1413,7 +1454,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorWheel",
         "Color Wheel Options",
         "",
-        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); keys left out keep their values, params that are not an object, another key or a value off the list are an error and change nothing, both are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel}",
+        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, vision?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list are an error and change nothing, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, vision}",
     ),
     (
         "ui.savePdfDialog",
