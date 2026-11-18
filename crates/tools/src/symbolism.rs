@@ -73,27 +73,19 @@ pub struct SymbolismTool {
 }
 
 /// Checks the Symbolism Tools Options in `values` before `tool.setOption` sets any, when `tool` is
-/// a symbolism tool: `method` that is not one of [`METHODS`], a Symbol Sprayer option that is not
-/// one of [`SPRAY_MODES`], and `usePressure`, `showBrush`, `proportional` or `affectsDensity` that
-/// is not true or false are errors. Ok for every other tool and every other key. Saved settings go
-/// to the tool's `set_option` instead, which skips a value it cannot read.
+/// a symbolism tool, with the tool's own checks ([`Tool::check_option`]): a number out of its
+/// range, `method` that is not one of [`METHODS`], a Symbol Sprayer option that is not one of
+/// [`SPRAY_MODES`], and `usePressure`, `showBrush`, `proportional` or `affectsDensity` that is not
+/// true or false are errors. Ok for every other tool, and for a key the tool does not report
+/// (`tool.setOption` refuses that one as an unknown option). Saved settings go to the tool's
+/// `set_option` instead, which skips a value it cannot read.
 pub fn check_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
     if !tool.starts_with("symbol") || create(tool).is_none() {
         return Ok(());
     }
-    let must_be = |key: &str, names: &[&str]| format!("`{key}` must be one of {}", names.join(", "));
-    for (key, v) in values {
-        let error = match key.as_str() {
-            "usePressure" | "showBrush" | "proportional" | "affectsDensity" => (!v.is_boolean()).then(|| format!("`{key}` must be true or false")),
-            "method" => one_of(v, &METHODS).is_none().then(|| must_be(key, &METHODS)),
-            k if SPRAY_ATTRIBUTES.iter().any(|(a, _)| *a == k) => one_of(v, &SPRAY_MODES).is_none().then(|| must_be(key, &SPRAY_MODES)),
-            _ => None,
-        };
-        if let Some(e) = error {
-            return Err(e);
-        }
-    }
-    Ok(())
+    let tool = SymbolismTool::new(tool);
+    let known = tool.options();
+    values.iter().filter(|(key, _)| known.get(key.as_str()).is_some()).try_for_each(|(key, v)| tool.check_option(key, v))
 }
 
 /// `v` as one of `allowed`, when it is one.
@@ -347,10 +339,14 @@ impl Tool for SymbolismTool {
     }
     fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
         use crate::option_check as c;
+        let must_be = |names: &[&str]| format!("`{key}` must be one of {}", names.join(", "));
         match key {
             "diameter" => c::number(key, v, 2.0, 2000.0),
             "intensity" | "density" => c::number(key, v, 1.0, 10.0),
             "symbol" | "style" => c::string_or_null(key, v),
+            "usePressure" | "showBrush" | "proportional" | "affectsDensity" => c::boolean(key, v),
+            "method" => one_of(v, &METHODS).map(drop).ok_or_else(|| must_be(&METHODS)),
+            k if SPRAY_ATTRIBUTES.iter().any(|(a, _)| *a == k) => one_of(v, &SPRAY_MODES).map(drop).ok_or_else(|| must_be(&SPRAY_MODES)),
             _ => Err(c::unknown(key)),
         }
     }

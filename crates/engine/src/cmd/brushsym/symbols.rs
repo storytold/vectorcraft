@@ -1036,8 +1036,9 @@ pub(super) fn symbol_spray(s: &mut Session, p: &Value) -> Result<Value> {
             let (_, _, js) = jitter(i + 7, *c);
             let near = near.as_ref();
             // User Defined: the symbol's own size, turned the way the stroke runs, opaque, stained
-            // with the fill color and given the style, each in full.
-            let k = near.filter(|_| modes.size).map_or(scale, |m| m.scale) * (1.0 + js * 0.1);
+            // with the fill color and given the style, each in full. Size: Average is the mean size
+            // under the brush, or the symbol's own size with none there, without the size jitter.
+            let k = if modes.size { near.map_or(scale, |m| m.scale) } else { scale * (1.0 + js * 0.1) };
             let angle = if modes.spin { near.map_or(0.0, |m| m.angle) } else { along.map_or(0.0, |v| v.atan2()) };
             let turn = Affine::translate(c.to_vec2()) * Affine::rotate(angle) * Affine::translate(-c.to_vec2());
             let id = d.alloc_id();
@@ -1155,7 +1156,7 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
     let first = pts.first().map_or(Point::ZERO, |(q, _)| *q);
     let share = |id: NodeId| if method == Method::Random { jitter(id.0 as usize, first).0 + 1.0 } else { 1.0 };
     // No undo step when no instance changes (none under the brush, or Average with each at the mean).
-    let count = crate::cmd::colorcmds::edit_if_changed(s, label, |_, d| {
+    let count = crate::cmd::colorcmds::edit_if_changed(s, label, |orig, d| {
         let mut touched = std::collections::BTreeSet::new();
         for (j, (q, pressure)) in pts.iter().enumerate() {
             let delta = if j > 0 { *q - pts[j - 1].0 } else { Vec2::ZERO };
@@ -1181,7 +1182,9 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 // Average needs the instance's own values, so it leaves an instance without a size
                 // as it is; the other methods change it as before.
-                let avg = match (method, &target, d.node(*id).and_then(|n| look(d, n))) {
+                // The instance's own values are read for Average only.
+                let own = (method == Method::Average).then(|| d.node(*id).and_then(|n| look(d, n))).flatten();
+                let avg = match (method, &target, own) {
                     (Method::Average, Some(t), Some(cur)) => Some((t, cur)),
                     // No mean under the brush (every instance there without a size), or none of
                     // its own.
@@ -1303,6 +1306,8 @@ pub(super) fn symbol_adjust(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
         }
+        // An instance the stroke moved away and back again is not counted.
+        touched.retain(|id| d.node(*id) != orig.node(*id));
         Ok((touched.len(), !touched.is_empty()))
     })?;
     Ok(json!({ "count": count }))

@@ -122,8 +122,9 @@ fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
         .collect()
 }
 
-/// OK: set the brush the Symbolism tools share (the tool keeps it within its ranges), after giving
-/// a new Symbol Set Density to the selected symbol sets.
+/// OK: set the brush the Symbolism tools share, after giving a new Symbol Set Density to the
+/// selected symbol sets. Every option is checked first, so a value the tools refuse (a number out
+/// of its range included) leaves the symbol sets and the options as they are.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let mut values: Map<String, Value> =
         NUMBERS.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.f64(k, 0.0)))).collect();
@@ -300,8 +301,11 @@ mod tests {
         d.fields.insert("usePressure".into(), json!(1));
         assert!(super::super::confirm(&mut app).is_err());
         assert_eq!((width(&app), undo(&app)), (was, steps));
-        // A tool that is not a Symbolism tool, or a density that is not a number.
-        for (k, v) in [("tool", json!("pen")), ("density", json!("three")), ("densityWas", json!(null))] {
+        // A tool that is not a Symbolism tool, a density that is not a number, or a number out of
+        // its range.
+        for (k, v) in
+            [("tool", json!("pen")), ("density", json!("three")), ("densityWas", json!(null)), ("diameter", json!(1)), ("intensity", json!(11))]
+        {
             app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
             let d = app.ui.dialog.as_mut().unwrap();
             d.fields.insert("density".into(), json!(3));

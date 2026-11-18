@@ -404,10 +404,10 @@ fn the_sprayer_gives_new_instances_the_average_or_the_user_defined_values() {
         s.execute("symbol.spray", &p).unwrap();
         *members(s, set).last().unwrap()
     };
-    // Average (the default): the new instance, sprayed beside it, looks like it.
+    // Average (the default): the new instance, sprayed beside it, looks like it, at its size.
     let near = spray(&mut s, json!([[215, 150]]), json!({}));
     let (w, o, f) = look(&s, near);
-    assert!((w / width - 1.0).abs() < 0.11, "{w} of {width}");
+    assert!((w / width - 1.0).abs() < 1e-9, "{w} of {width}");
     assert_eq!((o, f), (opacity, stain.clone()));
     // The averages of two instances that look alike are theirs.
     let third = spray(&mut s, json!([[208, 165]]), json!({"attributes": {"size": "average", "screen": null}}));
@@ -415,10 +415,10 @@ fn the_sprayer_gives_new_instances_the_average_or_the_user_defined_values() {
     // Style: Average replaces a User Defined stain with the fill of the instances under the brush.
     let mixed = spray(&mut s, json!([[205, 160]]), json!({"attributes": {"stain": "userDefined"}, "color": "#0000ff"}));
     assert_eq!(look(&s, mixed).2.map(|(c, _)| c), stain.clone().map(|(c, _)| c));
-    // Outside the brush's radius of every instance, the plain values.
+    // Outside the brush's radius of every instance, the plain values: the symbol's own size.
     let far = spray(&mut s, json!([[330, 250]]), json!({}));
     let (w, o, f) = look(&s, far);
-    assert!((w / 20.0 - 1.0).abs() < 0.11 && o == 1.0 && f.is_none(), "{w} {o} {f:?}");
+    assert!((w / 20.0 - 1.0).abs() < 1e-9 && o == 1.0 && f.is_none(), "{w} {o} {f:?}");
     // User Defined: the symbol's size and opaque; Style: Average still gives the fill under the brush.
     let user = json!({"size": "userDefined", "screen": "userDefined", "stain": "userDefined", "spin": "userDefined"});
     let plain = spray(&mut s, json!([[212, 140]]), json!({"attributes": user, "color": "#0000ff"}));
@@ -702,4 +702,17 @@ fn a_stroke_that_changes_no_instance_adds_no_undo_step() {
         assert_eq!(r["count"], 0, "{tool}");
         assert!(state(&s) == before, "{tool} changed the document");
     }
+}
+
+/// An instance a stroke moves away and back to where it was is not counted, and the stroke adds
+/// no undo step: the Shifter's drag out and back moves it 8 pt right, then 8 pt left.
+#[test]
+fn an_instance_moved_away_and_back_is_not_counted() {
+    let mut s = session();
+    let id = dot(&mut s, 200.0, 150.0);
+    let before = state(&s);
+    let r = adjust(&mut s, json!({"tool": "shift", "points": [[196, 166], [212, 166], [196, 166]], "radius": 40, "intensity": 10}));
+    assert_eq!(bounds(&s, id).center(), Point::new(200.0, 150.0));
+    assert_eq!(r["count"], 0);
+    assert!(state(&s) == before, "the stroke added an undo step");
 }
