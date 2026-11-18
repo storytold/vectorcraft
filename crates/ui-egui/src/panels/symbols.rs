@@ -326,6 +326,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The symbols drawn selected: the ones Select All Unused picked, else the current one.
     let on = |n: &str| if marked.is_empty() { sel.as_deref() == Some(n) } else { marked.iter().any(|m| m == n) };
     let mut clicked: Option<(String, bool)> = None;
+    // Art released on a symbol with Alt (Option) held redefines that symbol; while Alt art is over
+    // a symbol, the list does not take it as a new symbol.
+    let mut redefine: Option<(String, Vec<u64>)> = None;
+    let mut over_symbol = false;
     let list_rect = widgets::list_box(ui, |ui| {
         ui.set_min_height(110.0);
         ui.set_width(ui.available_width());
@@ -345,6 +349,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 chip(ui, &doc, &keys, egui::Rect::from_center_size(r.left_center() + vec2(3.0 + side / 2.0, 0.0), vec2(side, side)), n);
                 ui.painter().text(r.left_center() + vec2(side + 10.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(text), t.text);
+                if let Some(ids) = art_redefine_drop(ui, &resp, &doc, uid, &mut over_symbol) {
+                    redefine = Some((n.clone(), ids));
+                }
                 let resp = resp.on_hover_text(n);
                 if resp.double_clicked() {
                     clicked = Some((n.clone(), true));
@@ -372,6 +379,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         Stroke::new(if on { 2.0 } else { 1.0 }, if on { t.accent } else { t.border }),
                         StrokeKind::Inside,
                     );
+                    if let Some(ids) = art_redefine_drop(ui, &resp, &doc, uid, &mut over_symbol) {
+                        redefine = Some((n.clone(), ids));
+                    }
                     let resp = resp.on_hover_text(n);
                     if resp.double_clicked() {
                         clicked = Some((n.clone(), true));
@@ -391,8 +401,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.min_rect()
     });
     let zone = ui.interact(list_rect, ui.scope_id().with("symbols-drop"), Sense::hover());
-    if let Some(ids) = widgets::art_drop(ui, &zone)
+    if !over_symbol
+        && let Some(ids) = widgets::art_drop(ui, &zone)
         && let Err(e) = app.run("symbol.new", json!({ "ids": ids, "type": "dynamic" }))
+    {
+        app.status(e);
+    }
+    // Redefine Symbol with the dropped art, which becomes an instance of it, in one undo step.
+    if let Some((name, ids)) = redefine
+        && let Err(e) = app.run("symbol.update", json!({ "name": name, "ids": ids }))
     {
         app.status(e);
     }
@@ -535,6 +552,43 @@ fn symbol_dropped(ui: &Ui, button: &egui::Response, names: &[String], uid: Optio
         return None;
     }
     button.dnd_release_payload::<PanelDrag>().map(|_| name.clone())
+}
+
+/// The ids of the art dragged off the canvas of the active document `doc` (`uid`) and released
+/// with Alt (Option) held on the symbol tile or row `item` this frame, if any. While such art is
+/// held over `item` with Alt, `over` is set and `item` is outlined. Art of another document, or
+/// whose objects `doc` no longer has, is not taken. Only the release of the primary button drops
+/// the art; the release of another button ends the drag.
+fn art_redefine_drop(ui: &Ui, item: &egui::Response, doc: &Document, uid: Option<u64>, over: &mut bool) -> Option<Vec<u64>> {
+    if !alt_at_release(ui) {
+        return None;
+    }
+    let held = item.dnd_hover_payload::<PanelDrag>()?;
+    let PanelDrag::Art(ids) = &*held else { return None };
+    *over = true;
+    let ours = uid.is_some() && widgets::art_drag_doc(ui.ctx()) == uid;
+    if !ours || ids.is_empty() || !ids.iter().all(|id| doc.node(*id).is_some_and(|n| !n.is_layer())) {
+        return None;
+    }
+    widgets::drop_target_outline(ui, item.rect);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return None;
+    }
+    item.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
+}
+
+/// Whether Alt (Option) is held for a drop: when the primary button went up in this frame, as it
+/// went up, else now.
+fn alt_at_release(ui: &Ui) -> bool {
+    ui.input(|i| {
+        i.events
+            .iter()
+            .find_map(|e| match e {
+                egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => Some(modifiers.alt),
+                _ => None,
+            })
+            .unwrap_or(i.modifiers.alt)
+    })
 }
 
 /// The panel state key of the symbols Select All Unused picked.
@@ -767,6 +821,11 @@ mod tests {
 
     fn button(at: Pos2, pressed: bool) -> egui::Event {
         egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    }
+
+    /// The primary button going up at `at` with Alt (Option) held.
+    fn alt_release(at: Pos2) -> egui::Event {
+        egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::ALT }
     }
 
     fn symbols(app: &mut VectorcraftApp) -> Vec<String> {
@@ -2416,6 +2475,177 @@ mod tests {
         assert_eq!(app.session.active().unwrap().history.undo.len(), other, "another document: no undo step");
         assert!(app.session.set_active(0));
         assert_eq!(symbols(&mut app), ["Dot"], "the first document keeps its Dot");
+    }
+
+    /// The rects `out` outlines as drop targets (1.5 pt strokes).
+    fn drop_outlines(out: &egui::FullOutput) -> Vec<Rect> {
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if (r.stroke.width - 1.5).abs() < 0.01 => Some(r.rect),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Where symbol `name`'s tile or row is in the panel: its name in the list views, its tile (the
+    /// 44 pt squares, in panel order) in Thumbnail View.
+    fn item_at(ctx: &egui::Context, app: &mut VectorcraftApp, name: &str) -> Pos2 {
+        if app.ui.symbols_view != View::Thumbnail {
+            return panel_labels(ctx, app, &[name]).first().map(|l| l.1).unwrap_or_else(|| panic!("a {name} row"));
+        }
+        let out = frame_held(ctx, app, vec![], egui::Modifiers::NONE);
+        let tiles: Vec<Rect> = out
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Rect(r) if (r.rect.width() - 44.0).abs() < 0.01 && (r.rect.height() - 44.0).abs() < 0.01 => Some(r.rect),
+                _ => None,
+            })
+            .collect();
+        let i = symbols(app).iter().position(|n| n == name).unwrap_or_else(|| panic!("a {name} symbol"));
+        tiles.get(i).map(|r| r.center()).unwrap_or_else(|| panic!("a {name} tile in {tiles:?}"))
+    }
+
+    /// The art of symbol `name` in the active document.
+    fn symbol_art(app: &VectorcraftApp, name: &str) -> Arc<Node> {
+        let doc = &app.session.active().unwrap().doc;
+        doc.symbols.iter().find(|s| s.name == name).map(|s| s.art.clone()).unwrap_or_else(|| panic!("a {name} symbol"))
+    }
+
+    fn undo_len(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// Art dragged off the canvas and released with Alt (Option on macOS) held on a symbol's tile
+    /// or row, in each view, redefines that symbol and not the current one: its instances take the
+    /// art, the art becomes an instance of it, and no symbol is added, in one undo step. Only that
+    /// tile or row is outlined while the art is held over it with Alt.
+    #[test]
+    fn alt_art_drop_on_a_symbol_redefines_that_symbol_in_one_step() {
+        for view in ["thumbnail", "smallList", "largeList"] {
+            let mut app = leaf_and_dot();
+            app.run("ui.panelView", json!({"panel": "symbols", "view": view})).unwrap();
+            let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+            let (leaf, dot) = (symbol_art(&app, "Leaf"), symbol_art(&app, "Dot"));
+            let placed = instance_of(&app, "Leaf").expect("a Leaf instance");
+            let undo = undo_len(&app);
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let (at, other) = (item_at(&ctx, &mut app, "Leaf"), item_at(&ctx, &mut app, "Dot"));
+            widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::ALT);
+            let outlines = drop_outlines(&out);
+            assert_eq!(outlines.len(), 1, "{view}: only the Leaf item is outlined: {outlines:?}");
+            assert!(outlines[0].contains(at) && !outlines[0].contains(other), "{view}: {outlines:?}");
+            frame_held(&ctx, &mut app, vec![alt_release(at)], egui::Modifiers::ALT);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{view}: no symbol added");
+            assert_eq!(undo_len(&app), undo + 1, "{view}: one undo step");
+            // The Leaf instance there was takes the 40 × 20 rectangle's shape, where the old art was square.
+            let doc = app.session.active().unwrap().doc.clone();
+            let shape = doc.node(placed).and_then(|n| n.geometric_bounds()).map(|b| b.width() / b.height());
+            assert!(shape.is_some_and(|r| (r - 2.0).abs() < 1e-6), "{view}: Leaf is the dropped art: {shape:?}");
+            assert!(Arc::ptr_eq(&dot, &symbol_art(&app, "Dot")), "{view}: the current symbol Dot is unchanged");
+            assert_eq!(art(&app, "Leaf"), (2, 0), "{view}: the art became a Leaf instance");
+            app.run("edit.undo", json!({})).unwrap();
+            assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "{view}: undo restores Leaf");
+            assert_eq!(art(&app, "Leaf"), (1, 1), "{view}: undo restores the art");
+            app.run("edit.redo", json!({})).unwrap();
+            assert_eq!(art(&app, "Leaf"), (2, 0), "{view}: redo");
+        }
+    }
+
+    /// Alt held as the primary button goes up redefines the symbol, though Alt is let go later in
+    /// the same frame.
+    #[test]
+    fn alt_let_go_after_the_release_in_the_same_frame_still_redefines() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let leaf = symbol_art(&app, "Leaf");
+        let undo = undo_len(&app);
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+        frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::ALT);
+        frame_held(&ctx, &mut app, vec![alt_release(at), egui::Event::ModifiersChanged(egui::Modifiers::NONE)], egui::Modifiers::ALT);
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "no symbol added");
+        assert!(!Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "Leaf is redefined");
+        assert_eq!(undo_len(&app), undo + 1, "one undo step");
+    }
+
+    /// Art released on a symbol without Alt makes a new symbol, as a drop elsewhere on the list
+    /// does, and leaves the symbol under the pointer as it was; nothing is outlined but the list.
+    #[test]
+    fn a_plain_art_drop_on_a_symbol_makes_a_new_symbol() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let leaf = symbol_art(&app, "Leaf");
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+        let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], egui::Modifiers::NONE);
+        let outlines = drop_outlines(&out);
+        assert!(outlines.len() == 1 && outlines[0].width() > 100.0, "the list is outlined, not the tile: {outlines:?}");
+        frame(&ctx, &mut app, vec![button(at, false)]);
+        assert_eq!(symbols(&mut app).len(), 3, "a new symbol");
+        assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "Leaf is unchanged");
+    }
+
+    /// An Alt drop that cannot redefine the symbol under the pointer changes nothing, makes no new
+    /// symbol and adds no undo step: art of another document, objects the document no longer has,
+    /// no objects, and a release away from the panel are not outlined, and art holding an instance
+    /// of the symbol is refused when it is released.
+    #[test]
+    fn an_alt_art_drop_that_cannot_redefine_changes_nothing() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let instance = instance_of(&app, "Leaf").expect("a Leaf instance");
+        let leaf = symbol_art(&app, "Leaf");
+        let undo = undo_len(&app);
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        let doc = uid(&app).unwrap();
+        let away = pos2(230.0, 395.0);
+        let cases = [
+            ("another document's art", doc + 1, vec![NodeId(shape)], at, false),
+            ("objects the document lacks", doc, vec![NodeId(u64::MAX)], at, false),
+            ("no objects", doc, vec![], at, false),
+            ("a release away from the panel", doc, vec![NodeId(shape)], away, false),
+            ("a Leaf instance", doc, vec![instance], at, true),
+        ];
+        for (case, from, ids, to, outline) in cases {
+            widgets::drag_art(&ctx, from, ids);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::ALT);
+            assert_eq!(drop_outlines(&out).len(), usize::from(outline), "{case}: {:?}", drop_outlines(&out));
+            frame_held(&ctx, &mut app, vec![alt_release(to)], egui::Modifiers::ALT);
+            egui::DragAndDrop::clear_payload(&ctx);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{case}: no symbol added");
+            assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "{case}: Leaf is unchanged");
+            assert_eq!(undo_len(&app), undo, "{case}: no undo step");
+        }
+    }
+
+    /// Art held over a symbol, with Alt or without, and released with the secondary button is not
+    /// dropped: no symbol is redefined or added and no undo step is added.
+    #[test]
+    fn a_secondary_button_release_drops_no_art() {
+        let mut app = leaf_and_dot();
+        let shape = app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let leaf = symbol_art(&app, "Leaf");
+        let undo = undo_len(&app);
+        let ctx = egui::Context::default();
+        let at = item_at(&ctx, &mut app, "Leaf");
+        let secondary = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() };
+        for (case, modifiers) in [("with Alt", egui::Modifiers::ALT), ("without Alt", egui::Modifiers::NONE)] {
+            widgets::drag_art(&ctx, uid(&app).unwrap(), vec![NodeId(shape)]);
+            let out = frame_held(&ctx, &mut app, vec![egui::Event::PointerMoved(at)], modifiers);
+            assert_eq!(drop_outlines(&out).len(), 1, "{case}: the art is held over a target");
+            frame_held(&ctx, &mut app, vec![secondary.clone()], modifiers);
+            egui::DragAndDrop::clear_payload(&ctx);
+            assert_eq!(symbols(&mut app), ["Leaf", "Dot"], "{case}: no symbol added");
+            assert!(Arc::ptr_eq(&leaf, &symbol_art(&app, "Leaf")), "{case}: Leaf is unchanged");
+            assert_eq!(undo_len(&app), undo, "{case}: no undo step");
+        }
     }
 
     /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.

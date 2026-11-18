@@ -319,7 +319,7 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     // The art the drag started with: the release rolls the move back to it, and an Alt-copy's
     // copies, selected while it previews, go with that.
     let ids = it.selection.objects.clone();
-    egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
+    widgets::drag_art(ui.ctx(), st.uid, ids);
     true
 }
 
