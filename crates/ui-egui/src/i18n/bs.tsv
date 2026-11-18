@@ -2751,6 +2751,7 @@ digits	Malayalam	Malajalam
 	BLANK DOCUMENT PRESETS	PREDLOŠCI PRAZNIH DOKUMENATA
 	Bleed	Napust
 	Change to Right-to-Left Layout	Prebaci na raspored s desna nalijevo
+	Columns	Kolone
 	Columns:	Kolone:
 	Documents you create appear here.	Dokumenti koje kreirate pojavljuju se ovdje.
 	More Settings	Više postavki
@@ -2941,6 +2942,7 @@ digits	Malayalam	Malajalam
 	Layout Order:	Redoslijed rasporeda:
 	Change to Left-to-Right Layout	Prebaci na raspored s lijeva nadesno
 	Artboards: {n}	Radne ploče: {n}
+	Rows	Redovi
 	Rows:	Redovi:
 	Assign	Dodijeli
 	Color Group:	Grupa boja:

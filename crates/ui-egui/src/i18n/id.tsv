@@ -2560,6 +2560,7 @@ digits	Malayalam	Malayalam
 	BLANK DOCUMENT PRESETS	PRESET DOKUMEN KOSONG
 	Bleed	Bleed
 	Change to Right-to-Left Layout	Ubah ke tata letak kanan ke kiri
+	Columns	Kolom
 	Columns:	Kolom:
 	Documents you create appear here.	Dokumen yang Anda buat muncul di sini.
 	More Settings	Pengaturan lainnya
@@ -2750,6 +2751,7 @@ digits	Malayalam	Malayalam
 	Layout Order:	Urutan tata letak:
 	Change to Left-to-Right Layout	Ubah ke tata letak kiri ke kanan
 	Artboards: {n}	Artboard: {n}
+	Rows	Baris
 	Rows:	Baris:
 	Assign	Tetapkan
 	Color Group:	Grup warna:

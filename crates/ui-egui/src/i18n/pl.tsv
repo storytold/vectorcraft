@@ -2747,6 +2747,7 @@ digits	Malayalam	Malajalam
 	BLANK DOCUMENT PRESETS	USTAWIENIA PUSTEGO DOKUMENTU
 	Bleed	Spad
 	Change to Right-to-Left Layout	Zmień na układ od prawej do lewej
+	Columns	Kolumny
 	Columns:	Kolumny:
 	Documents you create appear here.	Tu pojawią się utworzone dokumenty.
 	More Settings	Więcej ustawień
@@ -2935,6 +2936,7 @@ digits	Malayalam	Malajalam
 	Layout Order:	Kolejność układu:
 	Change to Left-to-Right Layout	Zmień na układ od lewej do prawej
 	Artboards: {n}	Obszary kompozycji: {n}
+	Rows	Wiersze
 	Rows:	Wiersze:
 	Assign	Przypisz
 	Color Group:	Grupa kolorów:

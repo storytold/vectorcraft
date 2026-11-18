@@ -527,6 +527,7 @@ antiAlias	Sharp	锐利
 	Colors	颜色数
 	Colors:	颜色：
 	Column Graph Tool	柱形图工具
+	Columns	列数
 	Columns:	列数：
 	Column…	列…
 	Combine Slices	组合切片
@@ -3130,6 +3131,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Rounded Rectangle	圆角矩形
 	Rounded Rectangle Tool	圆角矩形工具
 	Rounded Rectangle…	圆角矩形…
+	Rows	行数
 	Rows:	行数：
 	Rule:	规则：
 	Rulers	标尺

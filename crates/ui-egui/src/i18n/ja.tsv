@@ -1356,6 +1356,7 @@ antiAlias	Sharp	シャープ
 	Colors	カラー
 	Colors:	カラー数:
 	Column Graph Tool	集合縦棒グラフツール
+	Columns	列数
 	Columns:	列数:
 	Coming soon — tracked in the parity plan	近日対応予定
 	Command Click to Select Objects Behind	Command+クリックで背面のオブジェクトを選択
@@ -3240,6 +3241,7 @@ mark-style	Japanese	日本式
 	Rounded Rectangle	角丸長方形
 	Rounded Rectangle Tool	角丸長方形ツール
 	Row Size:	行のサイズ:
+	Rows	行数
 	Rows:	行数:
 	Rule:	ルール:
 	Rulers & Grids	定規とグリッド

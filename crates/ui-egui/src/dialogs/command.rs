@@ -530,6 +530,56 @@ mod tests {
         assert_eq!(cols(&app), 2, "one Undo takes the whole change back");
     }
 
+    /// Grid Repeat Options labels its column fields Columns and Flip Columns, as the Rows and Flip
+    /// Rows fields beside them are spelled out.
+    #[test]
+    fn grid_repeat_options_spell_out_columns() {
+        let mut app = grid_options_app();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        for s in ["Rows:", "Columns:", "Flip Rows:", "Flip Columns:"] {
+            assert!(shown.contains(s), "{s} in {shown}");
+        }
+        assert!(!shown.contains("Cols"), "no Cols label: {shown}");
+    }
+
+    /// Object › Create Gradient Mesh… opens this dialog with the menu's rows, cols, appearance and
+    /// highlight. In French the heading and the four labels are translated, and "cols" is labeled
+    /// Columns (#7991).
+    #[test]
+    fn create_gradient_mesh_dialog_is_drawn_in_the_ui_language() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+        let entries = crate::menus::menu_entries(&app);
+        let item = entries.iter().find(|e| e.path == ["Object"] && e.label == "Create Gradient Mesh…").expect("listed");
+        let (cmd, p) = crate::menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        crate::menus::invoke(&mut app, &cmd, p);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("__label"), "Create Gradient Mesh");
+        assert_eq!(form::humanize("cols"), "Columns:");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        let heading = heading_label(app.ui.dialog.as_ref().unwrap());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(heading, "Créer un filet de dégradé");
+        for s in ["Créer un filet de dégradé", "Lignes", "Colonnes", "Aspect"] {
+            assert!(shown.contains(s), "{s} in {shown}");
+        }
+        for s in ["Create Gradient Mesh", "Rows", "Cols", "Columns", "Appearance", "Highlight"] {
+            assert!(!shown.contains(s), "{s} left in English: {shown}");
+        }
+        // Every language with complete menus heads the dialog as the menu item reads and has the
+        // four labels.
+        for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
+            let menu = crate::i18n::tr(lang, &item.label);
+            assert_ne!(menu, item.label, "{}: menu item", lang.code());
+            assert_eq!(heading_in(lang, "Create Gradient Mesh"), menu.trim_end_matches('…').trim_end(), "{}: heading", lang.code());
+            for key in ["rows", "cols", "appearance", "highlight"] {
+                let label = form::humanize(key);
+                assert!(crate::i18n::has(lang, label.trim_end_matches(':')), "{}: {label}", lang.code());
+            }
+        }
+    }
+
     /// Radial and Mirror Repeat Options have no Preview (their public pages list none): their
     /// fields apply on OK only, and the dialog takes no `preview`.
     #[test]
