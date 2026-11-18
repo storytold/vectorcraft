@@ -253,6 +253,28 @@ fn redefining_the_symbol_being_edited_leaves_symbol_editing_mode_in_the_same_ste
     assert!(st.doc.symbol_edit.is_some());
 }
 
+/// Redefining the symbol being edited with `keepArt: true` also leaves symbol editing mode in the
+/// same step; the art outside the editing layer stays ordinary art and stays selected, and the
+/// art on the editing layer still can't redefine it.
+#[test]
+fn redefining_the_symbol_being_edited_with_keep_art_leaves_the_art_and_the_mode() {
+    let (mut s, first, second) = two_instances();
+    let other = id(&run(&mut s, "shape.rectangle", json!({"x": 10, "y": 200, "width": 30, "height": 30})));
+    let layer = NodeId(run(&mut s, "symbol.edit", json!({"id": first.0}))["layer"].as_u64().unwrap());
+    let e = s.execute("symbol.update", &json!({"name": "Box", "keepArt": true})).unwrap_err().to_string();
+    assert!(e.contains("can't hold an instance of itself"), "{e}");
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = run(&mut s, "symbol.update", json!({"name": "Box", "ids": [other.0], "keepArt": true}));
+    assert!(r["id"].is_null(), "{r}");
+    let st = s.doc().unwrap();
+    assert!(st.doc.symbol_edit.is_none() && st.isolation.is_none() && st.doc.node(layer).is_none());
+    assert_eq!(st.history.undo.len(), steps + 1);
+    assert!(matches!(st.doc.node(other).map(|n| &n.kind), Some(NodeKind::Path { .. })), "the art stays ordinary art");
+    assert_eq!(st.selection.objects, vec![other], "the art stays selected");
+    assert!(is_instance(&s, first), "the instance editing was entered from is still an instance");
+    assert!(close(bounds(&s, second), Rect::new(285.0, 185.0, 315.0, 215.0)), "{:?}", bounds(&s, second));
+}
+
 #[test]
 fn leaving_goes_back_to_the_isolation_before_and_undo_keeps_a_group_isolated_inside() {
     let (mut s, first, _) = two_instances();

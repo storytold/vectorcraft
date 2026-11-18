@@ -79,6 +79,22 @@ fn loaded_text_cursor_is_not_the_text_i_beam() {
     assert!(pixel(&loaded, hx, hy)[3] > 200, "hotspot lies on the drawn frame");
 }
 
+/// Loaded text over an object a click threads it into is drawn as its own glyph: the loaded
+/// text's block with a link badge below right, so it has more ink than the plain loaded text.
+#[test]
+fn loaded_text_link_cursor_is_the_loaded_text_with_a_link_badge() {
+    assert!(Cursor::LoadedTextLink.stand_in().is_none());
+    for ppp in [1.0f32, 2.0] {
+        let link = rasterize(Cursor::LoadedTextLink, ppp).expect("link bitmap");
+        let loaded = rasterize(Cursor::LoadedText, ppp).expect("loaded text bitmap");
+        assert_ne!(link, loaded, "a glyph of its own at {ppp}x");
+        let ink = |img: &CustomCursorImage| img.rgba.as_chunks::<4>().0.iter().filter(|p| p[0] < 64 && p[3] > 200).count();
+        assert!(ink(&link) > ink(&loaded), "the badge adds ink at {ppp}x");
+        let [hx, hy] = link.hotspot.map(usize::from);
+        assert!(pixel(&link, hx, hy)[3] > 200, "hotspot lies on the drawn frame at {ppp}x");
+    }
+}
+
 #[test]
 fn every_glyph_becomes_a_bitmap_with_its_hotspot_inside() {
     for ppp in [1.0, 1.25, 1.5, 2.0, 3.0] {
