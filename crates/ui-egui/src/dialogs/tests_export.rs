@@ -244,6 +244,95 @@ fn an_empty_export_as_range_shows_an_example() {
     assert!(text.lines().any(|l| l == "1-3, 5"), "{text}");
 }
 
+/// #5941: the Format list showed no scroll bar until the pointer came over it, so nothing told
+/// the user that more formats lay below the last one shown, and it opened again where it was last
+/// scrolled, with its first formats out of view. Opened with the pointer elsewhere, a list that
+/// does not show every format shows its bar, and a list opened again starts at its first format.
+#[test]
+fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_at_its_first_format() {
+    fn walk(shape: &egui::Shape, clip: egui::Rect, texts: &mut Vec<(String, egui::Rect, egui::Rect)>, bars: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Text(t) => texts.push((t.galley.text().into(), t.visual_bounding_rect(), clip)),
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, texts, bars)),
+            _ => {}
+        }
+    }
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": "png"})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1024.0, 480.0)));
+    let mut time = 0.0;
+    let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.25;
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let (mut texts, mut bars) = (vec![], vec![]);
+        out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        (texts, bars)
+    };
+    let away = egui::Event::PointerMoved(egui::pos2(1.0, 1.0));
+    run(&mut app, vec![away.clone()]);
+    let (texts, _) = run(&mut app, vec![]);
+    let field = texts.iter().find(|(s, ..)| s == "PNG").map(|(_, r, _)| r.center()).expect("the Format field shows PNG");
+    let click_at = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    let labels: Vec<&str> = export_as::formats().iter().map(|f| f.label).collect();
+    // Opens the list, moves the pointer away and returns the list's rect, the format names drawn in
+    // it with their clip rects, and the bars drawn.
+    type Run<'r> = dyn FnMut(&mut VectorcraftApp, Vec<egui::Event>) -> (Vec<(String, egui::Rect, egui::Rect)>, Vec<egui::Rect>) + 'r;
+    let open = |run: &mut Run<'_>, app: &mut VectorcraftApp| {
+        run(app, vec![egui::Event::PointerMoved(field), click_at(field, true)]);
+        run(app, vec![click_at(field, false)]);
+        run(app, vec![away.clone()]);
+        let (mut texts, mut bars) = (vec![], vec![]);
+        for _ in 0..4 {
+            (texts, bars) = run(app, vec![]);
+        }
+        let list = ctx
+            .memory(|m| {
+                m.layer_ids().filter(|l| l.order == egui::Order::Foreground && m.areas().is_visible(l)).last().and_then(|l| m.area_rect(l.id))
+            })
+            .expect("the Format list is open");
+        let rows: Vec<_> = texts.into_iter().filter(|(s, r, _)| labels.contains(&s.as_str()) && list.contains_rect(*r)).collect();
+        (list, rows, bars)
+    };
+    let (list, rows, bars) = open(&mut run, &mut app);
+    assert!(!rows.is_empty(), "the Format list is open");
+    // A list that shows every format needs no bar; one that does not shows its bar.
+    if rows.len() < labels.len() {
+        assert!(
+            bars.iter().any(|b| list.contains_rect(*b) && b.left() > list.center().x),
+            "the list's scroll bar is drawn at rest in {list:?}: {bars:?}"
+        );
+    }
+
+    // Scrolled, closed and opened again, the list starts at its first format, not cut off at the top.
+    run(&mut app, vec![egui::Event::PointerMoved(list.center())]);
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -30.0),
+        modifiers: Default::default(),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    };
+    run(&mut app, vec![wheel]);
+    for _ in 0..4 {
+        run(&mut app, vec![]);
+    }
+    run(&mut app, vec![egui::Event::PointerMoved(field), click_at(field, true)]);
+    run(&mut app, vec![click_at(field, false)]);
+    let (_, rows, _) = open(&mut run, &mut app);
+    let first = rows.iter().find(|(s, ..)| s == labels[0]);
+    assert!(
+        first.is_some_and(|(_, r, clip)| r.top() >= clip.top()),
+        "the reopened list shows {} whole at its top: {:?}",
+        labels[0],
+        rows.iter().map(|(s, r, c)| (s, r.top(), c.top())).take(3).collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn svg_continues_in_svg_options() {
     let (mut app, written) = app(2);
