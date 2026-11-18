@@ -3110,6 +3110,8 @@ file-filter	Templates	Sablonok
 	Overprint and Transparency Flattener Options	Felülnyomás és átlátszóság-lapítás beállításai
 	Custom…	Egyéni…
 	Custom Transparency Flattener Options	Egyéni átlátszóság-lapítási beállítások
+	The PDF preset keeps the flattener preset but not the Custom… settings.	A PDF-előbeállítás megtartja a lapítási előbeállítást, de az Egyéni… beállításokat nem.
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	A PDF 1.3-fájlok a raszterizált területeket a saját régióikra vágják, és a Felülnyomás beállítás dönti el, hogy megmaradnak-e a felülnyomások.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Az EPS-ben nincs alfa-átlátszóság, és a Felülnyomások beállítás dönti el, hogy megmaradnak-e a felülnyomások.
 	Overprint Black…	Fekete felülnyomása…
 	Overprint Fill	Kitöltés felülnyomása

@@ -3207,6 +3207,8 @@ digits	Malayalam	Malaiàlam
 	Overprint and Transparency Flattener Options	Opcions de l’aplanador de sobremipressió i transparència
 	Custom…	Personalitzat…
 	Custom Transparency Flattener Options	Opcions personalitzades de l’aplanador de transparència
+	The PDF preset keeps the flattener preset but not the Custom… settings.	El preajust PDF conserva el preajust d’aplanament, però no la configuració de Personalitzat….
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	Els fitxers PDF 1.3 retallen les àrees rasteritzades a les seves regions, i Sobrimpressió determina si es conserven les sobreimpressions.
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	L’EPS no té transparència alfa, i Sobreimpressions determina si es conserven les sobreimpressions.
 	Overprint Black…	Sobrimpressió del negre…
 	Overprint Fill	Sobrimpressió del farciment

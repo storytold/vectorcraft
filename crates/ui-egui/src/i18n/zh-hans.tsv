@@ -2519,6 +2519,8 @@ file-filter	Templates	模板
 	Overprint and Transparency Flattener Options	叠印和透明度拼合器选项
 	Custom…	自定义…
 	Custom Transparency Flattener Options	自定义透明度拼合器选项
+	The PDF preset keeps the flattener preset but not the Custom… settings.	PDF 预设会保留拼合预设，但不保留“自定义…”设置。
+	PDF 1.3 files clip rasterized areas to their regions, and Overprint sets whether overprints are kept.	PDF 1.3 文件会将栅格化区域剪切到其区域，“叠印”决定是否保留叠印。
 	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS 没有 Alpha 透明度，“叠印”决定是否保留叠印。
 	Overprint Black…	黑色叠印…
 	Overprint Fill	叠印填色
