@@ -1,0 +1,363 @@
+//! Add Bounding Rectangle and Add Bounding Circle: the box and the smallest circle, the current
+//! paint and placement on top of the current layer or the isolated group, `each` and `skipped`,
+//! shapes of no size, clip groups and clipping sublayers, huge curves, and the errors that leave
+//! the document as it was.
+
+use serde_json::{Value, json};
+use vectorcraft_doc::{LiveShape, Node, NodeId, NodeKind};
+use vectorcraft_geom::{Point, Rect, Vec2, shapes};
+
+use super::{CIRCLE, COMPACT_AT, Gathered, RECTANGLE};
+use crate::Session;
+
+fn session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    s
+}
+
+fn node(s: &Session, id: NodeId) -> Node {
+    s.doc().unwrap().doc.node(id).unwrap().clone()
+}
+
+fn id_of(v: &Value) -> NodeId {
+    NodeId(v["id"].as_u64().unwrap())
+}
+
+fn ids_of(v: &Value) -> Vec<NodeId> {
+    v["ids"].as_array().unwrap().iter().map(|i| NodeId(i.as_u64().unwrap())).collect()
+}
+
+fn rect(s: &mut Session, x: f64, y: f64, w: f64, h: f64) -> NodeId {
+    id_of(&s.execute("shape.rectangle", &json!({"x": x, "y": y, "width": w, "height": h})).unwrap())
+}
+
+fn undo_len(s: &Session) -> usize {
+    s.doc().unwrap().history.undo.len()
+}
+
+fn object_count(s: &Session) -> usize {
+    let mut n = 0;
+    s.doc().unwrap().doc.walk(|_| n += 1);
+    n
+}
+
+/// Whether two rectangles agree to within `tol` on every edge.
+fn rect_near(b: Rect, want: Rect, tol: f64) -> bool {
+    [(b.x0, want.x0), (b.y0, want.y0), (b.x1, want.x1), (b.y1, want.y1)].iter().all(|(a, w)| (a - w).abs() < tol)
+}
+
+/// The live shape of `id`.
+fn live(s: &Session, id: NodeId) -> LiveShape {
+    match &node(s, id).kind {
+        NodeKind::Path { live: Some(live), .. } => live.as_ref().clone(),
+        other => panic!("not a live shape: {other:?}"),
+    }
+}
+
+/// The geometric bounds of `id`.
+fn bounds(s: &Session, id: NodeId) -> Rect {
+    s.doc().unwrap().doc.bounds_of(&[id], false).unwrap()
+}
+
+/// The last child of `parent`, the top of its stacking order.
+fn top_of(s: &Session, parent: NodeId) -> NodeId {
+    node(s, parent).children().unwrap().last().unwrap().id
+}
+
+/// Runs `command` with `p` and checks that it fails and leaves the document as it was.
+fn refused(s: &mut Session, command: &str, p: Value) -> String {
+    let (undo, objects) = (undo_len(s), object_count(s));
+    let e = s.execute(command, &p).unwrap_err().to_string();
+    assert_eq!((undo_len(s), object_count(s)), (undo, objects), "{p} changed the document");
+    e
+}
+
+/// A live rectangle on the selection's geometric bounding box, strokes left out, with the current
+/// paint, on top of the current layer, selected; one undo removes it.
+#[test]
+fn a_bounding_rectangle_is_the_geometric_box_on_top_of_the_layer() {
+    let mut s = session();
+    s.execute("stroke.set", &json!({"weight": 10})).unwrap();
+    let a = rect(&mut s, 10.0, 20.0, 30.0, 40.0);
+    let b = id_of(&s.execute("shape.ellipse", &json!({"x": 100, "y": 50, "width": 60, "height": 80})).unwrap());
+    assert_eq!(node(&s, a).appearance.stroke_width(), 10.0, "the strokes reach past the geometric box");
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let (before, undo) = (object_count(&s), undo_len(&s));
+    let out = s.execute(RECTANGLE, &json!({})).unwrap();
+    let id = id_of(&out);
+    assert_eq!(ids_of(&out), vec![id]);
+    assert!(out.get("skipped").is_none(), "{out}");
+    assert!(matches!(live(&s, id), LiveShape::Rectangle { .. }));
+    assert!(rect_near(bounds(&s, id), Rect::new(10.0, 20.0, 160.0, 130.0), 1e-9), "{:?}", bounds(&s, id));
+    let layer = s.doc().unwrap().current_layer().unwrap();
+    assert_eq!(top_of(&s, layer), id);
+    assert_eq!(s.doc().unwrap().selection.objects, vec![id]);
+    assert_eq!(undo_len(&s), undo + 1);
+    assert_eq!(object_count(&s), before + 1);
+    // The current paint, as a shape drawn now gets it.
+    let reference = rect(&mut s, 300.0, 300.0, 5.0, 5.0);
+    let (n, r) = (node(&s, id), node(&s, reference));
+    assert_eq!((n.appearance.fill_paint(), n.appearance.stroke_paint()), (r.appearance.fill_paint(), r.appearance.stroke_paint()));
+    assert_eq!(n.appearance.stroke_width(), r.appearance.stroke_width());
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(object_count(&s), before);
+}
+
+/// A bounding circle around a right triangle stands on its hypotenuse; around a circle it is that
+/// circle, grown by at most the flattening allowance; `offset` grows the radius, and a rectangle's
+/// sides, by that much.
+#[test]
+fn a_bounding_circle_is_the_smallest_circle_around_the_outlines() {
+    let mut s = session();
+    let tri =
+        id_of(&s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 80, "y": 0}, {"x": 0, "y": 60}], "closed": true})).unwrap());
+    s.execute("select.set", &json!({"ids": [tri.0]})).unwrap();
+    let c = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+    match live(&s, c) {
+        LiveShape::Ellipse { w, h, pie, .. } => {
+            assert!((w - 100.02).abs() < 1e-9 && (h - 100.02).abs() < 1e-9 && pie == (0.0, 360.0), "{w} {h}");
+        }
+        other => panic!("not a circle: {other:?}"),
+    }
+    assert!(rect_near(bounds(&s, c), Rect::new(-10.01, -20.01, 90.01, 80.01), 1e-9), "{:?}", bounds(&s, c));
+
+    // A circle of radius 50 and a dot inside it: the bounding circle is the circle itself.
+    let round = id_of(&s.execute("shape.ellipse", &json!({"x": 200, "y": 200, "width": 100, "height": 100})).unwrap());
+    let dot = rect(&mut s, 240.0, 240.0, 2.0, 2.0);
+    s.execute("select.set", &json!({"ids": [round.0, dot.0]})).unwrap();
+    let c = id_of(&s.execute(CIRCLE, &json!({"offset": 5})).unwrap());
+    let got = bounds(&s, c);
+    let want = Rect::new(195.0, 195.0, 305.0, 305.0);
+    assert!(rect_near(got, want, 0.03), "{got:?}");
+    assert!(got.x0 <= want.x0 + 1e-9 && got.x1 >= want.x1 - 1e-9 && got.y0 <= want.y0 + 1e-9 && got.y1 >= want.y1 - 1e-9, "{got:?}");
+
+    s.execute("select.set", &json!({"ids": [tri.0]})).unwrap();
+    let r = id_of(&s.execute(RECTANGLE, &json!({"offset": 4})).unwrap());
+    assert!(rect_near(bounds(&s, r), Rect::new(-4.0, -4.0, 84.0, 64.0), 1e-9));
+}
+
+/// A shape with no size is not drawn: a straight horizontal line gets no rectangle and a path of
+/// one anchor no circle, unless `offset` gives them room; with `each` they are counted in
+/// `skipped`, and alone they are an error.
+#[test]
+fn shapes_of_no_size_are_skipped_unless_offset_gives_them_room() {
+    let mut s = session();
+    let line = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 10, "y": 50}, {"x": 90, "y": 50}]})).unwrap());
+    let lone = id_of(&s.execute("path.create", &json!({"anchors": [{"x": 50, "y": 70}]})).unwrap());
+    let box_ = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    assert!(refused(&mut s, RECTANGLE, json!({})).contains("nothing to enclose"));
+    let r = id_of(&s.execute(RECTANGLE, &json!({"offset": 2})).unwrap());
+    assert!(rect_near(bounds(&s, r), Rect::new(8.0, 48.0, 92.0, 52.0), 1e-9), "{:?}", bounds(&s, r));
+    // The line has length, so its circle has size.
+    s.execute("select.set", &json!({"ids": [line.0]})).unwrap();
+    let c = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+    assert!(rect_near(bounds(&s, c), Rect::new(9.99, 9.99, 90.01, 90.01), 1e-9), "{:?}", bounds(&s, c));
+
+    s.execute("select.set", &json!({"ids": [lone.0]})).unwrap();
+    assert!(refused(&mut s, CIRCLE, json!({})).contains("nothing to enclose"));
+    let c = id_of(&s.execute(CIRCLE, &json!({"offset": 3})).unwrap());
+    assert!(rect_near(bounds(&s, c), Rect::new(46.99, 66.99, 53.01, 73.01), 1e-9), "{:?}", bounds(&s, c));
+
+    s.execute("select.set", &json!({"ids": [line.0, lone.0, box_.0]})).unwrap();
+    let out = s.execute(RECTANGLE, &json!({"each": true})).unwrap();
+    assert_eq!((ids_of(&out).len(), out["skipped"].as_u64()), (1, Some(2)), "{out}");
+    assert!(rect_near(bounds(&s, id_of(&out)), Rect::new(200.0, 200.0, 210.0, 210.0), 1e-9));
+    s.execute("select.set", &json!({"ids": [line.0, lone.0, box_.0]})).unwrap();
+    let out = s.execute(CIRCLE, &json!({"each": true})).unwrap();
+    assert_eq!((ids_of(&out).len(), out["skipped"].as_u64()), (2, Some(1)), "{out}");
+}
+
+/// With `each`, every selected object gets a shape of its own, all in one undo step, on top of the
+/// layer in the selection's stacking order, and the new shapes are selected.
+#[test]
+fn each_draws_one_shape_around_each_object() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 100.0, 0.0, 20.0, 30.0);
+    s.execute("select.set", &json!({"ids": [b.0, a.0]})).unwrap();
+    let undo = undo_len(&s);
+    let out = s.execute(RECTANGLE, &json!({"each": true})).unwrap();
+    let ids = ids_of(&out);
+    assert_eq!(ids.len(), 2);
+    assert!(rect_near(bounds(&s, ids[0]), Rect::new(0.0, 0.0, 10.0, 10.0), 1e-9));
+    assert!(rect_near(bounds(&s, ids[1]), Rect::new(100.0, 0.0, 120.0, 30.0), 1e-9));
+    let layer = s.doc().unwrap().current_layer().unwrap();
+    let order: Vec<NodeId> = node(&s, layer).children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(order, vec![a, b, ids[0], ids[1]]);
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    assert_eq!(undo_len(&s), undo + 1);
+}
+
+/// An object with no outline (an empty group) gets no shape and the result counts it; with only
+/// such objects selected the command draws nothing.
+#[test]
+fn each_counts_the_objects_without_an_outline() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let empty = s
+        .edit("Group", |d, _| {
+            let id = d.alloc_id();
+            d.insert(d.default_layer(), 0, Node::group(id, vec![]))?;
+            Ok(id)
+        })
+        .unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, empty.0]})).unwrap();
+    let out = s.execute(CIRCLE, &json!({"each": true})).unwrap();
+    assert_eq!((ids_of(&out).len(), out["skipped"].as_u64()), (1, Some(1)), "{out}");
+    s.execute("select.set", &json!({"ids": [a.0, empty.0]})).unwrap();
+    let out = s.execute(CIRCLE, &json!({})).unwrap();
+    assert!(out.get("skipped").is_none(), "{out}");
+    s.execute("select.set", &json!({"ids": [empty.0]})).unwrap();
+    assert!(refused(&mut s, RECTANGLE, json!({"each": true})).contains("nothing to enclose"));
+}
+
+/// Curves over a hundred thousand points across are held by their circle: every point along the
+/// curves is inside the circle, whose radius is the 0.01 pt allowance larger than the circle around
+/// the flattened points. The farthest point of the lopsided arc lies between two flattened points,
+/// about 0.001 pt outside the circle around them, so it needs that allowance.
+#[test]
+fn the_circle_holds_huge_curves() {
+    let mut s = session();
+    let d = "M 0 0 C 0 -90000 120000 -90000 120000 0 C 60000 40000 30000 70000 0 0 Z";
+    let blob = id_of(&s.execute("path.create", &json!({"d": d})).unwrap());
+    let arc = id_of(&s.execute("path.create", &json!({"d": "M 0 0 C 20 400 380 500 400 0"})).unwrap());
+    for big in [blob, arc] {
+        s.execute("select.set", &json!({"ids": [big.0]})).unwrap();
+        let c = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+        let LiveShape::Ellipse { w, xf, .. } = live(&s, c) else { panic!("not a circle") };
+        let (center, r) = (xf * Point::new(w / 2.0, w / 2.0), w / 2.0);
+        let path = node(&s, big).path_data().unwrap().to_bezpath();
+        let mut farthest: f64 = 0.0;
+        for seg in path.segments() {
+            for i in 0..=4000 {
+                let p = vectorcraft_geom::ParamCurve::eval(&seg, f64::from(i) / 4000.0);
+                farthest = farthest.max(p.distance(center));
+            }
+        }
+        assert!(farthest <= r + 1e-6, "a point {farthest} from the center is outside the circle of radius {r}");
+    }
+}
+
+/// Clip groups count by their clipping paths; for art inside one, the shape goes on top of the
+/// current layer, never into the clip group.
+#[test]
+fn clip_groups_count_by_their_clipping_paths() {
+    let mut s = session();
+    let art = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let clip = id_of(&s.execute("shape.ellipse", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap());
+    s.execute("select.set", &json!({"ids": [art.0, clip.0]})).unwrap();
+    let group = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    let id = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+    let b = bounds(&s, id);
+    assert!((b.width() / 2.0 - 25.01).abs() < 0.03 && b.center().distance(Point::new(35.0, 35.0)) < 0.03, "{b:?}");
+    let layer = s.doc().unwrap().current_layer().unwrap();
+    assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(layer));
+    s.execute("select.set", &json!({"ids": [clip.0]})).unwrap();
+    let id = id_of(&s.execute(RECTANGLE, &json!({})).unwrap());
+    assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(layer));
+    assert!(rect_near(bounds(&s, id), Rect::new(10.0, 10.0, 60.0, 60.0), 1e-6));
+}
+
+/// A sublayer that clips its contents counts by its clipping path, and the hidden objects of a
+/// sublayer are left out.
+#[test]
+fn sublayers_count_by_their_clipping_path_and_shown_art() {
+    let mut s = session();
+    let top = s.doc().unwrap().current_layer().unwrap();
+    let sub = id_of(&s.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": sub.0})).unwrap();
+    let art = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let hidden = rect(&mut s, 300.0, 300.0, 10.0, 10.0);
+    assert_eq!(s.doc().unwrap().doc.parent_of(art), Some(sub), "the art is in the sublayer");
+    s.execute("select.set", &json!({"ids": [hidden.0]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let (sub_node, symbols) = (d.node(sub).unwrap().clone(), d.symbol_boxes());
+    let mut g = Gathered::new();
+    super::outline_points(&sub_node, &symbols, &mut g, 0);
+    let (center, r) = shapes::enclosing_circle(&g.points).unwrap();
+    assert!(center.distance(Point::new(50.0, 50.0)) < 1e-9 && (r - 50.0 * 2f64.sqrt()).abs() < 1e-9, "{center:?} {r}");
+
+    // The top object of the sublayer becomes its clipping path.
+    s.execute("select.none", &json!({})).unwrap();
+    let clip = rect(&mut s, 20.0, 20.0, 10.0, 10.0);
+    assert_eq!(s.doc().unwrap().doc.parent_of(clip), Some(sub));
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(s.execute("layer.clippingMask.toggle", &json!({"id": sub.0})).unwrap()["clip"].as_bool().unwrap());
+    let d = &s.doc().unwrap().doc;
+    let sub_node = d.node(sub).unwrap().clone();
+    let mut g = Gathered::new();
+    super::outline_points(&sub_node, &d.symbol_boxes(), &mut g, 0);
+    let (center, r) = shapes::enclosing_circle(&g.points).unwrap();
+    assert!(center.distance(Point::new(25.0, 25.0)) < 1e-9 && (r - 5.0 * 2f64.sqrt()).abs() < 1e-9, "{center:?} {r}");
+}
+
+/// In an isolated group the shape goes on top of the group's art; in an isolated compound path it
+/// goes beside the compound path, never into it.
+#[test]
+fn shapes_go_into_an_isolated_group_but_not_an_isolated_compound_path() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let group = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": group.0})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let id = id_of(&s.execute(RECTANGLE, &json!({})).unwrap());
+    assert_eq!(s.doc().unwrap().doc.parent_of(id), Some(group));
+    assert_eq!(top_of(&s, group), id);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+
+    let c = rect(&mut s, 100.0, 100.0, 10.0, 10.0);
+    let e = rect(&mut s, 120.0, 100.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [c.0, e.0]})).unwrap();
+    let compound = id_of(&s.execute("object.compoundPath.make", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": compound.0})).unwrap();
+    let members: Vec<u64> = node(&s, compound).children().unwrap().iter().map(|n| n.id.0).collect();
+    s.execute("select.set", &json!({"ids": members})).unwrap();
+    let id = id_of(&s.execute(CIRCLE, &json!({})).unwrap());
+    let d = &s.doc().unwrap().doc;
+    assert_ne!(d.parent_of(id), Some(compound), "the circle does not join the compound path");
+    assert_eq!(d.parent_of(id), d.parent_of(compound));
+    assert_eq!(node(&s, compound).children().unwrap().len(), 2);
+}
+
+/// An offset or each that is not one the commands take is an error, and nothing is drawn; with
+/// nothing selected the commands are not available.
+#[test]
+fn bad_params_and_an_empty_selection_draw_nothing() {
+    let mut s = session();
+    assert!(s.execute(RECTANGLE, &json!({})).is_err(), "nothing selected");
+    assert!(s.execute(CIRCLE, &json!({})).is_err(), "nothing selected");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for command in [RECTANGLE, CIRCLE] {
+        for p in [json!({"offset": -1}), json!({"offset": "5"}), json!({"each": "yes"})] {
+            refused(&mut s, command, p);
+        }
+        assert!(refused(&mut s, command, json!({"offset": -1})).contains("`offset` must be 0 or more"));
+    }
+}
+
+/// Many points keep only their hull's corners, and the circle around them is the one around all
+/// of the points.
+#[test]
+fn gathered_points_keep_their_hull_and_circle() {
+    let mut g = Gathered::new();
+    let c = Point::new(500.0, 300.0);
+    for i in 0..200_000 {
+        let angle = f64::from(i) * 0.618;
+        let r = if i % 1000 == 0 { 250.0 } else { f64::from(i % 200) };
+        g.points.push(c + Vec2::from_angle(angle) * r);
+        g.compact();
+    }
+    assert!(g.points.len() <= COMPACT_AT + 1, "{} points kept", g.points.len());
+    let (center, radius) = shapes::enclosing_circle(&g.points).unwrap();
+    assert!(center.distance(c) < 1e-6 && (radius - 250.0).abs() < 1e-6, "{center:?} {radius}");
+}

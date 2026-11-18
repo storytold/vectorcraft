@@ -7754,6 +7754,11 @@ breakText	Glyphs	Глифы
 @msg	`circle` is past the last circle found ({found})	`circle` больше числа найденных окружностей ({found})
 @msg	object {value} is not a path or compound path	объект {value} не является контуром или составным контуром
 @msg	these shapes are too small to measure	эти фигуры слишком малы для измерения
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Добавить описанный прямоугольник
+	Add Bounding Circle	Добавить описанную окружность
+@msg	nothing to enclose	нечего окружать
+@msg	`offset` must be 0 or more	`offset` должно быть 0 или больше
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Инструменты документа
 	Save a Timestamped Copy	Сохранить копию с датой и временем

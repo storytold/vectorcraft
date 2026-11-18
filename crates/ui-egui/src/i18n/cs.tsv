@@ -7764,6 +7764,11 @@ breakText	Glyphs	Glyfy
 @msg	`circle` is past the last circle found ({found})	`circle` je za poslední nalezenou kružnicí ({found})
 @msg	object {value} is not a path or compound path	objekt {value} není cesta ani složená cesta
 @msg	these shapes are too small to measure	tyto tvary jsou příliš malé na měření
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Přidat ohraničující obdélník
+	Add Bounding Circle	Přidat ohraničující kružnici
+@msg	nothing to enclose	není co ohraničit
+@msg	`offset` must be 0 or more	`offset` musí být 0 nebo více
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Nástroje dokumentu
 	Save a Timestamped Copy	Uložit kopii s datem a časem

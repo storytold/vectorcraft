@@ -7415,6 +7415,11 @@ breakText	Glyphs	Glyph
 @msg	`circle` is past the last circle found ({found})	`circle` vượt quá đường tròn cuối cùng tìm được ({found})
 @msg	object {value} is not a path or compound path	đối tượng {value} không phải đường dẫn hay đường dẫn phức hợp
 @msg	these shapes are too small to measure	các hình này quá nhỏ để đo
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Thêm hình chữ nhật bao quanh
+	Add Bounding Circle	Thêm hình tròn bao quanh
+@msg	nothing to enclose	không có gì để bao quanh
+@msg	`offset` must be 0 or more	`offset` phải từ 0 trở lên
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Công cụ tài liệu
 	Save a Timestamped Copy	Lưu bản sao có ngày giờ

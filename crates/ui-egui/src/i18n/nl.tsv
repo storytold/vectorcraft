@@ -9655,6 +9655,11 @@ breakText	Glyphs	Glyphs
 @msg	`circle` is past the last circle found ({found})	`circle` ligt voorbij de laatst gevonden cirkel ({found})
 @msg	object {value} is not a path or compound path	object {value} is geen pad of samengesteld pad
 @msg	these shapes are too small to measure	deze vormen zijn te klein om te meten
+# Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
+	Add Bounding Rectangle	Begrenzingsrechthoek toevoegen
+	Add Bounding Circle	Begrenzingscirkel toevoegen
+@msg	nothing to enclose	niets om te omsluiten
+@msg	`offset` must be 0 or more	`offset` moet 0 of meer zijn
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Documentgereedschappen
 	Save a Timestamped Copy	Een kopie met tijdstempel opslaan

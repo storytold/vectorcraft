@@ -13098,6 +13098,30 @@ Commands:
   the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
   opens a dialog (Tangents, Centerline) with Preview. → `{ids, external, internal, centerline, warning?}`
   (`centerline`: the centerline's id, or null).
+- `addon.pathtools.boundingRectangle {each?, offset?}` draws a live rectangle on the geometric bounding box of the
+  selected objects, strokes and effects left out (Object › Plug-ins › Path Precision Tools › Add Bounding Rectangle,
+  #6966). `addon.pathtools.boundingCircle {each?, offset?}` draws the smallest live circle that holds the outlines of
+  the selected objects (Add Bounding Circle). The circle reads paths and compound paths by their curves, clip groups
+  and sublayers that clip their contents by their clipping paths, other sublayers by their shown objects, images by
+  their corners, and type and other objects by the corners of their bounding box. It splits each curve into pieces
+  until every piece's control points lie within 0.01 pt of its chord, fits the circle to the ends of the pieces, and
+  makes the radius 0.01 pt larger, so the circle holds the curves themselves. A curve is split into 1,024 pieces at
+  most; a piece that still bends more counts by its control points, which can make the circle slightly larger than the
+  smallest one. `offset` (0 or more, default 0) adds space: a rectangle grows by `offset` on each side and a circle's
+  radius grows by `offset`. `each: true` draws one shape around each selected object instead of one around the whole
+  selection.
+
+  Each shape gets the current paint and goes on top of the current layer, or of the isolated group, as other new art
+  does; inside an isolated compound path it goes beside the compound path and does not join it. The new shapes are
+  selected, and one undo removes them all. An object with no outline (an empty group) gets no shape, and neither does
+  a shape with no size: the rectangle around a straight horizontal or vertical line, or the circle around a single
+  point, unless `offset` is more than 0. With `each`, the result's `skipped` counts those objects. It is an error, with
+  the document unchanged, when no shape is left to draw and when `offset` is below 0. → `{id: the first shape, ids,
+  skipped?}`
+
+  ```json
+  {"name":"run_command","arguments":{"command":"addon.pathtools.boundingCircle","params":{"offset":2}}}
+  ```
 
 A parametric shape is an ordinary path. It keeps its numbers, with a fingerprint of the outline they drew, in one
 entry of its object data (`vc-pathtools-shape`, as `document.node` lists `attrs.data`), which SVG export leaves out;
