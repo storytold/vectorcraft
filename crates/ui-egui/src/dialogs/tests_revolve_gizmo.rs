@@ -315,22 +315,18 @@ impl Harness {
     }
 }
 
-fn clipping_group() -> Vec<(&'static str, Value)> {
-    vec![
-        ("shape.ellipse", json!({"x":20,"y":20,"width":100,"height":100})),
-        ("shape.rectangle", json!({"x":60,"y":60,"width":100,"height":100})),
-        ("select.all", json!({})),
-        ("object.clippingMask.make", json!({})),
-    ]
+fn an_image() -> Vec<(&'static str, Value)> {
+    let data = vectorcraft_format::base64_encode(&crate::tests_sysclip::blue_png());
+    vec![("file.place", json!({"name": "blue.png", "dataBase64": data, "link": false, "at": [150, 150]}))]
 }
 
 /// #6140: on an object a 3D effect can't take, the dialog says why in its own words, and OK, which
 /// could only fail, is off, where it used to look as if OK did nothing.
 #[test]
 fn a_refused_3d_effect_says_why_and_turns_ok_off() {
-    let mut h = Harness::extrude_dialog(&clipping_group(), true);
+    let mut h = Harness::extrude_dialog(&an_image(), true);
     assert!(!h.ok_is_on());
-    assert!(h.shows("requires a path"));
+    assert!(h.shows("can't build a solid from an image"));
     assert!(!h.shows("effect.apply"), "the reason is written without the command's id");
     let enter = Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
     h.frame(vec![enter], Modifiers::NONE);
@@ -341,9 +337,9 @@ fn a_refused_3d_effect_says_why_and_turns_ok_off() {
 /// and trying it leaves no preview open.
 #[test]
 fn a_refused_3d_effect_is_found_with_preview_off() {
-    let mut h = Harness::extrude_dialog(&clipping_group(), false);
+    let mut h = Harness::extrude_dialog(&an_image(), false);
     assert!(!h.ok_is_on());
-    assert!(h.shows("requires a path"));
+    assert!(h.shows("can't build a solid from an image"));
     assert!(!h.app.session.in_interaction());
 }
 
@@ -351,7 +347,7 @@ fn a_refused_3d_effect_is_found_with_preview_off() {
 /// one would replace its preview and cancel it.
 #[test]
 fn a_3d_effect_with_preview_off_leaves_another_interaction_alone() {
-    let mut h = Harness::extrude_dialog(&clipping_group(), false);
+    let mut h = Harness::extrude_dialog(&an_image(), false);
     h.app.session.begin_interaction("Drag").unwrap();
     let d = h.app.ui.dialog.as_mut().unwrap();
     d.fields.remove("__tried");
@@ -360,7 +356,7 @@ fn a_3d_effect_with_preview_off_leaves_another_interaction_alone() {
     assert!(h.app.session.in_interaction(), "the other interaction goes on");
     assert!(h.ok_is_on(), "nothing has tried the values yet");
     h.app.session.cancel_interaction().unwrap();
-    assert!(h.shows("requires a path"));
+    assert!(h.shows("can't build a solid from an image"));
     assert!(!h.ok_is_on());
     assert!(!h.app.session.in_interaction());
 }

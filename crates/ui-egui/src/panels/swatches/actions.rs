@@ -1,17 +1,23 @@
 use super::dnd::{group_of, selection};
 use super::libraries::SwatchLibraries;
-use super::{Kind, LibraryKind, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate, set_pstate, widgets};
+use super::{
+    Kind, LibraryKind, PanelDrag, Response, Ui, Value, VectorcraftApp, View, active_paint, json, library_panel, menu_item, pstate, set_pstate,
+    widgets,
+};
 
-/// The selected swatches and groups that can be deleted (all but None and Registration).
-pub(super) fn deletable(sel: &[String]) -> Vec<String> {
-    sel.iter().filter(|n| !n.starts_with('[')).cloned().collect()
+/// The selected swatches and groups that can be deleted: every color group in the document and
+/// every swatch that `Swatch::is_reserved` does not reserve (None and Registration). Names the
+/// document does not hold are left out.
+pub(super) fn deletable(app: &VectorcraftApp, sel: &[String]) -> Vec<String> {
+    let Some(d) = app.session.active().map(|st| &st.doc) else { return vec![] };
+    sel.iter().filter(|n| d.swatch(n).map_or_else(|| d.swatch_groups.iter().any(|g| g.name == **n), |w| !w.is_reserved())).cloned().collect()
 }
 
 /// The selected swatch when exactly one swatch with an editor is selected (not None, Registration
 /// or a group).
-fn editable(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
+pub(super) fn editable(app: &VectorcraftApp, sel: &[String]) -> Option<String> {
     match sel {
-        [n] if !n.starts_with('[') && app.session.active().is_some_and(|st| st.doc.swatch(n).is_some()) => Some(n.clone()),
+        [n] if app.session.active().and_then(|st| st.doc.swatch(n)).is_some_and(|w| !w.is_reserved()) => Some(n.clone()),
         _ => None,
     }
 }
@@ -77,19 +83,57 @@ pub(super) fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
         }
         ui.add_space((ui.available_width() - 3.0 * 28.0).max(0.0));
         if widgets::icon_button(ui, "dc-folder", tl!("New Color Group"), false, 24.0).clicked() {
-            app.run("ui.newColorGroup", json!({"swatches": deletable(sel)})).ok();
+            app.run("ui.newColorGroup", json!({"swatches": deletable(app, sel)})).ok();
         }
         // Alt-click skips the dialog; Ctrl/Cmd-click makes a spot color, and Ctrl/Cmd+Shift-click
         // makes a global process color.
         if widgets::icon_button(ui, "dc-new-item", tl!("New Swatch"), false, 24.0).clicked() {
             new_swatch(app, sel, ui.input(|i| i.modifiers));
         }
-        // Alt-click deletes without asking.
-        let del = deletable(sel);
-        if widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Swatch"), false, !del.is_empty(), 24.0).clicked() {
+        // Alt-click deletes without asking. Swatches or color groups dragged from the list can be
+        // dropped on it, also with nothing selected: the button is enabled while they are held.
+        let del = deletable(app, sel);
+        let dragged = dragged_deletable(app, ui.ctx());
+        let trash = widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Swatch"), false, !del.is_empty() || !dragged.is_empty(), 24.0);
+        if trash.clicked() && !del.is_empty() {
             delete(app, del, ui.input(|i| i.modifiers.alt));
         }
+        drop_on_delete(app, ui, &trash, dragged);
     });
+}
+
+/// The panel state key of the document (`uid`) the swatches being dragged from the list belong to.
+pub(super) const DRAG_DOC: &str = "swatch-drag-doc";
+
+/// The swatches and color groups of the active document being dragged from the list that Delete
+/// Swatch can delete: neither None nor Registration, and still in the document. Empty for any other
+/// drag, and for a drag started in another document.
+fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
+    if pstate::<Option<u64>>(ctx, DRAG_DOC) != Some(st.uid) {
+        return vec![];
+    }
+    match egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref() {
+        Some(PanelDrag::Paint { rows: Some(r), .. }) => deletable(app, &r.names).into_iter().filter(|n| st.doc.swatch_name_taken(n)).collect(),
+        _ => vec![],
+    }
+}
+
+/// Swatches or color groups (`names`) dragged onto Delete Swatch (`button`): the button is
+/// outlined while they are held over it, and the release of the primary button asks to delete them
+/// as a plain click does ([`delete`]); Alt does not skip the question. The release of another
+/// button ends the drag, and other drags are left to their own targets.
+fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: Vec<String>) {
+    if names.is_empty() || button.dnd_hover_payload::<PanelDrag>().is_none() {
+        return;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return;
+    }
+    if button.dnd_release_payload::<PanelDrag>().is_some() {
+        delete(app, names, false);
+    }
 }
 
 /// The colour group the selection points at: the last selected group, or the group of the last
@@ -121,9 +165,9 @@ pub(super) fn new_swatch(app: &mut VectorcraftApp, sel: &[String], m: egui::Modi
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let view: View = pstate(ui.ctx(), "swatch-view");
+    let view = app.ui.swatches_view;
     let selected = selection(app, ui);
-    let del = deletable(&selected);
+    let del = deletable(app, &selected);
     let opts = editable(app, &selected);
     if menu_item(ui, tl!("New Swatch…"), true, false) {
         new_swatch(app, &selected, egui::Modifiers::NONE);
@@ -174,13 +218,17 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     for (v, label) in View::ALL {
         if menu_item(ui, label, true, v == view) {
-            set_pstate(ui.ctx(), "swatch-view", v);
+            app.run("ui.panelView", json!({ "panel": "swatches", "view": v })).ok();
         }
     }
     ui.separator();
     let find: bool = pstate(ui.ctx(), "swatch-show-find");
     if menu_item(ui, tl!("Show Find Field"), true, find) {
         set_pstate(ui.ctx(), "swatch-show-find", !find);
+    }
+    let recent = app.ui.swatches_show_recent_colors;
+    if menu_item(ui, tl!("Show Recent Colors"), true, recent) {
+        app.ui.swatches_show_recent_colors = !recent;
     }
     ui.separator();
     if menu_item(ui, tl!("Swatch Options…"), opts.is_some(), false)
@@ -194,6 +242,6 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.separator();
     ui.menu_button(tl!("Open Swatch Library"), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
     if menu_item(ui, tl!("Save Swatch Library…"), true, false) {
-        app.run("ui.saveSwatchLibrary", json!({ "names": deletable(&selected) })).ok();
+        app.run("ui.saveSwatchLibrary", json!({ "names": deletable(app, &selected) })).ok();
     }
 }

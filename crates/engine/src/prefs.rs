@@ -10,6 +10,26 @@ pub enum DrawMode {
     Inside,
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: the instructions an object filter's run
+/// may use ([`vectorcraft_plugins::Plugin::large_limits`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginBudget {
+    /// The plug-in's own limits.
+    #[default]
+    Normal,
+    /// At least [`vectorcraft_plugins::LARGE_FUEL`] instructions besides those for each byte of
+    /// input; the time budget is unchanged.
+    Large,
+}
+
+/// A saved Plug-in Instruction Budget: any value but `large`, of any type, reads as Normal, and the
+/// other preferences are read as they are.
+fn plugin_budget<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<PluginBudget, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(if saved.as_str() == Some("large") { PluginBudget::Large } else { PluginBudget::Normal })
+}
+
 /// A saved Default Language as its tag: older preferences hold the language's name, and one the list
 /// no longer has reads as the default.
 fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
@@ -29,6 +49,12 @@ pub struct Prefs {
     pub constrain_angle: f64,
     pub corner_radius: f64,
     pub disable_auto_add_delete: bool,
+    /// General › Interpolate Control Points When Moving Anchors: the default of the `interpolate`
+    /// param of the commands that move direct-selected anchors (a Direct Selection drag, the arrow
+    /// keys, Move, Transform Again). On, the handles of each segment with one moved end are
+    /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
+    /// default), the handles of a moved anchor move with it and the other handles stay.
+    pub interpolate_control_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// Other Script… warns before it runs a chosen script.
@@ -71,6 +97,11 @@ pub struct Prefs {
     /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
     /// tool active before comes back; a quick press chooses the tool for good.
     pub hold_tool_keys: bool,
+    /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
+    /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
+    /// default), it hides during a move and while a shape is drawn, except that a Selection tool
+    /// move with Real-time Drawing off still moves the box.
+    pub bounding_box_while_moving_and_drawing: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
@@ -99,10 +130,16 @@ pub struct Prefs {
     pub font_names_in_english: bool,
     pub auto_size_area_type: bool,
     pub font_preview: bool,
+    /// Type › Show samples on white: the font menus draw each family's sample in dark type on a
+    /// white area in every brightness (off by default).
+    pub font_samples_on_white: bool,
     pub font_preview_size: String,
     pub recent_fonts_count: u32,
     pub missing_glyph_protection: bool,
     pub highlight_alternate_glyphs: bool,
+    /// Type › Show Character Alternates: with a Type tool and one character selected, the canvas
+    /// shows that character's alternate glyphs beside it (on by default).
+    pub show_character_alternates: bool,
     /// Type › Highlight Substituted Fonts: on screen, text drawn in a substitute for a missing
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
@@ -124,6 +161,9 @@ pub struct Prefs {
     pub guide_style: String,
     /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
     pub lock_guides_by_default: bool,
+    /// Artboard Guides with Cmd/Ctrl + Ruler Drag: Cmd/Ctrl held when a guide is dragged out of a
+    /// ruler makes it a guide of the active artboard, or with the Artboard tool a canvas guide.
+    pub cmd_ruler_drag_artboard_guides: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -159,6 +199,11 @@ pub struct Prefs {
     pub fonts_folder: String,
     // Plug-ins & Scratch Disks
     pub plugins_folder: String,
+    /// Plug-in Instruction Budget: the instructions each object filter run gets, from
+    /// `plugin.run`, a plug-in command and the app alike. Live effects, exporters and importers
+    /// keep their own budgets.
+    #[serde(deserialize_with = "plugin_budget")]
+    pub plugin_instruction_budget: PluginBudget,
     pub scratch_primary: String,
     pub scratch_secondary: String,
     // User Interface
@@ -200,6 +245,10 @@ pub struct Prefs {
     /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
     /// machines are unaffected.
     pub gpu_preference: String,
+    /// The desktop app's window presents without vsync, with frames capped at 240 a second (#6013).
+    /// Read at startup (it takes effect after a restart); `--present-mode` and
+    /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
+    pub low_latency_drawing: bool,
     pub history_states: u32,
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
@@ -209,6 +258,10 @@ pub struct Prefs {
     /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
     /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
+    /// The desktop canvas converts its sRGB into the ICC profile of the display that shows the
+    /// window, where the system doesn't (Windows without Advanced Color, X11). Display only: it
+    /// changes no document, proof or export.
+    pub monitor_profile_display: bool,
     // File Handling
     pub background_save: bool,
     pub background_export: bool,
@@ -249,6 +302,9 @@ pub struct Prefs {
     /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
     /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
     pub glyph_snap: vectorcraft_tools::GlyphSnap,
+    /// Pixel Snapping Options: whether View › Snap to Pixel snaps drawing, moving and scaling
+    /// (`view.snapToPixel.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub pixel_snap: vectorcraft_tools::PixelSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
@@ -372,6 +428,7 @@ impl Default for Prefs {
             constrain_angle: 0.0,
             corner_radius: 12.0,
             disable_auto_add_delete: false,
+            interpolate_control_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_external_script_warning: true,
@@ -394,6 +451,7 @@ impl Default for Prefs {
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
             hold_tool_keys: true,
+            bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
             marquee_selection: "touching".into(),
@@ -418,10 +476,12 @@ impl Default for Prefs {
             font_names_in_english: true,
             auto_size_area_type: false,
             font_preview: true,
+            font_samples_on_white: false,
             font_preview_size: s("medium"),
             recent_fonts_count: 10,
             missing_glyph_protection: true,
             highlight_alternate_glyphs: false,
+            show_character_alternates: true,
             highlight_substituted_fonts: true,
             placeholder_text: true,
             typed_lists: true,
@@ -434,6 +494,7 @@ impl Default for Prefs {
             guide_color: s("#4affff"),
             guide_style: s("lines"),
             lock_guides_by_default: false,
+            cmd_ruler_drag_artboard_guides: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,
@@ -460,6 +521,7 @@ impl Default for Prefs {
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
+            plugin_instruction_budget: PluginBudget::Normal,
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),
             ui_brightness: s("mediumDark"),
@@ -478,10 +540,12 @@ impl Default for Prefs {
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),
+            low_latency_drawing: false,
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
             linux_display_server: s("automatic"),
+            monitor_profile_display: true,
             background_save: true,
             background_export: true,
             autosave_recovery: true,
@@ -509,6 +573,7 @@ impl Default for Prefs {
             eyedropper: Default::default(),
             pathfinder: Default::default(),
             glyph_snap: Default::default(),
+            pixel_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
             gradient_presets: vec![],

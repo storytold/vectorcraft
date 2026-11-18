@@ -27,6 +27,8 @@ mod param_keys;
 mod paste_many;
 mod pen_click_after_smooth;
 mod pen_endpoint_picking;
+mod ruler_guide_nodes;
+mod ruler_guide_perf;
 mod ruler_origin;
 mod selection_commands;
 mod stroke_visibility;

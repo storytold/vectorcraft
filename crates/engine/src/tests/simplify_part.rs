@@ -73,8 +73,8 @@ fn simplify_refits_only_the_run_between_direct_selected_anchors() {
     assert_eq!(out["after"].as_u64(), Some(len as u64));
     assert!(len < 101 - 30, "{len}");
     let end = len - 41;
-    assert_eq!(sp.anchors[..20], original.anchors[..20], "the anchors before the run");
-    assert_eq!(sp.anchors[end + 1..], original.anchors[61..], "the anchors after the run");
+    assert_eq!(sp.anchors.to_vec()[..20], original.anchors.to_vec()[..20], "the anchors before the run");
+    assert_eq!(sp.anchors.to_vec()[end + 1..], original.anchors.to_vec()[61..], "the anchors after the run");
     assert_eq!((sp.anchors[20].p, sp.anchors[20].h_in), (original.anchors[20].p, original.anchors[20].h_in));
     assert_eq!((sp.anchors[end].p, sp.anchors[end].h_out), (original.anchors[60].p, original.anchors[60].h_out));
     for i in 0..20 {
@@ -100,7 +100,7 @@ fn separate_runs_on_one_path_simplify_independently_in_one_step() {
         let id = wave(&mut s);
         select_anchors(&mut s, id, ranges);
         s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
-        path_of(&s, id).subpaths[0].anchors.clone()
+        path_of(&s, id).subpaths[0].anchors.to_vec()
     };
     let (first, second) = (alone(&[(10, 30)]), alone(&[(60, 80)]));
     let mut s = session();
@@ -110,13 +110,13 @@ fn separate_runs_on_one_path_simplify_independently_in_one_step() {
     let undo = undo_len(&s);
     s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
     assert_eq!(undo_len(&s), undo + 1, "one undo step");
-    let both = path_of(&s, id).subpaths[0].anchors.clone();
+    let both = path_of(&s, id).subpaths[0].anchors.to_vec();
     // Where old anchor 30 is in the first result, and old anchor 80 in the second.
     let (a30, a80) = (first.len() - 71, second.len() - 21);
     assert!(a30 < 30 && a80 < 80, "both runs lose anchors");
     let mid = a30 + 30;
     assert_eq!(both[..=a30], first[..=a30]);
-    assert_eq!(both[a30 + 1..mid], original.anchors[31..60], "the anchors between the runs");
+    assert_eq!(both[a30 + 1..mid], original.anchors.to_vec()[31..60], "the anchors between the runs");
     assert_eq!(both[mid..], second[60..]);
     let sel: BTreeSet<_> = (10..=a30).chain(mid..=mid + a80 - 60).map(|i| (0, i)).collect();
     assert_eq!(s.doc().unwrap().selection.anchors.get(&id), Some(&sel));
@@ -138,7 +138,7 @@ fn a_run_across_the_start_of_a_closed_path_simplifies_as_one() {
     assert!(sp.closed);
     assert!(sp.anchors.len() < 80 - 10, "{}", sp.anchors.len());
     assert!(!sp.anchors.iter().any(|a| a.p == original.anchors[0].p), "anchor 0 was inside the run");
-    assert_eq!(sp.anchors[1..60], original.anchors[11..70]);
+    assert_eq!(sp.anchors.to_vec()[1..60], original.anchors.to_vec()[11..70]);
     assert_eq!((sp.anchors[0].p, sp.anchors[0].h_out), (original.anchors[10].p, original.anchors[10].h_out));
     assert_eq!((sp.anchors[60].p, sp.anchors[60].h_in), (original.anchors[70].p, original.anchors[70].h_in));
     for i in 0..60 {
@@ -162,8 +162,8 @@ fn picked_segments_simplify_and_stay_picked() {
     s.execute("object.path.simplify", &json!({"tolerance": 1})).unwrap();
     let sp = path_of(&s, id).subpaths[0].clone();
     let end = sp.anchors.len() - 41;
-    assert_eq!(sp.anchors[..20], original.anchors[..20]);
-    assert_eq!(sp.anchors[end + 1..], original.anchors[61..]);
+    assert_eq!(sp.anchors.to_vec()[..20], original.anchors.to_vec()[..20]);
+    assert_eq!(sp.anchors.to_vec()[end + 1..], original.anchors.to_vec()[61..]);
     let sel = &s.doc().unwrap().selection;
     assert_eq!(sel.segments.get(&id), Some(&(20..end).map(|i| (0, i)).collect()));
     assert_eq!(sel.anchors.get(&id), Some(&(20..=end).map(|i| (0, i)).collect()));
@@ -200,8 +200,8 @@ fn slider_preview_and_auto_simplify_only_the_run() {
         let previewed = path_of(&s, id);
         let sp = &previewed.subpaths[0];
         assert!(sp.anchors.len() < 101, "{p}");
-        assert_eq!(sp.anchors[..20], original.anchors[..20], "{p}");
-        assert_eq!(sp.anchors[sp.anchors.len() - 40..], original.anchors[61..], "{p}");
+        assert_eq!(sp.anchors.to_vec()[..20], original.anchors.to_vec()[..20], "{p}");
+        assert_eq!(sp.anchors.to_vec()[sp.anchors.len() - 40..], original.anchors.to_vec()[61..], "{p}");
         s.execute("edit.undo", &json!({})).unwrap();
         s.execute("object.path.simplify", &p).unwrap();
         assert_eq!(path_of(&s, id), previewed, "{p}");

@@ -37,7 +37,7 @@ use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 use super::{BLUE, polygon, rect_corners};
 use crate::bbox::{Handle, hit_handle, scale_for_drag};
 use crate::guides::{DrawSnap, Leave, Targets};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug)]
 enum Drag {
@@ -205,11 +205,12 @@ impl ArtboardTool {
         self.copy_targets = cx.smart_guides.then(|| Targets::for_artboard(cx.doc, usize::MAX, &[]).styled(cx));
     }
 
-    /// Snap a dragged handle: to whole pixels, the grid, or Smart Guides (in that order, as when
-    /// drawing). With Smart Guides the bleed edge `bleed` beyond the handle may snap instead.
+    /// Snap a dragged handle: to whole pixels (Snap to Pixel's While Scaling option), the grid, or
+    /// Smart Guides (in that order, as when drawing). With Smart Guides the bleed edge `bleed`
+    /// beyond the handle may snap instead.
     fn snap_handle(&mut self, cx: &ToolContext, p: Point, bleed: Vec2) -> Point {
         self.guides.clear();
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(PixelOp::Scaling) {
             return Point::new(p.x.round(), p.y.round());
         }
         if cx.snap_to_grid {
@@ -222,12 +223,13 @@ impl ArtboardTool {
         q
     }
 
-    /// Snap a move (or an Alt-drag `copy`) of `rect` by `d`: its top-left to whole pixels or the
-    /// grid, or any of its edges and centre to Smart Guides. Returns the snapped delta.
+    /// Snap a move (or an Alt-drag `copy`) of `rect` by `d`: its top-left to whole pixels (Snap to
+    /// Pixel's While Moving option) or the grid, or any of its edges and centre to Smart Guides.
+    /// Returns the snapped delta.
     fn snap_move(&mut self, cx: &ToolContext, rect: Rect, d: Vec2, copy: bool) -> Vec2 {
         self.guides.clear();
         let tl = Point::new(rect.x0, rect.y0);
-        if cx.snap_to_pixel {
+        if cx.snaps_to_pixel(PixelOp::Moving) {
             return Vec2::new((tl.x + d.x).round() - tl.x, (tl.y + d.y).round() - tl.y);
         }
         if cx.snap_to_grid {
@@ -721,6 +723,18 @@ impl Tool for ArtboardTool {
             // Not one of the saved options: the canvas sets it for the release of a double-click.
             "suppressFitClick" => self.suppress_fit = value.as_bool().unwrap_or(false),
             _ => {}
+        }
+    }
+
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "active" if value.as_u64().is_some() => Ok(()),
+            "active" => Err("`active` must be an artboard index: a whole number from 0".into()),
+            "selected" if value.as_array().is_some_and(|a| !a.is_empty() && a.iter().all(|i| i.as_u64().is_some())) => Ok(()),
+            "selected" => Err("`selected` must be a list of artboard indexes, the active one first".into()),
+            "moveArt" | "scaleArt" | "suppressFitClick" => c::boolean(key, value),
+            _ => Err(c::unknown(key)),
         }
     }
 

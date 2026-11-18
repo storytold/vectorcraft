@@ -43,7 +43,7 @@ pub(crate) fn end_point(cx: &ToolContext, snap: &mut DrawSnap, a: Point, p: Poin
         return a;
     }
     let u = d / len;
-    let to_point = cx.snap_to_point && !(cx.smart_guides || cx.snap_to_grid || cx.snap_to_pixel);
+    let to_point = cx.snap_to_point && !(cx.smart_guides || cx.snap_to_grid || cx.snaps_to_pixel(crate::PixelOp::Drawing));
     let s = if to_point { snap.measure(cx, p, None) } else { p };
     let q = a + u * (s - a).dot(u);
     let leave = crate::guides::Leave::segment(cx, a, true);
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn shift_drag_meets_a_ruler_guide() {
         let (mut d, _) = doc_with_rect();
-        d.guides.push(vectorcraft_doc::Guide::new(true, 50.0));
+        d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 50.0));
         let s = Selection::default();
         let p = paint();
         let mut cx = cx(&d, &s, &p);

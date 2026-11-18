@@ -1,16 +1,22 @@
-//! Apply SVG Filter (Effect › SVG Filters › Apply SVG Filter…): the document's SVG filters in a
-//! list. OK applies the selected one to the selection as a live effect (`svgFilter.apply`), or,
-//! opened from the Appearance panel for an applied SVG filter, puts it in that effect's place
-//! (`effect.setParams`). New and Edit open the filter's code under the list; Save adds the filter
-//! or replaces the one being edited (`svgFilter.define`). Delete removes the selected filter
-//! (`svgFilter.delete`) and Import… adds the filters of an SVG file (`svgFilter.import`). Those
-//! act at once. Effect › SVG Filters lists the same filters below its first items.
+//! Apply SVG Filter (Effect › SVG Filters › Apply SVG Filter…): the default SVG filters and the
+//! document's own in a list, the defaults first. OK applies the selected one to the selection as a
+//! live effect, or, opened from the Appearance panel for an applied SVG filter, puts it in that
+//! effect's place (`svgFilter.apply`, with `index`). New and Edit open the filter's code under the
+//! list; Save adds the filter or replaces the one being edited (`svgFilter.define`). Delete
+//! removes the selected filter (`svgFilter.delete`) and Import… adds the filters of an SVG file
+//! (`svgFilter.import`). Those act at once. Effect › SVG Filters lists the same filters below its
+//! first items.
+//!
+//! A default is not in the document until it is applied or edited: the document then holds a copy
+//! under the default's name, which is listed in the default's place. Delete is off for a default
+//! the document holds no copy of.
 //!
 //! Fields: `selected` (a filter's name), `code` (the code being edited), `editing` (`""`, `"new"`
 //! or the name of the filter being edited), and with an applied effect `__index`, `__item` and
 //! `missing` (the name of a deleted filter the effect names).
 
 use serde_json::{Value, json};
+use vectorcraft_effects::svg_filter::defaults::{DEFAULT_FILTERS, Listed, default_filter, listed};
 use vectorcraft_engine::doc::SvgFilter;
 
 use super::DialogSpec;
@@ -25,20 +31,21 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Apply SVG Filter…").trim_end_matches('…').to_string(),
     body,
     confirm,
-    ok_enabled: Some(|app, d| d.str("editing").is_empty() && filters(app).iter().any(|f| f.name == d.str("selected"))),
+    ok_enabled: Some(|app, d| d.str("editing").is_empty() && filters(app).0.iter().any(|f| f.filter.name == d.str("selected"))),
     min_width: 440.0,
     ..DialogSpec::FORM
 };
 
-/// The active document's SVG filters.
-fn filters(app: &VectorcraftApp) -> Vec<SvgFilter> {
-    app.session.active().map(|st| st.doc.svg_filters.clone()).unwrap_or_default()
+/// The filters the dialog lists for the active document, and how many come first as the defaults.
+fn filters(app: &VectorcraftApp) -> (Vec<Listed>, usize) {
+    listed(app.session.active().map(|st| st.doc.svg_filters.as_slice()).unwrap_or_default())
 }
 
 /// `ui.svgFilterDialog {index?, item?}`: open Apply SVG Filter for the active document; with
 /// `index`, for the applied SVG filter at `index` of `item` (null: the object's effects): the
-/// document's filter of its name selected; when the document has none of its name, the name shown
-/// above the list if the filter was deleted, or else its code open as a new filter.
+/// document's filter of its name selected, or the default of its name when the effect draws with
+/// the default's code or with nothing; when neither has its name, the name shown above the list if
+/// the filter was deleted, or else its code open as a new filter.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     if app.session.active().is_none() {
         return Err("no document open".into());
@@ -53,17 +60,19 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         let e = applied.get(k as usize).filter(|e| e.id == vectorcraft_effects::SVG_FILTER).ok_or_else(|| format!("no SVG filter at index {k}"))?;
         let name = e.params.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
         let xml = e.params.get("xml").and_then(Value::as_str).unwrap_or_default().to_string();
-        let held = filters(app).into_iter().find(|f| f.name == name);
-        match held {
-            // The document's filter it names: selected.
-            Some(_) => fields["selected"] = json!(name),
+        let held = app.session.active().is_some_and(|st| st.doc.svg_filters.iter().any(|f| f.name == name));
+        // A default the document holds no copy of, when the effect draws with its code or with nothing.
+        let default = default_filter(&name).is_some_and(|d| xml.is_empty() || xml == d.xml);
+        if held || default {
+            // The filter it names: selected.
+            fields["selected"] = json!(name);
+        } else if xml.is_empty() {
             // Deleted from the document: shown above the list, not selectable; OK waits for a choice.
-            None if xml.is_empty() => fields["missing"] = json!(name),
+            fields["missing"] = json!(name);
+        } else {
             // A filter the document doesn't hold (from an opened file): its code, to add it.
-            None => {
-                fields["code"] = json!(xml);
-                fields["editing"] = json!("new");
-            }
+            fields["code"] = json!(xml);
+            fields["editing"] = json!("new");
         }
         fields["__index"] = json!(k);
         // As given: `null` is the object's own effects, and none is the active item's.
@@ -75,33 +84,39 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// OK: the selected filter to the selection, or in the applied effect's place.
+/// OK: the selected filter to the selection, or in the applied effect's place. A default the
+/// document holds no copy of is copied into it in the same undo step.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let name = d.str("selected");
-    let f = filters(app).into_iter().find(|f| f.name == name).ok_or("select an SVG filter")?;
-    let r = match d.fields.get("__index").and_then(Value::as_u64) {
-        Some(k) => {
-            let mut p = json!({ "index": k, "params": { "name": f.name, "xml": f.xml } });
-            if let Some(item) = d.fields.get("__item") {
-                p["item"] = item.clone();
-            }
-            app.run("effect.setParams", p)?
+    let f = filters(app).0.into_iter().find(|f| f.filter.name == name).ok_or("select an SVG filter")?;
+    let mut p = json!({ "name": f.filter.name });
+    if let Some(k) = d.fields.get("__index").and_then(Value::as_u64) {
+        p["index"] = json!(k);
+        if let Some(item) = d.fields.get("__item") {
+            p["item"] = item.clone();
         }
-        None => app.run("svgFilter.apply", json!({ "name": f.name }))?,
-    };
+    }
+    let r = app.run("svgFilter.apply", p)?;
     app.ui.dialog = None;
     Ok(r)
 }
 
-/// The active document's filter names, mirrored for the (static) menu tree ([`sync`]).
+/// The names of the active document's filters that are not a default's, mirrored for the (static)
+/// menu tree ([`sync`]).
 fn names_store() -> &'static std::sync::RwLock<Vec<&'static str>> {
     static NAMES: std::sync::OnceLock<std::sync::RwLock<Vec<&'static str>>> = std::sync::OnceLock::new();
     NAMES.get_or_init(Default::default)
 }
 
-/// Mirror the active document's SVG filter names for the menu tree (cheap when unchanged).
+/// The names of `held`, a document's filters, that are not a default's, in their order.
+fn own_names(held: &[SvgFilter]) -> Vec<String> {
+    held.iter().filter(|f| default_filter(&f.name).is_none()).map(|f| f.name.clone()).collect()
+}
+
+/// Mirror the active document's SVG filter names for the menu tree (cheap when unchanged). A
+/// filter with a default's name is the menu's entry of that name already.
 pub fn sync(app: &VectorcraftApp) {
-    let names: Vec<String> = app.session.active().map(|st| st.doc.svg_filters.iter().map(|f| f.name.clone()).collect()).unwrap_or_default();
+    let names: Vec<String> = app.session.active().map(|st| own_names(&st.doc.svg_filters)).unwrap_or_default();
     let same = names_store().read().map(|v| v.len() == names.len() && v.iter().zip(&names).all(|(a, b)| *a == b)).unwrap_or(true);
     if !same {
         if let Ok(mut v) = names_store().write() {
@@ -111,20 +126,23 @@ pub fn sync(app: &VectorcraftApp) {
     }
 }
 
-/// Effect › SVG Filters: Apply SVG Filter…, Import SVG Filter… and then the active document's
-/// filters, each applying itself to the selection.
+/// Effect › SVG Filters: Apply SVG Filter…, Import SVG Filter…, the default filters and then the
+/// active document's other filters, each applying itself to the selection.
 pub fn menu_items() -> Vec<crate::menus::Item> {
     items_for(names_store().read().map(|v| v.clone()).unwrap_or_default())
 }
 
-/// [`menu_items`] for filters named `names`.
+/// [`menu_items`] for a document whose filters that are not a default's are named `names`.
 fn items_for(names: Vec<&'static str>) -> Vec<crate::menus::Item> {
     use crate::menus::Item;
+    let apply = |n: &'static str| Item::Cmd(n, "svgFilter.apply", json!({ "name": n }));
     let mut v =
         vec![Item::Cmd("Apply SVG Filter…", "ui.svgFilterDialog", Value::Null), Item::Cmd("Import SVG Filter…", "ui.importSvgFilter", Value::Null)];
+    v.push(Item::Sep);
+    v.extend(DEFAULT_FILTERS.iter().map(|d| apply(d.name)));
     if !names.is_empty() {
         v.push(Item::Sep);
-        v.extend(names.into_iter().map(|n| Item::Cmd(n, "svgFilter.apply", json!({ "name": n }))));
+        v.extend(names.into_iter().map(apply));
     }
     v
 }
@@ -170,7 +188,8 @@ enum Action {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let list = filters(app);
+    let (list, defaults) = filters(app);
+    let held = list.iter().filter(|f| !f.default).count();
     let selected = d.str("selected");
     let editing = d.str("editing");
     let mut act = None;
@@ -184,7 +203,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             if !missing.is_empty() {
                 ui.add_enabled_ui(false, |ui| ui.selectable_label(false, missing.as_str()));
             }
-            for f in &list {
+            for (i, Listed { filter: f, .. }) in list.iter().enumerate() {
+                // The document's other filters follow the defaults, below a line.
+                if i == defaults && i > 0 {
+                    ui.separator();
+                }
                 let r = ui.selectable_label(f.name == selected, f.name.as_str());
                 if r.double_clicked() && editing.is_empty() {
                     act = Some(Action::Edit(f.name.clone()));
@@ -195,17 +218,20 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         });
     });
     ui.add_space(6.0);
-    let has = list.iter().any(|f| f.name == selected);
+    let chosen = list.iter().find(|f| f.filter.name == selected);
+    let has = chosen.is_some();
+    // A default the document holds no copy of has nothing to delete.
+    let deletable = chosen.is_some_and(|f| !f.default);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         let idle = editing.is_empty();
-        if ui.add_enabled_ui(idle && list.len() < SvgFilter::MAX, |ui| widgets::flat_button(ui, tl!("New"), 64.0)).inner.clicked() {
+        if ui.add_enabled_ui(idle && held < SvgFilter::MAX, |ui| widgets::flat_button(ui, tl!("New"), 64.0)).inner.clicked() {
             act = Some(Action::New);
         }
         if ui.add_enabled_ui(idle && has, |ui| widgets::flat_button(ui, tl!("Edit"), 64.0)).inner.clicked() {
             act = Some(Action::Edit(selected.clone()));
         }
-        if ui.add_enabled_ui(idle && has, |ui| widgets::flat_button(ui, tl!("Delete"), 64.0)).inner.clicked() {
+        if ui.add_enabled_ui(idle && deletable, |ui| widgets::flat_button(ui, tl!("Delete"), 64.0)).inner.clicked() {
             act = Some(Action::Delete);
         }
         if crate::picks::can(app, &PickRequest::Open(pick()))
@@ -245,7 +271,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             Ok(())
         }
         Some(Action::Edit(name)) => {
-            if let Some(f) = list.iter().find(|f| f.name == name) {
+            if let Some(f) = list.iter().map(|f| &f.filter).find(|f| f.name == name) {
                 d.fields.insert("selected".into(), json!(f.name));
                 d.fields.insert("editing".into(), json!(f.name));
                 d.fields.insert("code".into(), json!(f.xml));
@@ -322,7 +348,9 @@ mod tests {
         crate::menus::invoke(&mut app, "ui.svgFilterDialog", json!({}));
         let mut d = app.ui.dialog.clone().unwrap();
         assert_eq!(d.kind, KIND);
-        assert!(frame(&mut app, &mut d).iter().any(|t| t == "Shift"), "the filter's name, as it is");
+        // Below the defaults, which fill the rows the list shows at first.
+        assert_eq!(filters(&app).0.last().map(|f| f.filter.name.as_str()), Some("Shift"), "the filter's name, as it is");
+        assert!(!frame(&mut app, &mut d).is_empty());
         assert!(!(SPEC.ok_enabled.unwrap())(&app, &d), "nothing selected");
         d.fields.insert("selected".into(), json!("Shift"));
         assert!((SPEC.ok_enabled.unwrap())(&app, &d));
@@ -411,16 +439,117 @@ mod tests {
         use crate::menus::Item;
         let ids =
             |items: &[Item]| items.iter().map(|i| if let Item::Cmd(l, c, p) = i { format!("{l} {c} {p}") } else { "—".into() }).collect::<Vec<_>>();
-        assert_eq!(ids(&items_for(vec![])), ["Apply SVG Filter… ui.svgFilterDialog null", "Import SVG Filter… ui.importSvgFilter null"]);
+        // The defaults follow the commands in every document, and with no document.
+        let plain = ids(&items_for(vec![]));
         assert_eq!(
-            ids(&items_for(vec!["Shift", "A (1)"]))[2..],
-            ["—", "Shift svgFilter.apply {\"name\":\"Shift\"}", "A (1) svgFilter.apply {\"name\":\"A (1)\"}"]
+            plain[..4],
+            [
+                "Apply SVG Filter… ui.svgFilterDialog null",
+                "Import SVG Filter… ui.importSvgFilter null",
+                "—",
+                "Soft Blur svgFilter.apply {\"name\":\"Soft Blur\"}"
+            ]
         );
+        assert_eq!(plain.len(), 3 + DEFAULT_FILTERS.len());
+        assert_eq!(plain.last().map(String::as_str), Some("Hue Shift svgFilter.apply {\"name\":\"Hue Shift\"}"));
+        // The document's other filters come below them.
+        let with = ids(&items_for(vec!["Shift", "A (1)"]));
+        assert_eq!(with[..plain.len()], plain[..]);
+        assert_eq!(with[plain.len()..], ["—", "Shift svgFilter.apply {\"name\":\"Shift\"}", "A (1) svgFilter.apply {\"name\":\"A (1)\"}"]);
+        // A document's filter with a default's name is that default's entry.
+        let held = [
+            SvgFilter { name: "Glow".into(), xml: String::new() },
+            SvgFilter { name: "Shift".into(), xml: String::new() },
+            SvgFilter { name: "glow".into(), xml: String::new() },
+        ];
+        assert_eq!(own_names(&held), ["Shift", "glow"]);
         let mut app = app();
         assert!(!crate::menus::enabled(&app, "svgFilter.apply"), "nothing selected");
         app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         assert!(crate::menus::enabled(&app, "svgFilter.apply"));
         assert_eq!(crate::menus::display_label(&app, "svgFilter.apply", "Shift"), "Shift", "a filter's name as it is");
+    }
+
+    /// The steps in the active document's undo history.
+    fn steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    #[test]
+    fn a_default_is_listed_first_and_ok_copies_it_into_the_document() {
+        let mut app = app();
+        app.session.execute("svgFilter.define", &json!({"xml": SHIFT})).unwrap();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        open(&mut app, &json!({})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        let (list, defaults) = filters(&app);
+        let names: Vec<&str> = list.iter().map(|f| f.filter.name.as_str()).collect();
+        assert_eq!((defaults, names.len()), (DEFAULT_FILTERS.len(), DEFAULT_FILTERS.len() + 1));
+        assert_eq!((names[0], names[defaults - 1], names[defaults]), ("Soft Blur", "Hue Shift", "Shift"), "the defaults, then the document's own");
+        assert!(frame(&mut app, &mut d).iter().any(|t| t == "Soft Blur"), "a default's name, as it is");
+        d.fields.insert("selected".into(), json!("Soft Shadow"));
+        assert!((SPEC.ok_enabled.unwrap())(&app, &d), "a default can be applied");
+        let before = steps(&app);
+        confirm(&mut app, &d).unwrap();
+        assert_eq!(steps(&app), before + 1, "one undo step");
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!(doc.svg_filters.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["Shift", "Soft Shadow"]);
+        let fx = &doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects;
+        assert_eq!((fx.len(), fx[0].params["name"].as_str()), (1, Some("Soft Shadow")));
+        assert_eq!(fx[0].params["xml"].as_str(), default_filter("Soft Shadow").map(|f| f.xml));
+        // Opened for that effect, the document's copy is selected; OK with another default puts it
+        // in the effect's place and copies it, in one step.
+        app.run("effect.dialog", json!({"effect": "svg.filter", "index": 0, "item": null})).unwrap();
+        let mut d = app.ui.dialog.clone().unwrap();
+        assert_eq!((d.str("selected").as_str(), d.str("editing").as_str()), ("Soft Shadow", ""));
+        d.fields.insert("selected".into(), json!("Invert"));
+        let before = steps(&app);
+        confirm(&mut app, &d).unwrap();
+        assert_eq!(steps(&app), before + 1);
+        let doc = &app.session.active().unwrap().doc;
+        let fx = &doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects;
+        assert_eq!((fx.len(), fx[0].params["name"].as_str()), (1, Some("Invert")), "in its place, not added");
+        assert_eq!(doc.svg_filters.len(), 3);
+    }
+
+    /// Edit on a default opens its code, and Save keeps the edited copy in the document under the
+    /// default's name; an effect that names a default the document no longer holds selects it.
+    #[test]
+    fn an_edited_default_is_saved_in_the_document() {
+        let mut app = app();
+        let id = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        // Save, as its button does for the default being edited.
+        let edited = r#"<filter id="Thin"><feMorphology operator="erode" radius="3"/></filter>"#;
+        let r = app.run("svgFilter.define", json!({"xml": edited, "replace": "Thin"})).unwrap();
+        assert_eq!(r["name"], "Thin");
+        assert_eq!(filters(&app).0.iter().filter(|f| !f.default).map(|f| f.filter.xml.as_str()).collect::<Vec<_>>(), [edited]);
+        assert_eq!(filters(&app).0.len(), DEFAULT_FILTERS.len(), "in the default's place");
+        app.session.execute("svgFilter.apply", &json!({"name": "Thin"})).unwrap();
+        // Deleted: the default is listed again, and the effect that names it selects the default.
+        app.session.execute("svgFilter.delete", &json!({"name": "Thin"})).unwrap();
+        assert!(filters(&app).0.iter().all(|f| f.default));
+        app.run("effect.dialog", json!({"effect": "svg.filter", "index": 0, "item": null})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!((d.str("selected").as_str(), d.str("missing").as_str(), d.str("editing").as_str()), ("Thin", "", ""));
+        confirm(&mut app, &d).unwrap();
+        let doc = &app.session.active().unwrap().doc;
+        let fx = &doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects;
+        assert_eq!(fx[0].params["xml"].as_str(), default_filter("Thin").map(|f| f.xml), "the default again");
+        // An applied filter with a default's name and other code opens as code to save.
+        let e = vectorcraft_doc::Effect {
+            id: "svg.filter".into(),
+            params: json!({"name": "Glow", "xml": "<filter id=\"Glow\"><feOffset dx=\"1\"/></filter>"}),
+            visible: true,
+        };
+        app.session
+            .edit("Plant", |d, _| {
+                d.node_mut(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects = vec![e];
+                Ok(())
+            })
+            .unwrap();
+        app.run("effect.dialog", json!({"effect": "svg.filter", "index": 0, "item": null})).unwrap();
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!((d.str("editing").as_str(), d.str("selected").as_str()), ("new", ""));
     }
 
     #[test]

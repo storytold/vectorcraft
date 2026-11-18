@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use kurbo::ParamCurveNearest;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile, StrokeLayer};
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
@@ -465,17 +465,8 @@ fn art_runs(t: &Track) -> Vec<(f64, f64)> {
     bounds.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
-/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1, and
-/// `width` the width (%) there.
-fn art_on_run(
-    t: &Track,
-    (s0, s1): (f64, f64),
-    a: &ArtBrush,
-    (art, b): (&Node, Rect),
-    cross: f64,
-    width: f64,
-    widen: &dyn Fn(f64) -> f64,
-) -> Option<Node> {
+/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1.
+fn art_on_run(t: &Track, (s0, s1): (f64, f64), a: &ArtBrush, (art, b): (&Node, Rect), cross: f64, widen: &dyn Fn(f64) -> f64) -> Option<Node> {
     let l = s1 - s0;
     if l <= 1e-9 {
         return None;
@@ -483,10 +474,8 @@ fn art_on_run(
     let w = b.width();
     let (along, cross) = match a.scale {
         ArtScale::Stretch => (AlongMap::linear(w, s0, s1), cross),
-        ArtScale::Proportional => {
-            let k = l / w;
-            (AlongMap::linear(w, s0, s1), k * width / 100.0)
-        }
+        // Scaled across as much as along, times the stroke weight and the width, as the other modes are.
+        ArtScale::Proportional => (AlongMap::linear(w, s0, s1), l / w * cross),
         ArtScale::BetweenGuides { start, end } => {
             let (g0, g1) = (start.clamp(0.0, 1.0) * w, end.clamp(0.0, 1.0) * w);
             let (g0, g1) = (g0.min(g1), g0.max(g1));
@@ -503,9 +492,10 @@ fn art_on_run(
     bend_widened(t, art, b, along, cross, widen)
 }
 
-/// An art brush's art along `bp`. With a width that follows the pen's pressure, the art is as
-/// wide as the pressure recorded at each point of the stroke gives (half way without a recording).
-pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>) -> Vec<Node> {
+/// An art brush's art along `bp`. With a width that follows the pen (its pressure, tilt, bearing
+/// or rotation), the art is as wide as what `stroke` recorded at each point gives (half way
+/// without a recording).
+pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, stroke: &StrokeLayer) -> Vec<Node> {
     let Some((art, b)) = oriented(&a.art, a.direction, a.flip_along, a.flip_across) else { return vec![] };
     let (light, heavy) = a.width_range();
     let width = light.max(heavy);
@@ -522,12 +512,12 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
             }
             // A run past the start of a closed track wraps round to it.
             let at = if s > l { s - l } else { s };
-            let p = pressure.map_or(PressureProfile::MID, |p| p.at(at / l)).clamp(0.0, 1.0);
+            let p = a.width_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5);
             (light + (heavy - light) * p) / width
         };
         let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, l)] };
         for run in runs {
-            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, width, &widen) {
+            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, &widen) {
                 out.push(n);
             }
         }

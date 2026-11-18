@@ -112,6 +112,9 @@ fn a_linked_pngs_bytes_are_embedded() {
 
 #[test]
 fn an_embedded_profile_is_restored() {
+    if !super::in_own_process("tests::saveoptions::an_embedded_profile_is_restored") {
+        return;
+    }
     let builtin = cms::profiles().into_iter().find(|p| p.kind == cms::ProfileKind::Rgb && p.builtin && p.name != cms::SRGB).unwrap();
     let icc = cms::icc_bytes(&builtin.name).unwrap();
     let name = format!("Studio RGB {}", std::process::id());
