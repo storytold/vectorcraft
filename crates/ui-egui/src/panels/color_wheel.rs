@@ -176,18 +176,20 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
 }
 
 /// The panel menu: Wheel View and Box View, Box Channel while the box shows, and OKLCH Sliders.
+/// Each item runs `ui.colorWheel` through the app's command entry point; a checked view or channel
+/// runs nothing.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
-        if menu_item(ui, label, true, set.view == view) {
-            command(app, &json!({ "view": view.id() })).ok();
+        if menu_item(ui, label, true, set.view == view) && set.view != view {
+            run(app, json!({ "view": view.id() }));
         }
     }
     ui.add_enabled_ui(set.view == View::Box, |ui| {
         ui.menu_button(format!("   {}", tl!("Box Channel")), |ui| {
             for ch in Channel::ALL {
-                if menu_item(ui, ch.name(), true, ch == set.channel) {
-                    command(app, &json!({ "channel": ch.id() })).ok();
+                if menu_item(ui, ch.name(), true, ch == set.channel) && ch != set.channel {
+                    run(app, json!({ "channel": ch.id() }));
                 }
             }
         });
@@ -198,9 +200,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let enabled = on || cms::active().rgb_is_srgb();
     if widgets::menu_item_hint(ui, tl!("OKLCH Sliders"), enabled, on, tl!("OKLCH needs sRGB as the working RGB space")) {
         let sliders = if on { Sliders::None } else { Sliders::Oklch };
-        if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
-            app.status(e);
-        }
+        run(app, json!({ "sliders": sliders.id() }));
+    }
+}
+
+/// Run `ui.colorWheel` with `p` from the panel menu, and show an error in the status bar.
+fn run(app: &mut VectorcraftApp, p: Value) {
+    if let Err(e) = app.run("ui.colorWheel", p) {
+        app.status(e);
     }
 }
 

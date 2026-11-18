@@ -300,7 +300,7 @@ fn the_settings_are_kept_and_read_leniently() {
 }
 
 /// The panel menu lists Wheel View and Box View with the shown one checked, and Box Channel; its
-/// items set the view and the channel.
+/// items set the view and the channel through the app's command entry point.
 #[test]
 fn the_panel_menu_switches_the_view_and_the_channel() {
     let mut app = app(json!("#ff0000"), "hue");
@@ -320,10 +320,17 @@ fn the_panel_menu_switches_the_view_and_the_channel() {
     );
     h.run_steps(3);
     assert!(h.query_by_label("✓ Wheel View").is_some());
+    let commands = h.state().run_count;
     h.get_by_label("   Box View").click();
     h.run_steps(2);
     assert_eq!(h.state().ui.color_wheel.view, View::Box);
+    assert_eq!(h.state().run_count, commands.wrapping_add(1), "Box View runs one ui.colorWheel command");
     assert!(h.query_by_label("✓ Box View").is_some());
+    // The checked item runs nothing.
+    h.get_by_label("✓ Box View").click();
+    h.run_steps(2);
+    assert_eq!(h.state().run_count, commands.wrapping_add(1), "the checked Box View runs no command");
+    assert_eq!(h.state().ui.color_wheel.view, View::Box);
 }
 
 /// Every channel's box puts each color back where it reads it, and the strip's value is the
