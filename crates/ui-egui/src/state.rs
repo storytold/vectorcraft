@@ -832,6 +832,11 @@ pub struct UiState {
     /// them (#1732).
     #[serde(default)]
     pub transform_each: Value,
+    /// The Expand choices OK last expanded with in this run of the app (object, fill, stroke,
+    /// gradient, steps; null: none yet): the Expand dialog opens on them, and Object › Expand…
+    /// chosen with Alt (Option) expands with them at once. They are not kept across launches.
+    #[serde(skip)]
+    pub expand_options: Value,
     /// The spacing used the last time Rearrange All Artboards was confirmed.
     #[serde(default)]
     pub rearrange_artboards_spacing: Value,
@@ -1271,6 +1276,7 @@ impl Default for UiState {
             simplify: Value::Null,
             move_options: Value::Null,
             transform_each: Value::Null,
+            expand_options: Value::Null,
             rearrange_artboards_spacing: Value::Null,
             dxf_import: Value::Null,
             psd_import: Value::Null,
