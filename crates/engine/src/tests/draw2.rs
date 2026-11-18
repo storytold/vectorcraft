@@ -646,7 +646,9 @@ fn freehand_with_fit_off_joins_the_points_with_straight_segments() {
     .unwrap();
     let sp = path(&s, r).subpaths[0].clone();
     assert!(corners(&sp), "{:?}", sp.anchors);
-    let inner: Vec<_> = at(&sp).into_iter().filter(|p| p.1 < 499.0).collect();
+    // Each end's bend stops `within` along the stroke, at a point added near the line; the
+    // drawn points beyond it stay as drawn.
+    let inner: Vec<_> = at(&sp).into_iter().filter(|p| p.1 < 490.0).collect();
     assert_eq!(inner, [(125.0, 470.0), (150.0, 460.0), (175.0, 470.0)]);
     assert!(s.execute("path.freehand", &json!({"points": [[0, 0], [1, 1]], "fit": "no"})).is_err());
 }

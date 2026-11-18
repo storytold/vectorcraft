@@ -78,8 +78,9 @@ fn stroke_subpath(pts: &[Point], tol: Option<f64>, closed: bool) -> SubPath {
 /// and the stroke behind it less and less, to not at all `reach` along it (Edit selected paths
 /// within), so a stroke that starts or ends near the path joins it smoothly instead of with a
 /// straight piece. A stroke shorter than `reach` bends over its own length, so each end still
-/// lands on its target and the other end's bend doesn't move it off.
-fn bend_ends(stroke: &mut [Point], a: Option<Point>, b: Option<Point>, reach: f64) {
+/// lands on its target and the other end's bend doesn't move it off. Where a bend stops between two
+/// points far apart, a point is added there, so the stroke beyond `reach` stays as drawn.
+fn bend_ends(stroke: &mut Vec<Point>, a: Option<Point>, b: Option<Point>, reach: f64) {
     let (Some(&first), Some(&last)) = (stroke.first(), stroke.last()) else { return };
     // How far along the stroke each point lies, measured before anything moves.
     let mut along = Vec::with_capacity(stroke.len());
@@ -101,6 +102,33 @@ fn bend_ends(stroke: &mut [Point], a: Option<Point>, b: Option<Point>, reach: f6
         }
         return;
     }
+    // A point where each bend stops, when that falls between two points (strokes sent by a script
+    // can have few, far apart): without it, the straight piece to the next point would tilt beyond
+    // `reach`.
+    let (mut c0, mut c1) = (a.map(|_| reach), b.map(|_| total - reach));
+    if let (Some(x), Some(y)) = (c0, c1)
+        && x > y
+    {
+        (c0, c1) = (Some(y), Some(x));
+    }
+    let mut points = Vec::with_capacity(stroke.len() + 2);
+    let mut dists = Vec::with_capacity(stroke.len() + 2);
+    let mut before: Option<(Point, f64)> = None;
+    for (&p, &d) in stroke.iter().zip(&along) {
+        if let Some((q, e)) = before {
+            for c in [c0, c1].into_iter().flatten() {
+                if e + 1e-9 < c && c < d - 1e-9 {
+                    points.push(q.lerp(p, (c - e) / (d - e)));
+                    dists.push(c);
+                }
+            }
+        }
+        points.push(p);
+        dists.push(d);
+        before = Some((p, d));
+    }
+    *stroke = points;
+    let along = dists;
     let weight = |d: f64| (1.0 - d / reach).max(0.0);
     let (shift_a, shift_b) = (a.map(|a| a - first), b.map(|b| b - last));
     for (p, &d) in stroke.iter_mut().zip(&along) {
@@ -695,5 +723,16 @@ mod bend_tests {
         assert_eq!(pts[0], Point::new(40.0, 0.0), "{pts:?}");
         assert_eq!(pts[2], Point::new(48.0, 0.0), "{pts:?}");
         assert_eq!(pts[1], Point::new(44.0, 0.0), "halfway, half of each end's shift: {pts:?}");
+    }
+
+    /// With points far apart (a stroke sent by a script), the bend still stops `reach` along the
+    /// stroke: a point is added there, and the stroke beyond it stays as drawn.
+    #[test]
+    fn bend_ends_stops_at_the_reach_between_points_far_apart() {
+        let mut pts = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0), Point::new(200.0, 0.0)];
+        bend_ends(&mut pts, Some(Point::new(0.0, 10.0)), Some(Point::new(200.0, 0.0)), 40.0);
+        assert_eq!(pts.first(), Some(&Point::new(0.0, 10.0)), "{pts:?}");
+        assert!(pts.contains(&Point::new(40.0, 0.0)), "a point where the bend stops: {pts:?}");
+        assert!(pts.iter().filter(|p| p.x >= 40.0).all(|p| p.y == 0.0), "beyond the reach, as drawn: {pts:?}");
     }
 }
