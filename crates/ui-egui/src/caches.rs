@@ -61,6 +61,9 @@ pub struct CanvasCache {
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// Whether the 3D and Materials panel's Export 3D Object button is available (a selected
+    /// object has a 3D effect that `assets.add3D` exports) for (document uid, revision).
+    pub three_d_exportable: Option<((u64, u64), bool)>,
     /// The Transform panel's Align to Pixel Grid state (on, off or mixed, and whether every
     /// selected object can be aligned) for (document uid, revision).
     pub pixel_aligned: Option<((u64, u64), Option<PixelAligned>)>,
