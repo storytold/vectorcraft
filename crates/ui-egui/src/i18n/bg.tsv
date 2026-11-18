@@ -129,6 +129,9 @@
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
 	Adjust Adjoining Width Points	Регулиране на прилежащите точки за ширина
+	Incoming	Входяща
+	Outgoing	Изходяща
+	Single Width Only	Само една ширина
 	Adjust Color Balance…	Коригиране на цветовия баланс…
 	Adjust Colors	Коригиране на цветовете
 	Adjust Options:	Параметри на коригиране:
@@ -475,6 +478,8 @@ font-technology	Variable	Променливи
 	Choose a folder	Избор на папка
 	Choose…	Избор…
 	Circle	Кръг
+	Circle Tool	Инструмент Кръг
+	Circle too large	Кръгът е твърде голям
 	Classic Defaults	Класически по подразбиране
 	Clean Up…	Почистване…
 	Clear	Изчистване
@@ -785,6 +790,8 @@ font-technology	Variable	Променливи
 	Delete Artboard	Изтриване на работна област
 	Delete Artboards	Изтриване на работни области
 	Delete Brush	Изтриване на четка
+	Delete Color	Изтриване на цвят
+	Restore Generated Table	Възстановяване на генерираната таблица
 	Delete Character Style	Изтриване на стил за знаци
 	Delete Empty Artboards	Изтриване на празни работни области
 	Delete Freeform Point	Изтриване на свободна точка
@@ -853,6 +860,7 @@ font-technology	Variable	Променливи
 	Direct Selection Tool	Инструмент „Директен избор“
 	Direction Handles	Маркери за посока
 	Disable Auto Add/Delete	Изключване на автоматично добавяне/изтриване
+	Interpolate Control Points When Moving Anchors	Интерполиране на маркерите за посока при преместване на опорни точки
 	Disable Opacity Mask	Изключване на маска за непрозрачност
 	Discard	Отхвърляне
 	Discard Empty Type	Отхвърляне на празен текст
@@ -1226,6 +1234,8 @@ font-technology	Variable	Променливи
 	Files	Файлове
 	Files of a PDF standard can't be password-protected.	Файлове от PDF стандарт не могат да бъдат защитени с парола.
 	Files of this standard tag their colours with ICC profiles.	Файловете от този стандарт етикетират цветовете си с ICC профили.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файловете от този стандарт етикетират цветовете си с ICC профили, с изключение на CMYK цветовете в профила на предназначението на изхода, които се записват като DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	С „Без включване на профили“ и CMYK предназначение на изхода всеки CMYK цвят се записва като DeviceCMYK, освен ако не се преобразува към CMYK местоназначение с друг профил.
 	Fill	Запълване
 	Fill & Stroke	Запълване и щрих
 	Fill (X), double-click for the Color Picker	Запълване (X), щракнете двукратно за избор на цвят
@@ -1967,6 +1977,7 @@ font-technology	Variable	Променливи
 	Load SVG into Clipboard	Зареждане на SVG в клипборда
 	Load Text into Clipboard	Зареждане на текст в клипборда
 	Local Libraries	Локални библиотеки
+	Locate Layer	Намиране на слой
 	Locate Object	Намиране на обект
 	Locate Selected Objects	Намиране на избраните обекти
 	Location	Местоположение
@@ -2161,6 +2172,7 @@ font-technology	Variable	Променливи
 	Scatter:	Разпръскване:
 	Rotation:	Завъртане:
 	Rotation relative to:	Завъртане спрямо:
+	Hue Jitter:	Вариация на оттенъка:
 	Brush Scale Options	Опции за мащабиране на четката
 	Scale Proportionately	Мащабиране пропорционално
 	Stretch to Fit Stroke Length	Разтягане за запълване дължината на щриха
@@ -2197,6 +2209,7 @@ font-technology	Variable	Променливи
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Черното става цвят на щриха, а бялото остава бяло. Другите цветове стават оттенъци на цвета на щриха и колкото по-светъл е един цвят, толкова по-светъл е оттенъкът му.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Черното остава черно, а бялото остава бяло. Другите цветове стават тъмни нюанси на цвета на щриха, когато са тъмни, и негови оттенъци, когато са светли.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Основният цвят става цвят на щриха. Другите цветове се завъртат по цветовото колело толкова, колкото и основният цвят, и запазват насищането и яркостта си.
+	Roundness	Закръгленост
 	Roundness:	Закръгленост:
 	Fixed	Фиксирано
 	Pressure	Натиск
@@ -2623,6 +2636,10 @@ font-technology	Variable	Променливи
 	Polar Grid Tool	Инструмент „Полярна мрежа“
 	Polygon	Многоъгълник
 	Polygon Properties:	Свойства на многоъгълника:
+	Line Properties:	Свойства на линията:
+	Line Length:	Дължина на линията:
+	Line Angle:	Ъгъл на линията:
+	Constrain Pie Angle	Запазване на ъгъла на сектора
 	Polygon Tool	Инструмент „Многоъгълник“
 	Portrait	Портретна
 	Power Saving (integrated)	Пестене на енергия (интегрирано)
@@ -2782,6 +2799,7 @@ digits	Malayalam	Малаялам
 	Real World:	Реален свят:
 	Real-time Drawing and Editing	Чертане и редактиране в реално време
 	Use Monitor Profile for Canvas	Използване на профила на монитора за платното
+	Refresh Monitor Profile	Обновяване на профила на монитора
 	The canvas is drawn in sRGB.	Платното се изобразява в sRGB.
 	Canvas display profile:	Профил на дисплея за платното:
 	The system matches the window to the display's colors.	Системата съгласува цветовете на прозореца с дисплея.
@@ -3042,6 +3060,7 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колелцето на мишката с натиснат Cmd/Ctrl превърта платното настрани.
 	Dragging sideways on a numeric field's label changes the field's value.	Влаченето настрани върху етикета на числово поле променя стойността на полето.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	„Създаване на режещи знаци“ рисува знаци в японски стил вместо в римски.
@@ -3419,6 +3438,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Задаване на правоъгълник за резен
 	Set Tab Stops	Задаване на табулатори
 	Set Text	Задаване на текст
+	Set the current fill or stroke to the selected color	Задаване на избрания цвят като текущо запълване или щрих
 	Set the selected color to the current color	Задаване на текущия цвят като избран
 	Set Zoom	Задаване на мащаб
 	Settings…	Настройки…
@@ -3540,7 +3560,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показване на ярки/заглушени
 	Show Warm/Cool	Показване на топли/студени
 	Show {kind} Brushes	Показване на четки от вида {kind}
-	Show/hide plate (Alt-click: only this plate)	Показване/скриване на плака (Alt-клик: само тази плака)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показване/скриване на плака (Alt-клик: само тази плака; Alt-клик отново: всички плаки)
 	Show:	Показване:
 	Shown with the optimised preview.	Показано с оптимизирания преглед.
 	Side 1:	Страна 1:
@@ -4108,6 +4128,8 @@ digits	Malayalam	Малаялам
 	V Spacing:	В. разстояние:
 	V:	В:
 	Variable Width Profile	Профил с променлива ширина
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
 	Variables	Променливи
 	New Variable	Нова променлива
 	Delete Variable	Изтриване на променлива
@@ -4381,6 +4403,7 @@ imageTrace	Outline	Контур
 	Bevel	Фаска
 	Offset	Отстъп
 	Axis	Ос
+	Axis Angle	Ъгъл на оста
 axis	Horizontal	Хоризонтално
 axis	Vertical	Вертикално
 axis	Both	И двете
@@ -4653,6 +4676,7 @@ axis	Both	И двете
 @msg	choose a folder to export to	изберете папка за експортиране
 @msg	choose a location for the package	изберете местоположение за пакета
 @msg	clipboard is empty	клипбордът е празен
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: поне един цвят трябва да остане в цветовата таблица
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
@@ -4807,6 +4831,9 @@ axis	Both	И двете
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
+@msg	`single` must be `incoming` or `outgoing`	`single` трябва да е `incoming` или `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` и `outIndex` трябва да са двете половини на една прекъсната точка за ширина
+@msg	a discontinuous width point keeps its place	прекъснатата точка за ширина запазва мястото си
 @msg	no swatch `{name}`	няма образец `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ
@@ -5509,6 +5536,7 @@ lighting	Light	Светлина
 	Cove	Извивка
 	Depth	Дълбочина
 	Front	Отпред
+	Side	Страна
 	Isometric Bottom	Изометрично отдолу
 	Isometric Left	Изометрично отляво
 	Isometric Right	Изометрично отдясно
@@ -6972,6 +7000,14 @@ breakText	Glyphs	Глифи
 	Remove Gaps	Премахване на разстоянията
 @msg	that makes too many pieces (at most 100000): make the dashes longer	така се получават твърде много части (най-много 100000): удължете тиретата
 @msg	select paths, or segments, to divide	изберете пътища или сегменти за разделяне
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Плавен мост…
+	Smooth Bridge	Плавен мост
+	Keep Originals	Запазване на оригиналите
+@msg	select two circles to bridge	изберете два кръга за свързване
+@msg	one circle is inside the other	единият кръг е вътре в другия
+@msg	the circles are too far apart for this radius: raise the radius	кръговете са твърде далеч един от друг за този радиус: увеличете радиуса
+@msg	the circles are too far apart for this radius	кръговете са твърде далеч един от друг за този радиус
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общи допирателни…
 	Common Tangents	Общи допирателни

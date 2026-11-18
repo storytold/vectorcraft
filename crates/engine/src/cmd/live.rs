@@ -29,6 +29,8 @@ mod commands;
 mod common;
 mod envelope;
 mod mesh;
+#[cfg(test)]
+mod selected_tests;
 
 pub(crate) use blend::expand_blends;
 pub use commands::specs;

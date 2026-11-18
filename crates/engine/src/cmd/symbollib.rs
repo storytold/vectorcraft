@@ -20,7 +20,7 @@ use super::clipboard::Clipboard;
 use super::clipboard::resources::SwatchChoices;
 use super::swatch::str_list;
 use super::swatchlib::{FileData, LibraryFile, LibraryInfo, concealed_library_id, concealed_library_ids, shown_id, shown_library_id, stem};
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, number_or, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, number_or, str_param, u64_req};
 
 /// The extension of saved symbol libraries: native documents.
 pub const SYMBOLS_EXT: &str = vectorcraft_format::EXTENSION;
@@ -53,6 +53,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{library: id or name, name? | names?: [symbol names in the library] (default: all of it), place?: false (also place an instance of the first one, its registration point at x, y: default the first artboard's centre), x?, y?, swatchConflict? (as edit.paste)} copy library symbols into the document's Symbols as one undo step (with the place), with their Symbol Options and the resources they use (the symbols they nest, patterns, swatches, brushes, graphic styles, images). A symbol the document already has (same name and art) isn't added again; a name another symbol has gets a number (\"Star 2\"). The first one becomes the current symbol → {library, names: [each symbol's name in the document], added: [names added], existing: [names already there], placed?: id}",
             has_doc,
             add
+        ),
+        cmd!(
+            "symbol.placeFromDocument",
+            "Place Symbol Instance",
+            [],
+            None,
+            "{sourceDocument: uid, name: a symbol of that document, x?, y?} place an instance of a symbol of another open document so its registration point is at (x, y) (default: the first artboard's center), as a symbol dragged from that document's Symbols panel onto the canvas is placed. The symbol, the symbols it nests and the resources they use are added as a drop of art from that document adds them, in the same undo step as the instance: a symbol the active document already has with the same name, art and Symbol Options is used, and one with the same name but other art or Symbol Options gets a number (\"Leaf 2\"); each symbol added takes its Symbol Options along. When sourceDocument is the active document, its own symbol is placed, as symbol.place places it. An error, with no edit, when that document is no longer open or has no symbol `name` → {id, name: the symbol's name in the active document}",
+            has_doc,
+            place_from_document
         ),
         cmd!(
             "symbol.saveLibrary",
@@ -628,6 +637,46 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     out["added"] = json!(added);
     out["existing"] = json!(existing);
     Ok(out)
+}
+
+/// `symbol.placeFromDocument`: an instance of symbol `name` of the open document `sourceDocument`
+/// placed in the active document, with the symbol and the resources it uses added as a drop of
+/// art from that document adds them, in one undo step. The source document is not changed.
+fn place_from_document(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "symbol.placeFromDocument";
+    let uid = u64_req(p, "sourceDocument", C)?;
+    let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `name`"))?;
+    let st = s.doc()?;
+    let centre = st.doc.artboards.first().map(|a| a.rect.center()).unwrap_or(Point::ZERO);
+    let at = Point::new(number_or(p, "x", centre.x, C)?, number_or(p, "y", centre.y, C)?);
+    let parent = st.target_parent()?;
+    let same = uid == st.uid;
+    let src = s.documents().iter().find(|d| d.uid == uid).map(|d| Arc::clone(&d.doc));
+    let src = src.ok_or_else(|| bad(C, "the document the symbol came from is no longer open"))?;
+    if !src.symbols.iter().any(|sym| sym.name == name) {
+        return Err(bad(C, format!("no symbol named `{name}` in the document it came from")));
+    }
+    // A symbol of the active document itself is placed as it is.
+    let clip = (!same).then(|| Clipboard::gather(&src, vec![instance(name)]));
+    // The source's colors are kept even where the active document has swatches of the same names.
+    let choices = SwatchChoices::parse(C, &json!({"swatchConflict": "add"}))?;
+    let (id, placed) = s.edit("Place Symbol Instance", |d, sel| {
+        let placed = match &clip {
+            // Each symbol added takes its Symbol Options along.
+            Some(clip) => {
+                let imported = clip.import_into(d, &choices, false)?;
+                let renamed = imported.renamed.iter().find(|r| r["kind"] == "symbol" && r["from"] == name).and_then(|r| r["to"].as_str());
+                renamed.unwrap_or(name).to_string()
+            }
+            None => name.to_string(),
+        };
+        let xf = place_xf(at, natural_size(d, &placed), d.symbol_registration(&placed));
+        let id = d.alloc_id();
+        d.insert(parent, usize::MAX, Node::new(id, NodeKind::SymbolInstance { symbol: placed.clone(), xf }))?;
+        sel.set([id]);
+        Ok((id, placed))
+    })?;
+    Ok(json!({ "id": id.0, "name": placed }))
 }
 
 fn save(s: &mut Session, p: &Value) -> Result<Value> {

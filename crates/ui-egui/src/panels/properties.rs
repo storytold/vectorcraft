@@ -986,7 +986,7 @@ fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.horizontal(|ui| {
         dim_label(ui, tl!("Profile:"));
-        if let Some(id) = super::stroke::profile_dropdown(app, ui, profile) {
+        if let Some(id) = super::stroke::profile_dropdown(app, ui, stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     });

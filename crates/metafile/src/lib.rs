@@ -1,6 +1,7 @@
 //! Windows metafiles: hand-written EMF and WMF writers and readers.
 //!
-//! [`export`] writes the visible art over one region of a document (an artboard) as a metafile:
+//! [`export`] writes the visible art over one region of a document (an artboard) as a metafile,
+//! and [`export_regions`] one metafile per region:
 //!
 //! - **EMF**: paths keep their Bézier curves, fills are solid brushes, strokes geometric pens with
 //!   their width, caps, joins, miter limit and dashes; strokes a pen can't draw (aligned inside or
@@ -81,20 +82,36 @@ pub struct Output {
 /// not); template layers, hidden objects and guides are left out. Raster effects should be turned
 /// into images before (the engine does); the ones left are reported and left out.
 pub fn export(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String> {
-    let r = region.abs();
-    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
+    Ok(export_regions(doc, &[region], kind)?.pop().unwrap_or_default())
+}
+
+/// Write the visible art of `doc` over each of `regions` as `kind`, one metafile per region in the
+/// same order, each as [`export`] writes it over that region. The live effects are applied once
+/// for all of them. When any region is empty, nothing is written and the result is an error.
+pub fn export_regions(doc: &Document, regions: &[Rect], kind: Kind) -> Result<Vec<Output>, String> {
+    let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
+    if regions.iter().any(|r| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0) {
         return Err("the export region is empty".into());
+    }
+    if regions.is_empty() {
+        return Ok(Vec::new());
     }
     // The scene writes layers that do not print and leaves hidden layers and objects out.
     let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
     let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
     let doc = baked.as_ref().unwrap_or(doc);
-    let (ops, mut warnings) = scene::Scene::new(doc, r, kind == Kind::Emf).run();
-    let bytes = match kind {
-        Kind::Emf => emf::write(&ops, r, doc.info_title()),
-        Kind::Wmf => wmf::write(&ops, r, &mut warnings),
-    };
-    Ok(Output { bytes, warnings })
+    let outputs = regions
+        .into_iter()
+        .map(|r| {
+            let (ops, mut warnings) = scene::Scene::new(doc, r, kind == Kind::Emf).run();
+            let bytes = match kind {
+                Kind::Emf => emf::write(&ops, r, doc.info_title()),
+                Kind::Wmf => wmf::write(&ops, r, &mut warnings),
+            };
+            Output { bytes, warnings }
+        })
+        .collect();
+    Ok(outputs)
 }
 
 /// A metafile read into a document.
