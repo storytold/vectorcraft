@@ -95,12 +95,19 @@ fn import_pdf_pages_as_links_opens_each_page_linked() {
     let path = dir.join("three.pdf").to_string_lossy().into_owned();
     std::fs::write(&path, three_pages()).unwrap();
     let mut app = app();
+    // All pages: checked without a click.
     io::open_bytes(&mut app, &path, &three_pages(), Some(path.clone())).unwrap();
-    assert_eq!(field(&app, "linkPages"), false, "off by default");
     frame(&mut app);
-    set(&mut app, "linkPages", json!(true));
+    confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(artboard_widths(&app), [100.0, 200.0, 300.0]);
+    assert_eq!(placed_pages(&app), [true, true, true], "All opens the pages linked");
+    // A range: cleared, and checked by hand it opens the range linked.
+    io::open_bytes(&mut app, &path, &three_pages(), Some(path.clone())).unwrap();
     set(&mut app, "allPages", json!(false));
     set(&mut app, "range", json!("1, 3"));
+    assert!(!import_pdf::links_on(app.ui.dialog.as_ref().unwrap()), "Range: cleared");
+    set(&mut app, "linkPages", json!(true));
     frame(&mut app);
     confirm(&mut app).unwrap();
     assert!(app.ui.dialog.is_none());
@@ -122,6 +129,41 @@ fn import_pdf_pages_as_links_opens_each_page_linked() {
     frame(&mut app);
     confirm(&mut app).unwrap();
     assert_eq!(placed_pages(&app), [false, false]);
+}
+
+/// Picking All checks Import PDF pages as links and picking Range clears it. A click on the box
+/// stands until the other one is picked; picking the one already picked or editing the range keeps
+/// it. `ui.dialog.set` picks the way the buttons do.
+#[test]
+fn picking_all_or_a_range_sets_the_links_default() {
+    let mut app = app();
+    io::open_bytes(&mut app, "three.pdf", &three_pages(), Some("/tmp/three.pdf".into())).unwrap();
+    let pick = |app: &mut VectorcraftApp, k: &str, v: serde_json::Value| set_field(app.ui.dialog.as_mut().unwrap(), k.into(), v);
+    let on = |app: &VectorcraftApp| import_pdf::links_on(app.ui.dialog.as_ref().unwrap());
+    assert!(on(&app), "All: checked");
+    pick(&mut app, "allPages", json!(false));
+    assert!(!on(&app), "Range: cleared");
+    pick(&mut app, "linkPages", json!(true));
+    pick(&mut app, "allPages", json!(false));
+    pick(&mut app, "range", json!("1-2"));
+    frame(&mut app);
+    assert!(on(&app), "checked by hand, picking Range again and editing the range keep it");
+    pick(&mut app, "allPages", json!(true));
+    assert!(on(&app), "All: checked");
+    pick(&mut app, "linkPages", json!(false));
+    pick(&mut app, "allPages", json!(true));
+    frame(&mut app);
+    assert!(!on(&app), "cleared by hand, picking All again keeps it");
+    pick(&mut app, "allPages", json!(false));
+    pick(&mut app, "allPages", json!(true));
+    assert!(on(&app), "All picked after Range: checked again");
+    // A file `linkPages` does not take (one over its size limit) leaves the box clear.
+    assert_eq!(field(&app, "__linkable"), true);
+    set(&mut app, "__linkable", json!(false));
+    assert!(!on(&app), "a file linkPages does not take");
+    // A file given without its path can't link its pages: the box stays clear.
+    io::open_bytes(&mut app, "three.pdf", &three_pages(), None).unwrap();
+    assert!(!on(&app));
 }
 
 #[test]

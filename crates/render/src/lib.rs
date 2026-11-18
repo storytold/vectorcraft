@@ -43,6 +43,7 @@ use lru::FrameCache;
 pub use brush_fx::instance_art;
 pub use changed::{Changed, changed, placed_area, view_pixels};
 pub use effects::stroke::width_outline;
+pub use fx::pinned_appearance_for_geometry_edit;
 pub use images::{IMAGE_CACHE_MAX, image_cache_bytes, installed_memory, newly_undecodable, set_image_cache_budget};
 pub use live::expand_live;
 pub use pattern::render_pattern_swatch;
@@ -285,7 +286,7 @@ mod renderer;
 mod text_geom;
 mod threads;
 
-pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds, rasterize_stage};
+pub use bounds::{drawn_bounds, drawn_outline, drawn_outlines, effect_bounds, painted_bounds, painted_bounds_with, rasterize_stage};
 pub use frame::FrameStats;
 use frame::{
     ClipEntry, ClipPaintEntry, Frame, FxArtEntry, GeomEntry, PlacedEntry, PlacedKey, PtrHasher, PtrMap, SliceEntry, StrokeEntry, StrokeKey,
