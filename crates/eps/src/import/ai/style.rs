@@ -419,8 +419,16 @@ fn closes(data: &[u8]) -> bool {
     false
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`art_styles`] has parsed a section on this thread.
+    pub(crate) static ART_STYLE_PARSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// [`art_styles_in`], names read in the default encoding.
 pub(super) fn art_styles(data: &[u8]) -> HashMap<String, ArtStyle> {
+    #[cfg(test)]
+    ART_STYLE_PARSES.set(ART_STYLE_PARSES.get() + 1);
     art_styles_in(data, &mut Names::default())
 }
 

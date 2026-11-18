@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md)",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults (in a document whose Default Graphic Style differs from the shipped one, as a New Document profile can redefine it: that style's fills, strokes and effects, without its opacity or a link to it); type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md)",
             has_doc,
             default_paint
         ),
@@ -1185,6 +1185,8 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
+        // A redefined Default Graphic Style gives other art its fills, strokes and effects, placed on each object.
+        let style = super::newart::redefined_default_style(&before).cloned();
         super::overprint::edit_counted(s, "Default Fill and Stroke", |d| {
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
@@ -1195,7 +1197,12 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                             r.style.stroke = Paint::None;
                         }
                     }
-                    _ => n.appearance = Appearance::default_art().into(),
+                    _ => {
+                        n.appearance = match &style {
+                            Some(g) => g.appearance_on(n).into_owned().into(),
+                            None => Appearance::default_art().into(),
+                        }
+                    }
                 }
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
