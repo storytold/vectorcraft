@@ -367,8 +367,10 @@ fn width_point_set(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(C, "`single` must be `incoming` or `outgoing`")),
     };
     // The outgoing half of a discontinuous point: its index and side widths (points).
+    // `single`, `outLeft` or `outRight` without `outIndex` is refused as a missing `outIndex`.
+    let out_widths = ["outLeft", "outRight"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
     let out = match p.get("outIndex") {
-        None | Some(Value::Null) if single.is_none() => None,
+        None | Some(Value::Null) if single.is_none() && !out_widths => None,
         _ => {
             let j = usize::try_from(u64_req(p, "outIndex", C)?).map_err(|_| bad(C, "no such width point"))?;
             let (l, r) = (f64_req(p, "outLeft", C)?, f64_req(p, "outRight", C)?);

@@ -275,6 +275,8 @@ fn paired_set_refuses_what_is_not_one_discontinuous_point() {
         pair(json!({"outLeft": 1.0e6})),
         pair(json!({"single": "both"})),
         pair(json!({"single": true})),
+        pair(json!({"outIndex": null})),
+        pair(json!({"outIndex": null, "outLeft": null})),
         json!({"id": id.0, "index": 2, "t": 0.5, "left": 5, "right": 5, "single": "incoming"}),
     ] {
         assert!(s.execute("stroke.widthPoint.set", &p).is_err(), "accepted {p}");
