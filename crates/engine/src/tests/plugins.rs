@@ -4564,9 +4564,10 @@ fn plugin_commands_are_registered_run_and_removed() {
     install_wat(&mut s, &tpl::module(&tpl::manifest(id, "filter", "{}"), tpl::ECHO, "", 1));
     assert!(listed(&s, grow).is_none() && crate::cmd::find_command(grow).is_none());
     install_wat(&mut s, &grower(id));
-    assert!(listed(&s, grow).is_some());
+    assert!(listed(&s, grow).is_some() && crate::cmd::find_command(grow).is_some());
     run(&mut s, "plugin.remove", json!({"id": id}));
     assert!(listed(&s, grow).is_none() && listed(&s, tidy).is_none());
+    assert!(crate::cmd::find_command(grow).is_none() && crate::cmd::find_command(tidy).is_none());
     assert!(s.execute(grow, &json!({})).is_err(), "removed, it no longer runs");
 }
 
