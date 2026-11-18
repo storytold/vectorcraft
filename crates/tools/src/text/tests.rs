@@ -1327,6 +1327,7 @@ fn area_type_drag_measure_labels_honor_preference() {
 
 #[test]
 fn layout_cache_follows_fonts_added_later() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
@@ -1542,6 +1543,7 @@ fn selected_type_shows_its_ports_in_each_state() {
 /// Preferences › Hyphenation › Exceptions change, the selected type is laid out again.
 #[test]
 fn the_out_port_follows_the_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     struct Clear;
     impl Drop for Clear {
         fn drop(&mut self) {
@@ -1690,6 +1692,7 @@ const OVERFLOWS: &str = "This text is far too long to fit in a frame of one hund
 /// overlays as a tool that lays every frame out afresh.
 #[test]
 fn type_overlays_keep_the_selected_frames_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (d, ids) = area_frames(&["One", "Two words", "Three words here", OVERFLOWS]);
     let (mut sel, p) = (Selection::default(), paint());
     sel.set(ids.iter().copied());
@@ -1721,6 +1724,7 @@ fn type_overlays_keep_the_selected_frames_layouts() {
 /// out again on the next frame.
 #[test]
 fn type_overlays_keep_a_selected_storys_layouts() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (mut d, ids) = area_frames(&["Story one ", "story two ", "story three ", "story four"]);
     d.text_threads.push(ids.clone());
     let (mut sel, p) = (Selection::default(), paint());
@@ -1749,6 +1753,7 @@ fn type_overlays_keep_a_selected_storys_layouts() {
 /// longer drawn is dropped, and choosing another tool drops them all.
 #[test]
 fn type_overlays_lay_out_again_only_the_frames_that_changed() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let (mut d, ids) = area_frames(&["One", "Two", "Three", OVERFLOWS]);
     let (mut sel, p) = (Selection::default(), paint());
     sel.set(ids.iter().copied());
@@ -1786,6 +1791,7 @@ fn type_overlays_lay_out_again_only_the_frames_that_changed() {
 /// each call, and draws what laying every frame out afresh draws.
 #[test]
 fn type_overlays_keep_at_most_frame_layouts_max() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     let texts = vec!["a "; FRAME_LAYOUTS_MAX + 3];
     let (mut d, ids) = area_frames(&texts);
     d.text_threads.push(ids.clone());
@@ -1806,6 +1812,7 @@ fn type_overlays_keep_at_most_frame_layouts_max() {
 
 #[test]
 fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     // Other tests can load system fonts; this assertion needs its own process-wide database.
     #[cfg(not(target_arch = "wasm32"))]
     if std::env::var("VECTORCRAFT_FONT_CACHE_TEST_CHILD").as_deref() != Ok("1") {
@@ -1848,6 +1855,7 @@ fn frame_layouts_follow_fonts_and_hyphenation_exceptions() {
 #[test]
 #[ignore = "timing, run by hand"]
 fn type_overlays_timing() {
+    let _inputs = crate::testutil::steady_layout_inputs();
     use std::time::Instant;
     let words = "The quick brown fox jumps over the lazy dog while seven wizards box. ".repeat(6);
     let texts: Vec<String> = (0..200).map(|i| format!("{i} {words}")).collect();
