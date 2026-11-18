@@ -82,6 +82,35 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
     assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
 }
 
+/// Object › Transform › Rotate Bounding Box… asks for an angle and turns the box, not the art, in
+/// one undo step: the panel then shows the box's angle.
+#[test]
+fn rotate_bounding_box_menu_item_turns_the_box_by_the_dialog_angle() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let entry = crate::menus::menu_entries(&app)
+        .into_iter()
+        .find(|e| e.path == ["Object", "Transform"] && e.label == "Rotate Bounding Box…")
+        .expect("menu item");
+    let (id, p) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
+    crate::menus::invoke(&mut app, &id, p);
+    let d = app.ui.dialog.as_mut().expect("a dialog opens");
+    assert_eq!(d.str("__command"), "object.rotateBoundingBox");
+    d.fields.insert("angle".into(), json!(90));
+    let bounds = |app: &VectorcraftApp| {
+        let st = app.session.doc().unwrap();
+        st.doc.bounds_of(&st.selection.objects, false)
+    };
+    let art = bounds(&app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(bounds(&app), art, "the art stays where it is");
+    let shown = texts(&mut app, show);
+    assert!(shown.iter().any(|t| t == "90°"), "{shown:?}");
+}
+
 /// #812: a selected live polygon shows its Polygon Properties in the Transform panel and the
 /// Properties panel's Transform section, and Make Sides Equal evens it out after a stretch.
 #[test]

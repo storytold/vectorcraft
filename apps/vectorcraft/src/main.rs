@@ -142,6 +142,11 @@ struct App {
     display_profile: display_profile::Reader,
     /// When this frame's input hook started, for the hang report's frame times (`hang_watch`).
     frame_start: Option<std::time::Instant>,
+    /// The shortest time between the starts of two frames, while the window presents without vsync
+    /// ([`presentation::min_frame_interval`]).
+    min_frame: Option<std::time::Duration>,
+    /// When the last frame started, after its wait for [`Self::min_frame`].
+    last_frame_began: Option<std::time::Instant>,
 }
 
 /// `vectorcraft --help`. Headless work (convert, run, MCP) is `vectorcraft-cli`'s.
@@ -365,6 +370,10 @@ fn main() -> std::process::ExitCode {
     let saved_window = saved.as_ref().and_then(|ui| ui.window);
     #[cfg(feature = "wgpu")]
     let gpu_pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("gpuPreference")).and_then(serde_json::Value::as_str);
+    // Preferences › Performance › Low-Latency Drawing; anything but `true` in the file is off.
+    #[cfg(feature = "wgpu")]
+    let low_latency_drawing =
+        saved.as_ref().and_then(|ui| ui.engine_prefs.get("lowLatencyDrawing")).and_then(serde_json::Value::as_bool).unwrap_or(false);
     #[cfg(feature = "wgpu")]
     let power_env = eframe::wgpu::PowerPreference::from_env();
     #[cfg(feature = "wgpu")]
@@ -458,10 +467,11 @@ fn main() -> std::process::ExitCode {
         let mut options = options;
         // One frame queued, not two: the canvas is rasterized on the CPU and the GPU only
         // composites it, so the window answers the pointer a frame sooner (#444).
-        // `--present-mode` and `--frame-latency` change it for a launch (`presentation`).
-        options.wgpu_options.surface = presentation.apply(eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY);
+        // `--present-mode` and `--frame-latency` change it for a launch, and Low-Latency Drawing
+        // asks for no vsync when neither sets the mode (`presentation`).
+        options.wgpu_options.surface = presentation.apply(eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY, low_latency_drawing);
         // What the app asks for: the driver picks novsync's mode and may clamp the latency.
-        log::info!("requested window surface: {}", presentation::describe(&options.wgpu_options.surface, &presentation));
+        log::info!("requested window surface: {}", presentation::describe(&options.wgpu_options.surface, &presentation, low_latency_drawing));
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
             create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, left_out.adapters.clone(), startup.clone()));
@@ -508,6 +518,11 @@ fn main() -> std::process::ExitCode {
     // For the hang report (`hang_watch`).
     #[cfg(feature = "wgpu")]
     let requested_surface = options.wgpu_options.surface;
+    // Without vsync, frames start at most 240 times a second (`presentation`).
+    #[cfg(feature = "wgpu")]
+    let min_frame = presentation::min_frame_interval(&requested_surface);
+    #[cfg(not(feature = "wgpu"))]
+    let min_frame = None;
     // A panic that ends the window (egui-wgpu's own, #502) is caught here: never a crash.
     let run = |options: eframe::NativeOptions, app_creator: eframe::AppCreator<'_>| {
         #[cfg(target_os = "linux")]
@@ -539,6 +554,7 @@ fn main() -> std::process::ExitCode {
                 // File Info's metadata templates live in their own folder next to the preferences.
                 prefs_dir::attach_metadata_templates_dir(&mut session);
                 prefs_dir::attach_new_doc_profiles(&mut session);
+                prefs_dir::attach_script_data(&mut session);
                 let mut app = VectorcraftApp::new(session, services(cc.winit_window().cloned(), cc.egui_ctx.clone()));
                 app.set_startup_update_check(true);
                 load_prefs(&mut app, saved);
@@ -694,6 +710,8 @@ fn main() -> std::process::ExitCode {
                     monitors_listed: None,
                     display_profile: Default::default(),
                     frame_start: None,
+                    min_frame,
+                    last_frame_began: None,
                 }))
             }),
         )
