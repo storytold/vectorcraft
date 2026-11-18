@@ -1086,10 +1086,18 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         ctx.request_repaint();
     }
     let sel_key = matches.get(sel).map(|e| e.id.clone()).unwrap_or_default();
+    // A palette that closes on this frame forgets its highlight and its answers here, as a closed
+    // frame does, so a command that opens it again before that frame starts it afresh.
+    let closing = run.is_some() || outside;
     ctx.data_mut(|d| {
-        d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view, sel_key));
+        if closing {
+            d.remove::<Highlight>(sel_id);
+            d.remove::<Availability>(availability_id);
+        } else {
+            d.insert_temp::<Highlight>(sel_id, (sel, q, offset, view, sel_key));
+            d.insert_temp(availability_id, availability);
+        }
         d.insert_temp(rsel_id, rsel);
-        d.insert_temp(availability_id, availability);
     });
     if let Some(id) = run {
         app.ui.palette_open = false;
@@ -1937,6 +1945,27 @@ mod tests {
         let top = shown.iter().find(|r| r.1).expect("a row is highlighted");
         assert_eq!(top.0, row_labels(&open.ctx, &[&first])[0], "{shown:?}");
         assert!(top.2 >= f64::from(open.popup().top()), "the first row is in view: {shown:?}");
+    }
+
+    /// A palette closed by a press outside it and opened again before a closed frame is drawn
+    /// starts with its first row highlighted and asks its results again whether they can run.
+    #[test]
+    fn the_palette_opened_again_at_once_after_closing_starts_afresh() {
+        let mut open = Open::new("", WINDOW);
+        open.app.ui.recent_commands = vec!["paint.swap".into(), "object.group".into(), "view.zoomIn".into()];
+        open.frame(vec![]);
+        open.press(egui::Key::ArrowDown, 2);
+        assert_eq!(open.highlighted(), 2);
+        let at = egui::pos2(2.0, 2.0);
+        assert!(!open.popup().contains(at), "{at:?} is outside {:?}", open.popup());
+        let press = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE };
+        open.frame(vec![egui::Event::PointerMoved(at), press]);
+        assert!(!open.app.ui.palette_open, "the press outside closes the palette");
+        let availability = egui::Id::unique("palette-availability");
+        assert!(open.ctx.data(|d| d.get_temp::<Availability>(availability)).is_none(), "the answers go when the palette closes");
+        open.app.ui.palette_open = true;
+        open.frame(vec![]);
+        assert_eq!(open.highlighted(), 0, "the first row is highlighted");
     }
 
     /// #1757: Up and Down move the highlighted result, wrapping at the ends; a new query starts
