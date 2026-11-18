@@ -3,8 +3,9 @@ use vectorcraft_geom::kurbo::ParamCurveDeriv;
 use super::outline::{self, Along, Budget, CURVE_TOLERANCE};
 use super::rings::{
     CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, curve_pieces, inset, left, signed_area,
-    solid_rings_traced,
+    solid_rings_traced, square_corners,
 };
+use super::side;
 use super::{
     Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View,
     eye_distance, perspective_scale,
@@ -211,6 +212,7 @@ impl<'a> Builder<'a> {
             side: false,
             away: behind,
             end: None,
+            surface: None,
             plane,
             #[cfg(test)]
             view,
@@ -249,11 +251,13 @@ impl<'a> Builder<'a> {
     /// wall with `cuts` (see [`cuts`]) as `cuts[i]` quads along edge `i`. `outward` is the
     /// direction (before rotation) the band faces away from the solid, for orienting normals.
     pub(super) fn band(&mut self, a: &[V3], b: &[V3], cuts: &[usize], outward: impl Fn(usize) -> V3) -> Result<(), String> {
-        self.curved_band(a, b, cuts, outward, None)
+        self.curved_band(a, b, cuts, outward, None, None)
     }
 
     /// [`Builder::band`], with `curves` the pieces of curve the rings' edges follow and the
     /// outlines at `a` and `b`: a quad whose edge is not cut keeps its edges along the profile curved.
+    /// With `side`, each quad carries where its corners lie on the side unrolled flat
+    /// ([`Facet::surface`]).
     pub(super) fn curved_band(
         &mut self,
         a: &[V3],
@@ -261,6 +265,7 @@ impl<'a> Builder<'a> {
         cuts: &[usize],
         outward: impl Fn(usize) -> V3,
         mut curves: Option<WallCurves>,
+        side: Option<SideBand>,
     ) -> Result<(), String> {
         let n = a.len().min(b.len());
         // At 0 and 1, the corners themselves.
@@ -295,6 +300,21 @@ impl<'a> Builder<'a> {
                     && let Some(f) = self.facets.last_mut()
                 {
                     f.side = true;
+                    if let Some(s) = side.as_ref()
+                        && let (Some([x0, x1]), Some(page)) = (s.x.get(i).copied(), f.contours.first())
+                    {
+                        let (u0, u1) = (x0 + (x1 - x0) * s0, x0 + (x1 - x0) * s1);
+                        let [y0, y1] = s.y;
+                        // The face shows the side's outside when it was neither turned around to
+                        // show its inside (on a hollow solid) nor kept turned away.
+                        let n = normal.unit();
+                        let outward = !f.away && f.normal[0] * n.0 + f.normal[1] * n.1 + f.normal[2] * n.2 > 0.0;
+                        f.surface = Some(crate::SurfaceCell {
+                            page: page.clone(),
+                            uv: vec![Point::new(u0, y0), Point::new(u1, y0), Point::new(u1, y1), Point::new(u0, y1)],
+                            outward,
+                        });
+                    }
                 }
                 if let Some(w) = curves.as_mut().filter(|_| pieces == 1)
                     && let Some(span) = w.spans.get(i).copied().flatten()
@@ -351,6 +371,13 @@ pub(super) struct WallCurves<'a> {
     pub(super) near: Option<&'a Along<'a>>,
     pub(super) far: Option<&'a Along<'a>>,
     pub(super) budget: &'a mut Budget,
+}
+
+/// Where a band of the side lies on the side unrolled flat ([`super::side`]): the x of each end of
+/// each edge of its rings, and the y of its two rings.
+pub(super) struct SideBand<'a> {
+    pub(super) x: &'a [[f64; 2]],
+    pub(super) y: [f64; 2],
 }
 
 /// Where a point of the art goes in view space at one step: [`Camera::place`] after a [`Turn`],
@@ -458,10 +485,15 @@ pub(super) fn check_bounds(b: Rect) -> Result<(), String> {
 }
 
 /// The art's outward direction at edge `i` of `ring` (before rotation), tilted towards the face
-/// it borders by `z` (+1 front, -1 back, 0 a side wall).
+/// it borders by `z` (+1 front, -1 back, 0 a side wall). An edge of no length (a corner cut
+/// square, see [`square_corners`]) faces out between the edges on either side of it.
 pub(super) fn outward(ring: &[Point], i: usize, z: f64) -> V3 {
     let n = ring.len();
-    let (lx, ly) = left(ring[i], ring[(i + 1) % n]);
+    let (mut lx, mut ly) = left(ring[i], ring[(i + 1) % n]);
+    if lx == 0.0 && ly == 0.0 && n > 2 {
+        let (a, b) = (left(ring[(i + n - 1) % n], ring[i]), left(ring[(i + 1) % n], ring[(i + 2) % n]));
+        (lx, ly) = (a.0 + b.0, a.1 + b.1);
+    }
     V3(-lx, -ly, z)
 }
 
@@ -607,7 +639,10 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
     let most = curve_pieces(path, size, bands, caps)?;
-    let traced = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?;
+    // Every inset of one extrusion goes the same way: into the shape for a bevel inside, out of it
+    // for one outside. The corners that way opens are cut square past the miter limit.
+    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
+    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
     let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
     let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);
     if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
@@ -659,7 +694,17 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
         })
         .collect();
     let mut budget = Budget::default();
-    for ((ring, traced), pieces) in rings.iter().zip(&traced).zip(&pieces) {
+    // With graphics on the side, the longest contour's pieces carry where they lie on it unrolled.
+    let unrolled = o
+        .map_surface
+        .then(|| {
+            let k = side::longest(&rings)?;
+            let y = side::across_steps(&steps.iter().map(|s| (s.inset, s.t)).collect::<Vec<_>>(), o.depth);
+            Some((k, side::along_ring(rings.get(k)?)?, y))
+        })
+        .flatten();
+    for (r, ((ring, traced), pieces)) in rings.iter().zip(&traced).zip(&pieces).enumerate() {
+        let unrolled = unrolled.as_ref().filter(|(k, ..)| *k == r);
         let placed: Vec<Vec<V3>> = steps.iter().map(|s| ring_at(ring, s)).collect();
         for (k, pair) in placed.windows(2).enumerate() {
             let ([a, c], Some(s0), Some(s1)) = (pair, steps.get(k), steps.get(k + 1)) else { continue };
@@ -676,7 +721,8 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
             // stay straight, within the sampling tolerance.
             let (near, far) = (along.get(k).filter(|_| k == 0), along.get(k + 1).filter(|_| k + 2 == steps.len()));
             let curves = (near.is_some() || far.is_some()).then(|| WallCurves { spans: &traced.spans, near, far, budget: &mut budget });
-            b.curved_band(a, c, pieces, |i| outward(ring, i, face), curves)?;
+            let side = unrolled.and_then(|(_, x, y)| Some(SideBand { x, y: [*y.get(k)?, *y.get(k + 1)?] }));
+            b.curved_band(a, c, pieces, |i| outward(ring, i, face), curves, side)?;
         }
     }
     if o.cap {
@@ -697,6 +743,38 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     Ok(b.finish())
 }
 
+/// The size of Extrude & Bevel's side unrolled flat ([`super::side`]), for a solid of `path` built
+/// as [`extrude`] builds it: the length of its longest contour's outline, the length across its
+/// bevels and walls, front to back, and the width about x = 0 that does not reach the side's cut.
+/// `None` with a depth of 0, for invalid bounds, and for a shape [`extrude`] refuses.
+pub fn extrude_side_size(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude) -> Option<(f64, f64, f64)> {
+    check_bounds(bounds).ok()?;
+    let o = options.sanitized();
+    if o.depth <= 0.0 {
+        return None;
+    }
+    let steps = steps(&o);
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
+    let size = bounds.width().max(bounds.height());
+    let most = curve_pieces(path, size, bands, caps).ok()?;
+    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
+    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most).ok()?.iter().map(|r| square_corners(r, side)).collect();
+    let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
+    // A solid past the face limit is refused, as [`extrude_faces`] refuses it.
+    let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);
+    if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
+        return None;
+    }
+    side::size(&rings, &steps.iter().map(|s| (s.inset, s.t)).collect::<Vec<_>>(), o.depth)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many Rotate planes (and Extrude & Bevel solids with no depth) this thread has built, for
+    /// the tests.
+    pub(crate) static PLANES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Rotate: the flat art turned in 3D about the centre of `bounds` (which may be larger than the
 /// shape's own, so that every part of one object turns about the same point).
 pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Vec<Facet>, String> {
@@ -705,6 +783,8 @@ pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Resul
 
 /// [`plane`], keeping its facet, its face before projection, or both, as `keep` asks.
 pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: View, keep: Keep) -> Result<Built, String> {
+    #[cfg(test)]
+    PLANES.with(|n| n.set(n.get() + 1));
     check_bounds(bounds)?;
     let rings = solid_rings_traced(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS, CURVE_PIECES)?;
     let camera = Camera::new(view, bounds, 0.0);

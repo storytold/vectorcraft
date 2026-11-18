@@ -51,15 +51,16 @@ fn export_shape_bounds(n: &Node) -> Option<Rect> {
 impl Reuse {
     const NONE: Self = Self { moves: false, turns: false, scales: false };
 
-    /// What a def of symbol art `art` stands for.
-    pub(crate) fn of(doc: &Document, art: &Node) -> Self {
+    /// What a def of symbol art `art` stands for, in `doc`. `find` finds the symbol of each
+    /// instance in it by name.
+    pub(crate) fn of<'d>(doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, art: &Node) -> Self {
         let mut r = Self { moves: true, turns: true, scales: true };
-        r.scan(doc, art, 0);
+        r.scan(doc, find, art, 0);
         r
     }
 
     /// Narrow down to what `n` (inside symbols nested `depth` deep) allows.
-    fn scan(&mut self, doc: &Document, n: &Node, depth: u32) {
+    fn scan<'d>(&mut self, doc: &'d Document, find: &dyn Fn(&str) -> Option<&'d vectorcraft_doc::Symbol>, n: &Node, depth: u32) {
         let pattern = |p: &Paint| matches!(p, Paint::Pattern { .. });
         let text_patterns = matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(|r| pattern(&r.style.fill) || pattern(&r.style.stroke)));
         let unlinked_mask = n.extras().mask.as_ref().is_some_and(|m| !m.linked);
@@ -95,17 +96,17 @@ impl Reuse {
                 if doc.symbol_nine_slice(symbol).is_some() {
                     self.scales = false;
                 }
-                if let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol) {
-                    self.scan(doc, &s.art, depth + 1);
+                if let Some(s) = find(symbol) {
+                    self.scan(doc, find, &s.art, depth + 1);
                 }
             }
             _ => {}
         }
         if let Some(m) = &n.extras().mask {
-            self.scan(doc, &m.art, depth);
+            self.scan(doc, find, &m.art, depth);
         }
         for c in n.children().into_iter().flatten() {
-            self.scan(doc, c, depth);
+            self.scan(doc, find, c, depth);
         }
     }
 
@@ -431,9 +432,73 @@ impl Writer<'_> {
         self.def(1, "</mask>");
         self.line(&format!("<g mask=\"url(#{mid})\">"));
         self.depth += 1;
+        self.spanning_rect(&bare, &region);
         self.node_body(&bare);
         self.depth -= 1;
         self.line("</g>");
+    }
+
+    /// Some readers draw a masked group only inside the bounding box of its shapes, which leaves
+    /// out a drop shadow, blur, glow or feather that paints past them. When `n`, written inside a
+    /// `<g mask>`, holds one ([`Self::holds_raster`]), a hidden, unpainted rectangle over the
+    /// mask's `region` makes that box cover what it paints.
+    fn spanning_rect(&mut self, n: &Node, region: &str) {
+        if self.holds_raster(n) {
+            self.line(&format!("<rect {region} fill=\"none\" visibility=\"hidden\"/>"));
+        }
+    }
+
+    /// Do `n`, its fills and strokes, its members at any depth, its symbols' art or the art its
+    /// live objects are written as have a visible raster effect (shadow, glow, blur, feather)?
+    /// Objects that aren't written (hidden ones, unless the options keep them) are skipped, and so
+    /// are fills and strokes that [`Self::shape`] doesn't write (hidden, unpainted or zero-width).
+    /// An instance with overrides is looked at in the art it is written as
+    /// ([`vectorcraft_brush::instance_art`]). The walk keeps its own stack, and looks at each
+    /// symbol's art once, and at each instance's overridden art once.
+    fn holds_raster(&self, n: &Node) -> bool {
+        let mut stack: Vec<std::sync::Arc<Node>> = vec![];
+        let mut symbols: std::collections::HashSet<(String, Option<vectorcraft_doc::NodeId>)> = std::collections::HashSet::new();
+        let paints = |i: &AppearanceItem| match i {
+            AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+            AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
+        };
+        // Whether `n` itself has one; else its members, symbol art or expanded art go on the stack.
+        let mut visit = |n: &Node, stack: &mut Vec<std::sync::Arc<Node>>| {
+            if !(n.visible || self.opts.hidden_layers) {
+                return false;
+            }
+            if has_raster(&n.appearance.effects) || n.appearance.items.iter().any(|i| paints(i) && has_raster(i.effects())) {
+                return true;
+            }
+            // A live object is written as its expanded art ([`Self::node_body`]), which holds no
+            // live objects.
+            if vectorcraft_doc::live::is_live(n) {
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                if !vectorcraft_doc::live::is_live(&g) {
+                    stack.push(std::sync::Arc::new(g));
+                    return false;
+                }
+            }
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                let custom = !n.extras().symbol_overrides.is_empty();
+                if symbols.insert((symbol.clone(), custom.then_some(n.id)))
+                    && let Some(s) = self.symbol_lookup.symbol(symbol)
+                {
+                    stack.push(if custom { std::sync::Arc::new(vectorcraft_brush::instance_art(&s.art, n)) } else { s.art.clone() });
+                }
+            }
+            stack.extend(n.children().into_iter().flatten().cloned());
+            false
+        };
+        if visit(n, &mut stack) {
+            return true;
+        }
+        while let Some(c) = stack.pop() {
+            if visit(&c, &mut stack) {
+                return true;
+            }
+        }
+        false
     }
 
     /// What `write` writes to the body, taken out of it (written at `depth`, for `<defs>`).
@@ -454,7 +519,7 @@ impl Writer<'_> {
     /// its geometry, so the region also covers the geometry's box, placed, grown by the strokes'
     /// and effects' reach unscaled.
     fn region_attrs(&mut self, nodes: &[&Node]) -> String {
-        let symbols = self.region_boxes.take().unwrap_or_else(|| self.doc.symbol_boxes());
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
         let mut art_reach = std::mem::take(&mut self.art_reach);
         let region = self.region_of(&symbols, &mut art_reach, nodes);
         self.region_boxes = Some(symbols);
@@ -464,7 +529,7 @@ impl Writer<'_> {
 
     /// The box of what each of `nodes` paints, as [`Self::paint_box`] measures it.
     fn paint_boxes(&mut self, nodes: &[&Node]) -> Vec<Option<Option<Rect>>> {
-        let symbols = self.region_boxes.take().unwrap_or_else(|| self.doc.symbol_boxes());
+        let symbols = self.region_boxes.take().unwrap_or_else(|| self.symbol_lookup.unmeasured());
         let mut art_reach = std::mem::take(&mut self.art_reach);
         let boxes = nodes.iter().map(|n| self.paint_box(&symbols, &mut art_reach, n)).collect();
         self.region_boxes = Some(symbols);
@@ -551,7 +616,7 @@ impl Writer<'_> {
             return Some(own + past + self.paint_reach(symbols, art_reach, &g, gb, depth + 1)?);
         }
         let symbol = match &n.kind {
-            NodeKind::SymbolInstance { symbol, xf } => self.doc.symbols.iter().find(|s| s.name == *symbol).map(|s| (s, xf)),
+            NodeKind::SymbolInstance { symbol, xf } => self.symbol_lookup.symbol(symbol).map(|s| (s, xf)),
             _ => None,
         };
         if n.children().is_none_or(|c| c.is_empty()) && symbol.is_none() {
@@ -664,7 +729,7 @@ impl Writer<'_> {
             }
         }
         self.symbol_nodes = after;
-        for (above, (_, body)) in above.iter().zip(written) {
+        for ((c, above), (_, body)) in elements.iter().zip(&above).zip(written) {
             if above.is_empty() {
                 self.body.push_str(&body);
                 continue;
@@ -672,6 +737,11 @@ impl Writer<'_> {
             let ids: Vec<&str> = above.iter().filter_map(|&j| shapes[j].as_deref()).collect();
             let mid = self.knockout_mask(&ids, &region);
             self.line(&format!("<g mask=\"url(#{mid})\">"));
+            // An element that paints past its shapes starts its mask group with a spanning
+            // rectangle (`Self::spanning_rect`).
+            self.depth += 1;
+            self.spanning_rect(c, &region);
+            self.depth -= 1;
             self.body.push_str(&body);
             self.line("</g>");
         }
@@ -957,7 +1027,7 @@ impl Writer<'_> {
                 let doc = self.doc;
                 // The instances nested in an inline graphic's art are ordinary instances again.
                 let inline = std::mem::take(&mut self.inline_graphic);
-                let Some(sym) = doc.symbols.iter().find(|s| s.name == *symbol) else { return };
+                let Some(sym) = self.symbol_lookup.symbol(symbol) else { return };
                 if self.symbol_nest > MAX_SYMBOL_NEST {
                     return;
                 }
@@ -992,8 +1062,8 @@ impl Writer<'_> {
                     (self.xf, self.instance_xf) = saved;
                     return;
                 }
-                if let Some(def) = self.symbol_use(sym, n, *xf) {
-                    let m = self.xf * *xf;
+                let m = self.xf * *xf;
+                if let Some(def) = self.symbol_use(sym, n, m) {
                     let tr = if m == Affine::IDENTITY { String::new() } else { format!(" transform=\"{}\"", self.matrix(m)) };
                     self.line(&format!("<use{id} xlink:href=\"#{def}\"{tr}{a}/>"));
                     return;
@@ -1034,7 +1104,8 @@ impl Writer<'_> {
         }
     }
 
-    /// The id of the `<symbol>` def instance `inst` (transform `xf`) can `<use>`, written on first
+    /// The id of the `<symbol>` def instance `inst` can `<use>` with transform `xf` (the `<use>`'s
+    /// own: the instance's transform after those of the instances it sits in), written on first
     /// use. `None` when the instance needs its own copy of the art: stained by its fill, or moved
     /// by a transform under which the def would not look as the canvas paints it ([`Reuse`]).
     fn symbol_use(&mut self, sym: &vectorcraft_doc::Symbol, inst: &Node, xf: Affine) -> Option<String> {
@@ -1043,7 +1114,8 @@ impl Writer<'_> {
             return None;
         }
         if !self.symbols.contains_key(&sym.name) {
-            let reuse = Reuse::of(self.doc, &sym.art);
+            let lookup = &self.symbol_lookup;
+            let reuse = Reuse::of(self.doc, &|name| lookup.symbol(name), &sym.art);
             self.symbols.insert(sym.name.clone(), SymbolDef { id: None, reuse, nodes: 0 });
         }
         let def = self.symbols.get(&sym.name)?;

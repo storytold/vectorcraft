@@ -93,7 +93,7 @@ fn more_smoothing_removes_the_jags_and_keeps_the_shape() {
         // Within the tolerance (2.5 % of 300 pt at most) plus the jag the refit smooths away.
         assert!(farthest(&before, &after) <= 7.5 + 1.5, "level {level}: {}", farthest(&before, &after));
         // The end points of an open path stay put.
-        let (a, b) = (&before.subpaths[0].anchors, &after.subpaths[0].anchors);
+        let (a, b) = (&before.subpaths[0].anchors.to_vec(), &after.subpaths[0].anchors.to_vec());
         assert_eq!((a[0].p, a[a.len() - 1].p), (b[0].p, b[b.len() - 1].p));
         assert!(!after.subpaths[0].closed);
         s.execute("edit.undo", &json!({})).unwrap();
@@ -206,7 +206,7 @@ fn direct_selected_anchors_smooth_only_their_section() {
     s.execute("select.anchors", &json!({"id": id.0, "anchors": anchors})).unwrap();
     s.execute("object.path.smooth", &json!({"level": 100})).unwrap();
     let after = path_of(&s, id);
-    let (a, b) = (&before.subpaths[0].anchors, &after.subpaths[0].anchors);
+    let (a, b) = (&before.subpaths[0].anchors.to_vec(), &after.subpaths[0].anchors.to_vec());
     assert!(b.len() < a.len(), "{} → {}", a.len(), b.len());
     // Anchors 0..=10 and 30..=40 are untouched, the section between them refitted.
     assert_eq!(a[..=10].iter().map(|x| x.p).collect::<Vec<_>>(), b[..=10].iter().map(|x| x.p).collect::<Vec<_>>());

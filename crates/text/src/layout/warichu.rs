@@ -287,6 +287,10 @@ fn place_block(g: &mut [SGlyph], s: &WariStyle, (vertical, whole): (bool, bool))
     let rtl = !vertical && g.first().is_some_and(|gl| gl.level.is_rtl());
     let (inset, outset) = if rtl { (after, before) } else { (before, after) };
     let length = inset + block + outset;
+    // How far the glyphs reach above and below the line's baseline, each from its block line's
+    // baseline.
+    let above = g.iter().zip(&places).map(|(gl, p)| gl.ascent - p.1).fold(0.0, f64::max);
+    let below = g.iter().zip(&places).map(|(gl, p)| gl.descent + p.1).fold(0.0, f64::max);
     let glyphs = g.len();
     for (i, (gl, (along, across, advance))) in g.iter_mut().zip(places).enumerate() {
         let em = gl.face.units_per_em() * gl.sy / r;
@@ -300,9 +304,10 @@ fn place_block(g: &mut [SGlyph], s: &WariStyle, (vertical, whole): (bool, bool))
         if i + 1 < glyphs {
             gl.keeps_next = true;
         }
-        // The line keeps the height of the block's own size, and holds the whole stack.
-        gl.ascent = (ascent / r).max(-top);
-        gl.descent = (descent / r).max(bottom);
+        // The line keeps the height of the block's own size, and holds the whole stack with each
+        // block line's glyphs.
+        gl.ascent = (ascent / r).max(-top).max(above);
+        gl.descent = (descent / r).max(bottom).max(below);
         if s.auto_leading {
             gl.leading /= r;
         }

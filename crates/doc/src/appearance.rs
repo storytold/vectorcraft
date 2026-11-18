@@ -143,6 +143,11 @@ impl Appearance {
     pub fn fill_paint(&self) -> Paint {
         self.fill().map(|f| f.paint.clone()).unwrap_or(Paint::None)
     }
+    /// Whether any visible fill has non-None paint. Unlike [`Self::fill`], this
+    /// includes lower fills in the stack; zero opacity still counts for selecting its geometry.
+    pub fn has_visible_fill(&self) -> bool {
+        self.items.iter().any(|item| matches!(item, AppearanceItem::Fill(fill) if fill.visible && !fill.paint.is_none()))
+    }
     pub fn stroke_paint(&self) -> Paint {
         self.stroke().map(|s| s.paint.clone()).unwrap_or(Paint::None)
     }
@@ -270,6 +275,16 @@ impl Appearance {
             AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(s),
             _ => None,
         })
+    }
+    /// Does any fill draw: one that is shown, has paint and has an opacity above 0, wherever it
+    /// sits in the stack?
+    pub fn has_drawn_fill(&self) -> bool {
+        self.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() && f.opacity > 0.0))
+    }
+    /// Does any stroke draw: one that is shown, has paint, a weight above 0 and an opacity above
+    /// 0, wherever it sits in the stack?
+    pub fn has_drawn_stroke(&self) -> bool {
+        self.painted_strokes().any(|s| s.width > 0.0 && s.opacity > 0.0)
     }
     /// Largest distance the painted area can extend beyond any geometry (see
     /// [`StrokeLayer::reach`]); paths measure their own with [`Self::stroked_bounds`].

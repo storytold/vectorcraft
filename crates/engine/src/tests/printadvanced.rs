@@ -171,7 +171,24 @@ fn print_as_bitmap_honours_rich_black() {
             }
         });
         let bytes = &prepared.images[key.as_ref().expect("bitmap image")].bytes;
-        let img = image::load_from_memory(bytes).unwrap().to_rgba8();
+        let img = craft_image_codecs::decode(bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         img.get_pixel(img.width() / 2, img.height() / 2).0
     };
     let accurate = centre(&crate::cmd::printadvanced::prepare("file.print", doc(&s), &set, &saved, false).unwrap().unwrap());

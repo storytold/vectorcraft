@@ -206,11 +206,25 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Assamese", "as", Quotes::ENGLISH),
     ("Sanskrit", "sa", Quotes::ENGLISH),
     ("Urdu", "ur", Quotes::ENGLISH),
+    // “…” outside, ‘…’ inside: CLDR gives these no delimiters of their own (`↑↑↑`, inherited), so
+    // they take root's (https://github.com/unicode-org/cldr/blob/main/common/main/root.xml,
+    // `delimiters`): sa.xml, ne.xml, as.xml, kok.xml and sd.xml (Arabic script; sd_Deva.xml for
+    // Devanagari inherits too) in https://github.com/unicode-org/cldr/blob/main/common/main/.
+    ("Nepali", "ne", Quotes::ENGLISH),
+    ("Konkani", "kok", Quotes::ENGLISH),
+    ("Sindhi", "sd", Quotes::ENGLISH),
 ];
 
 /// The quotes of a [`LANGUAGES`] entry (case-insensitive).
 pub fn language_quotes(language: &str) -> Option<Quotes> {
     LANGUAGES.iter().find(|(l, _, _)| l.eq_ignore_ascii_case(language)).map(|(_, _, q)| *q)
+}
+
+/// The BCP 47 tag of the [`LANGUAGES`] entry named or tagged `language` (case-insensitive), the
+/// default's included (`en-US`): what a document's language ([`DocSetup::language`]) is written
+/// as in an exported file. `None` for a language not in the list.
+pub fn language_tag(language: &str) -> Option<&'static str> {
+    LANGUAGES.iter().find(|(n, t, _)| n.eq_ignore_ascii_case(language) || t.eq_ignore_ascii_case(language)).map(|(_, t, _)| *t)
 }
 
 /// The [`LANGUAGES`] entry named or tagged `language` (case-insensitive) as a character's
@@ -397,6 +411,16 @@ impl DocSetup {
 mod tests {
     use super::*;
 
+    /// A document's language is written by its tag, the default's included (#3644).
+    #[test]
+    fn document_languages_have_their_tags() {
+        assert_eq!(language_tag(&DocSetup::default().language), Some("en-US"));
+        assert_eq!(language_tag("French"), Some("fr"));
+        assert_eq!(language_tag("german: swiss"), Some("de-CH"));
+        assert_eq!(language_tag("sr-latn"), Some("sr-Latn"));
+        assert_eq!((language_tag("Klingon"), language_tag("")), (None, None));
+    }
+
     /// Characters store a language of the list by its tag, the default as none.
     #[test]
     fn char_languages_are_stored_by_tag() {
@@ -420,6 +444,11 @@ mod tests {
         assert_eq!(char_language("BG"), Ok(Some("bg")));
         assert_eq!(char_language_name(Some("bg")), Some("Bulgarian"));
         assert_eq!(char_language_name(Some("sr-Cyrl")), Some("Serbian: Cyrillic"));
+        // Sanskrit, Nepali, Assamese, Konkani (a three-letter tag) and Sindhi, by name or tag.
+        for (name, tag) in [("Sanskrit", "sa"), ("Nepali", "ne"), ("Assamese", "as"), ("Konkani", "kok"), ("Sindhi", "sd")] {
+            assert_eq!((char_language(name), char_language(&tag.to_uppercase())), (Ok(Some(tag)), Ok(Some(tag))), "{name}");
+            assert_eq!(char_language_name(Some(tag)), Some(name));
+        }
         // Every entry has a tag of its own, and a name of its own.
         for (i, (n, t, _)) in LANGUAGES.iter().enumerate() {
             assert!(LANGUAGES.iter().skip(i + 1).all(|(n2, t2, _)| n2 != n && t2 != t), "{n} {t}");
@@ -443,6 +472,11 @@ mod tests {
         }
         let mut prev = None;
         assert_eq!(language_quotes("croatian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a ‚b‘ c“");
+        // Sanskrit, Nepali, Assamese, Konkani and Sindhi take CLDR root's quotes.
+        for name in ["Sanskrit", "Nepali", "Assamese", "Konkani", "Sindhi"] {
+            let mut prev = None;
+            assert_eq!(language_quotes(name).unwrap().apply("\"a 'b' c\"", &mut prev), "“a ‘b’ c”", "{name}");
+        }
         // Only a typed `”` stands for a straight quote; the other curly quotes stay as typed.
         assert_eq!(Quotes::typed_as_straight('”'), Some('"'));
         assert!(['“', '„', '‘', '’', '‚', '"', '\'', '«', '»', '「', 'a'].iter().all(|&c| Quotes::typed_as_straight(c).is_none()));

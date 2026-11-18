@@ -478,9 +478,9 @@ impl SmartPenTool {
         } else {
             straighten_segment(&mut sp, prev);
         }
-        let tail = sp.anchors.get(prev..)?;
+        let tail = sp.anchors.get_range(prev..)?;
         let mut bp = BezPath::new();
-        SubPath::new(tail.to_vec(), false).to_bezpath_into(&mut bp);
+        SubPath::new(tail, false).to_bezpath_into(&mut bp);
         Some(bp)
     }
 }
@@ -527,6 +527,7 @@ impl Tool for SmartPenTool {
                 }
                 _ => vec![],
             },
+            PointerKind::TripleClick => vec![],
         }
     }
 
@@ -623,6 +624,10 @@ impl Tool for SmartPenTool {
                 _ => {}
             }
         }
+    }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if key == "next" { crate::option_check::one_of(key, v, &["curved", "straight"]) } else { Err(crate::option_check::unknown(key)) }
     }
 }
 

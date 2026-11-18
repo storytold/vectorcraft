@@ -4,6 +4,8 @@
 //! neutral → off) and Opacity & Mask Define Knockout Shape; the menu's Page Isolated Blending and
 //! Page Knockout Group.
 
+use std::sync::Arc;
+
 use egui::{Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use vectorcraft_color::{BlendMode, Paint};
@@ -20,20 +22,21 @@ pub(super) const MASK_THUMB: &str = "tr-mask-thumb";
 
 /// The panel's values ([`vectorcraft_engine::Session::transparency_info`]) and its first target
 /// (the selection, or the object whose mask is being edited), recomputed only when the document
-/// or the selection changes.
-fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (TransparencyInfo, Option<Node>) {
-    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
+/// or the selection changes, or other gradient mesh points are picked. The target is the `Arc` the
+/// document holds.
+fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (TransparencyInfo, Option<Arc<Node>>) {
+    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>, Option<Vec<(NodeId, Vec<usize>)>>);
     let Some(st) = app.session.active() else { return Default::default() };
     let sel = &st.selection.objects;
-    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
+    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied(), app.session.mesh_points_picked());
     let id = egui::Id::unique("tr-state");
-    if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (TransparencyInfo, Option<Node>))>(id))
+    if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (TransparencyInfo, Option<Arc<Node>>))>(id))
         && k == key
     {
         return v;
     }
     let info = app.session.transparency_info();
-    let first = info.ids.first().and_then(|id| st.doc.node(*id)).cloned();
+    let first = info.ids.first().and_then(|id| super::layers::node_arc(&st.doc, *id));
     let v = (info, first);
     ctx.data_mut(|d| d.insert_temp(id, (key, v.clone())));
     v
@@ -82,18 +85,16 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 if editing.is_some() && oresp.on_hover_text(tl!("Stop editing the opacity mask")).clicked() {
                     app.run("transparency.stopEditingOpacityMask", json!({})).ok();
                 }
-                if let Some(n) = &n {
-                    let mut bare = n.clone();
-                    bare.extras_mut().mask = None;
-                    if !node_thumb(app, ui, "tr-obj", &bare, r.shrink(3.0), None) {
-                        let (f, s) = current_paints(app);
-                        let inner = r.shrink2(vec2(6.0, 10.0));
-                        widgets::paint_chip(ui, inner, &f);
-                        if let Some(c) = s.color()
-                            && !matches!(s, Paint::None)
-                        {
-                            ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, super::c32(&c)), StrokeKind::Middle);
-                        }
+                if let Some(n) = &n
+                    && !node_thumb(app, ui, "tr-obj", n, r.shrink(3.0), None, false)
+                {
+                    let (f, s) = current_paints(app);
+                    let inner = r.shrink2(vec2(6.0, 10.0));
+                    widgets::paint_chip(ui, inner, &f);
+                    if let Some(c) = s.color()
+                        && !matches!(s, Paint::None)
+                    {
+                        ui.painter().rect_stroke(inner, 0.0, Stroke::new(1.0, super::c32(&c)), StrokeKind::Middle);
                     }
                 }
                 match (mask, n.as_ref().map(|n| n.id)) {
@@ -113,7 +114,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                         let mresp = ui.interact(mr, egui::Id::unique(MASK_THUMB), Sense::click());
                         let bg = if m.clip != m.invert { [0, 0, 0, 255] } else { [255, 255, 255, 255] };
                         ui.painter().rect_filled(mr, 0.0, egui::Color32::from_rgb(bg[0], bg[1], bg[2]));
-                        node_thumb(app, ui, "tr-mask", &m.art, mr.shrink(2.0), Some(bg));
+                        node_thumb(app, ui, "tr-mask", &m.art, mr.shrink(2.0), Some(bg), true);
                         // Viewing the mask alone (Alt-click) highlights its thumbnail.
                         let viewing = app.session.active().is_some_and(|d| d.shown_mask().is_some());
                         let border = match (viewing, editing.is_some()) {
@@ -262,8 +263,9 @@ fn mask_items(mask: Option<&OpacityMask>, can_make: bool) -> [(&'static str, &'s
 
 /// A rendered thumbnail of `n` (which may live outside the tree, like mask art). One texture per
 /// slot, re-rendered only when the document revision, object or size changes, and not during a
-/// drag (every pointer move is a new revision): the last one stays until it ends.
-fn node_thumb(app: &VectorcraftApp, ui: &Ui, slot: &str, n: &vectorcraft_doc::Node, r: egui::Rect, bg: Option<[u8; 4]>) -> bool {
+/// drag (every pointer move is a new revision): the last one stays until it ends. With `own_mask`
+/// false, `n` is drawn without its opacity mask.
+fn node_thumb(app: &VectorcraftApp, ui: &Ui, slot: &str, n: &vectorcraft_doc::Node, r: egui::Rect, bg: Option<[u8; 4]>, own_mask: bool) -> bool {
     use std::cell::RefCell;
     thread_local! {
         static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
@@ -275,12 +277,20 @@ fn node_thumb(app: &VectorcraftApp, ui: &Ui, slot: &str, n: &vectorcraft_doc::No
     let cached: Option<(egui::Id, u64, egui::TextureHandle)> = ui.ctx().data(|d| d.get_temp(slot_id));
     let tex = match cached {
         Some((k, rev, tex)) if k == key && (rev == st.revision || busy) => Some(tex),
-        _ => RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail_with(&st.doc, n, px, bg, &super::layers::thumb_options())).map(|img| {
-            let color = crate::canvas::color_image(&img);
-            let tex = ui.ctx().load_texture(slot, color, egui::TextureOptions::LINEAR);
-            ui.ctx().data_mut(|d| d.insert_temp(slot_id, (key, st.revision, tex.clone())));
-            tex
-        }),
+        _ => {
+            let bare = (!own_mask && n.extras().mask.is_some()).then(|| {
+                let mut bare = n.clone();
+                bare.extras_mut().mask = None;
+                bare
+            });
+            let n = bare.as_ref().unwrap_or(n);
+            RENDERER.with(|rr| rr.borrow_mut().render_node_thumbnail_with(&st.doc, n, px, bg, &super::layers::thumb_options())).map(|img| {
+                let color = crate::canvas::color_image(&img);
+                let tex = ui.ctx().load_texture(slot, color, egui::TextureOptions::LINEAR);
+                ui.ctx().data_mut(|d| d.insert_temp(slot_id, (key, st.revision, tex.clone())));
+                tex
+            })
+        }
     };
     let Some(tex) = tex else { return false };
     let side = r.width().min(r.height());
@@ -351,6 +361,50 @@ mod tests {
         assert!(app.session.active().unwrap().doc.mask_edit.is_none());
     }
 
+    /// Picking other gradient mesh points (which gives the document no new revision) shows their
+    /// opacity, the one `transparency.set` changes then.
+    #[test]
+    fn picking_mesh_points_shows_their_opacity() {
+        use vectorcraft_engine::ViewInfo;
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].clone();
+        run(&mut app, "object.mesh.create", json!({"rows": 2, "cols": 2}));
+        run(&mut app, "object.mesh.setPointColor", json!({"id": a, "index": 0, "opacity": 0.3}));
+        run(&mut app, "paint.setStroke", json!({"color": "#000000"}));
+        let v = ViewInfo::default();
+        app.session.select_tool("mesh", v).unwrap();
+        let click = |app: &mut VectorcraftApp, x: f64, y: f64| {
+            for k in [PointerKind::Down, PointerKind::Up] {
+                app.session.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+            }
+        };
+        let picked = |app: &VectorcraftApp| app.session.mesh_points_picked().map(|p| p.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>());
+        let ctx = egui::Context::default();
+        click(&mut app, 35.0, 10.0);
+        assert_ne!(picked(&app), Some(vec![0]), "the click picks the top middle point");
+        assert_eq!(picked(&app).map(|v| v.len()), Some(1));
+        assert_eq!(state(&app, &ctx).0.opacity, Some(100.0));
+        click(&mut app, 10.0, 10.0);
+        assert_eq!(picked(&app), Some(vec![0]), "the click picks the top-left point");
+        assert_eq!(state(&app, &ctx).0.opacity, Some(30.0), "the newly picked point's opacity");
+        // An active Appearance row takes the opacity, so the values are the object's again.
+        let rows = app
+            .session
+            .active()
+            .unwrap()
+            .selection
+            .objects
+            .first()
+            .map(|id| app.session.active().unwrap().doc.node(*id).unwrap().appearance.items.len());
+        assert!(rows.is_some_and(|n| n > 0), "the mesh has its stroke row");
+        run(&mut app, "appearance.setActiveItem", json!({"index": 0}));
+        assert_eq!(picked(&app), None);
+        assert_eq!(app.session.transparency_info().opacity, Some(100.0), "the object's opacity, not the point's");
+        assert_eq!(run(&mut app, "transparency.info", json!({}))["opacity"], json!(100.0));
+    }
+
     #[test]
     fn mixed_values_show_blank() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -403,5 +457,58 @@ mod tests {
         run(&mut app, "transparency.togglePageIsolatedBlending", json!({}));
         let texts = frame(&mut app);
         assert!(texts.iter().any(|t| t == "✓ Page Knockout Group") && texts.iter().any(|t| t == "✓ Page Isolated Blending"), "{texts:?}");
+    }
+
+    /// The pixels of the thumbnail [`node_thumb`] draws of `n`, in a context of its own (so no
+    /// earlier texture is reused).
+    fn thumb_pixels(app: &VectorcraftApp, n: &Node, own_mask: bool) -> Vec<egui::Color32> {
+        let ctx = egui::Context::default();
+        let r = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(44.0, 44.0));
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            assert!(node_thumb(app, ui, "tr-test", n, r, None, own_mask), "the thumbnail draws");
+        });
+        let cached: Option<(egui::Id, u64, egui::TextureHandle)> = ctx.data(|d| d.get_temp(egui::Id::unique("tr-test")));
+        let id = cached.expect("the thumbnail's texture").2.id();
+        let pixels = out.textures_delta.set.iter().find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            img.pixels.clone()
+        });
+        out.textures_delta.clear();
+        pixels.expect("the thumbnail uploads")
+    }
+
+    /// The panel's state holds the target as the document holds it, a new one after an edit and
+    /// after Undo; the object thumbnail of a masked object draws as the object without its mask.
+    #[test]
+    fn state_holds_the_documents_node_and_the_object_thumbnail_leaves_out_the_mask() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+        let b = run(&mut app, "shape.ellipse", json!({"x": 10, "y": 10, "width": 20, "height": 20}))["id"].clone();
+        run(&mut app, "select.set", json!({"ids": [a, b]}));
+        run(&mut app, "transparency.makeOpacityMask", json!({}));
+        let held = |app: &VectorcraftApp, id: NodeId| super::super::layers::node_arc(&app.session.active().unwrap().doc, id).expect("held");
+        let ctx = egui::Context::default();
+        let n = state(&app, &ctx).1.expect("the masked object");
+        assert!(n.extras().mask.is_some(), "the object has its mask");
+        assert!(Arc::ptr_eq(&n, &held(&app, n.id)), "the node the document holds");
+        assert!(Arc::ptr_eq(&state(&app, &ctx).1.expect("cached"), &n), "the cached state gives the same node");
+        // The object thumbnail: as a copy with the mask removed draws, not as the masked object.
+        let mut bare = (*n).clone();
+        bare.extras_mut().mask = None;
+        let without = thumb_pixels(&app, &n, false);
+        assert!(without == thumb_pixels(&app, &bare, true), "the object without its mask");
+        assert!(without != thumb_pixels(&app, &n, true), "the mask changes the drawing");
+        // An edit and its Undo: the state follows the document.
+        run(&mut app, "transparency.set", json!({"opacity": 40}));
+        let (info, edited) = state(&app, &ctx);
+        let edited = edited.expect("the edited object");
+        assert_eq!((info.opacity, edited.opacity), (Some(40.0), 0.4));
+        assert!(Arc::ptr_eq(&edited, &held(&app, n.id)) && !Arc::ptr_eq(&edited, &n), "the edited node");
+        run(&mut app, "edit.undo", json!({}));
+        let (info, undone) = state(&app, &ctx);
+        let undone = undone.expect("the object after Undo");
+        assert_eq!((info.opacity, undone.opacity), (Some(100.0), 1.0));
+        assert!(Arc::ptr_eq(&undone, &held(&app, n.id)), "the node Undo put back");
     }
 }

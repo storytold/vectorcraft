@@ -45,6 +45,7 @@ impl Serialize for Node {
             is_default(&self.bbox_angle),
             e.perspective.is_none(),
             e.dimension.is_none(),
+            e.flare.is_none(),
             e.intertwine.is_none(),
             e.intertwine_tiers.is_empty(),
             e.live_paint_gaps.is_none(),
@@ -57,6 +58,7 @@ impl Serialize for Node {
             is_default(&e.pixel_aligned),
             e.color_mask.is_none(),
             is_default(&e.warp_piece),
+            is_default(&e.clip_pieces),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -90,6 +92,7 @@ impl Serialize for Node {
         field!("bbox_angle", &self.bbox_angle);
         field!("perspective", &e.perspective);
         field!("dimension", &e.dimension);
+        field!("flare", &e.flare);
         field!("intertwine", &e.intertwine);
         field!("intertwine_tiers", &e.intertwine_tiers);
         field!("live_paint_gaps", &e.live_paint_gaps);
@@ -102,6 +105,7 @@ impl Serialize for Node {
         field!("pixel_aligned", &e.pixel_aligned);
         field!("color_mask", &e.color_mask);
         field!("warp_piece", &e.warp_piece);
+        field!("clip_pieces", &e.clip_pieces);
         st.end()
     }
 }
@@ -226,6 +230,8 @@ pub(super) struct NodeWire {
     #[serde(default)]
     dimension: Option<Box<crate::dimension::Dimension>>,
     #[serde(default)]
+    flare: Option<Box<crate::flare::FlareSpec>>,
+    #[serde(default)]
     intertwine: Option<Box<PathData>>,
     #[serde(default, deserialize_with = "counted_list")]
     intertwine_tiers: Vec<PathData>,
@@ -249,6 +255,8 @@ pub(super) struct NodeWire {
     color_mask: Option<Box<crate::color_mask::ColorMask>>,
     #[serde(default)]
     warp_piece: bool,
+    #[serde(default)]
+    clip_pieces: bool,
 }
 
 impl From<NodeWire> for Node {
@@ -267,6 +275,7 @@ impl From<NodeWire> for Node {
             slice: w.slice,
             perspective: w.perspective,
             dimension: w.dimension,
+            flare: w.flare,
             intertwine: w.intertwine,
             intertwine_tiers: w.intertwine_tiers,
             live_paint_gaps: w.live_paint_gaps,
@@ -279,6 +288,7 @@ impl From<NodeWire> for Node {
             pixel_aligned: w.pixel_aligned,
             color_mask: w.color_mask,
             warp_piece: w.warp_piece,
+            clip_pieces: w.clip_pieces,
         };
         Node {
             id: w.id,

@@ -3,10 +3,8 @@ use super::{CommandSpec, EngineError, Result, Session, cmd, has_doc};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::dimension::{
-    ArrowStyle, Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition,
-};
-use vectorcraft_doc::{Appearance, Arrowhead, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_doc::dimension::{Dimension, DimensionMode, DimensionOptions, DimensionSource, LineType, Orientation, TextAlignment, TextPosition};
+use vectorcraft_doc::{Appearance, CharStyle, ColorMode, Dash, Document, Node, NodeId, NodeKind, TextObject};
 use vectorcraft_geom::{Affine, BezPath, PathData, Point, Vec2};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -495,7 +493,8 @@ pub(crate) fn refresh(before: &Document, doc: &mut Document) -> Result<bool> {
 
 /// Redraw the dimensions of an opened document whose art isn't in its colour mode: files saved
 /// before dimensions followed the colour mode have RGB dimensions in CMYK documents. A dimension
-/// that can't be redrawn keeps the art it has.
+/// that can't be redrawn keeps the art it has. The labels are measured in the document's own
+/// composite fonts, also when another document's definitions of the same names are registered.
 pub(crate) fn conform(doc: &mut Document) {
     if !doc.dimensions {
         return;
@@ -521,6 +520,10 @@ pub(crate) fn conform(doc: &mut Document) {
             }
         }
     });
+    if stale.is_empty() {
+        return;
+    }
+    let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
     for (id, d) in stale {
         // An error leaves this dimension as it was; the others are still redrawn.
         let _ = replace(doc, id, d);
@@ -562,12 +565,7 @@ fn appearance(o: &DimensionOptions, mode: ColorMode, ext: bool, arrows: bool) ->
             LineType::Solid => None,
         };
         if arrows {
-            let head = match o.arrow_style {
-                ArrowStyle::Filled => Some(Arrowhead::Triangle),
-                ArrowStyle::Open => Some(Arrowhead::TriangleOpen),
-                ArrowStyle::Tick => Some(Arrowhead::Slash),
-                ArrowStyle::None => None,
-            };
+            let head = o.arrow_style.arrowhead();
             st.start_arrow = head.clone();
             st.end_arrow = head;
             st.arrow_scale = (o.arrow_scale, o.arrow_scale);

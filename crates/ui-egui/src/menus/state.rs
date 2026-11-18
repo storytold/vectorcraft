@@ -61,8 +61,11 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         // A View › Rotate View item is checked when the active view is turned to its angle; without
         // a document no item is checked.
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
+        // Object › Align's Align To items: the choice the Align panel shows.
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::shown_align_to(app) == v,
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
+        "view.statusBarShow" => p.get("show").and_then(Value::as_str) == Some(app.ui.status_bar_show.param()),
         "window.control.dock" => p.get("edge").and_then(Value::as_str) == Some(crate::chrome::control_bar_placement(&app.ui)),
         "window.control.options" => p
             .get("group")
@@ -98,6 +101,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
+        // The Tile layout the panes show.
+        "window.arrange.tile" => app.ui.tiled && crate::canvas::TileLayout::from_params(p) == Ok(app.ui.tile_layout),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
         "view.slices.lock" => app.session.slices_locked(),
         "object.slice.clipToArtboard" => app.session.active().is_some_and(|d| d.doc.slices_clip_to_artboard),
@@ -218,14 +223,21 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" => {
-            crate::panels::character::text_style(app).is_some()
-        }
+        "type.bold"
+        | "type.italic"
+        | "type.underline"
+        | "type.superscript"
+        | "type.subscript"
+        | "type.lineComposer"
+        | "type.hyphenate"
+        | "type.highlightFontSize" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command_now(app)),
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::can_choose(app, v),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
-        "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
+        "file.cancelExport" | "file.exportInBackground" => app.background.running(crate::background::Kind::Export),
+        "file.cancelSave" | "file.saveInBackground" => app.background.running(crate::background::Kind::Save),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
@@ -281,10 +293,11 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
             .dialog
             .as_ref()
             .is_some_and(|d| crate::dialogs::para_style_options::is_paragraph_dialog(d) && crate::dialogs::para_style_options::can_reset(d)),
-        "ui.newArtboard" | "artboard.selectAll" => app.session.active().is_some(),
+        "ui.newArtboard" | "artboard.selectAll" | crate::dialogs::check_spelling::COMMAND => app.session.active().is_some(),
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::object_available(app),
         "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" | "ui.warichuSettings" => {
             crate::panels::character::text_style(app).is_some()
         }
@@ -310,15 +323,17 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.dxfOptionsDialog" => app.session.active().is_some(),
         "links.editOriginal" | "links.reveal" => selected_image(app, |im| im.link.is_some()) || selected_placed(app),
         "ui.placementOptionsDialog" => selected_image(app, |_| true) || selected_placed(app),
+        "links.copyInfo" => !crate::panels::links::selected_rows_of_app(app).is_empty(),
         "ui.relinkDialog" => app.services.pick_open.is_some() && (selected_image(app, |_| true) || selected_placed(app)),
         "ui.findLinksInFolder" => crate::picks::can(app, &crate::picks::PickRequest::Folder) && app.session.active().is_some(),
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
-        "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
+        "file.saveForWeb" | "file.saveForWeb.browser" | "file.export.svg.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
+        "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
         "ui.perspectiveGridDialog" | "ui.savePerspectivePreset" => app.session.active().is_some(),
         id if id.starts_with(crate::dialogs::perspective_presets::SLOT) => {

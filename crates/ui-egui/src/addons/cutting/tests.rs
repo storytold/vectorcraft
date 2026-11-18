@@ -210,3 +210,57 @@ fn banner_hems_and_grommets_previews_cancels_and_runs_on_ok() {
     // 528 pt along the top and bottom need 6 gaps, 328 pt down the sides 4: 20 grommets.
     assert_eq!(count(&app), nodes + 1 + 4 + 20 * 4);
 }
+
+/// Object › Plug-ins › Cutting Tools › Nest Shapes… opens the command dialog on its defaults with
+/// Preview off, previews the packed objects, puts them back on Cancel and keeps them as one step
+/// on OK.
+#[test]
+fn nest_shapes_previews_cancels_and_runs_on_ok() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let a = app.run("shape.rectangle", json!({"x": 700, "y": 100, "width": 50, "height": 40})).unwrap()["id"].clone();
+    let b = app.run("shape.rectangle", json!({"x": 800, "y": 100, "width": 60, "height": 30})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let (start, n) = (app.session.doc().unwrap().doc.clone(), steps(&app));
+    let open = |app: &mut VectorcraftApp| {
+        let entries = menus::menu_entries(app);
+        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Cutting Tools"] && e.label == "Nest Shapes…").unwrap();
+        assert!(item.enabled);
+        let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
+        menus::invoke(app, &cmd, p);
+    };
+
+    open(&mut app);
+    let d = app.ui.dialog.as_ref().expect("a dialog opens");
+    assert_eq!((d.str("__command"), d.str("__label")), (super::NEST.to_string(), "Nest Shapes".to_string()));
+    assert_eq!((d.bool("roll"), d.bool("rotate"), d.bool("usePreviewBounds"), d.bool("preview")), (false, false, true, false));
+    let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    for s in ["Nest Shapes", "Roll", "Width", "Height", "Margin", "Spacing", "Rotate", "Use Preview Bounds", "Preview"] {
+        assert!(shown.contains(s), "{s} in {shown}");
+    }
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+    let german = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    for s in ["Formen verschachteln", "Rolle"] {
+        assert!(german.contains(s), "{s} in {german}");
+    }
+    assert_eq!(app.session.doc().unwrap().doc, start, "no preview without the checkbox");
+
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+    painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+    assert_ne!(app.session.doc().unwrap().doc, start, "previewed");
+    crate::dialogs::cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, start, "Cancel puts the objects back");
+    assert_eq!(steps(&app), n, "and adds no undo step");
+
+    open(&mut app);
+    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "margin".into(), json!("0 pt"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(steps(&app), n + 1, "one undo step");
+    let doc = &app.session.doc().unwrap().doc;
+    let left = |id: &serde_json::Value| doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).unwrap().geometric_bounds().unwrap().x0;
+    // The taller object goes first, its 1 pt stroke at the artboard's corner, and the other 9 pt to
+    // the right of its stroke.
+    assert_eq!((left(&a), left(&b)), (0.5, 0.5 + 51.0 + 9.0));
+}
