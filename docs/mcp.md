@@ -674,8 +674,11 @@ and answers true when the fields show in percent.
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
 shows the wheel again. `"gamut": true` grays out the parts of the wheel's square and the box's field whose colors
 the CMYK space cannot print, as the panel menu's Show Out-of-Gamut Colors does, and `false` shows them again. The
-test is the out-of-gamut warning's, which `color.gamutCheck` answers for one color. Keys left out keep their values.
-Params that are not an object, another key or a value off the list return an error and change nothing. The command
+test is the out-of-gamut warning's, which `color.gamutCheck` answers for one color. The shading is approximate: the
+panel tests the color at the center of each cell of a 16 by 16 grid over the square or the field and grays out the
+whole cell or none of it, so a grayed cell can hold printable colors and a clear cell can hold colors that cannot
+print. Keys left out or set to `null` keep their values, and the other keys still apply. Params that are not an
+object, another key or a value off the list return an error and change nothing. The command
 returns `{view, channel, gamut}`, and the settings are kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's

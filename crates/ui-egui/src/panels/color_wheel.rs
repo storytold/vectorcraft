@@ -104,8 +104,9 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
 }
 
 /// `ui.colorWheel {view?, channel?, gamut?}`: show the wheel or the box, pick the box's channel,
-/// and show or hide the out-of-gamut shading. Keys left out keep their values; params that are not
-/// an object, another key or a value off the list are an error and change nothing. → the settings.
+/// and show or hide the out-of-gamut shading. Keys left out or set to null keep their values, and
+/// the other keys still apply; params that are not an object, another key or a value off the list
+/// are an error and change nothing. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     const KEYS: [&str; 3] = ["view", "channel", "gamut"];
     match p {
