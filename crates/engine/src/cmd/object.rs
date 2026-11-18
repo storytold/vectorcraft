@@ -42,3 +42,4 @@ pub(crate) use pixelgrid::{
 };
 pub(super) use shape::recut;
 pub(crate) use transform::{apply_transform, preview_copies, scaling, transform_node, transform_patterns, transforms_objects};
+pub use transform::{reflect_axis, scale_factors, shear_tangent};
