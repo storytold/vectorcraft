@@ -1048,6 +1048,11 @@ pub(crate) struct Imported {
     /// and that would draw them otherwise than the art they were pasted with: the document keeps
     /// its own, and the pasted graphs are drawn again with it.
     pub kept_designs: BTreeSet<String>,
+    /// The names of the symbols added to the document, whose art may hold graphs that draw with
+    /// [`Self::kept_designs`].
+    pub added_symbols: BTreeSet<String>,
+    /// The global and spot colors that took the document's color (merged).
+    merged_swatches: BTreeSet<String>,
 }
 
 impl Imported {
@@ -1114,7 +1119,12 @@ impl Clipboard {
     /// `d` keeps its own design.
     pub(super) fn used(&self, d: &Document) -> Used {
         let designs: Vec<GraphDesign> = self.graph_designs.iter().filter(|g| !d.graph_designs.iter().any(|x| x.name == g.name)).cloned().collect();
-        let defs = Defs {
+        Used::of(&self.defs(&designs), &self.nodes)
+    }
+
+    /// The clipboard's definitions, with graph designs `designs`.
+    fn defs<'a>(&'a self, designs: &'a [GraphDesign]) -> Defs<'a> {
+        Defs {
             swatches: self.swatches.iter().collect(),
             symbols: &self.symbols,
             patterns: &self.patterns,
@@ -1122,10 +1132,9 @@ impl Clipboard {
             char_styles: &self.char_styles,
             para_styles: &self.para_styles,
             brushes: Brushes::Ready(&self.brushes),
-            graph_designs: &designs,
+            graph_designs: designs,
             index: DefIndex::default(),
-        };
-        Used::of(&defs, &self.nodes)
+        }
     }
 
     /// The used global and spot colours whose name `d` gives another one: (pasted, document).
@@ -1317,6 +1326,7 @@ impl Clipboard {
         for s in d.symbols.iter_mut().filter(|s| added_symbols.contains(&s.name)) {
             out.relink.node(Arc::make_mut(&mut s.art));
         }
+        out.added_symbols = added_symbols.into_iter().collect();
         for p in d.patterns.iter_mut().filter(|p| added_patterns.contains(&p.name)) {
             for a in &mut p.art {
                 out.relink.node(Arc::make_mut(a));
@@ -1438,6 +1448,7 @@ impl Clipboard {
         for w in &bases {
             let p = if conflicts.contains(&w.name) && choices.of(&w.name) == SwatchChoice::Merge {
                 out.merged += 1;
+                out.merged_swatches.insert(w.name.clone());
                 Placed::Existing
             } else {
                 add_swatch(d, w, same_doc)
@@ -1495,15 +1506,25 @@ impl Clipboard {
         // Every name the pasted graphs draw with whose design in the document would draw them
         // otherwise: another design of that name, one the clipboard holds no design for (deleted
         // and made again), or, from another document, the same art when a resource came in renamed
-        // or a swatch took the document's color (the art may draw it).
-        let moved = !same_doc && (!out.relink.renames.is_empty() || out.merged > 0);
+        // or a swatch took the document's color, that the design's art uses. (An SVG filter effect
+        // carries its definition, so a filter that draws otherwise makes the art differ.)
+        let defs = self.defs(&self.graph_designs);
+        let moved = |n: &str| {
+            if same_doc || (out.relink.renames.is_empty() && out.merged_swatches.is_empty()) {
+                return false;
+            }
+            let uses = designs_used(&defs, &[n.to_string()]);
+            out.relink.renames.iter().any(|(r, names)| names.keys().any(|from| uses.has(*r, from)))
+                || out.merged_swatches.iter().any(|w| uses.has(Res::Swatch, w))
+        };
         let differs = |n: &str| {
             let ours = d.graph_designs.iter().find(|x| x.name == n);
             let theirs = self.graph_designs.iter().find(|g| g.name == n);
-            ours.is_some_and(|x| moved || theirs.is_none_or(|g| !Arc::ptr_eq(&g.art, &x.art) && g.art != x.art))
+            ours.is_some_and(|x| theirs.is_none_or(|g| !Arc::ptr_eq(&g.art, &x.art) && g.art != x.art) || moved(n))
         };
         let named = used.names.get(&Res::GraphDesign).into_iter().flatten();
-        out.kept_designs.extend(named.filter(|n| differs(n)).cloned());
+        let kept: Vec<String> = named.filter(|n| differs(n)).cloned().collect();
+        out.kept_designs.extend(kept);
         for g in self.graph_designs.iter().filter(|g| used.has(Res::GraphDesign, &g.name)) {
             if d.graph_designs.iter().any(|x| x.name == g.name) {
                 out.placed(Res::GraphDesign, &g.name, &Placed::Existing);
@@ -1582,6 +1603,24 @@ pub(crate) fn graph_design_library(src: &Document) -> Option<Document> {
     let used = designs_used(&Defs::of(src, &library), &names);
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
     let mut d = clip.to_document();
+    // A new document's default swatches and graphic styles give way to the source's of the same
+    // name or id, so a design draws with the source's.
+    let defaults = d.swatches.len().saturating_sub(clip.swatches.len());
+    let mut i = 0;
+    d.swatches.retain(|s| {
+        i += 1;
+        i > defaults || !clip.swatches.iter().any(|c| c.name == s.name)
+    });
+    // The swatch groups are all a new document's.
+    for g in d.swatch_groups.iter_mut() {
+        g.swatches.retain(|s| !clip.swatches.iter().any(|c| c.name == s.name));
+    }
+    let defaults = d.graphic_styles.len().saturating_sub(clip.graphic_styles.len());
+    let mut i = 0;
+    d.graphic_styles.retain(|g| {
+        i += 1;
+        i > defaults || !clip.graphic_styles.iter().any(|c| (c.id != 0 && c.id == g.id) || c.name == g.name)
+    });
     // The symbols keep their Symbol Options, which the document keeps by name.
     for (name, options) in &clip.symbol_options {
         options.give(&mut d, name);

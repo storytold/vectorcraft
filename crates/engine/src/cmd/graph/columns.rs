@@ -1,5 +1,5 @@
 use super::data::fmt_value;
-use super::designs::{bring_in, design_names, from_library, libraries_json};
+use super::designs::{bring_in_for, design_names, from_library, libraries_json};
 use super::edit::{regenerate, spec_of, target};
 use super::generate::generate_with;
 use super::markers::{design_frame, fit_affine};
@@ -493,7 +493,7 @@ pub(super) fn set_column(s: &mut Session, p: &Value) -> Result<Value> {
     // Drawn once on a copy of the document, to refuse designs past the budget before the edit.
     let mut probe = (*s.doc()?.doc).clone();
     if let Some((lib, name)) = &library {
-        bring_in(&mut probe, lib, std::slice::from_ref(name))?;
+        bring_in_for(&mut probe, lib, name, id, &mut spec)?;
     }
     let looks = column_designs(&probe, &spec);
     if generate_with(&mut probe, &spec, &looks).is_none() {
@@ -501,7 +501,7 @@ pub(super) fn set_column(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.edit("Graph Column", |d, sel| {
         if let Some((lib, name)) = &library {
-            bring_in(d, lib, std::slice::from_ref(name))?;
+            bring_in_for(d, lib, name, id, &mut spec)?;
         }
         regenerate(d, id, spec)?;
         if !reselect.is_empty() {

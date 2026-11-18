@@ -5539,6 +5539,31 @@ fn designs_of_a_document_loaded_as_a_swatch_library_come_in_when_applied() {
 }
 
 #[test]
+fn a_library_design_applied_to_a_moved_graph_that_names_it_keeps_the_graph_in_place() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // A library's name works in any case, as swatch library names do.
+    assert_eq!(s.execute("graph.design", &json!({"library": "COINS"})).unwrap(), json!({"designs": ["Coin"]}));
+    for (kind, cmd) in [("line", "graph.marker"), ("column", "graph.column")] {
+        // The graph names design "Coin", which the document no longer has, and is moved after.
+        save_design(&mut s, "Coin");
+        let id = graph(&mut s, kind);
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute(cmd, &json!({"design": "Coin"})).unwrap();
+        s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+        let rect = spec(&s, id).rect;
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 40, "dy": -10})).unwrap();
+        s.execute(cmd, &json!({"id": id.0, "design": "Coin", "library": lib})).unwrap();
+        let now = spec(&s, id).rect;
+        assert!((now.x0 - (rect.x0 + 40.0)).abs() < 1e-6 && (now.y0 - (rect.y0 - 10.0)).abs() < 1e-6, "{cmd}: {now:?}");
+        assert!((now.width() - rect.width()).abs() < 1e-6 && (now.height() - rect.height()).abs() < 1e-6, "{cmd}: {now:?}");
+        s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    }
+}
+
+#[test]
 fn a_design_the_document_has_under_the_same_name_stays_as_it_is() {
     let mut s = Session::new();
     let lib = load_coin_library(&mut s);
@@ -5660,6 +5685,234 @@ fn a_pasted_graph_naming_a_deleted_design_draws_with_the_documents_design_of_tha
 }
 
 #[test]
+fn a_pasted_graph_keeps_its_art_when_only_a_resource_its_design_does_not_use_comes_in_renamed() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#ff0000", "global": true})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"swatch": "Ink", "ids": [r]})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    // An edit of the graph's art that drawing the graph again would not keep.
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    // A copy of the document holds the same design; its "Ink" is another color, so the pasted
+    // rectangle's swatch takes the document's color, or with "add" comes in renamed.
+    let saved = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&s.doc().unwrap().doc));
+    s.execute("select.set", &json!({"ids": [id.0, r]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("document.open", &json!({"name": "b.vectorcraft", "dataBase64": saved})).unwrap();
+    s.execute("swatch.edit", &json!({"name": "Ink", "color": "#0000ff"})).unwrap();
+    for conflict in ["merge", "add"] {
+        let r = s.execute("edit.paste", &json!({"swatchConflict": conflict})).unwrap();
+        assert!(r["merged"] == 1 || r["renamed"].as_array().is_some_and(|a| !a.is_empty()), "{conflict}: {r}");
+        let st = s.doc().unwrap();
+        let d = &st.doc;
+        let pasted = st.selection.objects.iter().copied().find(|i| d.node(*i).is_some_and(|n| n.extras().graph.is_some())).unwrap();
+        let names: Vec<Option<String>> = series(d.node(pasted).unwrap(), 0).children().unwrap().iter().map(|n| n.name.clone()).collect();
+        assert_eq!(names[0].as_deref(), Some("Mine"), "{conflict}: not drawn again: {names:?}");
+    }
+}
+
+#[test]
+fn a_pasted_graph_is_drawn_again_when_its_designs_svg_filter_comes_in_under_another_name() {
+    const SHIFT: &str = r#"<filter id="Shift"><feOffset dx="3" dy="3"/></filter>"#;
+    const SHIFT_MORE: &str = r#"<filter id="Shift"><feOffset dx="9" dy="9"/></filter>"#;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": SHIFT})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("svgFilter.apply", &json!({"name": "Shift", "ids": [r]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "Coin"})).unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    let mark = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.edit("Name", |d, _| {
+        if let Some(n) = d.node_mut(mark) {
+            n.name = Some("Mine".into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    // A copy of the document holds the same design, but its "Shift" filter draws otherwise, so the
+    // pasted graph's filter keeps its own definition under another name.
+    let saved = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&s.doc().unwrap().doc));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    s.execute("document.open", &json!({"name": "b.vectorcraft", "dataBase64": saved})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": SHIFT_MORE, "replace": "Shift"})).unwrap();
+    s.execute("edit.paste", &json!({})).unwrap();
+    let st = s.doc().unwrap();
+    let pasted = st.selection.objects.to_vec()[0];
+    let names: Vec<Option<String>> = series(st.doc.node(pasted).unwrap(), 0).children().unwrap().iter().map(|n| n.name.clone()).collect();
+    assert_ne!(names[0].as_deref(), Some("Mine"), "drawn again with the document's design: {names:?}");
+}
+
+#[test]
+fn a_symbol_pasted_with_a_graph_inside_draws_it_with_the_documents_design_of_that_name() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut s);
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Chart"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [instance]})).unwrap();
+    s.execute("edit.copy", &json!({})).unwrap();
+    // A document whose "Coin" is a rectangle and an ellipse: the symbol's graph draws with it.
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    s.execute("edit.paste", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let art = &d.symbols.iter().find(|x| x.name == "Chart").expect("the symbol came in").art;
+    let mut graphs = vec![];
+    art.walk(&mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns: Vec<usize> = series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect();
+    assert_eq!(columns, [2, 2, 2, 2], "drawn with the document's design");
+}
+
+#[test]
+fn a_design_brought_in_from_a_library_redraws_the_graphs_in_symbols_that_name_it() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // A graph that names "Coin", which the document no longer has, kept as a symbol's art.
+    save_design(&mut s, "Coin");
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0]})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let art = &d.symbols.iter().find(|x| x.name == "Chart").unwrap().art;
+    let mut graphs = vec![];
+    art.walk(&mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    assert!(paints_with_swatch(series(&graphs[0], 0), "Gold"), "drawn with the library's design");
+}
+
+#[test]
+fn a_design_brought_in_from_a_library_redraws_a_graph_in_an_opacity_mask() {
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 300, "height": 200})).unwrap()["id"].as_u64().unwrap();
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    s.execute("select.set", &json!({"ids": [r, id.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let mut graphs = vec![];
+    vectorcraft_doc::swatches::walk_with_masks(s.doc().unwrap().doc.node(NodeId(r)).unwrap(), &mut |m| {
+        if m.extras().graph.is_some() {
+            graphs.push(m.clone());
+        }
+    });
+    assert!(paints_with_swatch(series(&graphs[0], 0), "Gold"), "drawn with the library's design");
+}
+
+#[test]
+fn an_instance_drops_its_changes_to_graph_parts_a_design_change_redraws() {
+    use vectorcraft_doc::symbol_overrides::SymbolOverride;
+    let mut s = Session::new();
+    let lib = load_coin_library(&mut s);
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Coin");
+    let id = graph(&mut s, "column");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    s.execute("graph.design", &json!({"delete": "Coin"})).unwrap();
+    let instance = s.execute("symbol.new", &json!({"name": "Chart", "ids": [id.0], "type": "dynamic"})).unwrap()["id"].as_u64().unwrap();
+    let instance = NodeId(instance);
+    // A change to the graph itself, and one to a part of it that drawing it again replaces.
+    let changes = vec![
+        SymbolOverride { path: vec![], opacity: Some(0.5), ..Default::default() },
+        SymbolOverride { path: vec![0], opacity: Some(0.25), ..Default::default() },
+    ];
+    s.edit("Change", |d, _| {
+        if let Some(n) = d.node_mut(instance) {
+            n.extras_mut().symbol_overrides = changes;
+        }
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.design", &json!({"library": lib, "add": "Coin"})).unwrap();
+    let kept = s.doc().unwrap().doc.node(instance).unwrap().extras().symbol_overrides.clone();
+    assert_eq!(kept.iter().map(|o| o.path.clone()).collect::<Vec<_>>(), [Vec::<u32>::new()], "{kept:?}");
+}
+
+#[test]
+fn a_graph_in_an_opacity_mask_draws_with_the_documents_design_when_pasted() {
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let mask_graph = |n: &vectorcraft_doc::Node| {
+        let mut graphs = vec![];
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+            if m.extras().graph.is_some() {
+                graphs.push(m.clone());
+            }
+        });
+        graphs.into_iter().next().expect("the masked graph")
+    };
+    // In a symbol's art and among the pasted objects.
+    for in_symbol in [true, false] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_coin_design(&mut s);
+        let r = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 300, "height": 200})).unwrap()["id"].as_u64().unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+        s.execute("select.set", &json!({"ids": [r, id.0]})).unwrap();
+        s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+        let copied = if in_symbol { s.execute("symbol.new", &json!({"name": "Masked", "ids": [r]})).unwrap()["id"].as_u64().unwrap() } else { r };
+        s.execute("select.set", &json!({"ids": [copied]})).unwrap();
+        s.execute("edit.copy", &json!({})).unwrap();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Coin");
+        s.execute("edit.paste", &json!({})).unwrap();
+        let st = s.doc().unwrap();
+        let g = if in_symbol {
+            mask_graph(&st.doc.symbols.iter().find(|x| x.name == "Masked").expect("the symbol came in").art)
+        } else {
+            mask_graph(st.doc.node(st.selection.objects.to_vec()[0]).unwrap())
+        };
+        let columns: Vec<usize> = series(&g, 0).children().unwrap().iter().map(|n| paths(n)).collect();
+        assert_eq!(columns, [2, 2, 2, 2], "in a symbol: {in_symbol}");
+    }
+}
+
+#[test]
 fn a_graph_pasted_back_after_its_design_was_made_again_draws_with_the_new_design() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
@@ -5709,6 +5962,85 @@ fn a_swatch_library_file_over_the_size_limit_is_refused_before_it_is_read() {
     let mut s = Session::new();
     let e = s.execute("swatch.library.load", &json!({"path": path})).unwrap_err().to_string();
     assert!(e.contains("larger than 256 MB"), "{e}");
+}
+
+#[test]
+fn a_document_with_graph_designs_and_no_swatches_loads_for_its_designs() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut src, "Pill");
+    let mut d = (*src.doc().unwrap().doc).clone();
+    d.swatches.clear();
+    d.swatch_groups.clear();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d)), "name": "Pills.vectorcraft"});
+    let mut s = Session::new();
+    let r = s.execute("swatch.library.load", &p).unwrap();
+    assert_eq!((r["count"].clone(), r["graphDesigns"].clone()), (json!(0), json!(1)));
+    // Without graph designs it has nothing to offer.
+    d.graph_designs.clear();
+    let p = json!({"dataBase64": vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&d)), "name": "Bare.vectorcraft"});
+    let e = s.execute("swatch.library.load", &p).unwrap_err().to_string();
+    assert!(e.contains("has no swatches of its own"), "{e}");
+}
+
+#[test]
+fn a_design_library_keeps_the_sources_color_for_a_default_swatch_name() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    // A default swatch the source made global and gave another color, used by a design.
+    let name = src.doc().unwrap().doc.swatches.iter().find(|w| !w.name.starts_with('[')).unwrap().name.clone();
+    let mine = Paint::solid(vectorcraft_color::Color::rgb(0.1, 0.7, 0.3));
+    let (n, p) = (name.clone(), mine.clone());
+    src.edit("Change", move |d, _| {
+        if let Some(w) = d.swatches.iter_mut().find(|w| w.name == n) {
+            w.paint = p;
+            w.global = true;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = src.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": name, "ids": [r]})).unwrap();
+    src.execute("select.set", &json!({"ids": [r]})).unwrap();
+    src.execute("graph.design", &json!({"new": "Green"})).unwrap();
+    let lib = crate::cmd::clipboard::resources::graph_design_library(&src.doc().unwrap().doc).unwrap();
+    let named: Vec<_> = lib.swatches.iter().filter(|w| w.name == name).collect();
+    assert_eq!(named.len(), 1, "one swatch named {name}");
+    assert_eq!(named[0].paint, mine);
+    // And one named like a swatch in a default group.
+    let grouped = src.doc().unwrap().doc.swatch_groups.iter().flat_map(|g| g.swatches.iter()).next().unwrap().name.clone();
+    let (n, p) = (grouped.clone(), mine.clone());
+    src.edit("Change", move |d, _| {
+        if let Some(w) = d.swatch_groups.iter_mut().flat_map(|g| g.swatches.iter_mut()).find(|w| w.name == n) {
+            w.paint = p;
+            w.global = true;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = src.execute("shape.rectangle", &json!({"x": 650, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": grouped, "ids": [r]})).unwrap();
+    src.execute("select.set", &json!({"ids": [r]})).unwrap();
+    src.execute("graph.design", &json!({"new": "Grouped"})).unwrap();
+    let lib = crate::cmd::clipboard::resources::graph_design_library(&src.doc().unwrap().doc).unwrap();
+    let all: Vec<_> = lib.swatches.iter().chain(lib.swatch_groups.iter().flat_map(|g| g.swatches.iter())).filter(|w| w.name == grouped).collect();
+    assert_eq!(all.len(), 1, "one swatch named {grouped}");
+}
+
+#[test]
+fn inline_swatch_library_data_over_the_size_limit_is_refused_before_it_is_read() {
+    let max = crate::cmd::place::document::MAX_FILE;
+    let mut s = Session::new();
+    // Text one byte over the limit, and base64 that decodes to one byte over it.
+    let chars = (max + 1) * 4 / 3 + 1;
+    // Each input is made in turn, so only one is held at a time.
+    for key in ["data", "dataBase64"] {
+        let value = if key == "data" { "a".repeat(max + 1) } else { "A".repeat(chars) };
+        let mut p = serde_json::Map::new();
+        p.insert(key.into(), serde_json::Value::String(value));
+        let e = s.execute("swatch.library.load", &serde_json::Value::Object(p)).unwrap_err().to_string();
+        assert!(e.contains("larger than 256 MB"), "{key}: {e}");
+    }
 }
 
 #[test]

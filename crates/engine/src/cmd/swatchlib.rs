@@ -818,11 +818,19 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn load(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "swatch.library.load";
-    // The size is checked before the file is read.
+    // The size is checked before the file is read, copied or decoded.
     let max = super::place::document::MAX_FILE;
-    if let Some(path) = text_param(p, "path", C)?
-        && super::fileio::file_stamp(path).is_some_and(|(len, _)| len > max as u64)
-    {
+    let too_big = match text_param(p, "path", C)? {
+        Some(path) => super::fileio::file_stamp(path).is_some_and(|(len, _)| len > max as u64),
+        None => match text_param(p, "data", C)? {
+            Some(text) => text.len() > max,
+            // Base64 holds 3 bytes in every 4 characters (padding and white space hold none).
+            None => {
+                text_param(p, "dataBase64", C)?.is_some_and(|b| b.bytes().filter(|c| *c != b'=' && !c.is_ascii_whitespace()).count() * 3 / 4 > max)
+            }
+        },
+    };
+    if too_big {
         return Err(bad(C, format!("the file is larger than {} MB", max >> 20)));
     }
     let mut designs = None;

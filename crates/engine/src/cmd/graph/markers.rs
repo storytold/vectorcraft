@@ -1,4 +1,4 @@
-use super::designs::{bring_in, design_names, from_library, libraries_json};
+use super::designs::{bring_in_for, design_names, from_library, libraries_json};
 use super::edit::{regenerate, spec_of, target};
 use super::series::{picked_series, reselect_series};
 use super::{Affine, Arc, Document, GraphSpec, Node, NodeKind, Rect, Result, Session, Value, bad, json};
@@ -93,7 +93,7 @@ pub(super) fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
     let cost = match &library {
         Some((lib, name)) => {
             let mut probe = (*s.doc()?.doc).clone();
-            bring_in(&mut probe, lib, std::slice::from_ref(name))?;
+            bring_in_for(&mut probe, lib, name, id, &mut spec)?;
             marker_cost(&spec, &marker_designs(&probe, &spec))
         }
         None => marker_cost(&spec, &marker_designs(&s.doc()?.doc, &spec)),
@@ -103,7 +103,7 @@ pub(super) fn set_marker(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.edit("Graph Marker", |d, sel| {
         if let Some((lib, name)) = &library {
-            bring_in(d, lib, std::slice::from_ref(name))?;
+            bring_in_for(d, lib, name, id, &mut spec)?;
         }
         regenerate(d, id, spec)?;
         if !reselect.is_empty() {

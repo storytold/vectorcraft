@@ -1619,9 +1619,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for id in &new_ids {
             super::object::keep_compound_aligned(d, *id, vectorcraft_doc::Scaling::default());
         }
-        // A pasted graph whose design the document has under the same name draws with the document's.
+        // A pasted graph whose design the document has under the same name draws with the document's,
+        // in the pasted objects and in the art of the symbols the paste added.
         if !imported.kept_designs.is_empty() {
             super::graph::redraw_with_designs(d, &new_ids, &imported.kept_designs)?;
+            super::graph::redraw_symbols_with_designs(d, &imported.added_symbols, &imported.kept_designs);
         }
         sel.set(new_ids.iter().copied());
         // Copied ruler guides (#3226): on the layer new art goes to, moved as the objects are (a

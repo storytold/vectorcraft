@@ -1,5 +1,5 @@
-use super::edit::regenerate;
-use super::{Arc, Document, GraphDesign, GraphSpec, Result, Session, Value, bad, json, ok, str_param};
+use super::edit::{regenerate, regenerate_detached};
+use super::{Arc, Document, GraphDesign, GraphSpec, Node, Result, Session, Value, bad, json, ok, str_param};
 use crate::cmd::clipboard::resources::import_graph_designs;
 use crate::cmd::swatchlib::{concealed_library_id, shown_library_id};
 
@@ -9,7 +9,8 @@ pub(super) fn design_names(d: &Document) -> Vec<String> {
 }
 
 /// The library param `library` names: a document Other Library… loaded (`swatch.library.load`)
-/// that holds graph designs, by its id, the id a reply showed for it, or its name. `None` without
+/// that holds graph designs, by its id, the id a reply showed for it, or its name (in any case, as
+/// swatch library names are matched). `None` without
 /// `library`.
 fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Arc<Document>>> {
     let key = match p.get("library") {
@@ -24,7 +25,7 @@ fn library_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<Arc<Documen
     let own = concealed_library_id(s, key);
     libs.get(key)
         .or_else(|| own.as_deref().and_then(|id| libs.get(id)))
-        .or_else(|| libs.iter().find(|l| l.name == key))
+        .or_else(|| libs.iter().find(|l| l.name.eq_ignore_ascii_case(key)))
         .map(|l| Some(l.doc.clone()))
         .ok_or_else(|| bad(cmd, format!("no library `{key}`")))
 }
@@ -66,17 +67,33 @@ pub(super) fn bring_in(d: &mut Document, lib: &Document, names: &[String]) -> Re
     Ok(())
 }
 
+/// [`bring_in`] library design `name` for graph `id`, whose new spec is `spec`: when that redraws
+/// the graph, `spec` takes the rectangle the redraw gave it, so a graph moved or resized since it
+/// was last drawn stays where it is.
+pub(super) fn bring_in_for(d: &mut Document, lib: &Document, name: &str, id: super::NodeId, spec: &mut GraphSpec) -> Result<()> {
+    bring_in(d, lib, &[name.to_string()])?;
+    if let Some(g) = d.node(id).and_then(|n| n.extras().graph.as_deref()) {
+        spec.rect = g.rect;
+    }
+    Ok(())
+}
+
 /// Whether graph `g` draws a series with design `name`, as its marker or its columns.
 fn draws_with(g: &GraphSpec, name: &str) -> bool {
     g.series_markers.iter().flatten().any(|m| m == name) || g.series_columns.iter().flatten().any(|c| c.design == name)
 }
 
-/// Regenerate the graphs whose series use design `name` (it was added or removed).
+/// Regenerate the graphs whose series use design `name` (it was added or removed), in the layers,
+/// in opacity-mask art and in symbols' art.
 fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
-    let mut ids = vec![];
+    let names = std::collections::BTreeSet::from([name.to_string()]);
+    let (mut ids, mut masked) = (vec![], vec![]);
     d.walk(|n| {
         if n.extras().graph.as_deref().is_some_and(|g| draws_with(g, name)) {
             ids.push(n.id);
+        }
+        if n.extras().mask.as_deref().is_some_and(|m| holds(&m.art, &names)) {
+            masked.push(n.id);
         }
     });
     for id in ids {
@@ -84,28 +101,80 @@ fn refresh_graphs_using(d: &mut Document, name: &str) -> Result<()> {
             regenerate(d, id, spec)?;
         }
     }
+    // The graphs in objects' opacity-mask art.
+    for id in masked {
+        let Some(mut art) = d.node(id).and_then(|n| n.extras().mask.as_deref()).map(|m| (*m.art).clone()) else { continue };
+        redraw_in(d, &mut art, &names);
+        if let Some(mask) = d.node_mut(id).and_then(|n| n.extras_if_any()).and_then(|e| e.mask.as_deref_mut()) {
+            mask.art = Arc::new(art);
+        }
+    }
+    // And the graphs in symbols' art, which instances draw.
+    let symbols: std::collections::BTreeSet<String> = d.symbols.iter().map(|s| s.name.clone()).collect();
+    redraw_symbols_with_designs(d, &symbols, &names);
     Ok(())
 }
 
 /// Draw the graphs in the subtrees of `ids` again that draw a series with one of the designs
 /// `names`: pasted graphs, after the paste kept the document's own designs of those names.
 pub(crate) fn redraw_with_designs(d: &mut Document, ids: &[super::NodeId], names: &std::collections::BTreeSet<String>) -> Result<()> {
-    let mut graphs = vec![];
     for id in ids {
-        if let Some(n) = d.node(*id) {
-            n.walk(&mut |m| {
-                if m.extras().graph.as_deref().is_some_and(|g| names.iter().any(|name| draws_with(g, name))) {
-                    graphs.push(m.id);
-                }
-            });
-        }
-    }
-    for id in graphs {
-        if let Some(spec) = d.node(id).and_then(|n| n.extras().graph.as_deref().cloned()) {
-            regenerate(d, id, spec)?;
-        }
+        let Some(mut n) = d.node(*id).filter(|n| holds(n, names)).cloned() else { continue };
+        redraw_in(d, &mut n, names);
+        *d.node_mut(*id).ok_or(super::EngineError::NoNode(*id))? = n;
     }
     Ok(())
+}
+
+/// Draw the graphs in the art of symbols `symbols` again that draw a series with one of the
+/// designs `names`: graphs of the symbols a paste added, after the paste kept the document's own
+/// designs of those names.
+pub(crate) fn redraw_symbols_with_designs(
+    d: &mut Document,
+    symbols: &std::collections::BTreeSet<String>,
+    names: &std::collections::BTreeSet<String>,
+) {
+    for i in 0..d.symbols.len() {
+        let Some(s) = d.symbols.get(i).filter(|s| symbols.contains(&s.name) && holds(&s.art, names)) else { continue };
+        let old = s.art.clone();
+        let mut art = (*old).clone();
+        redraw_in(d, &mut art, names);
+        let Some(s) = d.symbols.get_mut(i) else { continue };
+        s.art = Arc::new(art);
+        // Instances' changes to parts the redraw replaced are dropped.
+        let name = s.name.clone();
+        crate::cmd::symboledit::follow_art_change(d, &name, &old);
+    }
+}
+
+/// Whether `n`'s subtree, the art of opacity masks included, holds a graph that draws a series
+/// with one of the designs `names`.
+fn holds(n: &Node, names: &std::collections::BTreeSet<String>) -> bool {
+    let mut found = false;
+    vectorcraft_doc::swatches::walk_with_masks(n, &mut |m| {
+        found |= m.extras().graph.as_deref().is_some_and(|g| names.iter().any(|name| draws_with(g, name)));
+    });
+    found
+}
+
+/// Redraw the graphs of `n`'s subtree, the art of opacity masks included, that draw a series with
+/// one of the designs `names`.
+fn redraw_in(d: &mut Document, n: &mut Node, names: &std::collections::BTreeSet<String>) {
+    if let Some(mut art) = n.extras().mask.as_deref().filter(|m| holds(&m.art, names)).map(|m| (*m.art).clone()) {
+        redraw_in(d, &mut art, names);
+        if let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) {
+            mask.art = Arc::new(art);
+        }
+    }
+    if n.extras().graph.as_deref().is_some_and(|g| names.iter().any(|name| draws_with(g, name))) {
+        regenerate_detached(d, n);
+        return;
+    }
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut().filter(|c| holds(c, names)) {
+            redraw_in(d, Arc::make_mut(c), names);
+        }
+    }
 }
 
 /// The designs no graph's series draw with (Select Unused).
