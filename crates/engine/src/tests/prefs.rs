@@ -64,6 +64,49 @@ fn set_and_get_keyboard_increment_drives_nudge() {
     assert!((b.x0 - 15.0).abs() < 1e-9);
 }
 
+/// Ctrl/Cmd+arrow (`fine`) nudges by a tenth of the keyboard increment, and Shift+Ctrl+arrow
+/// (`big` and `fine`) by one increment: art, direct-selected anchors and ruler guides, one undo
+/// step per press, and repeated fine nudges add up to whole increments.
+#[test]
+fn fine_nudge_moves_a_tenth_of_the_keyboard_increment() {
+    let mut s = Session::new();
+    s.execute("prefs.set", &json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let x0 = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let n = undo(&s);
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0, "fine": true})).unwrap();
+    assert!((x0(&s) - 10.5).abs() < 1e-9, "{}", x0(&s));
+    assert_eq!(undo(&s), n + 1, "one undo step per press");
+    s.execute("object.nudge", &json!({"dx": -1, "dy": 0, "big": true, "fine": true})).unwrap();
+    assert!((x0(&s) - 5.5).abs() < 1e-9, "Shift+Ctrl: one increment, {}", x0(&s));
+    for _ in 0..10 {
+        s.execute("object.nudge", &json!({"dx": 1, "dy": 0, "fine": true})).unwrap();
+    }
+    assert!((x0(&s) - 10.5).abs() < 1e-9, "ten fine nudges are one increment, {}", x0(&s));
+    assert_eq!(undo(&s), n + 12);
+
+    // Direct-selected anchors.
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[0, 0]]})).unwrap();
+    let p0 = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors[0].p;
+    let before = p0(&s);
+    s.execute("object.nudge", &json!({"dx": 0, "dy": 1, "fine": true})).unwrap();
+    let d = p0(&s) - before;
+    assert!(d.x.abs() < 1e-9 && (d.y - 0.5).abs() < 1e-9, "{d:?}");
+
+    // Ruler guides.
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    s.execute("object.nudge", &json!({"dx": 1, "dy": 0, "fine": true})).unwrap();
+    let pos = s.doc().unwrap().doc.ruler_guides()[0].pos;
+    assert!((pos - 100.5).abs() < 1e-9, "{pos}");
+
+    assert!(s.execute("object.nudge", &json!({"dx": 1, "fine": "true"})).is_err());
+}
+
 #[test]
 fn set_rejects_out_of_range_and_wrong_types() {
     let mut s = Session::new();
