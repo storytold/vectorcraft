@@ -600,6 +600,11 @@ pub struct UiState {
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
+    /// The last Find and Replace search ([`crate::dialogs::find_replace`]): the dialog's Find and
+    /// Replace With text, its options and the place the search reached, which Edit › Find Next
+    /// goes on from while the dialog is closed. Not saved.
+    #[serde(skip)]
+    pub last_find: Option<serde_json::Value>,
     /// The notes of the last open that gave any, or of the last save or export, with the status
     /// text that names the first of them: hovering that text lists them when there are several.
     /// Not saved.
@@ -772,8 +777,8 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
-    /// Color Wheel panel: the wheel or the box, and the box's channel (`ui.colorWheel`,
-    /// [`crate::panels::color_wheel::deserialize_settings`]).
+    /// Color Wheel panel: the wheel or the box, the box's channel, and the color vision row
+    /// (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
     /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
@@ -1239,6 +1244,7 @@ impl Default for UiState {
             status: String::new(),
             status_sets: 0,
             replace_font_warning: None,
+            last_find: None,
             status_notes: None,
             palette_open: false,
             palette_query: String::new(),
