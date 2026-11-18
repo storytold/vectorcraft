@@ -38,7 +38,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
         "Shapes",
         &[
             &["rectangle", "roundedRectangle", "star", "lineSegment", "arc", "spiral", "rectangularGrid", "polarGrid", "flare"],
-            &["ellipse"],
+            &["ellipse", "circle"],
             &["polygon"],
             &["shaper"],
         ],
@@ -127,21 +127,20 @@ pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
     }
 }
 
-/// With `UiState::tools_beside_canvas` on, the canvas-edge redocking target, registered even
-/// while Tools floats, and the docked panel, which follows the canvas's left edge as dock columns
-/// resize, collapse or hide. With it off, `app.rs` draws Tools before the docking layout.
+/// The canvas-edge redocking targets, registered even while Tools floats, whichever way
+/// `UiState::tools_beside_canvas` is (a drop on the left one turns it on), and, with it on, the
+/// docked panel, which follows the canvas's left edge as dock columns resize, collapse or hide.
+/// With it off, `app.rs` draws Tools before the docking layout.
 ///
-/// The canvas's right edge, left of the panels, is a redocking target too, and Tools docked there
-/// (`UiState::toolbar_right`) is drawn at it whichever way the setting is.
+/// Tools docked on the canvas's right edge, left of the panels (`UiState::toolbar_right`), is
+/// drawn there whichever way the setting is.
 pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !app.ui.toolbar || app.ui.screen_mode >= 3 {
         return;
     }
     let canvas = ui.available_rect_before_wrap();
     crate::tools_float::set_right_dock_zone(ui.ctx(), canvas, WIDTH);
-    if app.ui.tools_beside_canvas {
-        crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
-    }
+    crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
     if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
         show(app, ui);
     }
@@ -299,6 +298,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, cols: usize, floating: Option<egu
                     let Some(shown) = tool_info(shown_tool(app, slot)).or_else(|| tool_info(slot[0])) else { continue };
                     let is_active = slot.contains(&active);
                     let (rect, resp) = ui.allocate_exact_size(vec2(36.0, PITCH - 1.0), Sense::click_and_drag());
+                    crate::palette::note_spot(ui, rect, || crate::palette::SpotAt::Slot(None, slot.iter().map(|s| s.to_string()).collect()));
                     let well = egui::Rect::from_center_size(rect.center(), vec2(30.0, 27.5));
                     if is_active {
                         ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
@@ -836,7 +836,7 @@ fn flyout_body(
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     ui.horizontal(|ui| {
         let rows = if floating {
-            ui.horizontal(|ui| tool_strip(ui, t, active, tools, locate))
+            ui.horizontal(|ui| tool_strip(ui, t, active, tools, toolbar, locate))
         } else {
             // A group taller than the window scrolls its rows (inside the frame's 1 pt border). The
             // rows' height is given, since the row this sits in starts one widget tall.
@@ -976,11 +976,19 @@ fn grab_id(toolbar: Option<&str>, key: &str) -> egui::Id {
 
 /// One icon button per tool, the active one lit, with its name and shortcut on hover. Returns the
 /// tool clicked and the button of `locate`.
-fn tool_strip(ui: &mut Ui, t: &Tokens, active: &str, tools: &[String], locate: Option<&str>) -> (Option<&'static str>, Option<egui::Rect>) {
+fn tool_strip(
+    ui: &mut Ui,
+    t: &Tokens,
+    active: &str,
+    tools: &[String],
+    toolbar: Option<&str>,
+    locate: Option<&str>,
+) -> (Option<&'static str>, Option<egui::Rect>) {
     let mut chosen = None;
     let mut located = None;
     for tool in tools.iter().filter_map(|id| tool_info(id)) {
         let (r, resp) = ui.allocate_exact_size(STRIP_BUTTON, Sense::click());
+        crate::palette::note_spot(ui, r, || crate::palette::SpotAt::Strip(toolbar.map(str::to_string), tool.id.to_string()));
         let well = r.shrink(1.0);
         if active == tool.id {
             ui.painter().rect_filled(well, CornerRadius::same(6), t.tool_active);
@@ -1212,7 +1220,7 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
         ui.label(text);
         let unit = app.session.general_unit();
         if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
-            app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+            app.run("tool.setOption", json!({ "key": "expand", "value": v.clamp(0.0, 1000.0) })).ok();
         }
     }
     let show = opts["showMesh"].as_bool().unwrap_or(true);
