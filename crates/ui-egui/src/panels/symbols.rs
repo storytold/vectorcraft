@@ -457,7 +457,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         } else if new.clicked() {
             // Alt skips Symbol Options: the symbol is made under the default name, dynamic as the
             // dialog's default. Shift keeps the selected art as ordinary art, with or without Alt.
-            let m = ui.input(|i| i.modifiers);
+            // Both are read as the primary button went up, when it did in this frame.
+            let m = modifiers_at_release(ui);
             let (cmd, mut p) = if m.alt { ("symbol.new", json!({"type": "dynamic"})) } else { ("ui.symbolOptions", json!({})) };
             if m.shift {
                 p["keepArt"] = json!(true);
@@ -470,9 +471,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // it: the dragged symbol, or every symbol Select All Unused picked when it is one of them.
         if let Some(name) = symbol_dropped(ui, &trash, &names, uid) {
             let picked = if marked.contains(&name) { &marked[..] } else { &[] };
-            delete(app, picked, Some(&name), super::alt_held(ui));
+            delete(app, picked, Some(&name), alt_at_release(ui));
         } else if trash.clicked() {
-            delete(app, &marked, sel.as_deref(), super::alt_held(ui));
+            delete(app, &marked, sel.as_deref(), alt_at_release(ui));
         }
     });
 }
@@ -485,8 +486,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let has_sel = app.session.active().is_some_and(|d| !d.selection.is_empty());
     let inst = has_instances_selected(app);
     let name = json!({"name": sel});
-    // Shift keeps the selected art as ordinary art instead of making it an instance.
-    let shift = ui.input(|i| i.modifiers.shift);
+    // Shift keeps the selected art as ordinary art instead of making it an instance. It is read as
+    // the primary button went up, when it did in this frame.
+    let shift = modifiers_at_release(ui).shift;
     let redefine = if shift { json!({"name": sel, "keepArt": true}) } else { name.clone() };
     let new = if shift { json!({"keepArt": true}) } else { json!({}) };
     let items: [(&str, bool, &str, Value); 3] = [
@@ -594,13 +596,13 @@ fn art_redefine_drop(ui: &Ui, item: &egui::Response, doc: &Document, uid: Option
     item.dnd_release_payload::<PanelDrag>().map(|_| ids.iter().map(|id| id.0).collect())
 }
 
-/// Whether Alt (Option) is held for a drop: when the primary button went up in this frame, as it
+/// Whether Alt (Option) is held for a drop or a click: when the primary button went up in this frame, as it
 /// went up, else now.
 fn alt_at_release(ui: &Ui) -> bool {
     modifiers_at_release(ui).alt
 }
 
-/// The modifiers held for a drop: when the primary button went up in this frame, as it went up,
+/// The modifiers held for a drop or a click: when the primary button went up in this frame, as it went up,
 /// else now.
 fn modifiers_at_release(ui: &Ui) -> egui::Modifiers {
     ui.input(|i| {
@@ -932,12 +934,20 @@ mod tests {
 
     /// Clicks the menu item labeled `label` with `modifiers` held.
     fn click_menu_held(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        click_menu_held_then(ctx, app, label, modifiers, vec![]);
+    }
+
+    /// Clicks the menu item labeled `label` with `modifiers` held, `after` following the release in
+    /// its frame.
+    fn click_menu_held_then(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers, after: Vec<egui::Event>) {
         let held = egui::Event::ModifiersChanged(modifiers);
         let labels = menu_frame(ctx, app, vec![held.clone()]);
         let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
         let press = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers };
         menu_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(item), press(true)]);
-        menu_frame(ctx, app, vec![held, press(false)]);
+        let mut last = vec![held, press(false)];
+        last.extend(after);
+        menu_frame(ctx, app, last);
     }
 
     /// Redefine Symbol in the panel menu with Shift held updates the symbol and leaves the
@@ -995,12 +1005,53 @@ mod tests {
 
     /// Clicks the panel's New Symbol button with `modifiers` held.
     fn click_new(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
+        click_button_then(app, "New Symbol", modifiers, vec![]);
+    }
+
+    /// Clicks the panel's button labeled `label` with `modifiers` held, `after` following the
+    /// release in its frame.
+    fn click_button_then(app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers, after: Vec<egui::Event>) {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let out = frame_held(&ctx, app, vec![], modifiers);
-        let at = clickable(&out).into_iter().find(|(l, _)| l == "New Symbol").expect("a New Symbol button").1;
+        let at = clickable(&out).into_iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
         let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
-        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+        let mut events = vec![egui::Event::PointerMoved(at), press(true), press(false)];
+        events.extend(after);
+        frame_held(&ctx, app, events, modifiers);
+    }
+
+    /// Shift held as the primary button goes up on New Symbol, on the panel's button or in its
+    /// menu, or on Redefine Symbol in the menu, keeps the selected art as ordinary art, though Shift
+    /// is let go later in the same frame. Alt held as the button goes up on Delete Symbol deletes
+    /// an unused symbol without asking, in the same case.
+    #[test]
+    fn shift_or_alt_let_go_after_the_release_in_the_same_frame_still_counts() {
+        let let_go = || vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        let menu_ctx = || {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            ctx
+        };
+        let (mut app, _) = leaf_dot_and_rect();
+        click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT, let_go());
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT | egui::Modifiers::ALT, let_go());
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift and Alt: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_menu_held_then(&menu_ctx(), &mut app, "New Symbol…", egui::Modifiers::SHIFT, let_go());
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol… with Shift: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_menu_held_then(&menu_ctx(), &mut app, "Redefine Symbol", egui::Modifiers::SHIFT, let_go());
+        assert_eq!(art(&app, "Dot"), (0, 1), "Redefine Symbol with Shift: the rectangle stays ordinary art");
+        let mut app = leaf_and_dot();
+        click_button_then(&mut app, "Delete Symbol", egui::Modifiers::ALT, let_go());
+        assert!(app.ui.dialog.is_none(), "Alt deletes an unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf"]);
     }
 
     /// The New Symbol button with Shift held opens Symbol Options, whose OK keeps the selected art
@@ -1846,12 +1897,7 @@ mod tests {
 
     /// Clicks the panel's Delete Symbol button with `modifiers` held.
     fn click_delete(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let out = frame_held(&ctx, app, vec![], modifiers);
-        let at = clickable(&out).into_iter().find(|(l, _)| l == "Delete Symbol").expect("a Delete Symbol button").1;
-        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
-        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+        click_button_then(app, "Delete Symbol", modifiers, vec![]);
     }
 
     /// Clicks the panel menu's Delete Symbol item.
@@ -2482,7 +2528,8 @@ mod tests {
         frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(40.0, 40.0))]);
         frame(ctx, app, vec![egui::Event::PointerMoved(from + vec2(80.0, 80.0))]);
         let held = frame_held(ctx, app, vec![egui::Event::PointerMoved(to)], egui::Modifiers::NONE);
-        frame_held(ctx, app, vec![button(to, false)], modifiers);
+        let release = egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers };
+        frame_held(ctx, app, vec![release], modifiers);
         held
     }
 

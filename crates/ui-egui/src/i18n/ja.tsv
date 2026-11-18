@@ -1522,6 +1522,7 @@ antiAlias	Sharp	シャープ
 	Delete Brush	ブラシを削除
 	Delete Color	カラーを削除
 	Restore Generated Table	生成されたテーブルを復元
+	Unshift All Colors	すべてのカラーのシフトを戻す
 	Delete Character Style	文字スタイルを削除
 	Delete Empty Artboards	空のアートボードを削除
 	Delete Freeform Point	フリーフォームポイントを削除
@@ -3275,6 +3276,8 @@ mark-style	Japanese	日本式
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	スマートガイドがスナップするために、ポインターやドラッグしたポイントが画面上でアートにどこまで近づく必要があるかです。この距離はどのズームでも同じです。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	直線セグメントの端、または中心から描いた円を、近くの曲線に接するようにスナップします。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
@@ -3410,6 +3413,9 @@ mark-style	Japanese	日本式
 	No menu item	メニュー項目なし
 	Toolbar	ツールバー
 	{toolbar}, in the {tool} group	{toolbar}、{tool} のグループ内
+	In the menu bar: {path}	メニューバー: {path}
+	In the {group} group: press and hold to open it	{group} のグループ内: 長押しで開きます
+	{home}, not shown now	{home}、現在は表示されていません
 @plural	{n} result|{n} results	{n} 件
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド
@@ -5084,6 +5090,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	paste unavailable	貼り付けを使用できません
 @msg	Save for Web: the image is empty	Web 用に保存: 画像が空です
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: カラーテーブルには少なくとも 1 つのカラーを残す必要があります
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` は別のキーと同じカラーを指しています
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` は「#ff8800」のような形式のカラーではありません
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: 指定できるカラーは {MAX_TABLE} 色までです
 @msg	no artboard {i} (0-based; the document has {_1})	アートボード {i} はありません (番号は 0 始まり、このドキュメントには {_1} 個あります)
@@ -9325,6 +9332,7 @@ breakText	Glyphs	字形
 @msg	One path lies inside the other, so they have no common tangents	一方のパスがもう一方の内側にあるため、共通接線はありません
 @msg	The paths overlap, so they have no internal tangents	パスが重なっているため、内側の接線はありません
 @msg	One path lies inside the other, so they have no internal tangents	一方のパスがもう一方の内側にあるため、内側の接線はありません
+@msg	The point lies inside the path, so it has no tangents	点がパスの内側にあるため、接線はありません
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
@@ -9818,6 +9826,11 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Pressure Sensitive	筆圧対応
+	Flex Ribbon	しなやかなリボン
+	Pulse Stroke	脈打つ線
+	Round Flow	丸筆の流れ
+	Chisel Flow	平筆の流れ
 	Fold Preview	折りプレビュー
 	Fold	折り
 	Show Fold Lines	折り線を表示

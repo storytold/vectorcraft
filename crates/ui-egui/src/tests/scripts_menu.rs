@@ -520,7 +520,9 @@ fn a_slow_first_read_says_so_until_its_listing_comes() {
     scripts_menu::check_slow(started + scripts_menu::SLOW_SECS / 2.0);
     assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::LOADING));
     assert_eq!(scripts_menu::revision(), before);
-    scripts_menu::check_slow(started + scripts_menu::SLOW_SECS);
+    // Past the threshold rather than at it: `(started + SLOW_SECS) - started` can round below
+    // SLOW_SECS, which made this test fail for some start times.
+    scripts_menu::check_slow(started + 1.5 * scripts_menu::SLOW_SECS);
     assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::SLOW));
     assert_eq!(native_shape(&app), format!("({}), -, {FIXED}", scripts_menu::SLOW));
     assert_eq!(scripts_menu::revision(), before + 1);
