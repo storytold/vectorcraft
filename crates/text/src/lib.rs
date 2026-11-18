@@ -26,6 +26,7 @@ mod justify;
 mod kashida;
 mod kept;
 mod layout;
+pub mod retype;
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
 mod suitcase;
@@ -41,10 +42,10 @@ pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
 pub use fontdb::{
-    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GlyphAlternate, GlyphCategory,
-    GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, PlatformFontFiles, StylisticSet, Substitution, SubstitutionKind,
-    WantedFont, WantedFonts, app_font_dir, is_font_file, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs,
-    set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
+    CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, GlyphAlternate,
+    GlyphCategory, GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, PlatformFontFiles, RECENTLY_ADDED_WITHIN,
+    RecentlyAdded, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file, is_generic_family, is_suitcase,
+    set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};

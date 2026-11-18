@@ -14,10 +14,19 @@
 //! release keeps the copies and the last shape as one undo step
 //! (<https://help.adobe.com/archive/en_US/illustrator/cs3/illustrator_cs3_help.pdf#page=469>).
 //!
+//! With the Ellipse tool, three Shift-clicks draw the circle through the three points clicked
+//! (`shape.circleThroughPoints`). Once a point is placed, a Shift-click on the selection's handles
+//! or widgets places a point too. Escape, a click without Shift, a drag, a press without Shift on the
+//! selection or a shape widget, and an edit, Undo or Redo made outside the tool drop the points
+//! placed so far.
+//! While the perspective grid shows with an active plane, a Shift-click opens the size dialog, as a
+//! click does, and the shape goes on the plane.
+//!
 //! The selection keeps its bounding box and its Live Shape widgets on show with the Rectangle,
 //! Rounded Rectangle, Ellipse, Polygon and Star tools, so a shape just drawn can be adjusted at
 //! once: a drag on a live rectangle's or polygon's corner widget rounds its corners and a drag on
-//! a live ellipse's pie widget sets its pie angle, as with the Selection tool; a drag on one of the
+//! a live ellipse's pie widget sets its pie angle and a drag on a live polygon's side widget sets
+//! its number of sides, as with the Selection tool; a drag on one of the
 //! box's eight handles scales the selection, a press on the selection's centre point (Show Center)
 //! moves it, and one just outside a corner of its box turns it about that centre, as the Selection
 //! tool's handles, centre point and rotate zone do; a press anywhere else draws a new shape (#5477).
@@ -35,6 +44,7 @@ use crate::corners::{self, CornerDrag};
 use crate::guides::{DrawSnap, Leave, PointSnap, TangentLine, Targets, square};
 use crate::pie::{self, PieDrag};
 use crate::select::{MoveSnap, handle_cursor, hit_center, is_area_type, matrix_json, rotate_zone, shown_box};
+use crate::sidewidget::{self, SideDrag};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// The largest corner radius the Rounded Rectangle tool draws, points: the range of General ›
@@ -76,6 +86,7 @@ pub fn shows_shape_widgets(id: &str) -> bool {
 enum WidgetDrag {
     Corner(CornerDrag),
     Pie(PieDrag),
+    Sides(SideDrag),
 }
 
 /// A drag of the selection itself, taken by a shape tool: a handle of its box scales it, the centre
@@ -142,6 +153,26 @@ pub struct ShapeTool {
     /// While Backtick is held in a drag, the pointer position the next copy is measured from: where
     /// the last copy was left, or where the drag first had the key down.
     copy_from: Option<Point>,
+    /// Ellipse tool: the points placed by Shift-clicks so far (fewer than three); the third
+    /// Shift-click draws the circle through them ([`circle_through_points`]).
+    through: Vec<Point>,
+    /// Where the pointer was last seen while `through` holds points, for the circle's preview.
+    hover: Option<Point>,
+    /// The press in progress came with Shift held, with the Ellipse tool and no active perspective
+    /// plane: a click places a point.
+    places_point: bool,
+}
+
+/// Whether the perspective grid shows with an active plane: shapes then go on the plane.
+fn perspective_plane_shown(cx: &ToolContext) -> bool {
+    let g = crate::distort::perspective::PerspectiveGrid::current(cx.doc);
+    g.visible && g.plane != crate::distort::perspective::Plane::None
+}
+
+/// The command three Shift-clicks with the Ellipse tool run: the circle through their points.
+fn circle_through_points(points: &[Point]) -> (String, Value) {
+    let pairs: Vec<Value> = points.iter().map(|p| json!([p.x, p.y])).collect();
+    ("shape.circleThroughPoints".into(), json!({ "points": pairs }))
 }
 
 /// The options that keys and Ctrl/Cmd change while a shape is dragged out.
@@ -195,9 +226,18 @@ impl ShapeTool {
             guides: vec![],
             measure: None,
             snapped: false,
+            through: vec![],
+            hover: None,
+            places_point: false,
             copies: vec![],
             copy_from: None,
         }
+    }
+
+    /// Whether a press with `m` places another point for a circle: Shift with the Ellipse tool once
+    /// a point is placed. Such a press skips the selection's handles and widgets.
+    fn placing_point(&self, m: Mods) -> bool {
+        self.id == "ellipse" && m.shift && !self.through.is_empty()
     }
 
     /// With Backtick `held` at pointer `raw`, leave a copy of the shape the drag shows (`cmd` and
@@ -257,18 +297,21 @@ impl ShapeTool {
         self.star_ratio = o.star_ratio;
     }
 
-    /// A press on a corner or pie widget of the selection: the drag adjusts it.
+    /// A press on a corner, pie or side widget of the selection: the drag adjusts it.
     fn press_widget(&mut self, cx: &ToolContext, ev: &PointerEvent) -> bool {
         if !shows_shape_widgets(self.id) {
             return false;
         }
-        self.widget = CornerDrag::hit(cx, ev, false).map(WidgetDrag::Corner).or_else(|| PieDrag::hit(cx, ev).map(WidgetDrag::Pie));
+        self.widget = CornerDrag::hit(cx, ev, false)
+            .map(WidgetDrag::Corner)
+            .or_else(|| PieDrag::hit(cx, ev).map(WidgetDrag::Pie))
+            .or_else(|| SideDrag::hit(cx, ev).map(WidgetDrag::Sides));
         self.widget.is_some()
     }
 
-    /// Is `p` over a corner or pie widget of the selection that a press would drag?
+    /// Is `p` over a corner, pie or side widget of the selection that a press would drag?
     fn over_widget(&self, cx: &ToolContext, p: Point) -> bool {
-        shows_shape_widgets(self.id) && (corners::over_widget(cx, p, false) || pie::over_widget(cx, p))
+        shows_shape_widgets(self.id) && (corners::over_widget(cx, p, false) || pie::over_widget(cx, p) || sidewidget::over_widget(cx, p))
     }
 
     /// The selection's box, while this tool shows it (the tools that draw a box, with a selection
@@ -444,10 +487,12 @@ impl ShapeTool {
             PointerKind::Drag => match w {
                 WidgetDrag::Corner(c) => c.drag(cx, ev.pos),
                 WidgetDrag::Pie(d) => d.drag(cx, ev.pos),
+                WidgetDrag::Sides(d) => d.drag(cx, ev.pos),
             },
             PointerKind::Up => match self.widget.take() {
                 Some(WidgetDrag::Corner(c)) => c.finish(),
                 Some(WidgetDrag::Pie(d)) => d.finish(),
+                Some(WidgetDrag::Sides(d)) => d.finish(),
                 None => vec![],
             },
             _ => vec![],
@@ -644,24 +689,33 @@ impl Tool for ShapeTool {
         match ev.kind {
             PointerKind::Move => {
                 // Over a widget a press would drag, no Smart Guide for a new shape's start.
-                if self.over_widget(cx, ev.pos)
-                    || self.over_handle(cx, ev.pos).is_some()
-                    || self.over_center(cx, ev.pos)
-                    || self.over_rotate(cx, ev.pos).is_some()
+                if !self.placing_point(ev.mods)
+                    && (self.over_widget(cx, ev.pos)
+                        || self.over_handle(cx, ev.pos).is_some()
+                        || self.over_center(cx, ev.pos)
+                        || self.over_rotate(cx, ev.pos).is_some())
                 {
                     self.snap.clear();
+                    // A press there drags the widget or the selection, which drops the points.
+                    self.hover = None;
                 } else {
-                    self.snap.hover(cx, ev.pos, &[], None);
+                    // The snapped point: the third Shift-click lands where the press snaps.
+                    let p = self.snap.hover(cx, ev.pos, &[], None);
+                    self.hover = (!self.through.is_empty()).then_some(p);
                 }
                 vec![]
             }
             PointerKind::Down => {
-                if self.press_widget(cx, ev) {
-                    self.snap.clear();
-                    return vec![];
-                }
-                if let Some(out) = self.press_selection(cx, ev) {
-                    return out;
+                if !self.placing_point(ev.mods) {
+                    if self.press_widget(cx, ev) {
+                        self.snap.clear();
+                        self.through.clear();
+                        return vec![];
+                    }
+                    if let Some(out) = self.press_selection(cx, ev) {
+                        self.through.clear();
+                        return out;
+                    }
                 }
                 let p = self.snap.press(cx, ev.pos, &[], None);
                 if self.id == "lineSegment" {
@@ -673,6 +727,7 @@ impl Tool for ShapeTool {
                 self.start = Some(p);
                 self.last = ev.pos;
                 self.began = false;
+                self.places_point = self.id == "ellipse" && ev.mods.shift && !perspective_plane_shown(cx);
                 self.inner = None;
                 self.before_drag = None;
                 self.clear_copies();
@@ -749,16 +804,39 @@ impl Tool for ShapeTool {
                 self.clear_copies();
                 if self.began {
                     self.began = false;
+                    self.through.clear();
                     vec![Action::Commit]
+                } else if self.places_point {
+                    // A Shift-click places a point; the third draws the circle through the three.
+                    self.through.push(s);
+                    self.hover = None;
+                    if self.through.len() < 3 {
+                        return vec![];
+                    }
+                    let (c, v) = circle_through_points(&self.through);
+                    self.through.clear();
+                    vec![Action::Exec(c, v)]
                 } else {
+                    self.through.clear();
                     // Alt (draw from centre) is passed on, so the size dialog can centre the shape on the click.
                     let args = if ev.mods.alt { json!({ "x": s.x, "y": s.y, "alt": true }) } else { json!({ "x": s.x, "y": s.y }) };
                     vec![Action::Dialog(self.id.into(), args)]
                 }
             }
+            // A double-click on a corner widget of the selected live shape shows the Transform
+            // panel; the tool and the selection stay as they are.
+            PointerKind::DoubleClick if shows_shape_widgets(self.id) && corners::over_widget(cx, ev.pos, false) => {
+                vec![Action::Panel("transform".into())]
+            }
             _ => vec![],
         }
     }
+    /// Switching tools during a drag of a corner, pie or side widget cancels it, as Escape does:
+    /// the shape goes back.
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.widget.is_some() { self.key(cx, ToolKey::Escape, Mods::default()) } else { vec![] }
+    }
+
     /// ↑/↓ change a polygon's sides, a star's points or the rounded rectangle's radius while it is
     /// drawn; Escape turns a widget or selection drag back.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
@@ -774,10 +852,22 @@ impl Tool for ShapeTool {
                 (ToolKey::Escape, _) => match self.widget.take() {
                     Some(WidgetDrag::Corner(c)) if c.adjusting() => vec![Action::Cancel],
                     Some(WidgetDrag::Pie(d)) if d.adjusting() => vec![Action::Cancel],
+                    Some(WidgetDrag::Sides(d)) => d.cancel(),
                     _ => vec![],
                 },
                 _ => vec![],
             };
+        }
+        // Escape drops the points Shift-clicks placed for a circle; the document stays as it is. A
+        // press that has not begun a drag is dropped too, so its release places no point.
+        if key == ToolKey::Escape && !self.began && !self.through.is_empty() {
+            self.through.clear();
+            self.hover = None;
+            if self.start.take().is_some() {
+                self.places_point = false;
+                self.snap.clear();
+            }
+            return vec![];
         }
         let Some(s) = self.start.filter(|_| self.began) else { return vec![] };
         let changed = match (self.id, key) {
@@ -813,6 +903,7 @@ impl Tool for ShapeTool {
         } else if key == ToolKey::Escape {
             self.start = None;
             self.began = false;
+            self.through.clear();
             self.inner = None;
             self.clear_copies();
             if let Some(o) = self.before_drag.take() {
@@ -844,6 +935,7 @@ impl Tool for ShapeTool {
         match &self.widget {
             Some(WidgetDrag::Corner(c)) => c.adjusting(),
             Some(WidgetDrag::Pie(d)) => d.adjusting(),
+            Some(WidgetDrag::Sides(d)) => d.adjusting(),
             None => match &self.selection {
                 Some(SelectionDrag::Move { began, .. }) => *began,
                 Some(SelectionDrag::Rotate { .. } | SelectionDrag::Scale { .. }) => true,
@@ -857,8 +949,22 @@ impl Tool for ShapeTool {
         match (&self.widget, &self.selection) {
             (Some(WidgetDrag::Corner(_)), _) => matches!(key, ToolKey::Up | ToolKey::Down),
             (_, Some(_)) => key == ToolKey::Escape,
-            _ => false,
+            _ => key == ToolKey::Escape && !self.through.is_empty(),
         }
+    }
+    /// Points placed by Shift-clicks for a circle: Escape drops them.
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
+        !self.through.is_empty()
+    }
+    /// The pointer left the canvas: the circle's preview through it goes.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = None;
+    }
+    /// An edit, Undo or Redo made outside the tool, or another document, drops the points placed
+    /// for a circle.
+    fn history_moved(&mut self) {
+        self.through.clear();
+        self.hover = None;
     }
     /// The widget being dragged, the Smart Guides of the shape being drawn or the selection being
     /// moved, and its size, angle or offset label.
@@ -866,12 +972,24 @@ impl Tool for ShapeTool {
         match &self.widget {
             Some(WidgetDrag::Corner(c)) => return c.overlays(cx),
             Some(WidgetDrag::Pie(d)) => return d.overlays(cx),
+            Some(WidgetDrag::Sides(d)) => return d.overlays(cx),
             None => {}
         }
         // A line on a common tangent shows that snap's guides, and its length and angle.
         let tangent = self.tangent_line.line().filter(|_| self.start.is_some());
         let mut o = if tangent.is_some() { self.tangent_line.guides(cx) } else { self.snap.guides().to_vec() };
         o.extend(self.guides.iter().cloned());
+        // The points Shift-clicks placed, and after two of them the circle through them and the
+        // pointer, dashed.
+        for p in &self.through {
+            o.push(Overlay::Anchor { p: *p, color: crate::draw2::FEEDBACK, filled: true, size: 6.0 });
+        }
+        if let ([a, b], Some(h)) = (self.through.as_slice(), self.hover)
+            && let Some((c, r)) = vectorcraft_geom::shapes::circle_through(*a, *b, h)
+        {
+            let path = vectorcraft_geom::shapes::ellipse(Rect::new(c.x - r, c.y - r, c.x + r, c.y + r)).to_bezpath();
+            o.push(Overlay::Path { path, color: crate::draw2::FEEDBACK, width: 1.0, dashed: true });
+        }
         if let Some((p, text)) = &self.measure {
             o.push(Overlay::Measure { p: *p, text: text.clone() });
         }
@@ -916,7 +1034,7 @@ impl Tool for ShapeTool {
         let idle = self.start.is_none();
         match &self.widget {
             Some(WidgetDrag::Corner(_)) => return Cursor::CornerRadius,
-            Some(WidgetDrag::Pie(_)) => return Cursor::ArrowHollow,
+            Some(WidgetDrag::Pie(_) | WidgetDrag::Sides(_)) => return Cursor::ArrowHollow,
             None => {}
         }
         // Alt-dragging the selection leaves a copy behind; otherwise the arrow, hollow while the
@@ -930,8 +1048,9 @@ impl Tool for ShapeTool {
             None => {}
         }
         // A press takes the corner and pie widgets first, then the box's handles, then the centre
-        // point, then the zone just outside a corner; everywhere else it draws a new shape.
-        if idle {
+        // point, then the zone just outside a corner; everywhere else it draws a new shape. A
+        // Shift-press that places another point for a circle skips them all.
+        if idle && !self.placing_point(m) {
             if shows_shape_widgets(self.id) && corners::over_widget(cx, p, false) {
                 return Cursor::CornerRadius;
             }
@@ -984,6 +1103,21 @@ impl Tool for ShapeTool {
                 "starRatio" => b.star_ratio = self.star_ratio,
                 _ => {}
             }
+        }
+    }
+    /// The options every shape tool keeps ([`Self::options`]). Any finite angle is taken: it is
+    /// kept as the same direction from 0 to 360°.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "sides" | "points" => c::whole(key, v, 3, 1000),
+            "anchors" => c::whole(key, v, 2, 1000),
+            "cornerRadius" => c::number(key, v, 0.0, MAX_CORNER_RADIUS),
+            "starRatio" => c::number(key, v, 0.01, 1.0),
+            "length" => c::number(key, v, 0.0, 1e6),
+            "angle" => c::finite(key, v),
+            "fillLine" => c::boolean(key, v),
+            _ => Err(c::unknown(key)),
         }
     }
 }

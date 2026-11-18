@@ -24,6 +24,7 @@ mod build;
 mod cancel;
 mod caret_kerning;
 mod charstroke;
+mod circle_through;
 pub(super) mod clip;
 mod clipboard;
 mod clipflavours;
@@ -84,6 +85,7 @@ mod history_mem;
 mod ids_without_selection;
 mod inline;
 mod interactivity;
+mod interpolate_handles;
 mod intertwine;
 mod journal;
 mod keyanchor;
@@ -121,6 +123,7 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod params_cache;
 mod path_menu_enabled;
 mod pathfinder_clip;
 mod pathops;
@@ -370,9 +373,12 @@ fn a_long_unknown_command_id_is_answered_at_once() {
 fn action_batch_names_the_nearest_command_id() {
     let mut s = session();
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "select.al"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `select.al`; did you mean `select.all`?");
+    assert_eq!(
+        e.to_string(),
+        "invalid parameters for `action.batch`: action step 1 (`select.al`) failed: unknown command `select.al`; did you mean `select.all`?"
+    );
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "nope"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `nope`");
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: action step 1 (`nope`) failed: unknown command `nope`");
 }
 
 #[test]
@@ -2808,6 +2814,26 @@ fn an_isolated_compound_paths_member_moves_alone() {
     assert_eq!((x0(&s, outer), x0(&s, hole)), (5.0, 55.0), "the compound path selected: the whole ring");
 }
 
+/// Rotate Bounding Box and Reset Bounding Box take the same objects as the transforms: a path of
+/// a compound path selected alone turns or squares its own box, and the compound path selected
+/// turns its box and its paths'.
+#[test]
+fn rotate_bounding_box_of_a_compound_paths_member_turns_only_that_path() {
+    let angle = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+    let mut s = session();
+    let (c, outer, hole) = isolated_ring(&mut s);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (0.0, 0.0, 30.0), "only the hole's box turned");
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 40.0), "the compound path and its paths");
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 0.0), "Reset squared only the hole's box");
+}
+
 /// The X, Y, W and H of the Properties and Transform panels run `object.setBounds`, which takes the
 /// same objects as the other transforms: a path of a compound path selected alone sets its own
 /// box and leaves the ring around it (#4046). The hole is off-centre, and a plain rectangle
@@ -3194,6 +3220,101 @@ fn every_command_has_unique_id_and_doc() {
     assert!(command_specs().iter().all(|c| !c.params.is_empty() && !c.label.is_empty()));
 }
 
+/// Ids that name no built-in command: commands only the app runs, near misses of real ids and
+/// plug-in command ids of plug-ins that are not installed.
+const NOT_BUILT_IN: &[&str] =
+    &["", "file.save", "file.open", "edit.preferences", "select", "select.none.", "SELECT.NONE", " select.none", "plugin.nobody.cmd", "plugin."];
+
+/// The spec a search of the built-in list in order finds for `id`.
+fn first_built_in(id: &str) -> Option<&'static CommandSpec> {
+    command_specs().iter().find(|c| c.id == id)
+}
+
+#[test]
+fn find_command_finds_the_spec_a_search_of_the_list_finds() {
+    let misses: Vec<String> = NOT_BUILT_IN.iter().map(|id| (*id).to_string()).chain((0..200).map(|i| format!("missing.command{i}"))).collect();
+    for id in command_specs().iter().map(|c| c.id.to_string()).chain(misses) {
+        let (found, first) = (find_command(&id), first_built_in(&id));
+        assert!(found.map(std::ptr::from_ref) == first.map(std::ptr::from_ref), "{id:?}");
+        assert_eq!(found.is_none(), NOT_BUILT_IN.contains(&id.as_str()) || id.starts_with("missing."), "{id:?}");
+    }
+}
+
+#[test]
+fn the_command_index_keeps_the_first_spec_of_an_id() {
+    let base = &command_specs()[0];
+    let specs = [
+        CommandSpec { id: "test.twice", label: "First", ..*base },
+        CommandSpec { id: "test.once", ..*base },
+        CommandSpec { id: "test.twice", label: "Second", ..*base },
+    ];
+    let index = crate::cmd::index_by_id(&specs);
+    assert_eq!(index.len(), 2);
+    assert!(index.get("test.twice").is_some_and(|c| std::ptr::eq(*c, &specs[0])));
+    assert!(index.get("test.once").is_some_and(|c| std::ptr::eq(*c, &specs[1])));
+    assert!(!index.contains_key("test.none"));
+}
+
+/// Times [`find_command`] against a search of the built-in list in order (the lookup before the
+/// index), in one process, over every built-in id and 200 ids that name no command, and
+/// `select.none` run 100,000 times on a document with one rectangle.
+/// Run with `cargo test --release -p vectorcraft-engine --lib command_lookup_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn command_lookup_timing() {
+    use std::hint::black_box;
+    use std::time::Instant;
+    let hits: Vec<&str> = command_specs().iter().map(|c| c.id).collect();
+    let missing: Vec<String> = (0..200 - NOT_BUILT_IN.len()).map(|i| format!("missing.command{i}")).collect();
+    let misses: Vec<&str> = NOT_BUILT_IN.iter().copied().chain(missing.iter().map(String::as_str)).collect();
+    let linear = |id: &str| first_built_in(id).or_else(|| crate::cmd::plugin::find_spec(id));
+    for id in hits.iter().chain(&misses) {
+        assert!(find_command(id).map(std::ptr::from_ref) == linear(id).map(std::ptr::from_ref), "{id:?}");
+    }
+    let per_lookup = |ids: &[&str], f: &dyn Fn(&str) -> Option<&'static CommandSpec>| {
+        let rounds = 50;
+        let start = Instant::now();
+        for _ in 0..rounds {
+            for id in ids {
+                black_box(f(black_box(id)));
+            }
+        }
+        start.elapsed().as_nanos() as f64 / (rounds * ids.len()) as f64
+    };
+    let median = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    println!("{} built-in ids, {} ids that name no command", hits.len(), misses.len());
+    for (what, ids) in [("built-in id", &hits), ("no such command", &misses)] {
+        let (mut old, mut new) = (Vec::new(), Vec::new());
+        for run in 0..7 {
+            // Alternates which lookup goes first, so a change in machine load falls on both.
+            if run % 2 == 0 {
+                old.push(per_lookup(ids, &linear));
+                new.push(per_lookup(ids, &find_command));
+            } else {
+                new.push(per_lookup(ids, &find_command));
+                old.push(per_lookup(ids, &linear));
+            }
+        }
+        println!("{what}: search of the list {old:.0?} ns, median {:.0}; index {new:.0?} ns, median {:.0}", median(old.clone()), median(new.clone()));
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let runs: Vec<f64> = (0..7)
+        .map(|_| {
+            let start = Instant::now();
+            for _ in 0..100_000 {
+                black_box(s.execute("select.none", &json!({})).unwrap());
+            }
+            start.elapsed().as_nanos() as f64 / 100_000.0
+        })
+        .collect();
+    println!("select.none: {runs:.0?} ns a command, median {:.0}", median(runs.clone()));
+}
+
 #[test]
 fn every_command_survives_empty_params() {
     // Robustness: no command may panic on {} (with and without a selection).
@@ -3310,6 +3431,26 @@ fn flare_ring_seed_moves_only_the_rings() {
         assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "seed": bad})).is_err(), "{bad}");
     }
     assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn flare_small_ring_seeds_spread_the_first_ring_along_the_path() {
+    let mut s = session();
+    let mut positions = Vec::new();
+    for seed in [0, 1, 2, 5, 11, (1u64 << 53) - 1] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        let ring = children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap();
+        let center = ring.geometric_bounds().unwrap().center();
+        assert!((20.0..=1020.0).contains(&center.x), "seed {seed}: {center:?}");
+        assert!((center.y - 30.0).abs() < 1e-9);
+        positions.push(center.x);
+    }
+    assert!((positions[0] - positions[1]).abs() > 1.0, "neighboring small seeds visibly move the first ring: {positions:?}");
+    let lo = positions[..5].iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = positions[..5].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(hi - lo > 250.0, "small seeds spread the first ring along the path: {positions:?}");
 }
 
 /// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
@@ -4186,6 +4327,124 @@ fn object_mosaic_refuses_a_boolean_given_as_text() {
     }
     let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 1, "gray": true, "deleteRaster": null})).unwrap();
     assert_eq!((r["tiles"].clone(), images(&s)), (json!(2), 1));
+}
+
+/// The size of the mosaic a call makes from the 100 × 50 pt image selected in `s`, with its column and row counts.
+fn mosaic_size(s: &mut Session, p: serde_json::Value) -> (f64, f64, serde_json::Value, serde_json::Value) {
+    let image = s.doc().unwrap().selection.objects.clone();
+    let r = s.execute("object.createObjectMosaic", &p).unwrap();
+    let b = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    ((b.width() * 1e6).round() / 1e6, (b.height() * 1e6).round() / 1e6, r["columns"].clone(), r["rows"].clone())
+}
+
+/// Resize Using Percentages reads the new width and height as percentages of the image's size; Constrain Ratio keeps
+/// the image's proportions, the named side leading; Use Ratio makes the tiles square from the count on the
+/// constrained side (columns by default), and the call answers the counts it used.
+#[test]
+fn object_mosaic_resizes_by_percentages_constrains_the_ratio_and_squares_the_tiles() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 2, "rows": 1})), (100.0, 50.0, json!(2), json!(1)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "height": 200, "percentages": true})), (50.0, 100.0, json!(10), json!(10)));
+    // A side left out is 100% of the image's.
+    assert_eq!(mosaic_size(&mut s, json!({"width": 150, "percentages": true})).0, 150.0);
+    assert_eq!(mosaic_size(&mut s, json!({"width": 200, "height": 10, "constrain": "width"})), (200.0, 100.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 10, "height": 25, "constrain": "height"})), (50.0, 25.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "constrain": "width", "percentages": true})), (50.0, 25.0, json!(10), json!(10)));
+    // Square tiles: 10 columns of 10 pt over 50 pt are 5 rows; 4 rows of 12.5 pt over 100 pt are 8 columns.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 10, "rows": 3, "useRatio": true})), (100.0, 50.0, json!(10), json!(5)));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 3, "rows": 4, "useRatio": true, "constrain": "height"})), (100.0, 50.0, json!(8), json!(4)));
+    // A side named for Use Ratio is kept without Constrain Ratio: the size stays as given.
+    assert_eq!(mosaic_size(&mut s, json!({"rows": 4, "height": 100, "useRatio": "height"})), (100.0, 100.0, json!(4), json!(4)));
+    // On a new size: 30 columns over 300 × 50 pt are 5 rows.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 30, "width": 300, "useRatio": true})), (300.0, 50.0, json!(30), json!(5)));
+    // The count is kept within 1..1000.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 1, "height": 5000, "useRatio": true})).3, json!(1000));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 5000, "height": 1, "useRatio": true})).3, json!(1));
+    // A size under 0.1 pt grows in proportion while Constrain Ratio keeps it.
+    let (w, h, ..) = mosaic_size(&mut s, json!({"width": 0.1, "constrain": "width"}));
+    assert!((w - 0.2).abs() < 1e-6 && (h - 0.1).abs() < 1e-6, "{w} × {h}");
+    // A side Constrain Ratio works out above 1,000,000 pt shrinks to it, in proportion: a height of
+    // 1,000,000 pt over the 100 × 50 pt image would need a width of 2,000,000 pt.
+    assert_eq!(mosaic_size(&mut s, json!({"height": 1e6, "constrain": "height"})), (1e6, 5e5, json!(10), json!(10)));
+    // An image 20,000,000 times wider than it is tall has no such size: the call is refused.
+    s.execute("object.scale", &json!({"sx": 1, "sy": 1e-7})).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"width": 1e6, "constrain": "width"}));
+    let msg = "the image's proportions leave no size with both sides between 0.1 and 1000000 pt";
+    assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{r:?}");
+}
+
+/// Use Ratio squares the tiles as drawn: with 4 pt between columns, 10 columns of 10 pt cells draw 6 pt wide, so the
+/// rows are 6 pt plus their own 4 pt apart (5 rows down 50 pt); on an image turned 90°, the tiles are measured along
+/// its own axes.
+#[test]
+fn object_mosaic_use_ratio_takes_spacing_and_turned_images_into_account() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let image = s.doc().unwrap().selection.objects.clone();
+    let counts = |s: &Session, p: serde_json::Value| crate::cmd::mosaic_counts(s, &p).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4, "spacingY": 4})), (10, 5));
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4})), (10, 8));
+    assert_eq!(counts(&s, json!({"columns": 10, "rows": 7})), (10, 7), "without Use Ratio the counts are kept");
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 10, "useRatio": true, "spacingX": 4})).unwrap();
+    let g = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().clone();
+    let t = g.children().unwrap()[0].geometric_bounds().unwrap();
+    assert!((t.width() - 6.0).abs() < 1e-6 && (t.height() - 6.25).abs() < 1e-6, "{t:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    // Turned 90°, the image's 100 pt side runs down the page; 10 columns along it are still 5 rows across its 50.
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true})), (10, 5));
+}
+
+#[test]
+fn object_mosaic_square_count_is_the_nearest_whole_count() {
+    use crate::cmd::menucmds::mosaic_square_count;
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 0.0, 0.0), 5);
+    assert_eq!(mosaic_square_count(3, 100.0, 50.0, 0.0, 0.0), 2);
+    assert_eq!(mosaic_square_count(0, 100.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(10, 0.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(1000, 1.0, 1000.0, 0.0, 0.0), 1000);
+    // Spacing wider than a cell leaves 10% of it, on either side.
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 50.0, 0.0), 50);
+    // 10 columns of 1 pt tiles (9 pt gaps) over 100 pt; rows 100 pt apart are capped too, so 10 rows draw 1 pt.
+    assert_eq!(mosaic_square_count(10, 100.0, 100.0, 9.0, 100.0), 10);
+    // 15 pt tiles over 50 pt: 3 rows draw 16.7 pt and 4 rows 12.5 pt, so 3.
+    assert_eq!(mosaic_square_count(1, 15.0, 50.0, 0.0, 0.0), 3);
+}
+
+/// A Constrain Ratio side that is not "width" or "height", a new size of 0 or less, and Use Ratio or Resize Using
+/// Percentages given as text are errors naming the key; no mosaic is made.
+#[test]
+fn object_mosaic_refuses_a_bad_ratio_side_size_or_switch() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = undo(&s);
+    for (p, msg) in [
+        (json!({"constrain": "both"}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"constrain": 1}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"width": 0}), "`width` must be between 0.1 and 1000000 (got 0)"),
+        (json!({"height": -5, "percentages": true}), "`height` must be between 0.1 and 1000000 (got -5)"),
+        (json!({"width": 2e6, "percentages": true}), "`width` must be between 0.1 and 1000000 (got 2000000)"),
+        // A side Constrain Ratio works out is not used, but a size given for it is still checked.
+        (json!({"width": 200, "height": 0, "constrain": "width"}), "`height` must be between 0.1 and 1000000 (got 0)"),
+        (json!({"useRatio": "true"}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"useRatio": 1}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"percentages": 1}), "`percentages` must be true or false"),
+    ] {
+        let r = s.execute("object.createObjectMosaic", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{p}: {r:?}");
+        assert_eq!(undo(&s), before, "{p}");
+    }
+    let r = s.execute("object.createObjectMosaic", &json!({"constrain": null, "useRatio": null, "percentages": null})).unwrap();
+    assert_eq!(r["tiles"], json!(100));
 }
 
 #[test]

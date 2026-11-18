@@ -10,12 +10,25 @@
 //! blend's steps, an envelope's distorted contents). Clicking an image samples its pixels
 //! (averaged over the options' raster sample size; a CMYK image gives its ink amounts).
 //!
+//! With a gradient mesh selected, a click on one of its points gives that point the current solid
+//! fill color, and a click inside one of its patches gives it to the patch's four points
+//! (`object.mesh.setPointColor`).
+//!
 //! The Gradient panel's eyedropper sets the `stop` option (the tool to return to): the next click
 //! samples the colour under the cursor into the selected gradient stop (`paint.sampleColor
 //! {stop}`) and switches back to that tool.
 //!
+//! Gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso before switching
+//! to the Eyedropper stay picked (its `meshPoints` option), and go back to one of those tools
+//! switched to next. While a selected, editable mesh has picked points, a click or Shift-click on an image or
+//! other art samples the color under the cursor into those points alone (`paint.sampleColor
+//! {stroke: false, ids}` with those meshes, which recolors the points through `paint.setFill`).
+//!
 //! Brush Options' Key Color eyedropper sets `brushKeyColor` and `stop`: the next click samples into
 //! the open dialog (`brushKeyColor` UI request) and switches back.
+//!
+//! Escape ends either pick without sampling and switches back to that tool. With neither pick
+//! armed, Escape is left to the application.
 
 use std::collections::HashSet;
 
@@ -28,7 +41,7 @@ use vectorcraft_geom::{Affine, Point, Rect};
 
 use super::paint_owner;
 use crate::params::color_json;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 #[derive(Default)]
 pub struct EyedropperTool {
@@ -38,6 +51,28 @@ pub struct EyedropperTool {
     text_selection: crate::text::TypeTool,
     /// Brush Options › Key Color (Hue Shift): sample into the dialog, then [`Self::stop`].
     brush_key_color: bool,
+    /// The gradient mesh points the tool switched from had picked, each a mesh and a point index.
+    mesh_points: Vec<(NodeId, usize)>,
+}
+
+/// The point of each of `points` that a selected, editable gradient mesh in `cx` has.
+fn live_points<'a>(cx: &'a ToolContext, points: &'a [(NodeId, usize)]) -> impl Iterator<Item = (NodeId, Point)> + 'a {
+    let editable = cx.doc.editable();
+    points.iter().filter(move |(id, _)| cx.selection.contains(*id) && editable(*id)).filter_map(|(id, index)| {
+        let Some(NodeKind::Mesh(m)) = cx.doc.node(*id).map(|n| &n.kind) else { return None };
+        Some((*id, m.points.get(*index)?.p))
+    })
+}
+
+/// The selected, editable gradient meshes in `cx` with one of `points` picked, in range, each once.
+fn picked_meshes(cx: &ToolContext, points: &[(NodeId, usize)]) -> Vec<NodeId> {
+    let mut ids: Vec<NodeId> = vec![];
+    for (id, _) in live_points(cx, points) {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
 }
 
 /// The colour of `paint` at `p` (gradients are sampled along their vector, radial ones honouring
@@ -453,6 +488,21 @@ fn image_color_at(s: &Sampler, n: &Node, p: Point) -> Option<Color> {
     Some(Color::rgb(r, g, b))
 }
 
+/// The selected, editable gradient mesh and its points that an Eyedropper click at `p` recolors
+/// ([`crate::meshedit::color_points`]): the topmost visible object within reach of `p` (locked art
+/// included, clipping applied) must be that mesh, and the points are its point within reach of
+/// `p`, else the four points around its patch under `p`.
+fn selected_mesh_points(cx: &ToolContext, p: Point) -> Option<(NodeId, Vec<usize>)> {
+    let tol = cx.tol(5.0);
+    let opt = sample_options(cx);
+    let leaf = hit_test_visible(cx.doc, p, HitOptions { tol: opt.tol.max(tol), ..opt })?.leaf;
+    if !cx.selection.contains(leaf) || !cx.doc.editable()(leaf) {
+        return None;
+    }
+    let Some(NodeKind::Mesh(m)) = cx.doc.node(leaf).map(|n| &n.kind) else { return None };
+    Some((leaf, crate::meshedit::color_points(m, p, tol)?))
+}
+
 impl Tool for EyedropperTool {
     fn id(&self) -> &'static str {
         "eyedropper"
@@ -471,6 +521,17 @@ impl Tool for EyedropperTool {
             return vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&c) })), Action::SwitchTool(back)];
         }
         let stop = self.stop.as_ref().zip(cx.gradient_stop);
+        // A plain click on a selected gradient mesh gives the fill color to the point there, else
+        // to the four points of the patch there.
+        if stop.is_none()
+            && !ev.mods.alt
+            && !ev.mods.shift
+            && let Paint::Solid { color, .. } = &cx.paint.fill
+            && let Some((id, points)) = selected_mesh_points(cx, ev.pos)
+        {
+            let params = json!({ "id": id.0, "points": points, "color": color_json(color), "keepModel": true });
+            return vec![Action::Exec("object.mesh.setPointColor".into(), params)];
+        }
         // Reading a source is independent of its editability. Only Alt's reverse operation
         // writes to the clicked object; Shift+Alt appends its appearance to the selection.
         let source = if ev.mods.alt && !ev.mods.shift && stop.is_none() {
@@ -485,11 +546,20 @@ impl Tool for EyedropperTool {
             return vec![Action::Exec("appearance.copyFrom".into(), json!({ "source": src.0, how: true }))];
         }
         let image = matches!(n.kind, NodeKind::Image(_));
-        if !(ev.mods.shift || stop.is_some() || image) {
+        // Picked mesh points take only a color sampled from other art or an image: the sample goes
+        // to them as a fill, and to nothing else that is selected. A click on a mesh with picked
+        // points is handled as before.
+        let meshes = if stop.is_none() { picked_meshes(cx, &self.mesh_points) } else { vec![] };
+        let meshes = if meshes.contains(&src) { vec![] } else { meshes };
+        if !(ev.mods.shift || stop.is_some() || image || !meshes.is_empty()) {
             return vec![Action::Exec("appearance.copyFrom".into(), json!({ "source": src.0 }))];
         }
         let Some(c) = sample_color_at(cx, ev.pos) else { return vec![] };
         let color = color_json(&c);
+        if !meshes.is_empty() {
+            let ids: Vec<u64> = meshes.iter().map(|id| id.0).collect();
+            return vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color, "stroke": false, "ids": ids }))];
+        }
         let Some((back, i)) = stop else { return vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color }))] };
         let out = vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color, "stop": i })), Action::SwitchTool(back.clone())];
         self.stop = None;
@@ -503,17 +573,33 @@ impl Tool for EyedropperTool {
         if let Some(o) = options.as_object_mut() {
             o.insert("stop".into(), json!(self.stop));
             o.insert("brushKeyColor".into(), json!(self.brush_key_color));
+            if !self.mesh_points.is_empty() {
+                let points: Vec<Value> = self.mesh_points.iter().map(|(id, index)| json!({"id": id.0, "index": index})).collect();
+                o.insert("meshPoints".into(), Value::Array(points));
+            }
         }
         options
     }
 
-    /// Accept a stop target or the selection transferred from the Type tool.
+    /// Accept a stop target, or the selection or the mesh points picked, transferred from the
+    /// Type tool or a tool that picks mesh points.
     fn set_option(&mut self, key: &str, value: &Value) {
         match key {
             "stop" => self.stop = value.as_str().map(str::to_string),
             "brushKeyColor" => self.brush_key_color = value.as_bool().unwrap_or(false),
+            "meshPoints" => self.mesh_points = crate::meshedit::points_of(value),
             "textSelection" => self.text_selection.set_option(key, value),
             _ => {}
+        }
+    }
+
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "stop" => c::string_or_null(key, value),
+            "brushKeyColor" => c::boolean(key, value),
+            "textSelection" => self.text_selection.check_option(key, value),
+            _ => Err(c::unknown(key)),
         }
     }
 
@@ -522,13 +608,49 @@ impl Tool for EyedropperTool {
         self.text_selection.after_command(cx)
     }
 
-    /// Keep the sampled character range highlighted without activating text input.
+    /// Keep the sampled character range highlighted without activating text input, and the picked
+    /// points of selected gradient meshes filled, as the tools that picked them show them.
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
-        if self.text_selection.options().get("editing").is_some_and(|v| !v.is_null()) { self.text_selection.overlays(cx) } else { vec![] }
+        let mut out =
+            if self.text_selection.options().get("editing").is_some_and(|v| !v.is_null()) { self.text_selection.overlays(cx) } else { vec![] };
+        out.extend(live_points(cx, &self.mesh_points).map(|(_, p)| Overlay::Anchor { p, color: crate::draw2::FEEDBACK, filled: true, size: 5.0 }));
+        out
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
         Cursor::Eyedropper
+    }
+
+    /// Escape ends a gradient stop's or Key Color's pick without sampling and switches back to the
+    /// tool that armed it.
+    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key != ToolKey::Escape || !self.picking() {
+            return vec![];
+        }
+        let back = self.stop.take().unwrap_or_else(|| "selection".to_string());
+        self.brush_key_color = false;
+        vec![Action::SwitchTool(back)]
+    }
+
+    /// A dropped press (a long or canceled touch) leaves an armed pick waiting for its click.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        vec![]
+    }
+
+    /// Escape is the tool's while a pick is armed, so it switches back and ends nothing else.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        key == ToolKey::Escape && self.picking()
+    }
+
+    fn ends_on_escape(&self, _cx: &ToolContext) -> bool {
+        self.picking()
+    }
+}
+
+impl EyedropperTool {
+    /// Is a one-shot pick armed (a gradient stop's or Brush Options' Key Color)?
+    fn picking(&self) -> bool {
+        self.stop.is_some() || self.brush_key_color
     }
 }
 
@@ -570,6 +692,82 @@ mod tests {
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": color_json(&Color::BLACK)}))]);
         assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)).is_empty());
+    }
+
+    /// With points of a selected gradient mesh picked, a click on other art samples the color under
+    /// the cursor into those points as a fill, as a Shift-click does. Unselected, or with the picks
+    /// out of range, on a locked mesh, or on the mesh itself, the click copies the appearance as
+    /// before; Alt still applies in reverse.
+    #[test]
+    fn picked_mesh_points_take_the_color_a_click_samples() {
+        use vectorcraft_doc::{Document, GradientMesh};
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let mesh = d.alloc_id();
+        let grid = GradientMesh::from_surface(1, 1, &|u, v| Point::new(100.0 + 100.0 * u, 100.0 + 100.0 * v), &|_, _| Color::WHITE);
+        d.insert(Some(l), 0, Node::new(mesh, NodeKind::Mesh(grid))).unwrap();
+        let red = d.alloc_id();
+        let mut art = (*filled_rect(Rect::new(300.0, 100.0, 350.0, 150.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)))).clone();
+        art.id = red;
+        d.insert(Some(l), usize::MAX, art).unwrap();
+        let p = paint();
+        let mut s = Selection::default();
+        s.set([mesh]);
+        let mut t = EyedropperTool::default();
+        t.set_option("meshPoints", &json!([{"id": mesh.0, "index": 1}, {"id": "x"}, {"id": mesh.0, "index": 3}]));
+        assert_eq!(t.options()["meshPoints"], json!([{"id": mesh.0, "index": 1}, {"id": mesh.0, "index": 3}]), "malformed entries are left out");
+        // The picked points show filled while the mesh is selected.
+        let anchors: Vec<Point> = t
+            .overlays(&cx(&d, &s, &p))
+            .into_iter()
+            .filter_map(|o| match o {
+                Overlay::Anchor { p, filled: true, .. } => Some(p),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(anchors, [Point::new(200.0, 100.0), Point::new(200.0, 200.0)]);
+        assert!(t.overlays(&cx(&d, &Selection::default(), &p)).is_empty());
+        let click = |t: &mut EyedropperTool, s: &Selection, m: Mods| {
+            t.pointer(&cx(&d, s, &p), &PointerEvent::new(PointerKind::Down, 325.0, 125.0).with_mods(m))
+        };
+        let sample = vec![Action::Exec(
+            "paint.sampleColor".into(),
+            json!({"color": color_json(&Color::rgb(1.0, 0.0, 0.0)), "stroke": false, "ids": [mesh.0]}),
+        )];
+        assert_eq!(click(&mut t, &s, Mods::default()), sample);
+        assert_eq!(click(&mut t, &s, Mods { shift: true, ..Default::default() }), sample);
+        // Other selected art does not take the sample.
+        let mut both = Selection::default();
+        both.set([mesh, red]);
+        assert_eq!(click(&mut t, &both, Mods::default()), sample, "only the picked mesh");
+        let alt = click(&mut t, &s, Mods { alt: true, ..Default::default() });
+        assert_eq!(alt, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": red.0, "reverse": true}))]);
+        // The mesh deselected, the picks stand for nothing.
+        let copy = vec![Action::Exec("appearance.copyFrom".into(), json!({"source": red.0}))];
+        assert_eq!(click(&mut t, &Selection::default(), Mods::default()), copy);
+        // Selected again, as Direct Selection keeps them, the picks take the sample again.
+        assert_eq!(click(&mut t, &s, Mods::default()), sample, "the mesh selected again");
+        // A click on the picked mesh itself (with no solid fill) copies its appearance as before, and
+        // a Shift-click samples into the active fill as before.
+        let mut unfilled = paint();
+        unfilled.fill = Paint::None;
+        let on_mesh =
+            |t: &mut EyedropperTool, m: Mods| t.pointer(&cx(&d, &s, &unfilled), &PointerEvent::new(PointerKind::Down, 150.0, 150.0).with_mods(m));
+        let own = vec![Action::Exec("appearance.copyFrom".into(), json!({"source": mesh.0}))];
+        assert_eq!(on_mesh(&mut t, Mods::default()), own, "a click on the mesh");
+        let shift = on_mesh(&mut t, Mods { shift: true, ..Default::default() });
+        assert_eq!(shift, vec![Action::Exec("paint.sampleColor".into(), json!({"color": color_json(&Color::WHITE)}))], "a Shift-click on the mesh");
+        // A locked mesh's picks stand for nothing.
+        let mut locked = d.clone();
+        locked.node_mut(mesh).unwrap().locked = true;
+        let a = t.pointer(&cx(&locked, &s, &p), &PointerEvent::new(PointerKind::Down, 325.0, 125.0));
+        assert_eq!(a, copy, "a locked mesh");
+        assert!(t.overlays(&cx(&locked, &s, &p)).is_empty());
+        t.set_option("meshPoints", &json!([{"id": mesh.0, "index": 4}]));
+        assert_eq!(click(&mut t, &s, Mods::default()), copy, "a point the mesh does not have");
+        t.set_option("meshPoints", &json!([]));
+        assert!(t.options().get("meshPoints").is_none());
+        assert_eq!(click(&mut t, &s, Mods::default()), copy);
     }
 
     /// On a clip group's mask edge, where the art it clips lies over it, the eyedropper copies the
@@ -617,6 +815,41 @@ mod tests {
             ]
         );
         assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}), "one sample only");
+    }
+
+    /// #8024: Escape ends a gradient stop's pick and a Key Color pick without sampling and
+    /// switches back; the plain Eyedropper leaves Escape alone.
+    #[test]
+    fn escape_ends_a_pick_and_switches_back() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let mut cx = cx(&d, &s, &p);
+        cx.gradient_stop = Some(1);
+        let none = Mods::default();
+        let mut t = EyedropperTool::default();
+        assert!(!t.claims_key(&cx, ToolKey::Escape) && !t.ends_on_escape(&cx), "nothing armed");
+        assert!(t.key(&cx, ToolKey::Escape, none).is_empty());
+
+        t.set_option("stop", &json!("gradient"));
+        assert!(t.claims_key(&cx, ToolKey::Escape) && t.ends_on_escape(&cx));
+        assert!(!t.claims_key(&cx, ToolKey::Enter));
+        assert!(t.drop_press(&cx).is_empty(), "a dropped press leaves the pick armed");
+        assert_eq!(t.key(&cx, ToolKey::Escape, none), vec![Action::SwitchTool("gradient".into())]);
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+        assert!(!t.claims_key(&cx, ToolKey::Escape) && t.key(&cx, ToolKey::Escape, none).is_empty(), "one cancel only");
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+        assert!(!a.iter().any(|a| matches!(a, Action::Exec(_, v) if v.get("stop").is_some())), "no stop sample after the cancel: {a:?}");
+
+        t.set_option("brushKeyColor", &json!(true));
+        t.set_option("stop", &json!("paintbrush"));
+        assert!(t.claims_key(&cx, ToolKey::Escape));
+        assert_eq!(t.key(&cx, ToolKey::Escape, none), vec![Action::SwitchTool("paintbrush".into())]);
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
+
+        // A Key Color pick with no tool to return to goes back to the Selection tool.
+        t.set_option("brushKeyColor", &json!(true));
+        assert_eq!(t.key(&cx, ToolKey::Escape, none), vec![Action::SwitchTool("selection".into())]);
+        assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}));
     }
 
     #[test]
@@ -1357,6 +1590,70 @@ mod tests {
         let shift = Mods { shift: true, ..Default::default() };
         let a = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 125.0, 150.0).with_mods(shift));
         assert_eq!(sampled_hex(&a), "#404040");
+    }
+
+    /// With a gradient mesh selected, a click on one of its points gives that point the fill color,
+    /// and a click inside a patch gives it to the patch's four points. Unselected, a click copies
+    /// the mesh's appearance as before, and Shift still samples.
+    #[test]
+    fn a_click_on_a_selected_mesh_gives_its_point_or_patch_the_fill_color() {
+        use vectorcraft_doc::{Document, GradientMesh};
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mesh = GradientMesh::from_surface(2, 2, &|u, v| Point::new(100.0 + 100.0 * u, 100.0 + 100.0 * v), &|_, _| Color::WHITE);
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Mesh(mesh))).unwrap();
+        let mut p = paint();
+        p.fill = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let red = color_json(&Color::rgb(1.0, 0.0, 0.0));
+        let set = |points: Value| {
+            vec![Action::Exec("object.mesh.setPointColor".into(), json!({"id": id.0, "points": points, "color": red, "keepModel": true}))]
+        };
+        let mut s = Selection::default();
+        let click = |s: &Selection, p: &crate::PaintDefaults, x: f64, y: f64, m: Mods| {
+            EyedropperTool::default().pointer(&cx(&d, s, p), &PointerEvent::new(PointerKind::Down, x, y).with_mods(m))
+        };
+        let plain = Mods::default();
+        let a = click(&s, &p, 125.0, 125.0, plain);
+        assert_eq!(a, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": id.0}))], "an unselected mesh");
+        s.set([id]);
+        assert_eq!(click(&s, &p, 151.0, 149.0, plain), set(json!([4])), "the point near the click");
+        assert_eq!(click(&s, &p, 125.0, 125.0, plain), set(json!([0, 1, 3, 4])), "the patch's four points");
+        assert_eq!(click(&s, &p, 175.0, 175.0, plain), set(json!([4, 5, 7, 8])));
+        let shift = Mods { shift: true, ..Default::default() };
+        assert!(matches!(&click(&s, &p, 125.0, 125.0, shift)[0], Action::Exec(c, _) if c == "paint.sampleColor"));
+        let alt = Mods { alt: true, ..Default::default() };
+        assert!(matches!(&click(&s, &p, 125.0, 125.0, alt)[0], Action::Exec(c, v) if c == "appearance.copyFrom" && v["reverse"] == true));
+        // Off the mesh, or with a fill that is not a solid color, nothing goes to its points.
+        assert!(click(&s, &p, 400.0, 400.0, plain).is_empty());
+        p.fill = Paint::None;
+        assert!(matches!(&click(&s, &p, 125.0, 125.0, plain)[0], Action::Exec(c, _) if c == "appearance.copyFrom"));
+    }
+
+    /// An unselected object on top of a selected mesh's point keeps the click: it copies that
+    /// object's appearance, and the mesh's points keep their colors.
+    #[test]
+    fn a_click_on_an_object_over_a_selected_mesh_copies_that_object() {
+        use vectorcraft_doc::{Document, GradientMesh};
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let id = d.alloc_id();
+        let mesh = GradientMesh::from_surface(2, 2, &|u, v| Point::new(100.0 + 100.0 * u, 100.0 + 100.0 * v), &|_, _| Color::WHITE);
+        d.insert(Some(l), 0, Node::new(id, NodeKind::Mesh(mesh))).unwrap();
+        let top = d.alloc_id();
+        let mut cover = (*filled_rect(vectorcraft_geom::Rect::new(140.0, 140.0, 160.0, 160.0), Paint::solid(Color::BLACK))).clone();
+        cover.id = top;
+        d.insert(Some(l), usize::MAX, cover).unwrap();
+        let mut p = paint();
+        p.fill = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let mut s = Selection::default();
+        s.set([id]);
+        let a = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(a, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": top.0}))]);
+        // Locked, it is still what the click samples.
+        d.node_mut(top).unwrap().locked = true;
+        let a = EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, 150.0, 150.0));
+        assert_eq!(a, vec![Action::Exec("appearance.copyFrom".into(), json!({"source": top.0}))], "a locked object on top");
     }
 
     /// Finding the point in a mesh counts the points it looks at in every patch: a 20 × 20 mesh

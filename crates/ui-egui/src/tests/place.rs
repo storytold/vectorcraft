@@ -1145,6 +1145,84 @@ fn the_place_cursors_files_ask_for_their_import_options_when_show_import_options
     assert_eq!(dialog_kind(&app), None);
 }
 
+/// A Shift-click of the place cursor asks for the current file's import options however the
+/// cursor was loaded; a file without import options, and a Shift-drag, place as before.
+#[test]
+fn a_shift_click_of_the_place_cursor_asks_for_the_files_import_options() {
+    let mut app = app();
+    let dir = Folder::new("ui-place-cursor-shift-click");
+    let a = dir.file("a.png", &png(10, 10, 72.0));
+    let notes = dir.file("notes.txt", NOTES);
+    let line = dir.file("line.dxf", LINE_DXF);
+    let shift = vectorcraft_tools::Mods { shift: true, ..Default::default() };
+    // A press at (10, 10) released at (`to`, 10) with `mods`, placed as the canvas places it.
+    let gesture = |app: &mut VectorcraftApp, mods: vectorcraft_tools::Mods, to: f64| {
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let view = app.view_info();
+        for (kind, x) in [(PointerKind::Down, 10.0), (PointerKind::Drag, to), (PointerKind::Up, to)] {
+            for r in app.session.pointer(&PointerEvent::new(kind, x, 10.0).with_mods(mods), view).unwrap() {
+                if let vectorcraft_engine::UiRequest::Place(p) = r {
+                    crate::place::place_from_cursor(app, &p);
+                }
+            }
+        }
+    };
+    let count = |app: &VectorcraftApp| app.session.tool_options()["count"].as_u64();
+    let load = |app: &mut VectorcraftApp, paths: Value, show: bool| {
+        app.run("file.place", json!({ "paths": paths })).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("showImportOptions".into(), json!(show));
+        crate::dialogs::confirm(app).unwrap();
+    };
+    // Show Import Options off: a Shift-click on a text file opens Text Import Options, whose OK
+    // places it.
+    load(&mut app, json!([notes, line, a]), false);
+    assert_eq!(count(&app), Some(3));
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+    assert_eq!(count(&app), Some(2), "the cursor goes on to the next file");
+    // A DXF drawing opens DXF Import Options.
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::dxf_import::KIND));
+    app.ui.dialog = None;
+    // A PNG image has no import options: it is placed.
+    let placed = images(&app, 0);
+    gesture(&mut app, shift, 10.0);
+    assert_eq!((dialog_kind(&app), images(&app, 0)), (None, placed + 1));
+    // Show Import Options on: one dialog, not two.
+    load(&mut app, json!([notes, a]), true);
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some(crate::dialogs::text_import::KIND));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(dialog_kind(&app), None);
+    // Off, a Shift-drag places at once, as a drag does.
+    load(&mut app, json!([notes, a]), false);
+    gesture(&mut app, shift, 200.0);
+    assert_eq!(dialog_kind(&app), None);
+    assert!(selected_text(&app).contains("three"));
+    // A plain click places at once.
+    let placed = images(&app, 0);
+    gesture(&mut app, vectorcraft_tools::Mods::default(), 10.0);
+    assert_eq!((dialog_kind(&app), images(&app, 0)), (None, placed + 1));
+    // A cursor loaded by file.place.queue with a `page`: the Shift-click still asks for the page.
+    let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")];
+    let two = dir.file("two.pdf", &pdf(&pages, None));
+    app.run("file.place.queue", json!({"paths": [two], "link": false, "page": 2})).unwrap();
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), Some("importPdf"));
+    app.ui.dialog = None;
+    // A one-page PDF opens no dialog, and is placed with the options the cursor was loaded with.
+    let one = dir.file("one.pdf", &pdf(&pages[..1], None));
+    app.run("file.place.queue", json!({"paths": [one], "link": false, "crop": "bounding"})).unwrap();
+    gesture(&mut app, shift, 10.0);
+    assert_eq!(dialog_kind(&app), None);
+    let st = app.session.active().unwrap();
+    let b = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+    assert!((b.width() - 10.0).abs() < 0.01, "the bounding box: {}", b.width());
+}
+
 /// An encrypted PDF in the place cursor asks for its password when clicked, with Show Import
 /// Options on or off, and the password's OK places it where the click put it.
 #[test]

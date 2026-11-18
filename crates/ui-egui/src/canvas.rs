@@ -52,7 +52,7 @@ use fill::{fill_view, polygon_area};
 #[cfg(test)]
 use grid::ruler_rects;
 use grid::{LineLook, PIXEL_GRID, PIXEL_GRID_ZOOM, checker, clip_segment, grid, ruler_input, rulers, rulers_hidden, textured_quad, view_bounds};
-pub(crate) use grid::{RulerScale, checker_texture, ruler_label, ruler_origin_dragging};
+pub(crate) use grid::{RulerScale, checker_texture, checker_tile, ruler_label, ruler_origin_dragging};
 #[cfg(test)]
 pub(crate) use grid::{TRANSPARENCY_GRID, vertical_label_height};
 use home::home;
@@ -63,15 +63,17 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 pub use overlays::SharedPaths;
 #[cfg(test)]
 use overlays::selected_anchor;
-use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
-pub use panes::Panes;
+use overlays::{
+    HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, overlay_hover_text, selection_overlay,
+};
+pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, note_drop, noted_cursor, pane, release_on_noted, tile, tiled_area};
+pub(crate) use raster::{KeptFrame, color_image, color_image_owned, render_job};
 use raster::{changed_pixels, frame_ppp, pixel_region, upload};
-pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
-#[cfg(test)]
-pub(crate) use task_bar::chip_paints;
 use task_bar::task_bar;
+#[cfg(test)]
+pub(crate) use task_bar::{chip_paints, images_with_other_art};
 pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_fonts, task_bar_shows_type};
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
@@ -175,7 +177,7 @@ enum Drag {
     },
     /// A Selection tool move over a panel or toolbar: the art waits where it last moved on the
     /// canvas, and the panels get it ([`widgets::PanelDrag::Art`]) if it is released there. Back
-    /// on the canvas the move goes on, as in Illustrator (#2826).
+    /// on the canvas the move goes on (#2826).
     Art,
     /// Fingers making a touch gesture ([`crate::touch`]): the first one's press does nothing.
     Gesture,
@@ -423,6 +425,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
         draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
         app.canvas.shared_paths = shared_paths;
+        crate::panels::tabs::paint_stop_guide(app, &painter, &xf);
+        overlay_hover_text(ui, &xf, &overlays, ui.data(|d| d.get_temp::<Drag>(drag_id())).is_some());
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);
@@ -831,7 +835,7 @@ fn frame_options(
         // Type › Highlight Substituted Fonts: pink behind text in a substitute font.
         highlight_substituted_fonts: app.session.prefs.highlight_substituted_fonts,
         // General › Anti-aliased Artwork: off, edges are hard on screen (raster effects and
-        // pattern tiles stay smooth), as in Illustrator.
+        // pattern tiles stay smooth).
         anti_alias: if app.session.prefs.anti_aliased_artwork { vectorcraft_render::AntiAlias::Art } else { vectorcraft_render::AntiAlias::None },
         progressive_placed: true,
         trace_views: true,
