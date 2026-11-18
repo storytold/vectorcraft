@@ -1462,6 +1462,57 @@ fn dragging_a_layer_into_the_empty_space_under_the_rows_moves_it_to_the_bottom()
     assert_eq!(ids(&app), vec![top, bottom], "the top layer is now the bottom one");
 }
 
+/// #8237: with Alt, the top layer dropped on the top edge of its own row copies above itself, and
+/// the bottom layer dropped in the empty space under the list copies below itself. Without Alt,
+/// neither drop changes anything.
+#[test]
+fn alt_dragging_the_top_layer_up_or_the_bottom_layer_down_copies_it() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({"top": true})).unwrap();
+    let ids = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    let [bottom, top] = ids(&app)[..] else { panic!("two layers") };
+    let ctx = egui::Context::default();
+    // Rows: the top layer, the bottom layer, then empty space.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    let row = |y: f32| egui::pos2(150.0, y);
+    let top_edge = |y: f32| egui::pos2(150.0, y - ROW_MEDIUM * 0.4);
+    let under = |y: f32| egui::pos2(150.0, y + 3.0 * ROW_MEDIUM);
+    drag(&mut app, &ctx, row(circles[0].y), top_edge(circles[0].y), false);
+    drag(&mut app, &ctx, row(circles[1].y), under(circles[1].y), false);
+    assert_eq!(ids(&app), vec![bottom, top], "moved onto their own places, nothing changes");
+    drag(&mut app, &ctx, row(circles[0].y), top_edge(circles[0].y), true);
+    let after = ids(&app);
+    assert_eq!((after.len(), &after[..2]), (3, &[bottom, top][..]), "a copy above the top layer");
+    // Rows: the copy, the top layer, the bottom layer, then empty space.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 3);
+    drag(&mut app, &ctx, row(circles[2].y), under(circles[2].y), true);
+    let after = ids(&app);
+    assert_eq!((after.len(), after[1]), (4, bottom), "a copy below the bottom layer");
+}
+
+/// #8237: a document's only layer, Alt-dragged up onto its own row or down into the empty space,
+/// is copied above or below itself.
+#[test]
+fn a_lone_layer_alt_dragged_up_or_down_is_copied() {
+    for (up, at) in [(true, 0), (false, 1)] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let ids = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+        let [only] = ids(&app)[..] else { panic!("one layer") };
+        let ctx = egui::Context::default();
+        let (circles, _) = frame(&mut app, &ctx, vec![], false);
+        assert_eq!(circles.len(), 1);
+        let y = circles[0].y;
+        let to = if up { y - ROW_MEDIUM * 0.4 } else { y + 3.0 * ROW_MEDIUM };
+        drag(&mut app, &ctx, egui::pos2(150.0, y), egui::pos2(150.0, to), true);
+        let after = ids(&app);
+        assert_eq!((after.len(), after[at]), (2, only), "up: {up}");
+    }
+}
+
 #[test]
 fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     let (mut app, [layer, sub, g, _, a, c]) = nested();
@@ -1491,6 +1542,57 @@ fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     assert_eq!(parent(&app, g), Some(sub));
     assert_eq!(app.session.active().unwrap().doc.node_count(), count + 2, "the group and its rectangle, copied");
     let _ = (layer, c);
+}
+
+/// One headless frame of the panel with `events` (Alt held when `alt`) → the cursor it asks for,
+/// and the cursor bitmap it hands the OS, if any.
+fn cursor_frame(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    alt: bool,
+) -> (egui::CursorIcon, Option<egui::CustomCursorImage>) {
+    let mut events = events;
+    events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
+    let mut out = ctx.run_ui(egui::RawInput { events, ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    (out.platform_output.cursor_icon, out.platform_output.cursor_image)
+}
+
+/// #8217: a row dragged over the list shows the copy cursor while Alt is held, as the drop then
+/// copies, and the grabbing hand otherwise, following Alt as it goes down and up mid-drag. The copy
+/// cursor is the panels' add cursor (#8241): where the window shows glyphs as OS cursors (Windows,
+/// X11, which have no system copy cursor winit can show), the white arrow with a plus.
+#[test]
+fn alt_shows_the_copy_cursor_while_rows_are_dragged() {
+    let (mut app, _) = nested();
+    let ctx = egui::Context::default();
+    // Rows: Layer 1, Sub, g, b, a, c.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 6);
+    let (from, to) = (egui::pos2(150.0, circles[2].y), egui::pos2(150.0, circles[5].y));
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from)], false);
+    frame(&mut app, &ctx, vec![button(from, true)], false);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(from + vec2(0.0, 6.0))], false);
+    let glyph = crate::cursors::add_cursor_is_a_glyph(&app).then(|| app.canvas.cursors.get(vectorcraft_tools::Cursor::GroupSelection, 1.0)).flatten();
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(to)], false), (egui::CursorIcon::Grabbing, None), "a move");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], true), (egui::CursorIcon::Copy, glyph), "Alt held: the drop copies");
+    assert_eq!(cursor_frame(&mut app, &ctx, vec![], false), (egui::CursorIcon::Grabbing, None), "Alt let go: a move again");
+    cursor_frame(&mut app, &ctx, vec![button(to, false)], false);
+    assert_ne!(cursor_frame(&mut app, &ctx, vec![], true).0, egui::CursorIcon::Copy, "no drag, no copy cursor");
+}
+
+/// The selected-art square copies with Alt as rows do; off the list (the trash, New Layer) Alt
+/// copies nothing, and guide rows keep their own cursor.
+#[test]
+fn drag_cursor_shows_a_copy_only_where_the_drop_copies() {
+    let (copy, grabbing) = (Some(egui::CursorIcon::Copy), Some(egui::CursorIcon::Grabbing));
+    for drag in [LayersDrag::Rows(vec![NodeId(1)]), LayersDrag::Art] {
+        assert_eq!(super::drag_cursor(&drag, true, true), copy);
+        assert_eq!(super::drag_cursor(&drag, false, true), grabbing);
+        assert_eq!(super::drag_cursor(&drag, true, false), grabbing, "off the list");
+    }
+    assert_eq!(super::drag_cursor(&LayersDrag::Guides(vec![0]), true, true), None);
 }
 
 /// An Intertwine group's row takes a dragged row inside it, as a group's does, and the object
@@ -2080,6 +2182,97 @@ fn the_panel_menu_lists_every_operation() {
     ] {
         assert!(texts.iter().any(|(t, _)| t.trim() == label), "{label} missing from {texts:?}");
     }
+}
+
+/// With Show Layers Only on, Locate Object becomes Locate Layer in the panel menu and a row's
+/// menu, and the bottom bar's Locate button highlights the sublayer holding the selected art,
+/// opening the layer around it. Off, the button highlights the art's own row.
+#[test]
+fn with_show_layers_only_locate_object_becomes_locate_layer() {
+    let (mut app, [layer, sub, _, b, _, _]) = nested();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let shown = |app: &mut VectorcraftApp, events: Vec<egui::Event>, f: fn(&mut VectorcraftApp, &mut egui::Ui)| {
+        super::super::tests_appearance::frame_events(&ctx, app, events, f).into_iter().map(|(t, _)| t.trim().to_string()).collect::<Vec<_>>()
+    };
+    let has = |texts: &[String], s: &str| texts.iter().any(|t| t == s);
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    let off = shown(&mut app, vec![], menu);
+    assert!(has(&off, "Locate Object") && !has(&off, "Locate Layer"), "{off:?}");
+    let locate = |app: &mut VectorcraftApp| {
+        let at = bar_buttons(app, &ctx)[4];
+        click_with(app, &ctx, at, egui::Modifiers::NONE);
+    };
+    locate(&mut app);
+    assert_eq!(rows_of(&app), vec![b], "off: the art's own row");
+
+    app.ui.layers_panel.layers_only = true;
+    let on = shown(&mut app, vec![], menu);
+    assert!(has(&on, "Locate Layer") && !has(&on, "Locate Object"), "{on:?}");
+    app.session.active_mut().unwrap().layers_open.set(layer, false);
+    shown(&mut app, vec![], show);
+    locate(&mut app);
+    assert_eq!(rows_of(&app), vec![sub], "on: the sublayer holding the art");
+    shown(&mut app, vec![], show);
+    assert!(app.session.active().unwrap().layers_open.contains(layer), "the layer around the sublayer opens");
+    assert!(has(&shown(&mut app, vec![], show), "Sub"), "the sublayer's row shows");
+
+    // A row's menu says Locate Layer too.
+    let c = frame(&mut app, &ctx, vec![], false).0;
+    let at = egui::pos2(150.0, c[0].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    let row_menu = shown(&mut app, vec![], show);
+    assert!(has(&row_menu, "Locate Layer") && !has(&row_menu, "Locate Object"), "{row_menu:?}");
+}
+
+/// Locate Layer or Locate Object run again on the row it already highlighted reveals that row
+/// again: the layers around it that were closed since open, once per Locate.
+#[test]
+fn a_repeated_locate_reveals_the_row_it_already_highlighted() {
+    let (mut app, [layer, sub, g, b, _, _]) = nested();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let draw = |app: &mut VectorcraftApp| {
+        super::super::tests_appearance::frame_events(&ctx, app, vec![], show).into_iter().map(|(t, _)| t.trim().to_string()).collect::<Vec<_>>()
+    };
+    let open = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().layers_open.contains(id);
+    let close = |app: &mut VectorcraftApp, ids: &[NodeId]| {
+        for id in ids {
+            app.session.active_mut().unwrap().layers_open.set(*id, false);
+        }
+    };
+    app.session.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+
+    // Locate Layer: the sublayer stays highlighted while its layer is closed, and Locate Layer again opens it.
+    app.ui.layers_panel.layers_only = true;
+    app.session.execute("layer.locate", &json!({"layersOnly": true})).unwrap();
+    draw(&mut app);
+    assert_eq!(rows_of(&app), vec![sub]);
+    close(&mut app, &[layer]);
+    assert!(!draw(&mut app).iter().any(|t| t == "Sub"), "the closed layer hides the sublayer");
+    app.session.execute("layer.locate", &json!({"layersOnly": true})).unwrap();
+    assert!(draw(&mut app).iter().any(|t| t == "Sub"), "the sublayer's row shows again");
+    assert!(open(&app, layer), "the layer around the sublayer opens again");
+    assert_eq!(rows_of(&app), vec![sub]);
+    // Once per Locate: a later frame leaves a layer closed after that alone.
+    close(&mut app, &[layer]);
+    draw(&mut app);
+    assert!(!open(&app, layer), "a frame without a Locate opens nothing");
+
+    // Locate Object: the same for the object's row inside a closed sublayer and group.
+    app.ui.layers_panel.layers_only = false;
+    app.session.execute("layer.locate", &json!({})).unwrap();
+    draw(&mut app);
+    assert_eq!(rows_of(&app), vec![b]);
+    close(&mut app, &[sub, g]);
+    draw(&mut app);
+    app.session.execute("layer.locate", &json!({})).unwrap();
+    draw(&mut app);
+    assert!(open(&app, layer) && open(&app, sub) && open(&app, g), "the layers and group around the object open again");
+    assert_eq!(rows_of(&app), vec![b]);
 }
 
 /// ≡ › Save Selection lists the saved selections: choosing one recalls it, Update Selection

@@ -1,8 +1,8 @@
 use super::{
     Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
-    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite,
-    fit_to_old_edge, ids_json, is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids,
-    source_nodes, source_shapes, switch_or,
+    PathData, Point, Rect, Result, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, fit_to_old_edge, ids_json,
+    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
+    switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -51,6 +51,27 @@ fn make_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result<
     replace_roots(d, roots, vec![g])?;
     sel.set([gid]);
     Ok((gid, nf, ne))
+}
+
+/// The children of Live Paint group `g` besides its sources group ([`b::sources`]) and its faces and
+/// edges (paths named [`FACE_NAME`] or [`EDGE_NAME`]), back to front: objects drawn in it in
+/// isolation mode. A group or other object named like a part is one of them.
+fn others_in(g: &Node) -> impl Iterator<Item = &Arc<Node>> {
+    let src = b::sources(g).map(|s| s.id);
+    g.children()
+        .into_iter()
+        .flatten()
+        .filter(move |c| Some(c.id) != src && !(c.path_data().is_some() && matches!(c.name.as_deref(), Some(FACE_NAME | EDGE_NAME))))
+}
+
+/// Make `parts` (a sources group, faces and edges made again) the children of Live Paint group `g`,
+/// with its other children ([`others_in`]) that are not among `gone` kept in front of them, in their
+/// order.
+fn set_parts(g: &mut Node, mut parts: Vec<Arc<Node>>, gone: &[NodeId]) {
+    parts.extend(others_in(g).filter(|c| !gone.contains(&c.id)).cloned());
+    if let Some(ch) = g.children_mut() {
+        *ch = parts;
+    }
 }
 
 /// Select `ids` alone, without an undo step, when they are not selected that way already.
@@ -134,9 +155,15 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
     let old_parts = old.clone();
     let mut sources = source_nodes(&old);
+    // The objects drawn in the other Live Paint groups besides their parts stay in the merged group.
+    let mut others = vec![];
     for r in roots {
         if *r != target {
-            sources.extend(source_nodes(d.node(*r).ok_or(EngineError::NoNode(*r))?));
+            let n = d.node(*r).ok_or(EngineError::NoNode(*r))?;
+            sources.extend(source_nodes(n));
+            if is_live_paint(n) {
+                others.extend(others_in(n).cloned());
+            }
         }
     }
     // Merge applies the Gap Options' merge rules to the groups' options, bottom-most first.
@@ -146,8 +173,9 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
     // The group keeps its name, lock, visibility, transparency, appearance, opacity mask, graphic
     // style link and the rest; its children are made again and its Gap Options set to the merged ones.
     let mut g = old;
+    set_parts(&mut g, children, roots);
     if let Some(ch) = g.children_mut() {
-        *ch = children;
+        ch.extend(others);
     }
     g.extras_mut().live_paint_gaps = stored_gap_options(options);
     for (pt, carried) in keep_faces {
@@ -199,6 +227,38 @@ pub(super) fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
+/// The Live Paint group whose drawn art is added when isolation mode leaves `isolated`: the innermost
+/// Live Paint group that is `isolated` or holds it, such as a group drawn in an isolated Live Paint
+/// group and then isolated itself. None when `isolated` is not in a Live Paint group.
+pub(crate) fn isolated_live_paint(d: &Document, isolated: NodeId) -> Option<NodeId> {
+    d.ancestry(isolated)?.into_iter().rev().find(|id| d.node(*id).is_some_and(is_live_paint))
+}
+
+/// The children of Live Paint group `g` besides its parts ([`others_in`]) that Live Paint takes
+/// ([`b::live_paint_takes`]) and that are shown and unlocked with everything in them, back to
+/// front: the paths drawn in it in isolation mode.
+fn drawn_in(g: &Node) -> Vec<NodeId> {
+    fn open(n: &Node) -> bool {
+        n.visible && !n.locked && n.children().is_none_or(|ch| ch.iter().all(|c| open(c)))
+    }
+    others_in(g).filter(|c| open(c) && b::live_paint_takes(c)).map(|c| c.id).collect()
+}
+
+/// Leaving isolation mode in Live Paint group `g` adds the paths drawn in it to the group as
+/// `livePaint.merge` does, in one "Merge Live Paint" undo step; → whether any were added. Type,
+/// images, other objects Live Paint does not take, and hidden or locked objects stay where they
+/// are. With nothing to add, or when `g` is not a Live Paint group, nothing changes and no undo
+/// step is recorded.
+pub(crate) fn merge_drawn_in_isolation(s: &mut Session, g: NodeId) -> Result<bool> {
+    let drawn = s.doc()?.doc.node(g).filter(|n| is_live_paint(n)).map(drawn_in).unwrap_or_default();
+    if drawn.is_empty() {
+        return Ok(false);
+    }
+    let roots: Vec<NodeId> = std::iter::once(g).chain(drawn).collect();
+    s.edit("Merge Live Paint", |d, sel| merge_live(d, sel, &roots))?;
+    Ok(true)
+}
+
 fn live_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
     let ids = root_ids(s, p)?;
@@ -216,7 +276,8 @@ pub(super) fn lp_release(s: &mut Session, p: &Value) -> Result<Value> {
         let mut released = Beside::replacing(d, &targets);
         for g in &targets {
             let n = d.node(*g).cloned().ok_or(EngineError::NoNode(*g))?;
-            let srcs: Vec<Node> = source_nodes(&n).iter().map(|c| (**c).clone()).collect();
+            // The objects drawn in the group besides its parts are released in front of its paths.
+            let srcs: Vec<Node> = source_nodes(&n).iter().chain(others_in(&n)).map(|c| (**c).clone()).collect();
             out.extend(srcs.iter().map(|c| c.id));
             released.put(d, *g, srcs)?;
         }
@@ -245,10 +306,12 @@ pub(super) fn lp_expand(s: &mut Session, p: &Value) -> Result<Value> {
                 e.trace = None;
                 e.live_paint_gaps = None;
             }
+            // Objects drawn in the group ([`others_in`]) stay, whatever they are named.
+            let src = b::sources(n).map(|c| c.id);
             if let Some(ch) = n.children_mut() {
                 ch.retain(|c| match c.name.as_deref() {
-                    Some(SOURCES_NAME) => false,
-                    Some(FACE_NAME | EDGE_NAME) => draws(c),
+                    _ if Some(c.id) == src => false,
+                    Some(FACE_NAME | EDGE_NAME) if c.path_data().is_some() => draws(c),
                     _ => true,
                 });
             }
@@ -354,9 +417,7 @@ pub(super) fn lp_gap_options(s: &mut Session, p: &Value) -> Result<Value> {
             // The faces change only with what paint stops at, or with new paths.
             if added > 0 || options.max_gap() != old.gap_options().max_gap() {
                 let (children, _, _) = build_children(d, sources, options.max_gap())?;
-                if let Some(ch) = n.children_mut() {
-                    *ch = children;
-                }
+                set_parts(&mut n, children, &[]);
                 repaint_from(&mut n, &old);
             }
             n.extras_mut().live_paint_gaps = stored_gap_options(options);

@@ -8,6 +8,9 @@
 //! Both are found as roots over the normal's angle: sampled, then refined by bisection, with
 //! sampled minima refined too so that a double root (outlines that touch) or two roots between
 //! neighboring samples are kept.
+//!
+//! One of the two may be a point instead ([`Outline::point`]): its support value is `p · n`, and
+//! the tangents are the lines through it that touch the other outline.
 
 use std::f64::consts::TAU;
 
@@ -60,7 +63,7 @@ pub enum OutlineError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Coincide;
 
-/// A convex closed outline that [`common_tangents`] takes.
+/// A convex closed outline, or a point, that [`common_tangents`] takes.
 #[derive(Clone, Debug)]
 pub enum Outline {
     /// The unit circle under an affine map: the center is the map's translation, `m` its linear
@@ -70,9 +73,19 @@ pub enum Outline {
     /// when the segments run counter-clockwise (y up); the segment where `p · n` is largest then
     /// comes later in the list as the angle of `n` grows.
     Convex { segments: Vec<CubicBez>, center: Point, size: f64, ccw: bool },
+    /// A single point.
+    Point { at: Point },
 }
 
 impl Outline {
+    /// The point `at`, whose tangents are the lines through it.
+    pub fn point(at: Point) -> Result<Self, OutlineError> {
+        if !at.x.is_finite() || !at.y.is_finite() {
+            return Err(OutlineError::Empty);
+        }
+        Ok(Outline::Point { at })
+    }
+
     /// The ellipse that `unit` maps the unit circle onto.
     pub fn ellipse(unit: Affine) -> Result<Self, OutlineError> {
         let [a, b, c, d, e, f] = unit.as_coeffs();
@@ -183,6 +196,7 @@ impl Outline {
                 size: *size,
                 ccw: *ccw,
             },
+            Outline::Point { at } => Outline::Point { at: *at + d },
         }
     }
 
@@ -203,7 +217,7 @@ impl Outline {
     /// The support value at `n` and the segment it is reached on, from every segment.
     fn support_scan(&self, n: Vec2) -> (f64, usize) {
         match self {
-            Outline::Ellipse { .. } => (self.support(n), 0),
+            Outline::Ellipse { .. } | Outline::Point { .. } => (self.support(n), 0),
             Outline::Convex { segments, .. } => {
                 let mut best = (f64::MIN, 0);
                 for (i, s) in segments.iter().enumerate() {
@@ -222,7 +236,7 @@ impl Outline {
     /// where the support value was reached at a normal angle a little less than `n`'s.
     fn support_from(&self, n: Vec2, from: usize) -> (f64, usize) {
         match self {
-            Outline::Ellipse { .. } => (self.support(n), 0),
+            Outline::Ellipse { .. } | Outline::Point { .. } => (self.support(n), 0),
             Outline::Convex { segments, ccw, .. } => {
                 let len = segments.len();
                 if len == 0 {
@@ -251,14 +265,20 @@ impl Outline {
         }
     }
 
-    /// The center: an ellipse's, or a path's center of area.
+    /// The center: an ellipse's, a path's center of area, or the point itself.
     pub fn center(&self) -> Point {
         match self {
             Outline::Ellipse { center, .. } | Outline::Convex { center, .. } => *center,
+            Outline::Point { at } => *at,
         }
     }
 
-    /// The diagonal of the bounds (an ellipse's: of the box its axes span).
+    /// Whether this is a point.
+    pub fn is_point(&self) -> bool {
+        matches!(self, Outline::Point { .. })
+    }
+
+    /// The diagonal of the bounds (an ellipse's: of the box its axes span; a point's: 0).
     pub fn size(&self) -> f64 {
         match self {
             Outline::Ellipse { m, .. } => {
@@ -266,6 +286,7 @@ impl Outline {
                 2.0 * (a.hypot(c).powi(2) + b.hypot(d).powi(2)).sqrt()
             }
             Outline::Convex { size, .. } => *size,
+            Outline::Point { .. } => 0.0,
         }
     }
 
@@ -280,6 +301,7 @@ impl Outline {
                 }
                 best
             }
+            Outline::Point { at } => at.to_vec2().dot(n),
         }
     }
 
@@ -320,6 +342,7 @@ impl Outline {
                 let Some(&(peak, _)) = all.iter().max_by(|x, y| x.1.total_cmp(&y.1)) else { return vec![] };
                 all.into_iter().filter(|(p, v)| h - v <= tol + slope * (*p - peak).hypot()).map(|(p, _)| p).collect()
             }
+            Outline::Point { at } => vec![*at],
         }
     }
 }
@@ -406,7 +429,14 @@ fn dir(angle: f64) -> Vec2 {
 /// the angle of its normal. Separate outlines have two of each; overlapping ones only external
 /// ones (two for ellipses, possibly more for paths whose outlines cross more often); one inside the
 /// other none; outlines that touch share one tangent where they touch.
+///
+/// When one of them is a point, its external and internal tangents are the same lines, and they
+/// come back as external ones: two when the point lies outside the other outline, one when it lies
+/// on it, none inside. Two points have none.
 pub fn common_tangents(a: &Outline, b: &Outline) -> Result<Vec<Tangent>, Coincide> {
+    if a.is_point() && b.is_point() {
+        return Ok(vec![]);
+    }
     // Worked out about the point between the two centers.
     let origin = (a.center().to_vec2() + b.center().to_vec2()) / 2.0;
     let (a, b) = (&a.shifted(-origin), &b.shifted(-origin));
@@ -434,7 +464,11 @@ pub fn common_tangents(a: &Outline, b: &Outline) -> Result<Vec<Tangent>, Coincid
     let (ha, hb, hb_back) = (hints(a, 1.0), hints(b, 1.0), hints(b, -1.0));
     let hint = |h: &[usize], k: usize| h.get(k).copied().unwrap_or(0);
     let external = roots(&at, &|t, k| a.support_from(dir(t), hint(&ha, k)).0 - b.support_from(dir(t), hint(&hb, k)).0, tol)?;
-    let internal = roots(&at, &|t, k| a.support_from(dir(t), hint(&ha, k)).0 + b.support_from(-dir(t), hint(&hb_back, k)).0, tol)?;
+    let internal = if a.is_point() || b.is_point() {
+        vec![]
+    } else {
+        roots(&at, &|t, k| a.support_from(dir(t), hint(&ha, k)).0 + b.support_from(-dir(t), hint(&hb_back, k)).0, tol)?
+    };
     let (a, b) = (Hinted { o: a, at: &at, hints: &ha }, Hinted { o: b, at: &at, hints: &hb });
     let mut out = Vec::with_capacity(external.len() + internal.len());
     for (kind, list) in [(TangentKind::External, external), (TangentKind::Internal, internal)] {
@@ -506,8 +540,13 @@ fn tangent_at(a: &Hinted, b: &Hinted, kind: TangentKind, angle: f64, double: boo
     // A double root's angle is found less exactly than a simple one's, so touching points may
     // stand a little apart.
     let (from, to) = if double && hi - lo <= 1e-6 * size {
-        // Touching at one point: the narrower outline's width along the line, centered there.
-        let width = [a, b].map(|o| o.support(angle + TAU / 4.0).0 + o.support(angle - TAU / 4.0).0).into_iter().fold(f64::MAX, f64::min);
+        // Touching at one point: the narrower outline's width along the line, centered there. A
+        // point on the other outline takes that outline's width.
+        let width = [a, b]
+            .into_iter()
+            .filter(|o| !o.o.is_point())
+            .map(|o| o.support(angle + TAU / 4.0).0 + o.support(angle - TAU / 4.0).0)
+            .fold(f64::MAX, f64::min);
         let mid = (lo + hi) / 2.0;
         (mid - width / 2.0, mid + width / 2.0)
     } else if mean(&on_a) <= mean(&on_b) {
@@ -973,6 +1012,127 @@ mod tests {
         let mut best = f64::MIN;
         each_extreme(&s, Vec2::new(0.0, 1.0), |_, v| best = best.max(v));
         assert!((best - 0.25).abs() < 1e-12, "{best}");
+    }
+
+    #[test]
+    fn a_point_outside_a_turned_ellipse_has_two_tangents_through_it() {
+        let m = ellipse_map(100.0, 50.0, 40.0, 15.0, 30.0);
+        let (oval, p) = (Outline::ellipse(m).unwrap(), Point::new(-60.0, 120.0));
+        let samples = sample_ellipse(m, 5_000);
+        for point_first in [true, false] {
+            let point = Outline::point(p).unwrap();
+            let all = if point_first { common_tangents(&point, &oval) } else { common_tangents(&oval, &point) }.unwrap();
+            assert_eq!(all.len(), 2, "{all:?}");
+            for t in &all {
+                assert_eq!(t.kind, TangentKind::External);
+                // Each runs from the first outline given to the second: from the point when it
+                // comes first.
+                let (at_point, on_oval) = if point_first { (t.from, t.to) } else { (t.to, t.from) };
+                assert!((at_point - p).hypot() < 1e-9, "{t:?}");
+                // Taken back to the unit circle, the far end lies on it and the line runs square to
+                // its radius there.
+                let inv = m.inverse();
+                let (q, d) = ((inv * on_oval).to_vec2(), (inv * on_oval) - (inv * at_point));
+                assert!((q.hypot() - 1.0).abs() < 1e-9, "{q:?}");
+                assert!((q.dot(d) / d.hypot()).abs() < 1e-7, "{q:?} {d:?}");
+                // The whole ellipse lies on one side of the line.
+                let dir = on_oval - at_point;
+                let n = Vec2::new(-dir.y, dir.x) / dir.hypot();
+                let side: Vec<f64> = samples.iter().map(|s| (*s - at_point).dot(n)).collect();
+                let (lo, hi) = side.iter().fold((f64::MAX, f64::MIN), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+                assert!(lo > -1e-6 || hi < 1e-6, "crosses: {lo} .. {hi}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_point_on_inside_and_beside_a_path() {
+        // On a circle: the one tangent there, centered on the point and as long as the circle is
+        // wide.
+        let on = common_tangents(&Outline::point(Point::new(10.0, 0.0)).unwrap(), &circle(0.0, 0.0, 10.0)).unwrap();
+        assert_eq!(on.len(), 1, "{on:?}");
+        assert!(ends_within(&on[0], Point::new(10.0, -10.0), Point::new(10.0, 10.0), 1e-5), "{on:?}");
+        // Inside, and two points: none.
+        assert!(common_tangents(&Outline::point(Point::new(3.0, 4.0)).unwrap(), &circle(0.0, 0.0, 10.0)).unwrap().is_empty());
+        let two = (Outline::point(Point::new(0.0, 0.0)).unwrap(), Outline::point(Point::new(5.0, 0.0)).unwrap());
+        assert!(common_tangents(&two.0, &two.1).unwrap().is_empty());
+        // Beside a square, in line with its bottom side: that tangent covers the whole side, and
+        // the other one touches the corner at (10, 10).
+        let square = SubPath::polyline(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)].map(Point::from), true);
+        let sq = Outline::convex(&square).unwrap();
+        let p = Point::new(20.0, 0.0);
+        let all = common_tangents(&Outline::point(p).unwrap(), &sq).unwrap();
+        assert_eq!(all.len(), 2, "{all:?}");
+        assert!(all.iter().any(|t| ends_at(t, p, Point::new(0.0, 0.0))), "{all:?}");
+        assert!(all.iter().any(|t| ends_at(t, p, Point::new(10.0, 10.0))), "{all:?}");
+        assert!(all.iter().all(|t| (t.from - p).hypot() < 1e-9), "from the point: {all:?}");
+        // On a straight side, off its middle: the one tangent is that side, covered whole.
+        let side = common_tangents(&Outline::point(Point::new(2.0, 0.0)).unwrap(), &sq).unwrap();
+        assert_eq!(side.len(), 1, "{side:?}");
+        assert!(ends_at(&side[0], Point::new(0.0, 0.0), Point::new(10.0, 0.0)), "{side:?}");
+        // At a corner of the square: one line through the corner, at the middle of the directions
+        // that touch there, as long as the square is wide along it.
+        let corner = common_tangents(&Outline::point(Point::new(10.0, 10.0)).unwrap(), &sq).unwrap();
+        assert_eq!(corner.len(), 1, "{corner:?}");
+        // The diagonal is 10√2 long, so each end lies 5√2 from the corner, along (1, -1).
+        assert!(ends_within(&corner[0], Point::new(15.0, 5.0), Point::new(5.0, 15.0), 1e-5), "{corner:?}");
+        // A point that is not finite is refused.
+        assert_eq!(Outline::point(Point::new(f64::NAN, 0.0)).err(), Some(OutlineError::Empty));
+        assert_eq!(Outline::point(Point::new(0.0, f64::INFINITY)).err(), Some(OutlineError::Empty));
+    }
+
+    #[test]
+    fn a_point_placed_on_a_turned_outline_has_one_tangent() {
+        // A point worked out on the outline lies a rounding error inside or outside it, and still
+        // gets the one line there, as long as the outline is wide along it.
+        let one = |p: Point, o: &Outline, samples: &[Point]| {
+            let all = common_tangents(&Outline::point(p).unwrap(), o).unwrap();
+            assert_eq!(all.len(), 1, "{p:?}: {all:?}");
+            // The line runs through the point.
+            let (a, d) = (all[0].from, all[0].to - all[0].from);
+            assert!(d.hypot() > 1.0 && ((p - a).cross(d) / d.hypot()).abs() < 1e-6, "{p:?}: {all:?}");
+            // Its length is the outline's width along it, measured on dense samples.
+            let u = d / d.hypot();
+            let (lo, hi) = samples.iter().map(|s| s.to_vec2().dot(u)).fold((f64::MAX, f64::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+            assert!((d.hypot() - (hi - lo)).abs() < 1e-3, "{p:?}: {} against {}", d.hypot(), hi - lo);
+        };
+        let m = ellipse_map(100.0, 50.0, 40.0, 15.0, 30.0);
+        let (oval, oval_samples) = (Outline::ellipse(m).unwrap(), sample_ellipse(m, 20_000));
+        for k in 0..37 {
+            let a = 0.17 + k as f64 * TAU / 37.0;
+            one(m * Point::new(a.cos(), a.sin()), &oval, &oval_samples);
+        }
+        // A closed Bézier circle, turned and moved: on each anchor and partway along each segment.
+        let turned = shapes::ellipse(Rect::new(-60.0, -60.0, 60.0, 60.0)).transformed(Affine::translate((37.3, -12.9)) * Affine::rotate(0.7));
+        let sp = turned.subpaths[0].clone();
+        let (path, path_samples) = (Outline::convex(&sp).unwrap(), sample_path(&sp, 5_000));
+        for an in sp.anchors.iter() {
+            one(an.p, &path, &path_samples);
+        }
+        for k in 0..sp.segment_count() {
+            for t in [0.21, 0.5, 0.83] {
+                one(sp.segment(k).eval(t), &path, &path_samples);
+            }
+        }
+    }
+
+    #[test]
+    fn a_point_within_the_touching_tolerance_counts_as_on_the_outline() {
+        // The tolerance is a billionth of the larger of the circle's size and the point's distance
+        // from its center: closer than that, inside or outside, the point gets the one line there.
+        let round = circle(0.0, 0.0, 10.0);
+        let tol = 1e-9 * round.size().max(10.0);
+        let at = |dx: f64| common_tangents(&Outline::point(Point::new(10.0 + dx, 0.0)).unwrap(), &round).unwrap();
+        for dx in [-0.5 * tol, 0.5 * tol] {
+            let on = at(dx);
+            assert_eq!(on.len(), 1, "{dx}: {on:?}");
+            assert!(ends_within(&on[0], Point::new(10.0, -10.0), Point::new(10.0, 10.0), 1e-5), "{dx}: {on:?}");
+        }
+        // Farther than that, a point inside gets none and a point outside gets two.
+        assert!(at(-100.0 * tol).is_empty());
+        assert_eq!(at(100.0 * tol).len(), 2);
+        assert!(at(-1e-6).is_empty());
+        assert_eq!(at(1e-6).len(), 2);
     }
 
     #[test]

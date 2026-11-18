@@ -430,6 +430,8 @@ fn set_live_shape_refuses_an_unknown_key() {
         json!({"id": 3, "radius": 5}),
         json!({"ids": [3], "sides": 6, "polygonAngle": 15, "polygonRadius": 20, "sideLength": null, "makeSidesEqual": true}),
         json!({"pieStart": 30, "pieEnd": 90, "invertPie": true}),
+        json!({"pieEnd": 90, "constrainPie": true}),
+        json!({"ids": [3], "lineLength": 72, "lineAngle": 90}),
         json!({"items": null}),
     ] {
         assert!(check_params(ID, &ok).is_ok(), "{ok}");
