@@ -124,7 +124,7 @@ fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<Live
 }
 
 pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
-    check_switches(p, &["invertPie", "makeSidesEqual", "relativeRadii"], "object.setLiveShape")?;
+    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "relativeRadii"], "object.setLiveShape")?;
     check_numbers(p, &["radius", "sides"], "object.setLiveShape")?;
     // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
     let items = match p.get("items").filter(|v| !v.is_null()) {
@@ -193,6 +193,12 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // An ellipse's pie (Ellipse Properties: Pie Start and End Angle, degrees; Invert Pie swaps them).
     let (pie_start, pie_end) = (angle("pieStart")?, angle("pieEnd")?);
     let invert = p.get("invertPie").and_then(Value::as_bool) == Some(true);
+    // Constrain Pie Angle: the one angle given moves the other by as much, so each ellipse keeps
+    // its span (its end angle less its start angle, counterclockwise).
+    let constrain = p.get("constrainPie").and_then(Value::as_bool) == Some(true);
+    if constrain && (invert || pie_start.is_some() == pie_end.is_some()) {
+        return Err(bad("object.setLiveShape", "`constrainPie` needs one of `pieStart` and `pieEnd`, without `invertPie`"));
+    }
     // A polygon's Polygon Properties: its angle, radius or side length, Make Sides Equal.
     let (polygon_angle, polygon_radius, side) = (angle("polygonAngle")?, length("polygonRadius")?, length("sideLength")?);
     let equal = p.get("makeSidesEqual").and_then(Value::as_bool) == Some(true);
@@ -204,7 +210,16 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // ellipse as 0° to 360°).
     let end_of = |a: f64| if a == 0.0 { 360.0 } else { a };
     let pie_of = |pie: (f64, f64)| {
-        let pie = (pie_start.unwrap_or(pie.0), pie_end.map_or(pie.1, end_of));
+        let span = (pie.1 - pie.0).rem_euclid(360.0);
+        let pie = match (constrain, pie_start, pie_end) {
+            // The angle it already has: nothing moves.
+            (true, Some(a), _) if a == pie.0 => pie,
+            (true, _, Some(a)) if end_of(a) == pie.1 => pie,
+            // A whole ellipse (a span of 0) stays whole.
+            (true, Some(a), _) => (a, end_of((a + span).rem_euclid(360.0))),
+            (true, _, Some(a)) => ((a - span).rem_euclid(360.0), end_of(a)),
+            _ => (pie_start.unwrap_or(pie.0), pie_end.map_or(pie.1, end_of)),
+        };
         if invert { (pie.1.rem_euclid(360.0), end_of(pie.0)) } else { pie }
     };
     // When every value given is the current one, the document and its undo history stay as they
