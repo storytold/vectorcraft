@@ -209,7 +209,10 @@ fn a_large_image_traced_as_a_flat_logo_shows_the_size_it_was_traced_at() {
     app.run("file.place", json!({"name": "logo.png", "dataBase64": data, "link": false})).unwrap();
     trace_with(&mut app, "Flat Logo");
     assert!(find_target(&app).stored.is_some(), "the image is traced: {}", app.ui.status);
-    assert_eq!(app.ui.status, "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.");
+    let note = "Flat Logo traced the image at 801 × 801 pixels, averaged down from 1602 × 1602.";
+    let status = format!("Traced with 1 note: {note}");
+    assert_eq!(app.ui.status, status);
+    assert_eq!(app.ui.status_notes, Some((status, vec![note.to_string()])));
 }
 
 #[test]
@@ -1576,7 +1579,11 @@ fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
 fn target_node_sorting_everything(app: &VectorcraftApp) -> Option<Node> {
     let st = app.session.active()?;
     let traceable = |n: &&Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
-    st.selection.in_paint_order(&st.doc).into_iter().find_map(|id| st.doc.node(id).filter(traceable).cloned()).or_else(|| first_selected(app))
+    st.selection
+        .in_paint_order(&st.doc)
+        .into_iter()
+        .find_map(|id| st.doc.node(id).filter(traceable).cloned())
+        .or_else(|| first_selected(app).map(|n| (*n).clone()))
 }
 
 /// [`Target`] from [`target_node_sorting_everything`] and a scan of the whole selection for Image

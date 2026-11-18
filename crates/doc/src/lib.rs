@@ -168,7 +168,7 @@ use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use stored_art::{StoredPlace, StoredRoot};
-pub use units::{ColorMode, Unit, parse_number};
+pub use units::{ColorMode, Unit, decimal_point, finite_in_every_unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {

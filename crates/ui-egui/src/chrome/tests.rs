@@ -172,11 +172,11 @@ fn right_stage(g: &super::RightGroup) -> String {
         w if w > super::MIN_SWITCHER => "narrower switcher",
         _ => "minimal switcher",
     };
-    format!("community {}, learn {}, {:?}, {switcher}", g.community, g.learn, g.search)
+    format!("community {}, learn {}, arrange {}, {:?}, {switcher}", g.community, g.learn, g.arrange, g.search)
 }
 
-/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then the search
-/// field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
+/// As the app bar's room runs short, the community button goes first, then Explore tutorials, then Arrange
+/// Documents, then the search field becomes the icon, then the workspace switcher narrows to its minimum, then the icon goes.
 /// Whatever shows fits in the room, down to the minimal switcher alone.
 #[test]
 fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
@@ -193,31 +193,33 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
             super::Search::Icon => w.gap + w.icon,
             super::Search::Hidden => 0.0,
         };
+        let arrange = if g.arrange { w.gap + w.icon } else { 0.0 };
         let learn = if g.learn { w.gap + w.icon } else { 0.0 };
         let community = if g.community { 10.0 + w.gap + w.community } else { 0.0 };
-        let used = g.switcher_w + 8.0 + search + learn + community;
+        let used = g.switcher_w + 8.0 + search + arrange + learn + community;
         assert!(used <= room || g.switcher_w == super::MIN_SWITCHER && g.search == super::Search::Hidden, "{room}: {g:?} needs {used}");
     }
     assert_eq!(
         stages,
         [
-            "community true, learn true, Field, full switcher",
-            "community false, learn true, Field, full switcher",
-            "community false, learn false, Field, full switcher",
-            "community false, learn false, Icon, full switcher",
-            "community false, learn false, Icon, narrower switcher",
-            "community false, learn false, Icon, minimal switcher",
+            "community true, learn true, arrange true, Field, full switcher",
+            "community false, learn true, arrange true, Field, full switcher",
+            "community false, learn false, arrange true, Field, full switcher",
+            "community false, learn false, arrange false, Field, full switcher",
+            "community false, learn false, arrange false, Icon, full switcher",
+            "community false, learn false, arrange false, Icon, narrower switcher",
+            "community false, learn false, arrange false, Icon, minimal switcher",
             // Once the icon has gone, the switcher takes the room it leaves.
-            "community false, learn false, Hidden, narrower switcher",
-            "community false, learn false, Hidden, minimal switcher",
+            "community false, learn false, arrange false, Hidden, narrower switcher",
+            "community false, learn false, arrange false, Hidden, minimal switcher",
         ]
     );
     // In Safe Mode the label's width is taken first (not counted in `room`), and the switcher goes
     // when a minimal one does not fit.
     let safe = |room| right_stage(&super::fit_right_group(&right_widths(room, true)));
-    assert_eq!(safe(700.0), "community true, learn true, Field, full switcher");
-    assert_eq!(safe(72.0), "community false, learn false, Hidden, minimal switcher");
-    assert_eq!(safe(71.0), "community false, learn false, Hidden, no switcher");
+    assert_eq!(safe(700.0), "community true, learn true, arrange true, Field, full switcher");
+    assert_eq!(safe(72.0), "community false, learn false, arrange false, Hidden, minimal switcher");
+    assert_eq!(safe(71.0), "community false, learn false, arrange false, Hidden, no switcher");
 }
 
 /// What screen readers call the app bar's search field, and the icon it becomes, before the shortcut.

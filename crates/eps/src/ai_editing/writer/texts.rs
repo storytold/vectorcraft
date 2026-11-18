@@ -1004,6 +1004,7 @@ impl TextDoc {
                     FirstBaseline::CapHeight => Some(2),
                     FirstBaseline::Leading => Some(3),
                     FirstBaseline::XHeight => Some(4),
+                    FirstBaseline::EmBoxHeight => Some(5),
                 };
                 if let Some(k) = kind {
                     data.push((10, dict(vec![(0, V::Int(k)), (1, real(o.first_baseline_min / scale))])));
