@@ -607,7 +607,7 @@ mod decimal_point_tests {
         }
         assert_eq!(mm("1,000.5"), None, "a point and a comma");
         assert_eq!(mm("1,2,3"), None, "two commas");
-        for thousand in ["1,000", "12,500 mm", "-1,000", "999,999mm"] {
+        for thousand in ["1,000", "12,500 mm", "-1,000", "+1,000", "999,999mm", "1,000\"", "1,000'"] {
             assert_eq!(mm(thousand), None, "{thousand} reads as thousands: refused, not a thousand times too small");
         }
         for (text, want) in [("0,125", 0.125), ("1,25", 1.25), ("1,0000", 1.0), ("1,500+2", 3.5)] {
