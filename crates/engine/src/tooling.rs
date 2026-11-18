@@ -283,6 +283,10 @@ impl Session {
             let points = self.tool.options().get("meshPoints").cloned().unwrap_or_else(|| Value::Array(vec![]));
             lent.set_option("meshPoints", &points);
         }
+        // The Cmd/Ctrl held for the loan is not the Cmd/Ctrl that mirrors a dragged handle (#7842).
+        if id == "directSelection" {
+            lent.set_option("lentByCmd", &Value::Bool(true));
+        }
         self.selection_at_lend = self.active().map(|d| (d.uid, d.selection.clone()));
         self.lender = Some(std::mem::replace(&mut self.tool, lent));
         Ok((PointerEvent { mods: Mods { cmd: false, ..ev.mods }, ..*ev }, settled))

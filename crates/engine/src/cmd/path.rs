@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Direction Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle; independent moves only that side and makes the anchor a corner; symmetric mirrors the other handle about the anchor without changing its kind (independent takes precedence); both default false",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle; independent moves only that side and makes the anchor a corner; symmetric mirrors the other handle about the anchor without changing its kind (not at an open end, where no segment leaves the anchor on that side); independent and symmetric cannot both be true; both default false",
             has_doc,
             set_handle
         ),
@@ -458,7 +458,13 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let out = str_param(p, "which") != Some("in");
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
-    let symmetric = switch_or(p, "symmetric", false, "path.setHandle")? && !independent;
+    let symmetric = switch_or(p, "symmetric", false, "path.setHandle")?;
+    if symmetric && independent {
+        return Err(bad("path.setHandle", "`independent` and `symmetric` cannot both be true"));
+    }
+    // The other handle is mirrored only where a segment leaves the anchor on its side: at an open
+    // end the handle moves as it would without `symmetric`.
+    let symmetric = symmetric && has_segment(s, id, si, ai, !out)?;
     // A handle already there, on an anchor already of the kind it would get, changes nothing and
     // records no undo step. The handle is compared directly: `set_handle` would recompute the
     // other handle of a smooth anchor, which need not give back the same value.
@@ -518,6 +524,16 @@ fn anchor_of(s: &Session, id: NodeId, si: usize, ai: usize) -> Result<Option<Anc
     }
     let d = &s.doc()?.doc;
     Ok(d.node(id).and_then(|n| n.path_data()).and_then(|path| path.subpaths.get(si)).and_then(|sp| sp.anchors.get(ai)).copied())
+}
+
+/// Whether anchor `ai` of subpath `si` of path `id` has a segment on its outgoing (`out`) or
+/// incoming side; false when the path, subpath or anchor is not there.
+fn has_segment(s: &Session, id: NodeId, si: usize, ai: usize, out: bool) -> Result<bool> {
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    let d = &s.doc()?.doc;
+    Ok(d.node(id).and_then(|n| n.path_data()).and_then(|path| path.subpaths.get(si)).is_some_and(|sp| sp.has_segment(ai, out)))
 }
 
 fn set_anchors(s: &mut Session, p: &Value) -> Result<Value> {

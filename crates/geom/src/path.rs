@@ -280,6 +280,11 @@ impl SubPath {
     pub fn polyline(points: &[Point], closed: bool) -> Self {
         Self { anchors: points.iter().map(|&p| Anchor::corner(p)).collect(), closed }
     }
+    /// Whether anchor `ai` has a segment on its outgoing (`out`) or incoming side.
+    pub fn has_segment(&self, ai: usize, out: bool) -> bool {
+        let n = self.anchors.len();
+        ai < n && n > 1 && (self.closed || if out { ai + 1 < n } else { ai > 0 })
+    }
     /// Number of segments (a closed path has one more, back to the start).
     pub fn segment_count(&self) -> usize {
         let n = self.anchors.len();

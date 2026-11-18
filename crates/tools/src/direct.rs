@@ -248,9 +248,27 @@ pub struct DirectSelectionTool {
     frame_click: Option<(NodeId, AnchorRef)>,
     /// Where the pointer last hovered: the type on a path bracket under it draws thicker.
     bracket_hover: Option<Point>,
+    /// The Cmd/Ctrl press that lent this tool for one gesture (`lentByCmd`) is still
+    /// held: it does not mirror a dragged handle. Once Cmd/Ctrl is let go, pressing it again does.
+    lent_cmd: bool,
 }
 
 impl DirectSelectionTool {
+    /// Whether a handle drag with `ev`'s modifiers mirrors the opposite handle: Cmd/Ctrl held
+    /// without Alt, unless it is still the press that lent this tool for one gesture while another
+    /// tool, such as the Pen, is chosen.
+    fn mirrors(&self, ev: &PointerEvent) -> bool {
+        ev.mods.cmd && !ev.mods.alt && !self.lent_cmd
+    }
+
+    /// Forget the lending Cmd/Ctrl once an event comes without it. The session takes Cmd/Ctrl off
+    /// the press it lends the tool for, while the drags after it still carry it.
+    fn track_lent_cmd(&mut self, ev: &PointerEvent) {
+        if ev.kind != PointerKind::Down {
+            self.lent_cmd &= ev.mods.cmd;
+        }
+    }
+
     pub fn new(group: bool) -> Self {
         Self {
             group,
@@ -278,6 +296,7 @@ impl DirectSelectionTool {
             frame_revision: (0, 0),
             frame_click: None,
             bracket_hover: None,
+            lent_cmd: false,
         }
     }
 
@@ -429,8 +448,8 @@ fn spine_anchor(cx: &ToolContext, (id, ai): (NodeId, usize)) -> Option<vectorcra
 }
 
 /// Preview a drag of the clicked blend-spine direction handle.
-fn drag_spine_handle(cx: &ToolContext, ev: &PointerEvent, (id, anchor, out): (NodeId, usize, bool), p: Point) -> Vec<Action> {
-    let symmetric = ev.mods.cmd && !ev.mods.alt;
+/// `symmetric`: the opposite handle mirrors the dragged one ([`DirectSelectionTool::mirrors`]).
+fn drag_spine_handle(cx: &ToolContext, ev: &PointerEvent, (id, anchor, out): (NodeId, usize, bool), p: Point, symmetric: bool) -> Vec<Action> {
     let q = if symmetric && ev.mods.shift {
         spine_anchor(cx, (id, anchor)).map_or(p, |a| a.p + vectorcraft_geom::constrain_angle_from(p - a.p, 45.0, cx.constrain_angle))
     } else {
@@ -791,9 +810,14 @@ impl Tool for DirectSelectionTool {
     }
     /// Direct Selection picks the gradient mesh points the Eyedropper held (`meshPoints`); Group
     /// Selection, which selects whole objects, does not.
+    /// The session sets `lentByCmd` on the tool Cmd/Ctrl lends for one gesture
+    /// ([`DirectSelectionTool::mirrors`]).
     fn set_option(&mut self, key: &str, value: &Value) {
         if key == "meshPoints" && !self.group {
             self.mesh.set_options(value);
+        }
+        if key == "lentByCmd" {
+            self.lent_cmd = value.as_bool().unwrap_or(false);
         }
     }
     /// Escape during a drag (anchors, handles, segments, objects, type areas, blend spines, mesh
@@ -853,6 +877,7 @@ impl Tool for DirectSelectionTool {
     }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.bracket_hover = (ev.kind == PointerKind::Move).then_some(ev.pos);
+        self.track_lent_cmd(ev);
         if let Some(out) = self.guide.pointer(cx, ev) {
             return out;
         }
@@ -999,7 +1024,7 @@ impl Tool for DirectSelectionTool {
                 self.guides = guides;
                 let cmd = if cx.doc.node(id).is_some_and(is_path_type) { "text.setPathHandle" } else { "path.setHandle" };
                 let mut params = json!({"id": id.0, "subpath": si, "anchor": ai, "which": if out {"out"} else {"in"}, "x": q.x, "y": q.y, "independent": ev.mods.alt});
-                if ev.mods.cmd && !ev.mods.alt {
+                if self.mirrors(ev) {
                     params["symmetric"] = json!(true);
                 }
                 vec![Action::Preview(cmd.into(), params)]
@@ -1040,7 +1065,7 @@ impl Tool for DirectSelectionTool {
                 ));
                 out
             }
-            (PointerKind::Drag, State::SpineHandle { id, anchor, out }) => drag_spine_handle(cx, ev, (id, anchor, out), p),
+            (PointerKind::Drag, State::SpineHandle { id, anchor, out }) => drag_spine_handle(cx, ev, (id, anchor, out), p, self.mirrors(ev)),
             (PointerKind::Drag, State::Mesh) => self.mesh.drag_to(p).unwrap_or_default(),
             (PointerKind::Up, State::Mesh) => {
                 self.state = State::Idle;

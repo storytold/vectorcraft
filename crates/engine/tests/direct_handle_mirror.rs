@@ -290,6 +290,42 @@ fn direct_handle_cmd_before_press_still_lends_selection_and_returns_direct() {
     assert_eq!(s.doc().unwrap().history.undo.len(), before.undo);
 }
 
+#[test]
+fn direct_handle_cmd_that_lends_direct_selection_from_the_pen_does_not_mirror() {
+    let mut s = session();
+    let id = curve(&mut s, Point::new(50.0, 100.0));
+    s.select_tool("pen", view()).unwrap();
+    let before = node(&s, id);
+    let undo = s.doc().unwrap().history.undo.len();
+    pointer(&mut s, PointerKind::Down, Point::new(180.0, 100.0), cmd());
+    assert_eq!(s.tool_id(), "directSelection", "Cmd lends the Pen the last selection tool");
+    let q = Point::new(180.0, 160.0);
+    pointer(&mut s, PointerKind::Drag, q, cmd());
+    handles(anchor(&s, id), Point::new(60.0, 70.0), q, AnchorKind::Smooth);
+    // Cmd let go and pressed again during the drag mirrors, as it does in Direct Selection itself.
+    pointer(&mut s, PointerKind::Drag, q, Mods::default());
+    handles(anchor(&s, id), Point::new(60.0, 70.0), q, AnchorKind::Smooth);
+    pointer(&mut s, PointerKind::Drag, q, cmd());
+    handles(anchor(&s, id), Point::new(20.0, 40.0), q, AnchorKind::Smooth);
+    assert_other_geometry(&s, id, &before);
+    pointer(&mut s, PointerKind::Up, q, cmd());
+    assert_eq!(s.tool_id(), "pen");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+}
+
+#[test]
+fn direct_handle_cmd_held_through_a_pen_lent_drag_leaves_the_opposite_length() {
+    let mut s = session();
+    let id = curve(&mut s, Point::new(50.0, 100.0));
+    s.select_tool("pen", view()).unwrap();
+    pointer(&mut s, PointerKind::Down, Point::new(180.0, 100.0), cmd());
+    let q = Point::new(180.0, 160.0);
+    pointer(&mut s, PointerKind::Drag, q, cmd());
+    pointer(&mut s, PointerKind::Up, q, cmd());
+    assert_eq!(s.tool_id(), "pen");
+    handles(anchor(&s, id), Point::new(60.0, 70.0), q, AnchorKind::Smooth);
+}
+
 fn text_anchor(s: &Session, id: NodeId) -> Anchor {
     let n = node(s, id);
     let vectorcraft_doc::NodeKind::Text(t) = n.kind else { panic!("text on a path") };
@@ -434,4 +470,118 @@ fn direct_handle_incoming_drag_mirrors_outgoing_and_release_restores_ordinary_le
     assert_eq!(snapshot(&s).selection, before.selection);
     run(&mut s, "edit.undo", json!({}));
     assert_content(&s, &before);
+}
+
+/// `command` with `params` is refused with an error containing `message`, and the document,
+/// selection and undo history stay as they were.
+fn refused(s: &mut Session, command: &str, params: Value, message: &str) {
+    let before = snapshot(s);
+    let err = s.execute(command, &params).unwrap_err().to_string();
+    assert!(err.contains(message), "{command} {params}: {err}");
+    assert_eq!(snapshot(s), before);
+}
+
+#[test]
+fn path_set_handle_symmetric_mirrors_refuses_bad_values_and_records_no_step_when_in_place() {
+    let mut s = session();
+    let id = curve(&mut s, Point::new(50.0, 100.0));
+    let at = |x: f64, y: f64| json!({"id": id.0, "anchor": 1, "which": "out", "x": x, "y": y});
+    for bad in [json!("yes"), json!(1)] {
+        let mut p = at(180.0, 160.0);
+        p["symmetric"] = bad;
+        refused(&mut s, "path.setHandle", p, "`symmetric` must be true or false");
+    }
+    let mut both = at(180.0, 160.0);
+    both["symmetric"] = json!(true);
+    both["independent"] = json!(true);
+    refused(&mut s, "path.setHandle", both, "`independent` and `symmetric` cannot both be true");
+
+    let undo = s.doc().unwrap().history.undo.len();
+    let mut mirror = at(180.0, 160.0);
+    mirror["symmetric"] = json!(true);
+    run(&mut s, "path.setHandle", mirror.clone());
+    handles(anchor(&s, id), Point::new(20.0, 40.0), Point::new(180.0, 160.0), AnchorKind::Smooth);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let placed = snapshot(&s);
+    run(&mut s, "path.setHandle", mirror);
+    assert_eq!(snapshot(&s), placed, "both handles already in place record no undo step");
+}
+
+#[test]
+fn symmetric_leaves_the_other_handle_retracted_at_an_open_end() {
+    let mut s = session();
+    let id = curve(&mut s, Point::new(50.0, 100.0));
+    let first = |s: &Session| node(s, id).path_data().unwrap().subpaths[0].anchors[0];
+    let p = first(&s).p;
+    run(&mut s, "path.setHandle", json!({"id": id.0, "anchor": 0, "which": "out", "x": 60, "y": 180, "symmetric": true}));
+    handles(first(&s), p, Point::new(60.0, 180.0), AnchorKind::Corner);
+
+    let mut s = session();
+    let blend_id = blend(&mut s);
+    let end = |s: &Session| {
+        let n = node(s, blend_id);
+        let vectorcraft_doc::NodeKind::Blend { children, spec } = n.kind else { panic!("blend") };
+        vectorcraft_doc::live::blend_spine(&children, &spec).unwrap().0.subpaths[0].anchors[0]
+    };
+    let start = end(&s);
+    run(&mut s, "object.blend.spine.moveAnchor", json!({"id": blend_id.0, "anchor": 0, "handle": "out", "x": 60, "y": 60, "symmetric": true}));
+    near(end(&s).h_out, Point::new(60.0, 60.0));
+    near(end(&s).h_in, start.h_in);
+    near(end(&s).h_in, start.p);
+}
+
+#[test]
+fn spine_and_type_path_handles_refuse_bad_symmetric_values() {
+    let mut s = session();
+    let id = blend(&mut s);
+    let spine = |extra: Value| {
+        let mut p = json!({"id": id.0, "anchor": 1, "handle": "out", "x": 180, "y": 160});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        p
+    };
+    refused(&mut s, "object.blend.spine.moveAnchor", spine(json!({"symmetric": "yes"})), "`symmetric` must be true or false");
+    refused(
+        &mut s,
+        "object.blend.spine.moveAnchor",
+        spine(json!({"symmetric": true, "independent": true})),
+        "`independent` and `symmetric` cannot both be true",
+    );
+    refused(
+        &mut s,
+        "object.blend.spine.moveAnchor",
+        json!({"id": id.0, "anchor": 1, "x": 180, "y": 160, "symmetric": true}),
+        "`symmetric` places a handle",
+    );
+
+    let text = path_text(&mut s);
+    let a = text_anchor(&s, text);
+    let at = json!({"id": text.0, "anchor": 1, "which": "out", "x": a.h_out.x, "y": a.h_out.y + 20.0});
+    let mut bad = at.clone();
+    bad["symmetric"] = json!(0);
+    refused(&mut s, "text.setPathHandle", bad, "`symmetric` must be true or false");
+    let mut both = at;
+    both["symmetric"] = json!(true);
+    both["independent"] = json!(true);
+    refused(&mut s, "text.setPathHandle", both, "`independent` and `symmetric` cannot both be true");
+}
+
+#[test]
+fn direct_handle_cmd_that_lends_direct_selection_from_the_pen_does_not_mirror_type_on_a_path() {
+    let mut s = session();
+    let id = path_text(&mut s);
+    let a = text_anchor(&s, id);
+    let length = a.h_in.distance(a.p);
+    s.select_tool("pen", view()).unwrap();
+    pointer(&mut s, PointerKind::Down, a.h_out, cmd());
+    assert_eq!(s.tool_id(), "directSelection");
+    let q = a.p + vectorcraft_geom::Vec2::new(80.0, 60.0);
+    pointer(&mut s, PointerKind::Drag, q, cmd());
+    let held = text_anchor(&s, id);
+    near(held.h_out, q);
+    assert!((held.h_in.distance(held.p) - length).abs() < 1e-6, "the other handle keeps its length");
+    pointer(&mut s, PointerKind::Drag, q, Mods::default());
+    pointer(&mut s, PointerKind::Drag, q, cmd());
+    assert_mirrored(text_anchor(&s, id), q, AnchorKind::Smooth);
+    pointer(&mut s, PointerKind::Up, q, cmd());
+    assert_eq!(s.tool_id(), "pen");
 }
