@@ -47,6 +47,7 @@ impl Metrics {
             FirstBaseline::CapHeight => self.cap,
             FirstBaseline::XHeight => self.xh,
             FirstBaseline::Leading => self.lead,
+            FirstBaseline::EmBoxHeight => self.top,
             FirstBaseline::Fixed => 0.0,
         };
         v.max(min)

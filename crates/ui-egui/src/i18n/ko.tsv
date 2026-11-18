@@ -43,6 +43,9 @@ font-technology	Variable	가변
 	Cap Height	대문자 높이
 	x-Height	x 높이
 	ICF Box	ICF 박스
+	Ascent	어센트
+	x Height	x 높이
+	Em Box Height	엠 박스 높이
 	Show Sample	샘플 표시
 	Hide Sample	샘플 숨기기
 	Max Ascent/Descent	최대 어센트/디센트
