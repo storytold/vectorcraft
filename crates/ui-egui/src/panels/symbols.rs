@@ -19,6 +19,7 @@ use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::caches::SymbolInstances;
 use crate::menus::Item;
 use crate::theme::Tokens;
 use crate::widgets::{self, PanelDrag, menu_item};
@@ -139,21 +140,37 @@ fn current(app: &VectorcraftApp) -> Option<String> {
     app.session.active().and_then(|st| vectorcraft_engine::cmd::current_symbol(&st.doc))
 }
 
-/// Does the selection hold (in it or in its groups) a symbol instance that `wanted` takes?
-fn instance_selected(app: &VectorcraftApp, wanted: impl Fn(&Node) -> bool) -> bool {
-    app.session.active().is_some_and(|st| {
-        st.selection.objects.iter().any(|id| {
-            let mut any = false;
-            if let Some(n) = st.doc.node(*id) {
-                n.walk(&mut |c| any |= matches!(c.kind, NodeKind::SymbolInstance { .. }) && wanted(c));
-            }
-            any
-        })
-    })
+#[cfg(test)]
+thread_local! {
+    /// How many times [`selected_instances`] walked the selection on this thread.
+    static INSTANCE_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-fn has_instances_selected(app: &VectorcraftApp) -> bool {
-    instance_selected(app, |_| true)
+/// The symbol instances in the selection and in its groups, found in one walk of the selected
+/// subtrees per (document uid, revision) ([`crate::caches::CanvasCache::symbol_instances`]);
+/// `None` without a document.
+fn selected_instances(app: &mut VectorcraftApp) -> Option<&mut SymbolInstances> {
+    let st = app.session.active()?;
+    let key = (st.uid, st.revision);
+    if app.canvas.symbol_instances.as_ref().is_none_or(|(k, _)| *k != key) {
+        #[cfg(test)]
+        INSTANCE_SCANS.with(|n| n.set(n.get() + 1));
+        let mut found = SymbolInstances::default();
+        for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+            n.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::SymbolInstance { .. }) {
+                    found.changed |= !c.extras().symbol_overrides.is_empty();
+                    found.ids.push(c.id);
+                }
+            });
+        }
+        app.canvas.symbol_instances = Some((key, found));
+    }
+    app.canvas.symbol_instances.as_mut().map(|(_, found)| found)
+}
+
+fn has_instances_selected(app: &mut VectorcraftApp) -> bool {
+    selected_instances(app).is_some_and(|found| !found.ids.is_empty())
 }
 
 /// Collect the IDs of selected instances of symbol `name` (including inside groups).
@@ -221,15 +238,19 @@ fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
 
 /// Does the selection hold a symbol instance with appearance changes of its own (a dynamic
 /// symbol's), which Reset drops?
-pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
-    instance_selected(app, |c| !c.extras().symbol_overrides.is_empty())
+pub(crate) fn changed_instances_selected(app: &mut VectorcraftApp) -> bool {
+    selected_instances(app).is_some_and(|found| found.changed)
 }
 
 /// Does the selection hold a symbol instance whose scale, rotation or shear differs from its
 /// symbol's, which Reset Transformation restores?
-fn transformed_instances_selected(app: &VectorcraftApp) -> bool {
+fn transformed_instances_selected(app: &mut VectorcraftApp) -> bool {
     let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return false };
-    instance_selected(app, |c| vectorcraft_engine::cmd::reset_transformation_changes(&doc, c))
+    let Some(found) = selected_instances(app) else { return false };
+    let ids = &found.ids;
+    *found
+        .transformed
+        .get_or_insert_with(|| ids.iter().filter_map(|id| doc.node(*id)).any(|n| vectorcraft_engine::cmd::reset_transformation_changes(&doc, n)))
 }
 
 /// The symbols of the selected objects when every one is a symbol instance; `None` otherwise.
@@ -995,6 +1016,134 @@ mod tests {
         app.ui.dialog.as_mut().unwrap().fields.insert("alignToPixelGrid".into(), json!(false));
         crate::dialogs::confirm(&mut app).unwrap();
         assert_eq!(app.run("symbol.list", json!({})).unwrap()["symbols"][0]["alignToPixelGrid"], false);
+    }
+
+    /// Does the selection hold a symbol instance that `wanted` takes, found by walking every
+    /// selected subtree on each call: what the cached flags must match.
+    fn walked(app: &VectorcraftApp, wanted: impl Fn(&Node) -> bool) -> bool {
+        app.session.active().is_some_and(|st| {
+            st.selection.objects.iter().any(|id| {
+                let mut any = false;
+                if let Some(n) = st.doc.node(*id) {
+                    n.walk(&mut |c| any |= matches!(c.kind, NodeKind::SymbolInstance { .. }) && wanted(c));
+                }
+                any
+            })
+        })
+    }
+
+    /// Any instance, one with appearance changes, one Reset Transformation changes: walked again.
+    fn walked_flags(app: &VectorcraftApp) -> [bool; 3] {
+        let Some(doc) = app.session.active().map(|st| st.doc.clone()) else { return [false; 3] };
+        [
+            walked(app, |_| true),
+            walked(app, |c| !c.extras().symbol_overrides.is_empty()),
+            walked(app, |c| vectorcraft_engine::cmd::reset_transformation_changes(&doc, c)),
+        ]
+    }
+
+    fn cached_flags(app: &mut VectorcraftApp) -> [bool; 3] {
+        [has_instances_selected(app), changed_instances_selected(app), transformed_instances_selected(app)]
+    }
+
+    fn scans() -> usize {
+        INSTANCE_SCANS.with(std::cell::Cell::get)
+    }
+
+    /// The Symbols and Properties panels' instance flags (Break Link, Reset Symbol Instance and the
+    /// Properties panel's Reset, Reset Transformation) are those a walk of the selection gives, for
+    /// plain, changed, scaled and grouped instances, several selected objects, nothing selected,
+    /// Undo and another document; the selection is walked once per document revision, however
+    /// often they are read.
+    #[test]
+    fn instance_flags_are_found_once_per_revision_and_match_a_walk_of_the_selection() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+        let id = |v: Value| v["id"].as_u64().unwrap();
+        let rect = id(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+        let second = id(app.run("shape.rectangle", json!({"x": 60, "y": 10, "width": 40, "height": 40})).unwrap());
+        let other = id(app.run("shape.rectangle", json!({"x": 300, "y": 10, "width": 40, "height": 40})).unwrap());
+        // Reads every flag several times; the walk runs only when the revision changed.
+        let check = |app: &mut VectorcraftApp, want: [bool; 3], what: &str| {
+            let before = scans();
+            for _ in 0..3 {
+                assert_eq!(cached_flags(app), want, "{what}");
+            }
+            assert_eq!(walked_flags(app), want, "{what}: a walk of the selection agrees");
+            assert!(scans() - before <= 1, "{what}: walked {} times", scans() - before);
+        };
+        app.run("select.set", json!({"ids": [rect]})).unwrap();
+        check(&mut app, [false; 3], "no instance");
+        // Two objects, so the instance's art is a group whose first object can be painted.
+        let inst = id(app.run("symbol.new", json!({"name": "S", "ids": [rect, second], "type": "dynamic"})).unwrap());
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        check(&mut app, [true, false, false], "a plain instance");
+        app.run("symbol.instance.setAppearance", json!({"id": inst, "path": [0], "fill": "#ff0000"})).unwrap();
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        check(&mut app, [true, true, false], "an instance with appearance changes");
+        let scaled = id(app.run("symbol.place", json!({"name": "S", "x": 200, "y": 100})).unwrap());
+        app.run("select.set", json!({"ids": [scaled]})).unwrap();
+        app.run("object.scale", json!({"sx": 150, "sy": 50})).unwrap();
+        check(&mut app, [true, false, true], "a scaled instance");
+        app.run("select.set", json!({"ids": [scaled, other]})).unwrap();
+        let group = id(app.run("object.group", json!({})).unwrap());
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        check(&mut app, [true, false, true], "an instance in a selected group");
+        app.run("select.set", json!({"ids": [inst, group]})).unwrap();
+        check(&mut app, [true, true, true], "several selected objects");
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        check(&mut app, [false; 3], "select.set to a path");
+        app.run("select.none", json!({})).unwrap();
+        check(&mut app, [false; 3], "nothing selected");
+        // Undo takes the group apart again.
+        app.run("edit.undo", json!({})).unwrap();
+        let undone = walked_flags(&app);
+        check(&mut app, undone, "after Undo");
+        // At one revision the walk runs once; a new revision walks again.
+        app.run("select.set", json!({"ids": [inst, scaled]})).unwrap();
+        let before = scans();
+        cached_flags(&mut app);
+        cached_flags(&mut app);
+        assert_eq!(scans(), before + 1);
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        cached_flags(&mut app);
+        assert_eq!(scans(), before + 2);
+        // Another document has its own uid, so its flags are found again.
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let plain = id(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap());
+        app.run("select.set", json!({"ids": [plain]})).unwrap();
+        check(&mut app, [false; 3], "another document");
+    }
+
+    /// The Properties panel (its Reset quick action) and the Symbols panel (Break Link) share one
+    /// walk of the selection while the document does not change.
+    #[test]
+    fn properties_and_symbols_panels_walk_the_selection_once_per_revision() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let rect = |app: &mut VectorcraftApp, x: f64| {
+            app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap()
+        };
+        let ids = [rect(&mut app, 10.0), rect(&mut app, 60.0)];
+        let inst = app.run("symbol.new", json!({"name": "S", "ids": ids, "type": "dynamic"})).unwrap()["id"].as_u64().unwrap();
+        app.run("symbol.instance.setAppearance", json!({"id": inst, "path": [0], "fill": "#ff0000"})).unwrap();
+        app.run("select.set", json!({"ids": [inst]})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let before = scans();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::properties::show(&mut app, ui));
+        out.textures_delta.clear();
+        assert_eq!(scans(), before + 1, "the Properties panel reads the flags");
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                super::super::properties::show(&mut app, ui);
+                show(&mut app, ui);
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(scans(), before + 1, "one walk for both panels over four frames");
+        assert_eq!(cached_flags(&mut app), [true, true, false]);
+        assert_eq!(scans(), before + 1);
     }
 
     /// F8 is Symbol Options… (`ui.symbolOptions`) by default, on every platform. Shift+F8 and Cmd+F8
