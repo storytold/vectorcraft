@@ -500,6 +500,36 @@ fn properties_shows_the_selected_image_and_its_link_actions() {
     assert!(text.contains("Linked File") && text.contains("Edit Original") && text.contains("Embed"), "{text}");
 }
 
+/// Unembed… acts on several selected embedded images: it asks for one folder, writes a file for
+/// each image there and links each one to its file; with no folder picked, nothing changes.
+#[test]
+fn unembed_writes_several_images_to_one_picked_folder() {
+    let dir = Folder::new("unembed-several");
+    let (mut app, _, embedded) = app(&dir);
+    let c = dir.file("other.png", &png(30, 10));
+    let other = app.run("file.place", json!({"path": c, "at": [50, 50], "link": false})).unwrap()["ids"][0].as_u64().unwrap();
+    assert!(super::links::can_unembed(&app, 1));
+    assert!(!super::links::can_unembed(&app, 0));
+    assert!(!super::links::can_unembed(&app, 2), "no folder to pick");
+    let out = dir.0.join("out");
+    std::fs::create_dir_all(&out).unwrap();
+    // No folder picked: nothing written or linked.
+    app.services.pick_folder = Some(Box::new(|| None));
+    assert!(super::links::can_unembed(&app, 2));
+    super::links::unembed_several(&mut app, vec![embedded, other]);
+    assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
+    assert_eq!(app.run("links.info", json!({"id": embedded})).unwrap()["status"], "embedded");
+    let picked = out.to_string_lossy().into_owned();
+    let answer = picked.clone();
+    app.services.pick_folder = Some(Box::new(move || Some(answer.clone())));
+    super::links::unembed_several(&mut app, vec![embedded, other]);
+    for (id, name) in [(embedded, "embedded.png"), (other, "other.png")] {
+        let info = app.run("links.info", json!({"id": id})).unwrap();
+        assert_eq!(info["path"], out.join(name).to_string_lossy().as_ref(), "{info}");
+    }
+    assert_eq!(app.ui.status, format!("Unembedded 2 images to {picked}"));
+}
+
 #[test]
 fn the_links_menu_items_run_commands() {
     let tree = crate::menus::menu_tree();

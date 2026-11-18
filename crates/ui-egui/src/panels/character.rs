@@ -282,14 +282,13 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
 /// has selected (the whole text when nothing is selected) while it edits text, else
 /// `text.setFormat` on the selected stories ([`selected_stories`]).
 pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
-    let Some((id, a, b)) = text_editing(app) else {
+    let Some((id, a, b)) = text_editing_kept(app)? else {
         target_selected_stories(app, &mut p);
         return app.run("text.setFormat", p);
     };
     if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
         return story_style(app, first, p);
     }
-    end_typing(app);
     p["id"] = json!(id.0);
     if b > a {
         p["start"] = json!(a);
@@ -340,7 +339,8 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
 /// and Optical set no space (#5111); nowhere to set at an empty line's start. Else it is a
 /// character attribute like the others: the selected range, or all the text.
 fn set_kerning(app: &mut VectorcraftApp, value: Value) {
-    let Some((id, a, b)) = text_editing(app) else {
+    let Ok(editing) = text_editing_kept(app) else { return };
+    let Some((id, a, b)) = editing else {
         format(app, json!({"kerning": value}));
         return;
     };
@@ -350,7 +350,6 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
     }
     let Some(NodeKind::Text(t)) = app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) else { return };
     let Some((target, before)) = vectorcraft_text::edit::caret_kerning_target(&t.plain_text(), a) else { return };
-    end_typing(app);
     let params = if before {
         json!({"id": id.0, "start": target.start, "end": target.end, "kerningBefore": value.as_f64().unwrap_or(0.0)})
     } else {
@@ -484,12 +483,14 @@ pub(crate) fn toggle_face(app: &mut VectorcraftApp, face: Face) -> Result<Value,
     Ok(json!({ "style": name }))
 }
 
-/// The Character panel fields that the Highlight Font Name, Highlight Kerning and Highlight
-/// Tracking commands give the keyboard focus ([`highlight`]).
+/// The Character panel fields that the Highlight Font Name, Highlight Font Size (Type › Size ›
+/// Other…), Highlight Kerning and Highlight Tracking commands give the keyboard focus
+/// ([`highlight`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Field {
     /// The font family menu: it opens, and its search field takes the focus.
     FontName,
+    FontSize,
     Kerning,
     Tracking,
 }
@@ -499,6 +500,7 @@ impl Field {
     fn salt(self) -> &'static str {
         match self {
             Field::FontName => "ch-font",
+            Field::FontSize => "ch-size",
             Field::Kerning => "ch-kern",
             Field::Tracking => "ch-track",
         }
@@ -507,17 +509,19 @@ impl Field {
     fn name(self) -> &'static str {
         match self {
             Field::FontName => "fontName",
+            Field::FontSize => "fontSize",
             Field::Kerning => "kerning",
             Field::Tracking => "tracking",
         }
     }
 }
 
-/// `type.highlightFontName`, `type.highlightKerning` and `type.highlightTracking`: show the
-/// Character panel if it is hidden (a shown one is activated, so its floating window comes
-/// forward), and give `field` the keyboard focus when the panel next draws it, a number field with
-/// its value selected (typing replaces it, Enter applies it). Without selected type or text the
-/// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
+/// `type.highlightFontName`, `type.highlightFontSize`, `type.highlightKerning` and
+/// `type.highlightTracking`: show the Character panel if it is hidden (a shown one is activated,
+/// so its floating window comes forward), and give `field` the keyboard focus when the panel next
+/// draws it, a number field with its value selected (typing replaces it, Enter applies it).
+/// Without selected type or text the Type tool edits, the panel shows, nothing takes the focus and
+/// the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
     if crate::panel_docking::visible(&app.ui, "character") {
@@ -538,19 +542,18 @@ pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value,
 pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
     let on = shared(app, |s| s.underline) != Some(true);
-    format(app, json!({"underline": on}));
+    run_format(app, json!({"underline": on}))?;
     Ok(json!(on))
 }
 
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
-    let Some((id, a, b)) = text_editing(app) else { return };
+    let Ok(Some((id, a, b))) = text_editing_kept(app) else { return };
     if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
         story_style(app, first, p).ok();
         return;
     }
-    end_typing(app);
     let mut q = p;
     q["id"] = json!(id.0);
     if b > a {
@@ -572,6 +575,15 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
     };
     let g = |k: &str| o.get(k).and_then(Value::as_u64).map_or(0, |v| (v as usize).min(len));
     Some((id, g("start"), g("end")))
+}
+
+/// [`text_editing`] after [`end_typing`], for an edit of the text: the selection is read in the
+/// text with the typing applied, which Real-time Drawing off leaves unapplied until then. When the
+/// typing can't be kept, the error (also shown in the status bar), so the edit stops instead of
+/// acting on a selection in the text without the typing.
+pub(crate) fn text_editing_kept(app: &mut VectorcraftApp) -> Result<Option<(NodeId, usize, usize)>, String> {
+    try_end_typing(app)?;
+    Ok(text_editing(app))
 }
 
 /// The frames of the threaded story whose whole text the Type tool has selected after Select All,
@@ -701,13 +713,25 @@ fn story_style(app: &mut VectorcraftApp, first: NodeId, mut p: Value) -> Result<
     app.run("text.setRangeStyle", p)
 }
 
-/// Close the Type tool's typing session (one undo step) before another command edits the text.
+/// Close the Type tool's typing session (one undo step) before another command edits the text. The
+/// typing Real-time Drawing off left unapplied is applied first; when it can't be kept, the error
+/// shows and the session goes on.
 pub(crate) fn end_typing(app: &mut VectorcraftApp) {
+    try_end_typing(app).ok();
+}
+
+/// [`end_typing`] that also returns the error when the typing can't be kept.
+fn try_end_typing(app: &mut VectorcraftApp) -> Result<(), String> {
     if app.session.tool_options().get("typing").and_then(Value::as_bool) == Some(true) {
+        if let Err(e) = app.keep_typing() {
+            app.status(e.clone());
+            return Err(e);
+        }
         app.session.set_tool_option("commitTyping", &json!(true));
         app.session.commit_interaction().ok();
         app.sync_views();
     }
+    Ok(())
 }
 
 static CTX: OnceLock<egui::Context> = OnceLock::new();
@@ -716,7 +740,8 @@ static CTX: OnceLock<egui::Context> = OnceLock::new();
 static CLIP: Mutex<String> = Mutex::new(String::new());
 static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
-fn text_copy(app: &mut VectorcraftApp) -> bool {
+/// Copy the Type tool's selected text (with `cut`, for a Cut, whose caller then deletes it).
+fn text_copy(app: &mut VectorcraftApp, cut: bool) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
     let story = text_story(app);
     // An empty selection has nothing to copy, unless the story's text is in the other frames.
@@ -744,7 +769,7 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         // plain-text copy would replace its formats, so let the publisher provide both text and
         // rich art. Paste on the canvas can then keep the runs after Type editing ends.
         if app.services.system_clipboard.is_some() {
-            app.publish_clipboard();
+            app.publish_clipboard(cut);
             return true;
         }
     }
@@ -815,10 +840,10 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
     }
     match id {
         "edit.copy" => {
-            text_copy(app);
+            text_copy(app, false);
         }
         "edit.cut" => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
@@ -909,10 +934,10 @@ pub(crate) fn apply_type_input(app: &mut VectorcraftApp, t: TextInput) {
     match t {
         TextInput::Key(k, m) => text_key(app, k, m),
         TextInput::Copy => {
-            text_copy(app);
+            text_copy(app, false);
         }
         TextInput::Cut => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
@@ -1318,9 +1343,10 @@ pub(crate) fn axis_sliders(app: &mut VectorcraftApp, ui: &mut Ui, face: &vectorc
 
 /// Set Variable Font settings `axes` on the text the panel acts on, live while a slider drags.
 fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
-    match text_editing(app) {
-        Some((id, a, b)) => {
-            end_typing(app);
+    match text_editing_kept(app) {
+        // The typing can't be kept (the error shows): nothing is set.
+        Err(_) => {}
+        Ok(Some((id, a, b))) => {
             let mut q = json!({"id": id.0, "fontAxes": axes});
             // After Select All in threaded text: every frame of the story.
             if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
@@ -1332,7 +1358,7 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
             }
             super::live_run(app, "Character", "text.setRangeStyle", q, phase);
         }
-        None => {
+        Ok(None) => {
             let mut p = json!({ "fontAxes": axes });
             target_selected_stories(app, &mut p);
             super::live_run(app, "Character", "text.setFormat", p, phase);
