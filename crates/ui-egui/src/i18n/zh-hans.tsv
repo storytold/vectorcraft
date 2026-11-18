@@ -3103,8 +3103,8 @@ digits	Malayalam	马拉雅拉姆数字
 	VectorCraft stores this choice, but Copy and Cut do not use a legacy vector clipboard format yet.	VectorCraft 会存储此选项，但复制和剪切尚不使用旧版矢量剪贴板格式。
 	Preserve Paths or Preserve Appearance and Overprints for the legacy vector clipboard; VectorCraft stores the choice but does not use it yet.	旧版矢量剪贴板的“保留路径”或“保留外观和叠印”；VectorCraft 会存储所选项，但尚未使用。
 	Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.	将从 VectorCraft 文字对象复制的文本粘贴到文字对象时，“保留格式”保留其样式，“保留纯文本”则使用粘贴位置的样式。
-	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it with the CMYK profile.	“将所有黑色显示为复合黑”在画布上将纯 CMYK 黑色（仅 100% 黑色油墨）显示为 RGB 黑色；“准确显示所有黑色”则用 CMYK 配置文件转换它。
-	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG and TIFF, or other printing.	“将所有黑色输出为复合黑”在 RGB 栅格导出和“以位图打印”中将纯 CMYK 黑色绘制为 RGB 黑色；不改变矢量导出、CMYK JPEG 和 TIFF 以及其他打印。
+	Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.	“将所有黑色显示为复合黑”在画布上将纯 CMYK 黑色（仅 100% 黑色油墨）显示为 RGB 黑色；“准确显示所有黑色”则通过工作 CMYK 空间转换它。
+	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	“将所有黑色输出为复合黑”在 RGB 和灰度栅格导出和“以位图打印”中将纯 CMYK 黑色绘制为 RGB 黑色；不改变矢量导出、CMYK JPEG、TIFF 和 PSD 以及其他打印。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档

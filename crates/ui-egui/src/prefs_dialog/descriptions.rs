@@ -301,11 +301,11 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     // Appearance of Black
     (
         "blackOnScreen",
-        "Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it with the CMYK profile.",
+        "Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it through the CMYK working space.",
     ),
     (
         "blackOutput",
-        "Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG and TIFF, or other printing.",
+        "Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.",
     ),
 ];
 
