@@ -85,14 +85,23 @@ pub fn export(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String
     Ok(export_regions(doc, &[region], kind)?.pop().unwrap_or_default())
 }
 
+/// The error [`export_regions`] returns for `regions`, without writing anything: a region whose
+/// corners are not all finite, or that has no width or no height, is empty. Corners in either
+/// order are allowed.
+pub fn check_regions(regions: &[Rect]) -> Result<(), String> {
+    let empty = |r: Rect| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0;
+    if regions.iter().any(|r| empty(r.abs())) {
+        return Err("the export region is empty".into());
+    }
+    Ok(())
+}
+
 /// Write the visible art of `doc` over each of `regions` as `kind`, one metafile per region in the
 /// same order, each as [`export`] writes it over that region. The live effects are applied once
 /// for all of them. When any region is empty, nothing is written and the result is an error.
 pub fn export_regions(doc: &Document, regions: &[Rect], kind: Kind) -> Result<Vec<Output>, String> {
+    check_regions(regions)?;
     let regions: Vec<Rect> = regions.iter().map(|r| r.abs()).collect();
-    if regions.iter().any(|r| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0) {
-        return Err("the export region is empty".into());
-    }
     if regions.is_empty() {
         return Ok(Vec::new());
     }
