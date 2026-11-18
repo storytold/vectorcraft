@@ -9028,6 +9028,36 @@ fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolati
     assert!(app.session.active().unwrap().isolation.is_none(), "2nd Escape must exit isolation mode");
 }
 
+/// One Escape leaves isolation mode from a sublayer two levels down, where Exit Isolation Mode goes
+/// up one layer at a time.
+#[test]
+fn escape_leaves_an_isolated_sublayer_in_one_step() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let top = app.session.active().unwrap().doc.layers[0].id;
+    let mid = app.session.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap()["id"].as_u64().unwrap();
+    let deep = app.session.execute("layer.newSublayer", &json!({"parent": mid})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("layer.setCurrent", &json!({"id": deep})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 20})).unwrap();
+    app.session.execute("object.isolate", &json!({"id": deep})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    let timed = |app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>| {
+        let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), time: Some(time), events, ..Default::default() }, |ui| {
+            crate::shortcuts::handle(app, ui.ctx());
+            show(app, ui)
+        });
+        out.textures_delta.clear();
+    };
+    let esc = |pressed| egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+    timed(&mut app, 0.0, vec![]);
+    assert_eq!(app.session.active().unwrap().isolation, Some(vectorcraft_doc::NodeId(deep)));
+    timed(&mut app, 1.0, vec![esc(true), esc(false)]);
+    timed(&mut app, 1.1, vec![]);
+    assert_eq!(app.session.active().unwrap().isolation, None, "one Escape leaves every level");
+}
+
 #[test]
 fn a_symbol_dropped_on_the_canvas_is_placed_there() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());

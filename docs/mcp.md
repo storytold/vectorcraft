@@ -5726,7 +5726,16 @@ and `layerRows`, the rows highlighted in the panel.
   runs Hide or Lock Others for the row's layer, or Show or Unlock All when the others already are), `layer.pasteRemembersLayers`,
   `object.isolate {id?}` (a group, a layer or a single object, by default the first selected object; not type, not a
   hidden or locked object or one in a hidden or locked group or layer, not a guide path while Lock Guides is on, and
-  while a symbol is edited only the editing layer or art on it) / `object.exitIsolation`. Leaving an isolated Live
+  while a symbol is edited only the editing layer or art on it) / `object.exitIsolation {all?}`. With a sublayer
+  isolated, `object.exitIsolation` isolates its parent layer and selects the sublayer, so repeated calls go up one
+  layer at a time until the top-level layer is left, as the
+  [help page](https://helpx.adobe.com/illustrator/desktop/manage-objects/select-objects/isolate-objects.html)
+  describes for Exit Isolation Mode; the Layers panel menu item, the isolation bar's back arrow, the Control bar
+  button, the canvas context menu and a double-click outside the art run it this way. As VectorCraft's own rules, a
+  step up records no undo step, a hidden or locked parent layer is not isolated (the call leaves isolation mode), and
+  `all: true` (Esc, the top-level layer's crumb on the isolation bar) leaves isolation mode from a sublayer at any
+  depth; `all` must be true or false. While a symbol is edited, a group isolated in its art still goes back to the
+  symbol's layer first, with or without `all`. A sublayer's crumb on the isolation bar isolates that sublayer. Leaving an isolated Live
   Paint group (`object.exitIsolation`, or `object.isolate` on a level outside it) adds the paths, compound paths and
   groups of them drawn in it, shown and unlocked with everything in them, to the group as `livePaint.merge` does, in
   one undo step; type, images and other objects stay in it as they are, and with nothing drawn no undo step is

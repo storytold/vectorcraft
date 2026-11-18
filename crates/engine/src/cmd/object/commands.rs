@@ -250,7 +250,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Exit Isolation Mode",
             [],
             None,
-            "{} leave isolation mode; leaving an isolated Live Paint group adds the paths, compound paths and groups of them drawn in it (shown and unlocked with everything in them) to the group as livePaint.merge does, in one undo step, and leaves type, images and other objects in it as they are; object.isolate on a level outside the group does the same",
+            "{all?: bool (default false)} leave isolation mode; from an isolated sublayer, go up one level to its parent layer instead (the next call goes up again), unless all is true or the parent layer is hidden or locked; no undo step for the move up; while a symbol is edited, a group isolated in its art goes back to the symbol's layer first, with or without all; leaving an isolated Live Paint group adds the paths, compound paths and groups of them drawn in it (shown and unlocked with everything in them) to the group as livePaint.merge does, in one undo step, and leaves type, images and other objects in it as they are; object.isolate on a level outside the group does the same",
             has_doc,
             exit_isolation
         ),
