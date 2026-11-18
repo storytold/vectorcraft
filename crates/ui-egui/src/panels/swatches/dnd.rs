@@ -114,6 +114,8 @@ pub(super) struct TileEvents {
     pub(super) drop: Option<Drop>,
     /// A drag is held over a tile or row.
     over: bool,
+    /// A drag of swatches or color groups started on a tile or row.
+    pub(super) started: bool,
 }
 
 /// Clicks, double-clicks, tooltips and drag and drop of the tile or row `resp` of entry `e`
@@ -133,6 +135,7 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
             .map(|x| x.name().to_string())
             .collect();
         egui::DragAndDrop::set_payload(ui.ctx(), drag_of(e, names));
+        ev.started = true;
     }
     tile_drop(ui, &resp, e, list, ev);
     // The default swatches' names show in the UI's language; the document keeps them as they are.
@@ -144,7 +147,10 @@ pub(super) fn tile_input(ui: &Ui, resp: Response, e: &Entry, items: &[Entry], se
         }),
         _ => resp.on_hover_text(shown),
     };
-    if resp.clicked() {
+    // Only the first click of a run of quick clicks applies and selects the swatch. The second
+    // opens the editor, and the later ones (counted as triple clicks) do nothing. Pattern editing
+    // selects the tile art, and a later click would paint it with the pattern itself.
+    if resp.clicked() && !resp.double_clicked() && !resp.triple_clicked() {
         ev.clicked = Some((e.clone(), ui.input(|i| i.modifiers)));
     }
 }
@@ -302,7 +308,8 @@ pub(crate) fn drag_preview(app: &VectorcraftApp, ctx: &egui::Context) {
             None => return,
         },
         PanelDrag::GraphicStyle(name) => return pointer_chip(ctx, |ui, r| crate::panels::graphic_styles::paint_style(app, ui, r, name)),
-        PanelDrag::Symbol(name) => match app.session.active() {
+        // Drawn from the document it was dragged from, whichever document is active now.
+        PanelDrag::Symbol { document, name } => match app.session.documents().iter().find(|st| st.uid == *document) {
             Some(st) => {
                 return pointer_chip(ctx, |ui, r| crate::panels::symbols::chip(ui, &st.doc, &crate::panels::symbols::document_symbols(st), r, name));
             }

@@ -428,13 +428,17 @@ fn request(action: egui::accesskit::Action, target_node: egui::accesskit::NodeId
     egui::Event::AccessKitActionRequest(ActionRequest { action, target_node, target_tree: TreeId::ROOT, data: None })
 }
 
-/// Type `typed` into Scale W, which shows `shown` (the first field that does, before H), and Tab out.
+/// Type `typed` into Scale W, which shows `shown` (the leftmost field that does, before H), and Tab out.
 fn type_w(screen: &mut Screen, app: &mut VectorcraftApp, shown: &str, typed: &str) {
     let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
     screen.run(app, vec![]);
     let out = screen.run(app, vec![]);
     let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
-    let w = nodes.iter().find(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.value().is_some_and(|v| v.starts_with(shown)));
+    // W is left of H on their row (the tree lists its nodes in no particular order).
+    let w = nodes
+        .iter()
+        .filter(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.value().is_some_and(|v| v.starts_with(shown)))
+        .min_by(|(_, a), (_, b)| a.bounds().map_or(f64::MAX, |r| r.x0).total_cmp(&b.bounds().map_or(f64::MAX, |r| r.x0)));
     screen.run(app, vec![request(egui::accesskit::Action::Focus, w.expect("the Scale W field").0)]);
     screen.run(app, vec![key(egui::Key::A, egui::Modifiers::COMMAND), egui::Event::Text(typed.into())]);
     screen.run(app, vec![key(egui::Key::Tab, egui::Modifiers::NONE)]);

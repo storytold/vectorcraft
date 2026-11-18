@@ -171,10 +171,11 @@ impl<'a> Separator<'a> {
     /// swatch link). Any ink above zero puts ink down, except on PostScript plates for a color that
     /// counts as 100% black ([`vectorcraft_doc::overprint::is_black_ink`], as
     /// [`vectorcraft_doc::overprint::OverprintBlack::default`] judges it) and is not linked to a
-    /// spot swatch, to Registration or to a swatch the document lacks: up to the half a percent of
-    /// another ink such a black may carry counts as none.
+    /// spot swatch or to Registration: up to the half a percent of another ink such a black may
+    /// carry counts as none. A link to a swatch the document lacks separates as the color's own
+    /// values, so such a black counts as unlinked.
     fn no_ink(&self, plate: &str, p: &Paint) -> bool {
-        let process = |swatch: Option<&str>| swatch.is_none_or(|n| n != REGISTRATION && self.doc.swatch(n).is_some_and(|w| !w.spot));
+        let process = |swatch: Option<&str>| swatch.is_none_or(|n| n != REGISTRATION && self.doc.swatch(n).is_none_or(|w| !w.spot));
         let none = |c: &Color, process: bool, ink: f32| ink <= 0.0 || (self.postscript && process && ink <= 0.005 && is_black_ink(c, 1.0, false));
         match p {
             Paint::Solid { color, swatch, tint } => {

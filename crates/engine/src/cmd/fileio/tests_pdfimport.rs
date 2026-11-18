@@ -410,3 +410,16 @@ fn a_placeholder_only_pdf_part_is_detected() {
     assert!(open(&mut s, &two, json!({"pages": "1"})).is_err());
     open(&mut s, &two, json!({})).unwrap();
 }
+
+/// `linkPages` takes a PDF up to the largest file placed, and nothing else.
+#[test]
+fn pages_can_link_a_pdf_up_to_the_largest_file_placed() {
+    let small = three_pages();
+    assert!(pages_can_link("pages.pdf", &small));
+    assert!(!pages_can_link("pages.svg", b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"));
+    let mut big = vec![0u8; crate::cmd::place::document::MAX_FILE + 1];
+    big[..small.len()].copy_from_slice(&small);
+    assert!(!pages_can_link("pages.pdf", &big), "over the limit");
+    big.pop();
+    assert!(pages_can_link("pages.pdf", &big), "at the limit");
+}

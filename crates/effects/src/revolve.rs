@@ -6,7 +6,7 @@ use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, Node, NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, PathEl, Point, Rect, Vec2};
-use vectorcraft_three_d::{Edge, Revolve, SolidFaces};
+use vectorcraft_three_d::{Edge, PlanarFace, Revolve, SolidFaces};
 
 use crate::solids::wireframe::{WireFace, wireframe_params};
 use crate::solids::{
@@ -168,7 +168,7 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
                 // With no member to carry them, the graphics' art must still fit its limits.
                 None => {
                     crate::solids::graphics::validate_symbols(doc, p)?;
-                    crate::solids::graphics::validate_surface_symbols(doc, p)?;
+                    crate::solids::graphics::validate_surface_symbols(doc, p, PlanarFace::Front)?;
                 }
             }
         }
@@ -201,10 +201,10 @@ fn check_graphics(doc: Option<&Document>, id: &str, path: &PathData, b: Rect, op
     let graphics = crate::solids::mapped_graphics(p);
     let Some(doc) = doc.filter(|_| id == REVOLVE && !graphics.is_empty()) else { return Ok(()) };
     crate::solids::graphics::validate_symbols(doc, p)?;
-    crate::solids::graphics::validate_surface_symbols(doc, p)?;
+    crate::solids::graphics::validate_surface_symbols(doc, p, PlanarFace::Front)?;
     let faces = vectorcraft_three_d::revolve(path, b, options)?;
     let mut used = *copies;
-    match crate::solids::graphics::surface_parts(Some(doc), NodeId(0), &graphics, &faces, &|_, c| Paint::solid(c), &mut used) {
+    match crate::solids::graphics::surface_parts(Some(doc), NodeId(0), (&graphics, PlanarFace::Front), &faces, &|_, c| Paint::solid(c), &mut used) {
         Some(_) => {
             *copies = used;
             Ok(())
@@ -523,7 +523,7 @@ fn surface(
     let mut parts = if graphics.is_empty() {
         vec![]
     } else {
-        match crate::solids::graphics::surface_parts(doc, n.id, &graphics, &faces, &shade, &mut used) {
+        match crate::solids::graphics::surface_parts(doc, n.id, (&graphics, PlanarFace::Front), &faces, &shade, &mut used) {
             Some(parts) => {
                 copies.graphics = used;
                 parts
@@ -801,7 +801,7 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
         let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
         let (paint, opacity, _) = paint_of(item);
         let mesh = vectorcraft_three_d::revolve_mesh(path, rule, b, fx_options(fx))?;
-        Ok(crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity) })
+        Ok(crate::SolidMesh::plain(mesh, crate::solids::mesh_color(&paint, opacity)))
     };
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
         let before = n.appearance.effects.get(..index).unwrap_or_default();
@@ -924,7 +924,7 @@ fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::
         let Some(item) = surface_item(&s.items) else { continue };
         let (paint, opacity, _) = paint_of(item);
         let mesh = vectorcraft_three_d::revolve_mesh(&s.path, s.rule, b, options)?;
-        crate::solids::keep_mesh(&mut out, total, crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity * s.opacity) }, limit)?;
+        crate::solids::keep_mesh(&mut out, total, crate::SolidMesh::plain(mesh, crate::solids::mesh_color(&paint, opacity * s.opacity)), limit)?;
     }
     Ok(out)
 }
