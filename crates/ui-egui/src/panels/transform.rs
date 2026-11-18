@@ -126,7 +126,12 @@ const PATTERN_MODES: [(&str, &str); 3] = [("object", "Transform Object Only"), (
 /// Only (the pattern tiles alone) or Transform Both. Until one is chosen (`default`, or any other
 /// value) neither is passed: patterns follow General › Transform Pattern Tiles. Errors are
 /// dropped, as the panels' fields have always done.
-pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) {
+pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, params: serde_json::Value) {
+    try_transform(app, cmd, params).ok();
+}
+
+/// [`run_transform`] that returns the command's result, for a field that shows its error.
+fn try_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json::Value) -> Result<serde_json::Value, String> {
     let switches = match app.session.prefs.transform_panel_patterns.as_str() {
         "object" => Some((true, false)),
         "pattern" => Some((false, true)),
@@ -137,7 +142,7 @@ pub fn run_transform(app: &mut VectorcraftApp, cmd: &str, mut params: serde_json
         params["objects"] = json!(objects);
         params["patterns"] = json!(patterns);
     }
-    app.run(cmd, params).ok();
+    app.run(cmd, params)
 }
 
 /// The panel menu's checked choice of [`PATTERN_MODES`]: the one chosen, else (`default`) what
@@ -323,12 +328,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             ui.add_space(4.0);
             let icon = icons::icon(ui, "dc-shear", 16.0, t.icon).on_hover_text(tl!("Shear"));
             crate::scrub::note_label(ui, icon.rect);
-            // Shear is relative: the field rests at 0° and a new value shears by it.
-            if let Some(a) = widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, -89.0, &SHEAR_PRESETS)
+            // Shear is relative: the field rests at 0° and a new value from -359° to 359° shears
+            // by it. The field has no minimum, so `object.shear` checks every value: it refuses
+            // ±90°, ±270° and a value outside -359° to 359°, and the status bar shows its error.
+            if let Some(a) =
+                widgets::spin_plain_named(ui, "xfp-shear", Some(tl!("Shear")), 0.0, "°", 2, 96.0, 15.0, f64::NEG_INFINITY, &SHEAR_PRESETS)
                 && a != 0.0
-                && a.abs() < 90.0
+                && let Err(e) = try_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}))
             {
-                run_transform(app, "object.shear", json!({"angle": a, "axis": "horizontal", "origin": origin, "copy": copy}));
+                app.status(e);
             }
         });
     });
