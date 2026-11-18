@@ -655,9 +655,10 @@ impl FontDb {
             return p.clone();
         }
         let mut pen = FlipPen(BezPath::new());
-        if let Ok(font) = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
-            // As before, keep the prefix emitted before a malformed glyph reports an error.
-            let _ = font.draw_to(gid, &mut pen);
+        if let Some(f) = face.skrifa()
+            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
+        {
+            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
         }
         let p = Arc::new(pen.0);
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
