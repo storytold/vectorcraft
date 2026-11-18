@@ -9906,7 +9906,7 @@ The rest are VectorCraft's own rules:
   in that group: where it has pixels, shaped by its layer mask, they are cleared to transparency, it is drawn there
   at its fill opacity, and its opacity fades the result back toward them. In a Pass Through group this applies only
   when it and the visible layers below it are in Normal mode. A knockout at 0 opacity, one that draws nothing, one
-  with nothing visible below it, and one at 0 fill over layers that are all transparent are not merged for the
+  with nothing visible below it, and one at 0 fill that covers none of their painted pixels are not merged for the
   knockout; one in a mode VectorCraft lacks is still merged by its mode.
 - A merged layer is named after the layers it holds, joined with ` + `.
 - A layer name the file stores only as a one-byte Pascal string, without its Unicode name, is read as Mac Roman.
@@ -9928,9 +9928,10 @@ The rest are VectorCraft's own rules:
 
 Each layer's pixels must fit the memory allowed for one image, and the pixels of all the layers and masks, with the
 canvases the merges make, must together fit eight times that; a file past either limit opens as its merged image,
-with a warning. The canvases one step of a merge holds at once must also fit the memory allowed for one image; when
-they don't, the layer that needed the merge comes in alone, with a warning: in the Normal mode, or as a layer of its
-own instead of clipped.
+with a warning. The pixels and canvases of merges that aren't made count against a second limit of the same size. The
+canvases one step of a merge holds at once must also fit the memory allowed for one image; when they don't, the
+layer that needed the merge comes in alone, with a warning: in the Normal mode, as a layer of its own instead of
+clipped, or without its knockout.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/poster.psd","hiddenLayers":true}}}

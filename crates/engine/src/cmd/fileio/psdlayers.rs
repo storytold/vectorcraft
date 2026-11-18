@@ -31,19 +31,20 @@
 //! when it and the visible layers below it are in the Normal mode. When a merge's canvases would need more
 //! memory than allowed, the layer comes in alone: in the Normal mode, unclipped, or without its
 //! knockout. Hidden layers are left out unless `hidden` asks for them. A hidden layer that would need
-//! a merge (one in a mode VectorCraft lacks, one with a knockout in a group, one that layers are
-//! clipped to, one clipped to another, or one below a merged layer) is always left out, with the
-//! layers clipped to it. Adjustment layers, fill layers that store no pixels and whose fill isn't read
-//! or whose shape is a vector mask, layer effects that are switched on, vector masks, and the
-//! knockouts of top-level layers, of clipped layers, of layers that others are clipped to and of
-//! layers in a pass-through group with a layer in another mode, and other Knockout values, aren't
-//! applied; the warnings count them and the hidden layers left out.
+//! a merge (one in a mode VectorCraft lacks, one with a knockout in a group that changes the layers
+//! below it, one that layers are clipped to, one clipped to another, or one below a merged layer) is
+//! always left out, with the layers clipped to it. Adjustment layers, fill layers that store no
+//! pixels and whose fill isn't read or whose shape is a vector mask, layer effects that are switched
+//! on, vector masks, and the knockouts of top-level layers, of clipped layers, of layers that others
+//! are clipped to and of layers in a pass-through group with a layer in another mode, and other
+//! Knockout values, aren't applied; the warnings count them and the hidden layers left out.
 //!
 //! The file is untrusted: every count, length and size is checked before anything is allocated,
 //! groups nest at most [`MAX_DEPTH`] deep (layers deeper than a document may nest merge into the
 //! group around them, with a warning), each layer's pixels, like the canvases one step of a
 //! merge holds together, must fit the memory allowed, and all the pixels decoded and the canvases
-//! the merges make must fit [`TOTAL_DECODED`] times that.
+//! the merges make must fit [`TOTAL_DECODED`] times that. What the merges that can't be made, or
+//! that a hidden layer would need, decoded and made is counted apart, against the same limit.
 
 use std::cell::Cell;
 use std::sync::Arc;
@@ -677,8 +678,8 @@ enum Level {
 enum Knocked {
     /// The merged canvas.
     Merged(Canvas),
-    /// Nothing below it draws, it draws nothing, or what is below it and the merge are both
-    /// transparent: it comes in as a layer of its own.
+    /// Nothing below it draws, it draws nothing, it is at 0 fill and cuts no painted pixel below
+    /// it, or what is below it and the merge are both transparent: it comes in as a layer of its own.
     Nothing,
     /// The canvases would need more memory than allowed.
     TooLarge,
@@ -717,6 +718,8 @@ struct Notes {
 /// The counts a merge that can't be made gives back.
 #[derive(Clone, Copy)]
 struct Counts {
+    /// The bytes spent so far (see [`Builder::spent`]).
+    spent: u64,
     skipped: usize,
     /// The knockouts counted as not applied.
     unknocked: usize,
@@ -789,8 +792,9 @@ impl Notes {
         out
     }
 
-    fn counts(&self, skipped: usize, unknocked: usize, blank: usize) -> Counts {
+    fn counts(&self, spent: u64, skipped: usize, unknocked: usize, blank: usize) -> Counts {
         Counts {
+            spent,
             skipped,
             unknocked,
             merged: self.merged.len(),
@@ -819,6 +823,8 @@ struct Builder<'a, F> {
     notes: Notes,
     /// The records [`Notes`] counted.
     noted: Vec<bool>,
+    /// Those records, in the order they were counted.
+    noted_log: Vec<usize>,
     /// The records counted as hidden layers left out.
     skipped: Vec<bool>,
     /// Those records, in the order they were counted.
@@ -840,6 +846,9 @@ struct Builder<'a, F> {
     kept: Vec<bool>,
     /// Bytes of layer and mask pixels decoded, and of canvases the merges made, so far.
     spent: Cell<u64>,
+    /// Those bytes that merges not made, and merges a hidden layer would need, took: given back to
+    /// `spent` and counted here instead, against the same limit.
+    wasted: Cell<u64>,
     /// The layers whose pixels were read so far (each time they were).
     painted: Cell<usize>,
     /// What each group gave when drawn alone without reading any layer's pixels (nothing, or a
@@ -867,6 +876,20 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
     fn spend(&self, bytes: u64) -> Result<(), String> {
         let total = self.spent.get().saturating_add(bytes);
         self.spent.set(total);
+        if total > self.max_alloc.saturating_mul(TOTAL_DECODED) {
+            return Err("the PSD file's layers take more memory to read than allowed".into());
+        }
+        Ok(())
+    }
+
+    /// Move the bytes spent since `spent` was the count to [`Self::wasted`], which has an allowance
+    /// of its own as large: what a merge that isn't made decoded doesn't take the room for reading
+    /// the layers apart.
+    fn refund(&self, spent: u64) -> Result<(), String> {
+        let since = self.spent.get().saturating_sub(spent);
+        self.spent.set(self.spent.get().min(spent));
+        let total = self.wasted.get().saturating_add(since);
+        self.wasted.set(total);
         if total > self.max_alloc.saturating_mul(TOTAL_DECODED) {
             return Err("the PSD file's layers take more memory to read than allowed".into());
         }
@@ -1006,9 +1029,11 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                         if let Some(u) = out.get_mut(b) {
                             u.base = true;
                         }
+                        let spent = self.spent.get();
                         if !unclipped && self.clip(&mut out, b, &body, i, &name, blend, opacity)? {
                             continue;
                         }
+                        self.refund(spent)?;
                         // The merge doesn't fit: this layer and the next ones clipped to the same
                         // base come in as layers of their own.
                         unclipped = true;
@@ -1131,7 +1156,10 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         // Once, though a merge may draw it again.
         match self.noted.get_mut(i) {
             Some(true) => return Ok(()),
-            Some(n) => *n = true,
+            Some(n) => {
+                *n = true;
+                self.noted_log.push(i);
+            }
             None => {}
         }
         let (content, empty, effects, vector_mask) = {
@@ -1149,6 +1177,23 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         self.notes.effects += usize::from(effects);
         self.notes.vector_masks += usize::from(vector_mask);
         Ok(())
+    }
+
+    /// What [`Self::note`] has counted so far: the length of its log, and the counts.
+    fn noted_so_far(&self) -> (usize, [usize; 5]) {
+        let n = &self.notes;
+        (self.noted_log.len(), [n.types, n.adjustments, n.fills, n.effects, n.vector_masks])
+    }
+
+    /// Forget what [`Self::note`] counted since `so_far`, for layers that are left out.
+    fn unnote(&mut self, (logged, counts): (usize, [usize; 5])) {
+        for i in self.noted_log.split_off(logged) {
+            if let Some(n) = self.noted.get_mut(i) {
+                *n = false;
+            }
+        }
+        let n = &mut self.notes;
+        [n.types, n.adjustments, n.fills, n.effects, n.vector_masks] = counts;
     }
 
     /// Count record `i` as a layer whose knockout isn't applied (once).
@@ -1231,13 +1276,17 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         let mut out: Vec<Unit<'i>> = vec![];
         for mut u in self.units(items, keep_hidden)? {
             if self.knocks(&u, &out, level)? {
-                // A hidden layer that would need the merge is left out.
-                if !u.visible {
-                    self.skip(u.record);
-                    continue;
-                }
-                let saved = self.notes.counts(self.skip_log.len(), self.unknock_log.len(), self.blank_log.len());
+                let saved = self.saved();
+                let noted = self.noted_so_far();
                 match self.knock(&out, &u)? {
+                    // A hidden layer that would need the merge is left out, and nothing its drawing
+                    // counted is counted.
+                    Knocked::Merged(_) | Knocked::TooLarge if !u.visible => {
+                        self.restore(saved)?;
+                        self.unnote(noted);
+                        self.skip(u.record);
+                        continue;
+                    }
                     Knocked::Merged(canvas) => {
                         self.take_merge(&mut out, &u, canvas);
                         if let Blend::Other(other) = u.blend
@@ -1251,7 +1300,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                     // with the hidden layers its drawing left out (see `kept`).
                     Knocked::Nothing => {}
                     Knocked::TooLarge => {
-                        self.restore(saved);
+                        self.restore(saved)?;
                         self.unknock(u.record);
                     }
                 }
@@ -1266,7 +1315,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                 continue;
             }
             // A merge that can't be made counts nothing its groups would have counted.
-            let saved = self.notes.counts(self.skip_log.len(), self.unknock_log.len(), self.blank_log.len());
+            let saved = self.saved();
             let made = match out.as_mut_slice() {
                 // Onto the previous merge alone: composited onto its canvas, in place.
                 [prev] if prev.is_merge() => {
@@ -1299,7 +1348,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
                     self.notes.merged.push(other.label());
                 }
             } else {
-                self.restore(saved);
+                self.restore(saved)?;
                 self.notes.unmerged += 1;
                 u.blend = Blend::Mode(BlendMode::Normal);
                 out.push(u);
@@ -1308,8 +1357,15 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         Ok(out)
     }
 
-    /// The counts as they were before a merge that couldn't be made.
-    fn restore(&mut self, c: Counts) {
+    /// The counts as they are, for [`Self::restore`].
+    fn saved(&self) -> Counts {
+        self.notes.counts(self.spent.get(), self.skip_log.len(), self.unknock_log.len(), self.blank_log.len())
+    }
+
+    /// The counts as they were before a merge that couldn't be made, the bytes it spent counted as
+    /// wasted (see [`Self::refund`]).
+    fn restore(&mut self, c: Counts) -> Result<(), String> {
+        self.refund(c.spent)?;
         for i in self.skip_log.split_off(c.skipped) {
             if let Some(s) = self.skipped.get_mut(i) {
                 *s = false;
@@ -1345,6 +1401,7 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
         }
         self.notes.merged.truncate(c.merged);
         self.notes.unmerged = c.unmerged;
+        Ok(())
     }
 
     /// The visible units `below` with `top` composited over them; `None` when the canvas would need
@@ -1424,15 +1481,14 @@ impl<F: Fn([f32; 4]) -> [f32; 3]> Builder<'_, F> {
             return Ok(Knocked::TooLarge);
         }
         // Nothing below draws.
-        if acc.is_none() {
+        let Some(below) = acc.as_ref() else { return Ok(Knocked::Nothing) };
+        // At 0 fill it draws nothing of its own: where it cuts no painted pixel below, no canvas for
+        // the merge is needed.
+        if fill <= 0.0 && !cuts_paint(below, &k, top.blend, opacity, top.record) {
             return Ok(Knocked::Nothing);
         }
         let clear = |c: &Canvas| c.px.iter().all(|p| p[3] <= 0.0);
-        let below_clear = acc.as_ref().is_some_and(clear);
-        // Nothing below to cut, and nothing of its own drawn at 0 fill: no canvas for the merge is needed.
-        if below_clear && fill <= 0.0 {
-            return Ok(Knocked::Nothing);
-        }
+        let below_clear = clear(below);
         if !knock_onto(&mut acc, &k, top.blend, fill, opacity, top.record, self.room(), &|n| self.spend(n))? {
             return Ok(Knocked::TooLarge);
         }
@@ -1797,6 +1853,15 @@ fn knock_onto(
     Ok(true)
 }
 
+/// Does `knock`, as [`knock_onto`] takes it, clear any of a pixel of `below` that has paint?
+fn cuts_paint(below: &Canvas, knock: &Canvas, blend: Blend, opacity: f32, record: usize) -> bool {
+    let (kw, opacity) = (knock.width.max(1), opacity.clamp(0.0, 1.0));
+    knock.px.iter().enumerate().any(|(k, s)| {
+        let (x, y) = (knock.left + (k % kw) as i64, knock.top + (k / kw) as i64);
+        below.get(x, y).is_some_and(|b| b[3] > 0.0) && coverage(blend, s[3].clamp(0.0, 1.0) * opacity, x, y, record) > 0.0
+    })
+}
+
 /// `acc` grown, when it doesn't already, to a canvas covering itself and `src` (a new one counted
 /// with `spend`). `false`, with `acc` as it was, when the canvases held, `acc` and `src` and a
 /// larger canvas when one is needed, would take more than `max_alloc` bytes.
@@ -1871,6 +1936,7 @@ pub(super) fn import(
         layers: 0,
         notes: Notes::default(),
         noted: vec![false; records.len()],
+        noted_log: vec![],
         skipped: vec![false; records.len()],
         skip_log: vec![],
         unknocked: vec![false; records.len()],
@@ -1881,6 +1947,7 @@ pub(super) fn import(
         unclip_log: vec![],
         kept: vec![false; records.len()],
         spent: Cell::new(0),
+        wasted: Cell::new(0),
         painted: Cell::new(0),
         blank: vec![None; records.len()],
         laid_blank: vec![false; records.len()],
