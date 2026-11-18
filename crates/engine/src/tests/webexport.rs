@@ -574,6 +574,16 @@ fn colour_table_fixed_palette_keeps_an_opaque_color() {
     let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": {"customPalette": full, "transparent": ["#ff0000"]}});
     let img = pixels(&one(&mut s, p));
     assert_eq!((img.get_pixel(5, 5).0[3], img.get_pixel(25, 5).0, img.get_pixel(35, 5).0[3]), (0, [0, 0, 255, 255], 0));
+    // With one opaque color and 255 mapped to transparent, the last of those does not fit, and its
+    // pixels still become transparent rather than taking the opaque color nearest them.
+    let mut d = session(30.0, 10.0);
+    rect(&mut d, [0.0, 0.0, 10.0, 10.0], "#0000ff");
+    rect(&mut d, [10.0, 0.0, 10.0, 10.0], "#0000ee");
+    let clear: Vec<String> = (1..255).map(|i| format!("#00{i:02x}00")).chain(["#0000ee".to_string()]).collect();
+    let palette: Vec<String> = std::iter::once("#0000ff".to_string()).chain(clear.iter().cloned()).collect();
+    let p = json!({"format": "png8", "dither": "none", "colors": 256, "colorTable": {"customPalette": palette, "transparent": clear}});
+    let img = pixels(&one(&mut d, p));
+    assert_eq!((img.get_pixel(5, 5).0, img.get_pixel(15, 5).0[3], img.get_pixel(25, 5).0[3]), ([0, 0, 255, 255], 0, 0));
     // Without transparent pixels the colors mapped to transparent still take one slot together.
     let mut t = session(30.0, 10.0);
     rect(&mut t, [0.0, 0.0, 10.0, 10.0], "#ff0000");

@@ -902,7 +902,9 @@ fn reduced(rgba: &[u8], w: u32, h: u32, s: &WebSettings, o: &PaletteOptions, loc
     // The colors mapped to transparent all become the one transparent entry, so together they take
     // one slot, and the opaque colors fill the rest in palette order. When no pixel takes one of
     // them and no pixel is transparent, that slot goes to the next opaque color instead.
-    let ix = quantize::quantize_to(rgba, w, h, o, &fixed_palette(&left, &to_clear, s.colors, has_clear, true));
+    let kept = fixed_palette(&left, &to_clear, s.colors, has_clear, true);
+    let mut ix = quantize::quantize_to(rgba, w, h, o, &kept);
+    clear_dropped(&mut ix, rgba, o, &kept, &left, &to_clear);
     if !has_clear && !ix.palette.iter().any(|c| to_clear.contains(c)) && left.iter().any(|c| to_clear.contains(c)) {
         return Ok(quantize::quantize_to(rgba, w, h, o, &fixed_palette(&left, &to_clear, s.colors, has_clear, false)));
     }
@@ -927,6 +929,37 @@ fn fixed_palette(left: &[[u8; 3]], to_clear: &[[u8; 3]], colors: u16, has_clear:
             keep
         })
         .collect()
+}
+
+/// Makes transparent the pixels of `ix` whose nearest color is a color of `left` mapped to
+/// transparent (`to_clear`) that does not fit in the fixed palette `kept`. Such a pixel takes the
+/// transparent entry, or an entry mapped to transparent, which Map to Transparent clears later.
+fn clear_dropped(ix: &mut Indexed, rgba: &[u8], o: &PaletteOptions, kept: &[[u8; 3]], left: &[[u8; 3]], to_clear: &[[u8; 3]]) {
+    let dropped: Vec<[u8; 3]> = left.iter().filter(|c| to_clear.contains(c) && !kept.contains(c)).copied().collect();
+    if dropped.is_empty() {
+        return;
+    }
+    let all: Vec<[u8; 3]> = kept.iter().chain(&dropped).copied().collect();
+    let near = quantize::nearest_entries(rgba, o, &all);
+    if !near.iter().any(|n| n.is_some_and(|n| n >= kept.len())) {
+        return;
+    }
+    let entry = match ix.transparent.or_else(|| ix.palette.iter().position(|c| to_clear.contains(c)).and_then(|i| u8::try_from(i).ok())) {
+        Some(i) => i,
+        None => {
+            // A kept color mapped to transparent that no pixel took; at most 255 entries are used then.
+            let (Some(c), Ok(i)) = (kept.iter().find(|c| to_clear.contains(c)), u8::try_from(ix.palette.len())) else {
+                return;
+            };
+            ix.palette.push(*c);
+            i
+        }
+    };
+    for (v, n) in ix.indices.iter_mut().zip(&near) {
+        if n.is_some_and(|n| n >= kept.len()) {
+            *v = entry;
+        }
+    }
 }
 
 /// An optimised image as straight RGBA → `(pixels, width, height)` (the dialog's preview).
