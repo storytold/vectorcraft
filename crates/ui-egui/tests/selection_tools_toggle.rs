@@ -106,6 +106,13 @@ fn control() -> Modifiers {
     Modifiers { ctrl: true, command: !cfg!(target_os = "macos"), ..Modifiers::NONE }
 }
 
+fn configure_control_backtick(app: &mut VectorcraftApp) {
+    // Main assigns this chord to Select Last Selection Tool. Free that binding explicitly,
+    // as a user does in Keyboard Shortcuts, before assigning the configurable toggle.
+    app.run("shortcuts.set", json!({"id": "tool.selectLastSelection", "shortcut": ""})).unwrap();
+    app.run("shortcuts.set", json!({"id": SWITCH, "shortcut": "Ctrl+~"})).unwrap();
+}
+
 #[test]
 fn selection_tools_existing_v_and_a_defaults_keep_their_choices() {
     let _globals = Globals::new();
@@ -132,7 +139,7 @@ fn selection_tools_configured_control_backtick_toggles_both_arrows() {
     assert_eq!(rows[0]["label"], "Switch Selection Tools");
     assert!(rows[0]["default"].is_null());
     assert!(rows[0]["shortcut"].is_null());
-    app.run("shortcuts.set", json!({"id": SWITCH, "shortcut": "Ctrl+~"})).unwrap();
+    configure_control_backtick(&mut app);
     let mut keys = Keyboard::new();
     keys.tap(&mut app, Key::Backtick, control());
     assert_eq!(app.session.tool_id(), "directSelection");
@@ -145,7 +152,7 @@ fn selection_tools_configured_control_backtick_toggles_both_arrows() {
 fn selection_tools_saved_binding_runs_and_reset_removes_it() {
     let _globals = Globals::new();
     let (mut original, _) = app();
-    original.run("shortcuts.set", json!({"id": SWITCH, "shortcut": "Ctrl+~"})).unwrap();
+    configure_control_backtick(&mut original);
     let saved = serde_json::to_string(&original.ui).unwrap();
     let (mut restored, id) = app();
     restored.ui = serde_json::from_str::<UiState>(&saved).unwrap();
@@ -175,7 +182,7 @@ fn selection_tools_other_tools_enter_selection_and_explicit_choice_survives_rele
         assert_eq!(app.run(SWITCH, json!({})).unwrap()["tool"], "directSelection");
         assert_eq!(app.session.tool_id(), "directSelection");
     }
-    app.run("shortcuts.set", json!({"id": SWITCH, "shortcut": "Ctrl+~"})).unwrap();
+    configure_control_backtick(&mut app);
     app.select_tool("pen");
     let mut keys = Keyboard::new();
     keys.key(&mut app, Key::V, true, Modifiers::NONE);
