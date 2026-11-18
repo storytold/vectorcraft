@@ -705,6 +705,16 @@ font-technology	Variable	Променливи
 	Create New Swatch…	Създаване на нов образец…
 	Create New {kind} Style	Създаване на нов стил за {kind}
 	Create Object Mosaic…	Създаване на обектова мозайка…
+	Create Object Mosaic	Създаване на обектова мозайка
+	Current Size:	Текущ размер:
+	New Size:	Нов размер:
+	Tile Spacing:	Разстояние между плочките:
+	Number of Tiles:	Брой плочки:
+	Constrain Ratio:	Ограничаване на съотношението:
+	Result:	Резултат:
+	Resize Using Percentages	Преоразмеряване с проценти
+	Delete Raster	Изтриване на растерното изображение
+	Use Ratio	Използване на съотношението
 	Create Outlines	Създаване на контур
 	Create Path	Създаване на път
 	Create PDF layers from layers and sublayers	Създаване на PDF слоеве от слоеве и подслоеве
@@ -832,6 +842,7 @@ font-technology	Variable	Променливи
 	Duplicate Action or Action Set	Дублиране на действие или набор от действия
 	Delete the action set “{name}” and its actions?	Изтриване на набора от действия „{name}“ и неговите действия?
 	Delete the selected action sets and their actions?	Изтриване на избраните набори от действия и техните действия?
+	Delete all action sets and their actions?	Изтриване на всички набори от действия и техните действия?
 	Delete Theme	Изтриване на тема
 	Delete theme	Изтриване на тема
 	Delete these {n} graphic styles?	Изтриване на тези {n} графични стила?
@@ -968,6 +979,8 @@ font-technology	Variable	Променливи
 	Duplicate	Дублиране
 	Duplicate and Offset 10 pt	Дублиране и отместване с 10 pt
 	Duplicate Artboard	Дублиране на работна област
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Щракнете, за да добавите работна област от тази страна, Alt-щракване дублира тази работна област заедно с графиката ѝ
+	Click to add an artboard on this side	Щракнете, за да добавите работна област от тази страна
 	Copy Artboard	Копиране на работна област
 	Cut Artboard	Изрязване на работна област
 	Rename Artboards	Преименуване на работни области
@@ -1254,6 +1267,16 @@ font-technology	Variable	Променливи
 	Fill: click for swatches, Shift-click for the color mixer	Запълване: щракнете за образци, Shift-щракване за смесителя на цветове
 	Find	Търсене
 	Find and Replace…	Търсене и замяна…
+	Find and Replace	Търсене и замяна
+	Find:	Търсене:
+	Replace With:	Замяна с:
+	Replace & Find	Замяна и търсене
+	Replace All	Замяна на всички
+	Match Case	Съвпадение на малки и главни букви
+	Find Whole Word	Търсене на цяла дума
+	Search Backwards	Търсене назад
+	Check Hidden Layers	Проверка на скритите слоеве
+	Check Locked Layers	Проверка на заключените слоеве
 	Find Font	Търсене на шрифт
 	Find Font…	Търсене на шрифт…
 	Find Next	Търсене на следващ
@@ -1281,6 +1304,7 @@ font-technology	Variable	Променливи
 	Fit to Selected Art	Побиране спрямо избраната графика
 	Flag…	Знаме…
 	Flare	Взрив
+	Edit Flare	Редактиране на взрива
 	Flare Tool	Инструмент „Взрив“
 	Flare Tool Options	Опции на инструмента „Взрив“
 	Halo	Ореол
@@ -2157,6 +2181,9 @@ font-technology	Variable	Променливи
 	Navigate	Навигация
 	Navigator	Навигатор
 	Navigator Panel Options	Опции за панела „Навигатор“
+	Attributes Panel Options	Опции за панела „Атрибути“
+	Number of Recent URLs:	Брой скорошни URL адреси:
+@msg	`count` must be a whole number from 1 to 30	`count` трябва да е цяло число от 1 до 30
 	Draw Dashed Lines as Solid Lines	Изчертаване на прекъснатите линии като плътни
 	Needs the desktop app	Изисква десктоп приложение
 	Neutral Gradients	Неутрални градиенти
@@ -2623,6 +2650,7 @@ font-technology	Variable	Променливи
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
 	Replace Actions…	Замяна на действия…
+	Clear Actions	Изчистване на действия
 	Reset Actions	Нулиране на действия
 	Replace the current actions with the default set?	Да се заменят ли текущите действия с набора по подразбиране?
 	Append adds the default set after the current sets instead.	С „Добавяне“ наборът по подразбиране се добавя след текущите набори.
@@ -3062,6 +3090,8 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колелцето на мишката с натиснат Cmd/Ctrl превърта платното настрани.
 	Dragging sideways on a numeric field's label changes the field's value.	Влаченето настрани върху етикета на числово поле променя стойността на полето.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Задържането на клавиш изпълнява инструмента или командата от колоната „Задръжте“ в „Клавишни комбинации“; краткото натискане изпълнява обичайната му комбинация.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Колко секунди трябва да се задържи клавиш, преди вместо обичайната му комбинация да се изпълни комбинацията му със задържане.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.
@@ -3143,6 +3173,7 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Колко близо на екрана показалецът или влачена точка трябва да стигне до обект, за да прилепнат интелигентните водачи; разстоянието е еднакво при всеки мащаб.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Прилепва края на линеен сегмент или окръжност, начертана от центъра си, така че да докосва близка крива.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Прилепва края на линеен сегмент така, че да среща близък прав сегмент под прав ъгъл.
+	Edit type set in fonts that aren't available?	Да се редактира ли текст с шрифтове, които не са налични?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показва номера на всяка отрязана част в каре в горния ѝ ляв ъгъл върху платното; когато е изключено, контурите на отрязаните части остават видими.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цветът на контурите на потребителските и обектните отрязани части и на каретата с номерата им; автоматичните отрязани части използват по-блед нюанс на този цвят.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
@@ -3511,6 +3542,7 @@ digits	Malayalam	Малаялам
 	Show Brush Size	Показване на размера на четката
 	Show Center	Показване на център
 	Show Code	Показване на код
+	Show in Browser	Показване в браузър
 	Show Color Groups	Показване на цътни групи
 	Show Color Swatches	Показване на цветни образци
 	Show Corner Widget	Показване на уиджета за ъгъл
@@ -4786,6 +4818,7 @@ axis	Both	И двете
 @msg	no graphic style `{n}`	няма графичен стил `{n}`
 @msg	no interaction in progress	няма текущо взаимодействие
 @msg	no key object	няма основен обект
+@msg	Align to Key Object isn't available with the Artboard tool	„Подравняване спрямо ключов обект“ не е налично с инструмента „Работна област“
 @msg	no library `{key}` (see {list})	няма библиотека `{key}` (вижте {list})
 @msg	no native format	няма нативен формат
 @msg	no pages	няма страници
@@ -4837,6 +4870,8 @@ axis	Both	И двете
 @msg	no such spine point	няма такава точка от оста
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` трябва да е списък с най-много 10000 индекса на точки от оста
 @msg	`with` moves points, not a handle	`with` мести точки, не дръжка
+@msg	`link` and `independent` cannot both be true	`link` и `independent` не могат и двата да са true
+@msg	`link` places a handle: give `handle`	`link` поставя дръжка: задайте `handle`
 @msg	no such spine segment	няма такъв сегмент от оста
 @msg	no such subpath	няма такъв подпът
 @msg	no such user library	няма такава потребителска библиотека
@@ -4923,6 +4958,7 @@ axis	Both	И двете
 @msg	select a blend	изберете преход (blend)
 @msg	select a blend or give `id`	изберете преливане или задайте неговия `id`
 @msg	select a clip group	изберете група за изрязване
+@msg	select a flare	изберете взрив
 @msg	select a gradient mesh	изберете мрежа на градиент (gradient mesh)
 @msg	select a linked image: an embedded one has no file	изберете свързано изображение: вграденото няма файл
 @msg	select a repeat	изберете повторение (repeat)
@@ -5136,6 +5172,7 @@ axis	Both	И двете
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} свързано изображение е променено на диска: „Обновяване на връзките“ показва новата версия|{n} свързани изображения са променени на диска: „Обновяване на връзките“ показва новите версии
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Обновен е {n} свързан файл, променен на диска|Обновени са {n} свързани файла, променени на диска
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	документът задава изтичане, което този PDF/X файл пропуска: включете „Използване на настройките за изтичане на документа“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} обект достига ръба на обрязване, но не стига до изтичането|{n} обекта достигат ръба на обрязване, но не стигат до изтичането
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} е експортиран с {n} бележка: {first}|{what} е експортиран с {n} бележки: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} шрифтов файл вече е в {folder}|{n} шрифтови файла вече са в {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} шрифтов файл вече е в {folder}; {failed} не можаха да бъдат добавени: {reason}|{n} шрифтови файла вече са в {folder}; {failed} не можаха да бъдат добавени: {reason}
@@ -6170,6 +6207,11 @@ theme	Appearance	Външен вид
 	The active document changed while the screen color sampler was open	Активният документ се промени, докато взимането на цвят от екрана беше отворено
 	This system has no screen color sampler	Тази система няма инструмент за взимане на цвят от екрана
 	Color blindness – Tritanopia-type	Цветна слепота – тип тританопия
+	Show Color Vision Preview	Показване на преглед на цветовото зрение
+	Protanopia	Протанопия
+	Deuteranopia	Девтеранопия
+	Tritanopia	Тританопия
+	Achromatopsia	Ахроматопсия
 	Panels Except Tools and Control	Панели без инструменти и контрол
 
 # Type › Reset Tracking and Kerning
@@ -6305,6 +6347,9 @@ theme	Appearance	Външен вид
 	Continue in Background	Продължаване във фонов режим
 	Cancel Export	Отказ от експортирането
 @msg	Export cancelled	Експортирането е отказано
+	Cancel Save	Отказ от записването
+@plural	{n} more save waiting|{n} more saves waiting	Още {n} записване в изчакване|Още {n} записвания в изчакване
+@msg	Save canceled	Записването е отказано
 # Paragraph panel menu › Justification…
 	Desired	Желано
 	Word Spacing:	Разстояние между думите:
@@ -6508,6 +6553,7 @@ axis	Y Axis	Y ос
 	Checkpoint	Контролна точка
 	Inventory Icons	Икони на инвентара
 	Skill Icons	Икони на умения
+	Weather Icons	Икони за времето
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -6607,6 +6653,12 @@ axis	Y Axis	Y ос
 	Bus Lines	Шинни линии
 	Terminal Nodes	Крайни възли
 
+# Original arrow art brushes.
+	Arrows	Стрелки
+	Solid Arrow	Плътна стрелка
+	Open Arrow	Отворена стрелка
+	Chevron Arrow	Стрелка с шеврон
+
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
 	Wave	Вълна
@@ -6623,6 +6675,252 @@ axis	Y Axis	Y ос
 	Stars	Звезди
 	Triangles	Триъгълници
 	Sparkles	Искри
+	Warm Gray	Топло сиво
+	Cool Gray	Студено сиво
+	Neutrals	Неутрални
+	Ivory	Слонова кост
+	Linen	Лен
+	Oat	Овес
+	Greige	Грейж
+	Stone	Камък
+	Taupe	Сиво-кафяво
+	Slate	Шисти
+	Clay	Глина
+	Terracotta	Теракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Пясък
+	Olive	Маслинено
+	Moss	Мъх
+	Rosy	Розовеещо
+	Neutral	Неутрално
+	Golden	Златисто
+	Pastel	Пастелни
+	Pastel Red	Пастелно червено
+	Pastel Orange	Пастелно оранжево
+	Pastel Amber	Пастелно кехлибарено
+	Pastel Yellow	Пастелно жълто
+	Pastel Lime	Пастелно лаймово
+	Pastel Green	Пастелно зелено
+	Pastel Teal	Пастелно синьо-зелено
+	Pastel Cyan	Пастелен циан
+	Pastel Azure	Пастелно лазурно
+	Pastel Blue	Пастелно синьо
+	Pastel Violet	Пастелно виолетово
+	Pastel Magenta	Пастелна магента
+	Soft Red	Меко червено
+	Soft Orange	Меко оранжево
+	Soft Amber	Меко кехлибарено
+	Soft Yellow	Меко жълто
+	Soft Lime	Меко лаймово
+	Soft Green	Меко зелено
+	Soft Teal	Меко синьо-зелено
+	Soft Cyan	Мек циан
+	Soft Azure	Меко лазурно
+	Soft Blue	Меко синьо
+	Soft Violet	Меко виолетово
+	Soft Magenta	Мека магента
+	Vivid Red	Ярко червено
+	Vivid Orange	Ярко оранжево
+	Vivid Amber	Ярко кехлибарено
+	Vivid Yellow	Ярко жълто
+	Vivid Lime	Ярко лаймово
+	Vivid Green	Ярко зелено
+	Vivid Teal	Ярко синьо-зелено
+	Vivid Cyan	Ярък циан
+	Vivid Azure	Ярко лазурно
+	Vivid Blue	Ярко синьо
+	Vivid Violet	Ярко виолетово
+	Vivid Magenta	Ярка магента
+	Deep	Наситени
+	Deep Red	Тъмночервено
+	Deep Orange	Тъмнооранжево
+	Deep Amber	Тъмно кехлибарено
+	Deep Yellow	Тъмножълто
+	Deep Lime	Тъмно лаймово
+	Deep Green	Тъмнозелено
+	Deep Teal	Тъмно синьо-зелено
+	Deep Cyan	Тъмен циан
+	Deep Azure	Тъмно лазурно
+	Deep Blue	Тъмносиньо
+	Deep Violet	Тъмновиолетово
+	Deep Magenta	Тъмна магента
+	Gold	Злато
+	Silver	Сребро
+	Bronze	Бронз
+	Copper	Мед
+	Brass	Месинг
+	Rose Gold	Розово злато
+	Gunmetal	Оръжеен метал
+	Platinum	Платина
+	Pewter	Калай
+	Ember	Жарава
+	Lagoon	Лагуна
+	Dusk	Здрач
+	Clay to Teal	От глина до синьо-зелено
+	Plum to Olive	От слива до маслинено
+	Complementary Coral	Коралово, комплементарни
+	Split Complementary Coral	Коралово, сплит-комплементарни
+	Analogous Coral	Коралово, аналогови
+	Triad Coral	Коралово, триада
+	Tetrad Coral	Коралово, тетрада
+	Pentagram Coral	Коралово, петограм
+	Complementary Teal	Синьо-зелено, комплементарни
+	Split Complementary Teal	Синьо-зелено, сплит-комплементарни
+	Analogous Teal	Синьо-зелено, аналогови
+	Triad Teal	Синьо-зелено, триада
+	Tetrad Teal	Синьо-зелено, тетрада
+	Pentagram Teal	Синьо-зелено, петограм
+	Soft Spectrum	Мек спектър
+	Red to Amber	От червено до кехлибарено
+	Orange to Yellow	От оранжево до жълто
+	Amber to Lime	От кехлибарено до лаймово
+	Yellow to Green	От жълто до зелено
+	Lime to Teal	От лаймово до синьо-зелено
+	Green to Cyan	От зелено до циан
+	Teal to Azure	От синьо-зелено до лазурно
+	Cyan to Blue	От циан до синьо
+	Azure to Violet	От лазурно до виолетово
+	Blue to Magenta	От синьо до магента
+	Violet to Red	От виолетово до червено
+	Magenta to Orange	От магента до оранжево
+	Dawn	Зазоряване
+	Noon	Пладне
+	Sunset	Залез
+	Night	Нощ
+	Overcast	Облачно
+	White to Black	От бяло до черно
+	Light Grays	Светлосиви
+	Dark Grays	Тъмносиви
+	Warm Grays	Топли сиви
+	Cool Grays	Студени сиви
+	Fade to Transparent	Преливане към прозрачно
+	White Fade	Бяло преливане
+	Vignette	Винетка
+	Mist	Мъгла
+	Petal	Венчелистче
+	Fern	Папрат
+	Smoke	Дим
+	Honey	Пчелен мед
+	Seafoam	Морска пяна
+	Lavender	Лавандула
+	Driftwood	Изхвърлено дърво
+	Ink Wash	Лавиран туш
+	Tide	Прилив
+	Bloom	Цъфтеж
+	Dew	Роса
+	Pollen	Прашец
+	Lichen	Лишей
+	Prism Veil	Призмен воал
+	Opal Ribbon	Опалова лента
+	Pearl Flash	Перлен проблясък
+	Aurora Foil	Фолио полярно сияние
+	Iris Sheen	Ирисов отблясък
+	Frost Spectrum	Скрежен спектър
+	Silver Tide	Сребърен прилив
+	Rose Quartz Gleam	Блясък на розов кварц
+	Moonstone Shift	Преливане на лунен камък
+	Violet Edge	Виолетов ръб
+	Mint Halo	Ментов ореол
+	Amber Corona	Кехлибарена корона
+	Polar Glint	Полярен проблясък
+	Pastel Orbit	Пастелна орбита
+	Coral and Navy	Коралово и тъмносиньо
+	Plum and Lime	Слива и лайм
+	Teal and Gold	Синьо-зелено и злато
+	Indigo and Peach	Индиго и праскова
+	Forest and Rose	Гора и роза
+	Red Glow	Червено сияние
+	Orange Glow	Оранжево сияние
+	Amber Glow	Кехлибарено сияние
+	Yellow Glow	Жълто сияние
+	Lime Glow	Лаймово сияние
+	Green Glow	Зелено сияние
+	Teal Glow	Синьо-зелено сияние
+	Cyan Glow	Цианово сияние
+	Azure Glow	Лазурно сияние
+	Blue Glow	Синьо сияние
+	Violet Glow	Виолетово сияние
+	Magenta Glow	Магентено сияние
+	Polka Dots	Едри точки
+	Vertical Stripes	Вертикални ивици
+	Horizontal Stripes	Хоризонтални ивици
+	Diagonal Stripes	Диагонални ивици
+	Checkerboard	Шахматна дъска
+	Diamonds	Ромбове
+	Crosses	Кръстчета
+	Coarse Grit	Едро зърно
+	Stipple	Пунктир
+	Scratches	Драскотини
+	Sparse Flecks	Редки петънца
+	Dense Flecks	Гъсти петънца
+	Sine Bands	Синусоидни ленти
+	Ripple Lines	Вълнисти линии
+	Interference Rings	Интерференчни пръстени
+	Offset Rings	Отместени пръстени
+	Warped Checks	Изкривени квадрати
+	Pinched Stripes	Притиснати ивици
+	Chevron Pulse	Пулсиращи шеврони
+	Radiating Lenses	Излъчващи лещи
+	Soft Shadow	Мека сянка
+	Hard Shadow	Твърда сянка
+	Lifted Card	Повдигната карта
+	Neon Tube	Неонова тръба
+	Inner Light	Вътрешна светлина
+	Feathered	Размити ръбове
+	Haze	Омара
+	Double Rule	Двойна линия
+	Triple Rule	Тройна линия
+	Dashed Border	Пунктирана рамка
+	Dotted Border	Точкова рамка
+	Offset Keyline	Отместен контур
+	Inset Keyline	Вътрешен контур
+	Outside Stroke	Външен щрих
+	Pointer	Показалец
+	Highlighter	Маркер
+	Sketchy Line	Скицирана линия
+	Scribble Fill	Драскано запълване
+	Wobble	Клатене
+	Zig Zag Edge	Зигзагообразен ръб
+	Wavy Edge	Вълнист ръб
+	Puffy	Надут
+	Starburst	Звезден взрив
+	Glossy	Лъскав
+	Brushed Metal	Шлифован метал
+	Spotlight	Прожектор
+	Sunset Band	Ивица на залеза
+	Sea Glass	Морско стъкло
+	Pearl	Перла
+	Chrome Rim	Хромиран кант
+	Glow Orb	Светеща сфера
+	Pill Badge	Значка-капсула
+	Round Badge	Кръгла значка
+	Flag Wave	Развяващо се знаме
+	Bulge	Издутина
+	Twisted	Усукан
+	Echo	Ехо
+	Spiral Copies	Копия по спирала
+	Multiply Tint	Оттенък умножение
+	Darken Veil	Воал потъмняване
+	Ghosted	Призрачен
+	Two Tone	Двуцветен
+	Overlay Glaze	Глазура прекриване
+	Screen Light	Светлина екран
+	Soft Light Wash	Лавиране мека светлина
+	Cyan Neon	Циан неон
+	Magenta Laser	Магента лазер
+	Amber Tube	Кехлибарена тръба
+	Electric Lime	Електрически лайм
+	Pulse Violet	Пулсиращо виолетово
+	Cobalt Phosphor	Кобалтов фосфор
+	Burst	Взрив
+	Rounded Square	Закръглен квадрат
+	Sun	Слънце
+	Moon	Луна
+	Cloud	Облак
+	Rain	Дъжд
+	Thunder	Гръм
+	Snow	Сняг
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб
@@ -7015,10 +7313,18 @@ breakText	Glyphs	Глифи
 	Smooth Bridge…	Плавен мост…
 	Smooth Bridge	Плавен мост
 	Keep Originals	Запазване на оригиналите
-@msg	select two circles to bridge	изберете два кръга за свързване
+@msg	select two or more circles to bridge	изберете два или повече кръга за свързване
 @msg	one circle is inside the other	единият кръг е вътре в другия
 @msg	the circles are too far apart for this radius: raise the radius	кръговете са твърде далеч един от друг за този радиус: увеличете радиуса
 @msg	the circles are too far apart for this radius	кръговете са твърде далеч един от друг за този радиус
+	Constant Gap	Постоянно разстояние
+	Reach:	Обхват:
+@msg	the circles are too far apart for this gap: raise the gap	кръговете са твърде далеч един от друг за това разстояние: увеличете разстоянието
+@msg	the circles are too far apart for this gap	кръговете са твърде далеч един от друг за това разстояние
+@msg	no two circles are within reach: raise the reach	няма два кръга в обхват: увеличете обхвата
+@msg	select at most 2000 circles to bridge	изберете най-много 2000 кръга за свързване
+@msg	that makes too many bridges (at most 8000): lower the reach	това дава твърде много мостове (най-много 8000): намалете обхвата
+@msg	the bridged circles are too complex to unite	свързаните кръгове са твърде сложни за обединяване
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Общи допирателни…
 	Common Tangents	Общи допирателни
@@ -7378,6 +7684,17 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Tap	Кратко натискане
+	Clear Hold	Изчистване на задържането
+	Hold Shortcuts	Комбинации със задържане
+	Hold Shortcut Delay	Забавяне на комбинациите със задържане
+	How hold shortcuts work	Как работят комбинациите със задържане
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Щракнете и натиснете клавиш, който да се задържа за това (Esc отменя). Задържането на клавиша изпълнява това; краткото натискане изпълнява собствената комбинация на клавиша.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Краткото натискане на клавиш изпълнява неговата комбинация. Задържането на клавиша за времето на забавяне изпълнява вместо това инструмента или командата от колоната му „Задръжте“. Комбинация със задържане е клавиш с буква, цифра или препинателен знак, самостоятелно или с Shift.
+@msg	Hold {_1} is already used by {_2}	Задържането на {_1} вече се използва от {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	комбинация със задържане е клавиш, който въвежда знак, самостоятелно или с Shift ({shown} съдържа Cmd, Ctrl или Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не може да бъде комбинация със задържане: използвайте буква, цифра или препинателен знак
+	Dashed Arrow	Пунктирана стрелка
 	Pressure Sensitive	Чувствителни на натиск
 	Flex Ribbon	Гъвкава лента
 	Pulse Stroke	Пулсиращ щрих
