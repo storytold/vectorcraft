@@ -3380,6 +3380,25 @@ enabled while the document has a saved view. In the desktop app the views are li
 checked when it opens: past 25, blank or repeated names, and views without a finite centre and a positive zoom are
 dropped.
 
+## Messages over the window
+
+`app.toast {message, level?, seconds?}` shows a short message over the desktop app's window without stopping work
+→ `{message, level, seconds}`. `message` is 1 to 500 characters and not only whitespace. `level` is `info` (the
+default), `success`, `warning` or `error`, and sets the color of the message's edge. `seconds` is how long it shows,
+0.5 to 60 (4 by default); a click on it closes it sooner. Messages stack at the window's bottom right, the newest
+lowest, at most 5 at once: a sixth closes the oldest. A message shows at most 6 lines, with the whole text on hover,
+and a stack taller than the window scrolls. A missing `message` or a value outside these ranges is an error, and
+nothing shows. The command edits no document and adds no undo step. Scripts raise one with `vc.run('app.toast',
+{...})`. A plug-in calls it through `vc_call` under the conditions in [Plug-ins](#plug-ins): API level 2, the
+`commands` and `doc.read` permissions, and `app.toast` in its `commandAllowlist`. An action recording records it as a
+step that shows the message again when the action plays, except while a drag or typing is in progress, when no
+command is recorded. A script run that fails puts the documents back, and the messages it raised still show. The headless MCP server and `vectorcraft-cli run` have no window: they keep the last 32 messages they were
+given and show none. These limits are VectorCraft's own values.
+
+```json
+{"name":"run_command","arguments":{"command":"app.toast","params":{"message":"Exported 4 artboards","level":"success"}}}
+```
+
 ## Navigator panel options
 
 The Navigator panel menu's Panel Options… opens the `navigatorPanelOptions` dialog (fields `color`, `solidDashes`),

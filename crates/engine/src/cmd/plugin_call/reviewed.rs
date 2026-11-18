@@ -88,6 +88,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.type.textTweaker",
     "addon.units.convert",
     "addon.units.selectionSize",
+    "app.toast",
     "appearance.addEffect",
     "appearance.addFill",
     "appearance.addStroke",
