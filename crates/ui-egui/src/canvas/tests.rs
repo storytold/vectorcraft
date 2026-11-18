@@ -9166,6 +9166,31 @@ fn double_clicking_type_in_a_missing_font_asks_before_editing() {
     assert!(t.runs.iter().all(|r| r.style.font_family == "Missing Test Family 7258"));
 }
 
+/// A Type tool press that reaches type in a missing font while another dialog is open (as one sent
+/// with `ui.pointer` does) leaves that dialog open and starts no edit.
+#[test]
+fn a_press_on_type_in_a_missing_font_keeps_an_open_dialog() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let params = json!({"x": 100, "y": 150, "text": "Hello world", "size": 24, "font": "Missing Test Family 8408"});
+    let id = app.session.execute("text.create", &params).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("type");
+    let doc = app.session.active().unwrap().uid;
+    crate::dialogs::confirm::ask_replace_files(&mut app, doc, &["/tmp/a.svg".to_string()], &[], "file.export", json!({}));
+    let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let view = app.view_info();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, b.center().x, b.center().y), view);
+    }
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::confirm::REPLACE_FILES));
+    crate::dialogs::cancel(&mut app);
+    let r = app.session.tool_poll(view, false);
+    crate::canvas::apply_requests(&mut app, r);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options()["editing"], json!(null));
+}
+
 #[test]
 fn escape_while_editing_in_isolation_returns_to_selection_tool_and_keeps_isolation_until_second_escape() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
