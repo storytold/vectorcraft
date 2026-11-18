@@ -97,19 +97,23 @@ fn shift_puts_the_circle_on_the_other_side() {
     assert_eq!(params(&click(&mut t, &cx, (300.0, 200.0), shift))["convex"], json!(true));
 }
 
-/// On a straight segment the pointer shows "Straight segment", at a cusp "Cusp", and where the
-/// circle would reach past the canvas "Circle too large"; a click there draws nothing.
+/// On a straight segment the pointer shows "Straight segment", at a cusp "Cusp", at a corner
+/// anchor "Corner", and where the circle would reach past the canvas "Circle too large"; a click
+/// there draws nothing.
 #[test]
 fn straight_segments_cusps_and_huge_circles_are_refused() {
     let line = PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M0 400 L400 400").unwrap());
     // A handle drawn back onto its anchor at (0, 0).
     let cusp = PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M0 0 C0 0 60 40 100 0").unwrap());
     let gentle = PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M0 450 C100 450.0000001 200 450.0000001 300 450").unwrap());
-    let d = doc_with(&[line, cusp, gentle]);
+    // A curve that meets a line at a corner anchor (150, 250).
+    let corner = PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M0 250 C50 200 100 200 150 250 L300 250").unwrap());
+    let d = doc_with(&[line, cusp, gentle, corner]);
     let (s, p) = (Selection::default(), paint());
     let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
     let mut t = CurvatureCircleTool::default();
-    for (at, want) in [((200.0, 401.0), "Straight segment"), ((-1.0, -1.0), "Cusp"), ((150.0, 451.0), "Circle too large")] {
+    let refused = [((200.0, 401.0), "Straight segment"), ((-1.0, -1.0), "Cusp"), ((150.0, 251.0), "Corner"), ((150.0, 451.0), "Circle too large")];
+    for (at, want) in refused {
         t.pointer(&cx, &ev(PointerKind::Move, at, Mods::default()));
         let o = t.overlays(&cx);
         assert_eq!(label(&o).as_deref(), Some(want), "{o:?}");
@@ -133,6 +137,12 @@ fn the_pointer_reaches_a_path_within_5_screen_points() {
     let zoomed = ToolContext { zoom: 2.0, ..cx };
     assert_eq!(click(&mut t, &zoomed, (303.0, 200.0), Mods::default()), vec![]);
     assert_eq!(click(&mut t, &zoomed, (302.0, 200.0), Mods::default()).len(), 1);
+    // A larger snapping tolerance reaches farther, with Smart Guides off or on.
+    for smart_guides in [false, true] {
+        let wide = ToolContext { snapping_tolerance: 10.0, smart_guides, ..cx };
+        assert_eq!(click(&mut t, &wide, (309.0, 200.0), Mods::default()).len(), 1, "{smart_guides}");
+        assert_eq!(click(&mut t, &wide, (311.0, 200.0), Mods::default()), vec![], "{smart_guides}");
+    }
 }
 
 /// Of two paths within reach, the nearer one is used, even when the other one is selected: a

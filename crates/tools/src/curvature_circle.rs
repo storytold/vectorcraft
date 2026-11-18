@@ -7,10 +7,11 @@
 //! cross, a line from the center to the point it touches and, with Measurement Labels on, its
 //! radius by the pointer, with an asterisk when the segment is the usual cubic of a circular arc
 //! of 90° or less and the circle has the arc's own radius. A click draws it, in one undo step, and a
-//! press dragged 2 screen points or more, or canceled with Escape, draws nothing. The circle goes on the side the path bends
-//! toward; with Shift held at the press, on the other side. On a straight stretch, at a cusp or a
-//! corner, or where the circle would reach past the canvas, the pointer shows "Straight segment",
-//! "Cusp" or "Circle too large" instead, and a click draws nothing.
+//! press dragged 2 screen points or more, or canceled with Escape, draws nothing. The circle goes on
+//! the side the path bends toward; with Shift held at the press, on the other side. On a straight
+//! stretch, at a cusp, at a corner, or where the circle would reach past the canvas, the pointer
+//! shows "Straight segment", "Cusp", "Corner" or "Circle too large" instead, and a click draws
+//! nothing.
 
 use serde_json::json;
 use vectorcraft_doc::{MAX_COORD, NodeId};
@@ -90,6 +91,7 @@ fn found(cx: &ToolContext, hit: Hit, convex: bool) -> Option<Found> {
         Ok(_) => Found::Refused("Circle too large", at),
         Err(NoCircle::Straight) => Found::Refused("Straight segment", at),
         Err(NoCircle::Cusp) => Found::Refused("Cusp", at),
+        Err(NoCircle::Corner) => Found::Refused("Corner", at),
     })
 }
 
@@ -192,8 +194,7 @@ impl Tool for CurvatureCircleTool {
             Some(Found::Circle(c)) => {
                 let r = c.radius;
                 let path = shapes::ellipse(Rect::new(c.center.x - r, c.center.y - r, c.center.x + r, c.center.y + r)).to_bezpath();
-                // The canvas draws a dashed outline dash by dash along its whole length: a circle
-                // longer than DASHED_PX on screen is drawn solid instead.
+                // Drawn solid when longer than DASHED_PX on screen.
                 let dashed = std::f64::consts::TAU * r <= cx.tol(DASHED_PX);
                 o.push(Overlay::Path { path, color, width: 1.0, dashed });
                 o.push(Overlay::Line { a: c.center, b: c.at, color, dashed: false });

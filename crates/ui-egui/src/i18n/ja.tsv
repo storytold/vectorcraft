@@ -4852,6 +4852,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	direct-select two or three anchor points, or give `points`	アンカーポイントを 2 つまたは 3 つダイレクト選択するか、`points` を指定してください
 @msg	the path is straight there, so no circle matches its curvature	パスはその位置で直線のため、曲率に合う円はありません
 @msg	the path has a cusp there, so it has no single curvature	パスはその位置に尖点があるため、曲率が 1 つに定まりません
+@msg	the path has a corner there, so it has no single curvature	パスはその位置にコーナーがあるため、曲率が 1 つに定まりません
+@msg	a guide has no curvature circle	ガイドには曲率円がありません
 @msg	the circle that matches the path there would reach past the canvas	その位置でパスに合う円はキャンバスからはみ出します
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください

@@ -4550,6 +4550,8 @@ imageTrace	Outline	轮廓
 @msg	direct-select two or three anchor points, or give `points`	请直接选择两个或三个锚点，或提供 `points`
 @msg	the path is straight there, so no circle matches its curvature	路径在该处是直的，因此没有圆与其曲率相符
 @msg	the path has a cusp there, so it has no single curvature	路径在该处有尖点，因此没有唯一的曲率
+@msg	the path has a corner there, so it has no single curvature	路径在该处有尖角，因此没有唯一的曲率
+@msg	a guide has no curvature circle	参考线没有曲率圆
 @msg	the circle that matches the path there would reach past the canvas	在该处与路径曲率相符的圆会超出画布
 @msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
 @msg	select at least two objects	请至少选择两个对象

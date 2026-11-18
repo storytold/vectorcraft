@@ -4924,6 +4924,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	direct-select two or three anchor points, or give `points`	wählen Sie zwei oder drei Ankerpunkte direkt aus oder geben Sie `points` an
 @msg	the path is straight there, so no circle matches its curvature	der Pfad ist dort gerade, daher passt kein Kreis zu seiner Krümmung
 @msg	the path has a cusp there, so it has no single curvature	der Pfad hat dort eine Spitze und daher keine eindeutige Krümmung
+@msg	the path has a corner there, so it has no single curvature	der Pfad hat dort eine Ecke und daher keine eindeutige Krümmung
+@msg	a guide has no curvature circle	eine Hilfslinie hat keinen Krümmungskreis
 @msg	the circle that matches the path there would reach past the canvas	der Kreis, der dort zum Pfad passt, würde über die Arbeitsfläche hinausreichen
 @msg	no circle passes through these points: two are the same or all three lie on one line	durch diese Punkte verläuft kein Kreis: zwei sind gleich oder alle drei liegen auf einer Linie
 @msg	no app to open files here	hier gibt es keine App zum Öffnen von Dateien

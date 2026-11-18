@@ -2083,6 +2083,8 @@ file-filter	Templates	範本
 @msg	direct-select two or three anchor points, or give `points`	請以直接選取方式選取兩個或三個錨點，或提供 `points`
 @msg	the path is straight there, so no circle matches its curvature	路徑在該處是直的，因此沒有圓與其曲率相符
 @msg	the path has a cusp there, so it has no single curvature	路徑在該處有尖點，因此沒有唯一的曲率
+@msg	the path has a corner there, so it has no single curvature	路徑在該處有角點，因此沒有唯一的曲率
+@msg	a guide has no curvature circle	參考線沒有曲率圓
 @msg	the circle that matches the path there would reach past the canvas	在該處與路徑曲率相符的圓會超出畫布
 @msg	no circle passes through these points: two are the same or all three lie on one line	沒有圓通過這些點：有兩點相同，或三點共線
 @msg	select at least two objects	請選取至少兩個物件

@@ -5385,6 +5385,8 @@ imageTrace	Outline	Contour
 @msg	direct-select two or three anchor points, or give `points`	selecteer met directe selectie twee of drie ankerpunten of geef `points` op
 @msg	the path is straight there, so no circle matches its curvature	het pad is daar recht, dus geen cirkel komt overeen met de kromming ervan
 @msg	the path has a cusp there, so it has no single curvature	het pad heeft daar een keerpunt en dus geen eenduidige kromming
+@msg	the path has a corner there, so it has no single curvature	het pad heeft daar een hoek en dus geen eenduidige kromming
+@msg	a guide has no curvature circle	een hulplijn heeft geen krommingscirkel
 @msg	the circle that matches the path there would reach past the canvas	de cirkel die daar bij het pad past, zou voorbij het canvas reiken
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
 @msg	no app to open files here	hier is geen app om bestanden mee te openen

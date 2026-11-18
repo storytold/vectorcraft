@@ -6226,9 +6226,9 @@ result is `{id, cx, cy, radius, nominal}`, where `nominal` is true for such an a
 The circle is not pixel-aligned, even while [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on.
 The command returns an error and draws nothing on a straight segment or the turning point of an S curve, at a cusp,
 at an anchor whose handle is drawn back onto it, at a corner anchor (`t` 0 or 1 where two segments meet at an angle
-of more than half a degree and the anchor is not marked smooth; segments of no length between them are passed over),
-when the circle would reach past the canvas (4,000,000 pt from the origin), when `t` is not from 0 to 1, when `id` is
-a guide, and when the path, subpath or segment does not exist.
+of more than half a degree and the anchor is not marked smooth, or where they turn back the way they came; segments
+of no length between them are passed over), when the circle would reach past the canvas (4,000,000 pt from the
+origin), when `t` is not from 0 to 1, when `id` is a guide, and when the path, subpath or segment does not exist.
 
 The Curvature Circle tool, after the Circle tool in the Ellipse tool's toolbar group, draws with this command. The
 pointer snaps to the nearest path that is not a guide within 5 screen points, or within Smart Guides › Snapping
@@ -6236,8 +6236,9 @@ Tolerance when that is larger, and the tool shows the circle that matches the pa
 once it is more than 50,000 screen points around), a small cross at its center, a line from the center to the point
 it touches and, with Measurement Labels on, its radius by the pointer, followed by an asterisk for an arc's own
 radius. A click draws the circle, and a press dragged 2 screen points or more, or canceled with Escape, draws nothing;
-Shift held at the press puts the circle on the other side of the path. On a straight segment, at a cusp or a corner, or where the circle would
-reach past the canvas, the pointer shows "Straight segment", "Cusp" or "Circle too large", and a click draws nothing.
+Shift held at the press puts the circle on the other side of the path. On a straight segment, at a cusp, at a corner
+anchor, or where the circle would reach past the canvas, the pointer shows "Straight segment", "Cusp", "Corner" or
+"Circle too large", and a click draws nothing.
 
 ```json
 {"name":"run_command","arguments":{"command":"shape.curvatureCircle","params":{"id":12,"segment":0,"t":0.5}}}

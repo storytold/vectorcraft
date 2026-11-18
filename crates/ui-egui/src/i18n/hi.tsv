@@ -7640,6 +7640,8 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	direct-select two or three anchor points, or give `points`	दो या तीन एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें, या `points` दें
 @msg	the path is straight there, so no circle matches its curvature	वहाँ पाथ सीधा है, इसलिए कोई वृत्त उसकी वक्रता से मेल नहीं खाता
 @msg	the path has a cusp there, so it has no single curvature	वहाँ पाथ में नुकीला बिंदु है, इसलिए उसकी कोई एक वक्रता नहीं है
+@msg	the path has a corner there, so it has no single curvature	वहाँ पाथ में कोना है, इसलिए उसकी कोई एक वक्रता नहीं है
+@msg	a guide has no curvature circle	गाइड का कोई वक्रता वृत्त नहीं होता
 @msg	the circle that matches the path there would reach past the canvas	वहाँ पाथ से मेल खाने वाला वृत्त कैनवास से बाहर चला जाएगा
 @msg	no circle passes through these points: two are the same or all three lie on one line	इन पॉइंट्स से होकर कोई वृत्त नहीं गुज़रता: दो एक जैसे हैं या तीनों एक ही रेखा पर हैं
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है

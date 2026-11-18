@@ -4779,6 +4779,8 @@ theme	Appearance	외관
 @msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
 @msg	the path is straight there, so no circle matches its curvature	패스가 그 위치에서 직선이므로 곡률에 맞는 원이 없습니다
 @msg	the path has a cusp there, so it has no single curvature	패스가 그 위치에서 뾰족하므로 곡률이 하나로 정해지지 않습니다
+@msg	the path has a corner there, so it has no single curvature	패스가 그 위치에서 모서리를 이루므로 곡률이 하나로 정해지지 않습니다
+@msg	a guide has no curvature circle	안내선에는 곡률원이 없습니다
 @msg	the circle that matches the path there would reach past the canvas	그 위치에서 패스에 맞는 원이 캔버스를 벗어납니다
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요

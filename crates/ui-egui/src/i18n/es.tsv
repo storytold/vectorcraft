@@ -5028,6 +5028,8 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	direct-select two or three anchor points, or give `points`	seleccione directamente dos o tres puntos de ancla o indique `points`
 @msg	the path is straight there, so no circle matches its curvature	el trazado es recto en ese punto, así que ningún círculo coincide con su curvatura
 @msg	the path has a cusp there, so it has no single curvature	el trazado tiene una cúspide en ese punto, así que no tiene una curvatura única
+@msg	the path has a corner there, so it has no single curvature	el trazado tiene un vértice en ese punto, así que no tiene una curvatura única
+@msg	a guide has no curvature circle	una guía no tiene círculo de curvatura
 @msg	the circle that matches the path there would reach past the canvas	el círculo que coincide con el trazado en ese punto excedería el lienzo
 @msg	no circle passes through these points: two are the same or all three lie on one line	ningún círculo pasa por estos puntos: dos son iguales o los tres están en una misma línea
 @msg	no app to open files here	aquí no hay ninguna aplicación para abrir archivos

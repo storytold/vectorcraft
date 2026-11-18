@@ -106,7 +106,7 @@ fn straight_segments_cusps_and_huge_circles_are_refused() {
     for (id, t, want) in [
         (line, 0.5, "the path is straight there, so no circle matches its curvature"),
         (cusp, 0.5, "the path has a cusp there, so it has no single curvature"),
-        (corner, 1.0, "the path has a cusp there, so it has no single curvature"),
+        (corner, 1.0, "the path has a corner there, so it has no single curvature"),
         (gentle, 0.5, "the circle that matches the path there would reach past the canvas"),
     ] {
         let e = s.execute(C, &json!({"id": id.0, "segment": 0, "t": t})).unwrap_err().to_string();

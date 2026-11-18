@@ -5052,6 +5052,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	direct-select two or three anchor points, or give `points`	выделите прямым выделением две или три опорные точки или задайте `points`
 @msg	the path is straight there, so no circle matches its curvature	контур в этом месте прямой, поэтому его кривизне не соответствует ни одна окружность
 @msg	the path has a cusp there, so it has no single curvature	у контура в этом месте точка возврата, поэтому у него нет единой кривизны
+@msg	the path has a corner there, so it has no single curvature	у контура в этом месте угол, поэтому у него нет единой кривизны
+@msg	a guide has no curvature circle	у направляющей нет круга кривизны
 @msg	the circle that matches the path there would reach past the canvas	окружность, соответствующая контуру в этом месте, вышла бы за пределы холста
 @msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
 @msg	no app to open files here	здесь нет приложения для открытия файлов

@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Curvature Circle",
             [],
             None,
-            "{id, subpath?=0, segment, t: 0..1, convex?=false} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth; segments of no length between them are passed over), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
+            "{id, subpath?=0, segment, t: 0..1, convex?=false} → {id, cx, cy, radius, nominal}: a circle with the current paint that touches path `id` at `t` on the segment and bends as the path bends there (its circle of curvature), on the side the path bends toward, or on the other side with convex; a segment that is the usual cubic of a circular arc of 90° or less gives a circle of that arc's own radius (nominal: true), on the concave side the arc's own circle; not pixel-aligned even while Align New Objects to Pixel Grid is on; a straight stretch, a cusp, a corner anchor (t 0 or 1 where two segments meet at an angle of more than half a degree and the anchor is not marked smooth, or where they turn back the way they came; segments of no length between them are passed over), a guide, or a circle reaching past the canvas is an error, and nothing is drawn",
             has_doc,
             curvature_circle
         ),
@@ -515,6 +515,7 @@ fn curvature_circle(s: &mut Session, p: &Value) -> Result<Value> {
     let circle = found.map_err(|e| match e {
         NoCircle::Straight => bad(C, "the path is straight there, so no circle matches its curvature"),
         NoCircle::Cusp => bad(C, "the path has a cusp there, so it has no single curvature"),
+        NoCircle::Corner => bad(C, "the path has a corner there, so it has no single curvature"),
     })?;
     let (center, radius) = (circle.center, circle.radius);
     let r = Rect::new(center.x - radius, center.y - radius, center.x + radius, center.y + radius);

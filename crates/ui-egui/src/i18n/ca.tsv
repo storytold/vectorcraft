@@ -6158,6 +6158,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	direct-select two or three anchor points, or give `points`	seleccioneu directament dos o tres punts d’ancoratge o indiqueu `points`
 @msg	the path is straight there, so no circle matches its curvature	el traçat és recte en aquest punt, així que cap cercle no coincideix amb la seva curvatura
 @msg	the path has a cusp there, so it has no single curvature	el traçat té una punta en aquest punt, així que no té una curvatura única
+@msg	the path has a corner there, so it has no single curvature	el traçat té un vèrtex en aquest punt, així que no té una curvatura única
+@msg	a guide has no curvature circle	una guia no té cercle de curvatura
 @msg	the circle that matches the path there would reach past the canvas	el cercle que coincideix amb el traçat en aquest punt sortiria del llenç
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers

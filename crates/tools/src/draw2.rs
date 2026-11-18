@@ -374,7 +374,7 @@ pub(crate) fn candidate_paths(cx: &ToolContext) -> Vec<NodeId> {
         }
     });
     rest.reverse();
-    // A set keeps this linear: hover runs it on every pointer move, over every path.
+    // Skips ids already listed.
     let mut seen: std::collections::HashSet<NodeId> = v.iter().copied().collect();
     for id in rest {
         if seen.insert(id) {

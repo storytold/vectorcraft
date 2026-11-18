@@ -5252,6 +5252,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	direct-select two or three anchor points, or give `points`	valitse suoraan kaksi tai kolme ankkuripistettä tai anna `points`
 @msg	the path is straight there, so no circle matches its curvature	polku on siinä kohdassa suora, joten mikään ympyrä ei vastaa sen kaarevuutta
 @msg	the path has a cusp there, so it has no single curvature	polulla on siinä kohdassa kärki, joten sillä ei ole yksiselitteistä kaarevuutta
+@msg	the path has a corner there, so it has no single curvature	polulla on siinä kohdassa kulma, joten sillä ei ole yksiselitteistä kaarevuutta
+@msg	a guide has no curvature circle	apuviivalla ei ole kaarevuusympyrää
 @msg	the circle that matches the path there would reach past the canvas	ympyrä, joka vastaa polkua siinä kohdassa, ylittäisi kankaan
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen

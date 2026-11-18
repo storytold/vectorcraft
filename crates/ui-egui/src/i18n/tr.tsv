@@ -4745,6 +4745,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	direct-select two or three anchor points, or give `points`	iki veya üç bağlantı noktasını doğrudan seçin veya `points` verin
 @msg	the path is straight there, so no circle matches its curvature	yol orada düz, bu yüzden hiçbir çember eğriliğiyle eşleşmiyor
 @msg	the path has a cusp there, so it has no single curvature	yolun orada sivri bir noktası var, bu yüzden tek bir eğriliği yok
+@msg	the path has a corner there, so it has no single curvature	yolun orada bir köşesi var, bu yüzden tek bir eğriliği yok
+@msg	a guide has no curvature circle	bir kılavuzun eğrilik çemberi yoktur
 @msg	the circle that matches the path there would reach past the canvas	yolla orada eşleşen çember tuvalin dışına taşardı
 @msg	no circle passes through these points: two are the same or all three lie on one line	bu noktalardan geçen bir çember yok: ikisi aynı ya da üçü de aynı doğru üzerinde
 @msg	no app to open files here	burada dosyaları açacak uygulama yok

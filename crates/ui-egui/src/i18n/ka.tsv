@@ -6837,6 +6837,8 @@ font-technology	Variable	ცვლადი
 @msg	direct-select two or three anchor points, or give `points`	პირდაპირი მონიშვნით მონიშნეთ ორი ან სამი საყრდენი წერტილი ან მიუთითეთ `points`
 @msg	the path is straight there, so no circle matches its curvature	ტრაექტორია იქ სწორია, ამიტომ არცერთი წრეწირი არ შეესაბამება მის სიმრუდეს
 @msg	the path has a cusp there, so it has no single curvature	ტრაექტორიას იქ წვეტი აქვს, ამიტომ მას ერთი სიმრუდე არ აქვს
+@msg	the path has a corner there, so it has no single curvature	ტრაექტორიას იქ კუთხე აქვს, ამიტომ მას ერთი სიმრუდე არ აქვს
+@msg	a guide has no curvature circle	დამხმარე ხაზს სიმრუდის წრე არ აქვს
 @msg	the circle that matches the path there would reach past the canvas	წრეწირი, რომელიც იქ ტრაექტორიას შეესაბამება, ტილოს გასცდებოდა
 @msg	no circle passes through these points: two are the same or all three lie on one line	ამ წერტილებზე წრეწირი არ გადის: ორი ერთნაირია ან სამივე ერთ წრფეზე მდებარეობს
 @msg	no app to open files here	აქ ფაილების გასახსნელი აპი არ არის

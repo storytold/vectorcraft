@@ -14,6 +14,8 @@ pub enum NoCircle {
     /// The curve has no single direction there: a cusp, a handle drawn back onto its anchor, or a
     /// segment with no length.
     Cusp,
+    /// Two segments meet at an anchor at an angle: the path has no single direction there.
+    Corner,
 }
 
 /// The circle that touches a curve at one point and bends as the curve does there.
@@ -76,16 +78,19 @@ pub fn curvature_circle(c: CubicBez, t: f64, convex: bool) -> Result<CurvatureCi
 
 /// [`curvature_circle`] at `t` on segment `seg` of `sp`. At an end of the segment where it meets
 /// the next or previous segment at a corner, the path has no single direction: that is a
-/// [`NoCircle::Cusp`], and so is a segment `sp` lacks. Segments with no length between the two are
-/// passed over. The anchor is smooth when it is marked smooth, or when the two segments leave it
-/// within [`SMOOTH_TURN`] of one direction.
+/// [`NoCircle::Corner`]. A segment `sp` lacks is a [`NoCircle::Cusp`]. Segments with no length
+/// between the two are passed over, and a closed subpath with one segment of length meets itself.
+/// The anchor is smooth when it is marked smooth with handles that do not point back, or when the
+/// two segments leave it within [`SMOOTH_TURN`] of one direction.
 pub fn curvature_circle_on(sp: &SubPath, seg: usize, t: f64, convex: bool) -> Result<CurvatureCircle, NoCircle> {
     let n = sp.segment_count();
     if seg >= n {
         return Err(NoCircle::Cusp);
     }
     let c = sp.segment(seg);
-    let corner = if t == 0.0 {
+    let corner = if start_direction(c) == Vec2::ZERO {
+        false
+    } else if t == 0.0 {
         neighbor(sp, seg, false).is_some_and(|(prev, skipped)| !smooth(sp, seg, skipped, end_direction(prev), start_direction(c)))
     } else if t == 1.0 {
         neighbor(sp, seg, true).is_some_and(|(next, skipped)| !smooth(sp, (seg + 1) % n, skipped, end_direction(c), start_direction(next)))
@@ -93,16 +98,17 @@ pub fn curvature_circle_on(sp: &SubPath, seg: usize, t: f64, convex: bool) -> Re
         false
     };
     if corner {
-        return Err(NoCircle::Cusp);
+        return Err(NoCircle::Corner);
     }
     curvature_circle(c, t, convex)
 }
 
 /// The nearest segment with length before (or with `forward`, after) segment `seg`, and whether
-/// segments with no length lay between; `None` at an open end of the subpath.
+/// segments with no length lay between; `None` at an open end of the subpath. In a closed subpath
+/// whose only segment with length is `seg`, that is `seg` itself.
 fn neighbor(sp: &SubPath, seg: usize, forward: bool) -> Option<(CubicBez, bool)> {
     let n = sp.segment_count();
-    for k in 1..n {
+    for k in 1..=n {
         let i = if forward { (seg + k < n || sp.closed).then(|| (seg + k) % n)? } else { (seg >= k || sp.closed).then(|| (seg + n - k) % n)? };
         let s = sp.segment(i);
         if start_direction(s) != Vec2::ZERO {
@@ -113,11 +119,13 @@ fn neighbor(sp: &SubPath, seg: usize, forward: bool) -> Option<(CubicBez, bool)>
 }
 
 /// Is the join at anchor `anchor` smooth: marked smooth (with no segment of no length passed
-/// over), or the directions `a` into it and `b` out of it the same within [`SMOOTH_TURN`]?
+/// over) with the directions `a` into it and `b` out of it not pointing back, or `a` and `b` the
+/// same within [`SMOOTH_TURN`]?
 fn smooth(sp: &SubPath, anchor: usize, skipped: bool, a: Vec2, b: Vec2) -> bool {
     let marked = !skipped && sp.anchors.get(anchor).is_some_and(|an| an.kind == AnchorKind::Smooth && an.has_in() && an.has_out());
     let (la, lb) = (a.hypot(), b.hypot());
-    marked || (la > 0.0 && lb > 0.0 && a.dot(b) > 0.0 && a.cross(b).abs() <= SMOOTH_TURN.sin() * la * lb)
+    let ahead = la > 0.0 && lb > 0.0 && a.dot(b) > 0.0;
+    ahead && (marked || a.cross(b).abs() <= SMOOTH_TURN.sin() * la * lb)
 }
 
 /// The direction a segment leaves its first anchor in: toward its first control point that is
@@ -284,8 +292,8 @@ mod tests {
     fn a_corner_anchor_has_no_circle() {
         let bp = kurbo::BezPath::from_svg("M0 0 C50 -50 100 -50 150 0 L300 0").unwrap();
         let sp = &crate::PathData::from_bezpath(&bp).subpaths[0];
-        assert_eq!(curvature_circle_on(sp, 0, 1.0, false), Err(NoCircle::Cusp));
-        assert_eq!(curvature_circle_on(sp, 1, 0.0, false), Err(NoCircle::Cusp));
+        assert_eq!(curvature_circle_on(sp, 0, 1.0, false), Err(NoCircle::Corner));
+        assert_eq!(curvature_circle_on(sp, 1, 0.0, false), Err(NoCircle::Corner));
         assert_eq!(curvature_circle_on(sp, 1, 0.5, false), Err(NoCircle::Straight));
         assert!(curvature_circle_on(sp, 0, 0.0, false).is_ok() && curvature_circle_on(sp, 0, 0.5, false).is_ok());
         assert_eq!(curvature_circle_on(sp, 2, 0.5, false), Err(NoCircle::Cusp));
@@ -299,7 +307,20 @@ mod tests {
         let bp = kurbo::BezPath::from_svg("M0 0 C10 -10 90 -10 100 0 C110 10 60 90 50 100 C40 90 -10 30 0 0 Z").unwrap();
         let tri = &crate::PathData::from_bezpath(&bp).subpaths[0];
         assert!(tri.closed);
-        assert_eq!(curvature_circle_on(tri, 0, 0.0, false), Err(NoCircle::Cusp));
+        assert_eq!(curvature_circle_on(tri, 0, 0.0, false), Err(NoCircle::Corner));
+    }
+
+    /// A closed subpath whose only segment with length loops back to its start meets itself at its
+    /// point: a teardrop's tip is a corner, from both ends of the loop.
+    #[test]
+    fn a_loop_that_meets_itself_at_an_angle_has_no_circle_there() {
+        let a = Point::new(0.0, 0.0);
+        let tip = |out: Point, back: Point| SubPath::new(vec![Anchor::with_handles(a, a, out), Anchor::with_handles(a, back, a)], true);
+        let drop = tip(Point::new(100.0, -100.0), Point::new(100.0, 100.0));
+        assert_eq!(drop.segment_count(), 2);
+        assert_eq!(curvature_circle_on(&drop, 0, 0.0, false), Err(NoCircle::Corner));
+        assert_eq!(curvature_circle_on(&drop, 0, 1.0, false), Err(NoCircle::Corner));
+        assert!(curvature_circle_on(&drop, 0, 0.5, false).is_ok());
     }
 
     /// A segment with no length between a curve and a line, or a closed subpath whose last anchor
@@ -309,8 +330,8 @@ mod tests {
         let (a, b, c) = (Point::new(0.0, 0.0), Point::new(150.0, 0.0), Point::new(300.0, 0.0));
         let curve_in = Anchor::with_handles(b, Point::new(100.0, -50.0), b);
         let open = SubPath::new(vec![Anchor::with_handles(a, a, Point::new(50.0, -50.0)), curve_in, Anchor::corner(b), Anchor::corner(c)], false);
-        assert_eq!(curvature_circle_on(&open, 0, 1.0, false), Err(NoCircle::Cusp));
-        assert_eq!(curvature_circle_on(&open, 2, 0.0, false), Err(NoCircle::Cusp), "from the line's side too");
+        assert_eq!(curvature_circle_on(&open, 0, 1.0, false), Err(NoCircle::Corner));
+        assert_eq!(curvature_circle_on(&open, 2, 0.0, false), Err(NoCircle::Corner), "from the line's side too");
         assert_eq!(curvature_circle_on(&open, 2, 0.5, false), Err(NoCircle::Straight));
         // A closed triangle of curves drawn back to its first anchor before it closes.
         let tri = SubPath::new(
@@ -323,12 +344,13 @@ mod tests {
             true,
         );
         assert_eq!(tri.segment_count(), 4);
-        assert_eq!(curvature_circle_on(&tri, 0, 0.0, false), Err(NoCircle::Cusp));
-        assert_eq!(curvature_circle_on(&tri, 2, 1.0, false), Err(NoCircle::Cusp));
+        assert_eq!(curvature_circle_on(&tri, 0, 0.0, false), Err(NoCircle::Corner));
+        assert_eq!(curvature_circle_on(&tri, 2, 1.0, false), Err(NoCircle::Corner));
     }
 
     /// An anchor whose handles turn by a thousandth of a radian, as rounded coordinates leave them,
-    /// is smooth; one marked smooth is smooth whatever its handles; a turn of 2° is a corner.
+    /// is smooth; one marked smooth is smooth unless its handles point back the way they came; a
+    /// turn of 2° is a corner.
     #[test]
     fn a_nearly_smooth_or_marked_smooth_anchor_has_a_circle() {
         let mid = |out_x: f64, kind: AnchorKind| {
@@ -341,8 +363,13 @@ mod tests {
         let rounded = mid(100.05, AnchorKind::Corner);
         assert!(curvature_circle_on(&rounded, 0, 1.0, false).is_ok() && curvature_circle_on(&rounded, 1, 0.0, false).is_ok());
         let turned = 50.0 * 2f64.to_radians().tan();
-        assert_eq!(curvature_circle_on(&mid(100.0 - turned, AnchorKind::Corner), 0, 1.0, false), Err(NoCircle::Cusp));
+        assert_eq!(curvature_circle_on(&mid(100.0 - turned, AnchorKind::Corner), 0, 1.0, false), Err(NoCircle::Corner));
         assert!(curvature_circle_on(&mid(100.0 - turned, AnchorKind::Smooth), 0, 1.0, false).is_ok());
+        // Marked smooth, with the out handle pointing back along the in handle.
+        let mut back = mid(100.0, AnchorKind::Smooth);
+        back.anchors.get_mut(1).unwrap().h_out = Point::new(100.0, -40.0);
+        assert_eq!(curvature_circle_on(&back, 0, 1.0, false), Err(NoCircle::Corner));
+        assert_eq!(curvature_circle_on(&back, 1, 0.0, false), Err(NoCircle::Corner));
     }
 
     /// An arc's cubic is taken only up to a quarter turn, with both ends on one circle and handles
