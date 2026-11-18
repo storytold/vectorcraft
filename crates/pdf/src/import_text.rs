@@ -294,6 +294,56 @@ struct Filled {
     actual: Option<bool>,
 }
 
+/// Whether a stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over a
+/// glyph `fill` filled (its font, placement, whether it is a glyph of an ActualText span, and its
+/// text) on a line that is `opaque` or not ([`TextLine::fills_at`]).
+fn may_stroke(fill: (u128, Placement, bool, Option<&str>), opaque: bool, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
+    let (g_font, g_at, g_actual, g_text) = fill;
+    if actual {
+        let same = |a: f64, b: f64| a.to_bits() == b.to_bits();
+        return g_actual && g_font == font && same(g_at.origin.x, at.origin.x) && same(g_at.origin.y, at.origin.y);
+    }
+    !g_actual && opacity >= 0.999 && opaque && g_font == font && g_at.same_as(&at) && g_text == Some(text)
+}
+
+/// The glyphs a stroke could still go over on lines of type finished before their stroke pass
+/// could end: lines beyond the most a fill pass keeps for its stroke pass. The device isn't told
+/// where an operator starts, so a stroke pass over such a line can't be told from one over the
+/// glyphs kept: its first stroke, over a glyph finished so, may match one of them instead. Kept up
+/// to [`MAX_LOST_FILLS`](Self::MAX_LOST_FILLS), beyond which any stroke may be over one.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LostFills {
+    /// Each glyph's font, placement, whether it is a glyph of an ActualText span, its text and
+    /// whether its line is opaque.
+    fills: Vec<(u128, Placement, bool, Option<String>, bool)>,
+    /// More glyphs than [`MAX_LOST_FILLS`](Self::MAX_LOST_FILLS) were finished so.
+    overflowed: bool,
+}
+
+impl LostFills {
+    /// The most glyphs kept, for bounded work and memory on hostile input.
+    pub const MAX_LOST_FILLS: usize = 4096;
+
+    /// Add the glyphs `line` filled that a stroke may still go over.
+    pub fn add(&mut self, line: &TextLine) {
+        let opaque = line.opacity >= 0.999;
+        for g in line.filled.get(line.stroked..).unwrap_or_default() {
+            if self.fills.len() >= Self::MAX_LOST_FILLS {
+                self.overflowed = true;
+                return;
+            }
+            self.fills.push((g.font, g.at, g.actual.is_some(), line.glyph_text(g).map(str::to_string), opaque));
+        }
+    }
+
+    /// Whether a stroke over glyph `text` drawn at `at` in `font` at `opacity` may be drawn over
+    /// one of the glyphs ([`TextLine::fills_at`]).
+    pub fn may_stroke(&self, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
+        self.overflowed
+            || self.fills.iter().any(|(f, a, act, t, opaque)| may_stroke((*f, *a, *act, t.as_deref()), *opaque, font, at, opacity, text, actual))
+    }
+}
+
 /// Glyphs next to each other in one run that a stroke is drawn over, not yet restyled
 /// ([`TextLine::stroke_filled`]): the run's index, the text's byte range in it, and the stroke.
 #[derive(Clone, Debug)]
@@ -713,16 +763,13 @@ impl TextLine {
 
     /// [`fills_at`](Self::fills_at) for glyph `g`.
     fn fills(&self, g: &Filled, font: u128, at: Placement, opacity: f32, text: &str, actual: bool) -> bool {
-        if actual {
-            let same = |a: f64, b: f64| a.to_bits() == b.to_bits();
-            return g.actual.is_some() && g.font == font && same(g.at.origin.x, at.origin.x) && same(g.at.origin.y, at.origin.y);
-        }
-        g.actual.is_none()
-            && opacity >= 0.999
-            && self.opacity >= 0.999
-            && g.font == font
-            && g.at.same_as(&at)
-            && self.runs.get(g.run).and_then(|(.., t)| t.get(g.start..g.start.saturating_add(g.len))) == Some(text)
+        let (fill, opaque) = ((g.font, g.at, g.actual.is_some(), self.glyph_text(g)), self.opacity >= 0.999);
+        may_stroke(fill, opaque, font, at, opacity, text, actual)
+    }
+
+    /// The text of filled glyph `g` in the line's runs.
+    fn glyph_text(&self, g: &Filled) -> Option<&str> {
+        self.runs.get(g.run).and_then(|(.., t)| t.get(g.start..g.start.saturating_add(g.len)))
     }
 
     /// Whether a stroke drawn later may still be drawn over a glyph of the line (fill and stroke

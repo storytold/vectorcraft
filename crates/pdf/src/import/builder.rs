@@ -17,13 +17,20 @@ use super::{
 /// The most lines of type kept for a text-showing operator's stroke pass ([`Builder::park_text`]):
 /// beyond them the oldest is finished, and strokes over its glyphs come in as type of their own.
 /// They are the lines its fill pass finished, besides the open one: a `TJ` over up to 65 lines is
-/// filled and stroked, one over more is a filled object and a stroked one for each part.
+/// filled and stroked, one over more is a filled object and a stroked one for each part. The
+/// pass's first stroke goes over a glyph finished so, which can match a glyph kept (a `TJ` that
+/// draws it again where it began): a first stroke that may go over one of them is type of its own
+/// too, and ends the pass ([`Builder::hold_stroke`]).
 const MAX_PARKED: usize = 64;
 
 /// The most strokes of a stroke pass held to be matched to the glyphs they go over
 /// ([`Builder::hold_stroke`]): beyond them, those held are matched to the last glyphs filled one
 /// after another that they go over, with as many glyphs filled from there on as strokes held
-/// ([`Builder::replayed`]), and the pass goes on from there.
+/// ([`Builder::replayed`]), and the pass goes on from there. The reader tells no operator's
+/// start, so the last such run is taken: the operator's fill pass is the one right before its
+/// stroke pass. An operator that fills the same run of more than this many glyphs twice at the
+/// same places may have its first strokes matched to its second copy; such a pass is matched as
+/// well as it can be, not exactly.
 const MAX_HELD: usize = 4096;
 
 /// The most glyphs [`Builder::replayed`] compares to the strokes held, for bounded work on
@@ -58,6 +65,7 @@ impl<'p> Builder<'p> {
             text_glyphs: vec![],
             parked: vec![],
             held: vec![],
+            lost: None,
             text_as,
             actual: Default::default(),
             images: HashMap::new(),
@@ -142,6 +150,7 @@ impl<'p> Builder<'p> {
         self.text_glyphs.clear();
         self.parked.clear();
         self.held.clear();
+        self.lost = None;
         self.mask = None;
         self.masked.clear();
         self.marked.clear();
@@ -511,13 +520,21 @@ impl<'p> Builder<'p> {
     /// Parked lines are finished, oldest first, when the stroke pass goes past them (a stroke is
     /// drawn over a later line or the open one: [`Self::settle_strokes`]; or over none of them:
     /// [`Self::end_fills`]), when anything else ends the open line ([`Self::end_text`]), and
-    /// beyond [`MAX_PARKED`] lines.
+    /// beyond [`MAX_PARKED`] lines: the glyphs of those are kept for the stroke after them
+    /// ([`Self::hold_stroke`]).
     pub(super) fn park_text(&mut self, park: bool) {
         match self.text.take() {
             Some(line) if park && line.awaits_stroke() => {
                 let glyphs = std::mem::take(&mut self.text_glyphs);
                 self.parked.push((line, glyphs));
-                self.release_parked(self.parked.len().saturating_sub(MAX_PARKED));
+                let over = self.parked.len().saturating_sub(MAX_PARKED);
+                if over > 0 {
+                    let lost = self.lost.get_or_insert_default();
+                    for (line, _) in self.parked.iter().take(over) {
+                        lost.add(line);
+                    }
+                }
+                self.release_parked(over);
             }
             line => {
                 self.text = line;
@@ -534,6 +551,7 @@ impl<'p> Builder<'p> {
     /// filled before it, and stroking those would draw it under the type of its own. The start
     /// and end of an ActualText span are too: a span's glyphs are stroked within it (#8543).
     pub(super) fn end_fills(&mut self) {
+        self.lost = None;
         self.settle_strokes();
         self.release_parked(usize::MAX);
         if let Some(line) = &mut self.text {
@@ -600,7 +618,17 @@ impl<'p> Builder<'p> {
     /// only told once the pass has ended: a `TJ` can draw the same glyph at the same place twice
     /// (its kerning goes back), and an operator can fill and stroke a glyph where one filled
     /// before it stands, which the device can't tell from a glyph the operator filled (#8543).
+    ///
+    /// The first stroke after lines were finished beyond [`MAX_PARKED`] ([`Self::park_text`])
+    /// that may go over a glyph of theirs may be the start of their stroke pass, which no longer
+    /// finds its first glyphs: it ends the pass ([`Self::end_fills`]) and is type of its own, as
+    /// are the pass's strokes after it. Any other first stroke there is matched as ever: no
+    /// stroke pass is due over those lines once another stroke is drawn.
     pub(super) fn hold_stroke(&mut self, mut h: HeldStroke) -> bool {
+        if self.lost.take().is_some_and(|lost| lost.may_stroke(h.font, h.at, h.opacity, &h.text, h.actual)) {
+            self.end_fills();
+            return false;
+        }
         if self.held.len() >= MAX_HELD {
             self.settle(false);
         }

@@ -121,6 +121,10 @@ pub(super) struct Builder<'p> {
     /// [`parked`](Self::parked) lines and the open one, held until the pass ends to be matched to
     /// the glyphs it strokes ([`Builder::settle_strokes`]).
     pub(super) held: Vec<HeldStroke>,
+    /// The glyphs of the lines a fill pass finished beyond the most kept for their stroke pass that
+    /// a stroke may still have gone over, until the first stroke after them
+    /// ([`Builder::hold_stroke`]) or a boundary of stroke passes ([`Builder::end_fills`]).
+    pub(super) lost: Option<crate::import_text::LostFills>,
     pub(super) text_as: TextAs,
     pub(super) actual: super::actual_text::ActualText,
     pub(super) images: HashMap<String, ImageBlob>,

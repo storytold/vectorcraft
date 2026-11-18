@@ -502,6 +502,32 @@ fn a_tj_over_more_lines_than_are_kept_comes_in_as_fill_and_stroke_apart() {
     assert_eq!(type_runs(&content(66)), want);
 }
 
+/// A `TJ` over more lines than are kept whose last part draws its first glyph again at the first
+/// glyph's origin still comes in as a filled object and a stroked one for each part: the stroke
+/// over the first glyph, whose line was finished, doesn't take the last part's fill (#8543).
+#[test]
+fn a_tj_over_more_lines_than_are_kept_that_ends_where_it_began_stays_fill_and_stroke_apart() {
+    // Helvetica's A is 667 units wide: 65 As and 64 kerns of 3,500 back to the first A's origin.
+    let parts = vec!["(A)"; 65].join(" -3500 ");
+    let content = format!("BT 2 Tr /F1 4 Tf 20 80 Td [{parts} 267355 (A)] TJ 0 Tr ET");
+    let (fill, stroke) = (vec![("A".to_string(), true, false)], vec![("A".to_string(), false, true)]);
+    let want: Vec<_> = std::iter::repeat_n(fill, 66).chain(std::iter::repeat_n(stroke, 66)).collect();
+    assert_eq!(type_runs(&content), want);
+}
+
+/// Type filled and stroked right after a `TJ` over more lines than are kept is filled and
+/// stroked as before, whether the `TJ` was filled and stroked or filled only (#8543).
+#[test]
+fn type_after_a_tj_over_more_lines_than_are_kept_is_filled_and_stroked() {
+    let parts = vec!["(A)"; 66].join(" -3500 ");
+    for mode in ["2", "0"] {
+        let content = format!("BT /F1 4 Tf 20 80 Td {mode} Tr [{parts}] TJ 2 Tr /F1 48 Tf 1 0 0 1 40 150 Tm (B) Tj 0 Tr ET");
+        let types = type_runs(&content);
+        assert_eq!(types.len(), if mode == "2" { 133 } else { 67 }, "{content}");
+        assert_eq!(types.last(), Some(&vec![("B".to_string(), true, true)]), "{content}");
+    }
+}
+
 /// The start and end of an ActualText span end the stroke pass of the glyphs filled before them,
 /// for the stroke over the glyph filled last too: a stroke after the span over the glyph its
 /// replacement text came with, or over a glyph filled before an empty span, is type of its own,
