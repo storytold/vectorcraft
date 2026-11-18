@@ -1533,15 +1533,18 @@ impl Targets {
                 continue;
             }
             let vs = if vertical { [r.x0, r.center().x, r.x1] } else { [r.y0, r.center().y, r.y1] };
-            let half = if vertical { r.height() / 2.0 } else { r.width() / 2.0 };
+            let (mid, half) =
+                if vertical { (Point::new(0.0, r.center().y), r.height() / 2.0) } else { (Point::new(r.center().x, 0.0), r.width() / 2.0) };
             for g in self.rulers.iter().filter(|g| g.vertical == vertical) {
                 for v in vs {
                     let s = (g.pos - v) / c;
                     if (g.pos - v).abs() > tol || s.abs() > 2.0 * tol || !(lo..=hi).contains(&s) || best.is_some_and(|b| s.abs() >= b.0.abs()) {
                         continue;
                     }
-                    // The guide runs past the bounds where the slide puts them.
-                    if let Some((t, from, _)) = g.line_at(r.center() + u * s, tol + half) {
+                    // The guide runs past the bounds: for a slide held to `within`, where the slide
+                    // puts them; for a Shift move, where the move put them.
+                    let at = if lo.is_finite() || hi.is_finite() { r.center() + u * s } else { mid };
+                    if let Some((t, from, _)) = g.line_at(at, tol + half) {
                         best = Some((s, t, from, vertical));
                     }
                 }

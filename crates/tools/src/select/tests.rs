@@ -1151,6 +1151,23 @@ fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
     assert!(moved_by(m, (231.0, 0.0)), "{m:?}");
 }
 
+/// #4312: a diagonal Shift move reaches an artboard guide only where the move puts the bounds
+/// within the guide's run: the middle at x 556 is beyond the guide's end at 500 by more than half
+/// the width and the Snapping Tolerance, so the top (506) does not slide onto the guide at 503.
+#[test]
+fn a_diagonal_shift_move_reaches_an_artboard_guide_where_the_move_puts_it() {
+    let (mut d, id) = doc_with_rect();
+    d.artboards[0].rect = Rect::new(0.0, 0.0, 500.0, 1600.0);
+    let board = d.artboards[0].id;
+    d.add_ruler_guide(&vectorcraft_doc::Guide { artboard: Some(board), ..vectorcraft_doc::Guide::new(false, 503.0) });
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let (m, _) = shift_moved(&c, (556.0, 556.0));
+    assert!(moved_by(m, (406.0, 406.0)), "{m:?}");
+}
+
 /// With Smart Guides on, a moved selection reaches a ruler guide within the Snapping Tolerance
 /// (4 px), as drawing and handle drags do; with Smart Guides off, Snap to Point reaches it within
 /// its own distance (2 px).
