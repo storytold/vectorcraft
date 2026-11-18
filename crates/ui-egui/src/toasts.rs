@@ -17,6 +17,10 @@ pub const MAX_SHOWN: usize = 5;
 /// The widest a message is, in points; longer text wraps.
 const WIDTH: f32 = 320.0;
 
+/// The narrowest a message gets in a narrow window, in points: its frame's margin and edge (22
+/// points) and room for one character.
+const MIN_WIDTH: f32 = 32.0;
+
 /// The most lines a message shows; the rest shows on hover.
 const MAX_ROWS: usize = 6;
 
@@ -91,10 +95,12 @@ pub(crate) fn show_at(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
     let area = egui::Area::new(egui::Id::unique("toasts")).order(egui::Order::Foreground).anchor(egui::Align2::RIGHT_BOTTOM, corner);
     // A stack taller than the window scrolls, kept at its newest message.
     let height = (ctx.content_rect().height() - 2.0 * MARGIN).max(0.0);
+    // In a window narrower than a message, the messages narrow to fit it.
+    let width = WIDTH.min(ctx.content_rect().width() - 2.0 * MARGIN).max(MIN_WIDTH);
     let dismissed = area
         .show(ctx, |ui| {
             let scroll = egui::ScrollArea::vertical().max_height(height).stick_to_bottom(true);
-            scroll.show(ui, |ui| stack(ui, &mut app.toasts.list, &t)).inner
+            scroll.show(ui, |ui| stack(ui, &mut app.toasts.list, &t, width)).inner
         })
         .inner;
     if let Some(id) = dismissed {
@@ -103,14 +109,14 @@ pub(crate) fn show_at(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64) {
     }
 }
 
-/// Draw `list`, oldest first; the id of the message clicked.
-fn stack(ui: &mut egui::Ui, list: &mut [Entry], t: &Tokens) -> Option<u64> {
-    ui.set_max_width(WIDTH);
+/// Draw `list`, oldest first, `width` points wide; the id of the message clicked.
+fn stack(ui: &mut egui::Ui, list: &mut [Entry], t: &Tokens, width: f32) -> Option<u64> {
+    ui.set_max_width(width);
     let mut clicked = None;
     for e in list {
         // Each message's widgets keep its id when the messages before it go, so a press and a
         // release land on the same message.
-        let r = ui.push_id(e.id, |ui| message(ui, e, t)).inner;
+        let r = ui.push_id(e.id, |ui| message(ui, e, t, width)).inner;
         if r.clicked() {
             clicked = Some(e.id);
         }
@@ -120,18 +126,19 @@ fn stack(ui: &mut egui::Ui, list: &mut [Entry], t: &Tokens) -> Option<u64> {
     clicked
 }
 
-/// Draw one message → its response to clicks.
-fn message(ui: &mut egui::Ui, e: &Entry, t: &Tokens) -> egui::Response {
+/// Draw one message `width` points wide → its response to clicks.
+fn message(ui: &mut egui::Ui, e: &Entry, t: &Tokens, width: f32) -> egui::Response {
     let frame = egui::Frame::new()
         .fill(t.panel)
         .stroke(egui::Stroke::new(1.0, color(t, e.toast.level)))
         .corner_radius(t.radius)
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
-            ui.set_width(WIDTH - 20.0);
+            // The frame's margin and edge take 11 points on each side.
+            ui.set_width(width - 22.0);
             let format = egui::TextFormat::simple(egui::TextStyle::Body.resolve(ui.style()), t.text);
             let mut job = egui::text::LayoutJob::single_section(e.toast.message.clone(), format);
-            job.wrap.max_width = WIDTH - 20.0;
+            job.wrap.max_width = width - 22.0;
             job.wrap.max_rows = MAX_ROWS;
             let galley = ui.painter().layout_job(job);
             let elided = galley.elided;
@@ -168,7 +175,12 @@ mod tests {
 
     /// [`pass`] in a window `height` points tall.
     fn pass_in(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64, events: Vec<egui::Event>, height: f32) -> Vec<String> {
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, height));
+        pass_sized(app, ctx, now, events, egui::vec2(1000.0, height))
+    }
+
+    /// [`pass`] in a window of `size` points.
+    fn pass_sized(app: &mut VectorcraftApp, ctx: &egui::Context, now: f64, events: Vec<egui::Event>, size: egui::Vec2) -> Vec<String> {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
         let input = egui::RawInput { screen_rect: Some(screen), events, ..Default::default() };
         let mut output = ctx.run_ui(input, |ui| show_at(app, ui.ctx(), now));
         output.textures_delta.clear();
@@ -323,6 +335,17 @@ mod tests {
         let stack = ctx.memory(|m| m.area_rect(egui::Id::unique("toasts"))).unwrap();
         assert!(stack.top() >= MARGIN - 0.5 && stack.bottom() <= height - MARGIN + 0.5, "{stack:?}");
         assert_eq!(app.toasts.list.len(), MAX_SHOWN);
+    }
+
+    #[test]
+    fn a_message_in_a_narrow_window_stays_inside_it() {
+        let (mut app, ctx) = app();
+        app.run("app.toast", json!({"message": "A message long enough to wrap onto more than one line"})).unwrap();
+        let size = egui::vec2(200.0, 700.0);
+        pass_sized(&mut app, &ctx, 0.0, vec![], size);
+        pass_sized(&mut app, &ctx, 0.0, vec![], size);
+        let rect = app.toasts.list[0].rect.unwrap();
+        assert!(rect.left() >= MARGIN - 0.5 && rect.right() <= size.x - MARGIN + 0.5, "{rect:?}");
     }
 
     #[test]

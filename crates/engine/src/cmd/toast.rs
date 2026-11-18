@@ -76,8 +76,11 @@ impl Toast {
 pub struct Queue(VecDeque<Toast>);
 
 impl Session {
-    /// Queue `toast` for the app to show. With [`MAX_QUEUED`] waiting, the oldest one goes.
-    pub fn toast(&mut self, toast: Toast) {
+    /// Queue `toast` for the app to show. With [`MAX_QUEUED`] waiting, the oldest one goes. Its
+    /// time is held to [`MIN_SECONDS`] to [`MAX_SECONDS`], and a time that is not a number is
+    /// [`DEFAULT_SECONDS`].
+    pub fn toast(&mut self, mut toast: Toast) {
+        toast.seconds = if toast.seconds.is_nan() { DEFAULT_SECONDS } else { toast.seconds.clamp(MIN_SECONDS, MAX_SECONDS) };
         while self.toasts.0.len() >= MAX_QUEUED {
             self.toasts.0.pop_front();
         }
@@ -190,6 +193,16 @@ mod tests {
         let most = "é".repeat(MAX_CHARS);
         s.execute(ID, &json!({"message": most})).unwrap();
         assert_eq!(s.take_toasts().len(), 1);
+    }
+
+    #[test]
+    fn a_message_queued_by_the_app_shows_for_0_5_to_60_seconds() {
+        let mut s = Session::new();
+        for seconds in [f64::INFINITY, 1e9, f64::NEG_INFINITY, 0.0, f64::NAN, 10.0] {
+            s.toast(Toast { seconds, ..Toast::new("m", Level::Info) });
+        }
+        let got: Vec<f64> = s.take_toasts().iter().map(|t| t.seconds).collect();
+        assert_eq!(got, vec![MAX_SECONDS, MAX_SECONDS, MIN_SECONDS, MIN_SECONDS, DEFAULT_SECONDS, 10.0]);
     }
 
     #[test]
