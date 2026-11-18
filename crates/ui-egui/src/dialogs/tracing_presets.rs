@@ -36,6 +36,10 @@ pub const REPLACE_KIND: &str = "tracingPresetsReplace";
 /// The editor's field naming the saved preset it edits.
 const EDITING: &str = "editing";
 
+/// The tallest the tracing settings draw, in the manager and the editor, before they scroll (the
+/// height of the manager's preset list), so the dialog's buttons stay on short screens.
+const SETTINGS_HEIGHT: f32 = 300.0;
+
 pub(super) const SPEC: DialogSpec = DialogSpec {
     heading: |_| tl!("Tracing Presets").into(),
     body,
@@ -148,9 +152,12 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             ui.set_width(320.0);
             ui.label(egui::RichText::new(list_label(&preset)).color(t.text_strong).strong());
             ui.add_space(8.0);
-            // The selected preset's settings, as the editor shows them, to read only.
+            // The selected preset's settings, as the editor shows them, to read only. They scroll
+            // past the height of the preset list.
             let mut params = preset.1.clone();
-            ui.add_enabled_ui(false, |ui| settings_editor(app, ui, "tracing-presets", &mut params));
+            egui::ScrollArea::vertical().id_salt("tracing-preset-details").max_height(SETTINGS_HEIGHT).show(ui, |ui| {
+                ui.add_enabled_ui(false, |ui| settings_editor(app, ui, "tracing-presets", &mut params));
+            });
             if builtin {
                 ui.add_space(6.0);
                 ui.label(egui::RichText::new(tl!("Built-in presets don't change: New makes a copy you can edit.")).color(t.text_dim).size(11.5));
@@ -332,7 +339,12 @@ fn preset_body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> b
     });
     ui.add_space(8.0);
     let mut params = d.fields.get("params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
-    if settings_editor(app, ui, "tracing-preset", &mut params) {
+    let changed = egui::ScrollArea::vertical()
+        .id_salt("tracing-preset-settings")
+        .max_height(SETTINGS_HEIGHT)
+        .show(ui, |ui| settings_editor(app, ui, "tracing-preset", &mut params))
+        .inner;
+    if changed {
         d.fields.insert("params".into(), params);
     }
     false

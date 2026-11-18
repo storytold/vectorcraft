@@ -385,3 +385,57 @@ fn a_long_list_of_names_keeps_replace_on_screen() {
         assert!(rect.is_some_and(|r| screen.contains_rect(r)), "{button} is drawn on screen: {rect:?}");
     }
 }
+
+/// The tracing settings scroll past the height of the preset list, in the manager and in the
+/// editor: a preset with every row shown (Color, Document Library, Ignore Color) makes neither
+/// dialog taller than a Black and White one does.
+#[test]
+fn tall_settings_scroll_instead_of_growing_the_dialog() {
+    fn walk(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    /// The height from the dialog's heading to the bottom of its button `button`.
+    fn height(app: &mut VectorcraftApp, heading: &str, button: &str) -> f32 {
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 2000.0));
+        let mut texts = vec![];
+        for k in 0..6 {
+            let raw = egui::RawInput { screen_rect: Some(screen), time: Some(f64::from(k) * 0.25), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| super::super::show(app, ui.ctx()));
+            out.textures_delta.clear();
+            texts.clear();
+            out.shapes.iter().for_each(|c| walk(&c.shape, &mut texts));
+        }
+        let at = |t: &str| texts.iter().find(|(s, _)| s == t).map(|(_, r)| *r).unwrap_or_else(|| panic!("{t}: {texts:?}"));
+        at(button).max.y - at(heading).min.y
+    }
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let short = listed(&mut app, "Default");
+    let mut tall = short.clone();
+    tall["mode"] = json!("color");
+    tall["palette"] = json!("documentLibrary");
+    tall["colorGroup"] = json!("Brand Colors");
+    tall["ignoreWhite"] = json!(true);
+    for (name, params) in [("Short", &short), ("Tall", &tall)] {
+        app.run("imageTrace.presets.save", json!({ "name": name, "preset": "Default", "params": params })).unwrap();
+    }
+    app.run("ui.tracingPresetsDialog", json!({})).unwrap();
+    let mut heights = vec![];
+    for name in ["Short", "Tall"] {
+        set(&mut app, "selected", json!(name));
+        let manager = height(&mut app, "Tracing Presets", "Close");
+        press(&mut app, Action::Edit, name).unwrap();
+        assert_eq!(kind(&app), Some(PRESET_KIND));
+        let editor = height(&mut app, "Save Preset", "OK");
+        app.ui.dialog = super::super::parent(app.ui.dialog.as_ref().unwrap());
+        heights.push((manager, editor));
+    }
+    let [(manager, editor), (tall_manager, tall_editor)] = heights[..] else { panic!("{heights:?}") };
+    assert!(tall_manager <= manager + 0.5, "the manager grows from {manager} to {tall_manager}");
+    assert!(tall_editor <= editor + 0.5, "the editor grows from {editor} to {tall_editor}");
+}
