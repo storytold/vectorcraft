@@ -3090,6 +3090,9 @@
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	બાઉન્ડિંગ લંબચોરસ ઉમેરો
 	Add Bounding Circle	બાઉન્ડિંગ વર્તુળ ઉમેરો
+	Add Bounding Rectangle…	બાઉન્ડિંગ લંબચોરસ ઉમેરો…
+	Add Bounding Circle…	બાઉન્ડિંગ વર્તુળ ઉમેરો…
+	One per Object	દરેક ઑબ્જેક્ટ માટે એક
 	Remove Guide	ગાઇડ દૂર કરો
 	Remove Item	આઇટમ દૂર કરો
 	Remove JavaScript File	JavaScript ફાઇલ દૂર કરો

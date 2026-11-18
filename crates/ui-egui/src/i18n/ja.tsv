@@ -9351,6 +9351,9 @@ breakText	Glyphs	字形
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	外接長方形を追加
 	Add Bounding Circle	外接円を追加
+	Add Bounding Rectangle…	外接長方形を追加…
+	Add Bounding Circle…	外接円を追加…
+	One per Object	オブジェクトごとに 1 つ
 @msg	nothing to enclose	囲むものがありません
 @msg	`offset` must be 0 or more	`offset` には 0 以上を指定してください
 @msg	the shape would have no size	図形にサイズがありません

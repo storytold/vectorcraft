@@ -345,8 +345,9 @@ fn bad_params_and_an_empty_selection_draw_nothing() {
     }
 }
 
-/// An offset that would take the shape more than 4,000,000 pt from the origin is an error that
-/// names the canvas edge, and nothing is drawn; the largest offset that stays inside is drawn.
+/// An offset that would put an edge of the shape more than 4,000,000 pt from the origin along
+/// either axis is an error that names the canvas edge, and nothing is drawn; the largest offsets
+/// that stay inside are drawn, for the rectangle and for the circle.
 #[test]
 fn an_offset_past_the_canvas_edge_draws_nothing() {
     let mut s = session();
@@ -360,6 +361,25 @@ fn an_offset_past_the_canvas_edge_draws_nothing() {
     }
     let r = id_of(&s.execute(RECTANGLE, &json!({"offset": 3.99e6})).unwrap());
     assert!(rect_near(bounds(&s, r), Rect::new(-3.99e6, -3.99e6, 3.99e6 + 10.0, 3.99e6 + 10.0), 1e-3));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let c = id_of(&s.execute(CIRCLE, &json!({"offset": 3.99e6})).unwrap());
+    // The circle around the square from (0, 0) to (10, 10), 0.01 pt larger, then the offset.
+    let radius = 50.0f64.sqrt() + 0.01 + 3.99e6;
+    assert!(rect_near(bounds(&s, c), Rect::new(5.0 - radius, 5.0 - radius, 5.0 + radius, 5.0 + radius), 1e-3));
+}
+
+/// The limit holds along each axis on its own: a shape whose right edge would pass 4,000,000 pt is
+/// refused although its other edges, and its distance along the other axis, are small.
+#[test]
+fn one_edge_past_the_canvas_edge_is_enough_to_refuse() {
+    let mut s = session();
+    let a = rect(&mut s, 3_999_980.0, 0.0, 10.0, 10.0);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    for command in [RECTANGLE, CIRCLE] {
+        let e = refused(&mut s, command, json!({"offset": 20}));
+        assert!(e.contains("the shape would reach past the edge of the canvas"), "{command}: {e}");
+    }
+    assert!(s.execute(RECTANGLE, &json!({"offset": 5})).is_ok(), "the right edge at 3,999,995 pt is inside");
 }
 
 /// Many points keep only their hull's corners, and the circle around them is the one around all

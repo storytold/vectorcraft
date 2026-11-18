@@ -7824,6 +7824,9 @@ breakText	Glyphs	Глифы
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Добавить описанный прямоугольник
 	Add Bounding Circle	Добавить описанную окружность
+	Add Bounding Rectangle…	Добавить описанный прямоугольник…
+	Add Bounding Circle…	Добавить описанную окружность…
+	One per Object	По одной на объект
 @msg	nothing to enclose	нечего окружать
 @msg	`offset` must be 0 or more	`offset` должно быть 0 или больше
 @msg	the shape would have no size	у фигуры не было бы размера

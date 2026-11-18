@@ -7898,6 +7898,9 @@ breakText	Glyphs	Merkit
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Lisää rajaava suorakulmio
 	Add Bounding Circle	Lisää rajaava ympyrä
+	Add Bounding Rectangle…	Lisää rajaava suorakulmio…
+	Add Bounding Circle…	Lisää rajaava ympyrä…
+	One per Object	Yksi kutakin objektia kohden
 @msg	nothing to enclose	ei ympäröitävää
 @msg	`offset` must be 0 or more	`offset` on oltava 0 tai enemmän
 @msg	the shape would have no size	muodolla ei olisi kokoa

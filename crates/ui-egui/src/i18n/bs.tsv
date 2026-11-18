@@ -7109,6 +7109,13 @@ shape	Open	Otvoren
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Dodaj granični pravougaonik
 	Add Bounding Circle	Dodaj granični krug
+	Add Bounding Rectangle…	Dodaj granični pravougaonik…
+	Add Bounding Circle…	Dodaj granični krug…
+	One per Object	Jedan po objektu
+@msg	nothing to enclose	nema ničega za obuhvatiti
+@msg	`offset` must be 0 or more	`offset` mora biti 0 ili više
+@msg	the shape would have no size	oblik ne bi imao veličinu
+@msg	the shape would reach past the edge of the canvas	oblik bi prešao rub radne površine
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alati za dokument
 	Save a Timestamped Copy	Sačuvaj kopiju s datumom i vremenom

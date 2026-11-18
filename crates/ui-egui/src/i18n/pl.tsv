@@ -7689,6 +7689,9 @@ breakText	Glyphs	Glify
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Dodaj prostokąt otaczający
 	Add Bounding Circle	Dodaj okrąg otaczający
+	Add Bounding Rectangle…	Dodaj prostokąt otaczający…
+	Add Bounding Circle…	Dodaj okrąg otaczający…
+	One per Object	Jeden na obiekt
 @msg	nothing to enclose	nie ma czego otoczyć
 @msg	`offset` must be 0 or more	`offset` musi wynosić 0 lub więcej
 @msg	the shape would have no size	kształt nie miałby rozmiaru

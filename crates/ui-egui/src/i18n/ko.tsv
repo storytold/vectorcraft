@@ -7433,6 +7433,9 @@ breakText	Glyphs	글리프
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	경계 사각형 추가
 	Add Bounding Circle	경계 원 추가
+	Add Bounding Rectangle…	경계 사각형 추가…
+	Add Bounding Circle…	경계 원 추가…
+	One per Object	개체마다 하나
 @msg	nothing to enclose	둘러쌀 항목이 없습니다
 @msg	`offset` must be 0 or more	`offset`은(는) 0 이상이어야 합니다
 @msg	the shape would have no size	도형의 크기가 없습니다

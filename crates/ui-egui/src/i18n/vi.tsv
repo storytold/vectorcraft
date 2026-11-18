@@ -7487,6 +7487,9 @@ breakText	Glyphs	Glyph
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Thêm hình chữ nhật bao quanh
 	Add Bounding Circle	Thêm hình tròn bao quanh
+	Add Bounding Rectangle…	Thêm hình chữ nhật bao quanh…
+	Add Bounding Circle…	Thêm hình tròn bao quanh…
+	One per Object	Một cho mỗi đối tượng
 @msg	nothing to enclose	không có gì để bao quanh
 @msg	`offset` must be 0 or more	`offset` phải từ 0 trở lên
 @msg	the shape would have no size	hình sẽ không có kích thước

@@ -10032,6 +10032,9 @@ breakText	Glyphs	გლიფები
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	შემომსაზღვრელი მართკუთხედის დამატება
 	Add Bounding Circle	შემომსაზღვრელი წრეწირის დამატება
+	Add Bounding Rectangle…	შემომსაზღვრელი მართკუთხედის დამატება…
+	Add Bounding Circle…	შემომსაზღვრელი წრეწირის დამატება…
+	One per Object	თითო თითოეულ ობიექტზე
 @msg	nothing to enclose	შემოსაზღვრელი არაფერია
 @msg	`offset` must be 0 or more	`offset` უნდა იყოს 0 ან მეტი
 @msg	the shape would have no size	ფიგურას ზომა არ ექნებოდა

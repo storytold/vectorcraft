@@ -7671,6 +7671,9 @@ breakText	Glyphs	字形
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	添加外接矩形
 	Add Bounding Circle	添加外接圆
+	Add Bounding Rectangle…	添加外接矩形…
+	Add Bounding Circle…	添加外接圆…
+	One per Object	每个对象一个
 @msg	nothing to enclose	没有可包围的内容
 @msg	`offset` must be 0 or more	`offset` 必须大于或等于 0
 @msg	the shape would have no size	形状将没有大小

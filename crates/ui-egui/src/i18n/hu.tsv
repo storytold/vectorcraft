@@ -7819,6 +7819,9 @@ breakText	Glyphs	Glifák
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Befoglaló téglalap hozzáadása
 	Add Bounding Circle	Befoglaló kör hozzáadása
+	Add Bounding Rectangle…	Befoglaló téglalap hozzáadása…
+	Add Bounding Circle…	Befoglaló kör hozzáadása…
+	One per Object	Objektumonként egy
 @msg	nothing to enclose	nincs mit körülvenni
 @msg	`offset` must be 0 or more	`offset`: 0 vagy nagyobb érték kell
 @msg	the shape would have no size	az alakzatnak nem lenne mérete

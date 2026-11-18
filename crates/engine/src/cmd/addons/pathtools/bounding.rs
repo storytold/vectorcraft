@@ -8,7 +8,8 @@ use vectorcraft_geom::{Affine, CubicBez, FillRule, ParamCurve, PathSeg, Point, R
 
 use super::super::super::edit::selected_roots;
 use super::super::super::{CommandSpec, bad, cmd, has_selection, number_or, switch_or};
-use crate::{MAX_COORD, Result, Session};
+use crate::sanity::rect_in_range;
+use crate::{Result, Session};
 
 #[cfg(test)]
 mod tests;
@@ -29,7 +30,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Add Bounding Rectangle",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{each?: bool (default false: one rectangle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added on every side)} draw a live rectangle on the geometric bounding box of the selected objects (strokes and effects left out), with the current paint, on top of the current layer or of the isolated group, as other new art; the rectangles are selected; one undo step. An object whose box has no width or no height (a straight horizontal or vertical line) gets no rectangle unless `offset` is more than 0, nor does an object with no bounds (an empty group); with `each` the result's `skipped` counts them. It is an error when no rectangle is left (\"the shape would have no size\" when a rectangle with no size was left out, else \"nothing to enclose\") and when a rectangle would reach more than 4,000,000 pt from the origin → {id: the first rectangle, ids, skipped?}",
+            "{each?: bool (default false: one rectangle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added on every side)} draw a live rectangle on the geometric bounding box of the selected objects (strokes and effects left out), with the current paint, on top of the current layer or of the isolated group, as other new art; the rectangles are selected; one undo step. An object whose box has no width or no height (a straight horizontal or vertical line) gets no rectangle unless `offset` is more than 0, nor does an object with no bounds (an empty group); with `each` the result's `skipped` counts them. It is an error when no rectangle is left (\"the shape would have no size\" when a rectangle with no size was left out, else \"nothing to enclose\") and when an edge of a rectangle would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Rectangle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first rectangle, ids, skipped?}",
             has_selection,
             bounding_rectangle
         ),
@@ -38,7 +39,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Add Bounding Circle",
             ["Object", "Plug-ins", "Path Precision Tools"],
             None,
-            "{each?: bool (default false: one circle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added to the radius)} draw the smallest live circle that holds the outlines of the selected objects (paths and compound paths by their curves, clip groups and sublayers that clip their contents by their clipping paths, other sublayers by their shown objects, images by their corners, type and other objects by the corners of their bounding box; strokes and effects left out), with the radius 0.01 pt larger so it holds the curves themselves, with the current paint, on top of the current layer or of the isolated group, as other new art; the circles are selected; one undo step. An object at a single point gets no circle unless `offset` is more than 0, nor does an object with no outline (an empty group); with `each` the result's `skipped` counts them. It is an error when no circle is left (\"the shape would have no size\" when a circle with no size was left out, else \"nothing to enclose\") and when a circle would reach more than 4,000,000 pt from the origin → {id: the first circle, ids, skipped?}",
+            "{each?: bool (default false: one circle around the whole selection; true: one around each selected object), offset?: pt (0 or more; default 0: added to the radius)} draw the smallest live circle that holds the outlines of the selected objects (paths and compound paths by their curves, clip groups and sublayers that clip their contents by their clipping paths, other sublayers by their shown objects, images by their corners, type and other objects by the corners of their bounding box; strokes and effects left out), with the radius 0.01 pt larger so it holds the curves themselves, with the current paint, on top of the current layer or of the isolated group, as other new art; the circles are selected; one undo step. An object at a single point gets no circle unless `offset` is more than 0, nor does an object with no outline (an empty group); with `each` the result's `skipped` counts them. It is an error when no circle is left (\"the shape would have no size\" when a circle with no size was left out, else \"nothing to enclose\") and when an edge of a circle's bounding box would lie more than 4,000,000 pt from the origin along either axis (\"the shape would reach past the edge of the canvas\"). The menu item Add Bounding Circle… opens a dialog with Offset and One per Object (`each`) and a Preview → {id: the first circle, ids, skipped?}",
             has_selection,
             bounding_circle
         ),
@@ -121,13 +122,9 @@ enum Around {
     NoOutline,
     /// The rectangle would have no width or no height, or the circle no radius.
     NoSize,
-    /// The shape would reach past [`MAX_COORD`] from the origin.
+    /// An edge of the shape would lie more than [`MAX_COORD`](crate::MAX_COORD) from the origin
+    /// along either axis.
     PastCanvas,
-}
-
-/// Is every edge of `r` finite and within [`MAX_COORD`] of the origin?
-fn on_canvas(r: Rect) -> bool {
-    [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.abs() <= MAX_COORD)
 }
 
 /// The live rectangle or circle around `ids`, grown by `offset`.
@@ -136,7 +133,7 @@ fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind,
         Kind::Rectangle => {
             let Some(r) = d.bounds_of_with(ids, false, symbols) else { return Around::NoOutline };
             let r = r.inflate(offset, offset);
-            if !on_canvas(r) {
+            if !rect_in_range(r) {
                 return Around::PastCanvas;
             }
             if r.width() <= 0.0 || r.height() <= 0.0 {
@@ -163,7 +160,7 @@ fn shape_around(d: &Document, symbols: &SymbolBoxes, ids: &[NodeId], kind: Kind,
             }
             let r = radius + FLATNESS + offset;
             let b = Rect::new(center.x - r, center.y - r, center.x + r, center.y + r);
-            if !on_canvas(b) {
+            if !rect_in_range(b) {
                 return Around::PastCanvas;
             }
             Around::Shape(LiveShape::Ellipse { w: b.width(), h: b.height(), pie: (0.0, 360.0), xf: Affine::translate(b.origin().to_vec2()) })

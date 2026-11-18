@@ -7077,6 +7077,13 @@ breakText	Glyphs	Glif
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Tambahkan persegi panjang pembatas
 	Add Bounding Circle	Tambahkan lingkaran pembatas
+	Add Bounding Rectangle…	Tambahkan persegi panjang pembatas…
+	Add Bounding Circle…	Tambahkan lingkaran pembatas…
+	One per Object	Satu per objek
+@msg	nothing to enclose	tidak ada yang bisa dilingkupi
+@msg	`offset` must be 0 or more	`offset` harus 0 atau lebih
+@msg	the shape would have no size	bentuk tidak akan memiliki ukuran
+@msg	the shape would reach past the edge of the canvas	bentuk akan melewati tepi kanvas
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Alat dokumen
 	Save a Timestamped Copy	Simpan salinan bercap waktu

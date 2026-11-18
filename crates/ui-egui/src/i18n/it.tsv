@@ -7461,6 +7461,9 @@ breakText	Glyphs	Glifi
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Aggiungi rettangolo di delimitazione
 	Add Bounding Circle	Aggiungi cerchio di delimitazione
+	Add Bounding Rectangle…	Aggiungi rettangolo di delimitazione…
+	Add Bounding Circle…	Aggiungi cerchio di delimitazione…
+	One per Object	Uno per oggetto
 @msg	nothing to enclose	niente da racchiudere
 @msg	`offset` must be 0 or more	`offset` deve essere 0 o maggiore
 @msg	the shape would have no size	la forma non avrebbe dimensioni

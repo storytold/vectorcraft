@@ -372,43 +372,106 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     assert!(app.ui.status.contains("The point lies inside the path"), "{}", app.ui.status);
 }
 
-/// Object › Plug-ins › Path Precision Tools › Add Bounding Rectangle and Add Bounding Circle are
-/// dimmed with nothing selected, open no dialog, and draw one shape around the whole selection with
-/// no offset as one undo step.
+/// Object › Plug-ins › Path Precision Tools › Add Bounding Rectangle… and Add Bounding Circle… are
+/// dimmed with nothing selected and open the command dialog with Offset 0, One per Object off and
+/// Preview off. With Preview on the shape shows on the canvas; Cancel takes it away with no step of
+/// history. OK with the defaults draws one shape around the whole selection; OK with an Offset and
+/// One per Object draws a larger shape around each object, as one undo step. An Offset that takes
+/// the shape past the canvas edge leaves the dialog open, the document unchanged and an error.
 #[test]
-fn add_bounding_rectangle_and_circle_draw_around_the_whole_selection() {
+fn add_bounding_rectangle_and_circle_open_a_dialog_with_offset_and_one_per_object() {
     let mut app = app();
-    let items = [("Add Bounding Rectangle", "addon.pathtools.boundingRectangle"), ("Add Bounding Circle", "addon.pathtools.boundingCircle")];
+    let items = [("Add Bounding Rectangle…", super::BOUNDING_RECTANGLE), ("Add Bounding Circle…", super::BOUNDING_CIRCLE)];
+    let find = |app: &VectorcraftApp, label: &str| {
+        let entries = menus::menu_entries(app);
+        entries.into_iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).expect(label)
+    };
     for (label, command) in items {
-        let entries = menus::menu_entries(&app);
-        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).expect(label);
-        assert_eq!((item.command.as_deref(), &item.params), (Some(command), &json!({})));
+        let item = find(&app, label);
+        assert_eq!((item.command.as_deref(), &item.params), (Some(command), &json!({"offset": 0, "each": false})));
         assert!(!item.enabled, "{label} with nothing selected");
     }
     let a = app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 30, "height": 40})).unwrap()["id"].as_u64().unwrap();
     let b = app.run("shape.rectangle", json!({"x": 100, "y": 20, "width": 20, "height": 40})).unwrap()["id"].as_u64().unwrap();
-    // The selection's box.
-    let [x0, y0, x1, y1] = [10.0, 20.0, 120.0, 60.0];
-    for (label, _) in items {
+    let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node_count();
+    let made = |app: &VectorcraftApp| {
+        let st = app.session.doc().unwrap();
+        st.selection.objects.iter().map(|id| st.doc.bounds_of(&[*id], false).unwrap()).collect::<Vec<_>>()
+    };
+    let open = |app: &mut VectorcraftApp, label: &str| {
         app.run("select.set", json!({"ids": [a, b]})).unwrap();
-        let steps = app.session.doc().unwrap().history.undo.len();
-        let entries = menus::menu_entries(&app);
-        let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Path Precision Tools"] && e.label == label).unwrap();
+        let item = find(app, label);
         assert!(item.enabled, "{label}");
         let (cmd, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
-        menus::invoke(&mut app, &cmd, p);
-        assert!(app.ui.dialog.is_none(), "{label} opens no dialog");
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), steps + 1, "{label}: one undo step");
-        let made = app.session.doc().unwrap().selection.objects.clone();
-        assert_eq!(made.len(), 1, "{label}: one shape around the whole selection");
-        let r = app.session.doc().unwrap().doc.bounds_of(&made, false).unwrap();
-        assert!(r.x0 <= x0 + 1e-6 && r.y0 <= y0 + 1e-6 && r.x1 >= x1 - 1e-6 && r.y1 >= y1 - 1e-6, "{label}: {r:?}");
-        if label == "Add Bounding Rectangle" {
-            assert!((r.x0 - x0).abs() < 1e-6 && (r.y0 - y0).abs() < 1e-6 && (r.x1 - x1).abs() < 1e-6 && (r.y1 - y1).abs() < 1e-6, "no offset: {r:?}");
+        menus::invoke(app, &cmd, p);
+    };
+    let near = |r: vectorcraft_geom::Rect, want: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(want).all(|(v, w)| (v - w).abs() < 1e-6);
+    for (label, command) in items {
+        let (start, n, nodes) = (app.session.doc().unwrap().doc.clone(), steps(&app), count(&app));
+        open(&mut app, label);
+        let d = app.ui.dialog.as_ref().unwrap_or_else(|| panic!("{label}: a dialog opens"));
+        assert_eq!((d.str("__command"), d.str("__label")), (command.to_string(), label.trim_end_matches('…').to_string()));
+        assert_eq!((d.f64("offset", -1.0), d.bool("each"), d.bool("preview")), (0.0, false, false), "{label}");
+        let shown = painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        for s in [label.trim_end_matches('…'), "Offset", "One per Object", "Preview"] {
+            assert!(shown.contains(s), "{label}: {s} in {shown}");
+        }
+        assert_eq!(count(&app), nodes, "{label}: no preview without the checkbox");
+
+        // Preview on: the shape is on the canvas. Cancel: as it was, with no step of history.
+        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+        painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
+        assert_eq!(count(&app), nodes + 1, "{label}: previewed");
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, start, "{label}: Cancel takes the preview away");
+        assert_eq!(steps(&app), n, "{label}: and adds no undo step");
+
+        // OK with the defaults: one shape around the whole selection, from (10, 20) to (120, 60).
+        open(&mut app, label);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none());
+        assert_eq!((steps(&app), count(&app)), (n + 1, nodes + 1), "{label}: one shape, one undo step");
+        let whole = made(&app);
+        if command == super::BOUNDING_RECTANGLE {
+            assert!(near(whole[0], [10.0, 20.0, 120.0, 60.0]), "{label}: {:?}", whole[0]);
         } else {
-            // The circle on the diagonal from (10, 20) to (120, 60), with the 0.01 pt allowance.
-            let radius = (110.0f64.hypot(40.0)) / 2.0 + 0.01;
-            assert!((r.width() / 2.0 - radius).abs() < 1e-6, "no offset: {r:?}");
+            // The circle on the diagonal, with the 0.01 pt allowance.
+            let r = 110.0f64.hypot(40.0) / 2.0 + 0.01;
+            assert!(near(whole[0], [65.0 - r, 40.0 - r, 65.0 + r, 40.0 + r]), "{label}: {:?}", whole[0]);
+        }
+
+        // OK with an Offset of 5 pt and One per Object: a shape around each object, one undo step.
+        open(&mut app, label);
+        let d = app.ui.dialog.as_mut().unwrap();
+        crate::dialogs::set_field(d, "offset".into(), json!(5));
+        crate::dialogs::set_field(d, "each".into(), json!(true));
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!((steps(&app), count(&app)), (n + 2, nodes + 3), "{label}: two shapes, one more undo step");
+        let each = made(&app);
+        if command == super::BOUNDING_RECTANGLE {
+            assert!(near(each[0], [5.0, 15.0, 45.0, 65.0]) && near(each[1], [95.0, 15.0, 125.0, 65.0]), "{label}: {each:?}");
+        } else {
+            let (ra, rb) = (30.0f64.hypot(40.0) / 2.0 + 5.01, 20.0f64.hypot(40.0) / 2.0 + 5.01);
+            let want = [[25.0 - ra, 40.0 - ra, 25.0 + ra, 40.0 + ra], [110.0 - rb, 40.0 - rb, 110.0 + rb, 40.0 + rb]];
+            assert!(near(each[0], want[0]) && near(each[1], want[1]), "{label}: {each:?}");
+        }
+
+        // An Offset past the canvas edge: the dialog stays open, nothing is drawn, and the error
+        // says why.
+        let (n, nodes) = (steps(&app), count(&app));
+        open(&mut app, label);
+        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "offset".into(), json!(5_000_000));
+        let e = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert!(e.contains("the shape would reach past the edge of the canvas"), "{label}: {e}");
+        assert!(app.ui.dialog.is_some(), "{label}: the dialog stays open");
+        crate::dialogs::cancel(&mut app);
+        assert_eq!((steps(&app), count(&app)), (n, nodes), "{label}: nothing drawn");
+    }
+    // Every language with complete menus has the menu items, the dialog's headings and its labels.
+    for lang in crate::i18n::Lang::all().filter(|l| l.complete_menus()) {
+        for s in ["Add Bounding Rectangle…", "Add Bounding Circle…", "Offset", "One per Object"] {
+            assert!(crate::i18n::has(lang, s), "{}: {s}", lang.code());
         }
     }
 }

@@ -8468,6 +8468,9 @@ liquify-list-end	{0}, {1}	{0} और {1}
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	बाउंडिंग आयत जोड़ें
 	Add Bounding Circle	बाउंडिंग वृत्त जोड़ें
+	Add Bounding Rectangle…	बाउंडिंग आयत जोड़ें…
+	Add Bounding Circle…	बाउंडिंग वृत्त जोड़ें…
+	One per Object	प्रत्येक ऑब्जेक्ट के लिए एक
 @msg	nothing to enclose	घेरने के लिए कुछ नहीं
 @msg	`offset` must be 0 or more	`offset` 0 या उससे अधिक होना चाहिए
 @msg	the shape would have no size	आकृति का कोई आकार नहीं होगा

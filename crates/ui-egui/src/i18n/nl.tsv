@@ -9726,6 +9726,9 @@ breakText	Glyphs	Glyphs
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Begrenzingsrechthoek toevoegen
 	Add Bounding Circle	Begrenzingscirkel toevoegen
+	Add Bounding Rectangle…	Begrenzingsrechthoek toevoegen…
+	Add Bounding Circle…	Begrenzingscirkel toevoegen…
+	One per Object	Eén per object
 @msg	nothing to enclose	niets om te omsluiten
 @msg	`offset` must be 0 or more	`offset` moet 0 of meer zijn
 @msg	the shape would have no size	de vorm zou geen grootte hebben

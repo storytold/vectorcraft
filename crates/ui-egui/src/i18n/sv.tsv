@@ -7868,6 +7868,9 @@ breakText	Glyphs	Glyfer
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Lägg till omslutande rektangel
 	Add Bounding Circle	Lägg till omslutande cirkel
+	Add Bounding Rectangle…	Lägg till omslutande rektangel…
+	Add Bounding Circle…	Lägg till omslutande cirkel…
+	One per Object	En per objekt
 @msg	nothing to enclose	inget att omsluta
 @msg	`offset` must be 0 or more	`offset` måste vara 0 eller mer
 @msg	the shape would have no size	formen skulle inte ha någon storlek

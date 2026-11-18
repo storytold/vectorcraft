@@ -7822,6 +7822,9 @@ breakText	Glyphs	Γλύφοι
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Προσθήκη ορθογωνίου οριοθέτησης
 	Add Bounding Circle	Προσθήκη κύκλου οριοθέτησης
+	Add Bounding Rectangle…	Προσθήκη ορθογωνίου οριοθέτησης…
+	Add Bounding Circle…	Προσθήκη κύκλου οριοθέτησης…
+	One per Object	Ένα ανά αντικείμενο
 @msg	nothing to enclose	δεν υπάρχει τίποτα για περίκλειση
 @msg	`offset` must be 0 or more	το `offset` πρέπει να είναι 0 ή μεγαλύτερο
 @msg	the shape would have no size	το σχήμα δεν θα είχε μέγεθος

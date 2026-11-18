@@ -7834,6 +7834,9 @@ breakText	Glyphs	Glyfy
 # Path Precision Tools add-on: Add Bounding Rectangle and Add Bounding Circle.
 	Add Bounding Rectangle	Přidat ohraničující obdélník
 	Add Bounding Circle	Přidat ohraničující kružnici
+	Add Bounding Rectangle…	Přidat ohraničující obdélník…
+	Add Bounding Circle…	Přidat ohraničující kružnici…
+	One per Object	Jeden pro každý objekt
 @msg	nothing to enclose	není co ohraničit
 @msg	`offset` must be 0 or more	`offset` musí být 0 nebo více
 @msg	the shape would have no size	tvar by neměl žádnou velikost
