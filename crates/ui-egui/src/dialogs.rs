@@ -716,10 +716,6 @@ pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Valu
         eps_options::field_set(d, field);
         return Ok(());
     }
-    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == save_pdf::KIND) {
-        save_pdf::field_set(d, field);
-        return Ok(());
-    }
     let Some(d) = app.ui.dialog.as_mut().filter(|d| d.kind == export_for_screens::KIND) else { return Ok(()) };
     match field {
         "exportPreset" => export_for_screens::preset_set(app),

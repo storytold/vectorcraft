@@ -1049,11 +1049,15 @@ fn custom_options_are_written_until_a_preset_is_chosen() {
     assert_eq!(d.fields["flattener"]["balance"].as_f64(), Some(0.0));
     let saved = &app.session.prefs.flattener_presets;
     assert_ne!(flattener(d, saved).ok(), FlattenOptions::preset(pdf::DEFAULT_FLATTENER), "the preset shows [Custom]");
-    // A preset set from outside drops the custom options.
-    let mut copy = d.clone();
-    set(&mut copy, "flattenerPreset", json!("Low Resolution"));
-    field_set(&mut copy, "flattenerPreset");
-    assert!(!copy.fields.contains_key("flattener"));
+    // A preset set through `ui.dialog.set` drops the custom options.
+    let kept = d.clone();
+    let dialog = app.ui.dialog.as_mut().unwrap();
+    assert!(super::super::accepts_field(dialog, "flattenerPreset"));
+    let old = dialog.fields.get("flattenerPreset").cloned();
+    super::super::set_field(dialog, "flattenerPreset".into(), json!("Low Resolution"));
+    super::super::field_set(&mut app, "flattenerPreset", old.as_ref()).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("flattener"));
+    app.ui.dialog = Some(kept);
     super::super::confirm(&mut app).unwrap();
     assert!(images(&written.borrow()[0].1) > 0, "balance 0 rasterizes the flattened art");
     open_advanced(&mut app, json!({"compatibility": "1.3"}));
@@ -1073,6 +1077,20 @@ fn custom_options_equal_to_the_preset_leave_its_name() {
         assert_eq!(kind(&app), Some(KIND));
         assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("flattener"), "{overprint}");
     }
+}
+
+/// OK keeps Custom… options that drop overprints dropping them, although the preset keeps them.
+#[test]
+fn custom_keeps_options_that_drop_overprints() {
+    let (mut app, _, _) = app();
+    let params = json!({"compatibility": "1.3", "advanced": {"overprint": "preserve"}, "flattener": {"preserveOverprints": false}});
+    open_advanced(&mut app, params);
+    Reader::new().click_custom(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), "shown as written");
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(KIND));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(flattener(d, &app.session.prefs.flattener_presets).map(|o| o.preserve_overprints), Ok(false));
 }
 
 #[test]

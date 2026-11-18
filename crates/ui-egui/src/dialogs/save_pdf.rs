@@ -799,7 +799,8 @@ fn edit_bleed(d: &mut Dialog, side: usize, value: f64) {
 
 /// `ui.dialog.set` set `field` of Save PDF or the PDF preset editor: `__bleedLinked` links or
 /// unlinks the bleed as its button does, and must be true or false; every write of `bleed`, the
-/// same values included, drops the link's state, so the link follows the values set.
+/// same values included, drops the link's state, so the link follows the values set. A flattener
+/// preset set there drops the Custom… options, as choosing it in the dropdown does.
 pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
     match field {
         BLEED_LINKED => match d.fields.get(BLEED_LINKED).cloned() {
@@ -811,6 +812,10 @@ pub(super) fn field_set(d: &mut Dialog, field: &str) -> Result<(), String> {
         },
         "bleed" => {
             d.fields.remove(BLEED_LINKED);
+            Ok(())
+        }
+        "flattenerPreset" => {
+            d.fields.remove("flattener");
             Ok(())
         }
         _ => Ok(()),
@@ -953,6 +958,7 @@ fn custom_body(_app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> 
 fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut o = custom_options(d)?;
     let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
+    let before = flattener(&parent, &app.session.prefs.flattener_presets).ok();
     let base = match FlattenOptions::find_preset(&flattener_name(&parent), &app.session.prefs.flattener_presets) {
         Some(base) => base,
         None => {
@@ -960,11 +966,12 @@ fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
             FlattenOptions::preset(pdf::DEFAULT_FLATTENER).unwrap_or_default()
         }
     };
-    // The writer sets these itself, so they take the preset's values: options that otherwise match
-    // the preset leave its name showing.
+    // The writer sets the first two itself, so they take the preset's values: options that
+    // otherwise match the preset leave its name showing. The writer keeps overprints only where the
+    // options and Overprint both keep them, so the options keep the value they had before.
     o.clip_complex_regions = base.clip_complex_regions;
     o.preserve_alpha = base.preserve_alpha;
-    o.preserve_overprints = base.preserve_overprints;
+    o.preserve_overprints = before.map_or(base.preserve_overprints, |b| b.preserve_overprints);
     if o == base {
         parent.fields.remove("flattener");
     } else {
@@ -972,14 +979,6 @@ fn custom_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String>
     }
     app.ui.dialog = Some(parent);
     Ok(Value::Null)
-}
-
-/// `ui.dialog.set` changed `field` of Save PDF `d`: a flattener preset set there drops the Custom…
-/// options, as choosing it in the dropdown does.
-pub(super) fn field_set(d: &mut Dialog, field: &str) {
-    if field == "flattenerPreset" {
-        d.fields.remove("flattener");
-    }
 }
 
 fn advanced(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
