@@ -144,7 +144,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
-    ("file.export.png", "Export As PNG…", "", "{path?, …document.export options}; no path: pick the file, then PNG Options"),
+    (
+        "file.export.png",
+        "Export As PNG…",
+        "",
+        "{path?, …document.export options}; no path: pick the file, then PNG Options with supplied options retained and defaults for omitted options",
+    ),
     (
         "file.exportForScreens",
         "Export for Screens…",
