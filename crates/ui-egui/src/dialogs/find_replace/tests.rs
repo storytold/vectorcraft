@@ -131,6 +131,25 @@ fn the_edit_menu_opens_the_find_and_replace_dialog() {
     }
 }
 
+/// A field given a value of another type than its own is an error and the dialog does not open; a
+/// null value gives no field.
+#[test]
+fn the_dialog_rejects_a_field_of_the_wrong_type() {
+    let (mut app, _) = app_with(&["cat"]);
+    let open = |app: &mut VectorcraftApp, params: Value| app.run("ui.paramDialog", json!({"command": super::COMMAND, "params": params}));
+    for (params, want) in [
+        (json!({"find": 17}), "`find` must be a string"),
+        (json!({"replace": true}), "`replace` must be a string"),
+        (json!({"matchCase": "yes"}), "`matchCase` must be true or false"),
+        (json!({"backwards": 1}), "`backwards` must be true or false"),
+    ] {
+        assert_eq!(open(&mut app, params.clone()).unwrap_err(), want, "{params}");
+        assert!(app.ui.dialog.is_none(), "{params}");
+    }
+    open(&mut app, json!({"find": null, "replace": "dog", "wholeWord": true})).unwrap();
+    assert_eq!((field(&app, "find"), field(&app, "replace"), field(&app, "wholeWord")), (json!(""), json!("dog"), json!(true)));
+}
+
 /// The dialog stays open from match to match: Find goes to the next match and selects its
 /// object, Replace changes that match, Replace & Find changes it and goes on, Replace All changes
 /// the rest, and Done closes. Each Replace is one undo step, and so is Replace All; finding and a

@@ -79,14 +79,21 @@ fn active_uid(app: &VectorcraftApp) -> Option<u64> {
 }
 
 /// Open Find and Replace on the last search when there has been one, with the fields that
-/// `params` gives in its place. A value of another type than the field's, such as the menu item's
-/// null `find` ([`menu_params`]), gives none.
+/// `params` gives in its place. A null value, such as the menu item's `find` ([`menu_params`]),
+/// gives none. A field given a value of another type is an error, and the dialog does not open.
 pub fn open(app: &mut VectorcraftApp, params: &Map<String, Value>) -> Result<Value, String> {
     let mut fields = Map::new();
     fields.insert("find".into(), json!(""));
     fields.insert("replace".into(), json!(""));
     for key in SWITCHES.into_iter().chain(["backwards"]) {
         fields.insert(key.into(), json!(false));
+    }
+    for (k, v) in params.iter().filter(|(_, v)| !v.is_null()) {
+        match fields.get(k) {
+            Some(Value::String(_)) if !v.is_string() => return Err(format!("`{k}` must be a string")),
+            Some(Value::Bool(_)) if !v.is_boolean() => return Err(format!("`{k}` must be true or false")),
+            _ => {}
+        }
     }
     let last = app.ui.last_find.as_ref().and_then(Value::as_object).cloned().unwrap_or_default();
     for (k, v) in last.iter().chain(params) {

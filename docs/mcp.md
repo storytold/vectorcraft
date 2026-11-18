@@ -9996,7 +9996,8 @@ the options as they are now, and find one otherwise. Enter runs Find. Edit › F
 search while the dialog is closed, and opens the dialog when there has been none. A place the search reached in one
 document is not used in another, nor once the Find text or an option that decides a match changes: the search then
 starts again as it does without `from`. `ui.paramDialog` opens
-the dialog on the last search, with the fields its `params` give in its place.
+the dialog on the last search, with the fields its `params` give in its place. A null field gives none, and a field of
+the wrong type is an error that leaves the dialog closed.
 
 
 ## Justification options
