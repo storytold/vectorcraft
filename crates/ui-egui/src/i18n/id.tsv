@@ -669,6 +669,13 @@
 	Previous Document	Dokumen sebelumnya
 	Cascade	Bertingkat
 	Tile	Ubin
+	Tile All Vertically	Ubin semua secara vertikal
+	Tile All Horizontally	Ubin semua secara horizontal
+	2-Up Layout	Tata letak 2
+	3-Up Layout	Tata letak 3
+	4-Up Layout	Tata letak 4
+	6-Up Layout	Tata letak 6
+	Arrange Documents	Susun dokumen
 	Float in Window	Mengambang di jendela
 	Float All in Windows	Mengambangkan semua di jendela
 	Consolidate All Windows	Konsolidasikan semua jendela
@@ -1675,6 +1682,7 @@ digits	Malayalam	Malayalam
 	Rule:	Aturan:
 	Save changes to {name}	Simpan perubahan ke {name}
 	Save theme to My Themes	Simpan tema ke Tema saya
+	Set the current fill or stroke to the selected color	Atur isian atau stroke saat ini ke warna terpilih
 	Set the selected color to the current color	Atur warna terpilih ke warna saat ini
 	Copy All Styles	Salin semua gaya
 	Exported {path}	Diekspor ke {path}
@@ -1890,7 +1898,7 @@ digits	Malayalam	Malayalam
 	Stroke: click for swatches, Shift-click for the color mixer	Stroke: klik untuk swatch, Shift+klik untuk pencampur warna
 	This panel is on the roadmap (see the parity plan).	Panel ini masih dalam roadmap (lihat rencana paritas).
 	Open a document to navigate it.	Buka dokumen untuk menjelajahinya.
-	View Artboard Only	Tampilkan artboard saja
+	View Artboard Contents Only	Tampilkan isi artboard saja
 	Contextual Alternates	Alternatif kontekstual
 	Default Figure	Angka default
 	Discretionary Ligatures	Ligatur opsional
@@ -2033,7 +2041,7 @@ digits	Malayalam	Malayalam
 	Overprint Preview (separations)	Pratinjau overprint (separasi)
 	Show All Plates	Tampilkan semua pelat
 	Show all plates	Tampilkan semua pelat
-	Show/hide plate (Alt-click: only this plate)	Tampilkan/sembunyikan pelat (Alt-klik: hanya pelat ini)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Tampilkan/sembunyikan pelat (Alt-klik: hanya pelat ini; Alt-klik lagi: semua pelat)
 	Simulate Paper	Simulasikan kertas
 	Use Black Point Compensation	Gunakan kompensasi titik hitam
 	Working CMYK (don't tag)	CMYK kerja (tanpa tag)
@@ -2073,6 +2081,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Ujung melewati titik akhir
 	Tip on the end point	Ujung pada titik akhir
 	Variable Width Profile	Profil lebar variabel
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Kuas pada guratan mempertahankan ukurannya sendiri, sehingga profil lebar tidak mengubahnya. Hapus kuas untuk menggunakan profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Kuas pada guratan mempertahankan ukurannya sendiri, sehingga profil lebar tidak mengubahnya. Hapus kuas untuk menggunakan profil.
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}
@@ -2182,6 +2192,9 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Balik horizontal
 	Flip Vertical	Balik vertikal
 	Polygon Properties:	Properti poligon:
+	Line Properties:	Properti garis:
+	Line Length:	Panjang garis:
+	Line Angle:	Sudut garis:
 	Rectangle Properties:	Properti persegi panjang:
 	Shape Properties:	Properti bentuk:
 	Shape Properties	Properti bentuk
@@ -2918,6 +2931,8 @@ antiAlias	Sharp	Tajam
 	Every option matches {base}.	Setiap opsi cocok dengan {base}.
 	Files of a PDF standard can't be password-protected.	File standar PDF tidak dapat dilindungi kata sandi.
 	Files of this standard tag their colours with ICC profiles.	File standar ini menandai warnanya dengan profil ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	File standar ini menandai warnanya dengan profil ICC, kecuali warna CMYK dalam profil output intent, yang ditulis sebagai DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Dengan “Jangan sertakan profil” dan output intent CMYK, setiap warna CMYK ditulis sebagai DeviceCMYK, kecuali dikonversi ke tujuan CMYK dengan profil lain.
 	Flattener preset:	Preset flattener:
 	General › Thumbnails	Umum › Miniatur
 	Grayscale images	Gambar skala abu-abu
@@ -3101,6 +3116,12 @@ antiAlias	Sharp	Tajam
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opsi ekspor teks
+	Chinese Big 5	Tionghoa Big 5
+	Cyrillic	Sirilik
+	Greek	Yunani
+	Turkish	Turki
+	Baltic	Baltik
+	Central European	Eropa Tengah
 	Character Set:	Set karakter:
 	Join the lines of each paragraph	Gabungkan baris setiap paragraf
 	Line Breaks	Pemisah baris
@@ -3130,6 +3151,9 @@ antiAlias	Sharp	Tajam
 	Variable Options	Opsi variabel
 	Define a variable first	Tentukan variabel terlebih dahulu
 	Adjust Adjoining Width Points	Sesuaikan titik lebar bersebelahan
+	Incoming	Masuk
+	Outgoing	Keluar
+	Single Width Only	Hanya satu lebar
 	Keep both sides the same width	Pertahankan kedua sisi tetap sama lebar
 	Side 1:	Sisi 1:
 	Side 2:	Sisi 2:
@@ -3511,6 +3535,7 @@ theme	Appearance	Tampilan
 	Select Art	Pilih karya seni
 	Set Current Layer	Tetapkan lapisan saat ini
 	Flatten Artwork	Ratakan karya seni
+	Locate Layer	Temukan lapisan
 	Locate Object	Temukan objek
 	Lock Others	Kunci lainnya
 	Merge Selected	Gabungkan terpilih
@@ -4329,6 +4354,8 @@ font-technology	Variable	Variabel
 	Couldn't paste from the clipboard: {e}	Tidak dapat menempel dari papan klip: {e}
 	Channel	Saluran
 	Circle	Lingkaran
+	Circle Tool	Alat lingkaran
+	Circle too large	Lingkaran terlalu besar
 	Clip to Art	Pangkas ke karya seni
 	Colorize	Warnai
 	Gamma	Gamma
@@ -4545,6 +4572,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
 	Script Alert	Peringatan Skrip
+	Script File Access	Akses Berkas Skrip
+	The script asks to read a file you choose.	Skrip meminta izin untuk membaca berkas yang Anda pilih.
+	The script asks to read and write a file you choose.	Skrip meminta izin untuk membaca dan menulis berkas yang Anda pilih.
+	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
+	Allow Once	Izinkan Sekali
+	Always Allow This Script	Selalu Izinkan Skrip Ini
+	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.
@@ -4891,6 +4925,9 @@ imageTrace	Outline	Kontur
 @msg	no such user library	tidak ada pustaka pengguna seperti itu
 @msg	no such view	tidak ada tampilan seperti itu
 @msg	no such width point	tidak ada titik lebar seperti itu
+@msg	`single` must be `incoming` or `outgoing`	`single` harus `incoming` atau `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` dan `outIndex` harus berupa dua bagian dari satu titik lebar terputus
+@msg	a discontinuous width point keeps its place	titik lebar terputus tetap di tempatnya
 @msg	no swatch `{name}`	tidak ada swatch `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	tidak ada pustaka swatch `{l}` (lihat swatch.library.list)
 @msg	no symbol instances selected	tidak ada instans simbol yang dipilih
@@ -5534,6 +5571,7 @@ imageTrace	Outline	Kontur
 	Ascent	Ascent
 	Cap Height	Tinggi kapital
 	x Height	Tinggi x
+	Em Box Height	Tinggi Em Box
 	Justify	Ratakan
 	First Baseline	Baseline pertama
 	Vertical Align	Perataan vertikal
@@ -7318,4 +7356,14 @@ breakText	Glyphs	Glif
 @msg	A panel is not joined to the rest by a crease.	Sebuah panel tidak tersambung ke bagian lain oleh garis lekuk apa pun.
 @msg	A fold line is on a non-printing layer.	Sebuah garis lipat berada di lapisan yang tidak dicetak.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panel: {panels}, engsel: {hinges}, galat: {errors}, peringatan: {warnings}
+	Fold Preview	Pratinjau lipatan
+	Fold	Lipat
+	Show Fold Lines	Tampilkan garis lipat
+	Three-Quarter	Tiga perempat
+	Open a document to preview its folded shape.	Buka dokumen untuk melihat pratinjau bentuk terlipatnya.
+@msg	Check the fold lines first.	Periksa garis lipat terlebih dahulu.
+@msg	Panels: {panels}, hinges: {hinges}	Panel: {panels}, engsel: {hinges}
+@msg	Other blanks not shown: {count}	Bentangan lain tidak ditampilkan: {count}
+@msg	A joint does not close by {gap} pt.	Sebuah sambungan tidak menutup sejauh {gap} pt.
+@msg	Two panels pass through each other.	Dua panel saling menembus.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

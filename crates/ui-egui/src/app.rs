@@ -90,6 +90,7 @@ impl VectorcraftApp {
                 selection_bounds: None,
                 content_bounds: None,
                 pixel_aligned: None,
+                symbol_instances: None,
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 cursors: Default::default(),
@@ -182,6 +183,8 @@ impl VectorcraftApp {
             automation_roots: None,
             synthetic_frame: false,
             pending_plugin_install: None,
+            script_picked: Vec::new(),
+            script_picked_left_out: false,
             pen_end: Default::default(),
             host_iteration: 0,
             #[cfg(test)]
@@ -354,8 +357,13 @@ impl VectorcraftApp {
         // A panel's, a dialog's or the text input's commit journaled in the frame before.
         crate::panels::actions::after_journaled_edit(self);
         crate::scripts_menu::poll(self, ctx);
-        if self.session.script_running() && !self.session.script_waiting() && self.session.script_dialog().is_none() {
-            // A script in `$.sleep` goes on when its time is up; until then the app can idle.
+        if self.session.script_running()
+            && !self.session.script_waiting()
+            && self.session.script_dialog().is_none()
+            && self.session.script_picker().is_none()
+        {
+            // A script in `$.sleep` goes on when its time is up; until then the app can idle. A
+            // script at a file dialog goes on when the dialog answers, and `picks::poll` looks for that.
             match self.session.script_sleep_left() {
                 Some(left) => ctx.request_repaint_after(left),
                 None => ctx.request_repaint(),
@@ -576,6 +584,7 @@ impl VectorcraftApp {
         self.ime_caret_rect = None;
         scrub::begin_frame(self, &ctx);
         font_menu::end_stale_preview(self, &ctx);
+        font_menu::apply_preview_size(self, &ctx);
         tools_float::track(self, &ctx);
         // A selection move released over a panel ends before any panel sees the release (#2826).
         canvas::release_over_panel(self, &ctx);
@@ -624,6 +633,8 @@ impl VectorcraftApp {
         plugin_runs::show(self, &ctx);
         trace_runs::show(self, &ctx);
         opening::show(self, &ctx);
+        // After every window this pass may open, and before the palette's field takes the keyboard.
+        panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);

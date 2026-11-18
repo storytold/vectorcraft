@@ -131,7 +131,10 @@ the two can still win that race.
 Swatch editors: `engine.execute` with `ui.swatchOptions {name}` opens the `swatchOptions` dialog for a colour swatch
 (fields `name`, `spot`, `global`, `mode`: `gray`/`rgb`/`hsb`/`lab`/`cmyk`/`web`, `color`: `"#rrggbb"` or a colour object,
 `preview`), which previews on the canvas while open; `ui.dialog.confirm` applies it with `swatch.edit` as one undo
-step and `ui.dialog.cancel` rolls the preview back. For a gradient swatch the dialog has `name` only (it shows the
+step and `ui.dialog.cancel` rolls the preview back. Under the colour it shows the out-of-gamut warning (in RGB, HSB
+and Lab) and the out-of-web-color warning (in every mode but `web`); a click on one sets `color` to the correction
+and `mode` to `cmyk` for the gamut correction, or to `rgb` for a web correction of a `gray`, `lab` or `cmyk` colour.
+The warnings are not fields: set `color` and `mode` to apply a correction from a script. For a gradient swatch the dialog has `name` only (it shows the
 gradient) and OK renames it; pattern swatches open pattern editing instead. Dropping a gradient (or colour) on a
 swatch of its kind in the Swatches panel with Alt held replaces it (`swatch.edit {name, paint}`), unless that is a
 tint swatch. A swatch dragged from the panel with Alt held also replaces the swatch of its kind it is dropped on,
@@ -602,6 +605,9 @@ Width Point Edit: double-clicking a width point with the Width tool, or `ui.widt
 `widthPoint` dialog (fields `id`, `index`, `t`, `side1` and `side2`: the left and right widths in points, `linked`,
 `adjustAdjoining`). `ui.dialog.confirm` runs `stroke.widthPoint.set` with them; `ui.dialog.set {field: "discard",
 value: true}` then confirm (the Delete button) removes the point with `stroke.widthPoint.remove`.
+Either half of a discontinuous point opens both: `index` is the incoming half, and `outIndex`, `outSide1`, `outSide2`
+and `outLinked` hold the outgoing half; `single` (`""`, `"incoming"` or `"outgoing"`) is Single Width Only. Confirm
+sets both halves in one `stroke.widthPoint.set` (one undo step), and Delete removes both.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
 corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,
@@ -739,7 +745,7 @@ folder, then opens the dialog searching it. The web shows a status line instead 
 disabled there.
 
 Text Import Options: placing a `.txt` file through the app (`file.place` with a file and no `text` options, the Place
-dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,
+dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: a `text.characterSet` value,
 `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces`, `spaces`). `ui.dialog.confirm` places the file as area
 type with those options (`file.place {text: {…}}`).
 
@@ -972,7 +978,11 @@ Halftone… (`engine.execute {command: "ui.menuDialog", params: {command: "objec
 Tool options last: `tool.setOption {key, value}` or `{values: {…}}` (and `tool` to set another tool's) sets them, and
 the options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, Symbolism, drawing tools) stay
 when you switch tools or documents and are saved with the preferences. The Liquify tools share their Global Brush
-Dimensions (`width`, `height`, `angle`, `intensity`).
+Dimensions (`width`, `height`, `angle`, `intensity`). `{}` reads the options and sets nothing; parameters that are
+not an object are an error. Every option given is checked before any is set: an option the tool doesn't have, a value
+of the wrong type, a number outside the tool's range or an unknown choice is an error that names the tool and the option
+(``tool `smooth`: `fidelity` must be a number from 0.05 to 100``), and no option, preference or undo step changes.
+The Live Paint tools' `width` and the Shape Builder's `gapLength` are set to the nearest end of their range instead.
 
 Perspective grid: View → Perspective Grid → Define Grid… (`ui.perspectiveGridDialog`) opens the `perspectiveGrid`
 dialog prefilled from the grid. Its fields are those of `perspective.grid.define` (`kind`, `units`, `scale`,

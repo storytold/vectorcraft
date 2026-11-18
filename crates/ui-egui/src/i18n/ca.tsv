@@ -224,6 +224,9 @@
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
 	Adjust Adjoining Width Points	Ajusta els punts d’amplada contigus
+	Incoming	Entrant
+	Outgoing	Sortint
+	Single Width Only	Només una amplada
 	Adjust Color Balance…	Ajusta l’equilibri de color…
 	Adjust Colors	Ajusta els colors
 	Adjust Options:	Opcions d’ajust:
@@ -685,6 +688,12 @@ antiAlias	Sharp	Nítid
 	Character options	Opcions de caràcter
 	Paragraph options	Opcions de paràgraf
 	Character Rotation	Rotació de caràcters
+	Chinese Big 5	Xinès Big 5
+	Cyrillic	Ciríl·lic
+	Greek	Grec
+	Turkish	Turc
+	Baltic	Bàltic
+	Central European	Centreeuropeu
 	Character Set:	Joc de caràcters:
 	Character Style	Estil de caràcter
 	Character Style Options	Opcions de l’estil de caràcter
@@ -708,6 +717,8 @@ antiAlias	Sharp	Nítid
 	Chrome	Crom
 	Chrome…	Crom…
 	Circle	Cercle
+	Circle Tool	Eina de cercle
+	Circle too large	El cercle és massa gran
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -1725,6 +1736,8 @@ digits	Malayalam	Malaiàlam
 	Files	Fitxers
 	Files of a PDF standard can't be password-protected.	Els fitxers d’un estàndard PDF no es poden protegir amb contrasenya.
 	Files of this standard tag their colours with ICC profiles.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC, excepte els colors CMYK del perfil d’intenció de sortida, que s’escriuen com a DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Amb «No incloguis els perfils» i una intenció de sortida CMYK, cada color CMYK s’escriu com a DeviceCMYK, tret que es converteixi a una destinació CMYK d’un altre perfil.
 	Fill	Farciment
 	Fill & Stroke	Farciment i traç
 	Fill (X), double-click for the Color Picker	Farciment (X), fes doble clic per al selector de color
@@ -2565,6 +2578,7 @@ digits	Malayalam	Malaiàlam
 	Loads native code	Carrega codi natiu
 	Local Libraries	Biblioteques locals
 	Locate Library…	Localitza la biblioteca…
+	Locate Layer	Localitza la capa
 	Locate Object	Localitza l’objecte
 	Locate Selected Objects	Localitza els objectes seleccionats
 	Location	Ubicació
@@ -3396,6 +3410,9 @@ digits	Malayalam	Malaiàlam
 	Polar Grid Tool Options	Opcions de l’eina de quadrícula polar
 	Polygon	Polígon
 	Polygon Properties:	Propietats del polígon:
+	Line Properties:	Propietats de la línia:
+	Line Length:	Longitud de la línia:
+	Line Angle:	Angle de la línia:
 	Polygon Tool	Eina de polígon
 	Portrait	Vertical
 	Portrait (flipped)	Vertical (invertit)
@@ -4442,6 +4459,7 @@ digits	Malayalam	Malaiàlam
 	Set Slice Rectangle	Defineix el rectangle del tall
 	Set Tab Stops	Defineix les tabulacions
 	Set Text	Defineix el text
+	Set the current fill or stroke to the selected color	Defineix el color seleccionat com a farciment o traç actual
 	Set the selected color to the current color	Defineix el color seleccionat com a color actual
 	Set Zoom	Defineix el zoom
 	Set:	Defineix:
@@ -4588,7 +4606,7 @@ digits	Malayalam	Malaiàlam
 	Show Vivid/Muted	Mostra els vius/apagats
 	Show Warm/Cool	Mostra els càlids/freds
 	Show {kind} Brushes	Mostra els pinzells {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa; Alt+clic de nou: totes les planxes)
 	Show:	Mostra:
 	Shown with the optimised preview.	Es mostra amb la previsualització optimitzada.
 	Shrink Text to Fit	Redueix el text perquè hi càpiga
@@ -5084,6 +5102,13 @@ digits	Malayalam	Malaiàlam
 	TIFF (8-bit Color)	TIFF (color de 8 bits)
 	TIFF (Black & White)	TIFF (blanc i negre)
 	Tile	Mosaic
+	Tile All Vertically	Mosaic vertical de tot
+	Tile All Horizontally	Mosaic horitzontal de tot
+	2-Up Layout	Disposició de 2
+	3-Up Layout	Disposició de 3
+	4-Up Layout	Disposició de 4
+	6-Up Layout	Disposició de 6
+	Arrange Documents	Organitza els documents
 	Tile Edge Color	Color de la vora del mosaic
 	Tile Edge Color…	Color de la vora del mosaic…
 	Tile Full Pages	Mosaic de pàgines senceres
@@ -5364,6 +5389,8 @@ digits	Malayalam	Malaiàlam
 	Variable Options	Opcions de variable
 	Variable Options…	Opcions de variable…
 	Variable Width Profile	Perfil d’amplada variable
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
 	Variables	Variables
 	Variation	Variació
 	Variation:	Variació:
@@ -5417,7 +5444,7 @@ digits	Malayalam	Malaiàlam
 	Update While Dragging	Actualitza mentre s’arrossega
 	Video Thumbnail 1280×720	Miniatura de vídeo 1280×720
 	View	Visualitza
-	View Artboard Only	Visualitza només el tauler
+	View Artboard Contents Only	Visualitza només el contingut del tauler
 	View Opacity Mask	Visualitza la màscara d’opacitat
 	View PDF after saving	Visualitza el PDF després de desar
 	View {n}	Vista {n}
@@ -5491,6 +5518,7 @@ digits	Malayalam	Malaiàlam
 	Write Layers	Escriu les capes
 	Writes, moves or deletes files	Escriu, mou o suprimeix fitxers
 	x Height	Alçada de la x
+	Em Box Height	Alçada de la caixa em
 	X11 (XWayland)	X11 (XWayland)
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) quan hi ha un llapis connectat
 	X:	X:
@@ -5838,6 +5866,13 @@ digits	Malayalam	Malaiàlam
 	Show External Script Warning	Mostra l'avís dels scripts externs
 	A Script Is Running	S'està executant un script
 	Script Alert	Avís de l'script
+	Script File Access	Accés de l’script als fitxers
+	The script asks to read a file you choose.	L’script demana llegir un fitxer que trieu.
+	The script asks to read and write a file you choose.	L’script demana llegir i escriure un fitxer que trieu.
+	The script asks to read and write a folder you choose, with everything in it.	L’script demana llegir i escriure una carpeta que trieu, amb tot el que conté.
+	Allow Once	Permet un cop
+	Always Allow This Script	Permet sempre aquest script
+	Deny	Denega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
@@ -5868,8 +5903,6 @@ digits	Malayalam	Malaiàlam
 @msg	Script file could not be read	No s'ha pogut llegir el fitxer de l'script
 @msg	Script folder has more than 2,048 entries	La carpeta de l'script té més de 2.048 entrades
 @msg	Script file open mode must be r, w, e or a	El mode d'obertura del fitxer de l'script ha de ser r, w, e o a
-@msg	Script file writing is not available	L'escriptura de fitxers de l'script no està disponible
-@msg	Script file dialogs are not available	Els quadres de diàleg de fitxers de l'script no estan disponibles
 @msg	Script files cannot be opened in another application	Els fitxers de l'script no es poden obrir en una altra aplicació
 @msg	Script file access is unavailable on the web	L'accés als fitxers de l'script no està disponible al web
 @msg	Script has 256 files open	L'script té 256 fitxers oberts
@@ -6010,6 +6043,27 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
+@msg	Script file access denied: {path}	S’ha denegat l’accés de l’script als fitxers: {path}
+@msg	Script file access to the app's own folders is not allowed	Els scripts no poden accedir a les carpetes pròpies de l’aplicació
+@msg	Script file cannot encode the text	El fitxer de l’script no pot codificar el text
+@msg	Script file could not be written	No s’ha pogut escriure el fitxer de l’script
+@msg	Script file dialogs need a person to answer them	Els diàlegs de fitxers de l’script necessiten una persona que els respongui
+@msg	Script file is not open for writing	El fitxer de l’script no està obert per escriure-hi
+@msg	Script file name is already in use	El nom del fitxer de l’script ja està en ús
+@msg	Script file name must be a name without a folder	El nom del fitxer de l’script ha de ser un nom sense carpeta
+@msg	Script file permission can be kept only for a script run from a file	El permís de fitxers només es pot conservar per a un script executat des d’un fitxer
+@msg	Script file permission could not be saved	No s’ha pogut desar el permís de fitxers de l’script
+@msg	Script folder is not empty	La carpeta de l’script no és buida
+@msg	Script files cannot make aliases	Els fitxers de l’script no poden crear àlies
+@msg	Script file hidden setting cannot be changed	No es pot canviar l’opció d’ocult del fitxer de l’script
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un diàleg de fitxers no es pot obrir dins d’una crida de retorn d’una funció integrada, d’un getter, d’una conversió o d’un fitxer que executa $.evalFile; crideu-lo des del codi propi de l’script
+@msg	the script wrote more file data than one run may write (32 MiB)	l’script ha escrit més dades de fitxers de les que pot escriure una execució (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per al diàleg de fitxers d’un script ha de ser un d’aquests: once, always, deny, stop
+@msg	choose a file or folder first, or deny	trieu primer un fitxer o una carpeta, o denegueu
+@msg	the script file permissions could not be saved: {e}	no s’han pogut desar els permisos de fitxers dels scripts: {e}
+@msg	this script's file access can be allowed only once	l’accés als fitxers d’aquest script només es pot permetre una vegada
+@msg	Only the person at the keyboard can allow a script's file access	Només la persona al teclat pot permetre l’accés als fitxers d’un script
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script rep com a màxim 2.048 fitxers: els fitxers triats després d’aquests s’han deixat fora
 @msg	Copied the link info	S’ha copiat la informació de l’enllaç
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
@@ -6217,8 +6271,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no active document	no hi ha cap document actiu
 @msg	no active perspective plane	no hi ha cap pla de perspectiva actiu
 @msg	no anchor points selected	no hi ha cap punt d’ancoratge seleccionat
-@msg	`points` must be three [x, y] pairs of numbers	`points` han de ser tres parells de nombres [x, y]
-@msg	direct-select three anchor points, or give `points`	seleccioneu directament tres punts d’ancoratge o indiqueu `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` han de ser dos o tres parells de nombres [x, y]
+@msg	direct-select two or three anchor points, or give `points`	seleccioneu directament dos o tres punts d’ancoratge o indiqueu `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers
 @msg	no artboard	no hi ha tauler
@@ -6342,6 +6396,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such user library	no existeix aquesta biblioteca d’usuari
 @msg	no such view	no existeix aquesta vista
 @msg	no such width point	no existeix aquest punt d’amplada
+@msg	`single` must be `incoming` or `outgoing`	`single` ha de ser `incoming` o `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` han de ser les dues meitats d’un mateix punt d’amplada discontinu
+@msg	a discontinuous width point keeps its place	un punt d’amplada discontinu manté la seva posició
 @msg	no swatch `{name}`	no hi ha la mostra `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	no hi ha la biblioteca de mostres `{l}` (vegeu swatch.library.list)
 @msg	no symbol `{n}`	no hi ha el símbol `{n}`
@@ -6581,6 +6638,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	shadings of more than 4096 patches or triangles were left out	els ombrejats de més de 4096 pedaços o triangles s’han omès
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	els ombrejats les funcions dels quals són d’un tipus desconegut s’omplen amb el seu color central
 @msg	Shape Builder: no region under the pointer	Constructor de formes: no hi ha cap regió sota el punter
+@msg	Shape Builder: select all paths you want to merge	Constructor de formes: selecciona tots els traçats que vulguis combinar
 @msg	Shape Builder: select paths or compound paths	Constructor de formes: selecciona traçats o traçats compostos
 @msg	shortcut for `{k}` must be a string	la drecera de `{k}` ha de ser una cadena
 @msg	Show All Hidden Attributes: nothing is hidden	Mostra tots els atributs ocults: no hi ha res d’ocult
@@ -8215,4 +8273,15 @@ breakText	Glyphs	Glifs
 @msg	A panel is not joined to the rest by a crease.	Un panell no està unit a la resta per cap línia d’hendit.
 @msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
+	Fold Preview	Previsualització del plegat
+	Fold	Plegat
+	Show Fold Lines	Mostra les línies de plegat
+	Three-Quarter	Tres quarts
+	Open a document to preview its folded shape.	Obre un document per previsualitzar-ne la forma plegada.
+@msg	Check the fold lines first.	Primer comprova les línies de plegat.
+@msg	Panels: {panels}, hinges: {hinges}	Panells: {panels}, frontisses: {hinges}
+@msg	Other blanks not shown: {count}	Altres troquelats no mostrats: {count}
+@msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
+@msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"

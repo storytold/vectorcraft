@@ -43,6 +43,9 @@ font-technology	Variable	가변
 	Cap Height	대문자 높이
 	x-Height	x 높이
 	ICF Box	ICF 박스
+	Ascent	어센트
+	x Height	x 높이
+	Em Box Height	엠 박스 높이
 	Show Sample	샘플 표시
 	Hide Sample	샘플 숨기기
 	Max Ascent/Descent	최대 어센트/디센트
@@ -747,6 +750,13 @@ digits	Malayalam	말라얄람어
 	Previous Document	이전 문서
 	Cascade	계단식 배열
 	Tile	바둑판식 배열
+	Tile All Vertically	모두 세로로 바둑판식 배열
+	Tile All Horizontally	모두 가로로 바둑판식 배열
+	2-Up Layout	2분할 레이아웃
+	3-Up Layout	3분할 레이아웃
+	4-Up Layout	4분할 레이아웃
+	6-Up Layout	6분할 레이아웃
+	Arrange Documents	문서 정렬
 	Float in Window	창에 플로팅
 	Float All in Windows	모두 창에 플로팅
 	Consolidate All Windows	모든 창 통합
@@ -1078,6 +1088,9 @@ digits	Malayalam	말라얄람어
 	Additional Plug-ins Folder	추가 플러그인 폴더
 	Additional Fonts Folder	추가 글꼴 폴더
 	Adjust Adjoining Width Points	인접한 너비 점 조정
+	Incoming	들어오는 쪽
+	Outgoing	나가는 쪽
+	Single Width Only	한 너비만
 	Adjust Colors	색상 조정
 	Adjust Options:	조정 옵션:
 	Advanced Options	고급 옵션
@@ -1248,6 +1261,12 @@ antiAlias	Sharp	날카롭게
 	Channel	채널
 	Character / Paragraph	문자 / 단락
 	Character Rotation	문자 회전
+	Chinese Big 5	중국어 Big 5
+	Cyrillic	키릴 자모
+	Greek	그리스어
+	Turkish	터키어
+	Baltic	발트어
+	Central European	중앙 유럽어
 	Character Set:	문자 집합:
 	Character Style Options	문자 스타일 옵션
 	Check Links	링크 확인
@@ -1307,6 +1326,8 @@ antiAlias	Sharp	날카롭게
 	Choose a folder	폴더 선택
 	Choose…	선택…
 	Circle	원
+	Circle Tool	점 기준 원 도구
+	Circle too large	원이 너무 큽니다
 	Clear All Tabs	모든 탭 지우기
 	Above Text	문자 위
 	Position Panel Above Text	패널을 문자 위에 배치
@@ -1842,6 +1863,8 @@ antiAlias	Sharp	날카롭게
 	Files	파일
 	Files of a PDF standard can't be password-protected.	PDF 표준 파일은 암호로 보호할 수 없습니다.
 	Files of this standard tag their colours with ICC profiles.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다. 단, 출력 의도 프로파일의 CMYK 색상은 DeviceCMYK로 기록됩니다.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	'프로파일 포함 안 함'과 CMYK 출력 의도를 사용하면, 다른 프로파일의 CMYK 대상으로 변환되지 않는 한 모든 CMYK 색상이 DeviceCMYK로 기록됩니다.
 	Fill	칠
 	Fill New Type Objects With Placeholder Text	새 문자 개체를 대체 텍스트로 채우기
 	Start Lists From Typed Markers	입력한 기호로 목록 시작
@@ -2346,6 +2369,7 @@ antiAlias	Sharp	날카롭게
 	Load SVG into Clipboard	SVG를 클립보드로 불러오기
 	Load Text into Clipboard	텍스트를 클립보드로 불러오기
 	Local Libraries	로컬 라이브러리
+	Locate Layer	레이어 찾기
 	Locate Object	개체 찾기
 	Locate Selected Objects	선택한 개체 찾기
 	Location	위치
@@ -2836,6 +2860,9 @@ diagnostics	ui	UI
 	Polar Grid Tool	극좌표 격자 도구
 	Polygon	다각형
 	Polygon Properties:	다각형 속성:
+	Line Properties:	선 속성:
+	Line Length:	선 길이:
+	Line Angle:	선 각도:
 	Polygon Tool	다각형 도구
 	Portrait	세로
 	Portuguese	Português
@@ -3418,6 +3445,7 @@ mark-style	Japanese	일본식
 	Set Text	문자 설정
 	Set Zoom	확대/축소 설정
 	Set base color to the current color	기준 색상을 현재 색상으로 설정
+	Set the current fill or stroke to the selected color	현재 칠 또는 선을 선택한 색상으로 설정
 	Set the selected color to the current color	선택한 색상을 현재 색상으로 설정
 	Setup…	설정…
 	Shape Builder	모양 빌더
@@ -3476,7 +3504,7 @@ mark-style	Japanese	일본식
 	Show all plates	모든 분판 표시
 	Show handles when multiple anchors are selected	여러 앵커 선택 시 핸들 표시
 	Show {kind} Brushes	{kind} 브러시 표시
-	Show/hide plate (Alt-click: only this plate)	분판 표시/숨기기(Alt 클릭: 이 분판만)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	분판 표시/숨기기(Alt 클릭: 이 분판만, 다시 Alt 클릭: 모든 분판)
 	Show:	표시:
 	Shown with the optimised preview.	최적화된 미리 보기와 함께 표시됩니다.
 	Side 1:	면 1:
@@ -3831,6 +3859,8 @@ mark-style	Japanese	일본식
 	User Swatch Library 9	사용자 견본 라이브러리 9
 	V Spacing:	세로 간격:
 	Variable Width Profile	가변 너비 프로파일
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
 	Variation:	변형:
 	Vector Halftone	벡터 하프톤
 	Vector illustration — fast, open, scriptable.	벡터 일러스트레이션 — 빠르고 개방적이며 스크립트 지원.
@@ -3844,7 +3874,7 @@ mark-style	Japanese	일본식
 	Vertical Type Tool	세로 문자 도구
 	Vertical Type on a Path Tool	패스 상의 세로 문자 도구
 	Vertical:	세로:
-	View Artboard Only	아트보드만 보기
+	View Artboard Contents Only	아트보드 내용만 보기
 	View Opacity Mask	불투명 마스크 보기
 	View PDF after saving	저장 후 PDF 보기
 	Viewing Angle:	시야각:
@@ -4666,6 +4696,7 @@ theme	Appearance	외관
 @msg	Live Paint: select paths or compound paths	라이브 페인트: 패스 또는 컴파운드 패스를 선택하세요
 @msg	Live Paint: these paths are too degenerate to paint	라이브 페인트: 이 패스는 퇴화되어 칠할 수 없습니다
 @msg	Shape Builder: no region under the pointer	모양 빌더: 포인터 아래에 영역이 없습니다
+@msg	Shape Builder: select all paths you want to merge	모양 빌더: 병합할 패스를 모두 선택하세요
 @msg	Shape Builder: select paths or compound paths	모양 빌더: 패스 또는 컴파운드 패스를 선택하세요
 @msg	image data `{_1}` is missing	이미지 데이터 `{_1}`이(가) 없습니다
 @msg	no Live Paint edge near that point	그 지점 근처에 라이브 페인트 가장자리가 없습니다
@@ -4837,8 +4868,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
-@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
-@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	`points` must be two or three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 두 개 또는 세 개여야 합니다
+@msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
@@ -5260,6 +5291,9 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}`은(는) 색상이 아닙니다(#rrggbb 또는 프리셋 이름)
 @msg	give the path `id` and the width point `index`	패스 `id`와 너비 점 `index`를 지정하세요
 @msg	no such width point	해당 너비 점이 없습니다
+@msg	`single` must be `incoming` or `outgoing`	`single`은 `incoming` 또는 `outgoing`이어야 합니다
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index`와 `outIndex`는 하나의 불연속 너비 점의 두 절반이어야 합니다
+@msg	a discontinuous width point keeps its place	불연속 너비 점은 위치를 유지합니다
 @msg	onto must name a panel floating in another group	onto는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	below and above must name a panel floating in another group	below와 above는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
@@ -5372,6 +5406,13 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 	Show External Script Warning	외부 스크립트 경고 표시
 	A Script Is Running	스크립트 실행 중
 	Script Alert	스크립트 알림
+	Script File Access	스크립트 파일 접근
+	The script asks to read a file you choose.	스크립트가 선택한 파일을 읽도록 요청합니다.
+	The script asks to read and write a file you choose.	스크립트가 선택한 파일을 읽고 쓰도록 요청합니다.
+	The script asks to read and write a folder you choose, with everything in it.	스크립트가 선택한 폴더와 그 안의 모든 항목을 읽고 쓰도록 요청합니다.
+	Allow Once	한 번 허용
+	Always Allow This Script	이 스크립트 항상 허용
+	Deny	거부
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	스크립트는 열려 있는 문서를 변경하고 실행하는 명령을 통해 파일을 쓸 수 있습니다. 신뢰할 수 있는 스크립트만 실행하세요.
 	Do not show this warning again	이 경고를 다시 표시하지 않음
 	Stop the script and undo what it did? Then quit again.	스크립트를 중지하고 변경 내용을 취소할까요? 그런 다음 다시 종료하세요.
@@ -5402,8 +5443,6 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	Script file could not be read	스크립트 파일을 읽을 수 없습니다
 @msg	Script folder has more than 2,048 entries	스크립트 폴더의 항목이 2,048개를 초과합니다
 @msg	Script file open mode must be r, w, e or a	스크립트 파일 열기 모드는 r, w, e 또는 a여야 합니다
-@msg	Script file writing is not available	스크립트 파일 쓰기를 사용할 수 없습니다
-@msg	Script file dialogs are not available	스크립트 파일 대화 상자를 사용할 수 없습니다
 @msg	Script files cannot be opened in another application	스크립트 파일을 다른 응용 프로그램에서 열 수 없습니다
 @msg	Script file access is unavailable on the web	웹에서는 스크립트 파일에 접근할 수 없습니다
 @msg	Script has 256 files open	스크립트가 파일 256개를 열고 있습니다
@@ -5521,6 +5560,27 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
+@msg	Script file access denied: {path}	스크립트 파일 접근이 거부되었습니다: {path}
+@msg	Script file access to the app's own folders is not allowed	스크립트는 앱 자체 폴더에 접근할 수 없습니다
+@msg	Script file cannot encode the text	스크립트 파일이 텍스트를 인코딩할 수 없습니다
+@msg	Script file could not be written	스크립트 파일을 쓸 수 없습니다
+@msg	Script file dialogs need a person to answer them	스크립트 파일 대화 상자에는 응답할 사람이 필요합니다
+@msg	Script file is not open for writing	스크립트 파일이 쓰기용으로 열려 있지 않습니다
+@msg	Script file name is already in use	스크립트 파일 이름이 이미 사용 중입니다
+@msg	Script file name must be a name without a folder	스크립트 파일 이름은 폴더 없는 이름이어야 합니다
+@msg	Script file permission can be kept only for a script run from a file	파일 권한은 파일에서 실행한 스크립트에만 유지할 수 있습니다
+@msg	Script file permission could not be saved	스크립트 파일 권한을 저장할 수 없습니다
+@msg	Script folder is not empty	스크립트 폴더가 비어 있지 않습니다
+@msg	Script files cannot make aliases	스크립트 파일은 별칭을 만들 수 없습니다
+@msg	Script file hidden setting cannot be changed	스크립트 파일의 숨김 설정을 변경할 수 없습니다
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 기본 제공 함수, getter, 변환 또는 $.evalFile이 실행하는 파일의 콜백 안에서는 파일 대화 상자를 열 수 없습니다. 스크립트 자체 코드에서 호출하세요
+@msg	the script wrote more file data than one run may write (32 MiB)	스크립트가 한 번의 실행에서 쓸 수 있는 것보다 많은 파일 데이터를 썼습니다(32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	스크립트 파일 대화 상자의 `answer`는 once, always, deny, stop 중 하나여야 합니다
+@msg	choose a file or folder first, or deny	먼저 파일이나 폴더를 선택하거나 거부하세요
+@msg	the script file permissions could not be saved: {e}	스크립트 파일 권한을 저장할 수 없습니다: {e}
+@msg	this script's file access can be allowed only once	이 스크립트의 파일 접근은 한 번만 허용할 수 있습니다
+@msg	Only the person at the keyboard can allow a script's file access	스크립트의 파일 접근은 키보드 앞에 있는 사람만 허용할 수 있습니다
+@msg	A script is given at most 2,048 files: the files picked after them were left out	스크립트에는 파일이 최대 2,048개까지 전달됩니다: 그 뒤에 고른 파일은 제외되었습니다
 @msg	Copied the link info	링크 정보를 복사했습니다
 @msg	Exported {path}	{path}을(를) 내보냈습니다
 @msg	no CSS to copy: select objects with CSS of their own	복사할 CSS가 없습니다: 자체 CSS가 있는 개체를 선택하세요
@@ -8382,6 +8442,7 @@ breakText	Glyphs	글리프
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
+@msg	connect needs extend	connect에는 extend가 필요합니다
 @msg	connect needs id	connect에는 id가 필요합니다
 @msg	connect path has no open end	connect 패스에 열린 끝이 없습니다
 @msg	continuation must be an array of path chunks	continuation은 패스 조각의 배열이어야 합니다
@@ -9609,3 +9670,13 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Fold Preview	접기 미리 보기
+	Fold	접기
+	Show Fold Lines	접는 선 표시
+	Three-Quarter	3/4 보기
+	Open a document to preview its folded shape.	접은 모양을 미리 보려면 문서를 여세요.
+@msg	Check the fold lines first.	먼저 접는 선을 검사하세요.
+@msg	Panels: {panels}, hinges: {hinges}	패널: {panels}, 힌지: {hinges}
+@msg	Other blanks not shown: {count}	표시되지 않은 다른 전개도: {count}
+@msg	A joint does not close by {gap} pt.	이음매가 {gap} pt만큼 닫히지 않습니다.
+@msg	Two panels pass through each other.	두 패널이 서로 관통합니다.

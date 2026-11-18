@@ -776,7 +776,7 @@ fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
     let mut shadowed = type_node(55);
     shadowed.opacity = 0.5;
     shadowed.appearance.effects.push(fx("stylize.dropShadow", json!({})));
-    // Type that clips a group is outlined as the plain outlines it clips by.
+    // Type that clips a group is outlined as a plain path of the region it clips by.
     let square = Node::path(NodeId(57), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
     let clip = Node::new(NodeId(58), NodeKind::Group { children: vec![Arc::new(type_node(56)), Arc::new(square)], clip: true });
     g.children_mut().unwrap().extend([Arc::new(shadowed), Arc::new(clip)]);
@@ -789,7 +789,10 @@ fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
     let b = o.geometric_bounds().unwrap();
     assert!(b.x0 < 30.0 && b.x1 > 220.0, "{b:?}");
     let clipped = d.node(NodeId(58)).and_then(|n| n.children()).and_then(|c| c.first()).unwrap();
-    assert!(matches!(clipped.kind, NodeKind::Group { .. }) && clipped.opacity == 1.0, "{clipped:?}");
+    assert!(matches!(clipped.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && clipped.opacity == 1.0, "{clipped:?}");
+    // The region is copied with the type.
+    let b = clipped.geometric_bounds().unwrap();
+    assert!(b.x0 < 30.0 && b.x1 > 220.0, "{b:?}");
 }
 
 #[test]

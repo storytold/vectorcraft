@@ -144,7 +144,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
-    ("file.export.png", "Export As PNG…", "", "{path?, …document.export options}; no path: pick the file, then PNG Options"),
+    (
+        "file.export.png",
+        "Export As PNG…",
+        "",
+        "{path?, …document.export options}; no path: pick the file, then PNG Options with supplied options retained and defaults for omitted options",
+    ),
     (
         "file.exportForScreens",
         "Export for Screens…",
@@ -804,7 +809,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.tile",
         "Tile",
         "",
-        "{} show every open document and each further view of one (window.newWindow) at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of panes, rounded up), each fitted to its pane; the current window's pane takes the tools, a click in another pane makes its window the current one; the tabs stay; windows floating come back under the tabs first; with fewer than two windows open the view stays as it is; returns {tiled, panes}",
+        "{layout?: grid|vertical|horizontal|2up|3up|4up|6up} show the open documents and each further view of one (window.newWindow) at once, edge to edge in the document area, one pane each, each fitted to its pane: `grid` (the default) in a grid (columns: the square root of the number of panes, rounded up), `vertical` side by side in one row (Tile All Vertically), `horizontal` stacked in one column (Tile All Horizontally), `2up`, `3up`, `4up` and `6up` at most that many panes (2up and 3up side by side, 4up two by two, 6up three by two) with the other windows under their tabs: the first windows in tab order, the current window in the last pane when it is not among them; the current window's pane takes the tools, a click in another pane makes its window the current one; the tabs stay; windows floating come back under the tabs first; with fewer than two windows open the view and the layout stay as they are; any other `layout` is an error; returns {tiled, panes, layout}",
     ),
     (
         "window.arrange.floatInWindow",
@@ -847,7 +852,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "tool.setOption",
         "Tool Option",
         "",
-        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` or no params reads them; params that are not an object are an error). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen. Every option is checked before any is set: an option the tool doesn't have, a value of the wrong type, a number out of the tool's range or an unknown choice is an error naming the tool and the option, and nothing changes. The Live Paint tools' width and the Shape Builder's gapLength are set to the nearest end of their range instead",
     ),
     (
         crate::touch::TOGGLE_MODE,
@@ -1121,7 +1126,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.navigatorPanelOptions",
         "Panel Options…",
         "",
-        "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them)} set the Navigator panel's options, the color its view box is drawn in and solid dashes (kept with the UI state) → {color, solidDashes}; with neither, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
+        "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them), viewArtboardContentsOnly?: bool (View Artboard Contents Only in the panel menu, on by default and for UI state saved without it: the thumbnail fits the artboards and draws only the art inside them, cut at each artboard's edges; off, it also shows the art on the pasteboard)} set the Navigator panel's options, the color its view box is drawn in, solid dashes and artboard contents only (kept with the UI state) → {color, solidDashes, viewArtboardContentsOnly}; with none, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
     ),
     (
         "ui.layersExpand",
@@ -1170,6 +1175,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Flattener Preview",
         "",
         "{highlight?: none|rasterizedRegions|transparentObjects|allAffected|expandedPatterns|outlinedStrokes|outlinedText|allRasterized, overprints?: preserve|simulate|discard, preset?: name (loads its options), options?: {option keys, over the preset's}, showOptions?} set the Flattener Preview panel (ui.inspect: ui.flattener_preview), show it and refresh its snapshot → what flattener.preview answers for it",
+    ),
+    (
+        "ui.foldPreview",
+        "Fold Preview",
+        "",
+        "{amount?: 0..1 (how far the blank is folded), view?: front|back|left|right|top|bottom|threeQuarter, rotateX?: deg -180..180 (the top toward the viewer), rotateY?: deg -180..180 (the right side toward the viewer), zoom?: 0.1..8 (1 fits the folded blank), perspective?: deg 0..160 (field of view; 0 for none), inside?: #rrggbb, the name of a swatch with a plain color, or empty for white (the board's inside), showFoldLines?: bool, base?: [x, y] (the panel under this point stays in place; an error when it is in no panel) or null (the largest panel)} set the Fold Preview window (ui.inspect: ui.fold_preview), which folds the blank that the document's shown fold lines make (addon.packaging.fold) with the document's art printed on the outside, show it and draw it again; view and zoom also center the view. A value of the wrong kind or out of range is an error and sets nothing → the window's settings and frame: the last frame's {width, height (pixels), foldMs, drawMs} or null",
     ),
     (
         "ui.copyScriptConsole",
