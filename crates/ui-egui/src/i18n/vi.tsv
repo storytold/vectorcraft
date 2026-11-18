@@ -128,6 +128,7 @@
 	Add Anchor Point	Thêm điểm neo
 	Add Anchor Point Tool	Công cụ Thêm điểm neo
 	Add Anchor Points	Thêm các điểm neo
+	Add Around	Thêm xung quanh đối tượng
 	Add Content	Thêm nội dung
 	Add Effect	Thêm hiệu ứng
 	Add Font Files	Thêm tệp phông chữ
@@ -214,6 +215,7 @@
 	Angled Strokes…	Nét xiên góc…
 	Angles	Các góc
 	Animated Zoom	Thu phóng có hiệu ứng
+	Anti Alias	Khử răng cưa
 	Anti-alias	Khử răng cưa
 	Anti-Alias	Khử răng cưa
 	Anti-alias Rasters	Khử răng cưa ảnh raster
@@ -223,6 +225,8 @@ antiAlias	Sharp	Sắc nét
 	Crisp	Rõ nét
 	Strong	Đậm
 	Anti-aliasing:	Khử răng cưa:
+	Art Optimized	Tối ưu cho hình vẽ
+	Type Optimized	Tối ưu cho chữ
 	Any Kind	Bất kỳ loại
 	Font Technology	Công nghệ phông chữ
 font-technology	Variable	Biến thiên
@@ -295,7 +299,7 @@ font-technology	Variable	Biến thiên
 	Assign Profile…	Gán hồ sơ màu…
 	Assign:	Gán:
 	Attach to Active Plane	Gắn vào mặt phẳng đang hoạt động
-	Attributes	Thuộc tính
+	Attributes	Đặc tính
 	Author Title:	Chức danh tác giả:
 	Author:	Tác giả:
 	Auto	Tự động
@@ -415,6 +419,12 @@ font-technology	Variable	Biến thiên
 	Brush Definition	Định nghĩa cọ
 	Brush Libraries	Thư viện cọ
 	Brush Options…	Tùy chọn cọ…
+	Options of Selected Object…	Tùy chọn của đối tượng đã chọn…
+	Options of Selected Object	Tùy chọn của đối tượng đã chọn
+@msg	no path painted with a brush is selected	chưa chọn đường được vẽ bằng cọ
+@msg	the selected paths are painted with brushes of different types	các đường đã chọn được vẽ bằng các loại cọ khác nhau
+@msg	give `params` or `reset`, not both	chỉ cung cấp `params` hoặc `reset`, không cả hai
+@msg	a bristle brush has no options of its own on a path	cọ lông không có tùy chọn riêng trên một đường
 	Brush Scale Options	Tùy chọn tỷ lệ cọ
 	Brush Strokes	Nét cọ
 	Brushes	Cọ
@@ -422,7 +432,7 @@ font-technology	Variable	Biến thiên
 	Built-in presets are read-only: New… starts an editable copy.	Thiết lập sẵn tích hợp ở chế độ chỉ đọc: Mới… tạo một bản sao có thể chỉnh sửa.
 	Built-in presets don't change: New makes a copy you can edit.	Thiết lập sẵn tích hợp không thay đổi: Mới tạo bản sao để chỉnh sửa.
 	Built-in presets don't change: New… starts an editable copy.	Thiết lập sẵn tích hợp không thay đổi: Mới… tạo một bản sao có thể chỉnh sửa.
-	Bulge…	Phình…
+	Bulge…	Lồi…
 	Bullet	Dấu đầu dòng
 	Bullets	Dấu đầu dòng
 	Bullets and Numbering	Dấu đầu dòng và đánh số
@@ -647,6 +657,7 @@ font-technology	Variable	Biến thiên
 	Color Mixer (Shift-click the chip)	Trộn màu (Shift-bấm chip màu)
 	Color Mode	Chế độ màu
 	Color Mode:	Chế độ màu:
+	Color Model	Mô hình màu
 	Color Model:	Mô hình màu:
 	Color Models	Các mô hình màu
 	Color Picker	Bộ chọn màu
@@ -667,6 +678,11 @@ font-technology	Variable	Biến thiên
 	Saturation and brightness	Độ bão hòa và độ sáng
 	Color field	Vùng chọn màu
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Hiển thị bánh xe
+	Box View	Hiển thị hộp
+	Box Channel	Kênh của hộp
+	Color box	Hộp màu
+	Color Wheel Options	Tùy chọn bánh xe màu
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu
@@ -675,6 +691,7 @@ font-technology	Variable	Biến thiên
 	Colors:	Màu sắc:
 	Column Graph Tool	Công cụ Biểu đồ cột
 	Column Width:	Chiều rộng cột:
+	Columns	Cột
 	Columns:	Cột:
 	Column…	Cột…
 	Combine Slices	Kết hợp lát cắt
@@ -706,6 +723,7 @@ font-technology	Variable	Biến thiên
 	Constrain	Giữ tỷ lệ
 	Constrain Angle	Ràng buộc góc
 	Constrain Width and Height Proportions	Ràng buộc tỷ lệ chiều rộng và chiều cao
+	Copy Width to Height	Sao chép chiều rộng sang chiều cao
 	Construction Guides	Đường căn xây dựng
 	Contextual Alternates	Ký tự thay thế theo ngữ cảnh
 	Contextual Task Bar	Thanh tác vụ theo ngữ cảnh
@@ -715,6 +733,8 @@ font-technology	Variable	Biến thiên
 	Control	Điều khiển
 	Convert	Chuyển đổi
 	Convert All Spot Colors to Process	Chuyển tất cả màu đặc thành màu lai
+	Convert {name} to process	Chuyển {name} thành màu lai
+	Keep {name} as spot	Giữ {name} là màu đặc
 	Convert All Strokes to Outlines	Chuyển tất cả nét thành đường bao
 	Convert All Text to Outlines	Chuyển tất cả văn bản thành đường bao
 	Convert Anchor Point	Chuyển đổi điểm neo
@@ -794,6 +814,9 @@ font-technology	Variable	Biến thiên
 	Create from Selection	Tạo từ vùng chọn
 	Create From:	Tạo từ:
 	Create Gradient Mesh…	Tạo lưới chuyển sắc…
+	Flat	Phẳng
+	To Center	Về tâm
+	To Edge	Về cạnh
 	Create Graph	Tạo biểu đồ
 	Create New Fields by	Tạo trường mới bằng
 	Create New Layer	Tạo lớp mới
@@ -1242,6 +1265,7 @@ font-technology	Variable	Biến thiên
 	Enable text access for screen readers	Bật truy cập văn bản cho trình đọc màn hình
 	Enable Touch Gestures	Bật cử chỉ cảm ứng
 	Switch Selection and Drawing Modes	Chuyển giữa chế độ chọn và vẽ
+	Select Last Selection Tool	Chọn công cụ chọn dùng gần nhất
 	Enable Touch Workspace	Bật không gian làm việc cảm ứng
 	Encoding	Mã hóa
 	Encoding:	Mã hóa:
@@ -1592,6 +1616,10 @@ file-filter	Templates	Mẫu
 	Font List	Danh sách phông
 	Show Similar Fonts	Hiển thị phông tương tự
 	Clear Similar Fonts	Xóa phông tương tự
+	Fonts used in this document	Phông được dùng trong tài liệu này
+	This document uses no available fonts	Tài liệu này không dùng phông nào có sẵn
+	Recently Added	Mới thêm gần đây
+	Fonts added in the last 30 days	Phông được thêm trong 30 ngày qua
 	Font Preview Size	Cỡ xem trước phông
 	Font Size	Cỡ chữ
 	Variable Font	Phông chữ biến thiên
@@ -2017,6 +2045,9 @@ digits	Hindi	Hindi
 	Cap Height	Chiều cao chữ hoa
 	x-Height	Chiều cao chữ x
 	ICF Box	Ô ICF
+	Ascent	Độ cao nét trên
+	x Height	Chiều cao chữ x
+	Em Box Height	Chiều cao ô em
 	Show Sample	Hiện mẫu
 	Hide Sample	Ẩn mẫu
 	Max Ascent/Descent	Độ cao/sâu tối đa
@@ -2323,6 +2354,7 @@ digits	Hindi	Hindi
 	Linked File Not Found	Không tìm thấy tệp liên kết
 	Links	Liên kết
 	Linux Display Server	Máy chủ hiển thị Linux
+	Low-Latency Drawing	Vẽ độ trễ thấp
 	Liquify	Lỏng hóa
 	List Data Sets	Liệt kê tập dữ liệu
 	List Folder	Liệt kê thư mục
@@ -2373,7 +2405,8 @@ digits	Hindi	Hindi
 	Long Lines	Nét dài
 	Long Strokes	Nét vẽ dài
 	Longest:	Dài nhất:
-	Lossless (lossy WebP isn't available yet)	Không mất dữ liệu (WebP mất dữ liệu chưa hỗ trợ)
+	Lossless	Không mất dữ liệu
+	Lossy	Mất dữ liệu
 	Lossy:	Mất dữ liệu:
 	Low	Thấp
 	lowercase	chữ thường
@@ -2439,7 +2472,7 @@ digits	Hindi	Hindi
 	Medium Thumbnail View	Chế độ hình thu nhỏ vừa
 	Medium Thumbnails	Hình thu nhỏ vừa
 	Menu Dialog	Hộp thoại menu
-	Merge	Hợp nhất
+	Merge	Gộp
 	Merge colors into one row	Hợp nhất màu vào một hàng
 	New Row	Hàng mới
 	Merge Graphic Styles	Hợp nhất kiểu đồ họa
@@ -2864,6 +2897,9 @@ digits	Hindi	Hindi
 	Overprint	In chồng
 	Overprint and Transparency Flattener	In chồng và làm phẳng trong suốt
 	Overprint and Transparency Flattener Options	Tùy chọn in chồng và làm phẳng trong suốt
+	Custom…	Tùy chỉnh…
+	Custom Transparency Flattener Options	Tùy chọn làm phẳng trong suốt tùy chỉnh
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS không có trong suốt kênh Alpha, và In chồng quyết định có giữ in chồng hay không.
 	Overprint Black…	In chồng đen…
 	Overprint Fill	Tô in chồng
 	Overprint Preview	Xem trước in chồng
@@ -2919,6 +2955,13 @@ digits	Hindi	Hindi
 	Pathfinders:	Pathfinder:
 	Paths	Đường dẫn
 	Path Length	Độ dài đường dẫn
+	Grid Size	Kích thước lưới
+	Grid Colors	Màu lưới
+	Flattener Preset	Thiết lập sẵn làm phẳng
+	X	X
+	Y	Y
+	Orange	Cam
+	Purple	Tím
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Đường dẫn: {paths}    Điểm neo: {anchors}    Màu: {colors}
 	Pattern	Họa tiết
 	Pattern Brush	Cọ họa tiết
@@ -3010,6 +3053,7 @@ diagnostics	ui	giao diện
 	Play Current Selection	Phát vùng chọn hiện tại
 	Save Actions…	Lưu hành động…
 	Load Actions…	Tải hành động…
+	Replace Actions…	Thay thế hành động…
 	Reset Actions	Đặt lại hành động
 	Replace the current actions with the default set?	Thay thế các hành động hiện tại bằng bộ mặc định?
 	Append adds the default set after the current sets instead.	Nối thêm sẽ thêm bộ mặc định vào sau các bộ hiện tại.
@@ -3068,6 +3112,18 @@ diagnostics	ui	giao diện
 	Preview:	Xem trước:
 	Preview All Layers	Xem trước tất cả lớp
 	Preview in Browser	Xem trước trong trình duyệt
+	Optimize to File Size…	Tối ưu theo kích thước tệp…
+	Optimize to File Size	Tối ưu theo kích thước tệp
+	Desired File Size:	Kích thước tệp mong muốn:
+	Start With:	Bắt đầu với:
+	Use:	Dùng:
+	Current Settings	Cài đặt hiện tại
+	Auto Select GIF/JPEG	Tự chọn GIF/JPEG
+	Total of All Slices	Tổng tất cả lát cắt
+	Each Slice	Mỗi lát cắt
+	Current Slice	Lát cắt hiện tại
+	{size}, within {target}	{size}, trong giới hạn {target}
+	No setting tried fits in {target}; the smallest is {size}	Không cài đặt nào đã thử vừa với {target}; nhỏ nhất là {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trong trình duyệt cần ứng dụng máy tính để bàn (web sẽ tải tệp xuống thay thế)
 	Preview Mode	Chế độ xem trước
 	Preview the document as it is now	Xem trước tài liệu như hiện tại
@@ -3352,6 +3408,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset all Revolve settings to their defaults.	Đặt lại tất cả cài đặt Revolve về mặc định.
 	Reset Bar Position	Đặt lại vị trí thanh
 	Reset Bounding Box	Đặt lại hộp bao
+	Rotate Bounding Box	Xoay hộp bao
+	Rotate Bounding Box…	Xoay hộp bao…
 	Reset Envelope Mesh	Đặt lại lưới Envelope
 	Reset Envelope Shape	Đặt lại hình dạng Envelope
 	Reset Essentials	Đặt lại Essentials
@@ -3388,6 +3446,8 @@ mark-style	Japanese	Kiểu Nhật
 	Reset to White, Black	Đặt lại về Trắng, Đen
 	Reset Tracking and Kerning	Đặt lại giãn chữ và kerning
 	Highlight Font Name	Đánh dấu tên phông
+	Highlight Font Size	Đánh dấu cỡ chữ
+	Other…	Khác…
 	Highlight Kerning	Đánh dấu kerning
 	Highlight Tracking	Đánh dấu giãn chữ
 	Reset with Mesh	Đặt lại với lưới
@@ -3405,16 +3465,113 @@ mark-style	Japanese	Kiểu Nhật
 	Resize	Thay đổi kích thước
 	Resize panel window	Thay đổi kích thước cửa sổ bảng
 	Resize panels	Thay đổi kích thước bảng
+	Resolution	Độ phân giải
 	Resolution:	Độ phân giải:
 	Responsive	Đáp ứng
 	Restore	Khôi phục
 	Restore every preference to its default (applied on OK)	Khôi phục tất cả tùy chọn về mặc định (áp dụng khi nhấn OK)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Hiển thị trên khung vẽ một thanh lệnh cho vùng chọn hoặc công cụ; thanh này ẩn khi bạn kéo và trong chế độ trình bày.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Khoảng cách một phím mũi tên di chuyển vùng chọn; khi giữ Shift, phím di chuyển xa gấp mười lần.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Góc của các trục mà phím mũi tên di chuyển theo và Shift giữ việc vẽ và di chuyển theo.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	Bán kính góc mà công cụ Hình chữ nhật bo góc dùng để vẽ; đổi bán kính trong khi vẽ cũng đổi giá trị này.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Khoảng cách Dán dời bản sao sang phải và xuống dưới khi không có vị trí được chỉ định, như từ một tập lệnh; Dán trong ứng dụng đặt bản sao vào giữa khung nhìn.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Ngăn công cụ Bút xóa điểm neo bạn nhấp trên một đường dẫn đã chọn, hoặc thêm điểm neo nơi bạn nhấp vào đoạn của nó.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	Các công cụ vẽ hiển thị con trỏ hình chữ thập thay cho biểu tượng của chúng; Caps Lock cũng làm vậy khi đang bật.
+	Shows a tip when the pointer rests on a button or field that has one.	Hiển thị mẹo khi con trỏ dừng trên một nút hoặc trường có mẹo.
+	Shows a warning before a script you choose runs.	Hiển thị cảnh báo trước khi một tập lệnh bạn chọn chạy.
+	Smooths the edges of artwork on the canvas.	Làm mịn các cạnh của hình minh họa trên khung vẽ.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Vùng chọn › Giống nhau › Màu tô, Màu nét và Tô & Nét chỉ khớp với cùng sắc độ của một mẫu màu toàn cục hoặc màu pha, không phải mọi sắc độ của nó.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Hiển thị màn hình Trang chủ khi không có tài liệu nào mở; khi tắt, cửa sổ để trống cho đến khi bạn nhấp vào Trang chủ.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Đo đối tượng cùng với nét và các hiệu ứng thay đổi hình dạng cho kích thước, vị trí và căn chỉnh; bóng đổ, ánh sáng và làm mờ không được đo.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Ở mức thu phóng 100%, một inch của tài liệu chiếm 96 điểm màn hình thay vì 72.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Nhấp đúp vào một nhóm, đường dẫn hoặc hình ảnh bằng công cụ Vùng chọn sẽ mở nó trong chế độ cô lập.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Phần tô và nét họa tiết biến đổi cùng hình minh họa, trừ khi phép biến đổi hoặc menu của bảng Biến đổi chọn khác.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Bán kính góc động co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	Độ dày nét, gạch đứt và khoảng cách hiệu ứng co giãn cùng hình minh họa, trừ khi phép co giãn chọn khác.
+	The mouse wheel zooms the canvas instead of scrolling it.	Con lăn chuột thu phóng khung vẽ thay vì cuộn nó.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Con lăn chuột kèm giữ Cmd/Ctrl cuộn khung vẽ sang ngang.
+	Dragging sideways on a numeric field's label changes the field's value.	Kéo sang ngang trên nhãn của một trường số sẽ thay đổi giá trị của trường.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Cử chỉ xoay bằng hai ngón trên bàn di chuột sẽ xoay khung nhìn của khung vẽ.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Giữ phím tắt của một công cụ sẽ chọn công cụ đó cho đến khi bạn thả ra, rồi công cụ trước đó được chọn lại.
+	Shows the bounding box while you move the selection or draw a shape.	Hiển thị hộp giới hạn khi bạn di chuyển vùng chọn hoặc vẽ một hình.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Tạo dấu cắt xén vẽ dấu kiểu Nhật thay cho kiểu La Mã.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Hình minh họa mới chỉ lấy phần tô và nét của vùng chọn; khi tắt, nó lấy toàn bộ diện mạo của đối tượng đã chọn.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Đổi chiều rộng hoặc chiều cao trong bảng Biến đổi, bảng Thuộc tính hoặc thanh Điều khiển sẽ đổi kích thước kia theo tỷ lệ.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Thuộc tính của một hình chữ nhật động hiển thị một trường Bán kính góc cho cả bốn góc; khi tắt, mỗi góc có trường riêng.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Những gì thao tác trong bảng Biến đổi biến đổi: đối tượng, các ô họa tiết của nó hoặc cả hai; Mặc định theo Biến đổi ô họa tiết.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Khi chọn một thể hiện biểu tượng, bảng Biến đổi dùng điểm đăng ký của biểu tượng làm điểm tham chiếu.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Làm tối khung vẽ bên ngoài các bảng vẽ khi công cụ Bảng vẽ đang hoạt động.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Khi Làm tối vùng bên ngoài bảng vẽ đang bật, vùng bên ngoài các bảng vẽ vẫn tối trong khi bạn kéo bằng công cụ Bảng vẽ.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Con trỏ phải cách đối tượng, điểm neo hoặc tay nắm bao nhiêu pixel để một cú nhấp chọn được nó.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	Khung của công cụ Chọn chọn các đối tượng nó chạm vào hay chỉ những đối tượng nằm hẳn bên trong; Hướng kéo chọn đối tượng bên trong khi kéo sang phải. E đảo quy tắc trong khi kéo.
+	A click selects a filled object only on its path, not inside its fill.	Cú nhấp chỉ chọn đối tượng có tô màu trên đường dẫn của nó, không phải bên trong phần tô.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Một điểm phải đến gần điểm neo hoặc đường căn thước bao nhiêu pixel để Hút vào điểm hút nó; khi bật Đường căn thông minh, dung sai hút của chúng được dùng thay thế.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	Với công cụ Chọn, Cmd/Ctrl-nhấp chọn đối tượng nằm dưới đối tượng đã chọn tại con trỏ; mỗi lần nhấp tiếp theo xuống sâu thêm một đối tượng.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	Phóng to và Thu nhỏ đưa tâm vùng chọn vào giữa khung nhìn.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	Hình minh họa bị khóa và bị ẩn bên trong một bảng vẽ được di chuyển, co giãn và sao chép cùng bảng vẽ như các hình minh họa khác.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	Kích thước điểm neo và đầu tay nắm hướng trên canvas; điểm neo lớn hơn cũng có thể được nắm từ xa hơn.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Vẽ đầu tay nắm hướng thành chấm đặc, chấm rỗng hoặc chấm đặc lớn hơn.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	Với công cụ Chọn trực tiếp, điểm neo dưới con trỏ được làm nổi bật.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Hiện tay nắm hướng khi chọn nhiều hơn một điểm neo; khi tắt, chúng chỉ hiện khi chọn đúng một điểm neo.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	Tiện ích góc ẩn ở những góc có số đo lớn hơn số độ này.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	Công cụ Bút xem trước đoạn tiếp theo từ điểm neo cuối đến con trỏ trước khi bạn nhấp.
+	The Curvature tool previews the curve to the pointer before you place the next point.	Công cụ Độ cong xem trước đường cong đến con trỏ trước khi bạn đặt điểm tiếp theo.
 	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	Đơn vị cho tài liệu mới theo kích thước dựng sẵn, trừ kích thước bằng pixel, và cho tệp đã mở không ghi đơn vị; chọn đơn vị ở đây rồi bấm OK cũng đặt nó cho tài liệu đang hoạt động.
 	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	Độ dày nét, nét đứt và khoảng cách hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
 	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	Cỡ chữ, giãn dòng và dịch chuyển đường cơ sở hiển thị theo đơn vị này, và số nhập cho chúng được đọc theo đơn vị này.
 	The unit for East Asian type measurements, which no field uses yet.	Đơn vị cho số đo chữ Đông Á, hiện chưa có trường nào dùng.
 	When on, a number typed without a unit into a field in picas is read in points.	Khi bật, số nhập không có đơn vị vào trường tính bằng pica được đọc theo điểm.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Với XML ID, tên đối tượng hiển thị dưới dạng XML ID trong Các lớp, Biến số và Tùy chọn lớp.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Bước cho cỡ chữ và khoảng cách dòng: Cmd/Ctrl+Shift+. và Cmd/Ctrl+Shift+, đổi cỡ chữ một bước, hoặc năm bước khi có thêm Alt; trong chữ ngang, Alt cùng mũi tên lên hoặc xuống đổi khoảng cách dòng một bước, hoặc năm bước khi có Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Bước cho giãn chữ và kerning, tính bằng phần nghìn em: trong chữ ngang, Alt cùng mũi tên trái hoặc phải đổi kerning tại con trỏ hoặc giãn chữ của văn bản đã chọn một bước, hoặc năm bước khi có Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Bước cho dịch đường cơ sở: trong chữ ngang, Alt và Shift cùng mũi tên lên hoặc xuống dời đường cơ sở một bước, hoặc năm bước khi có Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Hiện các tùy chọn cho chữ Nhật và chữ Đông Á khác trong các bảng Ký tự, Đoạn văn, OpenType và Glyph, cùng lệnh Phông chữ tổ hợp.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Hiện các tùy chọn cho chữ Ả Rập, Do Thái và Ấn Độ trong các bảng Ký tự và Đoạn văn, như hướng đoạn văn, kashida và chữ số.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Các công cụ chọn chỉ chọn chữ trên đường cơ sở, khung của chữ vùng hoặc đường dẫn của nó, không phải bất kỳ đâu bên trong hộp của nó.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Menu phông chữ liệt kê mỗi phông bằng tên tiếng Anh; khi tắt, phông có cả tên bằng ngôn ngữ của nó sẽ hiện tên đó.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Chữ vùng mới bắt đầu với Tự động định cỡ bật, nên khung chữ nhật chứa chữ ngang cao lên hoặc thấp xuống cho vừa chữ của nó.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Các danh sách phông chữ và menu Phông chữ hiện mẫu của mỗi phông bên cạnh tên của nó.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Mẫu phông chữ được vẽ bằng chữ tối trên nền trắng, bất kể độ sáng của giao diện; điều này chỉ áp dụng khi xem trước phông chữ trong menu đang bật.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Độ cao của mỗi hàng trong danh sách của các ô phông chữ, như ô trong bảng Ký tự, và do đó độ lớn của mỗi mẫu.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Số phông chữ dùng gần nhất, từ 1 đến 15, mà Phông chữ gần đây và các danh sách phông chữ hiện, mới nhất trước.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Khi bạn đổi phông chữ hoặc kiểu phông của văn bản, các ký tự mà phông mới không có glyph sẽ giữ phông cũ.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Vùng tô hồng trên canvas đánh dấu các glyph mà tính năng OpenType đã thay thế, như chữ ghép; vùng này không được in hay xuất.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Với công cụ Chữ, chọn một ký tự sẽ hiện bên cạnh nó trên canvas một hàng glyph thay thế để chọn.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Vùng tô hồng trên canvas đánh dấu chữ được vẽ bằng phông thay thế vì thiếu phông của nó; vùng này không được in hay xuất.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Chữ mới tạo bằng công cụ chữ bắt đầu với văn bản giữ chỗ đã được chọn, nên những gì bạn gõ sẽ thay thế nó.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Gõ một dấu danh sách như 1. hoặc * rồi một dấu cách ở đầu đoạn văn sẽ biến đoạn đó thành danh sách.
+	Fonts in this folder show in the font menus and can be used without being installed.	Phông chữ trong thư mục này hiện trong các menu phông chữ và có thể dùng mà không cần cài đặt.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Áp dụng kiểu đồ họa cho chữ sẽ bỏ phần tô hoặc nét riêng của ký tự ở nơi kiểu có phần đó, để màu của kiểu hiện ra.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Căn chỉnh và Phân bố đo chữ điểm theo phần mực của các glyph thay vì hộp em của nó.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Căn chỉnh và Phân bố đo chữ vùng theo phần mực của các glyph thay vì khung của nó.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Hộp giới hạn và bảng Biến đổi đo chữ điểm theo phần mực của các glyph thay vì hộp em của nó.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Hút thao tác vẽ, di chuyển và co giãn vào các phân chia của lưới, kể cả khi lưới đang ẩn; khi tùy chọn này bật, Hút vào pixel không có tác dụng.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Màu của các đường căn không được chọn; bảng vẽ có Nhãn đường căn vẽ các đường căn của riêng nó bằng màu của nhãn.
+	Draws guides as solid lines or as dots, including the guides already in the document.	Vẽ đường căn dưới dạng đường liền hoặc chấm, kể cả các đường căn đã có trong tài liệu.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Khi bật, các đường căn bị khóa lúc VectorCraft khởi động; đổi tùy chọn này sẽ khóa hoặc mở khóa chúng ngay, và Hiển thị › Đường căn › Khóa đường căn vẫn đổi được trạng thái khóa.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Khi bật, giữ Cmd/Ctrl lúc bắt đầu kéo từ thước sẽ tạo đường căn chỉ trên bảng vẽ đang hoạt động, hoặc đường căn cho toàn bộ khung vẽ khi dùng công cụ Bảng vẽ.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	Màu của lưới; các đường nằm giữa những đường lưới chính được vẽ bằng sắc nhạt hơn của màu đó.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	Vẽ lưới dưới dạng đường, hoặc dưới dạng chấm dọc theo các đường lưới chính tại mỗi phân chia.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	Khoảng cách giữa các đường lưới chính trong mọi tài liệu đang mở và trong tài liệu mới; tài liệu VectorCraft mở ra với lưới đã lưu cùng nó.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Số phần mà mỗi ô lưới chính được chia thành; Hút vào lưới hút vào các phần này, kể cả khi mức thu phóng ẩn các đường của chúng.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	Vẽ lưới phía sau tác phẩm; khi tắt, lưới được vẽ đè lên tác phẩm.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Trong Xem trước pixel ở mức thu phóng 600% trở lên, chế độ xem đang hoạt động hiện một đường tại cạnh của mỗi pixel tài liệu, đè lên tác phẩm.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	Màu của cạnh ô và đường giới hạn mẫu màu nét đứt hiện ra khi bạn chỉnh sửa họa tiết.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	Hút thao tác vẽ, di chuyển và biến đổi vào hình vẽ ở gần, đồng thời hiện đường căn và nhãn; Xem trước pixel tắt chúng, còn Hút vào lưới sẽ hút vào lưới thay cho chúng.
+	The color of Smart Guide lines and labels.	Màu của đường và nhãn của đường căn thông minh.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Hiện một đường dọc theo cạnh hoặc tâm mà hình vẽ thẳng hàng với; khi tắt, hình vẽ vẫn thẳng hàng mà không có đường, và Hút vào glyph không áp dụng.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Với công cụ chọn, viền đối tượng chưa chọn dưới con trỏ bằng màu lớp của nó khi bạn không kéo.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	Hiện kích thước hoặc góc bên cạnh con trỏ khi bạn co giãn, xoay, làm nghiêng hoặc phản chiếu hình vẽ.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Khi bạn vẽ, các điểm hút vào những đường theo các góc đã chọn đi qua điểm bắt đầu của đoạn hoặc hình.
+	The set of angles the construction guides follow while Construction Guides is on.	Tập hợp các góc mà đường căn xây dựng đi theo khi Đường căn xây dựng đang bật.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Gọi tên thứ mà điểm hút vào, như điểm neo, đường dẫn hoặc căn chỉnh; khi tắt, các điểm vẫn hút như vậy nhưng không có tên.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	Hiện khoảng cách, góc và mức hình vẽ đã di chuyển bên cạnh con trỏ khi bạn vẽ hoặc di chuyển.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	Hút hình vẽ được di chuyển hoặc đổi kích thước vào khoảng cách bằng khoảng cách giữa các đối tượng ở gần, và đánh dấu các khoảng bằng nhau.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Khi đã chọn thứ gì đó, giữ Alt/Option trên một đối tượng khác hoặc một bảng vẽ sẽ hiện khoảng cách giữa nó và vùng chọn.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Vùng chọn được kéo trở lại trong phạm vi dung sai hút tính từ chỗ bắt đầu kéo sẽ trở về đúng chỗ đó; bản sao thì không.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Con trỏ hoặc điểm đang kéo phải đến gần hình vẽ trên màn hình bao nhiêu để đường căn thông minh hút vào; khoảng cách này như nhau ở mọi mức thu phóng.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hút đầu mút của đoạn thẳng, hoặc hình tròn vẽ từ tâm, để nó chạm vào một đường cong ở gần.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hút đầu mút của đoạn thẳng để nó gặp một đoạn thẳng ở gần theo góc vuông.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
@@ -3487,6 +3644,7 @@ mark-style	Japanese	Kiểu Nhật
 	Rounded Rectangle…	Hình chữ nhật bo góc…
 	Roundness:	Độ tròn:
 	Row Size:	Kích thước hàng:
+	Rows	Hàng
 	Rows:	Hàng:
 	Rule:	Quy tắc:
 	Ruler Origin	Gốc thước
@@ -3677,6 +3835,7 @@ mark-style	Japanese	Kiểu Nhật
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
 	No recent commands	Không có lệnh gần đây
+	Search commands	Tìm kiếm lệnh
 	Search Commands…	Tìm kiếm lệnh…
 	Search Fonts Folder	Tìm kiếm thư mục phông chữ
 	Searching…	Đang tìm kiếm…
@@ -4198,7 +4357,7 @@ mark-style	Japanese	Kiểu Nhật
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
 	Import Composite Fonts	Nhập phông chữ tổ hợp
-@msg	each font must be {name, parts}	mỗi phông chữ phải là {name, parts}
+@msg	each font must be {{name, parts}}	mỗi phông chữ phải là {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	khóa không xác định `{k}`; một phông chữ nhận name và parts
 @msg	each font needs a name	mỗi phông chữ cần có tên
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` không thể là tên phông chữ tổ hợp (từ 1 đến {COMPOSITE_NAME_MAX} ký tự, không có ký tự điều khiển)
@@ -4211,7 +4370,10 @@ mark-style	Japanese	Kiểu Nhật
 @msg	two composite fonts are named `{_1}`	có hai phông chữ tổ hợp cùng tên `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` là tên của một phông chữ đã cài đặt
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} dùng `{font}`, một phông chữ tổ hợp
-@msg	give fonts: [{name, parts}…]	hãy cung cấp fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	hãy cung cấp fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` phải là "document", {{artboards: [index, …]}} hoặc {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	các số không theo thứ tự trong lượng từ {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	màu tô không phải là chuyển sắc dạng tự do (hãy áp dụng một chuyển sắc bằng paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path trống
 @msg	fonts must be a list of composite fonts	fonts phải là danh sách phông chữ tổ hợp
 @msg	names must be strings	names phải là chuỗi
@@ -4305,6 +4467,13 @@ mark-style	Japanese	Kiểu Nhật
 	Thumbnail View	Dạng xem hình thu nhỏ
 	Thumbnails:	Hình thu nhỏ:
 	Tile	Ô
+	Tile All Vertically	Xếp tất cả theo chiều dọc
+	Tile All Horizontally	Xếp tất cả theo chiều ngang
+	2-Up Layout	Bố cục 2
+	3-Up Layout	Bố cục 3
+	4-Up Layout	Bố cục 4
+	6-Up Layout	Bố cục 6
+	Arrange Documents	Sắp xếp tài liệu
 	Tile Edge Color	Màu cạnh ô
 	Tile Edge Color…	Màu cạnh ô…
 	Tile Full Pages	Ô toàn trang
@@ -4411,7 +4580,7 @@ mark-style	Japanese	Kiểu Nhật
 	Reverse Traps	Đảo chiều chồng màu
 	Precision	Độ chính xác
 	Remove Redundant Points	Xóa điểm thừa
-	Trim	Cắt xén
+	Trim	Cắt tỉa
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Cắt bỏ hình học bị che khi Mở rộng diện mạo. Xem trước trực tiếp giữ toàn bộ bề mặt. Sơn trong suốt và bề mặt vượt quá giới hạn hiển thị giữ nguyên tất cả các mặt.
 	Trim mark weight:	Độ dày dấu cắt:
 	Trim marks	Dấu cắt
@@ -4578,7 +4747,7 @@ mark-style	Japanese	Kiểu Nhật
 	Very High	Rất cao
 	Video	Video
 	View	Hiển thị
-	View Artboard Only	Chỉ hiển thị bảng vẽ
+	View Artboard Contents Only	Chỉ hiển thị nội dung bảng vẽ
 	View Opacity Mask	Hiển thị mặt nạ độ mờ
 	View PDF after saving	Xem PDF sau khi lưu
 	View {n}	Hiển thị {n}
@@ -4764,6 +4933,8 @@ theme	Appearance	Giao diện
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` lớn hơn `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	hãy cung cấp ít nhất một trong `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` phải là grayscale, rgb, hsb, cmyk hoặc websafe
+@msg	`view` must be wheel or box	`view` phải là wheel hoặc box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác
@@ -4859,6 +5030,8 @@ theme	Appearance	Giao diện
 @msg	automation path rejected: outside the read root {root}: {path}	đường dẫn tự động bị từ chối: ngoài thư mục gốc đọc {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	đường dẫn tự động bị từ chối: ngoài các thư mục gốc đọc {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	một tệp JavaScript được liên kết nằm ngoài các thư mục gốc đọc
+@msg	a linked image file is outside the read roots	một tệp hình ảnh được liên kết nằm ngoài các thư mục gốc đọc
+@msg	a linked file's export folder is outside the read roots	thư mục xuất của một tệp được liên kết nằm ngoài các thư mục gốc đọc
 @msg	the library's file is outside the read roots	tệp của thư viện nằm ngoài các thư mục gốc đọc
 @msg	{file} names more than one linked JavaScript file	{file} khớp với nhiều hơn một tệp JavaScript được liên kết
 @msg	automation path rejected: outside the write root {root}: {path}	đường dẫn tự động bị từ chối: ngoài thư mục gốc ghi {root}: {path}
@@ -4885,6 +5058,7 @@ theme	Appearance	Giao diện
 @msg	bad trailer	trailer không hợp lệ
 @msg	balance must be between 0 and 100	balance phải nằm trong khoảng 0 đến 100
 @msg	batch step {_1} (`{id}`) failed: {e}	bước hàng loạt {_1} (`{id}`) thất bại: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	bước {_1} của hành động (`{id}`) thất bại: {reason}
 @msg	before must name a panel	before phải đặt tên bảng
 @msg	below and above must name a panel floating in another group	below và above phải đặt tên bảng đang thả nổi trong nhóm khác
 @msg	Blend colors: select at least three objects with filled colours	Hòa trộn màu: chọn ít nhất ba đối tượng có màu tô
@@ -4925,6 +5099,13 @@ theme	Appearance	Giao diện
 	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
 	A Script Is Running	Một tập lệnh đang chạy
 	Script Alert	Thông báo của tập lệnh
+	Script File Access	Quyền truy cập tệp của tập lệnh
+	The script asks to read a file you choose.	Tập lệnh yêu cầu đọc một tệp bạn chọn.
+	The script asks to read and write a file you choose.	Tập lệnh yêu cầu đọc và ghi một tệp bạn chọn.
+	The script asks to read and write a folder you choose, with everything in it.	Tập lệnh yêu cầu đọc và ghi một thư mục bạn chọn, cùng mọi thứ bên trong.
+	Allow Once	Cho phép một lần
+	Always Allow This Script	Luôn cho phép tập lệnh này
+	Deny	Từ chối
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này
 	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
@@ -4941,6 +5122,8 @@ theme	Appearance	Giao diện
 @msg	the script is no longer in the Scripts folder	tập lệnh không còn trong thư mục Scripts
 	Some scripts were not listed	Một số tập lệnh không được liệt kê
 	The Scripts folder cannot be read	Không thể đọc thư mục Scripts
+	Loading scripts…	Đang tải tập lệnh…
+	The Scripts folder is still being read	Thư mục Scripts vẫn đang được đọc
 @msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
 @msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy
@@ -4953,8 +5136,6 @@ theme	Appearance	Giao diện
 @msg	Script file could not be read	Không thể đọc tệp tập lệnh
 @msg	Script folder has more than 2,048 entries	Thư mục tập lệnh có hơn 2.048 mục
 @msg	Script file open mode must be r, w, e or a	Chế độ mở tệp tập lệnh phải là r, w, e hoặc a
-@msg	Script file writing is not available	Không thể ghi tệp tập lệnh
-@msg	Script file dialogs are not available	Không có hộp thoại tệp cho tập lệnh
 @msg	Script files cannot be opened in another application	Không thể mở tệp tập lệnh trong ứng dụng khác
 @msg	Script file access is unavailable on the web	Không thể truy cập tệp tập lệnh trên web
 @msg	Script has 256 files open	Tập lệnh đang mở 256 tệp
@@ -5095,6 +5276,27 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` chỉ dành cho lần chạy không có ai để hỏi: trong ứng dụng, người dùng trả lời từng hộp thoại
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
+@msg	Script file access denied: {path}	Quyền truy cập tệp của tập lệnh bị từ chối: {path}
+@msg	Script file access to the app's own folders is not allowed	Tập lệnh không được phép truy cập các thư mục riêng của ứng dụng
+@msg	Script file cannot encode the text	Tệp của tập lệnh không thể mã hóa văn bản
+@msg	Script file could not be written	Không thể ghi tệp của tập lệnh
+@msg	Script file dialogs need a person to answer them	Hộp thoại tệp của tập lệnh cần một người trả lời
+@msg	Script file is not open for writing	Tệp của tập lệnh chưa được mở để ghi
+@msg	Script file name is already in use	Tên tệp của tập lệnh đã được sử dụng
+@msg	Script file name must be a name without a folder	Tên tệp của tập lệnh phải là một tên không có thư mục
+@msg	Script file permission can be kept only for a script run from a file	Chỉ có thể giữ quyền truy cập tệp cho tập lệnh chạy từ một tệp
+@msg	Script file permission could not be saved	Không thể lưu quyền truy cập tệp của tập lệnh
+@msg	Script folder is not empty	Thư mục của tập lệnh không trống
+@msg	Script files cannot make aliases	Tệp của tập lệnh không thể tạo bí danh
+@msg	Script file hidden setting cannot be changed	Không thể thay đổi cài đặt ẩn của tệp tập lệnh
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: không thể mở hộp thoại tệp bên trong callback của hàm dựng sẵn, getter, phép chuyển đổi hoặc tệp mà $.evalFile chạy; hãy gọi nó từ mã riêng của tập lệnh
+@msg	the script wrote more file data than one run may write (32 MiB)	tập lệnh đã ghi nhiều dữ liệu tệp hơn mức một lần chạy được phép ghi (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` cho hộp thoại tệp của tập lệnh phải là một trong: once, always, deny, stop
+@msg	choose a file or folder first, or deny	hãy chọn một tệp hoặc thư mục trước, hoặc từ chối
+@msg	the script file permissions could not be saved: {e}	không thể lưu quyền truy cập tệp của các tập lệnh: {e}
+@msg	this script's file access can be allowed only once	quyền truy cập tệp của tập lệnh này chỉ có thể được cho phép một lần
+@msg	Only the person at the keyboard can allow a script's file access	Chỉ người ngồi tại bàn phím mới có thể cho phép tập lệnh truy cập tệp
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Một tập lệnh nhận tối đa 2.048 tệp: các tệp được chọn sau đó đã bị bỏ qua
 @msg	Copied the link info	Đã sao chép thông tin liên kết
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
@@ -5267,6 +5469,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no active document	không có tài liệu đang hoạt động
 @msg	no active perspective plane	không có mặt phẳng phối cảnh đang hoạt động
 @msg	no anchor points selected	chưa chọn điểm neo
+@msg	`points` must be three [x, y] pairs of numbers	`points` phải là ba cặp số [x, y]
+@msg	direct-select three anchor points, or give `points`	hãy chọn trực tiếp ba điểm neo hoặc cung cấp `points`
+@msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
 @msg	no artboard {i} (0-based; the document has {_1})	không có bảng vẽ {i} (bắt đầu từ 0; tài liệu có {_1})
@@ -5385,6 +5590,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no target object has an opacity mask: select one or give `id`	không có đối tượng đích có mặt nạ độ mờ: hãy chọn hoặc cung cấp `id`
 @msg	no threaded text selected	chưa chọn văn bản liên kết
 @msg	no user library folder here	không có thư mục thư viện người dùng ở đây
+@msg	`{file}` has no swatches of its own	`{file}` không có mẫu màu riêng
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` có mẫu họa tiết, mà tệp .vcswatches không thể chứa
 @msg	no user workspace `{from}`	không có không gian làm việc người dùng `{from}`
 @msg	node {_1} is not text	nút {_1} không phải là văn bản
 @msg	node {_1} is on a locked artboard	nút {_1} nằm trên bảng vẽ bị khóa
@@ -5475,6 +5682,11 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	plug-in parameters: {0}	tham số plug-in: {0}
 @msg	plug-in trapped: {0}	plug-in bị kẹt: {0}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Xem trước trên trình duyệt cần ứng dụng máy tính (web sẽ tải xuống tệp thay thế)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	hãy cho `desiredK`, kích thước tệp mong muốn tính bằng K (1024 byte): một số lớn hơn 0 và tối đa 1048576
+@msg	`startWith` is `current` or `auto`	`startWith` là `current` hoặc `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	`use` là `allSlices`, `eachSlice` hoặc `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	`slice` là số lát cắt từ `slice.list`, đi cùng `use: currentSlice`
+@msg	Optimize to File Size: there is no image to measure	Tối ưu theo kích thước tệp: không có ảnh để đo
 @msg	print settings are not an object	cài đặt in không phải là đối tượng
 @msg	printing isn't available here	in không khả dụng ở đây
 @msg	range `{s}` is empty	phạm vi `{s}` trống
@@ -5526,6 +5738,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	Saved to User Defined: {_1}	Đã lưu vào Người dùng tùy chỉnh: {_1}
 @msg	Saved {n} files beside {path}	Đã lưu {n} tệp bên cạnh {path}
 @msg	Saved {path}	Đã lưu {path}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Đã sao chép với {n} ghi chú: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Đã cắt với {n} ghi chú: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Đã vector hóa ảnh với {n} ghi chú: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Đã lưu {path} với {n} ghi chú: {first}
 @msg	Saving	Đang lưu
 @msg	Saving recovery data for {_1}	Đang lưu dữ liệu phục hồi cho {_1}
@@ -5604,6 +5819,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	shadings of more than 4096 patches or triangles were left out	các vùng tô có hơn 4096 mảnh hoặc tam giác đã bị bỏ qua
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	các vùng tô có hàm loại không xác định được tô bằng màu giữa
 @msg	Shape Builder: no region under the pointer	Xây dựng hình dạng: không có vùng nào dưới con trỏ
+@msg	Shape Builder: select all paths you want to merge	Xây dựng hình dạng: chọn tất cả đường dẫn bạn muốn hợp nhất
 @msg	Shape Builder: select paths or compound paths	Xây dựng hình dạng: chọn đường dẫn hoặc đường dẫn phức
 @msg	shortcut for `{k}` must be a string	phím tắt cho `{k}` phải là chuỗi
 @msg	Show All Hidden Attributes: nothing is hidden	Hiện tất cả thuộc tính ẩn: không có gì bị ẩn
@@ -5636,6 +5852,25 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
+@msg	give one <filter> element	hãy chỉ định một phần tử <filter>
+@msg	the <filter> element needs an id, the filter's name	phần tử <filter> cần có id, là tên của bộ lọc
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id của bộ lọc SVG có tối đa {MAX_NAME} ký tự
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> không phải là phần tử của bộ lọc SVG
+@msg	an SVG filter has no event attributes such as {_1}	bộ lọc SVG không có thuộc tính sự kiện như {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	hình ảnh của bộ lọc SVG là URL data: dạng PNG, JPEG, GIF hoặc WebP
+@msg	the SVG filter isn't valid XML: {e}	bộ lọc SVG không phải là XML hợp lệ: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves của feTurbulence tối đa là {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} tối đa là {max}
+@msg	feConvolveMatrix's order	order của feConvolveMatrix
+@msg	feMorphology's radius	radius của feMorphology
+@msg	a blur's stdDeviation	stdDeviation của hiệu ứng làm mờ
+@msg	the SVG filter has no primitives	bộ lọc SVG không có thành phần cơ sở nào
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	bộ lọc SVG có tối đa {MAX_PRIMITIVES} thành phần cơ sở
+@msg	the SVG filter is too large once its attributes are written out	bộ lọc SVG quá lớn sau khi ghi ra các thuộc tính của nó
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	hình ảnh của bộ lọc SVG có tổng cộng tối đa {MAX_IMAGE_PIXELS} điểm ảnh
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	không thể vẽ bộ lọc SVG: hãy kiểm tra các thành phần cơ sở và đầu vào của chúng
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	các phần tử của bộ lọc SVG lồng nhau tối đa {MAX_DEPTH} cấp
+@msg	an SVG filter is at most {_1} KB	bộ lọc SVG có kích thước tối đa {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` phải là một đối tượng chỉ chứa `mode`, với giá trị shaded hoặc wireframe
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
@@ -5796,6 +6031,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	tool shortcuts must be a single key (optionally with Shift)	phím tắt công cụ phải là một phím đơn (tùy chọn với Shift)
 @msg	truncated	bị cắt ngắn
 @msg	Unembedded to {_1}	Đã bỏ nhúng vào {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Đã bỏ nhúng {n} ảnh vào {folder}
+@msg	every numbered name for {name} is taken in that folder	mọi tên đánh số cho {name} đã được dùng trong thư mục đó
 @msg	unknown command `{0}`	lệnh không xác định `{0}`
 @msg	step {step} of “{action}” runs the unknown command `{command}`	bước {step} của “{action}” chạy lệnh không xác định `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	lệnh không xác định `{0}`; ý bạn là `{1}`?
@@ -5813,6 +6050,19 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	panels can't be shown in Presentation Mode	không thể hiển thị bảng trong chế độ trình bày
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tham số không xác định `{key}`; ý bạn là `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tham số không xác định `{key}`; lệnh này không nhận tham số
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	tham số không xác định `{key}`; `{object}` nhận: {keys}
+@msg	unknown parameter `{key}`; {why_not}	tham số không xác định `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	không định dạng nào nhận tham số này (xem document.formats)
+@msg	no save format takes it (see file.formatOptions)	không định dạng lưu nào nhận tham số này (xem file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF không nhận tham số này (xem document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS không nhận tham số này (xem document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF không nhận tham số này (xem document.formats)
+@msg	{name} must be {range} (got {v})	{name} phải là {range} (nhận được {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Bộ xử lý đồ họa thử trước không hiển thị được cửa sổ, VectorCraft đã khởi động lại trên {summary} (Cài đặt › Hiệu suất › Bộ xử lý đồ họa › Tự động dùng bộ xử lý đang điều khiển màn hình của bạn)
+@msg	Sent “{title}” to {to}	Đã gửi “{title}” đến {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Đã gửi “{title}” đến {to}. Phản hồi của hàng đợi in: {note}
+@msg	the default printer	máy in mặc định
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	hiệu ứng raster trên đối tượng {object}: yêu cầu {requested} ppi, đạt {achieved} ppi do giới hạn 64 triệu điểm ảnh
 @msg	unknown parameter `{key}`; the command takes: {keys}	tham số không xác định `{key}`; lệnh nhận: {keys}
 @msg	the params must be an object, not {got}	các tham số phải là một đối tượng, không phải {got}
 @msg	unknown parameter `{path}`; the object takes no keys	tham số không xác định `{path}`; đối tượng không nhận khóa nào
@@ -5851,6 +6101,13 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	hơn {MAX_CSV_ROWS} tập dữ liệu: Nhập tập dữ liệu chỉ đọc tối đa {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	hơn {MAX_CSV_COLS} biến số: Nhập tập dữ liệu chỉ đọc tối đa {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	các biến số không phải văn bản đã bị bỏ qua: {kinds}
+variable-kind	Visibility	Hiển thị
+variable-kind	Linked File	Tệp được liên kết
+variable-kind	Graph Data	Dữ liệu biểu đồ
+variable-kind	Unknown	Không xác định
+variable-list-two	{0}, {1}	{0} và {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} và {1}
 @msg	a new document won't read these variables back with their kind: {names}	tài liệu mới sẽ không đọc lại các biến số này đúng loại: {names}
 @msg	a new document refuses this file because of these variables: {names}	tài liệu mới sẽ từ chối tệp này vì các biến số sau: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	tiêu đề `{header}` của `{name}` sẽ được đọc thành biến số `{other}`: hãy đổi tên một trong hai
@@ -5899,6 +6156,8 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	{label}: lost track of a shape's style	{label}: mất dấu kiểu của hình dạng
 @msg	{label}: select paths	{label}: hãy chọn đường dẫn
 @msg	{label}: select paths, compound paths, groups or text	{label}: hãy chọn đường dẫn, đường dẫn phức, nhóm hoặc văn bản
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	một đường thẳng hoặc đường dẫn mở khác không bao quanh vùng nào sẽ không làm thay đổi hình dạng của kết quả; để đưa nó vào, trước tiên hãy áp dụng Đối tượng › Đường dẫn › Đường bao nét cho nó
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} tạo ra kết quả trống: một đường thẳng hoặc đường dẫn mở khác không bao quanh vùng nào; để đưa nó vào, trước tiên hãy áp dụng Đối tượng › Đường dẫn › Đường bao nét cho nó
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC không khớp
 @msg	{name}: no local header	{name}: không có tiêu đề cục bộ
@@ -6752,6 +7011,7 @@ anchor	Points:	Điểm:
 	Open a document to check it for issues.	Mở một tài liệu để kiểm tra vấn đề.
 	Empty Text	Văn bản trống
 	Unpainted Objects	Đối tượng không tô màu
+	Empty Text Paths	Đường dẫn văn bản trống
 	Zero-Opacity Objects	Đối tượng có độ mờ đục bằng 0
 	Duplicate Objects	Đối tượng trùng lặp
 	Off-Artboard Art	Hình vẽ ngoài bảng vẽ
@@ -6881,6 +7141,12 @@ anchor	Points:	Điểm:
 @msg	`segment` must be "straight" or "curved"	`segment` phải là "straight" hoặc "curved"
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` phải là "free", "keepAngles" hoặc "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` phải là [x, y]
+
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Bộ chuyển đổi đơn vị
+	Unit Converter Panel	Bảng Bộ chuyển đổi đơn vị
+	Copy with Units	Sao chép kèm đơn vị
+	From Selection	Từ vùng chọn
 
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Chọn theo loại màu
@@ -7443,6 +7709,11 @@ breakText	Glyphs	Glyph
 @msg	Some islands could not be joined to the area around the art	Không thể nối một số đảo với vùng xung quanh hình vẽ
 @msg	`width` must be from {lo} to {hi} pt	`width` phải từ {lo} đến {hi} pt
 @msg	`angle` must be from -180 to 180 degrees	`angle` phải từ -180 đến 180 độ
+@msg	`roundness` must be from 0 to 100%	`roundness` phải từ 0 đến 100%
+@msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` phải từ 0.01 đến 100 pt
+@msg	style must be "pencil" or "brush"	style phải là "pencil" hoặc "brush"
+@msg	extend end must be "start" or "end"	đầu extend phải là "start" hoặc "end"
+@msg	connect end must be "start" or "end"	đầu connect phải là "start" hoặc "end"
 @msg	`roundness` must be from 1 to 100%	`roundness` phải từ 1 đến 100%
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` phải là số nguyên từ 1 đến {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Khung và đường bóc phần thừa…
@@ -7541,6 +7812,7 @@ breakText	Glyphs	Glyph
 @msg	Too many Revolve faces for visibility evaluation	Quá nhiều mặt Xoay tròn để tính toán phần nhìn thấy
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft đọc tối đa {ASE_MAX_ENTRIES} màu và nhóm từ một tệp trao đổi mẫu màu, còn thư viện này có {entries}
 @msg	WebP encoding failed: {e}	Mã hóa WebP thất bại: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	Mã hóa WebP thất bại: ảnh quá lớn cho WebP có mất dữ liệu: hãy giảm độ phân giải hoặc chọn Không mất dữ liệu
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index` phải là số nguyên
