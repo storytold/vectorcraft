@@ -10,7 +10,12 @@
 //! The panel menu's Box View puts a box in the wheel's place: a color field with a vertical
 //! channel strip at its right, for the channel picked under Box Channel (Hue, Saturation,
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
-//! Picker's axes. The view and the channel are kept with the preferences (`ui.colorWheel`).
+//! Picker's axes.
+//!
+//! Panel menu › Show Color Vision Preview adds a row under the wheel or the box with the color as
+//! simulated for protanopia, deuteranopia and tritanopia, through the simulations View › Proof
+//! Setup uses, and for achromatopsia as the gray with the color's CIE L*. The chips only show the
+//! simulation.
 //!
 //! Panel menu › OKLCH Sliders shows L, C and H rows under the wheel or the box that edit the color
 //! by OKLCH lightness, chroma and hue (CSS Color 4:
@@ -20,11 +25,14 @@
 //! hue, saturation and lightness of CSS Color 4's HSL
 //! (<https://www.w3.org/TR/css-color-4/#the-hsl-notation>). The choice is kept with the
 //! preferences too.
+//!
+//! The view, the channel, the slider rows and Show Color Vision Preview are kept with the
+//! preferences (`ui.colorWheel`).
 
-use egui::{Color32, Rect, Stroke, Ui, UiBuilder, pos2, vec2};
+use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, UiBuilder, pos2, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Cms};
+use vectorcraft_color::cms::{self, Cms, ProofSetup, ProofTarget};
 use vectorcraft_color::oklab::{self, CHROMA_FULL};
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, hsl_to_rgb, rgb_to_hsb, rgb_to_hsl};
 use vectorcraft_doc::{ColorMode, NodeId};
@@ -80,6 +88,10 @@ pub struct Settings {
     pub channel: Channel,
     #[serde(deserialize_with = "deserialize_sliders")]
     pub sliders: Sliders,
+    /// Show Color Vision Preview: the row of simulated colors under the wheel or the box. A saved
+    /// `true` shows the row and any other value hides it.
+    #[serde(deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
+    pub vision: bool,
 }
 
 /// The slider rows under the wheel or the box (panel menu, `ui.colorWheel {sliders}`).
@@ -137,9 +149,10 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?, sliders?}`: show the wheel or the box, pick the box's channel,
-/// and show OKLCH Sliders, HSL Sliders or neither. Keys left out keep their values; params that
-/// are not an object, another key or a value off the list are an error and change nothing.
+/// `ui.colorWheel {view?, channel?, sliders?, vision?}`: show the wheel or the box, pick the box's
+/// channel, show OKLCH Sliders, HSL Sliders or neither, and show or hide the color vision row. Keys
+/// left out or null keep their values; params that are not an object, another key or a value off
+/// the list are an error and change nothing.
 /// `sliders: "oklch"` is an error while the active document's RGB space (its assigned profile,
 /// else the working RGB space) is not sRGB. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -150,7 +163,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 /// Set the keys of `ui.colorWheel` params `p` in `settings`, with the color settings `cms`; on an
 /// error `settings` stay as they were.
 pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), String> {
-    const KEYS: [&str; 3] = ["view", "channel", "sliders"];
+    const KEYS: [&str; 4] = ["view", "channel", "sliders", "vision"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -179,12 +192,15 @@ pub(crate) fn set(settings: &mut Settings, p: &Value, cms: &Cms) -> Result<(), S
             set.sliders = sliders;
         }
     }
+    if let Some(on) = crate::menus::opt_bool(p, "vision")? {
+        set.vision = on;
+    }
     *settings = set;
     Ok(())
 }
 
-/// The panel menu: Wheel View and Box View, Box Channel while the box shows, HSL Sliders and OKLCH
-/// Sliders.
+/// The panel menu: Wheel View and Box View, Box Channel while the box shows, HSL Sliders, OKLCH
+/// Sliders and Show Color Vision Preview.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -217,6 +233,9 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Err(e) = app.run("ui.colorWheel", json!({ "sliders": sliders.id() })) {
             app.status(e);
         }
+    }
+    if menu_item(ui, tl!("Show Color Vision Preview"), true, set.vision) {
+        command(app, &json!({ "vision": !set.vision })).ok();
     }
 }
 
@@ -301,6 +320,65 @@ const OKLCH_NEEDS_SRGB: &str = "OKLCH needs sRGB as the working RGB space";
 /// Panel state: the HSL the slider rows asked for last, the [`Owner`] of the color they stored and
 /// its display sRGB.
 const HSL_MEMORY: &str = "color-wheel-hsl";
+/// The height of the color vision chips and the space between them.
+const VISION_CHIP: f32 = 16.0;
+const VISION_GAP: f32 = 3.0;
+
+/// The display sRGB of `c` as simulated for protanopia, deuteranopia and tritanopia, through
+/// `cms`'s Proof Setup simulations, and for achromatopsia: the gray with `c`'s CIE L*, through the
+/// same display transform.
+pub(crate) fn vision_colors(cms: &Cms, c: &Color) -> [[f32; 3]; 4] {
+    let srgb = cms.display_rgb(c);
+    let proof = |target| cms.proof_srgb(srgb, &ProofSetup { target, ..Default::default() });
+    let gray = cms.display_rgb(&Color::lab(cms.lab(c).l, 0.0, 0.0));
+    [proof(ProofTarget::Protanopia), proof(ProofTarget::Deuteranopia), proof(ProofTarget::Tritanopia), gray]
+}
+
+/// The names of the color vision chips, in the order of [`vision_colors`].
+fn vision_names() -> [String; 4] {
+    [tl!("Protanopia"), tl!("Deuteranopia"), tl!("Tritanopia"), tl!("Achromatopsia")].map(|s| s.to_string())
+}
+
+/// The 0 to 255 values of display sRGB `rgb`.
+pub(crate) fn bytes(rgb: [f32; 3]) -> [u8; 3] {
+    rgb.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
+/// The hex text of 0 to 255 values, in the form of the Color panel's hex field (`E67828`).
+pub(crate) fn hex([r, g, b]: [u8; 3]) -> String {
+    format!("{r:02X}{g:02X}{b:02X}")
+}
+
+/// The Show Color Vision Preview row: four chips across the panel with `color` as each color
+/// vision deficiency shows it. Each chip takes the keyboard focus and reports its name and, with a
+/// solid color, its hex value as its value to screen readers; its tooltip shows both. A click or a
+/// key on a chip does nothing. With no solid color the chips are empty and keep their names in the tooltip and for screen
+/// readers.
+fn vision_row(ui: &mut Ui, cms: &Cms, color: Option<&Color>) {
+    let t = Tokens::get(ui.ctx());
+    let colors = color.map(|c| vision_colors(cms, c));
+    let width = ui.available_width();
+    let (row, _) = ui.allocate_exact_size(vec2(width, VISION_CHIP), Sense::hover());
+    let w = ((width - 3.0 * VISION_GAP) / 4.0).max(1.0);
+    let enabled = ui.is_enabled();
+    for (i, name) in vision_names().into_iter().enumerate() {
+        let cell = Rect::from_min_size(row.min + vec2(i as f32 * (w + VISION_GAP), 0.0), vec2(w, VISION_CHIP));
+        let resp = ui.interact(cell, ui.scope_id().with(("color-vision", i)), Sense::focusable_noninteractive());
+        let value = colors.map(|cs| {
+            let [r, g, b] = bytes(cs[i]);
+            ui.painter().rect_filled(cell, 0.0, egui::Color32::from_rgb(r, g, b));
+            hex([r, g, b])
+        });
+        let stroke = if resp.has_focus() { ui.visuals().selection.stroke } else { Stroke::new(1.0, t.border) };
+        ui.painter().rect_stroke(cell, 0.0, stroke, StrokeKind::Inside);
+        let tip = match &value {
+            Some(v) => format!("{name}\n{v}"),
+            None => name.clone(),
+        };
+        resp.widget_info(|| egui::WidgetInfo { current_text_value: value.clone(), ..egui::WidgetInfo::labeled(egui::Role::Image, enabled, &name) });
+        resp.on_hover_text(tip);
+    }
+}
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
 /// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
@@ -683,6 +761,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         app.sync_views();
         set_pstate(ui.ctx(), ROWS_LIVE, None::<Sliders>);
+    }
+    if app.ui.color_wheel.vision {
+        ui.add_space(4.0);
+        vision_row(ui, &cms, color.as_ref());
     }
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);
