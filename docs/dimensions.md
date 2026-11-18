@@ -73,8 +73,9 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   With Smart Guides on, a linear dimension placed with its line within the Smart Guides snapping
   tolerance of the level of a parallel line of a linear dimension already drawn has its line on
   that level. The other dimension, and every layer and group it is in, must be visible and
-  unlocked. The tool reads at most 20,000 visible, unlocked objects, from the frontmost back, so in
-  a larger document a dimension past them is not a level. This is VectorCraft's own rule. With
+  unlocked. The tool reads at most 20,000 visible, unlocked layers, groups and objects, from the
+  frontmost back, so in a larger document a dimension past them is not a level. This is
+  VectorCraft's own rule. With
   Alignment Guides on, a guide runs along the level across both lines while the dimension is
   placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two

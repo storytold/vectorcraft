@@ -2080,12 +2080,12 @@ fn a_dimension_of_the_same_points_lines_up_and_the_line_follows_the_pointer() {
     assert_eq!(recipe(&s, id).line_ends(), (pt(200.0, 186.0), pt(300.0, 186.0)));
 }
 
-/// With Real-time Drawing off, a dimension hidden or deleted by a command while another is placed
-/// is no longer a level: no guide runs along its level.
+/// With Real-time Drawing off, a dimension hidden, locked or deleted by a command while another is
+/// placed is no longer a level: no guide runs along its level.
 #[test]
-fn a_dimension_hidden_or_deleted_while_another_is_placed_is_no_longer_a_level() {
+fn a_dimension_hidden_locked_or_deleted_while_another_is_placed_is_no_longer_a_level() {
     let plain = ViewInfo::default();
-    for cmd in ["object.hide", "edit.clear"] {
+    for cmd in ["object.hide", "object.lock", "edit.clear"] {
         let (mut s, first) = level_start(plain);
         run(&mut s, "prefs.set", json!({"key": "realTimeDrawing", "value": false}));
         linear_click(&mut s, plain, 200.0, 200.0);
