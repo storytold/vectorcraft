@@ -3220,6 +3220,101 @@ fn every_command_has_unique_id_and_doc() {
     assert!(command_specs().iter().all(|c| !c.params.is_empty() && !c.label.is_empty()));
 }
 
+/// Ids that name no built-in command: commands only the app runs, near misses of real ids and
+/// plug-in command ids of plug-ins that are not installed.
+const NOT_BUILT_IN: &[&str] =
+    &["", "file.save", "file.open", "edit.preferences", "select", "select.none.", "SELECT.NONE", " select.none", "plugin.nobody.cmd", "plugin."];
+
+/// The spec a search of the built-in list in order finds for `id`.
+fn first_built_in(id: &str) -> Option<&'static CommandSpec> {
+    command_specs().iter().find(|c| c.id == id)
+}
+
+#[test]
+fn find_command_finds_the_spec_a_search_of_the_list_finds() {
+    let misses: Vec<String> = NOT_BUILT_IN.iter().map(|id| (*id).to_string()).chain((0..200).map(|i| format!("missing.command{i}"))).collect();
+    for id in command_specs().iter().map(|c| c.id.to_string()).chain(misses) {
+        let (found, first) = (find_command(&id), first_built_in(&id));
+        assert!(found.map(std::ptr::from_ref) == first.map(std::ptr::from_ref), "{id:?}");
+        assert_eq!(found.is_none(), NOT_BUILT_IN.contains(&id.as_str()) || id.starts_with("missing."), "{id:?}");
+    }
+}
+
+#[test]
+fn the_command_index_keeps_the_first_spec_of_an_id() {
+    let base = &command_specs()[0];
+    let specs = [
+        CommandSpec { id: "test.twice", label: "First", ..*base },
+        CommandSpec { id: "test.once", ..*base },
+        CommandSpec { id: "test.twice", label: "Second", ..*base },
+    ];
+    let index = crate::cmd::index_by_id(&specs);
+    assert_eq!(index.len(), 2);
+    assert!(index.get("test.twice").is_some_and(|c| std::ptr::eq(*c, &specs[0])));
+    assert!(index.get("test.once").is_some_and(|c| std::ptr::eq(*c, &specs[1])));
+    assert!(!index.contains_key("test.none"));
+}
+
+/// Times [`find_command`] against a search of the built-in list in order (the lookup before the
+/// index), in one process, over every built-in id and 200 ids that name no command, and
+/// `select.none` run 100,000 times on a document with one rectangle.
+/// Run with `cargo test --release -p vectorcraft-engine --lib command_lookup_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn command_lookup_timing() {
+    use std::hint::black_box;
+    use std::time::Instant;
+    let hits: Vec<&str> = command_specs().iter().map(|c| c.id).collect();
+    let missing: Vec<String> = (0..200 - NOT_BUILT_IN.len()).map(|i| format!("missing.command{i}")).collect();
+    let misses: Vec<&str> = NOT_BUILT_IN.iter().copied().chain(missing.iter().map(String::as_str)).collect();
+    let linear = |id: &str| first_built_in(id).or_else(|| crate::cmd::plugin::find_spec(id));
+    for id in hits.iter().chain(&misses) {
+        assert!(find_command(id).map(std::ptr::from_ref) == linear(id).map(std::ptr::from_ref), "{id:?}");
+    }
+    let per_lookup = |ids: &[&str], f: &dyn Fn(&str) -> Option<&'static CommandSpec>| {
+        let rounds = 50;
+        let start = Instant::now();
+        for _ in 0..rounds {
+            for id in ids {
+                black_box(f(black_box(id)));
+            }
+        }
+        start.elapsed().as_nanos() as f64 / (rounds * ids.len()) as f64
+    };
+    let median = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    println!("{} built-in ids, {} ids that name no command", hits.len(), misses.len());
+    for (what, ids) in [("built-in id", &hits), ("no such command", &misses)] {
+        let (mut old, mut new) = (Vec::new(), Vec::new());
+        for run in 0..7 {
+            // Alternates which lookup goes first, so a change in machine load falls on both.
+            if run % 2 == 0 {
+                old.push(per_lookup(ids, &linear));
+                new.push(per_lookup(ids, &find_command));
+            } else {
+                new.push(per_lookup(ids, &find_command));
+                old.push(per_lookup(ids, &linear));
+            }
+        }
+        println!("{what}: search of the list {old:.0?} ns, median {:.0}; index {new:.0?} ns, median {:.0}", median(old.clone()), median(new.clone()));
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let runs: Vec<f64> = (0..7)
+        .map(|_| {
+            let start = Instant::now();
+            for _ in 0..100_000 {
+                black_box(s.execute("select.none", &json!({})).unwrap());
+            }
+            start.elapsed().as_nanos() as f64 / 100_000.0
+        })
+        .collect();
+    println!("select.none: {runs:.0?} ns a command, median {:.0}", median(runs.clone()));
+}
+
 #[test]
 fn every_command_survives_empty_params() {
     // Robustness: no command may panic on {} (with and without a selection).
