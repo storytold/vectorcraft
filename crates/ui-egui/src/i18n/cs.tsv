@@ -3454,6 +3454,9 @@ antiAlias	Sharp	Ostré
 	Variable Options	Možnosti proměnné
 	Define a variable first	Nejprve definujte proměnnou
 	Adjust Adjoining Width Points	Upravit sousední body šířky
+	Incoming	Příchozí
+	Outgoing	Odchozí
+	Single Width Only	Pouze jedna šířka
 	Keep both sides the same width	Zachovat stejnou šířku obou stran
 	Side 1:	Strana 1:
 	Side 2:	Strana 2:
@@ -5523,6 +5526,9 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	no such user library	taková uživatelská knihovna neexistuje
 @msg	no such view	takové zobrazení neexistuje
 @msg	no such width point	takový bod šířky neexistuje
+@msg	`single` must be `incoming` or `outgoing`	`single` musí být `incoming` nebo `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` a `outIndex` musí být dvě poloviny jednoho nespojitého bodu šířky
+@msg	a discontinuous width point keeps its place	nespojitý bod šířky si zachovává své místo
 @msg	no swatch `{name}`	položka vzorníku `{name}` neexistuje
 @msg	no swatch library `{l}` (see swatch.library.list)	knihovna vzorníku `{l}` neexistuje (viz swatch.library.list)
 @msg	no symbol instances selected	nejsou vybrány žádné instance symbolů

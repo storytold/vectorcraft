@@ -144,6 +144,9 @@
 	Additional Plug-ins Folder	Dossier de modules externes supplémentaires
 	Additional Fonts Folder	Dossier de polices supplémentaires
 	Adjust Adjoining Width Points	Ajuster les points de largeur adjacents
+	Incoming	Entrant
+	Outgoing	Sortant
+	Single Width Only	Une seule largeur
 	Adjust Color Balance…	Régler la balance des couleurs…
 	Adjust Colors	Régler les couleurs
 	Adjust Options:	Options de réglage :
@@ -5189,6 +5192,9 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no such user library	bibliothèque utilisateur inexistante
 @msg	no such view	vue inexistante
 @msg	no such width point	point de largeur inexistant
+@msg	`single` must be `incoming` or `outgoing`	`single` doit valoir `incoming` ou `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` et `outIndex` doivent être les deux moitiés d’un même point de largeur discontinu
+@msg	a discontinuous width point keeps its place	un point de largeur discontinu garde sa position
 @msg	no swatch `{name}`	aucune nuance `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	aucune bibliothèque de nuances `{l}` (voir swatch.library.list)
 @msg	no symbol instances selected	aucune instance de symbole sélectionnée

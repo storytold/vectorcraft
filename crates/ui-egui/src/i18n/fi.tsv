@@ -3401,6 +3401,9 @@ antiAlias	Sharp	Terävä
 	Variable Options	Muuttujan asetukset
 	Define a variable first	Määritä ensin muuttuja
 	Adjust Adjoining Width Points	Säädä viereisiä leveyspisteitä
+	Incoming	Saapuva
+	Outgoing	Lähtevä
+	Single Width Only	Vain yksi leveys
 	Keep both sides the same width	Pidä molemmat puolet samanlevyisinä
 	Side 1:	Puoli 1:
 	Side 2:	Puoli 2:
@@ -5446,6 +5449,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no such user library	käyttäjäkirjastoa ei ole
 @msg	no such view	näkymää ei ole
 @msg	no such width point	leveyspistettä ei ole
+@msg	`single` must be `incoming` or `outgoing`	`single` on oltava `incoming` tai `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` ja `outIndex` on oltava saman epäjatkuvan leveyspisteen kaksi puolikasta
+@msg	a discontinuous width point keeps its place	epäjatkuva leveyspiste pysyy paikallaan
 @msg	no swatch `{name}`	ei värimallia `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	ei värimallikirjastoa `{l}` (ks. swatch.library.list)
 @msg	no symbol instances selected	symboli-ilmentymiä ei ole valittu

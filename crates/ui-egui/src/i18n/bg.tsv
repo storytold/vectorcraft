@@ -129,6 +129,9 @@
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
 	Adjust Adjoining Width Points	Регулиране на прилежащите точки за ширина
+	Incoming	Входяща
+	Outgoing	Изходяща
+	Single Width Only	Само една ширина
 	Adjust Color Balance…	Коригиране на цветовия баланс…
 	Adjust Colors	Коригиране на цветовете
 	Adjust Options:	Параметри на коригиране:
@@ -4813,6 +4816,9 @@ axis	Both	И двете
 @msg	no such user library	няма такава потребителска библиотека
 @msg	no such view	няма такъв изглед
 @msg	no such width point	няма такава точка за ширина
+@msg	`single` must be `incoming` or `outgoing`	`single` трябва да е `incoming` или `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` и `outIndex` трябва да са двете половини на една прекъсната точка за ширина
+@msg	a discontinuous width point keeps its place	прекъснатата точка за ширина запазва мястото си
 @msg	no swatch `{name}`	няма образец `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	няма библиотека с образци `{l}` (вижте swatch.library.list)
 @msg	no symbol instances selected	няма избрани екземпляри на символ

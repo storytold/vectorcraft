@@ -137,6 +137,9 @@
 	Additional Plug-ins Folder	Папка додаткових модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
 	Adjust Adjoining Width Points	Налаштувати суміжні точки ширини
+	Incoming	Вхідна
+	Outgoing	Вихідна
+	Single Width Only	Лише одна ширина
 	Adjust Color Balance…	Налаштувати колірний баланс…
 	Adjust Colors	Налаштувати кольори
 	Adjust Options:	Параметри налаштування:
@@ -5246,6 +5249,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no such user library	такої користувацької бібліотеки немає
 @msg	no such view	такого виду немає
 @msg	no such width point	такої точки ширини немає
+@msg	`single` must be `incoming` or `outgoing`	`single` має бути `incoming` або `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` і `outIndex` мають бути двома половинами однієї розривної точки ширини
+@msg	a discontinuous width point keeps its place	розривна точка ширини зберігає своє місце
 @msg	no swatch `{name}`	немає зразка `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	немає бібліотеки зразків `{l}` (див. swatch.library.list)
 @msg	no symbol instances selected	екземпляри символів не виділені

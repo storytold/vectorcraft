@@ -3335,6 +3335,9 @@ antiAlias	Sharp	Ostre
 	Variable Options	Opcje zmiennej
 	Define a variable first	Najpierw zdefiniuj zmienną
 	Adjust Adjoining Width Points	Dopasuj sąsiednie punkty szerokości
+	Incoming	Wejściowa
+	Outgoing	Wyjściowa
+	Single Width Only	Tylko jedna szerokość
 	Keep both sides the same width	Zachowaj jednakową szerokość obu stron
 	Side 1:	Strona 1:
 	Side 2:	Strona 2:
@@ -5348,6 +5351,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such user library	brak takiej biblioteki użytkownika
 @msg	no such view	brak takiego widoku
 @msg	no such width point	brak takiego punktu szerokości
+@msg	`single` must be `incoming` or `outgoing`	`single` musi mieć wartość `incoming` lub `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` muszą być dwiema połówkami jednego nieciągłego punktu szerokości
+@msg	a discontinuous width point keeps its place	nieciągły punkt szerokości zachowuje swoje położenie
 @msg	no swatch `{name}`	brak próbki `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	brak biblioteki próbek `{l}` (patrz swatch.library.list)
 @msg	no symbol instances selected	nie zaznaczono wystąpień symboli
