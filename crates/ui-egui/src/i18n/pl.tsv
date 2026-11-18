@@ -93,6 +93,19 @@
 	Paste without Formatting	Wklej bez formatowania
 	Clear	Wyczyść
 	Find and Replace…	Znajdź i zamień…
+	Find and Replace	Znajdź i zamień
+	Find:	Znajdź:
+	Replace With:	Zastąp przez:
+	Replace & Find	Zastąp i znajdź
+	Replace All	Zastąp wszystko
+	Match Case	Uwzględnij wielkość liter
+	Find Whole Word	Znajdź całe słowo
+	Search Backwards	Szukaj wstecz
+	Check Hidden Layers	Sprawdź ukryte warstwy
+	Check Locked Layers	Sprawdź zablokowane warstwy
+@msg	No matches found	Nie znaleziono dopasowań
+@msg	Matches replaced: {n}	Zastąpione dopasowania: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	brak dopasowania `find` w bajtach {_1}..{_2} obiektu {_3}
 	Find Next	Znajdź następny
 	Spelling	Pisownia
 	Auto Spell Check	Automatyczne sprawdzanie pisowni
@@ -194,6 +207,16 @@
 	To Center	Do środka
 	To Edge	Do krawędzi
 	Create Object Mosaic…	Utwórz mozaikę obiektów…
+	Create Object Mosaic	Utwórz mozaikę obiektów
+	Current Size:	Bieżący rozmiar:
+	New Size:	Nowy rozmiar:
+	Tile Spacing:	Odstęp między kafelkami:
+	Number of Tiles:	Liczba kafelków:
+	Constrain Ratio:	Ogranicz proporcje:
+	Result:	Wynik:
+	Resize Using Percentages	Zmień rozmiar w procentach
+	Delete Raster	Usuń obraz rastrowy
+	Use Ratio	Użyj proporcji
 	Vector Halftone…	Półton wektorowy…
 	Create Trim Marks	Utwórz znaczniki przycięcia
 	Flatten Transparency…	Spłaszcz przezroczystość…
@@ -580,6 +603,11 @@
 	Color blindness – Protanopia-type	Daltonizm – typu protanopia
 	Color blindness – Deuteranopia-type	Daltonizm – typu deuteranopia
 	Color blindness – Tritanopia-type	Daltonizm – typu tritanopia
+	Show Color Vision Preview	Pokaż podgląd widzenia barw
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Achromatopsja
 	Customize…	Dostosuj…
 	Proof Colors	Próba kolorów
 	Zoom In	Powiększ
@@ -3247,6 +3275,7 @@ antiAlias	Sharp	Ostre
 	Preserve Editing Capabilities	Zachowaj możliwości edycji
 	Responsive	Responsywny
 	Show Code	Pokaż kod
+	Show in Browser	Pokaż w przeglądarce
 	Style Attributes	Atrybuty stylu
 	Style Attributes (Entity References)	Atrybuty stylu (odwołania do encji)
 	Styling:	Stylizacja:
@@ -4292,6 +4321,8 @@ axis	Both	Obie
 	Show	Pokaż
 	Copy Width Point	Kopiuj punkt szerokości
 	Duplicate Artboard	Powiel obszar kompozycji
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Kliknij, aby dodać obszar kompozycji po tej stronie, kliknij z Alt, aby powielić ten obszar kompozycji wraz z kompozycją
+	Click to add an artboard on this side	Kliknij, aby dodać obszar kompozycji po tej stronie
 	Area / Path Type	Tekst akapitowy / na ścieżce
 	Decrease Font Size	Zmniejsz rozmiar czcionki
 	Decrease Font Size by Five Steps	Zmniejsz rozmiar czcionki o pięć kroków
@@ -4559,6 +4590,7 @@ font-technology	Variable	Zmienne
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blisko na ekranie wskaźnik lub przeciągany punkt musi znaleźć się przy kompozycji, aby inteligentne linie pomocnicze go przyciągnęły; odległość jest taka sama przy każdym powiększeniu.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Przyciąga koniec odcinka lub okrąg rysowany od środka tak, aby dotykał pobliskiej krzywej.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Przyciąga koniec odcinka tak, aby spotykał pobliski prosty segment pod kątem prostym.
+	Edit type set in fonts that aren't available?	Edytować tekst złożony niedostępnymi czcionkami?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Pokazuje na obszarze roboczym numer każdego plasterka w ramce w jego lewym górnym rogu; po wyłączeniu kontury plasterków nadal są widoczne.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Kolor konturów plasterków użytkownika i obiektów oraz ramek z ich numerami; plasterki automatyczne używają bledszego odcienia tego koloru.
 	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
@@ -5010,6 +5042,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Installed plug-in {_1}	Zainstalowano wtyczkę {_1}
 @msg	Internal error: {msg} (please report this bug)	Błąd wewnętrzny: {msg} (zgłoś ten błąd)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Scal aktywne malowanie: zaznacz grupę aktywnego malowania i ścieżki do dodania
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` i `Edge` to nazwy ścian i krawędzi grupy aktywnego malowania: nadaj ścieżce inną nazwę
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Aktywne malowanie przyjmuje ścieżki i ścieżki złożone: najpierw przekształć tekst, obrazy i inne obiekty w ścieżki
 @msg	Live Paint: select paths or compound paths	Aktywne malowanie: zaznacz ścieżki lub ścieżki złożone
 @msg	Live Paint: these paths are too degenerate to paint	Aktywne malowanie: te ścieżki są zbyt zdegenerowane, aby je malować
@@ -7107,6 +7140,7 @@ axis	Y Axis	Oś Y
 	Checkpoint	Punkt kontrolny
 	Inventory Icons	Ikony ekwipunku
 	Skill Icons	Ikony umiejętności
+	Weather Icons	Ikony pogody
 	Attack	Atak
 	Defend	Obrona
 	Heal	Leczenie
@@ -7228,6 +7262,254 @@ axis	Y Axis	Oś Y
 	Stars	Gwiazdy
 	Triangles	Trójkąty
 	Sparkles	Iskry
+	Warm Gray	Ciepła szarość
+	Cool Gray	Chłodna szarość
+	Neutrals	Barwy neutralne
+	Ivory	Kość słoniowa
+	Linen	Len
+	Oat	Owies
+	Greige	Greige
+	Stone	Kamień
+	Taupe	Taupe
+	Slate	Łupek
+	Clay	Glina
+	Terracotta	Terakota
+	Ochre	Ochra
+	Umber	Umbra
+	Sand	Piasek
+	Olive	Oliwka
+	Moss	Mech
+	Rosy	Różowawy
+	Neutral	Neutralny
+	Golden	Złocisty
+	Pastel	Pastelowe
+	Pastel Red	Pastelowy czerwony
+	Pastel Orange	Pastelowy pomarańczowy
+	Pastel Amber	Pastelowy bursztynowy
+	Pastel Yellow	Pastelowy żółty
+	Pastel Lime	Pastelowa limonka
+	Pastel Green	Pastelowy zielony
+	Pastel Teal	Pastelowy morski
+	Pastel Cyan	Pastelowy cyjan
+	Pastel Azure	Pastelowy lazurowy
+	Pastel Blue	Pastelowy niebieski
+	Pastel Violet	Pastelowy fioletowy
+	Pastel Magenta	Pastelowa magenta
+	Soft Red	Łagodny czerwony
+	Soft Orange	Łagodny pomarańczowy
+	Soft Amber	Łagodny bursztynowy
+	Soft Yellow	Łagodny żółty
+	Soft Lime	Łagodna limonka
+	Soft Green	Łagodny zielony
+	Soft Teal	Łagodny morski
+	Soft Cyan	Łagodny cyjan
+	Soft Azure	Łagodny lazurowy
+	Soft Blue	Łagodny niebieski
+	Soft Violet	Łagodny fioletowy
+	Soft Magenta	Łagodna magenta
+	Vivid Red	Żywy czerwony
+	Vivid Orange	Żywy pomarańczowy
+	Vivid Amber	Żywy bursztynowy
+	Vivid Yellow	Żywy żółty
+	Vivid Lime	Żywa limonka
+	Vivid Green	Żywy zielony
+	Vivid Teal	Żywy morski
+	Vivid Cyan	Żywy cyjan
+	Vivid Azure	Żywy lazurowy
+	Vivid Blue	Żywy niebieski
+	Vivid Violet	Żywy fioletowy
+	Vivid Magenta	Żywa magenta
+	Deep	Głębokie
+	Deep Red	Głęboki czerwony
+	Deep Orange	Głęboki pomarańczowy
+	Deep Amber	Głęboki bursztynowy
+	Deep Yellow	Głęboki żółty
+	Deep Lime	Głęboka limonka
+	Deep Green	Głęboki zielony
+	Deep Teal	Głęboki morski
+	Deep Cyan	Głęboki cyjan
+	Deep Azure	Głęboki lazurowy
+	Deep Blue	Głęboki niebieski
+	Deep Violet	Głęboki fioletowy
+	Deep Magenta	Głęboka magenta
+	Gold	Złoto
+	Silver	Srebro
+	Bronze	Brąz
+	Copper	Miedź
+	Brass	Mosiądz
+	Rose Gold	Różowe złoto
+	Gunmetal	Grafitowy metal
+	Platinum	Platyna
+	Pewter	Cyna
+	Ember	Żar
+	Lagoon	Laguna
+	Dusk	Zmierzch
+	Clay to Teal	Od gliny do morskiego
+	Plum to Olive	Od śliwki do oliwki
+	Complementary Coral	Koralowy, dopełniające
+	Split Complementary Coral	Koralowy, rozdzielone dopełniające
+	Analogous Coral	Koralowy, analogiczne
+	Triad Coral	Koralowy, triada
+	Tetrad Coral	Koralowy, tetrada
+	Pentagram Coral	Koralowy, pentagram
+	Complementary Teal	Morski, dopełniające
+	Split Complementary Teal	Morski, rozdzielone dopełniające
+	Analogous Teal	Morski, analogiczne
+	Triad Teal	Morski, triada
+	Tetrad Teal	Morski, tetrada
+	Pentagram Teal	Morski, pentagram
+	Soft Spectrum	Łagodne spektrum
+	Red to Amber	Od czerwonego do bursztynowego
+	Orange to Yellow	Od pomarańczowego do żółtego
+	Amber to Lime	Od bursztynowego do limonki
+	Yellow to Green	Od żółtego do zielonego
+	Lime to Teal	Od limonki do morskiego
+	Green to Cyan	Od zielonego do cyjanu
+	Teal to Azure	Od morskiego do lazurowego
+	Cyan to Blue	Od cyjanu do niebieskiego
+	Azure to Violet	Od lazurowego do fioletowego
+	Blue to Magenta	Od niebieskiego do magenty
+	Violet to Red	Od fioletowego do czerwonego
+	Magenta to Orange	Od magenty do pomarańczowego
+	Dawn	Świt
+	Noon	Południe
+	Sunset	Zachód słońca
+	Night	Noc
+	Overcast	Zachmurzenie
+	White to Black	Od białego do czarnego
+	Light Grays	Jasne szarości
+	Dark Grays	Ciemne szarości
+	Warm Grays	Ciepłe szarości
+	Cool Grays	Chłodne szarości
+	Fade to Transparent	Zanikanie do przezroczystości
+	White Fade	Białe zanikanie
+	Vignette	Winieta
+	Mist	Mgła
+	Petal	Płatek
+	Fern	Paproć
+	Smoke	Dym
+	Honey	Miód
+	Seafoam	Morska piana
+	Lavender	Lawenda
+	Driftwood	Drewno wyrzucone przez morze
+	Ink Wash	Lawowanie tuszem
+	Tide	Przypływ
+	Bloom	Rozkwit
+	Dew	Rosa
+	Pollen	Pyłek
+	Lichen	Porost
+	Prism Veil	Pryzmatyczny welon
+	Opal Ribbon	Opalowa wstęga
+	Pearl Flash	Perłowy błysk
+	Aurora Foil	Folia zorzy
+	Iris Sheen	Połysk irysu
+	Frost Spectrum	Szronione spektrum
+	Silver Tide	Srebrny przypływ
+	Rose Quartz Gleam	Blask kwarcu różowego
+	Moonstone Shift	Opalizacja kamienia księżycowego
+	Violet Edge	Fioletowa krawędź
+	Mint Halo	Miętowa aureola
+	Amber Corona	Bursztynowa korona
+	Polar Glint	Polarny błysk
+	Pastel Orbit	Pastelowa orbita
+	Coral and Navy	Koralowy i granatowy
+	Plum and Lime	Śliwka i limonka
+	Teal and Gold	Morski i złoty
+	Indigo and Peach	Indygo i brzoskwinia
+	Forest and Rose	Las i róża
+	Red Glow	Czerwona poświata
+	Orange Glow	Pomarańczowa poświata
+	Amber Glow	Bursztynowa poświata
+	Yellow Glow	Żółta poświata
+	Lime Glow	Limonkowa poświata
+	Green Glow	Zielona poświata
+	Teal Glow	Morska poświata
+	Cyan Glow	Cyjanowa poświata
+	Azure Glow	Lazurowa poświata
+	Blue Glow	Niebieska poświata
+	Violet Glow	Fioletowa poświata
+	Magenta Glow	Magentowa poświata
+	Polka Dots	Groszki
+	Vertical Stripes	Pionowe paski
+	Horizontal Stripes	Poziome paski
+	Diagonal Stripes	Ukośne paski
+	Checkerboard	Szachownica
+	Diamonds	Romby
+	Crosses	Krzyżyki
+	Coarse Grit	Gruboziarnisty
+	Stipple	Punktowanie
+	Scratches	Rysy
+	Sparse Flecks	Rzadkie plamki
+	Dense Flecks	Gęste plamki
+	Sine Bands	Pasma sinusoidalne
+	Ripple Lines	Linie zmarszczek
+	Interference Rings	Pierścienie interferencyjne
+	Offset Rings	Przesunięte pierścienie
+	Warped Checks	Zniekształcona krata
+	Pinched Stripes	Ściśnięte paski
+	Chevron Pulse	Pulsujące jodełki
+	Radiating Lenses	Promieniujące soczewki
+	Soft Shadow	Miękki cień
+	Hard Shadow	Twardy cień
+	Lifted Card	Uniesiona karta
+	Neon Tube	Neonówka
+	Inner Light	Wewnętrzne światło
+	Feathered	Wtopione krawędzie
+	Haze	Opar
+	Double Rule	Podwójna linia
+	Triple Rule	Potrójna linia
+	Dashed Border	Kreskowana ramka
+	Dotted Border	Kropkowana ramka
+	Offset Keyline	Przesunięty kontur
+	Inset Keyline	Wewnętrzny kontur
+	Outside Stroke	Obrys zewnętrzny
+	Pointer	Wskaźnik
+	Highlighter	Zakreślacz
+	Sketchy Line	Szkicowa linia
+	Scribble Fill	Wypełnienie bazgrołami
+	Wobble	Chwianie
+	Zig Zag Edge	Krawędź zygzakowata
+	Wavy Edge	Falista krawędź
+	Puffy	Napuszony
+	Starburst	Wybuch gwiazdy
+	Glossy	Błyszczący
+	Brushed Metal	Szczotkowany metal
+	Spotlight	Reflektor
+	Sunset Band	Pas zachodu słońca
+	Sea Glass	Szkło morskie
+	Pearl	Perła
+	Chrome Rim	Chromowany brzeg
+	Glow Orb	Świecąca kula
+	Pill Badge	Odznaka w kształcie pigułki
+	Round Badge	Okrągła odznaka
+	Flag Wave	Powiewająca flaga
+	Bulge	Wybrzuszenie
+	Twisted	Skręcony
+	Echo	Echo
+	Spiral Copies	Kopie po spirali
+	Multiply Tint	Odcień mnożenia
+	Darken Veil	Welon ciemniej
+	Ghosted	Widmowy
+	Two Tone	Dwutonowy
+	Overlay Glaze	Glazura nakładki
+	Screen Light	Światło mnożenia odwrotnego
+	Soft Light Wash	Lawowanie łagodnym światłem
+	Cyan Neon	Cyjanowy neon
+	Magenta Laser	Karmazynowy laser
+	Amber Tube	Bursztynowa rura
+	Electric Lime	Elektryczna limonka
+	Pulse Violet	Pulsujący fiolet
+	Cobalt Phosphor	Kobaltowy luminofor
+	Burst	Wybuch
+	Rounded Square	Zaokrąglony kwadrat
+	Sun	Słońce
+	Moon	Księżyc
+	Cloud	Chmura
+	Rain	Deszcz
+	Thunder	Grzmot
+	Snow	Śnieg
+	Spectrum	Spektrum
+	Vivid	Żywe
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
@@ -9534,6 +9816,7 @@ breakText	Glyphs	Glify
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	obszary kompozycji nie mieszczą się na płótnie: użyj mniejszej liczby obszarów, mniejszych odstępów lub mniejszego rozmiaru
 @msg	the character's size can't be measured	nie można zmierzyć rozmiaru znaku
 @msg	the compound shape is too complex to expand	kształt złożony jest zbyt skomplikowany, aby go rozszerzyć
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	linia lub inna otwarta ścieżka, która nie obejmuje żadnego obszaru, nie dodaje obszaru do kształtu złożonego; aby ją uwzględnić, najpierw zastosuj do niej Obiekt › Ścieżka › Obrys konturu
 @msg	the container of the listed objects is gone	kontener wymienionych obiektów już nie istnieje
 @msg	the copy `{user_id}` can't be read as a library	kopii `{user_id}` nie można odczytać jako biblioteki
 @msg	the copy would leave the canvas	kopia wykroczyłaby poza płótno
