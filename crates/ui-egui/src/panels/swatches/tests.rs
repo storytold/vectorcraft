@@ -281,7 +281,27 @@ fn delete_asks_then_removes_the_selection_and_unlinks_art() {
     assert!(app.session.doc().unwrap().doc.swatch("Orange").is_some());
     delete(&mut app, vec!["Orange".into()], true);
     assert!(app.ui.dialog.is_none() && app.session.doc().unwrap().doc.swatch("Orange").is_none());
-    assert_eq!(deletable(&["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+    assert_eq!(deletable(&app, &["[None]".into(), REGISTRATION.into(), "Grays".into()]), ["Grays"]);
+}
+
+/// Only None and Registration are reserved: a user swatch or color group whose name starts with
+/// `[` can be deleted, the swatch can be edited, and names the document does not hold are left out.
+#[test]
+fn bracketed_user_swatches_and_groups_can_be_deleted_and_edited() {
+    let mut app = app();
+    app.run("swatch.new", json!({"name": "[Mine]", "color": "#336699"})).unwrap();
+    app.run("swatch.newGroup", json!({"name": "[Team]", "colors": ["#ff0000"]})).unwrap();
+    let names = |v: &[&str]| v.iter().map(|n| n.to_string()).collect::<Vec<String>>();
+    assert_eq!(deletable(&app, &names(&["[None]", REGISTRATION, "[Mine]", "[Team]", "Gone"])), ["[Mine]", "[Team]"]);
+    assert_eq!(actions::editable(&app, &names(&["[Mine]"])).as_deref(), Some("[Mine]"));
+    for name in ["[None]", REGISTRATION, "[Team]", "Gone"] {
+        assert_eq!(actions::editable(&app, &names(&[name])), None, "{name}");
+    }
+    let doomed = deletable(&app, &names(&["[Mine]"]));
+    delete(&mut app, doomed, false);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("message")).as_deref(), Some("Delete “[Mine]”?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(app.session.doc().unwrap().doc.swatch("[Mine]").is_none());
 }
 
 /// The prompt for several swatches and groups gives the form the language's plural rule picks for the count.

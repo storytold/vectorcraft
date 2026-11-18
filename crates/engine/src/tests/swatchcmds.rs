@@ -423,6 +423,71 @@ fn edit_color_group_numbers_extra_colors_after_the_names_it_keeps() {
     assert_eq!(*doc(&s), before);
 }
 
+/// `swatch.editGroup` with the group's own colors, in order, and its own name (or a blank one)
+/// records no undo step; a new order, a new color or a new name records one.
+#[test]
+fn edit_color_group_with_its_own_colors_records_no_undo_step() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00"], "keepModel": true}));
+    let undo = undo_len(&s);
+    for p in [
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"]}),
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"], "rename": "Mine"}),
+        json!({"group": "Mine", "colors": ["#ff0000", "#00ff00"], "rename": " "}),
+    ] {
+        let r = run(&mut s, "swatch.editGroup", p.clone());
+        assert_eq!(r, json!({"name": "Mine", "swatches": ["R=255 G=0 B=0", "R=0 G=255 B=0"], "relinked": 0}), "{p}");
+        assert_eq!(undo_len(&s), undo, "{p}: no undo step");
+    }
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#00ff00", "#ff0000"]}));
+    assert_eq!(undo_len(&s), undo + 1, "a new order is a step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#00ff00", "#ff0000"], "rename": "Yours"}));
+    assert_eq!(undo_len(&s), undo + 2, "a new name is a step");
+}
+
+/// `swatch.editGroup` with the color keys of the group's own colors records no undo step when a
+/// color lies between the keys' steps, and a rename keeps that color unrounded; a color given as a
+/// value is taken as it is.
+#[test]
+fn edit_color_group_with_its_own_color_keys_keeps_the_colors() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": [{"c": 60.005, "m": 0, "y": 0, "k": 0}, "#00ff00"], "keepModel": true}));
+    let colors = |s: &Session| -> Vec<Color> {
+        doc(s).swatch_groups.iter().find(|g| g.name == "Mine" || g.name == "Yours").unwrap().swatches.iter().filter_map(|w| w.paint.color()).collect()
+    };
+    let own = colors(&s);
+    let keys: Vec<String> = own.iter().map(|c| vectorcraft_color::recolor::ColorKey::of(c).to_string()).collect();
+    assert_ne!(crate::cmd::color_value(&json!(keys[0])), Some(own[0]), "the key rounds the color");
+    let undo = undo_len(&s);
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": keys}));
+    assert_eq!(undo_len(&s), undo, "the group's own colors record no step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": keys, "rename": "Yours"}));
+    assert_eq!(undo_len(&s), undo + 1, "a new name is a step");
+    assert_eq!(colors(&s), own, "the colors are kept unrounded");
+    // A color given as a value, not a key, is taken exactly, also within a key's step.
+    let Color::Cmyk { c, .. } = own[0] else { panic!("a CMYK swatch: {:?}", own[0]) };
+    let nudged = Color::cmyk(c - 0.000_002, 0.0, 0.0, 0.0);
+    assert_eq!(vectorcraft_color::recolor::ColorKey::of(&nudged), vectorcraft_color::recolor::ColorKey::of(&own[0]));
+    let p = json!({"group": "Yours", "colors": [{"c": c - 0.000_002, "m": 0, "y": 0, "k": 0}, "#00ff00"], "keepModel": true});
+    run(&mut s, "swatch.editGroup", p);
+    assert_eq!(undo_len(&s), undo + 2, "a new value is a step");
+    assert_eq!(colors(&s)[0], nudged);
+}
+
+#[test]
+fn edit_color_group_with_a_null_removes_that_swatch() {
+    let mut s = session();
+    run(&mut s, "swatch.newGroup", json!({"name": "Mine", "colors": ["#ff0000", "#00ff00", "#0000ff"], "keepModel": true}));
+    let undo = undo_len(&s);
+    let r = run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#ff0000", null, "#0000ff"]}));
+    assert_eq!(r["swatches"], json!(["R=255 G=0 B=0", "R=0 G=0 B=255"]));
+    assert_eq!(names(&s, Some("Mine")), ["R=255 G=0 B=0", "R=0 G=0 B=255"]);
+    assert_eq!(undo_len(&s), undo + 1, "a removed swatch is a step");
+    run(&mut s, "swatch.editGroup", json!({"group": "Mine", "colors": ["#ff0000", "#0000ff", null]}));
+    assert_eq!(undo_len(&s), undo + 1, "a null past the swatches removes nothing and records no step");
+    assert!(s.execute("swatch.editGroup", &json!({"group": "Mine", "colors": ["#ff0000", "nope"]})).is_err());
+}
+
 #[test]
 fn unused_leaves_out_linked_colours_gradients_and_patterns_in_use() {
     let mut s = session();

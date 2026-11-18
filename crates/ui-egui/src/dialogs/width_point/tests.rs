@@ -400,3 +400,176 @@ fn new_width_point_checkbox_adjusts_adjoining_in_one_step() {
 fn new_width_point_checkbox_off_preserves_adjoining() {
     creation_adjoining_checkbox(false);
 }
+
+/// [`app`]'s line with a discontinuous point in the middle: 4 + 4 pt before it, 2 + 6 pt after it.
+fn pair_app() -> (VectorcraftApp, u64) {
+    let (mut app, id) = app();
+    app.run("stroke.widthProfile.set", json!({"ids": [id], "points": [[0, 1, 1], [0.5, 0.8, 0.8], [0.5, 0.4, 1.2], [1, 1, 1]]})).unwrap();
+    app.session.doc_mut().unwrap().mark_saved();
+    (app, id)
+}
+
+fn assert_pair_fields(d: &Dialog) {
+    assert_eq!((d.fields["index"].clone(), d.fields["outIndex"].clone()), (json!(1), json!(2)));
+    assert_eq!((d.f64("side1", 0.0), d.f64("side2", 0.0), d.bool("linked")), (4.0, 4.0, true));
+    assert_eq!((d.f64("outSide1", 0.0), d.f64("outSide2", 0.0), d.bool("outLinked")), (2.0, 6.0, false));
+    assert_eq!(d.str("single"), "");
+}
+
+#[test]
+fn either_half_of_a_discontinuous_point_shows_both_sets_of_side_widths() {
+    for index in [1, 2] {
+        let (mut app, id) = pair_app();
+        app.run("ui.widthPointEdit", json!({"id": id, "index": index})).unwrap();
+        assert_pair_fields(app.ui.dialog.as_ref().unwrap());
+        let shown = frame(&mut app);
+        for s in ["Incoming", "Outgoing", "Single Width Only", "None", "Adjust Adjoining Width Points", "Delete"] {
+            assert!(shown.iter().any(|t| t == s), "{s} in {shown:?}");
+        }
+        for s in ["Side 1:", "Side 2:", "Total Width:"] {
+            assert_eq!(shown.iter().filter(|t| *t == s).count(), 2, "{s} in each set: {shown:?}");
+        }
+    }
+    // Double-clicking the point with the Width tool opens the same two sets.
+    let (mut app, _) = pair_app();
+    let view = app.view_info();
+    app.select_tool("width");
+    crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::DoubleClick, 200.0, 150.0), view);
+    assert_pair_fields(app.ui.dialog.as_ref().expect("Width Point Edit opened"));
+    // A continuous point keeps one set.
+    let (mut app, id) = pair_app();
+    app.run("ui.widthPointEdit", json!({"id": id, "index": 0})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().fields.get("outIndex").is_none());
+    let shown = frame(&mut app);
+    assert!(!shown.iter().any(|t| t == "Incoming" || t == "Outgoing"), "{shown:?}");
+    assert_eq!(shown.iter().filter(|t| *t == "Side 1:").count(), 1);
+}
+
+/// Three width points each within 1e-6 of the next, but the outer two farther apart: the halves
+/// are paired as `stroke.widthPoint.set` pairs them, from the incoming half's place, whichever
+/// of them is opened. The first two make one discontinuous point, and the third stays a
+/// continuous point.
+#[test]
+fn points_in_a_chain_pair_as_the_engine_pairs_them() {
+    let chain = json!([[0, 1, 1], [0.5, 0.8, 0.8], [0.50000075, 0.4, 1.2], [0.5000015, 0.6, 0.6], [1, 1, 1]]);
+    for index in [1, 2] {
+        let (mut app, id) = app();
+        app.run("stroke.widthProfile.set", json!({"ids": [id], "points": chain})).unwrap();
+        app.run("ui.widthPointEdit", json!({"id": id, "index": index})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!((d.fields["index"].clone(), d.fields["outIndex"].clone()), (json!(1), json!(2)), "opened {index}");
+        d.fields.insert("outSide1".into(), json!(1));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none(), "opened {index}");
+        assert_eq!(points(&app, id)[2], (0.50000075, 0.2, 1.2), "opened {index}");
+    }
+    let (mut app, id) = app();
+    app.run("stroke.widthProfile.set", json!({"ids": [id], "points": chain})).unwrap();
+    app.run("ui.widthPointEdit", json!({"id": id, "index": 3})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.fields["index"], json!(3));
+    assert!(d.fields.get("outIndex").is_none());
+    d.fields.insert("side1".into(), json!(1));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(points(&app, id)[3], (0.5000015, 0.2, 0.6));
+}
+
+#[test]
+fn ok_sets_both_halves_of_a_discontinuous_point_in_one_step() {
+    let (mut app, id) = pair_app();
+    let before = app.session.doc().unwrap().doc.clone();
+    let history = creation_history(&app);
+    // Cancel after edits changes nothing.
+    app.run("ui.widthPointEdit", json!({"id": id, "index": 2})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("outSide1".into(), json!(9));
+    super::super::cancel(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    assert_eq!(creation_history(&app), history);
+    app.run("ui.widthPointEdit", json!({"id": id, "index": 2})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    for (key, value) in [("side1", 6), ("side2", 2), ("outSide1", 1), ("outSide2", 3)] {
+        d.fields.insert(key.into(), json!(value));
+    }
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(points(&app, id), vec![(0.0, 1.0, 1.0), (0.5, 1.2, 0.4), (0.5, 0.2, 0.6), (1.0, 1.0, 1.0)]);
+    assert_eq!(creation_history(&app), (history.0 + 1, 0, true));
+    let after = app.session.doc().unwrap().doc.clone();
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+    app.run("edit.redo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, after);
+    // OK with nothing changed records no undo step.
+    app.run("ui.widthPointEdit", json!({"id": id, "index": 1})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(creation_history(&app), (history.0 + 1, 0, true));
+}
+
+#[test]
+fn delete_removes_both_halves_of_a_discontinuous_point() {
+    let (mut app, id) = pair_app();
+    let before = app.session.doc().unwrap().doc.clone();
+    let history = creation_history(&app);
+    app.run("ui.widthPointEdit", json!({"id": id, "index": 1})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(points(&app, id), vec![(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)]);
+    assert_eq!(creation_history(&app).0, history.0 + 1);
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(app.session.doc().unwrap().doc, before);
+}
+
+/// Click the last visible text `label` in the dialog (a radio after a heading of the same name).
+fn click_last(app: &mut VectorcraftApp, ctx: &egui::Context, label: &str) {
+    for _ in 0..4 {
+        creation_dialog_frame(app, ctx, vec![]);
+    }
+    let texts = creation_dialog_frame(app, ctx, vec![]);
+    let pos = texts.iter().rev().find(|(text, _)| text == label).unwrap_or_else(|| panic!("missing visible control {label}: {texts:?}")).1.center();
+    for pressed in [true, false] {
+        let button = egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        creation_dialog_frame(app, ctx, vec![egui::Event::PointerMoved(pos), button]);
+    }
+    creation_dialog_frame(app, ctx, vec![]);
+}
+
+#[test]
+fn single_width_only_keeps_the_chosen_half_as_one_point() {
+    for (choice, kept) in [("Incoming", (0.8, 0.8)), ("Outgoing", (0.4, 1.2))] {
+        let (mut app, id) = pair_app();
+        let before = app.session.doc().unwrap().doc.clone();
+        let history = creation_history(&app);
+        app.run("ui.widthPointEdit", json!({"id": id, "index": 1})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        crate::theme::apply(&ctx, Default::default());
+        click_last(&mut app, &ctx, choice);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("single"), choice.to_lowercase());
+        click_last(&mut app, &ctx, "OK");
+        assert!(app.ui.dialog.is_none());
+        assert_eq!(points(&app, id), vec![(0.0, 1.0, 1.0), (0.5, kept.0, kept.1), (1.0, 1.0, 1.0)], "{choice}");
+        assert_eq!(creation_history(&app), (history.0 + 1, 0, true));
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
+fn a_compound_member_edits_both_halves_of_its_owners_point() {
+    let (mut app, line) = app();
+    let second = app.run("shape.line", json!({"x1": 320, "y1": 50, "x2": 320, "y2": 250})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [line, second]})).unwrap();
+    let owner = app.run("object.compoundPath.make", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("stroke.widthProfile.set", json!({"ids": [owner], "points": [[0, 1, 1], [0.5, 0.8, 0.8], [0.5, 0.4, 1.2], [1, 1, 1]]})).unwrap();
+    app.run("ui.widthPointEdit", json!({"id": second, "index": 2})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.fields["id"], json!(owner));
+    d.fields.insert("adjustAdjoining".into(), json!(true));
+    d.fields.insert("side1".into(), json!(8));
+    d.fields.insert("outSide2".into(), json!(3));
+    super::super::confirm(&mut app).unwrap();
+    // The incoming change (Side 1 doubled) doubles the start's Side 1; the outgoing one (Side 2
+    // halved) halves the end's Side 2.
+    assert_eq!(points(&app, owner), vec![(0.0, 2.0, 1.0), (0.5, 1.6, 0.8), (0.5, 0.4, 0.6), (1.0, 1.0, 0.5)]);
+}
