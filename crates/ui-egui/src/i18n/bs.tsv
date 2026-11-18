@@ -3969,6 +3969,7 @@ theme	Appearance	Izgled
 	Data Recovery	Oporavak podataka
 	Default Language	Zadani jezik
 	Disable Auto Add/Delete	Onemogući automatsko dodavanje/brisanje
+	Interpolate Control Points When Moving Anchors	Interpoliraj ručke smjera pri pomjeranju sidrenih tačaka
 	Display All Blacks Accurately	Prikaži sve crne tačno
 	Display All Blacks as Rich Black	Prikaži sve crne kao bogatu crnu
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Prikaži bitmape kao slike sa zaglađenim ivicama u pregledu piksela
@@ -4512,6 +4513,7 @@ font-technology	Variable	Varijabilni
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Kreiraj oznake za obrezivanje crta oznake u japanskom stilu umjesto rimskih.

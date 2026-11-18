@@ -4009,6 +4009,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Näytä bittikartat reunanpehmennettyinä kuvina pikseliesikatselussa
@@ -4533,6 +4534,7 @@ font-technology	Variable	Muuttuvat
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
 	Dragging sideways on a numeric field's label changes the field's value.	Numerokentän nimiön vetäminen sivuttain muuttaa kentän arvoa.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Luo leikkuumerkit piirtää japanilaistyyliset merkit roomalaisten sijaan.

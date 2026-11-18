@@ -860,6 +860,7 @@ font-technology	Variable	Променливи
 	Direct Selection Tool	Инструмент „Директен избор“
 	Direction Handles	Маркери за посока
 	Disable Auto Add/Delete	Изключване на автоматично добавяне/изтриване
+	Interpolate Control Points When Moving Anchors	Интерполиране на маркерите за посока при преместване на опорни точки
 	Disable Opacity Mask	Изключване на маска за непрозрачност
 	Discard	Отхвърляне
 	Discard Empty Type	Отхвърляне на празен текст
@@ -3057,6 +3058,7 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колелцето на мишката с натиснат Cmd/Ctrl превърта платното настрани.
 	Dragging sideways on a numeric field's label changes the field's value.	Влаченето настрани върху етикета на числово поле променя стойността на полето.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест за завъртане с два пръста върху тъчпад завърта изгледа на платното.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Когато премествате котвени точки, всяка крива с една преместена крайна точка запазва формата си спрямо краищата си.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Задържането на клавишната комбинация на инструмент го избира, докато я пуснете, а след това отново се избира предишният инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показва ограничителната рамка, докато премествате селекцията или рисувате форма.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	„Създаване на режещи знаци“ рисува знаци в японски стил вместо в римски.

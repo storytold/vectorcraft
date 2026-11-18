@@ -1014,6 +1014,7 @@
 	Direction:	દિશા:
 	Directives	નિર્દેશો
 	Disable Auto Add/Delete	ઑટો ઍડ/ડિલીટ બંધ કરો
+	Interpolate Control Points When Moving Anchors	એન્કર બિંદુઓ ખસેડતી વખતે દિશા હેન્ડલ્સ ઇન્ટરપોલેટ કરો
 	Disable Opacity Mask	ઓપેસિટી માસ્ક બંધ કરો
 	Disable and Continue	બંધ કરો અને ચાલુ રાખો
 	Disabled plug-ins	બંધ કરેલા પ્લગ-ઇન્સ
@@ -3218,6 +3219,7 @@
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl દબાવી રાખીને માઉસ વ્હીલ ફેરવવાથી કેનવાસ બાજુમાં સ્ક્રોલ થાય છે.
 	Dragging sideways on a numeric field's label changes the field's value.	સંખ્યાત્મક ફીલ્ડના લેબલ પર બાજુમાં ખેંચવાથી ફીલ્ડનું મૂલ્ય બદલાય છે.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ટ્રેકપેડ પર બે આંગળીથી ફેરવવાનો હાવભાવ કેનવાસનું દૃશ્ય ફેરવે છે.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	જ્યારે તમે એન્કર પોઇન્ટ ખસેડો છો, ત્યારે એક ખસેલા છેડાવાળો દરેક વળાંક તેના છેડાઓની સાપેક્ષે પોતાનો આકાર જાળવે છે.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ટૂલની શોર્ટકટ કી દબાવી રાખવાથી છોડો ત્યાં સુધી તે ટૂલ પસંદ રહે છે, પછી અગાઉનું ટૂલ ફરી પસંદ થાય છે.
 	Shows the bounding box while you move the selection or draw a shape.	તમે પસંદગી ખસેડો કે આકાર દોરો ત્યારે બાઉન્ડિંગ બોક્સ બતાવે છે.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ટ્રિમ માર્ક્સ બનાવો રોમન ને બદલે જાપાની શૈલીના ચિહ્નો દોરે છે.

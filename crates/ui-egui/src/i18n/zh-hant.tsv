@@ -850,6 +850,7 @@ font-technology	Variable	可變
 	Direct Selection Tool	直接選取工具
 	Direction Handles	控制把手
 	Disable Auto Add/Delete	停用自動增加/刪除
+	Interpolate Control Points When Moving Anchors	移動錨點時內插控制把手
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
 	Preserve	保留
@@ -4384,6 +4385,7 @@ digits	Malayalam	馬來亞拉姆數字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 捲動滑鼠滾輪會橫向捲動畫布。
 	Dragging sideways on a numeric field's label changes the field's value.	在數值欄位的標籤上橫向拖曳可變更欄位的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移動錨點時，只有一端移動的每條曲線都會保持其相對於兩端的形狀。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移動選取範圍或繪製形狀時顯示邊框。
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	建立剪裁標記繪製日式標記，而不是西式標記。

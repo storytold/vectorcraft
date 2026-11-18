@@ -829,6 +829,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
+	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
 	Discard Empty Type	丢弃空文字
@@ -3053,6 +3054,7 @@ digits	Malayalam	马拉雅拉姆数字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
 	Dragging sideways on a numeric field's label changes the field's value.	在数值字段的标签上横向拖动可更改字段的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	创建裁切标记绘制日式标记，而不是西式标记。

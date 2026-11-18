@@ -1424,6 +1424,7 @@ antiAlias	Sharp	शार्प
 	Direction:	दिशा:
 	Directives	निर्देश
 	Disable Auto Add/Delete	ऑटो जोड़ना/हटाना अक्षम करें
+	Interpolate Control Points When Moving Anchors	एंकर पॉइंट खिसकाते समय निर्देशन हैंडल इंटरपोलेट करें
 	Disable Opacity Mask	ओपेसिटी मास्क अक्षम करें
 	Discard	डिस्कर्ड
 	Discard Empty Type	खाली टाइप हटाएँ
@@ -4268,6 +4269,7 @@ antiAlias	Sharp	शार्प
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl दबाकर माउस व्हील घुमाने से कैनवास बगल की ओर स्क्रॉल होता है।
 	Dragging sideways on a numeric field's label changes the field's value.	किसी संख्या वाले फ़ील्ड के लेबल पर बगल की ओर ड्रैग करने से फ़ील्ड का मान बदलता है।
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ट्रैकपैड पर दो उंगलियों से घुमाने का जेस्चर कैनवास के व्यू को घुमाता है।
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	जब आप एंकर पॉइंट हिलाते हैं, तो एक हिले हुए सिरे वाला हर वक्र अपने सिरों के सापेक्ष अपना आकार बनाए रखता है।
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	किसी टूल की शॉर्टकट कुंजी दबाए रखने पर वह टूल छोड़ने तक चुना रहता है, फिर पिछला टूल दोबारा चुना जाता है।
 	Shows the bounding box while you move the selection or draw a shape.	सिलेक्शन खिसकाते या आकार ड्रॉ करते समय बाउंडिंग बॉक्स दिखाता है।
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ट्रिम मार्क्स बनाएं रोमन की जगह जापानी शैली के निशान ड्रॉ करता है।

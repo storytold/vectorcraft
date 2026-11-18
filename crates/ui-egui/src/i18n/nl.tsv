@@ -4387,6 +4387,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
+	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Bitmaps in pixelvoorbeeld weergeven als afbeeldingen met antialiasing
@@ -4907,6 +4908,7 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Afsnijtekens maken tekent tekens in Japanse stijl in plaats van Romeinse.
