@@ -323,6 +323,7 @@ fn headless_command_list_includes_ui_commands() {
         "app.quit",
         "window.arrange.tile",
         "align.horizontalLeft",
+        "align.toKeyObject",
         "ui.action.play",
     ];
     for (n, id) in want.iter().enumerate() {
@@ -1692,6 +1693,14 @@ fn transform_rejects_a_mistyped_reflect_copy_or_origin_before_editing() {
     assert_eq!(applied["isError"], false, "{applied}");
     let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
     assert_eq!(applied["applied"], json!(["move"]));
+    let applied = call(&mut s, 21, "transform", json!({"ids": [second], "rotate": 90, "origin": null}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    // The schema allows null for every argument but `ids`.
+    let tools = tool_definitions();
+    let props = &tools.iter().find(|t| t["name"] == "transform").unwrap()["inputSchema"]["properties"];
+    for key in ["dx", "dy", "rotate", "scale", "scaleX", "scaleY", "shear", "reflect", "copy", "origin"] {
+        assert!(props[key]["anyOf"].as_array().is_some_and(|a| a.contains(&json!({"type": "null"}))), "{key}: {}", props[key]);
+    }
 }
 
 #[test]

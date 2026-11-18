@@ -54,6 +54,7 @@ use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
 use crate::shaperwidget;
+use crate::sidewidget::{self, SideDrag};
 use crate::typewidget;
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
@@ -134,6 +135,8 @@ enum State {
     Corner(CornerDrag),
     /// Dragging a live ellipse's pie widget.
     Pie(PieDrag),
+    /// Dragging a live polygon's side widget.
+    Sides(SideDrag),
     /// Dragging a selected blend's Appearance or Easing widget.
     BlendWidget(BlendWidgetDrag),
     /// Dragging an Objects on Path group's Rotate All widget.
@@ -827,7 +830,7 @@ impl Tool for SelectionTool {
 
     /// E during a marquee drag switches the marquee between the objects it touches and only the
     /// objects inside it. Escape during a drag (a move or an Alt-drag copy, a bounding-box scale or
-    /// rotation, a marquee, a corner widget, a pie widget, a blend widget, the Rotate All, Space, Move All or Select/Move widget, the brackets of type on a path, a mirror
+    /// rotation, a marquee, a corner widget, a pie widget, a polygon's side widget, a blend widget, the Rotate All, Space, Move All or Select/Move widget, the brackets of type on a path, a mirror
     /// axis, a grid repeat's handles, a ruler guide) cancels it: what it changed goes back, no copy
     /// is left, and the tool waits for the next press. With the pointer loaded with text, Escape
     /// drops the text.
@@ -865,6 +868,12 @@ impl Tool for SelectionTool {
             return d.cancel();
         }
         if key == ToolKey::Escape
+            && matches!(self.state, State::Sides(_))
+            && let State::Sides(d) = std::mem::take(&mut self.state)
+        {
+            return d.cancel();
+        }
+        if key == ToolKey::Escape
             && matches!(self.state, State::NineSlice(_))
             && let State::NineSlice(d) = std::mem::take(&mut self.state)
         {
@@ -896,11 +905,15 @@ impl Tool for SelectionTool {
         out
     }
 
-    /// Switching tools during a blend widget's drag cancels it, as Escape does: its value goes back.
+    /// Switching tools during a drag of a blend widget, a corner widget, a pie widget or a
+    /// polygon's side widget cancels it, as Escape does: its value goes back.
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         match std::mem::take(&mut self.state) {
             State::BlendWidget(d) if d.adjusting() => vec![Action::Cancel],
-            State::BlendWidget(_) => vec![],
+            State::Corner(c) if c.adjusting() => vec![Action::Cancel],
+            State::Pie(d) if d.adjusting() => vec![Action::Cancel],
+            State::Sides(d) => d.cancel(),
+            State::BlendWidget(_) | State::Corner(_) | State::Pie(_) => vec![],
             other => {
                 self.state = other;
                 vec![]
@@ -947,6 +960,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } | State::Scaling { .. } | State::Rotating { .. } => true,
             State::Corner(c) => c.adjusting(),
             State::Pie(d) => d.adjusting(),
+            State::Sides(d) => d.adjusting(),
             State::BlendWidget(d) => d.adjusting(),
             State::RotateAll(d) => d.adjusting(),
             State::Space(d) => d.adjusting(),
@@ -1126,6 +1140,15 @@ impl Tool for SelectionTool {
                 self.state = State::Idle;
                 d.finish()
             }
+            (PointerKind::Drag, State::Sides(mut d)) => {
+                let out = d.drag(cx, p);
+                self.state = State::Sides(d);
+                out
+            }
+            (PointerKind::Up, State::Sides(d)) => {
+                self.state = State::Idle;
+                d.finish()
+            }
             (PointerKind::Drag, State::BlendWidget(mut d)) => {
                 let out = d.drag(cx, p);
                 self.state = State::BlendWidget(d);
@@ -1233,6 +1256,7 @@ impl Tool for SelectionTool {
             }),
             State::Corner(c) => o.extend(c.overlays(cx)),
             State::Pie(d) => o.extend(d.overlays(cx)),
+            State::Sides(d) => o.extend(d.overlays(cx)),
             State::BlendWidget(d) => o.extend(d.overlays(cx)),
             State::RotateAll(d) => o.extend(d.overlays(cx)),
             State::Space(d) => o.extend(d.overlays(cx)),
@@ -1292,7 +1316,7 @@ impl Tool for SelectionTool {
             State::Moving { began: true, .. } if m.alt => return Cursor::SelectionCopy,
             State::Moving { began: true, .. } => return if self.snapped { Cursor::ArrowHollow } else { Cursor::Arrow },
             State::Corner(_) => return Cursor::CornerRadius,
-            State::Pie(_) | State::BlendWidget(_) => return Cursor::ArrowHollow,
+            State::Pie(_) | State::Sides(_) | State::BlendWidget(_) => return Cursor::ArrowHollow,
             State::RotateAll(_) => return Cursor::Rotate,
             State::Space(_) => return Cursor::ArrowHollow,
             State::MoveAll(_) | State::Member(_) => return Cursor::Move,
@@ -1321,6 +1345,9 @@ impl Tool for SelectionTool {
             return Cursor::CornerRadius;
         }
         if near_selected && pie::over_widget(cx, p) {
+            return Cursor::ArrowHollow;
+        }
+        if sidewidget::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
         if blendwidget::over_widget(cx, p) {
@@ -1385,11 +1412,17 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
 /// object selected whole between it and the art under the pointer, such as members of a group
 /// picked with Group Selection. A press there keeps the selection and a drag moves it (#8047). A
 /// member with only some anchors or segments selected does not count: the press selects `top`.
+/// A member with every anchor selected (as `select.anchors` and `select.key` leave a path) counts.
 fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
     if cx.selection.contains(top) {
         return Some(top);
     }
-    let whole = |id: NodeId| cx.selection.contains(id) && cx.selection.partial(id).is_none() && !cx.selection.segments.contains_key(&id);
+    let every_anchor = |id: NodeId| {
+        cx.selection
+            .partial(id)
+            .is_none_or(|picked| cx.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
+    };
+    let whole = |id: NodeId| cx.selection.contains(id) && every_anchor(id) && !cx.selection.segments.contains_key(&id);
     let below = h.ancestry.iter().position(|id| *id == top).map_or(&[][..], |i| h.ancestry.get(i..).unwrap_or_default());
     below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
 }
@@ -1689,6 +1722,10 @@ impl SelectionTool {
         if blendwidget::over_widget(cx, p) {
             return vec![];
         }
+        // A live polygon's side widget takes a plain double-click the same way.
+        if sidewidget::over_widget(cx, p) {
+            return vec![];
+        }
         if crate::rulerguide::guide_at(cx, p).is_some() {
             return vec![];
         }
@@ -1728,7 +1765,7 @@ impl SelectionTool {
             self.state = State::Loaded { from, before: port == crate::text::Port::In, press: None };
             return Some(vec![]);
         }
-        // 1. Live Corners widgets, pie widgets, blend widgets, the Rotate All, Space, Move All and Select/Move widgets and type on a path's brackets, then the
+        // 1. Live Corners widgets, pie widgets, a polygon's side widget, blend widgets, the Rotate All, Space, Move All and Select/Move widgets and type on a path's brackets, then the
         // bounding-box handles of the current selection.
         if let Some(c) = CornerDrag::hit(cx, ev, false) {
             self.state = State::Corner(c);
@@ -1736,6 +1773,10 @@ impl SelectionTool {
         }
         if let Some(d) = PieDrag::hit(cx, ev) {
             self.state = State::Pie(d);
+            return Some(vec![]);
+        }
+        if let Some(d) = SideDrag::hit(cx, ev) {
+            self.state = State::Sides(d);
             return Some(vec![]);
         }
         if let Some(d) = BlendWidgetDrag::hit(cx, ev) {
