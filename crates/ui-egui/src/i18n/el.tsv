@@ -99,6 +99,7 @@
 	Add Anchor Point	Προσθήκη σημείου αγκύρωσης
 	Add Anchor Point Tool	Εργαλείο προσθήκης σημείου αγκύρωσης (Add Anchor Point Tool)
 	Add Anchor Points	Προσθήκη σημείων αγκύρωσης
+	Add Around	Προσθήκη γύρω από το αντικείμενο
 	Add Effect	Προσθήκη εφέ
 	Add Freeform Line	Προσθήκη ελεύθερης γραμμής
 	Add Freeform Point	Προσθήκη ελεύθερου σημείου
@@ -176,6 +177,7 @@
 	Angle:	Γωνία:
 	Angles	Γωνίες
 	Animated Zoom	Κινούμενη μεγέθυνση
+	Anti Alias	Εξομάλυνση ακμών
 	Anti-alias	Εξομάλυνση ακμών
 	Anti-Alias	Εξομάλυνση ακμών
 	Anti-alias Rasters	Εξομάλυνση ακμών εικόνων ράστερ
@@ -514,6 +516,7 @@ font-technology	Variable	Μεταβλητές
 	Color Mixer (Shift-click the chip)	Μείκτης χρωμάτων (Shift-κλικ στο δείγμα)
 	Color Mode	Λειτουργία χρώματος
 	Color Mode:	Λειτουργία χρώματος:
+	Color Model	Μοντέλο χρώματος
 	Color Model:	Μοντέλο χρώματος:
 	Color Models	Μοντέλα χρώματος
 	Color Picker	Επιλογέας χρώματος
@@ -540,6 +543,7 @@ font-technology	Variable	Μεταβλητές
 	Colors	Χρώματα
 	Colors:	Χρώματα:
 	Column Graph Tool	Γράφημα στηλών (Column Graph Tool)
+	Columns	Στήλες
 	Columns:	Στήλες:
 	Column…	Στήλη…
 	Combine Slices	Συνδυασμός τομών
@@ -1017,6 +1021,7 @@ font-technology	Variable	Μεταβλητές
 	Enable text access for screen readers	Ενεργοποίηση πρόσβασης κειμένου για αναγνώστες οθόνης
 	Enable Touch Gestures	Ενεργοποίηση χειρονομιών αφής
 	Switch Selection and Drawing Modes	Εναλλαγή λειτουργιών επιλογής και σχεδίασης
+	Select Last Selection Tool	Επιλογή του τελευταίου εργαλείου επιλογής
 	Enable Touch Workspace	Ενεργοποίηση χώρου εργασίας αφής
 	Encoding	Κωδικοποίηση
 	Encoding:	Κωδικοποίηση:
@@ -2101,6 +2106,7 @@ font-technology	Variable	Μεταβλητές
 	Search Preferences	Αναζήτηση στις προτιμήσεις
 	No settings found	Δεν βρέθηκαν ρυθμίσεις
 	Reset to Default	Επαναφορά προεπιλογής
+	Resolution	Ανάλυση
 	Resolution:	Ανάλυση:
 	Restore	Επαναφορά
 	Revert	Επαναφορά αποθηκευμένης έκδοσης
@@ -2121,6 +2127,7 @@ font-technology	Variable	Μεταβλητές
 	Show Bounding Box While Moving and Drawing	Εμφάνιση πλαισίου οριοθέτησης κατά τη μετακίνηση και τη σχεδίαση
 	Rotate…	Περιστροφή…
 	Rotation	Περιστροφή
+	Rows	Γραμμές
 	Rows:	Γραμμές:
 	Rulers	Χάρακες
 	Rulers & Grids	Χάρακες και πλέγματα
@@ -2456,6 +2463,8 @@ axis	Both	Και τα δύο
 @msg	the script is no longer in the Scripts folder	το σενάριο δεν βρίσκεται πλέον στον φάκελο Scripts
 	Some scripts were not listed	Ορισμένα σενάρια δεν εμφανίζονται στη λίστα
 	The Scripts folder cannot be read	Δεν είναι δυνατή η ανάγνωση του φακέλου Scripts
+	Loading scripts…	Φόρτωση σεναρίων…
+	The Scripts folder is still being read	Ο φάκελος Scripts διαβάζεται ακόμα
 @msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	μια εντολή που απέτυχε άλλαξε βήματα αναίρεσης που δεν ήταν δυνατό να επαναφερθούν, οπότε το σενάριο σταμάτησε
 @msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
@@ -3465,6 +3474,9 @@ theme	Appearance	Εμφάνιση
 	Overprint	Υπερεκτύπωση
 	Overprint and Transparency Flattener	Υπερεκτύπωση και ισοπέδωση διαφάνειας
 	Overprint and Transparency Flattener Options	Επιλογές υπερεκτύπωσης και ισοπέδωσης διαφάνειας
+	Custom…	Προσαρμοσμένο…
+	Custom Transparency Flattener Options	Προσαρμοσμένες επιλογές ισοπέδωσης διαφάνειας
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	Το EPS δεν έχει διαφάνεια άλφα και οι Υπερεκτυπώσεις ορίζουν αν διατηρούνται οι υπερεκτυπώσεις.
 	Overprint Black…	Υπερεκτύπωση μαύρου…
 	Overprint Fill	Υπερεκτύπωση γεμίσματος
 	Overprint Preview	Προεπισκόπηση υπερεκτύπωσης
@@ -3545,6 +3557,7 @@ theme	Appearance	Εμφάνιση
 	Play Current Selection	Αναπαραγωγή τρέχουσας επιλογής
 	Save Actions…	Αποθήκευση ενεργειών…
 	Load Actions…	Φόρτωση ενεργειών…
+	Replace Actions…	Αντικατάσταση ενεργειών…
 	Reset Actions	Επαναφορά ενεργειών
 	Replace the current actions with the default set?	Να αντικατασταθούν οι τρέχουσες ενέργειες με το προεπιλεγμένο σύνολο;
 	Append adds the default set after the current sets instead.	Η Προσάρτηση προσθέτει αντί γι’ αυτό το προεπιλεγμένο σύνολο μετά τα τρέχοντα σύνολα.
@@ -3833,6 +3846,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Replaces the saved preset of that name.	Αντικαθιστά την αποθηκευμένη προεπιλογή με αυτό το όνομα.
 	Require a password to open the document	Απαίτηση κωδικού για το άνοιγμα εγγράφου
 	Reset Bounding Box	Επαναφορά πλαισίου οριοθέτησης
+	Rotate Bounding Box	Περιστροφή πλαισίου οριοθέτησης
+	Rotate Bounding Box…	Περιστροφή πλαισίου οριοθέτησης…
 	Reset Envelope Mesh	Επαναφορά πλέγματος περιβλήματος
 	Reset Envelope Shape	Επαναφορά σχήματος περιβλήματος
 	Reset Essentials	Επαναφορά χώρου εργασίας Essentials
@@ -3917,6 +3932,29 @@ digits	Malayalam	Μαλαγιάλαμ
 	The unit for East Asian type measurements, which no field uses yet.	Η μονάδα για τις μετρήσεις κειμένου Ανατολικής Ασίας, την οποία δεν χρησιμοποιεί ακόμη κανένα πεδίο.
 	When on, a number typed without a unit into a field in picas is read in points.	Όταν είναι ενεργό, ένας αριθμός που πληκτρολογείται χωρίς μονάδα σε πεδίο σε πίκες διαβάζεται σε σημεία.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Με το Αναγνωριστικό XML, τα ονόματα αντικειμένων εμφανίζονται ως αναγνωριστικά XML στα Επίπεδα, στις Μεταβλητές και στις Επιλογές επιπέδου.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Το βήμα για το μέγεθος κειμένου και το διάστιχο: τα Cmd/Ctrl+Shift+. και Cmd/Ctrl+Shift+, αλλάζουν το μέγεθος κατά ένα βήμα, ή κατά πέντε μαζί με Alt. Σε οριζόντιο κείμενο, το Alt με το επάνω ή κάτω βέλος αλλάζει το διάστιχο κατά ένα βήμα, ή κατά πέντε με Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Το βήμα για την αραίωση και το kerning, σε χιλιοστά του em: σε οριζόντιο κείμενο, το Alt με το αριστερό ή δεξί βέλος αλλάζει το kerning στον δρομέα ή την αραίωση του επιλεγμένου κειμένου κατά ένα βήμα, ή κατά πέντε με Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Το βήμα για τη μετατόπιση γραμμής βάσης: σε οριζόντιο κείμενο, τα Alt και Shift με το επάνω ή κάτω βέλος μετακινούν τη γραμμή βάσης κατά ένα βήμα, ή κατά πέντε με Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Εμφανίζει τις επιλογές για ιαπωνικό και άλλο ανατολικοασιατικό κείμενο στα πάνελ Χαρακτήρας, Παράγραφος, OpenType και Γλύφοι, καθώς και την εντολή Σύνθετες γραμματοσειρές.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Εμφανίζει τις επιλογές για αραβικό, εβραϊκό και ινδικό κείμενο στα πάνελ Χαρακτήρας και Παράγραφος, όπως η κατεύθυνση παραγράφου, οι κασίντες και τα ψηφία.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Τα εργαλεία επιλογής επιλέγουν κείμενο μόνο στη γραμμή βάσης του, στο πλαίσιο του κειμένου περιοχής ή στη διαδρομή του, όχι οπουδήποτε μέσα στο πλαίσιό του.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Τα μενού γραμματοσειρών δείχνουν κάθε γραμματοσειρά με το αγγλικό της όνομα· όταν είναι ανενεργό, μια γραμματοσειρά που έχει και όνομα στη δική της γλώσσα δείχνει αυτό το όνομα.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Το νέο κείμενο περιοχής ξεκινά με ενεργό το Αυτόματο μέγεθος, οπότε ένα ορθογώνιο πλαίσιο οριζόντιου κειμένου μεγαλώνει ή μικραίνει σε ύψος για να χωρά το κείμενό του.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Οι λίστες γραμματοσειρών και το μενού Γραμματοσειρά δείχνουν ένα δείγμα κάθε γραμματοσειράς δίπλα στο όνομά της.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Τα δείγματα γραμματοσειρών σχεδιάζονται με σκούρο κείμενο σε λευκό, όποια κι αν είναι η φωτεινότητα του περιβάλλοντος· ισχύει μόνο όσο είναι ενεργές οι προεπισκοπήσεις γραμματοσειρών στα μενού.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Πόσο ψηλή είναι κάθε γραμμή στις λίστες των πεδίων γραμματοσειράς, όπως αυτό του πάνελ Χαρακτήρας, και άρα πόσο μεγάλο είναι κάθε δείγμα.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Πόσες από τις τελευταίες γραμματοσειρές που χρησιμοποιήθηκαν, από 1 έως 15, δείχνουν οι Πρόσφατες γραμματοσειρές και οι λίστες γραμματοσειρών, με την πιο πρόσφατη πρώτη.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Όταν αλλάζετε τη γραμματοσειρά ή το στυλ γραμματοσειράς ενός κειμένου, οι χαρακτήρες για τους οποίους η νέα γραμματοσειρά δεν έχει γλύφο κρατούν την προηγούμενη γραμματοσειρά τους.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Μια ροζ επισήμανση στον καμβά σημειώνει τους γλύφους που αντικαταστάθηκαν από λειτουργίες OpenType, όπως τα συμπλέγματα· δεν τυπώνεται ούτε εξάγεται.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Με το εργαλείο Κείμενο, η επιλογή ενός χαρακτήρα δείχνει δίπλα του στον καμβά μια σειρά με τους εναλλακτικούς γλύφους του για να διαλέξετε.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Μια ροζ επισήμανση στον καμβά σημειώνει κείμενο που σχεδιάζεται με γραμματοσειρά αντικατάστασης επειδή λείπει η γραμματοσειρά του· δεν τυπώνεται ούτε εξάγεται.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Το νέο κείμενο που δημιουργείται με εργαλείο κειμένου ξεκινά με επιλεγμένο κείμενο κράτησης θέσης, το οποίο αντικαθίσταται από ό,τι πληκτρολογείτε.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Η πληκτρολόγηση ενός δείκτη λίστας, όπως 1. ή *, και μετά ενός κενού στην αρχή μιας παραγράφου κάνει την παράγραφο λίστα.
+	Fonts in this folder show in the font menus and can be used without being installed.	Οι γραμματοσειρές σε αυτόν τον φάκελο εμφανίζονται στα μενού γραμματοσειρών και μπορούν να χρησιμοποιηθούν χωρίς εγκατάσταση.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Η εφαρμογή στυλ γραφικών σε κείμενο αφαιρεί το δικό τους γέμισμα ή περίγραμμα από τους χαρακτήρες όπου το στυλ έχει, ώστε να φαίνεται το χρώμα του στυλ.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Η Στοίχιση και η Κατανομή μετρούν το κείμενο σημείου με βάση το μελάνι των γλύφων του αντί για το τετράγωνο em του.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Η Στοίχιση και η Κατανομή μετρούν το κείμενο περιοχής με βάση το μελάνι των γλύφων του αντί για το πλαίσιό του.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Το πλαίσιο οριοθέτησης και το πάνελ Μετασχηματισμός μετρούν το κείμενο σημείου με βάση το μελάνι των γλύφων του αντί για το τετράγωνο em του.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Προσκολλά τη σχεδίαση, τη μετακίνηση και την κλιμάκωση στις υποδιαιρέσεις του πλέγματος, ακόμη και όταν το πλέγμα είναι κρυφό· όσο είναι ενεργό, η Προσκόλληση σε εικονοστοιχείο δεν ισχύει.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Το χρώμα των οδηγών που δεν είναι επιλεγμένοι· ένας πίνακας σχεδίασης με Ετικέτα οδηγών σχεδιάζει τους δικούς του οδηγούς στο χρώμα της ετικέτας.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Σχεδιάζει τους οδηγούς ως συνεχείς γραμμές ή ως κουκκίδες, μαζί με τους οδηγούς που υπάρχουν ήδη στο έγγραφο.
@@ -5084,6 +5122,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no target object has an opacity mask: select one or give `id`	κανένα αντικείμενο-στόχος δεν έχει μάσκα αδιαφάνειας: επιλέξτε ένα ή δώστε `id`
 @msg	no threaded text selected	δεν έχει επιλεγεί συνδεδεμένο κείμενο
 @msg	no user library folder here	δεν υπάρχει φάκελος βιβλιοθήκης χρήστη εδώ
+@msg	`{file}` has no swatches of its own	το `{file}` δεν έχει δικά του δείγματα χρωμάτων
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	το `{_1}` έχει δείγματα μοτίβου, που ένα αρχείο .vcswatches δεν μπορεί να περιέχει
 @msg	no user workspace `{from}`	δεν υπάρχει χώρος εργασίας χρήστη `{from}`
 @msg	node {_1} is not text	ο κόμβος {_1} δεν είναι κείμενο
 @msg	node {_1} is on a locked artboard	ο κόμβος {_1} βρίσκεται σε κλειδωμένο πίνακα σχεδίασης
@@ -5409,6 +5449,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	All colors are within the CMYK gamut	Όλα τα χρώματα βρίσκονται εντός της χρωματικής γκάμας CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} χρώμα βρίσκεται εκτός της χρωματικής γκάμας CMYK|{n} χρώματα βρίσκονται εκτός της χρωματικής γκάμας CMYK
 @msg	Unembedded to {_1}	Καταργήθηκε η ενσωμάτωση στο {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Καταργήθηκε η ενσωμάτωση {n} εικόνας στο {folder}|Καταργήθηκε η ενσωμάτωση {n} εικόνων στο {folder}
+@msg	every numbered name for {name} is taken in that folder	όλα τα αριθμημένα ονόματα για το {name} χρησιμοποιούνται ήδη σε αυτόν τον φάκελο
 @msg	Reset {_1}	Επαναφορά {_1}
 @msg	Sent to {_1}	Στάλθηκε στο {_1}
 @msg	{_1} files	{_1} αρχεία
@@ -5554,6 +5596,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	automation path rejected: outside the read root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας ανάγνωσης {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός των ριζών ανάγνωσης {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	ένα συνδεδεμένο αρχείο JavaScript είναι εκτός των ριζών ανάγνωσης
+@msg	a linked image file is outside the read roots	ένα συνδεδεμένο αρχείο εικόνας είναι εκτός των ριζών ανάγνωσης
+@msg	a linked file's export folder is outside the read roots	ο φάκελος εξαγωγής ενός συνδεδεμένου αρχείου είναι εκτός των ριζών ανάγνωσης
 @msg	the library's file is outside the read roots	το αρχείο της βιβλιοθήκης είναι εκτός των ριζών ανάγνωσης
 @msg	{file} names more than one linked JavaScript file	το {file} αντιστοιχεί σε περισσότερα από ένα συνδεδεμένα αρχεία JavaScript
 @msg	automation path rejected: outside the write root {root}: {path}	απορρίφθηκε η διαδρομή αυτοματισμού: εκτός ρίζας εγγραφής {root}: {path}
@@ -5667,6 +5711,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	missing panel layout	λείπει η διάταξη πινάκων
 @msg	unsupported native docking operation	μη υποστηριζόμενη εγγενής λειτουργία σύνδεσης πινάκων
 	Linux Display Server	Διακομιστής οθόνης Linux
+	Low-Latency Drawing	Σχεδίαση χαμηλής καθυστέρησης
 	Ruler Origin	Αρχή χαράκων
 	Reset Ruler Origin	Επαναφορά αρχής χαράκων
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	το αποσυμπιεσμένο αρχείο υπερβαίνει τα όρια ανάγνωσης του VectorCraft ({_1} MB ανά έγγραφο, {_2} MB ανά εικόνα)
@@ -6460,6 +6505,8 @@ effect	Points	Σημεία
 	Reset Horizontal Scale	Επαναφορά οριζόντιας κλίμακας
 	Reset Tracking and Kerning	Επαναφορά απόστασης χαρακτήρων και διαγραμμάτωσης
 	Highlight Font Name	Επισήμανση ονόματος γραμματοσειράς
+	Highlight Font Size	Επισήμανση μεγέθους γραμματοσειράς
+	Other…	Άλλο…
 	Highlight Kerning	Επισήμανση διαγραμμάτωσης
 	Highlight Tracking	Επισήμανση απόστασης χαρακτήρων
 	Sample Color from Screen	Δειγματοληψία χρώματος από την οθόνη
@@ -7363,6 +7410,12 @@ anchor	Points:	Σημεία:
 @msg	`segment` must be "straight" or "curved"	Το `segment` πρέπει να είναι "straight" ή "curved"
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	Το `mode` πρέπει να είναι "free", "keepAngles" ή "symmetric"
 @msg	`{key}` must be [x, y]	Το `{key}` πρέπει να είναι [x, y]
+
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Μετατροπέας μονάδων
+	Unit Converter Panel	Πλαίσιο Μετατροπέας μονάδων
+	Copy with Units	Αντιγραφή με μονάδες
+	From Selection	Από την επιλογή
 
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Επιλογή κατά είδος χρώματος

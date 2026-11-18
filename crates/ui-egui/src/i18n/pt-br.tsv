@@ -126,6 +126,7 @@
 	Add Anchor Point	Adicionar Ponto de Ancoragem
 	Add Anchor Point Tool	Ferramenta Adicionar Ponto de Ancoragem
 	Add Anchor Points	Adicionar Pontos de Ancoragem
+	Add Around	Adicionar ao Redor do Objeto
 	Add Effect	Adicionar Efeito
 	Add Freeform Line	Adicionar Linha Livre
 	Add Freeform Point	Adicionar Ponto Livre
@@ -195,6 +196,7 @@
 	Angle:	Ângulo:
 	Angles	Ângulos
 	Animated Zoom	Zoom Animado
+	Anti Alias	Suavização
 	Anti-Alias	Suavização de Serrilhado
 	Anti-alias	Suavizar bordas
 	Anti-alias Rasters	Suavizar Rasters
@@ -501,6 +503,7 @@ antiAlias	Sharp	Nítido
 	Color Library…	Biblioteca de Cores…
 	Color Mode	Modo de Cor
 	Color Mode:	Modo de Cor:
+	Color Model	Modelo de Cor
 	Color Model:	Modelo de Cor:
 	Color Models	Modelos de Cor
 	Color Picker	Seletor de Cores
@@ -529,6 +532,7 @@ antiAlias	Sharp	Nítido
 	Colors	Cores
 	Colors:	Cores:
 	Column Graph Tool	Ferramenta Gráfico de Colunas
+	Columns	Colunas
 	Columns:	Colunas:
 	Column…	Coluna…
 	Combine Slices	Combinar Fatias
@@ -962,6 +966,7 @@ antiAlias	Sharp	Nítido
 	Enable Rubber Band for	Habilitar Elástico para
 	Enable Touch Gestures	Habilitar Gestos de Toque
 	Switch Selection and Drawing Modes	Alternar Modos de Seleção e Desenho
+	Select Last Selection Tool	Selecionar Última Ferramenta de Seleção
 	Enable Touch Workspace	Habilitar Espaço de Trabalho de Toque
 	Enable copying of text, images and other content	Habilitar cópia de texto, imagens e outro conteúdo
 	Enable in-menu font previews	Habilitar visualizações de fonte no menu
@@ -1185,6 +1190,8 @@ antiAlias	Sharp	Nítido
 	Reset Tracking and Kerning	Redefinir Rastreamento e Kerning
 	Reset Horizontal Scale	Redefinir Escala Horizontal
 	Highlight Font Name	Destacar Nome da Fonte
+	Highlight Font Size	Destacar Tamanho da Fonte
+	Other…	Outro…
 	Highlight Kerning	Destacar Kerning
 	Highlight Tracking	Destacar Rastreamento
 	Step Type	Ajustar Texto em Incrementos
@@ -2116,6 +2123,9 @@ antiAlias	Sharp	Nítido
 	Overprint Stroke	Sobreimpressão de Traçado
 	Overprint and Transparency Flattener	Sobreimpressão e Achatamento de Transparência
 	Overprint and Transparency Flattener Options	Opções de Sobreimpressão e Achatamento de Transparência
+	Custom…	Personalizado…
+	Custom Transparency Flattener Options	Opções Personalizadas de Achatamento de Transparência
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	O EPS não tem transparência alfa, e Sobreimpressões define se as sobreimpressões são mantidas.
 	Overprint:	Sobreimpressão:
 	Overprints:	Sobreimpressões:
 	Override Character Color	Substituir Cor do Caractere
@@ -2210,6 +2220,7 @@ antiAlias	Sharp	Nítido
 	Play Current Selection	Reproduzir Seleção Atual
 	Save Actions…	Salvar Ações…
 	Load Actions…	Carregar Ações…
+	Replace Actions…	Substituir Ações…
 	Reset Actions	Redefinir Ações
 	Replace the current actions with the default set?	Substituir as ações atuais pelo conjunto padrão?
 	Append adds the default set after the current sets instead.	Anexar adiciona o conjunto padrão depois dos conjuntos atuais.
@@ -2534,6 +2545,8 @@ digits	Malayalam	Malaiala
 	Reselect	Resselecionar
 	Reset	Redefinir
 	Reset Bounding Box	Redefinir Caixa Delimitadora
+	Rotate Bounding Box	Girar Caixa Delimitadora
+	Rotate Bounding Box…	Girar Caixa Delimitadora…
 	Reset Envelope Mesh	Redefinir Malha do Envelope
 	Reset Envelope Shape	Redefinir Forma do Envelope
 	Reset Essentials	Redefinir Essentials
@@ -2572,6 +2585,7 @@ digits	Malayalam	Malaiala
 	Reshape Segment	Remodelar Segmento
 	Reshape Tool	Ferramenta Remodelar
 	Reshape Type Area	Remodelar Área de Texto
+	Resolution	Resolução
 	Resolution:	Resolução:
 	Responsive	Responsivo
 	Restore	Restaurar
@@ -2629,6 +2643,29 @@ digits	Malayalam	Malaiala
 	The unit for East Asian type measurements, which no field uses yet.	A unidade das medidas de texto do Leste Asiático, que nenhum campo usa ainda.
 	When on, a number typed without a unit into a field in picas is read in points.	Quando ativado, um número digitado sem unidade em um campo em picas é lido em pontos.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Com ID XML, os nomes dos objetos aparecem como IDs XML em Camadas, Variáveis e Opções de Camada.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	O passo do tamanho do texto e da entrelinha: Cmd/Ctrl+Shift+. e Cmd/Ctrl+Shift+, mudam o tamanho em um passo, ou em cinco com Alt também; em texto horizontal, Alt com a seta para cima ou para baixo muda a entrelinha em um passo, ou em cinco com Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	O passo do tracking e do kerning, em milésimos de em: em texto horizontal, Alt com a seta para a esquerda ou para a direita muda o kerning no cursor ou o tracking do texto selecionado em um passo, ou em cinco com Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	O passo do deslocamento da linha de base: em texto horizontal, Alt e Shift com a seta para cima ou para baixo movem a linha de base em um passo, ou em cinco com Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Mostra as opções de texto japonês e de outros idiomas do Leste Asiático nos painéis Caractere, Parágrafo, OpenType e Glifos, e o comando Fontes compostas.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Mostra as opções de texto árabe, hebraico e índico nos painéis Caractere e Parágrafo, como a direção do parágrafo, as kashidas e os dígitos.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	As ferramentas de seleção selecionam o texto só na linha de base, no quadro do texto de área ou no seu demarcador, e não em qualquer ponto dentro da sua caixa.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Os menus de fontes listam cada fonte pelo nome em inglês; desativado, uma fonte que também tem um nome no próprio idioma mostra esse nome.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	O novo texto de área começa com Tamanho Automático ativado, então um quadro retangular de texto horizontal cresce ou encolhe em altura para caber o texto.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	As listas de fontes e o menu Fonte mostram uma amostra de cada fonte ao lado do nome.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	As amostras de fontes são desenhadas em texto escuro sobre branco, seja qual for o brilho da interface; vale só enquanto as visualizações de fontes nos menus estão ativadas.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	A altura de cada linha nas listas dos campos de fonte, como o do painel Caractere, e portanto o tamanho de cada amostra.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Quantas das últimas fontes usadas, de 1 a 15, Fontes Recentes e as listas de fontes mostram, da mais recente para a mais antiga.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Ao mudar a fonte ou o estilo da fonte de um texto, os caracteres para os quais a nova fonte não tem glifo mantêm a fonte que tinham.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Um realce rosa na tela de desenho marca os glifos substituídos por recursos OpenType, como as ligaduras; ele não é impresso nem exportado.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Com a ferramenta Texto, selecionar um único caractere mostra ao lado dele, na tela de desenho, uma fileira dos seus glifos alternativos para escolher.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Um realce rosa na tela de desenho marca o texto desenhado com uma fonte substituta porque a fonte dele está ausente; ele não é impresso nem exportado.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	O novo texto criado com uma ferramenta de texto começa com um texto de preenchimento selecionado, que a digitação substitui.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Digitar um marcador de lista como 1. ou * e depois um espaço no início de um parágrafo transforma o parágrafo em uma lista.
+	Fonts in this folder show in the font menus and can be used without being installed.	As fontes desta pasta aparecem nos menus de fontes e podem ser usadas sem ser instaladas.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Aplicar um estilo gráfico a um texto remove o preenchimento ou o traçado próprio dos caracteres onde o estilo tem um, para que a pintura do estilo apareça.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Alinhar e Distribuir medem o texto de ponto pela tinta dos seus glifos em vez da sua caixa em.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Alinhar e Distribuir medem o texto de área pela tinta dos seus glifos em vez do seu quadro.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	A caixa delimitadora e o painel Transformar medem o texto de ponto pela tinta dos seus glifos em vez da sua caixa em.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Ajusta o desenho, o movimento e a escala às subdivisões da grade, mesmo com a grade oculta; enquanto está ativado, Ajustar ao Pixel não se aplica.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	A cor das guias não selecionadas; uma prancheta com Rótulo das Guias desenha as próprias guias na cor do rótulo.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Desenha as guias como linhas contínuas ou como pontos, inclusive as guias que já estão no documento.
@@ -2702,6 +2739,7 @@ digits	Malayalam	Malaiala
 	Rounded Rectangle	Retângulo Arredondado
 	Rounded Rectangle Tool	Ferramenta Retângulo Arredondado
 	Rounded Rectangle…	Retângulo Arredondado…
+	Rows	Linhas
 	Rows:	Linhas:
 	Rule:	Regra:
 	Rulers	Réguas
@@ -4761,6 +4799,8 @@ axis	Both	Ambos
 @msg	All colors are within the CMYK gamut	Todas as cores estão dentro do gamut CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} cor está fora do gamut CMYK|{n} cores estão fora do gamut CMYK
 @msg	Unembedded to {_1}	Desincorporado para {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} imagem desincorporada para {folder}|{n} imagens desincorporadas para {folder}
+@msg	every numbered name for {name} is taken in that folder	todos os nomes numerados para {name} já existem nessa pasta
 @msg	Reset {_1}	Redefinir {_1}
 @msg	Sent to {_1}	Enviado para {_1}
 @msg	{_1} files	{_1} arquivos
@@ -4853,6 +4893,8 @@ axis	Both	Ambos
 @msg	automation path rejected: outside the read root {root}: {path}	caminho da automação rejeitado: fora da raiz de leitura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de leitura {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	um arquivo JavaScript vinculado está fora das raízes de leitura
+@msg	a linked image file is outside the read roots	um arquivo de imagem vinculado está fora das raízes de leitura
+@msg	a linked file's export folder is outside the read roots	a pasta de exportação de um arquivo vinculado está fora das raízes de leitura
 @msg	automation path rejected: outside the write root {root}: {path}	caminho da automação rejeitado: fora da raiz de gravação {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de gravação {roots}: {path}
 @msg	automation path rejected: path is empty	caminho da automação rejeitado: o caminho está vazio
@@ -5632,6 +5674,8 @@ axis	Both	Ambos
 @msg	the script is no longer in the Scripts folder	o script não está mais na pasta Scripts
 	Some scripts were not listed	Alguns scripts não foram listados
 	The Scripts folder cannot be read	Não é possível ler a pasta Scripts
+	Loading scripts…	Carregando scripts…
+	The Scripts folder is still being read	A pasta Scripts ainda está sendo lida
 @msg	the script's run is no longer available	a execução do script não está mais disponível
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	um comando que falhou alterou etapas de desfazer que não puderam ser restauradas, então o script foi interrompido
 @msg	a recovery copy could not be written, so the script was not run	não foi possível gravar uma cópia de recuperação, portanto o script não foi executado
@@ -5866,6 +5910,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 	Right Diagonal	Diagonal Direita
 	Left Diagonal	Diagonal Esquerda
 	Linux Display Server	Servidor de Exibição do Linux
+	Low-Latency Drawing	Desenho de Baixa Latência
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) Quando Houver uma Caneta Conectada
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Se a caneta de uma mesa digitalizadora não desenhar, escolha uma opção X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
@@ -7295,6 +7340,12 @@ anchor	Points:	Pontos:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` deve ser "free", "keepAngles" ou "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` deve ser [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Conversor de unidades
+	Unit Converter Panel	Painel Conversor de unidades
+	Copy with Units	Copiar com unidades
+	From Selection	Da seleção
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Selecionar por tipo de cor
 	Objects with Spot Colors	Objetos com cores spot
@@ -8451,6 +8502,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`{f}` is the copy of a document open now	`{f}` é a cópia de um documento aberto agora
 @msg	`{id}` is no writable format (see document.formats)	`{id}` não é um formato gravável (veja document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` não é uma biblioteca carregada
+@msg	`{file}` has no swatches of its own	`{file}` não tem amostras próprias
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` tem amostras de padrão, que um arquivo .vcswatches não pode conter
 @msg	`{key}` has no colours	`{key}` não tem cores
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` contém mais de {MAX_EDIT_WORDS} palavras
 @msg	`{key}` is a design name	`{key}` é o nome de um projeto
@@ -8742,7 +8795,13 @@ swatch	Yellow Green	Verde-amarelado
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel deve ser {own} (o modo do documento), grayscale ou bitmap
 @msg	colour groups can't go into colour groups	grupos de cores não podem ficar dentro de grupos de cores
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode e spot se aplicam somente a amostras de cor sólida
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	coluna {column}: `{cell}` é uma coluna `%` de arquivos de dados de gráfico, que não são lidos
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	linha {line}, coluna {column}: o arquivo de dados de gráfico `{path}` de `{var}` é um caminho relativo: informe `base` ou um caminho absoluto
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	linha {line}, coluna {column}: não é possível ler o arquivo de dados de gráfico de `{var}`: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	linha {line}, coluna {column}: o arquivo de dados de gráfico `{path}` de `{var}` não é seguido: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	linha {line}, coluna {column}: o arquivo de dados de gráfico `{path}` de `{var}` tem mais de {MAX_GRAPH_DATA_FILE} bytes
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	linha {line}, coluna {column}: o arquivo de dados de gráfico `{path}` de `{var}` gera um valor de gráfico com mais de {MAX_GRAPH_CSV} bytes
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	linha {line}, coluna {column}: os arquivos de dados de gráfico têm mais de {MAX_GRAPH_FILES_TOTAL} bytes no total
+@msg	`base` is empty	`base` está vazio
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	coluna {column}: `{cell}` indica `{name}`, que é uma variável de {_1}
 @msg	column {column}: `{cell}` names no variable	coluna {column}: `{cell}` não indica nenhuma variável
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	coluna {column}: o nome da variável tem mais de {MAX_NAME} caracteres

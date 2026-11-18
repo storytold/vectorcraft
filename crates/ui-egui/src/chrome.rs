@@ -36,7 +36,7 @@ use tabs::{CLOSE_BEFORE_TITLE, first_tab_shown, tab_drop, tab_groups, tab_title}
 pub use tabs::{doc_tabs, isolation_bar, step_document};
 pub(crate) use tabs::{document_window_title, show_document, window_tab};
 
-/// The application bar's height, in points (compact, as in PhotoCraft).
+/// The application bar's height, in points (compact).
 pub const APP_BAR_HEIGHT: f32 = 32.0;
 /// The brand mark's side.
 const MARK: f32 = 18.0;

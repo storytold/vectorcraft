@@ -442,6 +442,39 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     assert!((start - 0.625).abs() < 1e-6, "{start}");
 }
 
+/// Type › Size ends with a separator and Other…, which runs `type.highlightFontSize`: dimmed
+/// without selected type, enabled with it, and never checked.
+#[test]
+fn type_size_ends_with_other() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let id = "type.highlightFontSize";
+    assert!(!enabled(&app, id), "no document");
+    app.run("file.new", json!({})).unwrap();
+    let items: Vec<Item> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Sub("Size", children) => Some(children),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    let n = items.len();
+    assert!(n > 2, "{n} items");
+    assert!(matches!(items[n - 2], Item::Sep), "a separator comes before Other…");
+    assert!(matches!(&items[n - 1], Item::Cmd("Other…", c, p) if *c == id && p.is_null()), "Other… comes last");
+    assert!(items[..n - 2].iter().all(|i| matches!(i, Item::Cmd(_, "text.setStyle", _))), "the sizes come first");
+    assert!(!enabled(&app, id), "nothing selected");
+    let path = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [path]})).unwrap();
+    assert!(!enabled(&app, id), "a path selected");
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Size"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [text]})).unwrap();
+    assert!(enabled(&app, id), "type selected");
+    assert_eq!(checked(&app, id, &Value::Null), None);
+}
+
 /// Type › Dynamic Text Presets › Circle, Arch and Bow run `type.dynamicTextPreset` with their
 /// preset, enabled for point type and type on a path but not for area type alone.
 #[test]
