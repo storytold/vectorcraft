@@ -47,3 +47,5 @@ vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 craft-svg = { workspace = true, features = ["tree-render", "tree-text"] }
 vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }
+# How many times the symbol list is read to find symbols by name.
+vectorcraft-doc = { workspace = true, features = ["symbol-read-count"] }
