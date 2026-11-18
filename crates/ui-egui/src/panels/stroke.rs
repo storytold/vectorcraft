@@ -76,7 +76,7 @@ fn dash_state(dash: Option<&Dash>, last: Option<(Vec<f64>, bool)>) -> (Vec<f64>,
 }
 
 /// Six dash/gap fields → a dash pattern: stops at the first empty dash; a dash without a gap
-/// repeats its length as the gap (Illustrator's behaviour).
+/// repeats its length as the gap.
 pub fn dash_pattern(fields: &[Option<f64>; 6]) -> Vec<f64> {
     edited_dash_pattern(fields, &[])
 }
