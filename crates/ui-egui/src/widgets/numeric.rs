@@ -22,29 +22,7 @@ pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
     if bare_points && unit == Unit::Picas { Unit::Points } else { unit }
 }
 
-/// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
-/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
-/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
-/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
-/// number that reads as thousands ([`thousands`]).
-pub(super) fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
-}
-
-/// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
-/// digits (not a lone 0), a comma, exactly three digits, then at most a unit? Read as a decimal it
-/// would be a thousand times too small, so the field refuses it instead (`0,125` and `1,25` are
-/// decimals).
-fn thousands(text: &str) -> bool {
-    let number = text.trim().trim_start_matches('-');
-    let Some((whole, rest)) = number.split_once(',') else { return false };
-    let (part, unit) = rest.split_at(rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len()));
-    (1..=3).contains(&whole.len())
-        && whole.bytes().all(|b| b.is_ascii_digit())
-        && !whole.starts_with('0')
-        && part.len() == 3
-        && unit.trim().chars().all(char::is_alphabetic)
-}
+pub(super) use vectorcraft_doc::decimal_point;
 
 /// A recessed numeric field showing `value` (points) in `unit`. Returns the new value (points)
 /// when the user commits (Enter / focus loss / Shift+Enter, which keeps the focus outside dialogs).
