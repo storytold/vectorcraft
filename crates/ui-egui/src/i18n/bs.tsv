@@ -5270,6 +5270,8 @@ imageTrace	Outline	Obris
 @msg	no such spine point	nema takve tačke kičme
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` mora biti lista od najviše 10000 indeksa tačaka kičme
 @msg	`with` moves points, not a handle	`with` pomjera tačke, ne ručicu
+@msg	`link` and `independent` cannot both be true	`link` i `independent` ne mogu oba biti true
+@msg	`link` places a handle: give `handle`	`link` postavlja ručicu: navedite `handle`
 @msg	no such spine segment	nema takvog segmenta kičme
 @msg	no such subpath	nema takve podputanje
 @msg	no such user library	nema takve korisničke biblioteke
