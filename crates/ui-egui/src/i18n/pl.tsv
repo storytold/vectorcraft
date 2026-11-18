@@ -4398,6 +4398,7 @@ font-technology	Variable	Zmienne
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Kółko myszy z wciśniętym Cmd/Ctrl przewija obszar roboczy w poziomie.
 	Dragging sideways on a numeric field's label changes the field's value.	Przeciąganie w bok po etykiecie pola liczbowego zmienia wartość pola.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Gest obrotu dwoma palcami na gładziku obraca widok obszaru roboczego.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Podczas przesuwania punktów kontrolnych każda krzywa z jednym przesuniętym końcem zachowuje kształt względem swoich końców.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Przytrzymanie skrótu narzędzia wybiera je do momentu puszczenia klawisza, a potem ponownie wybierane jest poprzednie narzędzie.
 	Shows the bounding box while you move the selection or draw a shape.	Pokazuje obwiednię podczas przesuwania zaznaczenia lub rysowania kształtu.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Utwórz znaczniki przycięcia rysuje znaczniki w stylu japońskim zamiast rzymskich.

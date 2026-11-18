@@ -6956,6 +6956,7 @@ font-technology	Variable	Variable
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Musehjulet med Cmd/Ctrl holdt nede ruller lærredet sidelæns.
 	Dragging sideways on a numeric field's label changes the field's value.	Når du trækker sidelæns på et talfelts etiket, ændres feltets værdi.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	En rotationsbevægelse med to fingre på en pegeplade roterer visningen af lærredet.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Når du flytter ankerpunkter, beholder hver kurve med ét flyttet endepunkt sin form i forhold til sine endepunkter.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Når du holder et værktøjs genvejstast nede, er værktøjet valgt, indtil du slipper, og derefter vælges det forrige værktøj igen.
 	Shows the bounding box while you move the selection or draw a shape.	Viser afgrænsningsboksen, mens du flytter markeringen eller tegner en form.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Opret beskæringsmærker tegner mærker i japansk stil i stedet for romerske.
