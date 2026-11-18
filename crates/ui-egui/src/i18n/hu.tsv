@@ -1048,6 +1048,7 @@ font-technology	Variable	Változó
 	Delete Brush	Ecset törlése
 	Delete Color	Szín törlése
 	Restore Generated Table	Előállított tábla visszaállítása
+	Unshift All Colors	Az összes szín eltolásának visszavonása
 	Delete Character Style	Karakterstílus törlése
 	Delete Data Set	Adatkészlet törlése
 	Delete Empty Artboards	Üres rajztáblák törlése
@@ -4102,6 +4103,9 @@ mark-style	Japanese	Japán
 	No menu item	Nincs menüpont
 	Toolbar	Eszköztár
 	{toolbar}, in the {tool} group	{toolbar}, a(z) {tool} csoportjában
+	In the menu bar: {path}	A menüsorban: {path}
+	In the {group} group: press and hold to open it	A(z) {group} csoportban: a megnyitáshoz nyomja le és tartsa lenyomva
+	{home}, not shown now	{home}, most nem látható
 @plural	{n} result|{n} results	{n} találat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
 	Recent Commands	Legutóbbi parancsok
@@ -5458,6 +5462,7 @@ imageTrace	Outline	Körvonal
 @msg	clipboard is empty	a vágólap üres
 @msg	closing needs three anchors	a lezáráshoz három horgonypont kell
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: legalább egy színnek a színtáblában kell maradnia
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: a(z) `{k}` olyan színt nevez meg, amelyet egy másik kulcs is megnevez
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nem szín (például "#ff8800")
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: legfeljebb {MAX_TABLE} szín
 @msg	column must be true or a number from 1	a column értéke true vagy 1-től kezdődő szám lehet
@@ -7791,6 +7796,7 @@ breakText	Glyphs	Glifák
 @msg	One path lies inside the other, so they have no common tangents	Az egyik útvonal a másikon belül van, így nincsenek közös érintőik
 @msg	The paths overlap, so they have no internal tangents	Az útvonalak átfedik egymást, így nincsenek belső érintőik
 @msg	One path lies inside the other, so they have no internal tangents	Az egyik útvonal a másikon belül van, így nincsenek belső érintőik
+@msg	The point lies inside the path, so it has no tangents	A pont az útvonalon belül van, így nincsenek érintői
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
@@ -10100,6 +10106,11 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Pressure Sensitive	Nyomásérzékeny
+	Flex Ribbon	Rugalmas szalag
+	Pulse Stroke	Lüktető vonás
+	Round Flow	Kerek vonás
+	Chisel Flow	Ferde vonás
 	Fold Preview	Hajtás előnézete
 	Fold	Hajtás
 	Show Fold Lines	Hajtásvonalak megjelenítése
