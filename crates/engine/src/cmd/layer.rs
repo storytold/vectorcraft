@@ -29,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Layer…",
             ["Window", "Layers"],
             Some("Cmd+L"),
-            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer); `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps; refused while an opacity mask is edited (the Layers panel lists only the mask) → {id}",
+            "{name?, top?: bool, below?: bool, color?, template?, locked?, visible?, printable?, preview?, dimImages?} a layer directly above the current layer, at its level (a sublayer beside a current sublayer), or directly below it in Draw Behind; `top`: above all layers (Ctrl/Cmd-click the button); `below`: directly below the current layer, at its level (Ctrl/Cmd+Alt-click the button), not with `top`. Options as layer.setProps; refused while an opacity mask is edited (the Layers panel lists only the mask) → {id}",
             super::maskedit::outside_mask_editing,
             new_layer
         ),
@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Rows",
             [],
             None,
-            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer, group or Intertwine group (on top of its contents). Layers go only in layers or at the top level, objects in layers, groups and Intertwine groups; an object placed beside a top-level layer goes inside it. An object placed in an Intertwine group becomes a member drawn in its row's order, with no arranged areas, and one placed in a group that is a member becomes part of that member; one that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused. A member moved out of its Intertwine group drops its arranged areas, and a group left with one member is replaced by that member, or becomes a plain group of it when the group has an opacity, blending, appearance, mask, lock or hidden state of its own (with no member, it is removed). A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies. Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
+            "{ids|id, target, place?: \"above\"|\"below\"|\"inside\" (default inside), copy?: bool} drag rows in the Layers panel: above or below the target row (beside it, in its layer or group), or inside a layer, group or Intertwine group (on top of its contents). Layers go only in layers or at the top level, objects in layers, groups and Intertwine groups; an object placed beside a top-level layer goes inside it. An object placed in an Intertwine group becomes a member drawn in its row's order, with no arranged areas, and one placed in a group that is a member becomes part of that member; one that is or holds an Intertwine group, a Repeat, a graph or a Live Paint group is refused. A member moved out of its Intertwine group drops its arranged areas, and a group left with one member is replaced by that member, or becomes a plain group of it when the group has an opacity, blending, appearance, mask, lock or hidden state of its own (with no member, it is removed). A row never goes into itself; a locked layer or group takes nothing. `copy` (Alt-drag) moves copies, which may also go above or below a row they copy (the target among `ids`). Every selected object left hidden or locked, such as one moved into a hidden layer or group, is deselected (the key object too). One undo step → {ids}",
             has_doc,
             move_rows
         ),
@@ -526,12 +526,15 @@ fn add_layer(s: &mut Session, p: &Value, cmd: &str, label: &str, place: impl FnO
 fn new_layer(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.new";
     let below = switch_or(p, "below", false, C)?;
-    if below && bool_or(p, "top", false) {
+    let top = bool_or(p, "top", false);
+    if below && top {
         return Err(bad(C, "`top` and `below` can't both be true"));
     }
+    // In Draw Behind a layer given neither `top` nor `below` goes below the current layer.
+    let below = below || (!top && s.draw_mode == crate::DrawMode::Behind);
     let st = s.doc()?;
     // Above the current layer, at its level; below it with `below`; on top of everything with `top`.
-    let cur = st.current_layer().filter(|_| !bool_or(p, "top", false));
+    let cur = st.current_layer().filter(|_| !top);
     add_layer(s, p, C, "New Layer", |d| match cur.and_then(|c| d.position(c)) {
         Some((parent, i, _)) => Ok((parent, if below { i } else { i + 1 })),
         None => Ok((None, if below { 0 } else { usize::MAX })),
@@ -723,19 +726,18 @@ fn select_art(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         vec![id]
     };
-    let all_selected = !ids.is_empty() && ids.iter().all(|i| st.selection.contains(*i));
+    let all_selected = add && !ids.is_empty() && {
+        let selected: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
+        ids.iter().all(|i| selected.contains(i))
+    };
     let rows = st.layer_rows.clone();
     s.select(|_, sel| {
         if !add {
             sel.set(ids.iter().copied());
         } else if all_selected {
-            for i in &ids {
-                sel.remove(*i);
-            }
+            sel.remove_all(ids.iter().copied());
         } else {
-            for i in &ids {
-                sel.add(*i);
-            }
+            sel.add_all(ids.iter().copied());
         }
     })?;
     let st = s.doc_mut()?;
@@ -774,9 +776,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "no such rows"));
     }
-    // Never into itself or a row inside it.
+    // Never into itself or a row inside it. A copy may go above or below one of the rows it
+    // copies, which a move there would leave where it is (#8237).
+    let beside_itself = copy && place != Place::Inside && ids.contains(&target);
     let around = d.ancestry(target).unwrap_or_default();
-    if ids.iter().any(|i| around.contains(i)) {
+    if ids.iter().any(|i| around.contains(i) && !(beside_itself && *i == target)) {
         return Err(bad(C, "a row can't go into itself"));
     }
     let nodes: Vec<&Node> = ids.iter().filter_map(|i| d.node(*i)).collect();
@@ -788,6 +792,11 @@ fn move_rows(s: &mut Session, p: &Value) -> Result<Value> {
             parent => (parent, Some(target)),
         },
     };
+    // A copy beside a top-level layer it copies, with objects among the rows, would go inside
+    // that layer: into itself.
+    if parent.is_some_and(|p| ids.contains(&p)) {
+        return Err(bad(C, "a row can't go into itself"));
+    }
     if let Some(n) = nodes.iter().find(|n| !accepts(d, parent, n)) {
         let into = parent.and_then(|p| d.node(p)).map_or("the top level", |p| if p.is_layer() { "a layer" } else { p.kind_label() });
         return Err(bad(C, format!("{} can't go into {into}", n.display_name())));
