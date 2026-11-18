@@ -298,6 +298,30 @@ fn rescanning_drops_loaded_fonts_removed_since() {
     assert_eq!(db.outline(&again, glyph).elements(), db.outline(&face, glyph).elements());
 }
 
+/// The scan dates each installed family by its font files' creation times: a family installed
+/// just now is recently added for 30 days, and leaves the list when its files are removed and the
+/// folders scanned again. Where the file system keeps no creation time, nothing is listed.
+#[test]
+fn installed_fonts_are_recently_added_by_their_files_creation_time() {
+    let dir = font_dir("recently-added");
+    let regular = dir.join("Sysfont-Regular.ttf");
+    let created = std::fs::metadata(&regular).and_then(|m| m.created()).ok();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    let now = std::time::SystemTime::now();
+    let list = db.recently_added(now);
+    let Some(created) = created else {
+        assert_eq!(list, RecentlyAdded::default(), "no creation times: nothing is dated");
+        return;
+    };
+    assert_eq!(list.families, [FAMILY]);
+    assert!(list.recheck_at.is_some_and(|t| t >= created + RECENTLY_ADDED_WITHIN), "{list:?}");
+    assert!(db.recently_added(now + RECENTLY_ADDED_WITHIN + std::time::Duration::from_secs(60)).families.is_empty(), "31 days on");
+    std::fs::remove_file(&regular).unwrap();
+    std::fs::remove_file(dir.join("Sub/Sysfont-Bold.TTF")).unwrap();
+    assert_eq!(db.load_system_fonts(), 0);
+    assert_eq!(db.recently_added(now), RecentlyAdded::default(), "removed fonts leave the list");
+}
+
 #[test]
 fn a_background_scan_serves_the_first_lookup() {
     let dir = font_dir("background");
