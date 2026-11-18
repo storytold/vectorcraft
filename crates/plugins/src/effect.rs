@@ -620,6 +620,44 @@ mod tests {
         registry::remove(ID);
     }
 
+    /// A cached result whose gradient stop prints `plates` beside a spot swatch is refused once that
+    /// swatch is no longer a spot swatch, and used again when it is one again.
+    #[test]
+    fn cached_painted_plates_refuse_after_spot_becomes_process() {
+        let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        crate::safe_mode::set_active(None);
+        const ID: &str = "test.effect.spotplates";
+        let manifest = format!(r#"{{"id":"{ID}","name":"Test","version":"1","kind":"effect","api":2,"paintOutput":true,"params":{{}}}}"#);
+        let gray = json!({"model": "gray", "k": 0});
+        let stops = json!([{"offset": 0, "color": gray}, {"offset": 1, "color": gray, "swatch": "Ink", "plates": [0.1, 0.2, 0.3, 0.4]}]);
+        let fill = json!({"type": "gradient", "gradient": {"kind": "Linear", "stops": stops}});
+        let square = PathData::single(SubPath::polyline(&[(0.0, 0.0), (9.0, 0.0), (9.0, 9.0)].map(|(x, y)| Point::new(x, y)), true));
+        let output = json!({"objects": [{"path": square, "fills": [fill]}]}).to_string();
+        let src = crate::wat::with_imports(&manifest, "", "", &output);
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
+        let with_ink = |spot: bool| {
+            let mut doc = Document::new(100.0, 100.0);
+            doc.swatches.push(vectorcraft_color::Swatch {
+                name: "Ink".into(),
+                paint: Paint::solid(Color::cmyk(0.0, 0.5, 1.0, 0.0)),
+                global: true,
+                spot,
+            });
+            doc
+        };
+        let (spot, process) = (with_ink(true), with_ink(false));
+        let path = line(2);
+        let draw =
+            |doc: &Document| apply_painted(ID, &json!({}), &path, Rect::new(0.0, 0.0, 1.0, 1.0), FillRule::NonZero, Paints::default(), Some(doc));
+        assert!(draw(&spot).is_some());
+        assert_eq!(last_error(ID), None);
+        assert!(draw(&process).is_none(), "from the cache, refused");
+        let e = last_error(ID).unwrap();
+        assert!(e.contains("objects[0].fills[0].gradient.stops[1].plates: `plates` requires a stop linked to a spot swatch"), "{e}");
+        assert!(draw(&spot).is_some(), "from the cache, used again");
+        registry::remove(ID);
+    }
+
     /// A clock that reads `step` milliseconds later each time it is read.
     fn stepping(step: u64) -> crate::deferred::Clock {
         let t = Arc::new(std::sync::atomic::AtomicU64::new(0));

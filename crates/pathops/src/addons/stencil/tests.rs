@@ -211,6 +211,37 @@ fn bridges_found_before_the_budget_runs_out_are_kept() {
 }
 
 #[test]
+fn joined_art_is_kept_when_lines_in_one_direction_run_out() {
+    // A ring whose thin left bar has edges of many short zigzag segments: lines across it in the
+    // horizontal direction look at many more segments than vertical lines across the top bar.
+    let zigzag = |x: f64, from: f64, to: f64, out: &mut Vec<Point>| {
+        let n = ((to - from).abs() / 0.05) as usize;
+        out.extend((1..n).map(|i| Point::new(x + if i % 2 == 1 { 0.02 } else { 0.0 }, from + (to - from) * i as f64 / n as f64)));
+    };
+    let mut outer = vec![Point::new(0.0, 0.0), Point::new(200.0, 0.0), Point::new(200.0, 100.0), Point::new(0.0, 100.0)];
+    zigzag(0.0, 100.0, 0.0, &mut outer);
+    let mut hole = vec![Point::new(10.0, 20.0), Point::new(170.0, 20.0), Point::new(170.0, 80.0), Point::new(10.0, 80.0)];
+    zigzag(9.98, 80.0, 20.0, &mut hole);
+    let art = PathData::new(vec![SubPath::polyline(&outer, true), SubPath::polyline(&hole, true)]);
+    let found = contours(&art, 4.0).unwrap();
+    let shortest = spec(4.0, 1, BridgeDirection::Shortest);
+    let views = (0..180).step_by(SHORTEST_STEP_DEG).count();
+    // A share of the work that runs out in the horizontal direction while another direction joins
+    // the island.
+    let share = (1..5000)
+        .find(|&budget| {
+            let all: Vec<View> =
+                (0..180).step_by(SHORTEST_STEP_DEG).map(|d| View::new(&found, (d as f64).to_radians(), 4.0, budget).unwrap()).collect();
+            let mut picker = Picker::new(&found, &all, 4.0);
+            picker.connect();
+            all.iter().any(View::exhausted) && picker.unjoined() == 0
+        })
+        .expect("a share of the work that runs out with the island joined");
+    let (bridges, unjoined) = choose(&found, shortest, share * views).unwrap();
+    assert_eq!((bridges.len(), unjoined), (1, 0));
+}
+
+#[test]
 fn curves_are_followed_within_a_twentieth_of_the_width() {
     let circle = PathData::from_bezpath(&kurbo::Circle::new((0.0, 0.0), 100.0).to_path(0.001));
     let mut counts = vec![];

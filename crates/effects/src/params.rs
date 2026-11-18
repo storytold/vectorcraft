@@ -31,7 +31,8 @@ pub fn merged_params(id: &str, params: &Value) -> Value {
 /// (`lightRotation`, `lightHeight`, `lightBehind`). Scribble took one `variation` before its
 /// separate `overlapVariation` and `spacingVariation`. Earlier values (from a file or a script of
 /// then) become the current ones that show exactly the same, unless those are given too, which win.
-/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°).
+/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°), and a Warp's
+/// map `version` given as a whole float is stored as an integer.
 pub fn upgrade_params(id: &str, params: &Value) -> Value {
     match params {
         Value::Object(m) => {
@@ -39,6 +40,7 @@ pub fn upgrade_params(id: &str, params: &Value) -> Value {
             upgrade_perspective(id, &mut m);
             upgrade_light(id, &mut m);
             upgrade_scribble(id, &mut m);
+            upgrade_warp_version(id, &mut m);
             Value::Object(m)
         }
         other => other.clone(),
@@ -71,6 +73,19 @@ fn upgrade_perspective(id: &str, m: &mut Map<String, Value>) {
     }
 }
 
+/// A Warp's map `version` given as a whole float (`1.0`) is stored as the integer.
+fn upgrade_warp_version(id: &str, m: &mut Map<String, Value>) {
+    if !id.starts_with("warp.") {
+        return;
+    }
+    if let Some(v) = m.get_mut("version")
+        && !v.is_u64()
+        && let Some(n) = crate::warp::warp_version(v)
+    {
+        *v = json!(n);
+    }
+}
+
 fn upgrade_scribble(id: &str, m: &mut Map<String, Value>) {
     if id != "stylize.scribble" {
         return;
@@ -91,7 +106,15 @@ pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
     if !catalog_index().contains_key(id) {
         vectorcraft_plugins::effect::installed(id)?;
     }
-    Some(Effect { id: id.to_string(), params: merged_params(id, params), visible: true })
+    let mut params = merged_params(id, params);
+    // A new Warp takes its style's Bézier net unless a map is given; the catalog's defaults carry
+    // no version, so warps saved without one keep the earlier map.
+    if id.starts_with("warp.")
+        && let Value::Object(m) = &mut params
+    {
+        m.entry("version").or_insert(json!(crate::warp::WARP_NET));
+    }
+    Some(Effect { id: id.to_string(), params, visible: true })
 }
 
 /// Scale the distance parameters of `e` by `s` (Scale Strokes & Effects; see

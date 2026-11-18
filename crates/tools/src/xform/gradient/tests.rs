@@ -111,14 +111,41 @@ fn the_end_handle_changes_only_the_end_and_the_start_moves_both() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = GradientTool::default();
-    t.pointer(&cx, &ev(PointerKind::Down, Point::new(200.0, 150.0)));
-    let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(220.0, 170.0)))).clone();
+    // Alt-drag moves the end freely: the length and the angle change together.
+    t.pointer(&cx, &with(ALT, ev(PointerKind::Down, Point::new(200.0, 150.0))));
+    let v = preview(&t.pointer(&cx, &with(ALT, ev(PointerKind::Drag, Point::new(220.0, 170.0))))).clone();
     assert_eq!((point(&v["start"]), point(&v["end"])), (Point::new(100.0, 150.0), Point::new(220.0, 170.0)));
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, Point::new(220.0, 170.0))), vec![Action::Commit]);
     // The start handle moves the whole vector.
     t.pointer(&cx, &ev(PointerKind::Down, Point::new(100.0, 150.0)));
     let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(110.0, 140.0)))).clone();
     assert_eq!((point(&v["start"]), point(&v["end"])), (Point::new(110.0, 140.0), Point::new(210.0, 140.0)));
+}
+
+/// A plain drag of the end handle changes only the length: the end stays on the bar's line, with
+/// Shift too, never nearer the start than `MIN_LENGTH`, and it does not snap to a target off
+/// that line.
+#[test]
+fn a_plain_drag_of_the_end_handle_changes_only_the_length() {
+    let (d, s) = graded(two());
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = GradientTool::default();
+    let drag = |t: &mut GradientTool, m: Mods, to: Point| {
+        t.pointer(&cx, &with(m, ev(PointerKind::Down, Point::new(200.0, 150.0))));
+        let v = preview(&t.pointer(&cx, &with(m, ev(PointerKind::Drag, to)))).clone();
+        let guides = t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { .. }));
+        t.pointer(&cx, &with(m, ev(PointerKind::Up, to)));
+        (point(&v["start"]), point(&v["end"]), guides)
+    };
+    let start = Point::new(100.0, 150.0);
+    assert_eq!(drag(&mut t, Mods::default(), Point::new(220.0, 170.0)), (start, Point::new(220.0, 150.0), false));
+    assert_eq!(drag(&mut t, SHIFT, Point::new(230.0, 100.0)), (start, Point::new(230.0, 150.0), false));
+    // Near the rectangle's corner, off the line: no snap.
+    assert_eq!(drag(&mut t, Mods::default(), Point::new(202.0, 197.0)), (start, Point::new(202.0, 150.0), false));
+    // Dragged back past the start, the end stops short of it.
+    let (_, end, _) = drag(&mut t, Mods::default(), Point::new(60.0, 160.0));
+    assert!(end.distance(Point::new(100.0 + cx.tol(MIN_LENGTH), 150.0)) < 1e-9, "{end:?}");
 }
 
 #[test]
@@ -140,9 +167,9 @@ fn handles_snap_to_anchors_and_shift_uses_the_constrain_angle() {
     let p = paint();
     let mut cx = cx(&d, &s, &p);
     let mut t = GradientTool::default();
-    // The end handle dragged near the rectangle's corner lands on it, with a guide label.
-    t.pointer(&cx, &ev(PointerKind::Down, Point::new(200.0, 150.0)));
-    let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(202.0, 197.0)))).clone();
+    // The end handle Alt-dragged near the rectangle's corner lands on it, with a guide label.
+    t.pointer(&cx, &with(ALT, ev(PointerKind::Down, Point::new(200.0, 150.0))));
+    let v = preview(&t.pointer(&cx, &with(ALT, ev(PointerKind::Drag, Point::new(202.0, 197.0))))).clone();
     assert_eq!(point(&v["end"]), Point::new(200.0, 200.0));
     assert!(t.overlays(&cx).iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "anchor")));
     t.pointer(&cx, &ev(PointerKind::Up, Point::new(202.0, 197.0)));
@@ -156,12 +183,13 @@ fn handles_snap_to_anchors_and_shift_uses_the_constrain_angle() {
     let v = preview(&t.pointer(&cx2, &ev(PointerKind::Drag, Point::new(150.0, 130.0)))).clone();
     assert_eq!(point(&v["start"]), Point::new(100.0, 100.0));
     t.pointer(&cx2, &ev(PointerKind::Up, Point::new(150.0, 130.0)));
-    // Constrain Angle 30: Shift gives 30 and 75 degrees (and no snapping).
+    // Constrain Angle 30: Shift with Alt gives 30 and 75 degrees (and no snapping).
     cx.constrain_angle = 30.0;
     let angle = |v: &Value| GradientGeom { start: point(&v["start"]), end: point(&v["end"]), aspect: 1.0, focal: None }.angle_deg();
+    let shift_alt = Mods { alt: true, ..SHIFT };
     for (to, want) in [(Point::new(190.0, 100.0), 30.0), (Point::new(125.0, 60.0), 75.0)] {
-        t.pointer(&cx, &ev(PointerKind::Down, Point::new(200.0, 150.0)));
-        let v = preview(&t.pointer(&cx, &with(SHIFT, ev(PointerKind::Drag, to)))).clone();
+        t.pointer(&cx, &with(shift_alt, ev(PointerKind::Down, Point::new(200.0, 150.0))));
+        let v = preview(&t.pointer(&cx, &with(shift_alt, ev(PointerKind::Drag, to)))).clone();
         assert!((angle(&v) - want).abs() < 1e-9, "{want}: {v}");
         t.pointer(&cx, &ev(PointerKind::Up, to));
     }
@@ -452,4 +480,37 @@ fn a_radial_with_a_negative_aspect_drags_to_a_positive_one() {
     t.pointer(&cx, &ev(PointerKind::Down, Point::new(100.0, 100.0)));
     let v = preview(&t.pointer(&cx, &ev(PointerKind::Drag, Point::new(100.0, 80.0)))).clone();
     assert!((v["aspect"].as_f64().unwrap() - 70.0).abs() < 1e-9, "{v}");
+}
+
+/// A gradient that repeats `n` times shows a tick across the bar where each run meets the next
+/// (`n` - 1 of them), and a conic one across its extent at each such turn; one that pads shows
+/// none.
+#[test]
+fn the_annotator_marks_where_the_runs_meet() {
+    use vectorcraft_color::GradientSpread;
+    let ticks = |kind: GradientKind, spread: GradientSpread| {
+        let (mut d, s) = graded(two());
+        let n = d.node_mut(s.objects[0]).unwrap();
+        let Paint::Gradient(mut g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        (g.gradient.kind, g.gradient.spread, g.gradient.repeats) = (kind, spread, 4);
+        let geom = g.geom.unwrap();
+        n.appearance.set_fill(Paint::Gradient(g));
+        let p = paint();
+        let o = GradientTool::default().overlays(&cx(&d, &s, &p));
+        let lines: Vec<(Point, Point)> =
+            o.iter().filter_map(|o| if let Overlay::Line { a, b, dashed: true, .. } = o { Some((*a, *b)) } else { None }).collect();
+        (lines, geom)
+    };
+    let (lines, geom) = ticks(GradientKind::Linear, GradientSpread::Repeat);
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    for (k, (a, b)) in lines.iter().enumerate() {
+        let at = geom.start + (geom.end - geom.start) * ((k + 1) as f64 / 4.0);
+        assert!(a.midpoint(*b).distance(at) < 1e-9, "tick {k} at {at:?}: {a:?} {b:?}");
+    }
+    let (lines, geom) = ticks(GradientKind::Conic, GradientSpread::Reflect);
+    assert_eq!(lines.len(), 3);
+    let frame = geom.conic_frame();
+    let quarter = frame * Point::new(0.0, 1.0);
+    assert!(lines[0].0.midpoint(lines[0].1).distance(quarter) < 1e-9, "{lines:?} {quarter:?}");
+    assert!(ticks(GradientKind::Radial, GradientSpread::Pad).0.is_empty());
 }

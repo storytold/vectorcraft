@@ -82,6 +82,16 @@ impl Paths {
     pub(crate) fn len(&self) -> usize {
         self.ids.len()
     }
+    /// The entry of `id` in the table: `Some(None)` when the id appears more than once, `None`
+    /// when it isn't in the table.
+    pub(crate) fn entry(&self, id: &NodeId) -> Option<Option<u32>> {
+        self.ids.get(id).copied()
+    }
+    /// Entry `e`'s parent entry (`u32::MAX` for a top-level layer) and its index among its
+    /// siblings.
+    pub(crate) fn place(&self, e: u32) -> Option<(u32, u32)> {
+        self.at.get(e as usize).copied()
+    }
 }
 
 /// Lookups that had to walk (the cache didn't have the id, or its path no longer checks out)
@@ -106,6 +116,22 @@ pub fn tree_walks() -> u64 {
 /// Adds one to [`tree_walks`].
 pub(crate) fn note_tree_walk() {
     TREE_WALKS.set(TREE_WALKS.get().saturating_add(1));
+}
+
+thread_local! {
+    /// [`path_lookups`] of this thread.
+    static PATH_LOOKUPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times [`crate::Document::index_path`] has run on this thread, the lookups that
+/// [`crate::Document::node`] and [`crate::Document::ancestry`] make through it included.
+pub fn path_lookups() -> u64 {
+    PATH_LOOKUPS.get()
+}
+
+/// Adds one to [`path_lookups`].
+pub(crate) fn note_path_lookup() {
+    PATH_LOOKUPS.set(PATH_LOOKUPS.get().saturating_add(1));
 }
 
 /// The cache, shared by clones of a document (each checks every path it uses against its own tree).

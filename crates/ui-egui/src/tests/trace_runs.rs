@@ -16,7 +16,41 @@ fn app() -> VectorcraftApp {
     app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
     let img = image::RgbaImage::from_fn(40, 40, |x, y| image::Rgba(if x < 20 && y < 30 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let data = vectorcraft_format::base64_encode(&png);
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false})).unwrap();
     app.trace_runs.off_the_ui_thread = true;
@@ -108,6 +142,69 @@ fn without_threads_make_traces_at_once() {
     assert_eq!(undos(&app), before + 1);
 }
 
+/// A trace's notes: the status bar names how many there are and the first of them, and keeps them
+/// all, in the reply's order, for the message's hover. Make and Make and Expand, at once, off the
+/// UI thread and from the Image Trace panel; a trace without notes leaves the status bar empty.
+/// A trace that made no paths shows its first note as it is, and keeps them all for the hover.
+#[test]
+fn a_trace_shows_how_many_notes_it_has() {
+    let mut app = app();
+    let img = image::RgbaImage::from_fn(1501, 20, |x, _| image::Rgba(if x < 700 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }));
+    let mut png = vec![];
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let data = vectorcraft_format::base64_encode(&png);
+    let slow = "The image is 1501 × 20 pixels, more than 1500 on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.";
+    let some = ("#000000", "keepColors: none of the colors the trace found matches #00ffff, so nothing of it is traced.");
+    let none = ("#ff00ff", "Nothing was traced: none of the colors the trace found matches keepColors (#ff00ff, #00ffff).");
+    for (command, threaded, from_panel) in
+        [("imageTrace.make", false, false), ("imageTrace.make", true, false), ("imageTrace.makeAndExpand", true, true)]
+    {
+        for (keep, first) in [some, none] {
+            app.run("file.place", json!({"name": "wide.png", "dataBase64": data, "link": false})).unwrap();
+            app.trace_runs.off_the_ui_thread = threaded;
+            app.ui.status.clear();
+            let p = json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "keepColors": [keep, "#00ffff"]}});
+            trace_runs::start(&mut app, command, p, from_panel).unwrap();
+            wait(&mut app);
+            let notes = [first, slow].map(String::from).to_vec();
+            let status = if keep == some.0 { format!("Traced with 2 notes: {first}") } else { first.to_string() };
+            assert_eq!(app.ui.status, status, "{command}, threaded {threaded}");
+            assert_eq!(app.ui.status_notes, Some((status, notes)), "{command}, threaded {threaded}");
+        }
+    }
+    // The 40 × 40 px image of [`app`] traces without notes: the status bar stays empty.
+    let mut app = self::app();
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        app.ui.status.clear();
+        let v = app.run(command, json!({"preset": "Default"})).unwrap();
+        assert_eq!(v["warnings"], json!([]), "{command}");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("", &None), "{command}");
+        app.run("edit.undo", json!({})).unwrap();
+    }
+}
+
+/// A trace without notes clears the message an earlier trace's notes left, with its hover notes,
+/// and leaves any other message, one with the same text set since included.
+#[test]
+fn a_trace_without_notes_clears_an_earlier_traces_notes() {
+    let mut app = app();
+    let earlier = "Traced with 2 notes: a note";
+    for (then, kept) in [(None, ""), (Some("Ready"), "Ready"), (Some(earlier), earlier)] {
+        app.status(earlier);
+        app.trace_runs.notes_status = Some((earlier.to_string(), app.ui.status_sets));
+        if let Some(then) = then {
+            app.status(then);
+        }
+        app.ui.status_notes = Some((app.ui.status.clone(), vec!["a note".to_string(), "another".to_string()]));
+        let v = app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+        assert_eq!(v["warnings"], json!([]), "{then:?}");
+        assert_eq!(app.ui.status, kept, "{then:?}");
+        assert_eq!(app.ui.status_notes.is_none(), kept.is_empty(), "{then:?}");
+        assert_eq!(app.trace_runs.notes_status, None, "{then:?}");
+        app.run("edit.undo", json!({})).unwrap();
+    }
+}
+
 /// Nothing to trace fails at once, before anything runs.
 #[test]
 fn nothing_to_trace_fails_at_once() {
@@ -160,6 +257,23 @@ fn a_trace_needs_its_image_as_it_was() {
     wait(&mut app);
     assert_eq!(undos(&app), before, "nothing changes");
     assert!(app.ui.status.contains("changed meanwhile: trace it again"), "{}", app.ui.status);
+}
+
+/// A trace started before File › Revert doesn't apply after it, even when the document was
+/// reverted to the same image: nothing changes, and the status bar says why.
+#[test]
+fn a_trace_started_before_a_revert_does_not_apply() {
+    let mut app = app();
+    let i = app.session.active_index().unwrap();
+    let copy = (*app.session.doc().unwrap().doc).clone();
+    let [img] = app.session.doc().unwrap().selection.objects[..] else { panic!("the image is selected") };
+    crate::menus::invoke(&mut app, "imageTrace.make", json!({"preset": "Default"}));
+    assert!(app.session.replace_document(i, copy));
+    wait(&mut app);
+    assert_eq!(undos(&app), 0, "nothing changes");
+    let st = app.session.doc().unwrap();
+    assert!(matches!(st.doc.node(img).unwrap().kind, vectorcraft_doc::NodeKind::Image(_)), "the image is not traced");
+    assert_eq!(app.ui.status, "Image Trace finished, but its document was reverted: trace it again");
 }
 
 /// The progress window opens after its delay with Cancel and Continue in Background; Continue in

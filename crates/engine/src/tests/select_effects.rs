@@ -1,6 +1,6 @@
 //! Clicks, hovers and marquees with the selection tools leave out the area that raster effects
 //! (drop shadows, glows, blurs) paint beyond an object: there they reach the object under the
-//! effect, or nothing.
+//! effect, or nothing. Clicks and marquees take art where its geometry effects draw it.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::NodeId;
@@ -168,9 +168,41 @@ fn a_click_on_the_drop_shadow_of_a_symbols_art_does_not_select_the_instance() {
 fn a_click_on_the_drop_shadow_of_an_image_outside_its_frame_does_not_select_it() {
     let mut s = session();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [65, 65]}));
     let im = NodeId(r["ids"][0].as_u64().unwrap());
     // The frame lies from x 50 to 80 and the shadow from 90 to 120.
@@ -233,4 +265,265 @@ fn a_marquee_that_touches_only_a_drop_shadow_does_not_select_its_object() {
     assert!(press(&mut s, "selection", (85.0, 40.0), (95.0, 60.0), Mods::default()).is_empty());
     // From above B, over B and the shadow: B only.
     assert_eq!(press(&mut s, "selection", (105.0, 5.0), (115.0, 30.0), Mods::default()), [b]);
+}
+
+/// The selection after a drag with `tool` from `from` to `to`.
+fn marquee(s: &mut Session, tool: &str, from: (f64, f64), to: (f64, f64)) -> vectorcraft_doc::Selection {
+    press(s, tool, from, to, Mods::default());
+    s.doc().unwrap().selection.clone()
+}
+
+/// The point of anchor `(si, ai)` of path `id`.
+fn anchor_point(s: &Session, id: NodeId, (si, ai): vectorcraft_doc::AnchorRef) -> Point {
+    let path = s.doc().unwrap().doc.node(id).and_then(|n| n.path_data()).unwrap();
+    path.anchors().find(|(s, i, _)| (*s, *i) == (si, ai)).map(|(.., a)| a.p).unwrap()
+}
+
+/// The anchors a marquee or a click picked on `id`, as points.
+fn picked_points(s: &Session, id: NodeId) -> Vec<Point> {
+    let refs: Vec<_> = s.doc().unwrap().selection.partial(id).into_iter().flatten().copied().collect();
+    refs.into_iter().map(|r| anchor_point(s, id, r)).collect()
+}
+
+/// The anchors the tool marks as hovered.
+fn anchor_marks(s: &mut Session) -> Vec<Point> {
+    s.overlays(ViewInfo::default())
+        .into_iter()
+        .filter_map(|o| if let vectorcraft_tools::Overlay::Anchor { p, .. } = o { Some(p) } else { None })
+        .collect()
+}
+
+fn hover(s: &mut Session, x: f64, y: f64) -> Cursor {
+    let v = ViewInfo::default();
+    s.pointer(&PointerEvent::new(PointerKind::Move, x, y), v).unwrap();
+    s.cursor(Point::new(x, y), Mods::default(), v)
+}
+
+#[test]
+fn a_direct_selection_marquee_leaves_out_a_drop_shadow() {
+    let mut s = session();
+    let (a, b) = shadow_over_b(&mut s);
+    let (a_before, b_before) = (bounds(&s, a), bounds(&s, b));
+    assert_ne!(pixel(&s, 90, 50), WHITE);
+    run(&mut s, "select.none", json!({}));
+    // Over the shadow alone: no object, no anchor, no segment.
+    let sel = marquee(&mut s, "directSelection", (85.0, 40.0), (95.0, 60.0));
+    assert!(sel.objects.is_empty() && sel.anchors.is_empty() && sel.segments.is_empty(), "{sel:?}");
+    // Over the shadow and B's upper left corner: that anchor of B, and nothing of A.
+    let sel = marquee(&mut s, "directSelection", (90.0, 5.0), (105.0, 30.0));
+    assert_eq!(sel.objects, [b]);
+    assert_eq!(picked_points(&s, b), [Point::new(100.0, 20.0)]);
+    // Across B's top edge under the shadow, with neither of its anchors inside: that segment.
+    run(&mut s, "select.none", json!({}));
+    assert_ne!(pixel(&s, 112, 25), BLUE);
+    let sel = marquee(&mut s, "directSelection", (110.0, 5.0), (115.0, 30.0));
+    assert_eq!(sel.objects, [b]);
+    assert!(sel.segments.contains_key(&b) && !sel.segments.contains_key(&a), "{sel:?}");
+    assert_eq!((bounds(&s, a), bounds(&s, b)), (a_before, b_before));
+}
+
+#[test]
+fn direct_selection_hover_leaves_out_a_drop_shadow_and_marks_the_anchor_under_it() {
+    let mut s = session();
+    let (_, b) = shadow_over_b(&mut s);
+    // B's upper left corner lies under the shadow.
+    assert_ne!(pixel(&s, 101, 21), BLUE);
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("directSelection", ViewInfo::default()).unwrap();
+    for (x, y) in [(90.0, 50.0), (110.0, 50.0)] {
+        assert_eq!(hover(&mut s, x, y), Cursor::ArrowHollow, "({x}, {y})");
+        assert!(anchor_marks(&mut s).is_empty(), "({x}, {y})");
+    }
+    assert_eq!(hover(&mut s, 101.0, 21.0), Cursor::DirectAnchor);
+    assert_eq!(anchor_marks(&mut s), [Point::new(100.0, 20.0)]);
+    // A press there picks that anchor of B.
+    assert_eq!(press(&mut s, "directSelection", (101.0, 21.0), (101.0, 21.0), Mods::default()), [b]);
+    assert_eq!(picked_points(&s, b), [Point::new(100.0, 20.0)]);
+}
+
+#[test]
+fn a_group_selection_click_on_a_drop_shadow_selects_the_object_under_it() {
+    let mut s = session();
+    let (a, b) = shadow_over_b(&mut s);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(press(&mut s, "groupSelection", (110.0, 50.0), (110.0, 50.0), Mods::default()), [b]);
+    assert!(press(&mut s, "groupSelection", (90.0, 50.0), (90.0, 50.0), Mods::default()).is_empty());
+    assert_eq!(press(&mut s, "groupSelection", (50.0, 50.0), (50.0, 50.0), Mods::default()), [a]);
+}
+
+#[test]
+fn group_selection_clicks_on_a_drop_shadow_climb_the_groups_of_the_object_under_it() {
+    let mut s = session();
+    // B and C in one group, A and D in another above it, and A's shadow over B.
+    let b = rect(&mut s, 100.0, 20.0, 60.0, 60.0, "#0000ff");
+    let c = rect(&mut s, 170.0, 20.0, 20.0, 20.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0, c.0]}));
+    let gb = id_of(&run(&mut s, "object.group", json!({})));
+    let a = rect(&mut s, 20.0, 20.0, 60.0, 60.0, "#ff0000");
+    let d = rect(&mut s, 20.0, 120.0, 20.0, 20.0, "#ff0000");
+    run(&mut s, "select.set", json!({"ids": [a.0, d.0]}));
+    let ga = id_of(&run(&mut s, "object.group", json!({})));
+    shadow(&mut s, a, 40.0);
+    assert_ne!(pixel(&s, 110, 50), BLUE);
+    assert_ne!(pixel(&s, 90, 50), WHITE);
+    run(&mut s, "select.none", json!({}));
+    let click = |s: &mut Session, x, y| {
+        let mut sel = press(s, "groupSelection", (x, y), (x, y), Mods::default());
+        sel.sort_by_key(|n| n.0);
+        sel
+    };
+    assert_eq!(click(&mut s, 110.0, 50.0), [b]);
+    let mut both = vec![b, gb];
+    both.sort_by_key(|n| n.0);
+    assert_eq!(click(&mut s, 110.0, 50.0), both);
+    // With A selected, a click on its shadow over the canvas does not add A's group.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert!(click(&mut s, 90.0, 50.0).is_empty());
+    // On A itself the second click adds it.
+    assert_eq!(click(&mut s, 50.0, 50.0), [a]);
+    let mut both = vec![a, ga];
+    both.sort_by_key(|n| n.0);
+    assert_eq!(click(&mut s, 50.0, 50.0), both);
+}
+
+#[test]
+fn a_group_selection_marquee_leaves_out_a_drop_shadow() {
+    let mut s = session();
+    let (a, b) = shadow_over_b(&mut s);
+    run(&mut s, "select.none", json!({}));
+    let sel = marquee(&mut s, "groupSelection", (85.0, 40.0), (95.0, 60.0));
+    assert!(sel.objects.is_empty() && sel.anchors.is_empty(), "{sel:?}");
+    // Over the shadow and B's upper left corner: B whole, and not A (#8047).
+    let sel = marquee(&mut s, "groupSelection", (90.0, 5.0), (105.0, 30.0));
+    assert_eq!(sel.objects, [b]);
+    assert!(sel.partial(b).is_none(), "{sel:?}");
+    // With E, a marquee around B that crosses A's shadow selects B whole, and not A.
+    run(&mut s, "select.none", json!({}));
+    let v = ViewInfo::default();
+    s.select_tool("groupSelection", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 95.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 130.0, 50.0), v).unwrap();
+    s.tool_key(vectorcraft_tools::ToolKey::Letter('e'), Mods::default(), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 165.0, 90.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 165.0, 90.0), v).unwrap();
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!(sel.objects, [b]);
+    assert!(sel.partial(b).is_none() && sel.partial(a).is_none(), "{sel:?}");
+}
+
+#[test]
+fn group_selection_hover_over_a_drop_shadow_marks_nothing() {
+    let mut s = session();
+    let (_, b) = shadow_over_b(&mut s);
+    run(&mut s, "select.none", json!({}));
+    s.select_tool("groupSelection", ViewInfo::default()).unwrap();
+    for (x, y) in [(90.0, 50.0), (110.0, 50.0), (101.0, 21.0)] {
+        assert_eq!(hover(&mut s, x, y), Cursor::GroupSelection, "({x}, {y})");
+        assert!(anchor_marks(&mut s).is_empty(), "({x}, {y})");
+    }
+    assert_eq!(press(&mut s, "groupSelection", (110.0, 50.0), (110.0, 50.0), Mods::default()), [b]);
+}
+
+/// A rectangle that a Transform effect moves 100 pt to the right is selected by a click and by a
+/// marquee where it is drawn, and not at its own place, which it no longer paints. The same holds
+/// for a group whose own Transform effect moves it.
+#[test]
+fn a_click_and_a_marquee_select_art_where_its_transform_effect_draws_it() {
+    let mut s = session();
+    let a = rect(&mut s, 20.0, 20.0, 40.0, 40.0, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [a.0], "params": {"moveH": 100}, "item": null}));
+    assert_eq!(pixel(&s, 140, 40), [255, 0, 0, 255], "drawn where it moved");
+    assert_eq!(pixel(&s, 40, 40), WHITE, "not drawn at its own place");
+    run(&mut s, "select.none", json!({}));
+    assert!(click(&mut s, 40.0, 40.0).is_empty());
+    assert_eq!(click(&mut s, 140.0, 40.0), [a]);
+    assert_eq!(press(&mut s, "selection", (110.0, 10.0), (130.0, 30.0), Mods::default()), [a], "a marquee across its drawn corner");
+    run(&mut s, "select.none", json!({}));
+    assert!(press(&mut s, "selection", (10.0, 10.0), (30.0, 30.0), Mods::default()).is_empty(), "a marquee across its own corner");
+
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [g.0], "params": {"moveH": 100}, "item": null}));
+    assert_eq!(pixel(&s, 140, 140), BLUE, "the group drawn where it moved");
+    run(&mut s, "select.none", json!({}));
+    assert!(click(&mut s, 40.0, 140.0).is_empty());
+    assert_eq!(click(&mut s, 140.0, 140.0), [g]);
+    assert_eq!(press(&mut s, "selection", (110.0, 110.0), (130.0, 130.0), Mods::default()), [g]);
+    run(&mut s, "select.none", json!({}));
+    assert!(press(&mut s, "selection", (10.0, 110.0), (30.0, 130.0), Mods::default()).is_empty());
+}
+
+/// A group's own fill paints its member's shape before the member's own Transform effect moves the
+/// member: a click there selects the group, and a click on the moved member selects it too. A
+/// Direct Selection marquee takes the group there and the member where it moved.
+#[test]
+fn a_click_selects_a_group_where_its_own_fill_paints_a_moved_member() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [b.0], "params": {"moveH": 100}, "item": null}));
+    assert_eq!(pixel(&s, 40, 140), [255, 0, 0, 255], "the group's fill at the member's own place");
+    assert_eq!(pixel(&s, 140, 140), BLUE, "the member where it moved");
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(click(&mut s, 40.0, 140.0), [g]);
+    run(&mut s, "select.none", json!({}));
+    assert_eq!(click(&mut s, 140.0, 140.0), [g]);
+    // A marquee across the edge of the group's fill takes the group, and one across the moved
+    // member's edge takes the member.
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 130.0, 30.0, 150.0), None, true), [g]);
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(110.0, 130.0, 130.0, 150.0), None, true), [b]);
+}
+
+/// An inner group's own fill paints its member's shape before the member's own Transform effect
+/// moves the member, and so does an outer group's own fill around it: a Direct Selection marquee
+/// across the edge of those fills takes both groups, and one across the moved member takes it.
+#[test]
+fn a_marquee_takes_an_inner_groups_own_fill_inside_a_painted_group() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [b.0], "params": {"moveV": -100}, "item": null}));
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    let o = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    assert_eq!(pixel(&s, 40, 140), [0, 255, 0, 255], "the outer group's fill at the member's own place");
+    assert_eq!(pixel(&s, 40, 40), BLUE, "the member where it moved");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 130.0, 30.0, 150.0), None, true), [o, g]);
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 30.0, 30.0, 50.0), None, true), [b]);
+}
+
+/// A group's own fill paints its member's shape before the member's own Transform effect moves
+/// the member, and so does its layer's own fill around it: a Direct Selection marquee across the
+/// edge of the group's fill takes the group, and one across the moved member takes it.
+#[test]
+fn a_marquee_takes_a_groups_own_fill_inside_a_painted_layer() {
+    let mut s = session();
+    let b = rect(&mut s, 20.0, 120.0, 40.0, 40.0, "#0000ff");
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let g = id_of(&run(&mut s, "object.group", json!({})));
+    run(&mut s, "appearance.addFill", json!({}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": 0}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "ids": [b.0], "params": {"moveV": -100}, "item": null}));
+    let l = s.doc().unwrap().doc.layers[0].id;
+    run(&mut s, "appearance.addFill", json!({"ids": [l.0]}));
+    assert!(!s.doc().unwrap().doc.layers[0].appearance.items.is_empty(), "the layer has a fill of its own");
+    assert_eq!(pixel(&s, 40, 40), BLUE, "the member where it moved");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 130.0, 30.0, 150.0), None, true), [g]);
+    assert_eq!(vectorcraft_doc::hit::marquee(doc, Rect::new(10.0, 30.0, 30.0, 50.0), None, true), [b]);
 }

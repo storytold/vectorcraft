@@ -110,9 +110,16 @@ impl VectorcraftApp {
         self.views.get_mut(i)
     }
 
+    /// The mapping between the document and the canvas of the last frame, at the active view (none
+    /// before the canvas is laid out or without a document).
+    pub(crate) fn canvas_xf(&self) -> Option<crate::canvas::Xf> {
+        Some(crate::canvas::Xf::at(self.canvas_rect?, self.view()?, self.canvas_ui_zoom))
+    }
+
     pub fn view_info(&self) -> ViewInfo {
         ViewInfo {
-            zoom: self.view().map(|v| v.zoom).unwrap_or(1.0),
+            // The tools measure their tolerances and widgets in the interface's points.
+            zoom: self.view().map_or(1.0, |v| v.screen_zoom(self.canvas_ui_zoom)),
             outline: self.outline_view(),
             smart_guides: self.ui.view.smart_guides,
             guides: self.ui.view.guides,

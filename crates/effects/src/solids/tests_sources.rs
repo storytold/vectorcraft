@@ -317,6 +317,86 @@ fn images_are_refused_alone_and_in_a_group_with_image_trace_named() {
     }
 }
 
+/// A clipping group: `art` inside a clipping path of `path` filled under `rule`.
+fn shaped_clip_group(id: u64, path: PathData, rule: FillRule, art: Vec<Node>) -> Node {
+    let mut clipping = Node::path(NodeId(id + 1), path, Appearance::default());
+    if let NodeKind::Path { clipping: c, rule: r, .. } = &mut clipping.kind {
+        *c = true;
+        *r = rule;
+    }
+    let children = std::iter::once(clipping).chain(art).map(Arc::new).collect();
+    Node::new(NodeId(id), NodeKind::Group { children, clip: true })
+}
+
+/// An image `width` by `height` pixels placed by `xf`.
+fn placed(id: u64, width: u32, height: u32, xf: Affine) -> Node {
+    let mut img = image(id);
+    if let NodeKind::Image(i) = &mut img.kind {
+        i.width = width;
+        i.height = height;
+        i.xf = xf;
+    }
+    img
+}
+
+#[test]
+fn an_image_inside_a_clips_box_but_outside_its_shape_is_left_out() {
+    let d = document();
+    let circle = || shapes::ellipse(Rect::new(100.0, 100.0, 200.0, 200.0));
+    let square = || shapes::rectangle(Rect::new(100.0, 100.0, 150.0, 150.0));
+    let at = |x: f64, y: f64| Affine::translate((x, y));
+    // Two circles inside each other's clips: they show together only the lens between them.
+    let lens = |art: Vec<Node>| {
+        let inner = shaped_clip_group(70, shapes::ellipse(Rect::new(120.0, 100.0, 220.0, 200.0)), FillRule::NonZero, art);
+        shaped_clip_group(80, shapes::ellipse(Rect::new(80.0, 100.0, 180.0, 200.0)), FillRule::NonZero, vec![inner])
+    };
+    let mut ring = shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0));
+    ring.subpaths.extend(shapes::rectangle(Rect::new(130.0, 130.0, 170.0, 170.0)).subpaths);
+    // Turned 45° about its center at (156, 156): its box reaches into the square's corner, and its
+    // frame does not.
+    let turned = at(156.0, 156.0) * Affine::rotate(std::f64::consts::FRAC_PI_4) * at(-5.0, -5.0);
+    // A shown rectangle and an image `w` by `h` at `xf` inside the clipping path `path`.
+    let clipped = |path: PathData, rule: FillRule, shown: Rect, (w, h, xf): (u32, u32, Affine)| {
+        shaped_clip_group(60, path, rule, vec![rect(62, shown.x0, shown.y0, shown.x1, shown.y1, 0.0), placed(63, w, h, xf)])
+    };
+    let middle = Rect::new(140.0, 140.0, 160.0, 160.0);
+    let band = Rect::new(100.0, 100.0, 110.0, 200.0);
+    let left_out = [
+        // In the corner of the circle's box, outside the circle.
+        ("a circle's corner", clipped(circle(), FillRule::NonZero, middle, (10, 10, at(100.0, 100.0)))),
+        ("a turned frame", clipped(square(), FillRule::NonZero, Rect::new(110.0, 110.0, 140.0, 140.0), (10, 10, turned))),
+        // Above the lens: inside each circle, outside both at once.
+        ("two clips' shared area", lens(vec![rect(62, 145.0, 140.0, 155.0, 160.0, 0.0), placed(63, 8, 3, at(146.0, 100.0))])),
+        ("an even-odd hole", clipped(ring.clone(), FillRule::EvenOdd, band, (10, 10, at(140.0, 140.0)))),
+    ];
+    let shown = [
+        ("part of the circle", clipped(circle(), FillRule::NonZero, middle, (10, 10, at(145.0, 145.0)))),
+        ("a non-zero hole", clipped(ring, FillRule::NonZero, band, (10, 10, at(140.0, 140.0)))),
+        // A strip 0.005 pt wide inside the square still shows.
+        ("a narrow strip", clipped(square(), FillRule::NonZero, Rect::new(110.0, 110.0, 140.0, 140.0), (10, 10, at(149.995, 120.0)))),
+        ("the lens", lens(vec![rect(62, 145.0, 140.0, 155.0, 160.0, 0.0), placed(63, 8, 3, at(146.0, 108.0))])),
+    ];
+    for id in TYPES {
+        for (what, g) in &left_out {
+            let n = with(g.clone(), id, json!({}));
+            assert_eq!(validate_three_d_in(Some(&d), &n, id, &json!({})), Ok(()), "{id}: {what}");
+            assert!(art(&d, &n, id).is_some(), "{id}: {what} draws");
+            assert!(three_d_meshes_in(Some(&d), &n).is_ok_and(|m| !m.is_empty()), "{id}: {what} exports");
+        }
+        for (what, g) in &shown {
+            let n = with(g.clone(), id, json!({}));
+            assert!(validate_three_d_in(Some(&d), &n, id, &json!({})).is_err_and(|e| e.contains("Image Trace")), "{id}: {what}");
+            assert!(art(&d, &n, id).is_none(), "{id}: {what}");
+        }
+    }
+    // Each frame cut to a clip counts: past the limit the art is refused, never left out unchecked.
+    let many: Vec<Node> = std::iter::once(rect(62, 140.0, 140.0, 160.0, 160.0, 0.0))
+        .chain((0..=source::MAX_IMAGE_CUTS as u64).map(|i| placed(100 + i, 10, 10, at(100.0, 100.0))))
+        .collect();
+    let n = with(shaped_clip_group(60, circle(), FillRule::NonZero, many), ROTATE, front());
+    assert!(validate_three_d_in(Some(&d), &n, ROTATE, &json!({})).is_err_and(|e| e.contains("too many objects")));
+}
+
 /// Symbols `L0` to `L{levels}`: `L0` holds `leaf`, each later one `fan` instances of the one
 /// before it.
 fn nested_symbols(levels: usize, fan: usize, leaf: Node) -> Document {

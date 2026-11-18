@@ -7,8 +7,10 @@ use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 mod actionset;
 pub(super) mod adjust;
 mod ai_open_path;
+mod anchor_edit_work;
 mod appearance;
 mod areafit;
+mod arrowheads;
 mod assets;
 mod assets_3d;
 mod attributes;
@@ -22,6 +24,7 @@ mod build;
 mod cancel;
 mod caret_kerning;
 mod charstroke;
+mod circle_through;
 pub(super) mod clip;
 mod clipboard;
 mod clipflavours;
@@ -43,8 +46,10 @@ mod containers;
 mod css;
 mod cut;
 mod dashalign;
+mod dcs;
 mod distort;
 mod docsetup;
+mod document_close;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;
@@ -80,8 +85,10 @@ mod history_mem;
 mod ids_without_selection;
 mod inline;
 mod interactivity;
+mod interpolate_handles;
 mod intertwine;
 mod journal;
+mod keyanchor;
 mod keyguide;
 mod knockout;
 mod labspots;
@@ -116,7 +123,9 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod params_cache;
 mod path_menu_enabled;
+mod pathfinder_clip;
 mod pathops;
 mod pathtype;
 mod pattern;
@@ -124,6 +133,7 @@ mod pdffidelity;
 mod pdfmarks;
 mod pdfpresets;
 mod pdfraster;
+mod persp_infer;
 mod persp_planes;
 pub(super) mod persp_select;
 mod persp_text;
@@ -174,6 +184,7 @@ mod smartguides;
 mod smooth_path;
 mod spelling;
 mod store;
+mod stored_path;
 mod strokegeom;
 mod strokegradient;
 mod strokereach;
@@ -189,6 +200,7 @@ mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbollib;
+mod tangent_line;
 mod targeting;
 mod textcombos;
 mod textedit;
@@ -206,6 +218,7 @@ mod typescale;
 mod typeundo;
 mod units;
 mod variables;
+mod warp_images;
 mod webexport;
 mod widthpoints;
 mod widthprofiles;
@@ -233,6 +246,25 @@ pub(crate) fn selected_guides(s: &Session) -> Vec<usize> {
 pub(crate) fn key_guide(s: &Session) -> Option<usize> {
     let st = s.doc().unwrap();
     st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
+}
+
+/// Runs the unit test `path` (`tests::newdoc::...`) again in a child process of the test binary
+/// → whether this is that child. For a test that changes process-wide state the tests running
+/// beside it read, such as the active color settings.
+pub(crate) fn in_own_process(path: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some() {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", path, "--nocapture"]).env(CHILD, "1").output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{path} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
 }
 
 #[test]
@@ -341,9 +373,12 @@ fn a_long_unknown_command_id_is_answered_at_once() {
 fn action_batch_names_the_nearest_command_id() {
     let mut s = session();
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "select.al"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `select.al`; did you mean `select.all`?");
+    assert_eq!(
+        e.to_string(),
+        "invalid parameters for `action.batch`: action step 1 (`select.al`) failed: unknown command `select.al`; did you mean `select.all`?"
+    );
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "nope"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `nope`");
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: action step 1 (`nope`) failed: unknown command `nope`");
 }
 
 #[test]
@@ -1267,7 +1302,12 @@ fn a_transform_that_moves_nothing_records_no_undo_step() {
     for (id, p) in calls {
         assert_eq!(s.execute(id, &p).unwrap(), json!({"ids": [a.0]}), "{id} {p}");
         assert_eq!(history(&s), before, "{id} {p}");
-        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), p));
+        // The journal adds the frame a scale acted in, so a replay acts in the same one.
+        let mut recorded = p;
+        if id == "object.scale" {
+            recorded["basis"] = json!("box");
+        }
+        assert_eq!(s.journal.last().unwrap(), &(id.to_string(), recorded));
     }
     assert_eq!(
         s.doc().unwrap().last_transform,
@@ -1513,6 +1553,7 @@ fn shape_commands_refuse_a_number_or_boolean_given_as_text() {
         ("shape.flare", json!({"cx": 100, "cy": 100, "x2": "300", "y2": 300}), "x2"),
         ("shape.flare", with(&flare, "direction", json!("45")), "direction"),
         ("shape.flare", with(&flare, "seed", json!("7")), "seed"),
+        ("shape.flare", with(&flare, "ringSeed", json!("7")), "ringSeed"),
         ("shape.spiral", with(&spiral, "decay", json!("80")), "decay"),
         ("shape.spiral", with(&spiral, "segments", json!("10")), "segments"),
     ]
@@ -2100,7 +2141,7 @@ mod pen_interactions {
                 gesture(&mut s, &[(400.0, 500.0)], Mods::default(), v);
                 let extended = path(&s, id);
                 assert_eq!(extended.anchor_count(), 3);
-                assert_eq!(extended.subpaths[0].anchors[..2], reversed.subpaths[0].anchors);
+                assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], reversed.subpaths[0].anchors);
                 assert!(!s.in_interaction() && !s.tool_busy());
                 assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
             }
@@ -2135,7 +2176,7 @@ mod pen_interactions {
         gesture(&mut s, &[(300.0, 400.0)], Mods::default(), v);
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], converted.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], converted.subpaths[0].anchors);
         assert_eq!(s.doc().unwrap().doc.layers[0].children().unwrap().len(), 1);
     }
 
@@ -2194,7 +2235,7 @@ mod pen_interactions {
         }
         let extended = path(&s, id);
         assert_eq!(extended.anchor_count(), 3);
-        assert_eq!(extended.subpaths[0].anchors[..2], before.subpaths[0].anchors);
+        assert_eq!(extended.subpaths[0].anchors.to_vec()[..2], before.subpaths[0].anchors);
         let a = extended.subpaths[0].anchors[2];
         assert_eq!(a.p, Point::new(320.0, 450.0));
         assert_eq!(a.h_in, Point::new(290.0, 430.0), "Alt freezes the incoming handle and Space translates it");
@@ -2773,6 +2814,26 @@ fn an_isolated_compound_paths_member_moves_alone() {
     assert_eq!((x0(&s, outer), x0(&s, hole)), (5.0, 55.0), "the compound path selected: the whole ring");
 }
 
+/// Rotate Bounding Box and Reset Bounding Box take the same objects as the transforms: a path of
+/// a compound path selected alone turns or squares its own box, and the compound path selected
+/// turns its box and its paths'.
+#[test]
+fn rotate_bounding_box_of_a_compound_paths_member_turns_only_that_path() {
+    let angle = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+    let mut s = session();
+    let (c, outer, hole) = isolated_ring(&mut s);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (0.0, 0.0, 30.0), "only the hole's box turned");
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 40.0), "the compound path and its paths");
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 0.0), "Reset squared only the hole's box");
+}
+
 /// The X, Y, W and H of the Properties and Transform panels run `object.setBounds`, which takes the
 /// same objects as the other transforms: a path of a compound path selected alone sets its own
 /// box and leaves the ring around it (#4046). The hole is off-centre, and a plain rectangle
@@ -3159,6 +3220,101 @@ fn every_command_has_unique_id_and_doc() {
     assert!(command_specs().iter().all(|c| !c.params.is_empty() && !c.label.is_empty()));
 }
 
+/// Ids that name no built-in command: commands only the app runs, near misses of real ids and
+/// plug-in command ids of plug-ins that are not installed.
+const NOT_BUILT_IN: &[&str] =
+    &["", "file.save", "file.open", "edit.preferences", "select", "select.none.", "SELECT.NONE", " select.none", "plugin.nobody.cmd", "plugin."];
+
+/// The spec a search of the built-in list in order finds for `id`.
+fn first_built_in(id: &str) -> Option<&'static CommandSpec> {
+    command_specs().iter().find(|c| c.id == id)
+}
+
+#[test]
+fn find_command_finds_the_spec_a_search_of_the_list_finds() {
+    let misses: Vec<String> = NOT_BUILT_IN.iter().map(|id| (*id).to_string()).chain((0..200).map(|i| format!("missing.command{i}"))).collect();
+    for id in command_specs().iter().map(|c| c.id.to_string()).chain(misses) {
+        let (found, first) = (find_command(&id), first_built_in(&id));
+        assert!(found.map(std::ptr::from_ref) == first.map(std::ptr::from_ref), "{id:?}");
+        assert_eq!(found.is_none(), NOT_BUILT_IN.contains(&id.as_str()) || id.starts_with("missing."), "{id:?}");
+    }
+}
+
+#[test]
+fn the_command_index_keeps_the_first_spec_of_an_id() {
+    let base = &command_specs()[0];
+    let specs = [
+        CommandSpec { id: "test.twice", label: "First", ..*base },
+        CommandSpec { id: "test.once", ..*base },
+        CommandSpec { id: "test.twice", label: "Second", ..*base },
+    ];
+    let index = crate::cmd::index_by_id(&specs);
+    assert_eq!(index.len(), 2);
+    assert!(index.get("test.twice").is_some_and(|c| std::ptr::eq(*c, &specs[0])));
+    assert!(index.get("test.once").is_some_and(|c| std::ptr::eq(*c, &specs[1])));
+    assert!(!index.contains_key("test.none"));
+}
+
+/// Times [`find_command`] against a search of the built-in list in order (the lookup before the
+/// index), in one process, over every built-in id and 200 ids that name no command, and
+/// `select.none` run 100,000 times on a document with one rectangle.
+/// Run with `cargo test --release -p vectorcraft-engine --lib command_lookup_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn command_lookup_timing() {
+    use std::hint::black_box;
+    use std::time::Instant;
+    let hits: Vec<&str> = command_specs().iter().map(|c| c.id).collect();
+    let missing: Vec<String> = (0..200 - NOT_BUILT_IN.len()).map(|i| format!("missing.command{i}")).collect();
+    let misses: Vec<&str> = NOT_BUILT_IN.iter().copied().chain(missing.iter().map(String::as_str)).collect();
+    let linear = |id: &str| first_built_in(id).or_else(|| crate::cmd::plugin::find_spec(id));
+    for id in hits.iter().chain(&misses) {
+        assert!(find_command(id).map(std::ptr::from_ref) == linear(id).map(std::ptr::from_ref), "{id:?}");
+    }
+    let per_lookup = |ids: &[&str], f: &dyn Fn(&str) -> Option<&'static CommandSpec>| {
+        let rounds = 50;
+        let start = Instant::now();
+        for _ in 0..rounds {
+            for id in ids {
+                black_box(f(black_box(id)));
+            }
+        }
+        start.elapsed().as_nanos() as f64 / (rounds * ids.len()) as f64
+    };
+    let median = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    println!("{} built-in ids, {} ids that name no command", hits.len(), misses.len());
+    for (what, ids) in [("built-in id", &hits), ("no such command", &misses)] {
+        let (mut old, mut new) = (Vec::new(), Vec::new());
+        for run in 0..7 {
+            // Alternates which lookup goes first, so a change in machine load falls on both.
+            if run % 2 == 0 {
+                old.push(per_lookup(ids, &linear));
+                new.push(per_lookup(ids, &find_command));
+            } else {
+                new.push(per_lookup(ids, &find_command));
+                old.push(per_lookup(ids, &linear));
+            }
+        }
+        println!("{what}: search of the list {old:.0?} ns, median {:.0}; index {new:.0?} ns, median {:.0}", median(old.clone()), median(new.clone()));
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let runs: Vec<f64> = (0..7)
+        .map(|_| {
+            let start = Instant::now();
+            for _ in 0..100_000 {
+                black_box(s.execute("select.none", &json!({})).unwrap());
+            }
+            start.elapsed().as_nanos() as f64 / 100_000.0
+        })
+        .collect();
+    println!("select.none: {runs:.0?} ns a command, median {:.0}", median(runs.clone()));
+}
+
 #[test]
 fn every_command_survives_empty_params() {
     // Robustness: no command may panic on {} (with and without a selection).
@@ -3237,6 +3393,169 @@ fn flare_rotation_turns_only_the_rays() {
     }
 }
 
+/// `shape.flare`'s `ringSeed` places the rings along the path anew and keeps their count and
+/// sizes and the other parts; the same `ringSeed` draws the same flare, neighboring ones differ,
+/// and a seed that is not a whole number of at least 0 (for `ringSeed`, below 2^53) is refused.
+#[test]
+fn flare_ring_seed_moves_only_the_rings() {
+    let mut s = session();
+    let parts = |s: &mut Session, ring_seed: Option<u64>| {
+        let mut p = json!({"cx": 200, "cy": 200, "diameter": 60, "rays": 9, "rings": 6, "x2": 400, "y2": 300, "seed": 3});
+        if let Some(r) = ring_seed {
+            p["ringSeed"] = json!(r);
+        }
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        children.iter().map(|c| (c.name.clone(), c.geometric_bounds().unwrap())).collect::<Vec<_>>()
+    };
+    let plain = parts(&mut s, None);
+    let placed = parts(&mut s, Some(11));
+    assert_eq!(placed, parts(&mut s, Some(11)));
+    assert_eq!(plain.len(), placed.len());
+    let mut moved = 0;
+    for ((name, a), (_, b)) in plain.iter().zip(&placed) {
+        if name.as_deref() == Some("Ring") {
+            assert!((a.width() - b.width()).abs() < 1e-9, "a ring keeps its size");
+            moved += usize::from(a.center().distance(b.center()) > 1e-6);
+        } else {
+            assert_eq!(a, b, "{name:?}");
+        }
+    }
+    assert_eq!(moved, 6, "every ring moves");
+    assert_ne!(parts(&mut s, Some(0)), parts(&mut s, Some(1)), "neighboring seeds place the rings differently");
+    let undo = s.doc().unwrap().history.undo.len();
+    for bad in [json!(-1), json!(2.5), json!(true), json!(1u64 << 53)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "ringSeed": bad})).is_err(), "{bad}");
+    }
+    for bad in [json!(-1), json!(2.5), json!(true)] {
+        assert!(s.execute("shape.flare", &json!({"cx": 0, "cy": 0, "seed": bad})).is_err(), "{bad}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn flare_small_ring_seeds_spread_the_first_ring_along_the_path() {
+    let mut s = session();
+    let mut positions = Vec::new();
+    for seed in [0, 1, 2, 5, 11, (1u64 << 53) - 1] {
+        let p = json!({"cx": 20, "cy": 30, "x2": 1020, "y2": 30, "rays": 0, "rings": 1, "ringSeed": seed});
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let NodeKind::Group { children, .. } = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("flare is a group") };
+        let ring = children.iter().find(|n| n.name.as_deref() == Some("Ring")).unwrap();
+        let center = ring.geometric_bounds().unwrap().center();
+        assert!((20.0..=1020.0).contains(&center.x), "seed {seed}: {center:?}");
+        assert!((center.y - 30.0).abs() < 1e-9);
+        positions.push(center.x);
+    }
+    assert!((positions[0] - positions[1]).abs() > 1.0, "neighboring small seeds visibly move the first ring: {positions:?}");
+    let lo = positions[..5].iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = positions[..5].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(hi - lo > 250.0, "small seeds spread the first ring along the path: {positions:?}");
+}
+
+/// `shape.ellipse` without `anchors`, or with 4, draws the live ellipse it always drew.
+#[test]
+fn ellipse_with_four_anchors_is_the_live_ellipse() {
+    let mut s = session();
+    let draw = |s: &mut Session, extra: Option<u64>| {
+        let mut p = json!({"x": 40, "y": 30, "width": 120, "height": 80});
+        if let Some(n) = extra {
+            p["anchors"] = json!(n);
+        }
+        let id = NodeId(s.execute("shape.ellipse", &p).unwrap()["id"].as_u64().unwrap());
+        s.doc().unwrap().doc.node(id).unwrap().clone()
+    };
+    let (plain, four) = (draw(&mut s, None), draw(&mut s, Some(4)));
+    for n in [&plain, &four] {
+        assert!(matches!(n.live_shape(), Some(vectorcraft_doc::LiveShape::Ellipse { .. })), "{:?}", n.live_shape());
+        assert_eq!(n.path_data().unwrap().anchor_count(), 4);
+    }
+    assert_eq!(plain.path_data(), four.path_data());
+    assert_eq!(plain.live_shape(), four.live_shape());
+}
+
+/// Any other count draws a closed plain path of that many smooth anchors on the ellipse, its
+/// bounds the typed size, as one undo step.
+#[test]
+fn ellipse_anchors_draw_that_many_anchors_on_the_ellipse() {
+    let mut s = session();
+    let (x, y, w, h) = (40.0, 30.0, 120.0, 80.0);
+    let (c, rx, ry) = (Point::new(x + w / 2.0, y + h / 2.0), w / 2.0, h / 2.0);
+    for n in [2u64, 3, 5, 6, 8] {
+        let undo = s.doc().unwrap().history.undo.len();
+        let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": n})).unwrap()["id"].as_u64().unwrap());
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{n}: one undo step");
+        let node = s.doc().unwrap().doc.node(id).unwrap();
+        assert!(node.live_shape().is_none(), "{n}: a plain path");
+        let path = node.path_data().unwrap();
+        assert_eq!(path.subpaths.len(), 1);
+        let sp = &path.subpaths[0];
+        assert!(sp.closed, "{n}");
+        assert_eq!(sp.anchors.len() as u64, n);
+        for a in &sp.anchors {
+            assert_eq!(a.kind, vectorcraft_geom::AnchorKind::Smooth, "{n}");
+            let on = ((a.p.x - c.x) / rx).powi(2) + ((a.p.y - c.y) / ry).powi(2);
+            assert!((on - 1.0).abs() < 0.01, "{n}: {:?} is off the ellipse ({on})", a.p);
+        }
+        let b = path.bounds().unwrap();
+        for (got, want) in [(b.x0, x), (b.y0, y), (b.x1, x + w), (b.y1, y + h)] {
+            assert!((got - want).abs() < 1e-6, "{n}: bounds {b:?}");
+        }
+    }
+    // The first anchor is the left one, and they run clockwise on screen, as the live ellipse's do.
+    let id = NodeId(s.execute("shape.ellipse", &json!({"x": x, "y": y, "width": w, "height": h, "anchors": 8})).unwrap()["id"].as_u64().unwrap());
+    let sp = s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].clone();
+    assert!(sp.anchors[0].p.distance(Point::new(x, c.y)) < 1e-6, "{:?}", sp.anchors[0].p);
+    assert!(sp.anchors[2].p.distance(Point::new(c.x, y)) < 1e-6, "{:?}", sp.anchors[2].p);
+}
+
+/// An `anchors` that is not a whole number from 2 to 1000 is refused, and nothing is drawn.
+#[test]
+fn ellipse_refuses_a_bad_anchor_count() {
+    let mut s = session();
+    let undo = s.doc().unwrap().history.undo.len();
+    let range = |got: &str| format!("`anchors` must be a whole number between 2 and 1000 (got {got})");
+    for (bad, want) in [
+        (json!(0), range("0")),
+        (json!(1), range("1")),
+        (json!(2.5), range("2.5")),
+        (json!(-3), range("-3")),
+        (json!(1001), range("1001")),
+        (json!("x"), "`anchors` must be a number, not \"x\"".to_string()),
+        (json!("6"), "`anchors` must be a number, not \"6\"".to_string()),
+        (json!(true), "`anchors` must be a number, not true".to_string()),
+    ] {
+        let e = s.execute("shape.ellipse", &json!({"x": 0, "y": 0, "width": 50, "height": 50, "anchors": bad})).unwrap_err().to_string();
+        assert!(e.contains(&want), "{bad}: {e}");
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    assert!(s.doc().unwrap().doc.layers[0].children().unwrap().is_empty());
+}
+
+/// Through the session, Ctrl/Cmd in the Flare tool's center drag keeps the center's size while the
+/// drag sizes the halo, and the flare drawn keeps both.
+#[test]
+fn flare_tool_ctrl_keeps_the_center_while_the_drag_sizes_the_halo() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    let cmd = vectorcraft_tools::Mods { cmd: true, ..Default::default() };
+    s.select_tool("flare", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 240.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 280.0, 200.0).with_mods(cmd), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 500.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 500.0, 400.0), v).unwrap();
+    let st = s.doc().unwrap();
+    let g = st.doc.node(st.selection.objects[0]).unwrap();
+    let NodeKind::Group { children, .. } = &g.kind else { panic!("flare is a group") };
+    let width = |name: &str| children.iter().find(|c| c.name.as_deref() == Some(name)).unwrap().geometric_bounds().unwrap().width();
+    // The center as the key found it (80); the halo as a 160-point center with 20 % growth would
+    // have it: 80 × 1.2 × 1.6 = 153.6 radius.
+    assert!((width("Center") - 80.0).abs() < 0.5, "{}", width("Center"));
+    assert!((width("Halo") - 2.0 * 153.6).abs() < 0.5, "{}", width("Halo"));
+}
+
 #[test]
 fn reshape_moves_the_grabbed_point_and_its_neighbourhood() {
     let mut s = session();
@@ -3284,7 +3603,7 @@ fn reshape_open_path(s: &mut Session, anchors: Value) -> NodeId {
 
 /// The anchors of the path's first subpath.
 fn reshape_anchors(s: &Session, id: NodeId) -> Vec<vectorcraft_geom::Anchor> {
-    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
 }
 
 /// The share of the drag an anchor takes at `u` of the way from an end to the grabbed point.
@@ -4027,6 +4346,38 @@ fn snap_to_pixel_rounds_drawing_and_moves() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 37.3, 34.8), v).unwrap();
     let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
     assert_eq!((b.x0, b.y0), (17.0, 16.0));
+}
+
+/// Pixel Snapping Options (`view.snapToPixel.options`): with While Drawing off a rectangle drawn
+/// with Snap to Pixel on keeps its fractional corners while a move still lands on whole pixels, and
+/// with While Moving off a move keeps its fractional offset while drawing snaps again.
+#[test]
+fn pixel_snapping_options_choose_the_edits_snap_to_pixel_rounds() {
+    let mut s = session();
+    let v = ViewInfo { snap_to_pixel: true, smart_guides: false, snap_to_point: false, ..Default::default() };
+    let drag = |s: &mut Session, tool: &str, from: (f64, f64), to: (f64, f64)| {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.0, from.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1), v).unwrap();
+    };
+    let bounds = |s: &Session, id| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.y0, b.x1, b.y1)
+    };
+    s.execute("view.snapToPixel.options", &json!({"drawing": false})).unwrap();
+    drag(&mut s, "rectangle", (10.25, 10.5), (60.5, 40.25));
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, id), (10.25, 10.5, 60.5, 40.25), "drawing does not snap");
+    drag(&mut s, "selection", (30.0, 30.0), (37.5, 34.75));
+    assert_eq!(bounds(&s, id).0, 18.0, "moving still snaps the left edge");
+    assert_eq!(bounds(&s, id).1, 15.0, "moving still snaps the top edge");
+    s.execute("view.snapToPixel.options", &json!({"drawing": true, "moving": false})).unwrap();
+    drag(&mut s, "selection", (40.0, 30.0), (45.25, 33.5));
+    assert_eq!((bounds(&s, id).0, bounds(&s, id).1), (23.25, 18.5), "moving does not snap");
+    drag(&mut s, "rectangle", (100.25, 100.5), (140.5, 130.75));
+    let drawn = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, drawn), (100.0, 101.0, 141.0, 131.0), "drawing snaps again");
 }
 
 #[test]

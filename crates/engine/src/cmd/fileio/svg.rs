@@ -2,6 +2,8 @@
 //! params' top level or from an `svg` object (which wins), and the files an SVG export writes
 //! (one per artboard, plus the images it links to).
 
+use std::borrow::Cow;
+
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use vectorcraft_doc::Document;
@@ -91,6 +93,12 @@ pub const OPTIONS: &[FormatOption] = &[
         description: "embed the fonts type uses as @font-face, subset to the characters used (whole when the font's licence forbids subsetting, left out with a warning when it forbids embedding)",
     },
     FormatOption {
+        name: "variableData",
+        ty: "boolean",
+        default: "false",
+        description: "Include Variable Data: write the text variables, the data sets and the type object each text variable is bound to as a variable library (variableSets) that document.open and variable.loadLibrary read back; variables of other kinds, and what is past the limits variable.loadLibrary reads (256 text variables, 1,000 data sets, 8 MiB), are left out with a warning",
+    },
+    FormatOption {
         name: "svg",
         ty: "object",
         default: "null",
@@ -149,6 +157,18 @@ fn plan(doc: &Document, p: &Value) -> Result<(ExportOptions, Vec<Option<usize>>,
     Ok((opts, named.unwrap_or_else(|| vec![0]).into_iter().map(Some).collect(), chosen))
 }
 
+/// The art the SVG files of `doc` with options `p` draw, as [`encode`] picks it: with chosen
+/// artboards, the art over each one; else all of `doc`. `None` when the options don't read.
+pub(super) fn drawn<'a>(doc: &'a Document, p: &Value) -> Option<Vec<Cow<'a, Document>>> {
+    let (_, boards, chosen) = plan(doc, p).ok()?;
+    if !chosen {
+        return Some(vec![Cow::Borrowed(doc)]);
+    }
+    let mut renderer = vectorcraft_render::Renderer::new();
+    let rects: Vec<_> = boards.iter().flatten().filter_map(|b| doc.artboards.get(*b)).map(|a| a.rect).collect();
+    Some(rects.into_iter().map(|r| Cow::Owned(super::export::art_over(doc, r, &mut renderer))).collect())
+}
+
 /// What a save of `doc` as SVG (format `label`) with options `p` loses of several artboards: the
 /// file is one artboard and reopens as one, unless it carries the native document (Preserve
 /// Editing Capabilities).
@@ -160,12 +180,18 @@ pub(super) fn lost_artboards_warning(doc: &Document, p: &Value, label: &str) -> 
     })
 }
 
+/// The native document Preserve Editing embeds: `doc`, without an Export for Screens `folder`
+/// outside the read roots of the request being served (the open document keeps it).
+fn native_attachment(doc: &Document) -> Vec<u8> {
+    vectorcraft_format::save(&super::access::with_readable_settings_folder(doc), false)
+}
+
 /// Encode `doc` as SVG (or gzipped, SVGZ): one file per chosen artboard, with the images they
 /// link to and the writer's warnings.
 pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Encoded, String> {
     let (opts, boards, chosen) = plan(doc, p)?;
     // Preserve editing embeds the native document (once, shared by every file).
-    let native = opts.preserve_editing.then(|| vectorcraft_format::save(doc, false));
+    let native = opts.preserve_editing.then(|| native_attachment(doc));
     // Draw linked files as vectors when available, or their previews with a warning. Keep
     // that preparation out of the native attachment so missing links remain relinkable.
     let (full, warnings) = crate::cmd::place::document::full_documents(doc);
@@ -198,6 +224,7 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
                 enc.warnings.push(w);
             }
         }
+        enc.add_setting_notes(out.setting_notes);
         enc.files.push((artboard, if compressed { vectorcraft_svg::compress_bytes(&bytes) } else { bytes }));
     }
     // Live type names its fonts; outlines and embedded fonts are the fallback font's.

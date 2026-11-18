@@ -89,7 +89,12 @@ fn bridges(s: &mut Session, p: &Value) -> Result<Value> {
         };
         let refs: Vec<(&PathData, FillRule)> = parts.iter().map(|(p, r)| (p, *r)).collect();
         let spec = BridgeSpec { width, count: count as usize, direction };
-        let bridged = stencil_bridges(&refs, spec).map_err(|e| EngineError::Other(e.to_string()))?;
+        let bridged = stencil_bridges(&refs, spec).map_err(|e| match e {
+            vectorcraft_pathops::PathOpsError::TooComplex => {
+                EngineError::Other("Stencil Bridges: the selected art is too large or too detailed to bridge".into())
+            }
+            e => EngineError::Other(e.to_string()),
+        })?;
         (bridged, style_of(&top), roots)
     };
     let summary = |id: Option<NodeId>, original: Option<NodeId>| {

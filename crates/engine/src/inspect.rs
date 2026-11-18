@@ -287,7 +287,8 @@ fn document_base(s: &Session) -> Value {
         "title": st.title(),
         // The File Info title (`file.info`): the title the file gave itself, else the document's name. `title` is the tab's name.
         "fileInfoTitle": d.info_title(),
-        "path": st.path,
+        // Null for a confined caller when the file is outside its read roots.
+        "path": st.path.as_deref().filter(|p| crate::file_access::check_read(p).is_ok()),
         "dirty": st.is_dirty(),
         "revision": st.revision,
         "units": d.units.label(),
@@ -307,6 +308,8 @@ fn document_base(s: &Session) -> Value {
         "key": st.selection.key.map(|k| k.0),
         // The ruler guide that is the key instead (`select.key {guide}`): an index into `guide.list`.
         "keyGuide": st.selection.key_guide.and_then(|id| crate::cmd::guide_indexes(d, &[id]).first().copied()),
+        // The anchor point that is the key instead (`select.key {id, anchor}`): {id, anchor}.
+        "keyAnchor": st.selection.key_anchor.map(|(id, (si, ai))| json!({"id": id.0, "anchor": [si, ai]})),
         "history": st.history.undo.iter().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "redo": st.history.redo.iter().rev().map(|h| h.label.clone()).collect::<Vec<_>>(),
         "objects": d.node_count(),

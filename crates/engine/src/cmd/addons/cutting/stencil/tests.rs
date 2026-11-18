@@ -278,6 +278,34 @@ fn bad_params_are_refused() {
 }
 
 #[test]
+fn art_too_detailed_to_bridge_is_refused_with_a_message_that_says_so() {
+    let mut s = session();
+    let parent = s.doc().unwrap().target_parent().unwrap();
+    let id = s
+        .edit("dense", |d, sel| {
+            // More anchors than Stencil Bridges measures.
+            let mut zigzag = kurbo::BezPath::new();
+            zigzag.move_to((100.0, 100.0));
+            for i in 1..=vectorcraft_pathops::addons::stencil::MAX_STENCIL_SEGMENTS {
+                zigzag.line_to((100.0 + i as f64 * 0.001, if i % 2 == 0 { 100.0 } else { 101.0 }));
+            }
+            zigzag.close_path();
+            let huge = vectorcraft_geom::PathData::from_bezpath(&zigzag);
+            let n = vectorcraft_doc::Node::path(d.alloc_id(), huge, vectorcraft_doc::Appearance::default());
+            let id = n.id;
+            d.insert(parent, usize::MAX, n)?;
+            sel.set([id]);
+            Ok(id)
+        })
+        .unwrap();
+    select(&mut s, &[id]);
+    let steps = undo_steps(&s);
+    let e = s.execute("addon.cutting.bridges", &json!({"width": 4})).unwrap_err().to_string();
+    assert!(e.contains("Stencil Bridges: the selected art is too large or too detailed to bridge"), "{e}");
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
 fn selected_objects_without_outlines_stay_where_they_are() {
     for keep in [true, false] {
         let mut s = session();

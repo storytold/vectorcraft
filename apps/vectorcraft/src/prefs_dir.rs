@@ -65,6 +65,31 @@ pub fn attach_scripts_dir(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Keep File Info's metadata templates in the `Metadata Templates` folder, which a saved template
+/// makes.
+pub fn attach_metadata_templates_dir(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Metadata Templates") {
+        session.attach_metadata_templates_dir(dir);
+    }
+}
+
+/// Have File › New start each category's documents from its profile in the `New Document
+/// Profiles` folder, which `file.newProfiles.edit` makes.
+pub fn attach_new_doc_profiles(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("New Document Profiles") {
+        session.attach_new_doc_profiles(dir);
+    }
+}
+
+/// Keep each script's `Folder.userData` in the `Script Data` folder, and the file access people
+/// allow scripts with Always in `Script Grants.json` beside it. Both are made when a script first
+/// needs them.
+pub fn attach_script_data(session: &mut vectorcraft_engine::Session) {
+    if let Some(dir) = store_dir("Script Data") {
+        session.attach_script_data(dir);
+    }
+}
+
 /// Take the saved PDF presets from the `PDF Presets` folder (#2168), and keep the ones saved from
 /// now on there. After the preferences were restored: the folder is the one place the presets live.
 pub fn attach_pdf_preset_store(session: &mut vectorcraft_engine::Session) {
@@ -78,6 +103,14 @@ pub fn attach_pdf_preset_store(session: &mut vectorcraft_engine::Session) {
 pub fn attach_custom_dictionary(session: &mut vectorcraft_engine::Session) {
     if let Some(path) = store_dir("Custom Dictionary.txt") {
         session.attach_custom_dictionary(path);
+    }
+}
+
+/// Keep the custom arrowheads (Stroke panel menu › Edit Arrowheads…) in the `Arrowheads.vectorcraft`
+/// file next to the settings, and list the heads it holds.
+pub fn attach_arrowheads(session: &mut vectorcraft_engine::Session) {
+    if let Some(path) = store_dir(vectorcraft_engine::cmd::arrowheads::FILE_NAME) {
+        session.attach_arrowheads_file(path.to_string_lossy().to_string());
     }
 }
 

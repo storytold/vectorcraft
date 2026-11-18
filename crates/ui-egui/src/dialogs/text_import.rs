@@ -1,8 +1,9 @@
 //! Text Import Options: placing a text file asks how to read it (platform and character set) and
 //! what to clean up (line breaks inside paragraphs, blank lines between them, runs of spaces). OK
-//! places it as area type (`file.place` with `text`).
+//! places it as area type (`file.place` with `text`) and remembers the options: the next text file
+//! starts from them, and is placed with them when Show Import Options is off.
 //!
-//! Fields: `platform` (`windows` | `mac`), `characterSet` (`unicode` | `ansi`),
+//! Fields: `platform` (`windows` | `mac`), `characterSet` (one of [`CHARACTER_SETS`]),
 //! `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces` (on or off), `spaces` (how many
 //! spaces make a tab, 2–100), and `__params` (the `file.place` params naming the file).
 
@@ -21,15 +22,31 @@ pub(super) const SPEC: DialogSpec =
 /// The label column of the Encoding rows.
 const LABEL: f32 = 104.0;
 
+/// The Character Set choices: `file.place`'s `text.characterSet` value and the menu label.
+const CHARACTER_SETS: [(&str, &str); 11] = [
+    ("unicode", "Unicode"),
+    ("ansi", "ANSI"),
+    ("shiftJis", "Shift JIS"),
+    ("gb2312", "GB2312"),
+    ("chineseBig5", "Chinese Big 5"),
+    ("cyrillic", "Cyrillic"),
+    ("gb18030", "GB18030"),
+    ("greek", "Greek"),
+    ("turkish", "Turkish"),
+    ("baltic", "Baltic"),
+    ("centralEuropean", "Central European"),
+];
+
 /// Is the file `p` names (`path` or `name`) a text file?
 pub fn is_text(p: &Value) -> bool {
     let name = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).unwrap_or_default();
     vectorcraft_engine::cmd::fileio::TEXT_EXTS.contains(&vectorcraft_engine::cmd::fileio::extension(name).as_str())
 }
 
-/// Ask how to place the text file `params` (`file.place` params) names.
+/// Ask how to place the text file `params` (`file.place` params) names, starting from the options
+/// confirmed last.
 pub fn open(app: &mut VectorcraftApp, params: &Value) -> Value {
-    let fields = json!({
+    let mut fields = json!({
         "platform": if cfg!(target_os = "macos") { "mac" } else { "windows" },
         "characterSet": "unicode",
         "removeLineReturns": false,
@@ -38,14 +55,36 @@ pub fn open(app: &mut VectorcraftApp, params: &Value) -> Value {
         "spaces": 3,
         "__params": params,
     });
+    let last = &app.ui.text_import;
+    let sets = CHARACTER_SETS.map(|(value, _)| value);
+    for (k, wanted) in [("platform", &["windows", "mac"][..]), ("characterSet", &sets[..])] {
+        if let Some(v) = last.get(k).and_then(Value::as_str).filter(|v| wanted.contains(v)) {
+            fields[k] = json!(v);
+        }
+    }
+    for k in ["removeLineReturns", "removeParagraphReturns"] {
+        if let Some(v) = last.get(k).and_then(Value::as_bool) {
+            fields[k] = json!(v);
+        }
+    }
+    if let Some(n) = last.get("replaceSpaces").and_then(Value::as_u64).filter(|n| (2..=100).contains(n)) {
+        fields["replaceSpaces"] = json!(true);
+        fields["spaces"] = json!(n);
+    }
     app.ui.dialog = Some(Dialog::new(KIND, fields));
     json!({ "dialog": KIND })
+}
+
+/// The `text` options a text file is placed with when Show Import Options is off: those confirmed
+/// last, else `file.place`'s defaults.
+pub fn last_options(app: &VectorcraftApp) -> Value {
+    if app.ui.text_import.is_object() { app.ui.text_import.clone() } else { json!({}) }
 }
 
 fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     widgets::subheader(ui, tl!("Encoding"));
     form::choice(ui, d, "platform", tl!("Platform:"), (LABEL, 180.0), &[("windows", "Windows"), ("mac", "Mac")]);
-    form::choice(ui, d, "characterSet", tl!("Character Set:"), (LABEL, 180.0), &[("unicode", "Unicode"), ("ansi", "ANSI")]);
+    form::choice(ui, d, "characterSet", tl!("Character Set:"), (LABEL, 180.0), &CHARACTER_SETS);
     ui.add_space(10.0);
     widgets::subheader(ui, tl!("Line Breaks"));
     for (key, label) in
@@ -87,10 +126,12 @@ fn options(d: &Dialog) -> Value {
     o
 }
 
-/// Places the file with the options; closes first, so an error shows in the status bar.
+/// Places the file with the options and remembers them for the next text file; closes first, so an
+/// error shows in the status bar.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let mut params = d.fields.get("__params").cloned().unwrap_or_else(|| json!({}));
     params["text"] = options(d);
+    app.ui.text_import = params["text"].clone();
     app.ui.dialog = None;
     crate::place::run_for_user(app, &params)
 }
@@ -139,5 +180,59 @@ mod tests {
         let NodeKind::Text(t) = &n.kind else { panic!("type") };
         assert_eq!(t.plain_text(), "one two\nthree", "one paragraph per block");
         assert_eq!(st.history.undo.len(), 1);
+    }
+
+    /// Every character set is a choice: one confirmed last comes back on the next text file and
+    /// decodes it, an unknown remembered value falls back to Unicode, and with Show Import Options
+    /// off the remembered set is the one the file is placed with.
+    #[test]
+    fn a_remembered_character_set_comes_back_and_places_the_file() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let file = json!({"name": "notes.txt", "dataBase64": vectorcraft_format::base64_encode(&[0x93, 0xFA, 0x96, 0x7B])});
+        app.ui.text_import = json!({"characterSet": "shiftJis", "platform": "windows"});
+        app.run("file.place", file.clone()).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("characterSet")).as_deref(), Some("shiftJis"));
+        assert!(frame(&mut app).contains("Shift JIS"), "the remembered set is shown");
+        let r = super::super::confirm(&mut app).unwrap();
+        let st = app.session.doc().unwrap();
+        let n = st.doc.node(vectorcraft_engine::doc::NodeId(r["ids"][0].as_u64().unwrap())).unwrap();
+        let NodeKind::Text(t) = &n.kind else { panic!("type") };
+        assert_eq!(t.plain_text(), "日本");
+        assert_eq!(last_options(&app)["characterSet"], "shiftJis", "remembered for Show Import Options off");
+        app.ui.text_import = json!({"characterSet": "latin9"});
+        app.run("file.place", file).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("characterSet")).as_deref(), Some("unicode"));
+        let values: Vec<&str> = CHARACTER_SETS.iter().map(|(v, _)| *v).collect();
+        let labels: Vec<&str> = CHARACTER_SETS.iter().map(|(_, l)| *l).collect();
+        assert_eq!(
+            values,
+            ["unicode", "ansi", "shiftJis", "gb2312", "chineseBig5", "cyrillic", "gb18030", "greek", "turkish", "baltic", "centralEuropean"]
+        );
+        assert_eq!(
+            labels,
+            ["Unicode", "ANSI", "Shift JIS", "GB2312", "Chinese Big 5", "Cyrillic", "GB18030", "Greek", "Turkish", "Baltic", "Central European"]
+        );
+    }
+
+    /// A text file dropped on a canvas is placed by the dialog's OK in the document it was dropped
+    /// on, even when another document became active meanwhile.
+    #[test]
+    fn a_dropped_text_files_ok_places_in_the_document_it_was_dropped_on() {
+        use crate::place::{DropAt, DropTarget};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        for _ in 0..2 {
+            app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        }
+        app.session.set_active(0);
+        let st = app.session.doc().unwrap();
+        let target = DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: true });
+        crate::place::drop_files(&mut app, vec![(target, ("notes.txt".into(), None, b"one".to_vec()))]);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+        app.session.set_active(1);
+        super::super::confirm(&mut app).unwrap();
+        let objects = |i: usize| app.session.documents()[i].doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>();
+        assert_eq!((objects(0), objects(1)), (1, 0), "placed in the document it was dropped on");
+        assert_eq!(app.session.active_index(), Some(0));
     }
 }

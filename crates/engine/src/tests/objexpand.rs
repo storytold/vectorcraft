@@ -191,6 +191,295 @@ fn a_fitted_gradient_turned_by_a_transform_expands_as_the_canvas_draws_it() {
     }
 }
 
+/// A Transform effect after a drop shadow, on the object or on the fill, scales and turns the
+/// shadow on the canvas; Object › Expand of the gradient fill keeps the shadow the canvas drew.
+#[test]
+fn a_shadow_before_a_transform_expands_as_the_canvas_draws_it() {
+    for item in [json!(null), json!(0)] {
+        let mut s = session();
+        let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+        for (effect, params) in [
+            ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100})),
+            ("distort.transform", json!({"scaleH": 200, "scaleV": 200, "rotate": 90})),
+        ] {
+            run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+        }
+        let before = render(&s);
+        run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+        let after = render(&s);
+        let diff = differing(&before, &after, 64);
+        assert_eq!(diff, 0, "item {item}: {diff} pixels differ");
+    }
+}
+
+/// The object's Transform effect scales and turns the drop shadow of its gradient fill on the
+/// canvas; Object › Expand of the fill keeps the shadow the canvas drew.
+#[test]
+fn a_fills_shadow_under_the_objects_transform_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+    for (effect, params, item) in [
+        ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100}), json!(0)),
+        ("distort.transform", json!({"scaleH": 200, "scaleV": 100, "rotate": 90}), json!(null)),
+    ] {
+        run(&mut s, "effect.apply", json!({"effect": effect, "params": params, "ids": [id.0], "item": item}));
+    }
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({"object": false, "stroke": false, "steps": 64}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
+/// A group's Transform effect scales and turns its member's drop shadow on the canvas, and an
+/// object's scales and turns its fill's, with Scale Strokes & Effects off or on; Expand Appearance
+/// keeps the shadows the canvas drew.
+#[test]
+fn shadows_under_a_groups_or_an_objects_transform_expand_appearance_as_the_canvas_draws_them() {
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100});
+    for strokes in [false, true] {
+        let transform = json!({"scaleH": 200, "scaleV": 100, "rotate": 90, "strokes": strokes});
+        for group in [false, true] {
+            let mut s = session();
+            let id = gradient_rect(&mut s, Rect::new(80.0, 80.0, 120.0, 120.0), white_black(), false);
+            let item = if group { json!(null) } else { json!(0) };
+            run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow, "ids": [id.0], "item": item}));
+            if group {
+                run(&mut s, "object.group", json!({}));
+            }
+            run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": transform}));
+            let before = render(&s);
+            run(&mut s, "effect.expandAppearance", json!({}));
+            let after = render(&s);
+            let diff = differing(&before, &after, 64);
+            assert_eq!(diff, 0, "group {group}, Scale Strokes & Effects {strokes}: {diff} pixels differ");
+        }
+    }
+}
+
+/// Each copy of a Transform effect draws the drop shadow listed before the effect under itself,
+/// scaled with it, and Expand Appearance keeps those shadows: the square (20..40) has its shadow
+/// 20 pt to its right, and its copy scaled 200 % and moved 80 pt down (10..50 across, 90..130
+/// down) has its own 40 pt to its right.
+#[test]
+fn each_copys_shadow_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1}}));
+    let before = render(&s);
+    assert_eq!(before.pixel(70, 110), [0, 255, 0, 255], "the copy's shadow");
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
+/// Each copy of a fill's own Transform effect, and each copy of its object's Transform effect,
+/// draws the fill's drop shadow under itself, scaled with it, and Expand Appearance keeps those
+/// shadows: the copy (10..50 across, 90..130 down) has its own shadow 40 pt to its right.
+#[test]
+fn each_copys_fill_shadow_expands_as_the_canvas_draws_it() {
+    let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    let copies = json!({"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1});
+    for own in [true, false] {
+        let mut s = session();
+        run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 20, "height": 20}));
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+        run(&mut s, "paint.setStroke", json!({"none": true}));
+        run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow, "item": 0}));
+        let item = if own { json!(0) } else { json!(null) };
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": copies, "item": item}));
+        let before = render(&s);
+        assert_eq!(before.pixel(80, 110), [0, 255, 0, 255], "own {own}: the copy's shadow");
+        run(&mut s, "effect.expandAppearance", json!({}));
+        let after = render(&s);
+        let diff = differing(&before, &after, 64);
+        assert_eq!(diff, 0, "own {own}: {diff} pixels differ");
+    }
+}
+
+/// Each copy of a group's Transform effect draws the drop shadow listed before the effect under
+/// itself, of both its squares together and scaled with it, and Expand Appearance keeps those
+/// shadows: the squares (20..40 together) have their shadow 20 pt to their right, and their copy
+/// scaled 200 % and moved 80 pt down (10..50 across, 90..130 down) has its own 40 pt to its right.
+/// A copy moved 30 pt right (50..70) lies under the squares' shadow (40..60), which still paints
+/// over it once expanded. The expanded art has no effects left, and each object in it an id of its
+/// own.
+#[test]
+fn each_copys_shadow_on_a_group_expands_as_the_canvas_draws_it() {
+    let cases = [
+        (json!({"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1}), (80, 110), "the copy's shadow"),
+        (json!({"moveH": 30, "copies": 1}), (55, 30), "the squares' shadow over the copy"),
+    ];
+    for (params, (x, y), what) in cases {
+        let mut s = session();
+        let mut ids = vec![];
+        for x in [20, 30] {
+            ids.push(run(&mut s, "shape.rectangle", json!({"x": x, "y": 20, "width": 10, "height": 20}))["id"].as_u64().unwrap());
+            run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+            run(&mut s, "paint.setStroke", json!({"none": true}));
+        }
+        run(&mut s, "select.set", json!({"ids": ids}));
+        run(&mut s, "object.group", json!({}));
+        let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+        run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": params}));
+        let before = render(&s);
+        assert_eq!(before.pixel(x, y), [0, 255, 0, 255], "{params}: {what}");
+        run(&mut s, "effect.expandAppearance", json!({}));
+        let after = render(&s);
+        let diff = differing(&before, &after, 64);
+        assert_eq!(diff, 0, "{params}: {diff} pixels differ");
+        let doc = &s.doc().unwrap().doc;
+        let (mut seen, mut count, mut effects) = (std::collections::HashSet::new(), 0, 0);
+        for l in &doc.layers {
+            l.walk(&mut |n| {
+                seen.insert(n.id);
+                count += 1;
+                effects += n.appearance.effects.len();
+            });
+        }
+        assert_eq!(seen.len(), count, "{params}: each object has an id of its own");
+        assert_eq!(effects, 0, "{params}: no effects are left");
+    }
+}
+
+/// A member's random Transform effect takes its seed from the member's id, and the canvas draws
+/// every copy of the group with that id: Expand Appearance of a group with a stroke of its own, a
+/// shadow and a copying Transform effect gives each copy's symbol instance the same random move, so
+/// the copies, 60 pt apart, still draw alike.
+#[test]
+fn each_copys_random_member_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    let mut ids = vec![];
+    for x in [20, 50] {
+        ids.push(run(&mut s, "shape.rectangle", json!({"x": x, "y": 20, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+        run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+        run(&mut s, "paint.setStroke", json!({"none": true}));
+    }
+    run(&mut s, "select.set", json!({"ids": [ids[0]]}));
+    ids[0] = run(&mut s, "symbol.new", json!({"name": "Box"}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [ids[0]]}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveH": 16, "moveV": 16, "random": true}}));
+    run(&mut s, "select.set", json!({"ids": ids}));
+    let g = run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [g]}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    assert!(node(&s, NodeId(g)).appearance.items.iter().any(|i| i.visible()), "the group has a stroke of its own");
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"moveV": 60, "copies": 2}}));
+    // The pixels of each copy's 60 pt band that differ from the first copy's by more than 64.
+    let unlike = |r: &vectorcraft_render::Rendered| {
+        let px = |x: usize, y: usize| {
+            let i = (y * r.width as usize + x) * 4;
+            r.pixels.get(i..i + 4).map(<[u8]>::to_vec).unwrap_or_default()
+        };
+        let mut n = 0;
+        for k in [60, 120] {
+            for y in 0..60 {
+                for x in 0..r.width as usize {
+                    n += usize::from(px(x, y).iter().zip(px(x, y + k)).any(|(a, b)| a.abs_diff(b) > 64));
+                }
+            }
+        }
+        n
+    };
+    let before = render(&s);
+    assert_eq!(unlike(&before), 0, "the canvas draws the copies alike");
+    let art = vectorcraft_render::effects::evaluate_container(Some(&s.doc().unwrap().doc), &node(&s, NodeId(g))).unwrap();
+    let mut live = 0;
+    art.walk(&mut |n| live += n.appearance.effects.iter().filter(|e| e.id == "distort.transform").count());
+    assert_eq!(live, 3, "each copy's instance keeps its random effect live");
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    assert_eq!(unlike(&after), 0, "the expanded copies draw alike");
+    assert!(differing(&before, &after, 64) < 200, "the copies stay where they are drawn");
+}
+
+/// A member's own Offset Path applies before the copying Transform effect of its group, which has
+/// a stroke of its own, whether or not a shadow is listed before that Transform effect: the copy
+/// scaled 200 % draws the offset square scaled, with or without a shadow at 0 % opacity.
+#[test]
+fn a_members_offset_path_applies_before_its_painted_groups_copies() {
+    let draw = |shadow: bool| {
+        let mut s = session();
+        let mut ids = vec![];
+        for x in [20, 40] {
+            ids.push(run(&mut s, "shape.rectangle", json!({"x": x, "y": 20, "width": 10, "height": 10}))["id"].as_u64().unwrap());
+            run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+            run(&mut s, "paint.setStroke", json!({"none": true}));
+        }
+        run(&mut s, "select.set", json!({"ids": [ids[0]]}));
+        run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 5}}));
+        run(&mut s, "select.set", json!({"ids": ids}));
+        let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+        run(&mut s, "appearance.addStroke", json!({}));
+        if shadow {
+            let fx = json!({"x": 10, "y": 0, "blur": 0, "opacity": 0, "mode": "normal", "color": "#00ff00"});
+            run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": fx}));
+        }
+        run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}}));
+        let n = node(&s, g);
+        assert_eq!(vectorcraft_render::effects::outer_effects(&n).len() < n.appearance.effects.len(), shadow, "each copy carries the shadow");
+        render(&s)
+    };
+    let diff = differing(&draw(false), &draw(true), 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
+/// Each copy of type's Transform effect draws the drop shadow listed before the effect under
+/// itself, scaled with it, and Expand Appearance keeps those shadows: the type's copy, scaled 200 %
+/// and moved 80 pt down, has its shadow 40 pt to the right of its letters rather than the type's
+/// own 20 pt.
+#[test]
+fn each_copys_shadow_on_type_expands_as_the_canvas_draws_it() {
+    let mut s = session();
+    let t = run(&mut s, "text.create", json!({"x": 20, "y": 60, "text": "I", "size": 40}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let shadow = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 200, "scaleV": 200, "moveV": 80, "copies": 1}}));
+    let before = render(&s);
+    if !(0..100u32).any(|y| (0..200u32).any(|x| before.pixel(x, y) == [255, 0, 0, 255])) {
+        eprintln!("skipped: built without a font that draws the type");
+        return;
+    }
+    // The rightmost red pixel of the copy, below the type, and 38 pt right of it the copy's shadow.
+    let red =
+        (100..200u32).flat_map(|y| (0..200u32).map(move |x| (x, y))).filter(|&(x, y)| before.pixel(x, y) == [255, 0, 0, 255]).max_by_key(|p| p.0);
+    let (x, y) = red.expect("the copy");
+    assert_eq!(before.pixel(x + 38, y), [0, 255, 0, 255], "the copy's shadow, 40 pt to the right of ({x}, {y})");
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+}
+
+/// A group's Transform effect runs after its member's own Offset Path in Expand Appearance as on
+/// the canvas: the 100 pt square offset to 120 pt and scaled by half expands 60 pt wide.
+#[test]
+fn a_groups_effects_after_its_members_own_expand_as_the_canvas_draws_them() {
+    let mut s = session();
+    run(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}));
+    run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 10}}));
+    run(&mut s, "object.group", json!({}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 50, "scaleV": 50}}));
+    let before = render(&s);
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let after = render(&s);
+    let diff = differing(&before, &after, 64);
+    assert_eq!(diff, 0, "{diff} pixels differ");
+    let doc = &s.doc().unwrap().doc;
+    let w = doc.node(doc.layers[0].id).and_then(|l| l.geometric_bounds()).unwrap().width();
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+}
+
 #[test]
 fn a_placed_gradient_moved_by_a_warp_expands_as_the_canvas_draws_it() {
     // The object's own effect, and the fill's (the first appearance item).
@@ -461,6 +750,455 @@ fn a_turned_or_flat_diamond_expands_as_the_canvas_draws_it() {
             assert!(differing(&before, &after, 48) < 200, "{aspect} {how}: {}", differing(&before, &after, 48));
             assert!(mean_diff(&before, &after) < 2.5, "{aspect} {how}: {}", mean_diff(&before, &after));
         }
+    }
+}
+
+/// A gradient that repeats or reflects expands, into objects or a mesh, as the canvas paints it:
+/// its stops repeated across the box, for each kind.
+#[test]
+fn a_spread_gradient_expands_as_the_canvas_paints_it() {
+    for kind in ["linear", "radial", "conic", "diamond"] {
+        for spread in ["repeat", "reflect"] {
+            for to in [json!({"steps": 240}), json!({"gradient": "mesh"})] {
+                let mut s = session();
+                let gr = json!({"kind": kind, "spread": spread, "repeats": 3, "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]});
+                gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, false);
+                let before = render(&s);
+                run(&mut s, "object.expand", to.clone());
+                let after = render(&s);
+                // Where Repeat starts the stops again, the hard edge may land a pixel off.
+                assert!(mean_diff(&before, &after) < 4.0, "{kind} {spread} {to}: {}", mean_diff(&before, &after));
+            }
+        }
+    }
+}
+
+/// A gradient that repeats or reflects expands into the same whole number of objects in each run,
+/// so each run starts on an object's edge: a sharp step in the middle of each of 7 runs, expanded
+/// into about 15 objects (2 a run), lands where the canvas paints it.
+#[test]
+fn a_spread_gradient_expands_into_whole_bands_for_each_run() {
+    let stops = json!([
+        {"offset": 0, "color": "#ffff00"}, {"offset": 0.5, "color": "#ffff00"},
+        {"offset": 0.5, "color": "#004080"}, {"offset": 1, "color": "#004080"}
+    ]);
+    for kind in ["linear", "conic"] {
+        for spread in ["repeat", "reflect"] {
+            let mut s = session();
+            // A conic gradient turns about the box's center.
+            let start = if kind == "conic" { [100, 100] } else { [30, 100] };
+            let gr = json!({"kind": kind, "spread": spread, "repeats": 7, "start": start, "end": [170, 100], "stops": stops});
+            gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gr, false);
+            let before = render(&s);
+            run(&mut s, "object.expand", json!({"steps": 15}));
+            let after = render(&s);
+            assert!(mean_diff(&before, &after) < 2.0, "{kind} {spread}: {}", mean_diff(&before, &after));
+        }
+    }
+}
+
+/// A gradient that repeats across a box in more runs than are written (700 runs of 0.2 pt) is not
+/// expanded into its first runs and a flat last color: the fill stays a gradient, and the rest of
+/// the object (its stroke) still expands. `object.expand.info` reports no gradient or fill to
+/// expand, and Expand with only Fill on reports nothing to expand; the same gradient in 70 runs
+/// (10 repeats) reports both.
+#[test]
+fn a_spread_gradient_with_more_runs_than_written_stays_a_gradient() {
+    let gradient = |repeats: u32| {
+        json!({"kind": "linear", "spread": "repeat", "repeats": repeats, "start": [30, 100], "end": [50, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]})
+    };
+    for (repeats, expands) in [(10, true), (100, false)] {
+        let mut s = session();
+        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gradient(repeats), true);
+        let info = s.execute("object.expand.info", &json!({})).unwrap();
+        assert_eq!(
+            (info["gradient"].clone(), info["fill"].clone(), info["stroke"].clone()),
+            (json!(expands), json!(expands), json!(true)),
+            "{repeats}"
+        );
+        let only_fill = s.execute("object.expand", &json!({"object": false, "stroke": false}));
+        assert_eq!(only_fill.is_ok(), expands, "{repeats}: {only_fill:?}");
+    }
+    for to in [json!({"steps": 240}), json!({"gradient": "mesh"})] {
+        let mut s = session();
+        gradient_rect(&mut s, Rect::new(30.0, 40.0, 170.0, 160.0), gradient(100), true);
+        let before = render(&s);
+        run(&mut s, "object.expand", to.clone());
+        let after = render(&s);
+        assert!(mean_diff(&before, &after) < 2.0, "{to}: {}", mean_diff(&before, &after));
+        let mut gradients = 0;
+        s.doc().unwrap().doc.walk(|n| gradients += usize::from(matches!(n.appearance.fill_paint(), Paint::Gradient(_))));
+        assert_eq!(gradients, 1, "{to}");
+    }
+}
+
+/// Selected type "Hi" at 48 pt, its characters filled with a gradient that repeats 100 times along
+/// a vector `len` pt long.
+fn spread_gradient_type(s: &mut Session, len: f64) -> u64 {
+    let t = run(s, "text.create", json!({"x": 50, "y": 100, "text": "Hi", "size": 48}))["id"].as_u64().unwrap();
+    run(s, "select.set", json!({"ids": [t]}));
+    run(
+        s,
+        "paint.setFill",
+        json!({"gradient": {"kind": "linear", "spread": "repeat", "repeats": 100, "start": [50, 100], "end": [50.0 + len, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]}}),
+    );
+    t
+}
+
+/// How many objects in the document have a gradient fill, and how many are type.
+fn gradients_and_type(s: &Session) -> (usize, usize) {
+    let (mut gradients, mut texts) = (0, 0);
+    s.doc().unwrap().doc.walk(|n| {
+        gradients += usize::from(matches!(n.appearance.fill_paint(), Paint::Gradient(_)));
+        texts += usize::from(matches!(n.kind, NodeKind::Text(_)));
+    });
+    (gradients, texts)
+}
+
+/// Type is outlined before its fills expand, and each glyph's gradient fits that glyph's own box:
+/// `object.expand.info` reports a gradient (and a fill) only when a glyph's box needs no more runs
+/// than are written, so Expand turns it into art. Both Expand Gradient To options leave the
+/// glyphs whose gradient needs more runs with their gradient, and Object still outlines the type.
+/// The query leaves the document and its history as they are.
+#[test]
+fn type_whose_gradient_needs_more_runs_than_written_reports_no_gradient() {
+    // 0.2 pt runs (100 repeats over 20 pt) across glyphs about 30 pt wide: under the limit.
+    // 0.02 pt runs (over 2 pt): far over it.
+    for (len, expands) in [(20.0, true), (2.0, false)] {
+        let mut s = session();
+        spread_gradient_type(&mut s, len);
+        let before = (s.doc().unwrap().revision, s.doc().unwrap().history.undo.len(), s.doc().unwrap().doc.layers.clone());
+        let info = run(&mut s, "object.expand.info", json!({}));
+        assert_eq!((info["gradient"].clone(), info["fill"].clone(), info["object"].clone()), (json!(expands), json!(expands), json!(true)), "{len}");
+        assert!(
+            before == (s.doc().unwrap().revision, s.doc().unwrap().history.undo.len(), s.doc().unwrap().doc.layers.clone()),
+            "{len}: the query changed the document"
+        );
+        for to in [json!({}), json!({"gradient": "mesh"})] {
+            let mut s = session();
+            spread_gradient_type(&mut s, len);
+            run(&mut s, "object.expand", to.clone());
+            let (gradients, texts) = gradients_and_type(&s);
+            assert_eq!(texts, 0, "{len} {to}: outlined");
+            assert_eq!(gradients == 0, expands, "{len} {to}: {gradients} gradient fills left");
+        }
+    }
+}
+
+/// One glyph whose box needs more runs than are written does not hide another that Expand turns
+/// into art: the 200 pt "H" keeps its gradient, the 48 pt "i" expands, and the query reports it.
+#[test]
+fn type_reports_a_gradient_when_any_glyph_expands() {
+    let mut s = session();
+    let t = spread_gradient_type(&mut s, 20.0);
+    run(&mut s, "text.setRangeStyle", json!({"id": t, "start": 0, "end": 1, "size": 200}));
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["gradient"].clone(), info["fill"].clone()), (json!(true), json!(true)));
+    run(&mut s, "object.expand", json!({}));
+    assert_eq!(gradients_and_type(&s), (1, 0), "the large glyph keeps its gradient");
+}
+
+/// Type scaled unevenly outlines its characters' stroke as a filled path, so a gradient on that
+/// stroke becomes a gradient fill: the query reports it, and Expand turns it into art.
+#[test]
+fn type_reports_a_stroke_gradient_its_uneven_scale_turns_into_a_fill() {
+    let mut s = session();
+    let t = run(&mut s, "text.create", json!({"x": 50, "y": 100, "text": "Hi", "size": 48}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    run(
+        &mut s,
+        "paint.setStroke",
+        json!({"gradient": {"kind": "linear", "spread": "repeat", "repeats": 100, "start": [50, 100], "end": [70, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]}}),
+    );
+    run(&mut s, "stroke.set", json!({"weight": 4}));
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!(info["gradient"], json!(false), "a live stroke's gradient is not a fill");
+    run(&mut s, "object.scale", json!({"ids": [t], "sx": 300, "sy": 100}));
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["gradient"].clone(), info["fill"].clone()), (json!(true), json!(true)));
+    run(&mut s, "object.expand", json!({}));
+    assert_eq!(gradients_and_type(&s), (0, 0), "the filled strokes' gradients became art");
+}
+
+/// The same rule for type in the art of a symbol instance that Object expands. The symbol's art
+/// is the type scaled down (its "i" about 2.5 pt wide), so its glyphs need more runs than are
+/// written with 0.002 pt runs (over a 0.2 pt vector).
+#[test]
+fn type_in_symbol_art_reports_a_gradient_only_when_it_expands() {
+    for (len, expands) in [(20.0, true), (0.2, false)] {
+        let mut s = session();
+        spread_gradient_type(&mut s, len);
+        let inst = run(&mut s, "symbol.new", json!({"name": "Hi"}))["id"].as_u64().unwrap();
+        run(&mut s, "select.set", json!({"ids": [inst]}));
+        let info = run(&mut s, "object.expand.info", json!({}));
+        assert_eq!(info["gradient"], json!(expands), "{len}");
+        assert_eq!((info["symbolArt"]["gradient"].clone(), info["symbolArt"]["fill"].clone()), (json!(expands), json!(expands)), "{len}: {info}");
+    }
+}
+
+/// Selected type "Hi" at 64 pt whose characters have no paint, with fills and strokes of its own:
+/// each of `items` is an `appearance.setItem` edit of a new object-level stroke when it has a
+/// `weight`, else of a new object-level fill; the first `below` of them paint below the characters.
+fn type_with_own_paint(s: &mut Session, items: &[Value], below: usize) -> NodeId {
+    let t = run(s, "text.create", json!({"x": 25, "y": 110, "text": "Hi", "size": 64}))["id"].as_u64().unwrap();
+    run(s, "select.set", json!({"ids": [t]}));
+    run(s, "paint.setFill", json!({"none": true}));
+    run(s, "paint.setStroke", json!({"none": true}));
+    for (i, item) in items.iter().enumerate() {
+        let add = if item.get("weight").is_some() { "appearance.addStroke" } else { "appearance.addFill" };
+        run(s, add, json!({"target": "object"}));
+        let mut p = item.clone();
+        p["index"] = json!(i);
+        run(s, "appearance.setItem", p);
+    }
+    run(s, "appearance.moveItem", json!({"from": "contents", "to": below}));
+    NodeId(t)
+}
+
+fn blue_stroke() -> Value {
+    json!({"color": "#0000ff", "weight": 5})
+}
+
+fn red_blue() -> Value {
+    json!({"gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}})
+}
+
+/// Create Outlines draws what the type drew: a gradient fill of the type object's own, below its
+/// characters, keeps one gradient across both glyphs over the layout's box, and its stroke stays
+/// over them.
+#[test]
+fn create_outlines_draws_the_type_objects_own_paint() {
+    let mut s = session();
+    type_with_own_paint(&mut s, &[red_blue(), blue_stroke()], 1);
+    let before = render(&s);
+    run(&mut s, "type.createOutlines", json!({}));
+    let after = render(&s);
+    let n = differing(&before, &after, 24);
+    assert!(n < 40, "{n} pixels differ");
+    assert!(differing(&before, &render(&session()), 24) > 1000, "the type paints something");
+}
+
+/// Create Outlines draws what the type drew with effects of its own: a drop shadow of the whole
+/// type and a Transform effect that scales and turns it, over fills and strokes of the object's
+/// own around its Characters row.
+#[test]
+fn create_outlines_draws_the_type_objects_own_effects() {
+    let mut s = session();
+    type_with_own_paint(&mut s, &[red_blue(), blue_stroke()], 1);
+    let plain = render(&s);
+    let shadow = json!({"x": 6, "y": 6, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    run(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "params": shadow, "item": null}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.transform", "params": {"scaleH": 80, "scaleV": 80, "rotate": 10}, "item": null}));
+    let before = render(&s);
+    assert!(differing(&plain, &before, 24) > 500, "the effects change what the type draws");
+    run(&mut s, "type.createOutlines", json!({}));
+    let after = render(&s);
+    let n = differing(&before, &after, 24);
+    assert!(n < 40, "{n} pixels differ");
+}
+
+/// A Warp effect of the type object's own bends one gradient across the whole type on the canvas,
+/// and the group Create Outlines makes keeps it across the whole outline rather than one per
+/// glyph, so the outlines draw what the type drew.
+#[test]
+fn create_outlines_keeps_a_warped_character_gradient_across_the_type() {
+    let mut s = session();
+    let t = run(&mut s, "text.create", json!({"x": 20, "y": 110, "text": "HIH", "size": 60}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    let down = json!({"kind": "linear", "angle": 90, "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
+    run(&mut s, "paint.setFill", json!({"gradient": down}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    run(&mut s, "effect.apply", json!({"effect": "warp.arc", "params": {"bend": 50}, "item": null}));
+    let before = render(&s);
+    run(&mut s, "type.createOutlines", json!({}));
+    let after = render(&s);
+    let n = differing(&before, &after, 24);
+    assert!(n < 40, "{n} pixels differ");
+}
+
+/// Selected type "HIH" at 40 pt with ruby, underlined and struck through, its characters filled
+/// with `fill` (a `paint.setFill` param) and stroked 2 pt wide, then scaled to 150% and rotated 20
+/// degrees (the stroke keeps its 2 pt, which is 4/3 pt in text space).
+fn transformed_gradient_type(s: &mut Session, fill: Value) -> NodeId {
+    let t = run(s, "text.create", json!({"x": 30, "y": 110, "text": "HIH", "size": 40}))["id"].as_u64().unwrap();
+    run(s, "select.set", json!({"ids": [t]}));
+    run(s, "type.ruby", json!({"text": "ab"}));
+    run(s, "text.setFormat", json!({"ids": [t], "underline": true, "strikethrough": true}));
+    run(s, "paint.setFill", fill);
+    run(s, "paint.setStroke", json!({"color": "#008000"}));
+    run(s, "stroke.set", json!({"weight": 2}));
+    run(s, "object.scale", json!({"ids": [t], "sx": 150, "sy": 150}));
+    run(s, "object.rotate", json!({"ids": [t], "angle": 20}));
+    NodeId(t)
+}
+
+/// Create Outlines draws what the type drew: a gradient on the characters that has no vector of
+/// its own keeps one gradient across every glyph, ruby glyph and bar, fitted to the layout's box,
+/// and one with a vector keeps it where it was, both with the type's scale and rotation. The
+/// characters' stroke keeps the weight it was drawn at.
+#[test]
+fn create_outlines_keeps_a_character_gradient_across_the_type() {
+    let placed = json!({"gradient": {"kind": "linear", "start": [40, 100], "end": [110, 100],
+        "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}});
+    for fill in [red_blue(), placed] {
+        let mut s = session();
+        let t = transformed_gradient_type(&mut s, fill.clone());
+        let NodeKind::Text(text) = &node(&s, t).kind else { panic!("not type") };
+        assert!(!text.ruby.is_empty() && text.runs.iter().all(|r| r.style.underline && r.style.strikethrough), "{fill}");
+        // The characters' stroke is kept in text space and drawn scaled by the type's transform.
+        let weight = text.runs[0].style.stroke_layer().width;
+        let drawn = weight * vectorcraft_doc::Scaling::factor(text.xf).unwrap_or(1.0);
+        assert!((drawn - weight).abs() > 0.1, "the type's transform scales: {weight} {drawn}");
+        let before = render(&s);
+        let g = run(&mut s, "type.createOutlines", json!({}))["ids"][0].as_u64().unwrap();
+        let after = render(&s);
+        let n = differing(&before, &after, 24);
+        assert!(n < 60, "{fill}: {n} pixels differ");
+        assert!(differing(&before, &render(&session()), 24) > 1000, "the type paints something");
+        // Every glyph, ruby glyph and bar takes the same gradient, placed, and the stroke at the
+        // weight it was drawn at.
+        let mut gradients = vec![];
+        let mut widths = vec![];
+        node(&s, NodeId(g)).walk(&mut |c: &Node| {
+            if let Paint::Gradient(gr) = c.appearance.fill_paint() {
+                gradients.push(gr.clone());
+            }
+            widths.extend(c.appearance.stroke().map(|st| st.width));
+        });
+        assert!(gradients.len() >= 6, "{fill}: three glyphs, ruby and two bars: {}", gradients.len());
+        assert!(gradients.iter().all(|gr| gr.is_placed() && *gr == gradients[0]), "{fill}: {gradients:?}");
+        assert!(widths.len() == gradients.len() && widths.iter().all(|w| (w - drawn).abs() < 1e-9), "{fill}: {drawn} {widths:?}");
+    }
+}
+
+/// Expand outlines the type before its fills expand, so a gradient on its characters that has no
+/// vector of its own expands across the whole type, as the canvas draws it, and the query reports
+/// it.
+#[test]
+fn expand_keeps_a_character_gradient_across_the_type() {
+    let mut s = session();
+    transformed_gradient_type(&mut s, red_blue());
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["gradient"].clone(), info["fill"].clone(), info["object"].clone()), (json!(true), json!(true), json!(true)), "{info}");
+    let before = render(&s);
+    run(&mut s, "object.expand", json!({}));
+    let after = render(&s);
+    assert_eq!(gradients_and_type(&s), (0, 0), "outlined and expanded");
+    let d = mean_diff(&before, &after);
+    assert!(d < 0.5, "{d}");
+}
+
+/// `object.expand.info` reports the type object's own stroke, pattern fill and gradient fill, which
+/// Object turns into paths of its whole outline: a gradient only when that outline's box needs no
+/// more runs than are written.
+#[test]
+fn type_objects_own_stroke_pattern_and_gradient_are_reported() {
+    let mut s = session();
+    type_with_own_paint(&mut s, &[blue_stroke()], 0);
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["object"].clone(), info["stroke"].clone(), info["fill"].clone()), (json!(true), json!(true), json!(false)), "{info}");
+
+    let mut s = session();
+    pattern_rect(&mut s, Rect::new(150.0, 150.0, 190.0, 190.0), false);
+    let t = type_with_own_paint(&mut s, &[json!({"swatch": "Dots"})], 0);
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["fill"].clone(), info["gradient"].clone(), info["stroke"].clone()), (json!(true), json!(false), json!(false)), "{info}");
+
+    // 0.4 pt runs across about 80 pt: under the limit; 0.02 pt runs: far over it.
+    for (len, expands) in [(40.0, true), (2.0, false)] {
+        let mut s = session();
+        let gradient = json!({"gradient": {"kind": "linear", "spread": "repeat", "repeats": 100, "start": [25, 100], "end": [25.0 + len, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]}});
+        type_with_own_paint(&mut s, &[gradient], 0);
+        let info = run(&mut s, "object.expand.info", json!({}));
+        assert_eq!((info["gradient"].clone(), info["fill"].clone()), (json!(expands), json!(expands)), "{len}: {info}");
+        run(&mut s, "object.expand", json!({}));
+        let (gradients, texts) = gradients_and_type(&s);
+        assert_eq!(texts, 0, "{len}: outlined");
+        assert_eq!(gradients == 0, expands, "{len}: {gradients} gradient fills left");
+    }
+}
+
+/// Type with only spaces has no outline for its own stroke or pattern fill to go on, so
+/// `object.expand.info` reports neither.
+#[test]
+fn type_without_an_outline_reports_no_own_stroke_or_fill() {
+    let mut s = session();
+    pattern_rect(&mut s, Rect::new(150.0, 150.0, 190.0, 190.0), false);
+    let t = run(&mut s, "text.create", json!({"x": 25, "y": 110, "text": "   ", "size": 64}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    for (i, item) in [json!({"swatch": "Dots"}), blue_stroke()].into_iter().enumerate() {
+        let add = if item.get("weight").is_some() { "appearance.addStroke" } else { "appearance.addFill" };
+        run(&mut s, add, json!({"target": "object"}));
+        let mut p = item;
+        p["index"] = json!(i);
+        run(&mut s, "appearance.setItem", p);
+    }
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!(
+        (info["object"].clone(), info["stroke"].clone(), info["fill"].clone(), info["gradient"].clone()),
+        (json!(true), json!(false), json!(false), json!(false)),
+        "{info}"
+    );
+}
+
+/// How many objects in the document have a visible stroke with paint and weight.
+fn painted_strokes(s: &Session) -> usize {
+    let mut n = 0;
+    s.doc().unwrap().doc.walk(|c| {
+        n += usize::from(
+            c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if st.visible && !st.paint.is_none() && st.width > 0.0)),
+        );
+    });
+    n
+}
+
+/// A visible stroke under a topmost stroke with no paint still has something for Stroke to
+/// outline, on type's own appearance and on a path: `object.expand.info` reports it, and Expand
+/// outlines it.
+#[test]
+fn a_stroke_under_an_unpainted_stroke_is_reported_and_outlined() {
+    let mut s = session();
+    type_with_own_paint(&mut s, &[blue_stroke(), json!({"none": true, "weight": 1})], 0);
+    let mut r = session();
+    run(&mut r, "shape.rectangle", json!({"x": 40, "y": 40, "width": 100, "height": 80}));
+    run(&mut r, "paint.setStroke", json!({"color": "#0000ff"}));
+    run(&mut r, "stroke.set", json!({"weight": 4}));
+    run(&mut r, "appearance.addStroke", json!({"target": "object"}));
+    let top = node(&r, selected(&r).id).appearance.items.len() - 1;
+    run(&mut r, "appearance.setItem", json!({"index": top, "none": true}));
+    for (what, s) in [("type", &mut s), ("path", &mut r)] {
+        let info = run(s, "object.expand.info", json!({}));
+        assert_eq!(info["stroke"], json!(true), "{what}: {info}");
+        run(s, "object.expand", json!({}));
+        assert_eq!(painted_strokes(s), 0, "{what}: the stroke is outlined");
+    }
+}
+
+/// Expand keeps the type object's own stroke and gradient fill through Object: Stroke outlines the
+/// stroke and Fill expands the gradient, and with those options off they stay live on the path of
+/// the whole outline. The picture stays the same either way.
+#[test]
+fn expand_keeps_the_type_objects_own_paint() {
+    for (opts, live) in [(json!({}), false), (json!({"fill": false, "stroke": false}), true)] {
+        let mut s = session();
+        type_with_own_paint(&mut s, &[red_blue(), blue_stroke()], 1);
+        let before = render(&s);
+        run(&mut s, "object.expand", opts.clone());
+        let after = render(&s);
+        assert!(mean_diff(&before, &after) < 2.0, "{opts}: {}", mean_diff(&before, &after));
+        let (gradients, texts) = gradients_and_type(&s);
+        assert_eq!(texts, 0, "{opts}: outlined");
+        assert_eq!(gradients == 1, live, "{opts}: {gradients} gradient fills");
+        let mut strokes = 0;
+        s.doc().unwrap().doc.walk(|n| strokes += usize::from(!n.appearance.stroke_paint().is_none()));
+        assert_eq!(strokes == 1, live, "{opts}: {strokes} strokes");
     }
 }
 
@@ -817,6 +1555,28 @@ fn a_random_brush_in_the_tile_art_draws_every_tile_alike() {
         expand_to_tiles(&mut s);
         assert_eq!(differing(&before, &render(&s), 64), 0, "turned {turned}: every tile as on the canvas");
     }
+}
+
+#[test]
+fn a_path_set_to_random_by_its_own_brush_options_draws_every_tile_alike() {
+    // The brush scatters at fixed values; the tile path's own settings (Options of Selected
+    // Object) make it scatter at random, so the expanded tiles must still match the canvas.
+    let mut s = session();
+    let tile = run(&mut s, "shape.rectangle", json!({"x": 0, "y": 0, "width": 12, "height": 12}))["id"].as_u64().unwrap();
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    run(&mut s, "paint.setStroke", json!({"color": "#000000"}));
+    run(&mut s, "brush.apply", json!({"name": "Confetti"}));
+    run(&mut s, "brush.options", json!({"name": "Confetti", "params": {"modes": ["fixed", "fixed", "fixed", "fixed"]}}));
+    run(&mut s, "brush.objectOptions", json!({"ids": [tile], "params": {"modes": ["random", "random", "random", "random"]}}));
+    run(&mut s, "object.pattern.make", json!({"ids": [tile], "name": "Confetti", "width": 60, "height": 60, "edit": false}));
+    run(&mut s, "select.set", json!({"ids": [tile]}));
+    run(&mut s, "edit.clear", json!({}));
+    run(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 160, "height": 160}));
+    run(&mut s, "paint.setFill", json!({"swatch": "Confetti"}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    let before = render(&s);
+    expand_to_tiles(&mut s);
+    assert_eq!(differing(&before, &render(&s), 64), 0, "every tile as on the canvas");
 }
 
 #[test]
@@ -1351,4 +2111,55 @@ fn expand_info_counts_two_fills_but_not_a_plain_rectangle() {
     assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(false), "a basic appearance");
     run(&mut s, "appearance.addFill", json!({}));
     assert_eq!(run(&mut s, "object.expand.info", json!({}))["appearance"], json!(true), "two fills");
+}
+
+/// A Transform effect left out past the effect budget (its result over 8 million lines drawn)
+/// leaves the art where it is, and Expand, Expand Appearance and Outline Stroke keep the drop
+/// shadow before it with its own offset and blur, as the canvas draws it: the object's, the fill's
+/// and the stroke's.
+#[test]
+fn a_shadow_before_a_skipped_transform_expands_with_its_own_offset() {
+    use vectorcraft_doc::{Appearance, Effect};
+    use vectorcraft_geom::{Anchor, PathData, Point, SubPath};
+    let anchors = (0..=30_000)
+        .map(|i| {
+            let x = 2.0 * f64::from(i);
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    let path = PathData::single(SubPath::new(anchors, true));
+    let bounds = path.bounds().unwrap();
+    let effects = || {
+        vec![
+            Effect { id: "stylize.dropShadow".into(), params: json!({"x": 10, "y": 5, "blur": 4}), visible: true },
+            Effect { id: "distort.transform".into(), params: json!({"scaleH": 100000, "scaleV": 100000}), visible: true },
+        ]
+    };
+    let shadow = |effects: &[Effect]| match vectorcraft_render::effects::raster_effects(effects).first() {
+        Some(vectorcraft_render::effects::RasterFx::DropShadow { dx, dy, blur, .. }) => (*dx, *dy, *blur),
+        other => panic!("expected a drop shadow, got {other:?}"),
+    };
+    let mut d = vectorcraft_doc::Document::new(200.0, 200.0);
+    let basic = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 2.0);
+    let mut object = Node::path(NodeId(1), path.clone(), basic.clone());
+    object.appearance.effects = effects();
+    let m = crate::cmd::expand::reshaped(&d, &object).unwrap();
+    assert_eq!(m.geometric_bounds(), Some(bounds), "the art stays where it is");
+    assert_eq!(shadow(&m.appearance.effects), (10.0, 5.0, 4.0), "the object's shadow");
+    let mut fill = Node::path(NodeId(2), path.clone(), basic.clone());
+    *fill.appearance.items[0].effects_mut() = effects();
+    let (_, _, _, moved) = crate::cmd::expand::fill_shape(&d, &fill, &fill.appearance.items[0], &path, bounds).unwrap();
+    assert_eq!(shadow(moved.effects()), (10.0, 5.0, 4.0), "the fill's shadow");
+    let mut stroke = Node::path(NodeId(3), path.clone(), basic);
+    *stroke.appearance.items[1].effects_mut() = effects();
+    let outlined = crate::cmd::pathops::outline_strokes(&mut d, &[], &stroke).unwrap();
+    let mut drawn = vec![];
+    outlined.walk(&mut |n| {
+        for item in &n.appearance.items {
+            if !vectorcraft_render::effects::raster_effects(item.effects()).is_empty() {
+                drawn.push(shadow(item.effects()));
+            }
+        }
+    });
+    assert_eq!(drawn, [(10.0, 5.0, 4.0)], "the stroke's shadow");
 }

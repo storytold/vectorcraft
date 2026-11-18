@@ -156,7 +156,12 @@ impl Unit {
     /// before it (`3cm*50%` is 1.5 cm, `3cm/50%` is 6 cm). After `+` or `-`, it adds or takes away
     /// that share of everything before it (`50pt+25%` is 62.5 pt, `100pt+20pt-50%` is 60 pt). A
     /// percentage on its own (`50%`) reads as nothing.
+    ///
+    /// Text with more than 128 `+ - * /` signs reads as nothing.
     pub fn parse(self, s: &str) -> Option<f64> {
+        if s.chars().filter(|c| matches!(c, '+' | '-' | '*' | '/')).count() > MAX_MEASURE_OPERATORS {
+            return None;
+        }
         parse_measure(s, self).filter(|v| v.is_finite())
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
@@ -206,6 +211,9 @@ impl Unit {
         format!("{} {}", s, self.suffix())
     }
 }
+
+/// The most `+ - * /` signs [`Unit::parse`] reads in one text.
+const MAX_MEASURE_OPERATORS: usize = 128;
 
 fn parse_measure(s: &str, default: Unit) -> Option<f64> {
     let s = s.trim();
@@ -306,6 +314,37 @@ fn percent(s: &str) -> Option<f64> {
         (p, None) => Some(p / 100.0),
         _ => None,
     }
+}
+
+/// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
+/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
+/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
+/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
+/// number that reads as thousands ([`thousands`]).
+pub fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
+}
+
+/// Is `text` a number written with a thousands comma, as `1,000`, `+1,000`, `12,500 mm` or
+/// `1,000"`: a sign, one to three digits (not a lone 0), a comma, exactly three digits, then at
+/// most a unit? Read as a decimal it would be a thousand times too small, so the field refuses it
+/// instead (`0,125` and `1,25` are decimals).
+fn thousands(text: &str) -> bool {
+    let number = text.trim();
+    let number = number.strip_prefix(['+', '-']).unwrap_or(number);
+    let Some((whole, rest)) = number.split_once(',') else { return false };
+    let (part, unit) = rest.split_at(rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len()));
+    (1..=3).contains(&whole.len())
+        && whole.bytes().all(|b| b.is_ascii_digit())
+        && !whole.starts_with('0')
+        && part.len() == 3
+        && unit.trim().chars().all(|c| c.is_alphabetic() || c == '"' || c == '\'')
+}
+
+/// Is the length `pt` (points) a finite number in every unit of [`Unit::EAST_ASIAN`]? A length
+/// near the largest number in points is too large in Q and Ha.
+pub fn finite_in_every_unit(pt: f64) -> bool {
+    pt.is_finite() && Unit::EAST_ASIAN.iter().all(|u| u.from_pt(pt).is_finite())
 }
 
 /// A unitless field value (percent, degrees, counts) with the same `+ - * /` arithmetic as
