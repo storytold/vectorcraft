@@ -7125,6 +7125,19 @@ the Align To choice, and while there is a key object or a key guide they send th
 `shortcuts.set {id, shortcut}` gives one a shortcut. The Object › Distribute menu lists the eight Distribute commands,
 and each item runs its command.
 
+The Align panel's Align To choices are UI commands too, with no params: `align.toSelection`, `align.toKeyObject` and
+`align.toArtboard`. Each chooses what a click on its Align To button chooses and returns `{alignTo}`, the choice the
+panel then shows (`align.toSelection` returns `"artboard"` while one object is selected, which aligns to the artboard).
+`align.toSelection` and `align.toArtboard` store the choice (`ui.inspect` › `ui.align_to`) and let the key go; with the
+Artboard tool chosen they store it and the selected objects keep their key. With no key, `align.toKeyObject` makes the
+topmost of two or more selected objects the key object, or a ruler guide selected with one object the key guide, and
+keeps the stored choice. It fails with "no key object" when there is nothing to make the key, which includes a topmost
+selected object inside another selected object, and with "Align to Key Object isn't available with the Artboard tool"
+while the Artboard tool is chosen; its menu item and the panel's button are off in both cases. Object › Align lists the
+three after its align items, with the choice the panel shows checked, and Edit › Keyboard Shortcuts lists them under
+Align with no default shortcut. While the key is a key anchor, the panel names its choice Align to Key Anchor and the
+menu item keeps the name Align to Key Object.
+
 With the Artboard tool chosen, the same buttons and UI commands, and the Control bar's Align and Distribute buttons,
 run `artboard.align`, `artboard.distribute` and `artboard.distributeSpacing` on the artboards the tool has selected.
 Align To then offers Align to Selection and Align to Artboard. Align to Artboard sends `to: "artboard"`, which keeps the

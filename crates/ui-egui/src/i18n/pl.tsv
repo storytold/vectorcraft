@@ -5366,6 +5366,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no graphic style `{n}`	brak stylu graficznego `{n}`
 @msg	no interaction in progress	brak trwającej interakcji
 @msg	no key object	brak obiektu kluczowego
+@msg	Align to Key Object isn't available with the Artboard tool	„Wyrównaj do obiektu kluczowego” jest niedostępne z narzędziem Obszar kompozycji
 @msg	no library `{key}` (see {list})	brak biblioteki `{key}` (patrz {list})
 @msg	no native format	brak formatu natywnego
 @msg	no pages	brak stron

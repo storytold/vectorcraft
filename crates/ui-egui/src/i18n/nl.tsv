@@ -5597,6 +5597,7 @@ imageTrace	Outline	Contour
 @msg	no graphic style `{n}`	geen grafische stijl `{n}`
 @msg	no interaction in progress	geen interactie gaande
 @msg	no key object	geen sleutelobject
+@msg	Align to Key Object isn't available with the Artboard tool	Uitlijnen op sleutelobject is niet beschikbaar met het tekengebied-gereedschap
 @msg	no library `{key}` (see {list})	geen bibliotheek `{key}` (zie {list})
 @msg	no native format	geen eigen indeling
 @msg	no pages	geen pagina's

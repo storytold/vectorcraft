@@ -5277,6 +5277,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no graphic style `{n}`	нет графического стиля `{n}`
 @msg	no interaction in progress	нет взаимодействия в процессе
 @msg	no key object	нет ключевого объекта
+@msg	Align to Key Object isn't available with the Artboard tool	«Выровнять по ключевому объекту» недоступно с инструментом «Монтажная область»
 @msg	no library `{key}` (see {list})	нет библиотеки `{key}` (см. {list})
 @msg	no native format	нет собственного формата
 @msg	no pages	нет страниц

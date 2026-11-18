@@ -4512,6 +4512,7 @@ axis	Both	Ambos
 @msg	no graphic style `{n}`	nenhum estilo gráfico `{n}`
 @msg	no interaction in progress	nenhuma interação em andamento
 @msg	no key object	nenhum objeto-chave
+@msg	Align to Key Object isn't available with the Artboard tool	Alinhar ao Objeto-Chave não está disponível com a Ferramenta Mesa de Trabalho
 @msg	no library `{key}` (see {list})	nenhuma biblioteca `{key}` (veja {list})
 @msg	no native format	sem formato nativo
 @msg	no pages	sem páginas
