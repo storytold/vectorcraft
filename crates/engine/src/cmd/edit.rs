@@ -6,6 +6,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, RulerMode, Unit};
 use vectorcraft_geom::{Affine, Point, Vec2};
+use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
 
 use super::clipboard::SwatchChoices;
 use super::{
@@ -713,6 +714,85 @@ pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     Ok(())
 }
 
+/// The document state that commands also change without an undo step: the perspective grid's view
+/// options (whether it shows, Lock Grid, Lock Station Point, Snap to Grid and Show Rulers), its
+/// active plane, the grid preferences, the export settings, and the current brush and symbol. Each
+/// undo and redo step keeps it as the document on its other side had it
+/// ([`crate::HistoryEntry::unrecorded`]).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Unrecorded {
+    grid: vectorcraft_doc::GridPrefs,
+    export_settings: serde_json::Map<String, Value>,
+    brush: Option<Value>,
+    symbol: Option<Value>,
+    options: [bool; 5],
+    plane: Plane,
+}
+
+impl Unrecorded {
+    pub(crate) fn of(d: &Document) -> Self {
+        let g = PerspectiveGrid::current(d);
+        Unrecorded {
+            grid: d.grid.clone(),
+            export_settings: d.export_settings.clone(),
+            brush: d.unknown.get(vectorcraft_brush::CURRENT_KEY).cloned(),
+            symbol: d.unknown.get(super::brushsym::CURRENT_SYMBOL).cloned(),
+            options: [g.visible, g.locked, g.lock_station, g.snap, g.rulers],
+            plane: g.plane,
+        }
+    }
+}
+
+/// Undo and redo bring back `d`; `step` is that state as the document on the step's other side had
+/// it. A part the step did not change (`d` has it as `step` does) stays as it is in `now`, the
+/// document before the undo or redo, since it changed after the step without an undo step. A part
+/// the step changed comes back with `d`. A current brush or symbol that `d` does not hold also
+/// comes back with `d`. The point Automatic Plane Positioning holds comes back with `d`, and is let go when the
+/// active plane kept is not the one it holds.
+fn keep_unrecorded(now: &Document, step: &Unrecorded, d: &mut Arc<Document>) {
+    fn pick<T: Clone + PartialEq>(back: &T, step: &T, now: &T) -> T {
+        if back == step { now.clone() } else { back.clone() }
+    }
+    let back = Unrecorded::of(d);
+    let cur = Unrecorded::of(now);
+    let mut want = Unrecorded {
+        grid: pick(&back.grid, &step.grid, &cur.grid),
+        export_settings: pick(&back.export_settings, &step.export_settings, &cur.export_settings),
+        brush: pick(&back.brush, &step.brush, &cur.brush),
+        symbol: pick(&back.symbol, &step.symbol, &cur.symbol),
+        options: std::array::from_fn(|i| pick(&back.options[i], &step.options[i], &cur.options[i])),
+        plane: pick(&back.plane, &step.plane, &cur.plane),
+    };
+    if want.brush != back.brush && want.brush.as_ref().and_then(Value::as_str).is_some_and(|n| vectorcraft_brush::find(d, n).is_none()) {
+        want.brush = back.brush.clone();
+    }
+    if want.symbol != back.symbol && want.symbol.as_ref().and_then(Value::as_str).is_some_and(|n| !d.symbols.iter().any(|s| s.name == n)) {
+        want.symbol = back.symbol.clone();
+    }
+    if want == back {
+        return;
+    }
+    let m = Arc::make_mut(d);
+    for (key, v) in [(vectorcraft_brush::CURRENT_KEY, &want.brush), (super::brushsym::CURRENT_SYMBOL, &want.symbol)] {
+        match v {
+            Some(v) => m.unknown.insert(key.into(), v.clone()),
+            None => m.unknown.remove(key),
+        };
+    }
+    if (want.options, want.plane) != (back.options, back.plane) {
+        let mut g = PerspectiveGrid::current(m);
+        [g.visible, g.locked, g.lock_station, g.snap, g.rulers] = want.options;
+        if g.plane != want.plane {
+            g.plane = want.plane;
+            g.inferred = None;
+        }
+        g.keep_positioning_valid();
+        super::distortcmds::store_grid(m, &g);
+    }
+    m.grid = want.grid;
+    m.export_settings = want.export_settings;
+}
+
 fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     settle_interaction(s)?;
     let menu = s.menu.clone();
@@ -723,6 +803,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let editing = st.doc.mask_edit.map(|m| m.layer);
     let editing_symbol = st.doc.symbol_edit.clone();
     let doc = std::mem::replace(&mut st.doc, e.doc);
+    keep_unrecorded(&doc, &e.unrecorded, &mut st.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.redo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
@@ -758,6 +839,7 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let editing = st.doc.mask_edit.map(|m| m.layer);
     let editing_symbol = st.doc.symbol_edit.clone();
     let doc = std::mem::replace(&mut st.doc, e.doc);
+    keep_unrecorded(&doc, &e.unrecorded, &mut st.doc);
     let selection = std::mem::replace(&mut st.selection, Arc::unwrap_or_clone(e.selection));
     let selection = shared_selection(selection, st.history.undo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
@@ -1076,8 +1158,10 @@ fn cut(s: &mut Session, p: &Value) -> Result<Value> {
 /// Select every surviving piece while retaining intentional compound-path structure.
 /// `roots` contains the copied targets: whole-object roots are removed in full, while partial paths
 /// lose only the copied geometry. An exhausted partial path is removed, along with its compound
-/// parent if now empty; layers remain. Returns JSON `null` on success, replacing direct-selection
-/// references with surviving object IDs.
+/// parent if now empty; a compound left with one member stays a compound path, as after Clear;
+/// layers remain. Removed and replaced roots go through one [`super::pathops::Beside`], which
+/// rebuilds each parent's children once when the roots are separate. Returns JSON `null` on
+/// success, replacing direct-selection references with surviving object IDs.
 fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
     let st = s.doc()?;
     let sel = st.selection.clone();
@@ -1085,13 +1169,18 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
         // The selected ruler guides were copied too (#3226): they go in the same undo step.
         let gone = selection.guides.clone();
         d.retain_guides(selection, |g| !g.id.is_some_and(|id| gone.contains(&id)));
+        // The compound paths that hold a root; one left with no members goes too.
+        let compounds: BTreeSet<NodeId> = roots
+            .iter()
+            .filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. }))))
+            .collect();
         let mut survivors = vec![];
         let mut pieces = super::pathops::Beside::replacing(d, roots);
         for id in roots {
             let Some(node) = d.node(*id) else { continue };
             let has_direct = sel.anchors.contains_key(id) || sel.segments.contains_key(id);
             if !has_direct || node.path_data().is_none() {
-                remove_leaving_no_empty_compound(d, *id)?;
+                pieces.put(d, *id, vec![])?;
                 continue;
             }
             let original = super::path::deletion_source(d, *id)?;
@@ -1114,31 +1203,20 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
             }
             subpaths.retain(|sp| sp.anchors.len() >= 2);
             if subpaths.is_empty() {
-                remove_leaving_no_empty_compound(d, *id)?;
+                pieces.put(d, *id, vec![])?;
             } else {
                 survivors.extend(super::path::replace_deleted_pieces(d, &mut pieces, original, subpaths)?);
             }
         }
         pieces.finish(d)?;
+        let emptied: Vec<NodeId> = compounds.into_iter().filter(|p| d.node(*p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))).collect();
+        super::pathops::remove_each(d, &emptied)?;
         selection.set(survivors);
         selection.anchors.clear();
         selection.segments.clear();
         Ok(())
     })?;
     ok()
-}
-
-/// Remove object `id`, and the compound path that held it when it was the compound's last member.
-/// A compound left with one member stays a compound path, as after Clear.
-fn remove_leaving_no_empty_compound(d: &mut Document, id: NodeId) -> Result<()> {
-    let parent = d.parent_of(id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })));
-    d.remove(id)?;
-    if let Some(p) = parent
-        && d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty()))
-    {
-        d.remove(p)?;
-    }
-    Ok(())
 }
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1751,3 +1829,6 @@ pub(crate) fn copy_above(d: &mut Document, roots: &[NodeId], mut change: impl Fn
 pub(crate) fn arc_nodes(v: Vec<Node>) -> Vec<Arc<Node>> {
     v.into_iter().map(Arc::new).collect()
 }
+
+#[cfg(test)]
+mod tests;
