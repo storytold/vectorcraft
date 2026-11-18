@@ -212,6 +212,9 @@
 	Additional Fonts Folder	További betűtípusok mappája
 	Additional Plug-ins Folder	További bővítmények mappája
 	Adjust Adjoining Width Points	Szomszédos szélességi pontok igazítása
+	Incoming	Bejövő
+	Outgoing	Kimenő
+	Single Width Only	Csak egy szélesség
 	Adjust Color Balance…	Színegyensúly beállítása…
 	Adjust Colors	Színek beállítása
 	Adjust Options:	Módosítandó:
@@ -584,6 +587,12 @@ font-technology	Variable	Változó
 	Character options	Karakterbeállítások
 	Paragraph options	Bekezdésbeállítások
 	Character Rotation	Karakterforgatás
+	Chinese Big 5	Kínai Big 5
+	Cyrillic	Cirill
+	Greek	Görög
+	Turkish	Török
+	Baltic	Balti
+	Central European	Közép-európai
 	Character Set:	Karakterkészlet:
 	Character Style	Karakterstílus
 	Character Style Options	Karakterstílus beállításai
@@ -649,6 +658,8 @@ font-technology	Variable	Változó
 	Choose a folder	Válassz mappát
 	Choose…	Kiválasztás…
 	Circle	Kör
+	Circle Tool	Kör eszköz
+	Circle too large	A kör túl nagy
 	Circle (open)	Kör (nyitott)
 	Classic Defaults	Klasszikus alapértékek
 	Clean Up…	Tisztítás…
@@ -1590,6 +1601,8 @@ digits	Malayalam	Malajálam
 	Files	Fájlok
 	Files of a PDF standard can't be password-protected.	A PDF-szabványnak megfelelő fájlok nem védhetők jelszóval.
 	Files of this standard tag their colours with ICC profiles.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Ennek a szabványnak a fájljai ICC-profillal jelölik a színeiket, kivéve a kimeneti cél profiljában lévő CMYK-színeket, amelyek DeviceCMYK-ként íródnak.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	„Profilok nélkül” beállítással és CMYK kimeneti céllal minden CMYK-szín DeviceCMYK-ként íródik, kivéve, ha egy másik profil CMYK-céljába konvertálódik.
 	Fill	Kitöltés
 	Fill & Stroke	Kitöltés és körvonal
 	Fill (X), double-click for the Color Picker	Kitöltés (X), dupla kattintás: Színválasztó
@@ -2557,6 +2570,7 @@ file-filter	Templates	Sablonok
 	Load Texture…	Textúra betöltése…
 	Loaded Texture	Betöltött textúra
 	Local Libraries	Helyi könyvtárak
+	Locate Layer	Réteg megkeresése
 	Locate Object	Objektum megkeresése
 	Locate Selected Objects	Kijelölt objektumok megkeresése
 	Location	Hely
@@ -3274,6 +3288,9 @@ diagnostics	ui	felület
 	Polar Grid Tool	Polárrács
 	Polygon	Sokszög
 	Polygon Properties:	Sokszög tulajdonságai:
+	Line Properties:	Vonal tulajdonságai:
+	Line Length:	Vonal hossza:
+	Line Angle:	Vonal szöge:
 	Polygon Tool	Sokszög
 	Portrait	Álló
 	Portrait (flipped)	Álló (megfordítva)
@@ -4168,6 +4185,7 @@ mark-style	Japanese	Japán
 	Set Slice Rectangle	Szelet téglalapjának beállítása
 	Set Tab Stops	Tabulátorpontok beállítása
 	Set Text	Szöveg beállítása
+	Set the current fill or stroke to the selected color	Az aktuális kitöltés vagy körvonal legyen a kijelölt szín
 	Set the selected color to the current color	A kijelölt szín legyen az aktuális szín
 	Set Zoom	Nagyítás beállítása
 	Set:	Készlet:
@@ -4310,7 +4328,7 @@ mark-style	Japanese	Japán
 	Show Vivid/Muted	Élénk/tompa változatok
 	Show Warm/Cool	Meleg/hideg változatok
 	Show {kind} Brushes	Ecsetek megjelenítése: {kind}
-	Show/hide plate (Alt-click: only this plate)	Nyomólemez megjelenítése/elrejtése (Alt+kattintás: csak ez a lemez)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Nyomólemez megjelenítése/elrejtése (Alt+kattintás: csak ez a lemez; újabb Alt+kattintás: minden lemez)
 	Show:	Megjelenítés:
 	Shown with the optimised preview.	Az optimalizált előnézettel együtt látható.
 	Shrink Text to Fit	Szöveg zsugorítása a kerethez
@@ -4755,6 +4773,13 @@ mark-style	Japanese	Japán
 	TIFF (8-bit Color)	TIFF (8 bites színes)
 	TIFF (Black & White)	TIFF (fekete-fehér)
 	Tile	Mozaikelrendezés
+	Tile All Vertically	Összes mozaikelrendezése függőlegesen
+	Tile All Horizontally	Összes mozaikelrendezése vízszintesen
+	2-Up Layout	2-es elrendezés
+	3-Up Layout	3-as elrendezés
+	4-Up Layout	4-es elrendezés
+	6-Up Layout	6-os elrendezés
+	Arrange Documents	Dokumentumok elrendezése
 	Tile Edge Color	Csempeszél színe
 	Tile Edge Color…	Csempeszél színe…
 	Tile Full Pages	Teljes oldalak csempézése
@@ -5004,6 +5029,8 @@ mark-style	Japanese	Japán
 	Variable Options	Változó beállításai
 	Variable Options…	Változó beállításai…
 	Variable Width Profile	Változó szélességprofil
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	A körvonal ecsetje megtartja a saját méretét, ezért a szélességprofil nem változtatja meg. Profil használatához távolítsa el az ecsetet.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	A körvonal ecsetje megtartja a saját méretét, ezért a szélességprofil nem változtatja meg. Profil használatához távolítsa el az ecsetet.
 	Variables	Változók
 	Variation	Ingadozás
 	Variation:	Ingadozás:
@@ -5052,7 +5079,7 @@ mark-style	Japanese	Japán
 	Video Banner 2560×1440	Videós szalagcím 2560×1440
 	Video Thumbnail 1280×720	Videó-bélyegkép 1280×720
 	View	Nézet
-	View Artboard Only	Csak a rajztábla látszik
+	View Artboard Contents Only	Csak a rajztábla tartalma látszik
 	View Opacity Mask	Átlátszósági maszk megtekintése
 	View PDF after saving	PDF megtekintése mentés után
 	View {n}	Nézet {n}
@@ -5115,6 +5142,7 @@ mark-style	Japanese	Japán
 	Wrinkle Tool	Gyűrés
 	Write Layers	Rétegek írása
 	x Height	x-magasság
+	Em Box Height	Kvirtmező magassága
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), ha toll csatlakozik
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Ha a grafikus tábla tolla nem rajzol, válassz egy X11 (XWayland) beállítást.
 	X11 (XWayland)	X11 (XWayland)
@@ -5434,6 +5462,13 @@ imageTrace	Outline	Körvonal
 	Show External Script Warning	Figyelmeztetés külső parancsfájlok előtt
 	A Script Is Running	Egy parancsfájl fut
 	Script Alert	Parancsfájl-értesítés
+	Script File Access	Parancsfájl fájlhozzáférése
+	The script asks to read a file you choose.	A parancsfájl egy Ön által választott fájl olvasását kéri.
+	The script asks to read and write a file you choose.	A parancsfájl egy Ön által választott fájl olvasását és írását kéri.
+	The script asks to read and write a folder you choose, with everything in it.	A parancsfájl egy Ön által választott mappa és teljes tartalma olvasását és írását kéri.
+	Allow Once	Engedélyezés egyszer
+	Always Allow This Script	A parancsfájl engedélyezése mindig
+	Deny	Elutasítás
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
 	Stop the script and undo what it did? Then quit again.	Leállítja a parancsfájlt, és visszavonja a módosításait? Ezután lépjen ki újra.
@@ -5464,8 +5499,6 @@ imageTrace	Outline	Körvonal
 @msg	Script file could not be read	A parancsfájlt nem sikerült beolvasni
 @msg	Script folder has more than 2,048 entries	A parancsfájlmappában 2048-nál több bejegyzés van
 @msg	Script file open mode must be r, w, e or a	A parancsfájl megnyitási módja r, w, e vagy a lehet
-@msg	Script file writing is not available	A parancsfájlok írása nem érhető el
-@msg	Script file dialogs are not available	A parancsfájlok fájlpárbeszédpanelei nem érhetők el
 @msg	Script files cannot be opened in another application	A parancsfájlok nem nyithatók meg másik alkalmazásban
 @msg	Script file access is unavailable on the web	A parancsfájlok elérése a weben nem érhető el
 @msg	Script has 256 files open	A parancsfájlnak 256 megnyitott fájlja van
@@ -5584,6 +5617,27 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	az `answers` csak olyan futtatáshoz való, ahol nincs kit megkérdezni: az alkalmazásban minden párbeszédpanelre a felhasználó válaszol
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
+@msg	Script file access denied: {path}	A parancsfájl fájlhozzáférése megtagadva: {path}
+@msg	Script file access to the app's own folders is not allowed	A parancsfájlok nem férhetnek hozzá az alkalmazás saját mappáihoz
+@msg	Script file cannot encode the text	A parancsfájl fájlja nem tudja kódolni a szöveget
+@msg	Script file could not be written	A parancsfájl fájlját nem sikerült írni
+@msg	Script file dialogs need a person to answer them	A parancsfájl fájlpárbeszédpaneleire egy személynek kell válaszolnia
+@msg	Script file is not open for writing	A parancsfájl fájlja nincs írásra megnyitva
+@msg	Script file name is already in use	A parancsfájl fájljának neve már használatban van
+@msg	Script file name must be a name without a folder	A parancsfájl fájljának neve mappa nélküli név kell legyen
+@msg	Script file permission can be kept only for a script run from a file	A fájlengedély csak fájlból futtatott parancsfájlnál tartható meg
+@msg	Script file permission could not be saved	A parancsfájl fájlengedélyét nem sikerült menteni
+@msg	Script folder is not empty	A parancsfájl mappája nem üres
+@msg	Script files cannot make aliases	A parancsfájl fájljai nem hozhatnak létre álneveket
+@msg	Script file hidden setting cannot be changed	A parancsfájl fájljának rejtett beállítása nem módosítható
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: fájlpárbeszédpanel nem nyílhat meg beépített függvény, getter, átalakítás vagy a $.evalFile által futtatott fájl visszahívásán belül; hívja meg a parancsfájl saját kódjából
+@msg	the script wrote more file data than one run may write (32 MiB)	a parancsfájl több fájladatot írt, mint amennyit egy futás írhat (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	a parancsfájl fájlpárbeszédpaneléhez tartozó `answer` értéke a következők egyike kell legyen: once, always, deny, stop
+@msg	choose a file or folder first, or deny	először válasszon fájlt vagy mappát, vagy utasítsa el
+@msg	the script file permissions could not be saved: {e}	a parancsfájlok fájlengedélyeit nem sikerült menteni: {e}
+@msg	this script's file access can be allowed only once	ennek a parancsfájlnak a fájlhozzáférése csak egyszer engedélyezhető
+@msg	Only the person at the keyboard can allow a script's file access	Parancsfájl fájlhozzáférését csak a billentyűzetnél ülő személy engedélyezheti
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Egy parancsfájl legfeljebb 2 048 fájlt kap: az ezek után kiválasztott fájlok kimaradtak
 @msg	Copied the link info	Csatolás adatai másolva
 @msg	Corners edits the corners of a path	a Sarkok parancs egy útvonal sarkait szerkeszti
 @msg	could not decode image: {0}	a kép nem dekódolható: {0}
@@ -5753,8 +5807,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no active document	nincs aktív dokumentum
 @msg	no active perspective plane	nincs aktív perspektivikus sík
 @msg	no anchor points selected	nincs kijelölt horgonypont
-@msg	`points` must be three [x, y] pairs of numbers	a `points` három [x, y] számpár legyen
-@msg	direct-select three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel három horgonypontot, vagy add meg a `points` értéket
+@msg	`points` must be two or three [x, y] pairs of numbers	a `points` két vagy három [x, y] számpár legyen
+@msg	direct-select two or three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel két vagy három horgonypontot, vagy add meg a `points` értéket
 @msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
@@ -5865,6 +5919,9 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no such user library	nincs ilyen felhasználói könyvtár
 @msg	no such view	nincs ilyen nézet
 @msg	no such width point	nincs ilyen szélességi pont
+@msg	`single` must be `incoming` or `outgoing`	a `single` értéke `incoming` vagy `outgoing` lehet
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	az `index` és az `outIndex` egyetlen szakadásos szélességi pont két fele kell legyen
+@msg	a discontinuous width point keeps its place	a szakadásos szélességi pont megtartja a helyét
 @msg	no swatch `{name}`	nincs ilyen színminta: `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	nincs ilyen színminta-könyvtár: `{l}` (lásd: swatch.library.list)
 @msg	no symbol instances selected	nincs kijelölt szimbólumpéldány
@@ -6094,6 +6151,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	shadings of more than 4096 patches or triangles were left out	kimaradtak a 4096-nál több foltból vagy háromszögből álló árnyalások
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	az ismeretlen típusú függvényt használó árnyalások a középső színükkel kitöltve jelennek meg
 @msg	Shape Builder: no region under the pointer	Alakzatépítő: a mutató alatt nincs terület
+@msg	Shape Builder: select all paths you want to merge	Alakzatépítő: jelöld ki az összes egyesítendő útvonalat
 @msg	Shape Builder: select paths or compound paths	Alakzatépítő: jelölj ki útvonalakat vagy összetett útvonalakat
 @msg	shortcut for `{k}` must be a string	`{k}` billentyűparancsa csak szöveg lehet
 @msg	Show All Hidden Attributes: nothing is hidden	Összes rejtett attribútum megjelenítése: nincs rejtett elem
@@ -8658,6 +8716,7 @@ breakText	Glyphs	Glifák
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	összetett alakzatba útvonalak, összetett útvonalak, csoportok, összetett alakzatok, szöveg, összemosások és burkolók kerülhetnek
 @msg	compound {_1} must contain exactly one open path to join	az összetett objektumnak ({_1}) pontosan egy összekapcsolható nyitott útvonalat kell tartalmaznia
 @msg	connect needs a path other than the one extended	connect: a meghosszabbított útvonaltól különböző útvonal kell
+@msg	connect needs extend	connect: extend is kell hozzá
 @msg	connect needs id	connect: id is kell hozzá
 @msg	connect path has no open end	connect: az útvonalnak nincs nyitott vége
 @msg	continuation must be an array of path chunks	continuation: útvonaldarabok tömbje kell
@@ -10004,3 +10063,13 @@ breakText	Glyphs	Glifák
 @msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
 @msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}
+	Fold Preview	Hajtás előnézete
+	Fold	Hajtás
+	Show Fold Lines	Hajtásvonalak megjelenítése
+	Three-Quarter	Háromnegyed
+	Open a document to preview its folded shape.	Nyiss meg egy dokumentumot a hajtogatott alakja előnézetéhez.
+@msg	Check the fold lines first.	Előbb ellenőrizd a hajtásvonalakat.
+@msg	Panels: {panels}, hinges: {hinges}	Panelek: {panels}, zsanérok: {hinges}
+@msg	Other blanks not shown: {count}	További kiterítékek nincsenek megjelenítve: {count}
+@msg	A joint does not close by {gap} pt.	Egy illesztés {gap} pt-tal nem záródik.
+@msg	Two panels pass through each other.	Két panel áthatol egymáson.

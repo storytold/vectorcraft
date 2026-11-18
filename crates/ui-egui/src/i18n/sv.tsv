@@ -131,6 +131,9 @@
 	Additional Plug-ins Folder	Mapp för ytterligare plugins
 	Additional Fonts Folder	Mapp för ytterligare typsnitt
 	Adjust Adjoining Width Points	Justera angränsande breddpunkter
+	Incoming	Inkommande
+	Outgoing	Utgående
+	Single Width Only	Endast en bredd
 	Adjust Color Balance…	Justera färgbalans…
 	Adjust Colors	Justera färger
 	Adjust Options:	Justeringsalternativ:
@@ -415,6 +418,11 @@ font-technology	Variable	Variabla
 	Character Alignment	Teckenjustering
 	Character / Paragraph	Tecken / stycke
 	Character Rotation	Teckenrotation
+	Chinese Big 5	Kinesisk Big 5
+	Cyrillic	Kyrillisk
+	Greek	Grekisk
+	Baltic	Baltisk
+	Central European	Centraleuropeisk
 	Character Set:	Teckenuppsättning:
 	Character Style	Teckenstil
 	Character Style Options	Alternativ för teckenstil
@@ -477,6 +485,8 @@ font-technology	Variable	Variabla
 	Choose a folder	Välj en mapp
 	Choose…	Välj…
 	Circle	Cirkel
+	Circle Tool	Cirkelverktyg
+	Circle too large	Cirkeln är för stor
 	Classic Defaults	Klassiska standardvärden
 	Clean Up…	Rensa upp…
 	Clear	Rensa
@@ -1253,6 +1263,8 @@ font-technology	Variable	Variabla
 	Files	Filer
 	Files of a PDF standard can't be password-protected.	Filer enligt en PDF-standard kan inte lösenordsskyddas.
 	Files of this standard tag their colours with ICC profiles.	Filer enligt den här standarden märker sina färger med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer enligt den här standarden märker sina färger med ICC-profiler, utom CMYK-färger i profilen för utgångsavsikt, som skrivs som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med ”Inkludera inte profiler” och en CMYK-utgångsavsikt skrivs varje CMYK-färg som DeviceCMYK, om den inte konverteras till ett CMYK-mål med en annan profil.
 	Fill	Fyllning
 	Fill & Stroke	Fyllning och kontur
 	Fill (X), double-click for the Color Picker	Fyllning (X), dubbelklicka för färgväljaren
@@ -1992,6 +2004,7 @@ font-technology	Variable	Variabla
 	Load SVG into Clipboard	Läs in SVG till urklipp
 	Load Text into Clipboard	Läs in text till urklipp
 	Local Libraries	Lokala bibliotek
+	Locate Layer	Hitta lager
 	Locate Object	Hitta objekt
 	Locate Selected Objects	Hitta markerade objekt
 	Location	Plats
@@ -2650,6 +2663,9 @@ font-technology	Variable	Variabla
 	Polar Grid Tool	Verktyg för polärt rutnät
 	Polygon	Polygon
 	Polygon Properties:	Polygonegenskaper:
+	Line Properties:	Linjeegenskaper:
+	Line Length:	Linjelängd:
+	Line Angle:	Linjevinkel:
 	Polygon Tool	Polygonverktyg
 	Portrait	Stående
 	Power Saving (integrated)	Energisparläge (integrerad)
@@ -3446,6 +3462,7 @@ digits	Malayalam	Malayalam
 	Set Slice Rectangle	Ange skivrektangel
 	Set Tab Stops	Ange tabbstopp
 	Set Text	Ange text
+	Set the current fill or stroke to the selected color	Ersätt den aktuella fyllningen eller konturen med den markerade färgen
 	Set the selected color to the current color	Ersätt den markerade färgen med den aktuella färgen
 	Set Zoom	Ange zoom
 	Settings…	Inställningar…
@@ -3567,7 +3584,7 @@ digits	Malayalam	Malayalam
 	Show Vivid/Muted	Visa livfull/dämpad
 	Show Warm/Cool	Visa varm/kall
 	Show {kind} Brushes	Visa {kind}-penslar
-	Show/hide plate (Alt-click: only this plate)	Visa/dölj plåt (Alt-klick: endast den här plåten)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Visa/dölj plåt (Alt-klick: endast den här plåten; Alt-klick igen: alla plåtar)
 	Show:	Visa:
 	Shown with the optimised preview.	Visas med den optimerade förhandsgranskningen.
 	Side 1:	Sida 1:
@@ -3976,6 +3993,13 @@ digits	Malayalam	Malayalam
 	Thumbnail View	Miniatyrvy
 	Thumbnails:	Miniatyrer:
 	Tile	Sida vid sida
+	Tile All Vertically	Alla sida vid sida lodrätt
+	Tile All Horizontally	Alla sida vid sida vågrätt
+	2-Up Layout	Layout med 2
+	3-Up Layout	Layout med 3
+	4-Up Layout	Layout med 4
+	6-Up Layout	Layout med 6
+	Arrange Documents	Ordna dokument
 	Tile Edge Color	Rutkantsfärg
 	Tile Edge Color…	Rutkantsfärg…
 	Tile Full Pages	Dela upp i hela sidor
@@ -4169,6 +4193,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	V-avstånd:
 	V:	V:
 	Variable Width Profile	Profil för variabel bredd
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
 	Variables	Variabler
 	New Variable	Ny variabel
 	Delete Variable	Radera variabel
@@ -4233,7 +4259,7 @@ digits	Malayalam	Malayalam
 	Vertical:	Vertikalt:
 	Very High	Mycket hög
 	View	Visa
-	View Artboard Only	Visa endast rityta
+	View Artboard Contents Only	Visa endast ritytans innehåll
 	View Opacity Mask	Visa opacitetsmask
 	View PDF after saving	Visa PDF efter sparning
 	View {n}	Vy {n}
@@ -4512,6 +4538,13 @@ axis	Both	Båda
 	Show External Script Warning	Visa varning för externa skript
 	A Script Is Running	Ett skript körs
 	Script Alert	Skriptmeddelande
+	Script File Access	Skriptets filåtkomst
+	The script asks to read a file you choose.	Skriptet ber om att läsa en fil som du väljer.
+	The script asks to read and write a file you choose.	Skriptet ber om att läsa och skriva en fil som du väljer.
+	The script asks to read and write a folder you choose, with everything in it.	Skriptet ber om att läsa och skriva en mapp som du väljer, med allt innehåll.
+	Allow Once	Tillåt en gång
+	Always Allow This Script	Tillåt alltid det här skriptet
+	Deny	Neka
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
 	Stop the script and undo what it did? Then quit again.	Stoppa skriptet och ångra det det gjort? Avsluta sedan igen.
@@ -4542,8 +4575,6 @@ axis	Both	Båda
 @msg	Script file could not be read	Skriptfilen kunde inte läsas
 @msg	Script folder has more than 2,048 entries	Skriptmappen har fler än 2 048 poster
 @msg	Script file open mode must be r, w, e or a	Skriptfilens öppningsläge måste vara r, w, e eller a
-@msg	Script file writing is not available	Skrivning av skriptfiler är inte tillgänglig
-@msg	Script file dialogs are not available	Fildialogrutor för skript är inte tillgängliga
 @msg	Script files cannot be opened in another application	Skriptfiler kan inte öppnas i ett annat program
 @msg	Script file access is unavailable on the web	Åtkomst till skriptfiler är inte tillgänglig på webben
 @msg	Script has 256 files open	Skriptet har 256 filer öppna
@@ -4685,6 +4716,27 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` är bara för en körning utan någon att fråga: i appen svarar personen på varje dialogruta
 @msg	Running a script	Kör ett skript
 @msg	Copied the script report	Kopierade skriptrapporten
+@msg	Script file access denied: {path}	Skriptets filåtkomst nekades: {path}
+@msg	Script file access to the app's own folders is not allowed	Skript får inte komma åt appens egna mappar
+@msg	Script file cannot encode the text	Skriptets fil kan inte koda texten
+@msg	Script file could not be written	Skriptets fil kunde inte skrivas
+@msg	Script file dialogs need a person to answer them	Skriptets fildialoger behöver en person som svarar på dem
+@msg	Script file is not open for writing	Skriptets fil är inte öppen för skrivning
+@msg	Script file name is already in use	Namnet på skriptets fil används redan
+@msg	Script file name must be a name without a folder	Namnet på skriptets fil måste vara ett namn utan mapp
+@msg	Script file permission can be kept only for a script run from a file	Filbehörighet kan bara behållas för ett skript som körs från en fil
+@msg	Script file permission could not be saved	Skriptets filbehörighet kunde inte sparas
+@msg	Script folder is not empty	Skriptets mapp är inte tom
+@msg	Script files cannot make aliases	Skriptets filer kan inte skapa alias
+@msg	Script file hidden setting cannot be changed	Inställningen för dold för skriptets fil kan inte ändras
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en fildialog kan inte öppnas i ett återanrop från en inbyggd funktion, en getter, en konvertering eller en fil som $.evalFile kör; anropa den från skriptets egen kod
+@msg	the script wrote more file data than one run may write (32 MiB)	skriptet skrev mer fildata än en körning får skriva (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` för ett skripts fildialog måste vara ett av: once, always, deny, stop
+@msg	choose a file or folder first, or deny	välj först en fil eller mapp, eller neka
+@msg	the script file permissions could not be saved: {e}	skriptens filbehörigheter kunde inte sparas: {e}
+@msg	this script's file access can be allowed only once	det här skriptets filåtkomst kan bara tillåtas en gång
+@msg	Only the person at the keyboard can allow a script's file access	Bara personen vid tangentbordet kan tillåta ett skripts filåtkomst
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Ett skript får högst 2 048 filer: filerna som valdes efter dem utelämnades
 @msg	Copied the link info	Kopierade länkinfo
 @msg	Corners edits the corners of a path	Hörn redigerar hörnen på en bana
 @msg	Couldn't copy to the system clipboard: {e}	Kunde inte kopiera till systemets urklipp: {e}
@@ -4759,6 +4811,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Saved {path}	Sparade {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Markera text eller klicka i text med textverktyget för att infoga glyfer
 @msg	Shape Builder: no region under the pointer	Formbyggare: inget område under pekaren
+@msg	Shape Builder: select all paths you want to merge	Formbyggare: markera alla banor du vill sammanfoga
 @msg	Shape Builder: select paths or compound paths	Formbyggare: markera banor eller sammansatta banor
 @msg	Show All Hidden Attributes: nothing is hidden	Visa alla dolda attribut: ingenting är dolt
 @msg	Split Into Grid: select paths large enough for the grid	Dela upp i rutnät: markera banor som är tillräckligt stora för rutnätet
@@ -4981,8 +5034,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no active document	inget aktivt dokument
 @msg	no active perspective plane	inget aktivt perspektivplan
 @msg	no anchor points selected	inga ankarpunkter är markerade
-@msg	`points` must be three [x, y] pairs of numbers	`points` måste vara tre talpar [x, y]
-@msg	direct-select three anchor points, or give `points`	direktmarkera tre ankarpunkter eller ange `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` måste vara två eller tre talpar [x, y]
+@msg	direct-select two or three anchor points, or give `points`	direktmarkera två eller tre ankarpunkter eller ange `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
@@ -5084,6 +5137,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no such user library	användarbiblioteket finns inte
 @msg	no such view	vyn finns inte
 @msg	no such width point	breddpunkten finns inte
+@msg	`single` must be `incoming` or `outgoing`	`single` måste vara `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` och `outIndex` måste vara de två halvorna av en och samma diskontinuerliga breddpunkt
+@msg	a discontinuous width point keeps its place	en diskontinuerlig breddpunkt behåller sin plats
 @msg	no swatch `{name}`	ingen färgruta `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	inget färgrutebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	inga symbolinstanser är markerade
@@ -6388,6 +6444,7 @@ lighting	Light	Ljus
 	of	av
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	x-höjd
+	Em Box Height	Em-rutans höjd
 	▾ Default Actions	▾ Standardåtgärder
 	⚠ {chord} was already used by {names} — it has been removed there.	Obs! {chord} användes redan av {names} – det har tagits bort där.
 @id	file.close	Stäng
@@ -8437,6 +8494,7 @@ digits	Hindi	Hindi
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammansatta former tar banor, sammansatta banor, grupper, sammansatta former, text, övergångar och kuvert
 @msg	connect end must be "start" or "end"	connect end måste vara "start" eller "end"
 @msg	connect needs a path other than the one extended	connect behöver en annan bana än den som förlängs
+@msg	connect needs extend	connect behöver extend
 @msg	connect needs id	connect behöver id
 @msg	connect path has no open end	connect-banan har ingen öppen ände
 @msg	Contour: select paths or shapes	Kontur: markera banor eller former
@@ -9706,4 +9764,14 @@ digits	Hindi	Hindi
 @msg	A panel is not joined to the rest by a crease.	En panel är inte förbunden med resten av någon biglinje.
 @msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, gångjärn: {hinges}, fel: {errors}, varningar: {warnings}
+	Fold Preview	Förhandsgranskning av falsning
+	Fold	Falsning
+	Show Fold Lines	Visa falslinjer
+	Three-Quarter	Trekvarts
+	Open a document to preview its folded shape.	Öppna ett dokument för att förhandsgranska dess falsade form.
+@msg	Check the fold lines first.	Kontrollera falslinjerna först.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, gångjärn: {hinges}
+@msg	Other blanks not shown: {count}	Andra ämnen visas inte: {count}
+@msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
+@msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

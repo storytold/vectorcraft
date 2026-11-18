@@ -673,7 +673,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         },
         "window.newWindow" => crate::doc_windows::new_window(app),
         "window.arrange.cascade" => crate::doc_windows::cascade(app),
-        "window.arrange.tile" => crate::canvas::tile(app),
+        "window.arrange.tile" => crate::canvas::tile(app, p),
         "window.arrange.floatInWindow" => crate::doc_windows::float_in_window(app, p),
         "window.arrange.floatAllInWindows" => crate::doc_windows::float_all(app),
         "window.arrange.consolidateAllWindows" if p.get("index").is_some_and(|i| !i.is_null()) => crate::doc_windows::dock(app, p),
@@ -867,6 +867,7 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.imageTracePresetDialog" => crate::dialogs::trace_presets::open(app, p),
         "ui.flattenerPreview" => crate::panels::flattener_preview::command(app, p),
+        "ui.foldPreview" => crate::addons::packaging::preview::command(app, p),
         "ui.copyScriptConsole" => crate::panels::script_console::copy(app, p),
         "window.graphicStyleLibrary" => crate::panels::graphic_styles::open_library(app, p),
         "ui.libraryPanel" => crate::panels::library_panel::command(app, p),

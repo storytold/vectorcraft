@@ -228,6 +228,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     (crate::addons::cleanup::ID, "Artwork Cleanup", "sparkles"),
     (crate::addons::color::ID, "Color Effects", "sun"),
     (crate::addons::packaging::ID, "Fold Lines", "scissors"),
+    (crate::addons::packaging::preview::ID, "Fold Preview", "box"),
     (crate::addons::pathtools::ID, "Anchor Inspector", "dc-anchor-smooth"),
     (crate::addons::pathtools::shape::ID, "Parametric Shape", "hexagon"),
     (crate::addons::pen::ID, "Smart Pen", "spline-pointer"),
@@ -606,6 +607,10 @@ pub struct UiState {
     /// Consolidate All Windows. Not saved: the reference app does not save windows with a document.
     #[serde(skip)]
     pub tiled: bool,
+    /// How Tile lays the panes out: in a grid, side by side, stacked, or 2-up to 6-up. Not saved,
+    /// as `tiled` is not.
+    #[serde(skip)]
+    pub tile_layout: crate::canvas::TileLayout,
     /// Window › Arrange › Float in Window, Float All in Windows and Cascade: the documents in
     /// floating windows of their own, out of the tab strip, until Consolidate All Windows. Not
     /// saved, as `tiled` is not.
@@ -715,6 +720,10 @@ pub struct UiState {
     /// Flattener Preview panel: highlight, overprints, preset and options (`ui.flattenerPreview`).
     #[serde(default)]
     pub flattener_preview: crate::panels::flattener_preview::Settings,
+    /// Fold Preview window: fold amount, view, zoom, perspective, inside color, fold lines and
+    /// base panel (`ui.foldPreview`).
+    #[serde(default)]
+    pub fold_preview: crate::addons::packaging::preview::Settings,
     /// Color Guide panel: Limit to Library, a swatch library id, "document" (the document's
     /// swatches) or "" (none) (`ui.colorGuideLimit`).
     #[serde(default)]
@@ -869,7 +878,8 @@ pub struct UiState {
     /// Layers panel › Panel Options… (row size, thumbnails, Show Layers Only, Locate Selected Objects).
     #[serde(default)]
     pub layers_panel: crate::panels::layers::PanelOptions,
-    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines).
+    /// Navigator panel › Panel Options… (the view box color, Draw Dashed Lines as Solid Lines) and
+    /// the panel menu's View Artboard Contents Only.
     #[serde(default)]
     pub navigator_panel: crate::panels::navigator::PanelOptions,
     /// The Layers panel's Filter (`ui.layersFilter`). It is not saved and lasts the session, as the
@@ -1226,6 +1236,7 @@ impl Default for UiState {
             palette_query: String::new(),
             screen_mode: 0,
             tiled: false,
+            tile_layout: crate::canvas::TileLayout::Grid,
             floating: Vec::new(),
             tab_document: None,
             draw_mode: 0,
@@ -1256,6 +1267,7 @@ impl Default for UiState {
             color_guide: Default::default(),
             library_panels: vec![],
             flattener_preview: Default::default(),
+            fold_preview: Default::default(),
             color_guide_limit: String::new(),
             color_guide_base: None,
             color_guide_spot: None,

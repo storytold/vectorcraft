@@ -442,6 +442,7 @@ registry! {
     ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
     ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
+    ScriptFiles: [script_run::PICKER_KIND] => script_run::PICKER_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -600,7 +601,8 @@ pub fn accepts_field(d: &Dialog, field: &str) -> bool {
 /// Options setting set this way for several rows is sent to every row (Template also sets Lock
 /// and Dim Images, as its checkbox does). A DXF Options preset set this way sets its fields, as
 /// one picked from its menu does, and the preset it shows follows the DXF options set this way.
-/// A Graph Data Column Width set this way sets every column, as Cell Style's does.
+/// A Graph Data Column Width set this way sets every column, as Cell Style's does. An Import PDF
+/// `allPages` set this way to the other pick sets Import PDF pages as links back to its default.
 pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == brush_options::KIND {
         brush_art_options::note_set(d, &field);
@@ -610,6 +612,9 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if d.kind == layer_options::KIND {
         layer_options::note_set(d, &field, &value);
+    }
+    if d.kind == import_pdf::KIND {
+        import_pdf::note_set(d, &field, &value);
     }
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
@@ -646,6 +651,16 @@ pub fn field_names(d: &Dialog) -> Vec<String> {
 fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogResult {
     let r = app.run(id, params);
     app.ui.dialog = None;
+    r
+}
+
+/// Set a tool's options with `tool.setOption` (`params`) and close the dialog; when the tool
+/// refuses one of them, nothing is set and the dialog stays open.
+fn set_tool_options_and_close(app: &mut VectorcraftApp, params: Value) -> DialogResult {
+    let r = app.run("tool.setOption", params);
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
     r
 }
 
@@ -717,6 +732,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
+        }
+        if d.kind == script_run::PICKER_KIND {
+            script_run::picker_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
         // Find Font's next open starts with an empty replacement search.
@@ -1011,6 +1029,8 @@ mod tests_plugin_fields;
 mod tests_plugin_import;
 #[cfg(test)]
 mod tests_raster_formats;
+#[cfg(test)]
+mod tests_raster_supplied_options;
 #[cfg(test)]
 mod tests_svg_options_range;
 

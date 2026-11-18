@@ -678,6 +678,13 @@
 	Previous Document	Poprzedni dokument
 	Cascade	Kaskadowo
 	Tile	Sąsiadująco
+	Tile All Vertically	Wszystkie sąsiadująco w pionie
+	Tile All Horizontally	Wszystkie sąsiadująco w poziomie
+	2-Up Layout	Układ po 2
+	3-Up Layout	Układ po 3
+	4-Up Layout	Układ po 4
+	6-Up Layout	Układ po 6
+	Arrange Documents	Rozmieść dokumenty
 	Float in Window	Pływające w oknie
 	Float All in Windows	Wszystkie pływające w oknach
 	Consolidate All Windows	Scal wszystkie okna
@@ -1735,6 +1742,7 @@ digits	Malayalam	Malajalam
 	Rule:	Reguła:
 	Save changes to {name}	Zapisz zmiany w {name}
 	Save theme to My Themes	Zapisz motyw w Moich motywach
+	Set the current fill or stroke to the selected color	Ustaw bieżące wypełnienie lub obrys na zaznaczony kolor
 	Set the selected color to the current color	Ustaw zaznaczony kolor na bieżący
 	Copy All Styles	Kopiuj wszystkie style
 	Exported {path}	Wyeksportowano {path}
@@ -2055,7 +2063,7 @@ digits	Malayalam	Malajalam
 	Stroke: click for swatches, Shift-click for the color mixer	Obrys: kliknij, aby wybrać próbkę, z Shift — mikser kolorów
 	This panel is on the roadmap (see the parity plan).	Ten panel jest w planach (patrz plan zgodności).
 	Open a document to navigate it.	Otwórz dokument, aby się po nim poruszać.
-	View Artboard Only	Pokaż tylko obszar kompozycji
+	View Artboard Contents Only	Pokaż tylko zawartość obszaru kompozycji
 	Contextual Alternates	Alternatywy kontekstowe
 	Default Figure	Cyfry domyślne
 	Discretionary Ligatures	Ligatury opcjonalne
@@ -2205,7 +2213,7 @@ digits	Malayalam	Malajalam
 	Overprint Preview (separations)	Podgląd nadruku (rozbarwienia)
 	Show All Plates	Pokaż wszystkie płyty
 	Show all plates	Pokaż wszystkie płyty
-	Show/hide plate (Alt-click: only this plate)	Pokaż/ukryj płytę (kliknięcie z Alt: tylko ta płyta)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Pokaż/ukryj płytę (kliknięcie z Alt: tylko ta płyta; ponowne kliknięcie z Alt: wszystkie płyty)
 	Simulate Paper	Symuluj papier
 	Use Black Point Compensation	Użyj kompensacji punktu czerni
 	Working CMYK (don't tag)	Roboczy CMYK (bez znacznika)
@@ -2245,6 +2253,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Czubek wystaje poza punkt końcowy
 	Tip on the end point	Czubek na punkcie końcowym
 	Variable Width Profile	Profil zmiennej szerokości
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Pędzel obrysu zachowuje własny rozmiar, więc profil szerokości go nie zmienia. Usuń pędzel, aby użyć profilu.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Pędzel obrysu zachowuje własny rozmiar, więc profil szerokości go nie zmienia. Usuń pędzel, aby użyć profilu.
 	Weight:	Grubość:
 	Art using a deleted global swatch keeps its colour.	Kompozycja używająca usuniętej próbki globalnej zachowa swój kolor.
 	Color Group: {name}	Grupa kolorów: {name}
@@ -2355,6 +2365,9 @@ digits	Malayalam	Malajalam
 	Flip Horizontal	Odbij w poziomie
 	Flip Vertical	Odbij w pionie
 	Polygon Properties:	Właściwości wielokąta:
+	Line Properties:	Właściwości linii:
+	Line Length:	Długość linii:
+	Line Angle:	Kąt linii:
 	Rectangle Properties:	Właściwości prostokąta:
 	Shape Properties:	Właściwości kształtu:
 	Shape Properties	Właściwości kształtu
@@ -3087,6 +3100,8 @@ antiAlias	Sharp	Ostre
 	Every option matches {base}.	Wszystkie opcje są zgodne z {base}.
 	Files of a PDF standard can't be password-protected.	Plików standardu PDF nie można chronić hasłem.
 	Files of this standard tag their colours with ICC profiles.	Pliki tego standardu oznaczają kolory profilami ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Pliki tego standardu oznaczają kolory profilami ICC, z wyjątkiem kolorów CMYK w profilu docelowych warunków wyjściowych, które są zapisywane jako DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Przy opcji „Nie dołączaj profili” i docelowych warunkach wyjściowych CMYK każdy kolor CMYK jest zapisywany jako DeviceCMYK, chyba że zostanie przekonwertowany do miejsca docelowego CMYK z innym profilem.
 	Flattener preset:	Ustawienie spłaszczania:
 	General › Thumbnails	Ogólne › Miniatury
 	Grayscale images	Obrazy w skali szarości
@@ -3297,6 +3312,12 @@ antiAlias	Sharp	Ostre
 	Encoding:	Kodowanie:
 	Line Endings:	Znaki końca wiersza:
 	Text Export Options	Opcje eksportu tekstu
+	Chinese Big 5	Chiński Big 5
+	Cyrillic	Cyrylica
+	Greek	Grecki
+	Turkish	Turecki
+	Baltic	Bałtycki
+	Central European	Środkowoeuropejski
 	Character Set:	Zestaw znaków:
 	Join the lines of each paragraph	Połącz wiersze każdego akapitu
 	Line Breaks	Podziały wierszy
@@ -3326,6 +3347,9 @@ antiAlias	Sharp	Ostre
 	Variable Options	Opcje zmiennej
 	Define a variable first	Najpierw zdefiniuj zmienną
 	Adjust Adjoining Width Points	Dopasuj sąsiednie punkty szerokości
+	Incoming	Wejściowa
+	Outgoing	Wyjściowa
+	Single Width Only	Tylko jedna szerokość
 	Keep both sides the same width	Zachowaj jednakową szerokość obu stron
 	Side 1:	Strona 1:
 	Side 2:	Strona 2:
@@ -3731,6 +3755,7 @@ theme	Appearance	Wygląd
 	Select Art	Zaznacz kompozycję
 	Set Current Layer	Ustaw bieżącą warstwę
 	Flatten Artwork	Spłaszcz kompozycję
+	Locate Layer	Znajdź warstwę
 	Locate Object	Znajdź obiekt
 	Lock Others	Zablokuj pozostałe
 	Merge Selected	Scal zaznaczone
@@ -4536,6 +4561,8 @@ font-technology	Variable	Zmienne
 	Couldn't paste from the clipboard: {e}	Nie udało się wkleić ze schowka: {e}
 	Channel	Kanał
 	Circle	Okrąg
+	Circle Tool	Narzędzie Okrąg
+	Circle too large	Okrąg jest za duży
 	Clip to Art	Przytnij do kompozycji
 	Colorize	Koloruj
 	Gamma	Gamma
@@ -4753,6 +4780,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
 	A Script Is Running	Skrypt jest uruchomiony
 	Script Alert	Komunikat skryptu
+	Script File Access	Dostęp skryptu do plików
+	The script asks to read a file you choose.	Skrypt prosi o odczyt wybranego przez Ciebie pliku.
+	The script asks to read and write a file you choose.	Skrypt prosi o odczyt i zapis wybranego przez Ciebie pliku.
+	The script asks to read and write a folder you choose, with everything in it.	Skrypt prosi o odczyt i zapis wybranego przez Ciebie folderu wraz z całą jego zawartością.
+	Allow Once	Zezwól raz
+	Always Allow This Script	Zawsze zezwalaj temu skryptowi
+	Deny	Odmów
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
@@ -4783,8 +4817,6 @@ imageTrace	Outline	Kontur
 @msg	Script file could not be read	Nie udało się odczytać pliku skryptu
 @msg	Script folder has more than 2,048 entries	Folder skryptu ma więcej niż 2048 pozycji
 @msg	Script file open mode must be r, w, e or a	Tryb otwarcia pliku skryptu musi być r, w, e lub a
-@msg	Script file writing is not available	Zapisywanie plików skryptu jest niedostępne
-@msg	Script file dialogs are not available	Okna dialogowe plików skryptu są niedostępne
 @msg	Script files cannot be opened in another application	Plików skryptu nie można otworzyć w innej aplikacji
 @msg	Script file access is unavailable on the web	Dostęp do plików skryptu jest niedostępny w przeglądarce
 @msg	Script has 256 files open	Skrypt ma otwartych 256 plików
@@ -4901,6 +4933,27 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	there is no script engine named {name}	nie ma silnika skryptów o nazwie {name}
 @msg	Running a script	Uruchamianie skryptu
 @msg	Copied the script report	Skopiowano raport skryptu
+@msg	Script file access denied: {path}	Odmówiono skryptowi dostępu do plików: {path}
+@msg	Script file access to the app's own folders is not allowed	Skrypt nie ma dostępu do własnych folderów aplikacji
+@msg	Script file cannot encode the text	Plik skryptu nie może zakodować tekstu
+@msg	Script file could not be written	Nie można zapisać pliku skryptu
+@msg	Script file dialogs need a person to answer them	Okna dialogowe plików skryptu wymagają osoby, która na nie odpowie
+@msg	Script file is not open for writing	Plik skryptu nie jest otwarty do zapisu
+@msg	Script file name is already in use	Nazwa pliku skryptu jest już używana
+@msg	Script file name must be a name without a folder	Nazwa pliku skryptu musi być nazwą bez folderu
+@msg	Script file permission can be kept only for a script run from a file	Uprawnienie do plików można zachować tylko dla skryptu uruchomionego z pliku
+@msg	Script file permission could not be saved	Nie można zapisać uprawnienia skryptu do plików
+@msg	Script folder is not empty	Folder skryptu nie jest pusty
+@msg	Script files cannot make aliases	Pliki skryptu nie mogą tworzyć aliasów
+@msg	Script file hidden setting cannot be changed	Nie można zmienić ustawienia ukrycia pliku skryptu
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: okna dialogowego plików nie można otworzyć w wywołaniu zwrotnym funkcji wbudowanej, gettera, konwersji ani pliku uruchamianego przez $.evalFile; wywołaj je z własnego kodu skryptu
+@msg	the script wrote more file data than one run may write (32 MiB)	skrypt zapisał więcej danych plików, niż może zapisać jedno uruchomienie (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` dla okna dialogowego plików skryptu musi być jedną z wartości: once, always, deny, stop
+@msg	choose a file or folder first, or deny	najpierw wybierz plik lub folder albo odmów
+@msg	the script file permissions could not be saved: {e}	nie można zapisać uprawnień skryptów do plików: {e}
+@msg	this script's file access can be allowed only once	na dostęp tego skryptu do plików można zezwolić tylko raz
+@msg	Only the person at the keyboard can allow a script's file access	Na dostęp skryptu do plików może zezwolić tylko osoba przy klawiaturze
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Skrypt otrzymuje najwyżej 2 048 plików: pliki wybrane po nich zostały pominięte
 @msg	Copied the link info	Skopiowano informacje o łączu
 @msg	Corners edits the corners of a path	Narożniki edytuje narożniki ścieżki
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}
@@ -4976,6 +5029,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Saved {path}	Zapisano {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Zaznacz tekst lub kliknij w tekst narzędziem Tekst, aby wstawić glify
 @msg	Shape Builder: no region under the pointer	Kreator kształtów: brak obszaru pod wskaźnikiem
+@msg	Shape Builder: select all paths you want to merge	Kreator kształtów: zaznacz wszystkie ścieżki, które chcesz scalić
 @msg	Shape Builder: select paths or compound paths	Kreator kształtów: zaznacz ścieżki lub ścieżki złożone
 @msg	Show All Hidden Attributes: nothing is hidden	Pokaż wszystkie ukryte atrybuty: nic nie jest ukryte
 @msg	Split Into Grid: select paths large enough for the grid	Podziel na siatkę: zaznacz ścieżki wystarczająco duże dla siatki
@@ -5208,8 +5262,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no active document	brak aktywnego dokumentu
 @msg	no active perspective plane	brak aktywnej płaszczyzny perspektywy
 @msg	no anchor points selected	nie zaznaczono punktów kontrolnych
-@msg	`points` must be three [x, y] pairs of numbers	`points` musi zawierać trzy pary liczb [x, y]
-@msg	direct-select three anchor points, or give `points`	zaznacz bezpośrednio trzy punkty kontrolne lub podaj `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` musi zawierać dwie lub trzy pary liczb [x, y]
+@msg	direct-select two or three anchor points, or give `points`	zaznacz bezpośrednio dwa lub trzy punkty kontrolne lub podaj `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	przez te punkty nie przechodzi żaden okrąg: dwa są takie same albo wszystkie trzy leżą na jednej prostej
 @msg	no app to open files here	brak aplikacji do otwierania plików
 @msg	no artboard	brak obszaru kompozycji
@@ -5311,6 +5365,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such user library	brak takiej biblioteki użytkownika
 @msg	no such view	brak takiego widoku
 @msg	no such width point	brak takiego punktu szerokości
+@msg	`single` must be `incoming` or `outgoing`	`single` musi mieć wartość `incoming` lub `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` muszą być dwiema połówkami jednego nieciągłego punktu szerokości
+@msg	a discontinuous width point keeps its place	nieciągły punkt szerokości zachowuje swoje położenie
 @msg	no swatch `{name}`	brak próbki `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	brak biblioteki próbek `{l}` (patrz swatch.library.list)
 @msg	no symbol instances selected	nie zaznaczono wystąpień symboli
@@ -6077,6 +6134,7 @@ variable-list-end	{0}, {1}	{0} i {1}
 	Ascent	Wydłużenie górne
 	Cap Height	Wysokość wersalików
 	x Height	Wysokość x
+	Em Box Height	Wysokość ramki firetowej
 	Justify	Justuj
 	First Baseline	Pierwsza linia bazowa
 	Vertical Align	Wyrównanie pionowe
@@ -8764,6 +8822,7 @@ breakText	Glyphs	Glify
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	kształty złożone przyjmują ścieżki, ścieżki złożone, grupy, kształty złożone, tekst, przejścia i koperty
 @msg	compound {_1} must contain exactly one open path to join	obiekt złożony {_1} musi zawierać dokładnie jedną otwartą ścieżkę do połączenia
 @msg	connect needs a path other than the one extended	connect wymaga ścieżki innej niż przedłużana
+@msg	connect needs extend	connect wymaga extend
 @msg	connect needs id	connect wymaga id
 @msg	connect path has no open end	ścieżka w connect nie ma otwartego końca
 @msg	copy needs path: the file to copy into the document's folder	copy wymaga path: pliku do skopiowania do folderu dokumentu
@@ -9876,3 +9935,13 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Fold Preview	Podgląd złożenia
+	Fold	Złożenie
+	Show Fold Lines	Pokaż linie zgięcia
+	Three-Quarter	Trzy czwarte
+	Open a document to preview its folded shape.	Otwórz dokument, aby zobaczyć podgląd jego złożonego kształtu.
+@msg	Check the fold lines first.	Najpierw sprawdź linie zgięcia.
+@msg	Panels: {panels}, hinges: {hinges}	Panele: {panels}, zawiasy: {hinges}
+@msg	Other blanks not shown: {count}	Inne wykroje nie są pokazane: {count}
+@msg	A joint does not close by {gap} pt.	Połączenie nie domyka się o {gap} pt.
+@msg	Two panels pass through each other.	Dwa panele przechodzą przez siebie.

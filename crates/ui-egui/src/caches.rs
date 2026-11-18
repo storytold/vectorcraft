@@ -64,6 +64,9 @@ pub struct CanvasCache {
     /// The Transform panel's Align to Pixel Grid state (on, off or mixed, and whether every
     /// selected object can be aligned) for (document uid, revision).
     pub pixel_aligned: Option<((u64, u64), Option<PixelAligned>)>,
+    /// The symbol instances in the selection and its groups, for (document uid, revision): the
+    /// Properties and Symbols panels read them every frame.
+    pub symbol_instances: Option<((u64, u64), SymbolInstances)>,
     /// [`CacheKey::plugins`] by document uid, with the plug-in revision
     /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
     pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
@@ -114,6 +117,18 @@ pub type LivePaintGapsCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_tools:
 /// [`CanvasCache::pixel_aligned`]: the selected objects' Align to Pixel Grid, on or off when they
 /// agree and `None` when they differ, with whether every one can be aligned.
 pub type PixelAligned = (Option<bool>, bool);
+
+/// [`CanvasCache::symbol_instances`]: the symbol instances in the selection and its groups.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SymbolInstances {
+    /// Each instance's id, in the order the selection's subtrees list them.
+    pub ids: Vec<vectorcraft_doc::NodeId>,
+    /// One of them has appearance changes of its own (`symbol_overrides`).
+    pub changed: bool,
+    /// One of them has a scale, rotation or shear that Reset Transformation would change; measured
+    /// on the first read.
+    pub transformed: Option<bool>,
+}
 
 /// [`CanvasCache::print_tiling`]: the print tiling of (document uid, revision).
 pub type PrintTilingCache = ((u64, u64), std::sync::Arc<Vec<vectorcraft_pdf::TilingPage>>);

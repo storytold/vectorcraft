@@ -65,6 +65,7 @@ pub mod zip;
 
 use serde_json::{Value, json};
 
+pub(crate) use action_batch::action_step;
 pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{
@@ -95,7 +96,7 @@ pub use naming::{NameParts as FileNameParts, parse_date as parse_file_date, rend
 pub(crate) use native::preview_png;
 pub use native::with_compression_pref;
 pub(crate) use pdfimport::opened_page_document;
-pub use pdfimport::{LoadOptions, page_document};
+pub use pdfimport::{LoadOptions, page_document, pages_can_link};
 pub(crate) use psdlayers::import_active as psd_layers;
 pub use psdlayers::{PsdInfo, info as psd_info};
 pub(crate) use psdslices::over as psd_slices;
