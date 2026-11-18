@@ -141,6 +141,7 @@
 	Add to Swatches	Agregar a muestras
 	Add Used Colors	Agregar colores usados
 	Additional Plug-ins Folder	Carpeta de plugins adicionales
+	Plug-in Instruction Budget	Presupuesto de instrucciones de plugins
 	Additional Fonts Folder	Carpeta de fuentes adicionales
 	Adjust Adjoining Width Points	Ajustar puntos de anchura contiguos
 	Incoming	Entrante
@@ -3471,6 +3472,9 @@ digits	Malayalam	Malayálam
 	Search commands, tools, panels and effects…	Buscar comandos, herramientas, paneles y efectos…
 	No commands match	Ningún comando coincide
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Sin elemento de menú
+	Toolbar	Barra de herramientas
+	{toolbar}, in the {tool} group	{toolbar}, en el grupo {tool}
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes
@@ -5754,6 +5758,7 @@ variable-list-end	{0}, {1}	{0} y {1}
 @msg	a linked JavaScript file is outside the read roots	un archivo JavaScript vinculado está fuera de las carpetas raíz de lectura
 @msg	a linked image file is outside the read roots	un archivo de imagen vinculado está fuera de las carpetas raíz de lectura
 @msg	a linked file's export folder is outside the read roots	la carpeta de exportación de un archivo vinculado está fuera de las carpetas raíz de lectura
+@msg	a linked file's editing data can't be read to check it against the read roots	no se pueden leer los datos de edición de un archivo vinculado para comprobarlos con las carpetas raíz de lectura
 @msg	automation path rejected: outside the write root {root}: {path}	ruta de automatización rechazada: fuera de la carpeta raíz de escritura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ruta de automatización rechazada: fuera de las carpetas raíz de escritura {roots}: {path}
 @msg	automation path rejected: path is empty	ruta de automatización rechazada: la ruta está vacía

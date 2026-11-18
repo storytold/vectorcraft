@@ -3984,6 +3984,7 @@ theme	Appearance	Ulkoasu
 	90° & 45° Angles	90° ja 45° kulmat
 	90° Angles	90° kulmat
 	Additional Plug-ins Folder	Lisälaajennusten kansio
+	Plug-in Instruction Budget	Laajennusten käskybudjetti
 	Additional Fonts Folder	Lisäfonttien kansio
 	Alignment Guides	Tasausapuviivat
 	Anchor Points, Handle, and Bounding Box Display	Ankkuripisteiden, kahvojen ja rajausruudun näyttö
@@ -4502,6 +4503,9 @@ font-technology	Variable	Muuttuvat
 	Search commands, tools, panels and effects…	Hae komentoja, työkaluja, paneeleita ja tehosteita…
 	No commands match	Mikään komento ei vastaa hakua
 	{pos} of {total}: {name}	{pos}/{total}: {name}
+	No menu item	Ei valikkokohdetta
+	Toolbar	Työkalurivi
+	{toolbar}, in the {tool} group	{toolbar}, ryhmässä {tool}
 @plural	{n} result|{n} results	{n} tulos|{n} tulosta
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.|{shown}/{n} tulosta. Kirjoita lisää rajataksesi tuloksia.
 	Recent Commands	Viimeisimmät komennot
@@ -5936,6 +5940,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 @msg	a linked JavaScript file is outside the read roots	linkitetty JavaScript-tiedosto on lukujuurten ulkopuolella
 @msg	a linked image file is outside the read roots	linkitetty kuvatiedosto on lukujuurten ulkopuolella
 @msg	a linked file's export folder is outside the read roots	linkitetyn tiedoston vientikansio on lukujuurten ulkopuolella
+@msg	a linked file's editing data can't be read to check it against the read roots	linkitetyn tiedoston muokkaustietoja ei voi lukea niiden tarkistamiseksi lukujuuria vasten
 @msg	the library's file is outside the read roots	kirjaston tiedosto on lukujuurten ulkopuolella
 @msg	{file} names more than one linked JavaScript file	{file} vastaa useampaa kuin yhtä linkitettyä JavaScript-tiedostoa
 @msg	automation path rejected: outside the write root {root}: {path}	automaation polku hylättiin: kirjoitusjuuren {root} ulkopuolella: {path}
