@@ -299,3 +299,23 @@ fn shapes_past_the_limits_are_reported_as_left_out() {
     assert_eq!(r["texts"], json!(["A"]));
     assert_eq!(r["truncated"], json!(true), "{r}");
 }
+
+#[test]
+fn a_glyph_painted_beyond_what_type_takes_stays_an_outline() {
+    let mut s = session();
+    let g = outlined(&mut s, json!({"x": 40, "y": 100, "text": "AB", "size": 40}));
+    let a = children_of(&s, g)[0];
+    s.edit("test", |d, _| {
+        let n = d.node_mut(NodeId(a)).unwrap();
+        let mut ap = (*n.appearance).clone();
+        let fill = ap.items.iter().find(|i| i.is_fill()).unwrap().clone();
+        ap.items.push(fill);
+        n.appearance = ap.into();
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let r = s.execute("type.retype", &json!({})).unwrap();
+    assert_eq!(r["texts"], json!(["B"]), "two fills: A stays an outline: {r}");
+    assert_eq!(r["unmatched"], json!([a]));
+}

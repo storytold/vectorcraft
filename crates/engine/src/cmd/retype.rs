@@ -58,8 +58,9 @@ struct Piece {
     /// The shape's own transparency, which the new type takes.
     opacity: f32,
     blend: vectorcraft_color::BlendMode,
-    /// The shape has an opacity mask of its own, which type cannot take: it stays an outline.
-    masked: bool,
+    /// The shape has what type cannot take (its own opacity mask, more than one fill or stroke,
+    /// effects, a brush, width profile or arrowheads): it stays an outline.
+    keeps_outline: bool,
 }
 
 /// The shapes in `n` (held by `parent`), in paint order. `barrier` is set when art that is not a
@@ -79,7 +80,7 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, t
         appearance: (*n.appearance).clone(),
         opacity: n.opacity,
         blend: n.blend,
-        masked: n.extras().mask.is_some(),
+        keeps_outline: n.extras().mask.is_some() || !type_can_paint(&n.appearance),
     };
     match &n.kind {
         NodeKind::Group { children, clip: false } => {
@@ -105,6 +106,12 @@ fn collect(n: &Node, parent: Option<NodeId>, depth: usize, barrier: &mut bool, t
         // Live type, images, clip groups and the rest stay, and the type after them stays after them.
         _ => *barrier = true,
     }
+}
+
+/// Can type's character style paint `ap` as it is: a basic appearance (at most one fill and one
+/// stroke, no effects, no item opacity or blend), with a plain stroke?
+fn type_can_paint(ap: &Appearance) -> bool {
+    ap.is_basic() && ap.stroke().is_none_or(|s| s.start_arrow.is_none() && s.end_arrow.is_none() && s.profile.is_none() && s.brush.is_none())
 }
 
 /// The faces to match against: the families in `fonts`, the document's fonts, then every loaded face.
@@ -165,8 +172,9 @@ impl Line {
             && pc.opacity == self.opacity
             && pc.blend == self.blend
             && m.face.id() == self.face.id()
-            && (m.scale - self.scale).abs() <= self.scale * 0.005
-            && (m.angle - self.angle).abs() < 1e-3
+            // One size and turn for the whole line: the type sets every glyph at the first one's.
+            && (m.scale - self.scale).abs() <= self.scale * 1e-4
+            && (m.angle - self.angle).abs() < 1e-5
             && across < size * 0.05
             && (m.origin - self.end).dot(dir) > -size * 0.25
     }
@@ -226,6 +234,14 @@ impl Line {
             stroke_width: self.appearance.stroke_width(),
             ..Default::default()
         };
+        let mut style = style;
+        if let Some(st) = self.appearance.stroke() {
+            style.stroke_cap = st.cap;
+            style.stroke_join = st.join;
+            style.stroke_miter_limit = st.miter_limit;
+            style.stroke_dash = st.dash.clone();
+            style.stroke_align = st.align;
+        }
         let mut t = TextObject::point(self.origin, &self.text, style);
         if self.angle != 0.0 {
             t.xf *= kurbo::Affine::rotate(self.angle);
@@ -272,12 +288,13 @@ fn verified(lines: Vec<Line>, system_layout: bool, unmatched: &mut Vec<NodeId>) 
         let n = l.pieces.len();
         match l.first_mismatch(&l.text_object(system_layout)) {
             None => out.push(l),
-            Some(0) => {
-                unmatched.extend(l.pieces.first().copied());
-                if let Some(rest) = l.part(1, n) {
-                    todo.push_front(rest);
+            // The first glyph on its own may still be drawn as it was (a contextual form changed it).
+            Some(0) if n > 1 => {
+                for part in [l.part(1, n), l.part(0, 1)].into_iter().flatten() {
+                    todo.push_front(part);
                 }
             }
+            Some(0) => unmatched.extend(l.pieces.first().copied()),
             Some(k) => {
                 for part in [l.part(k, n), l.part(0, k)].into_iter().flatten() {
                     todo.push_front(part);
@@ -346,7 +363,7 @@ fn retype(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(EngineError::Other("Retype: select outlined text (paths or compound paths)".into()));
         }
         let index = RetypeIndex::build(db, candidate_faces(db, d, &fonts));
-        let found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.masked { vec![] } else { index.matches(&pc.path) }).collect();
+        let found: Vec<Vec<GlyphMatch>> = pieces.iter().map(|pc| if pc.keeps_outline { vec![] } else { index.matches(&pc.path) }).collect();
         // The face most shapes match, so a glyph several fonts share is set in the same font as
         // the glyphs around it.
         let mut votes: Vec<(u32, usize)> = vec![];
