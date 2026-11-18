@@ -4870,6 +4870,8 @@ axis	Both	И двете
 @msg	no such spine point	няма такава точка от оста
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` трябва да е списък с най-много 10000 индекса на точки от оста
 @msg	`with` moves points, not a handle	`with` мести точки, не дръжка
+@msg	`link` and `independent` cannot both be true	`link` и `independent` не могат и двата да са true
+@msg	`link` places a handle: give `handle`	`link` поставя дръжка: задайте `handle`
 @msg	no such spine segment	няма такъв сегмент от оста
 @msg	no such subpath	няма такъв подпът
 @msg	no such user library	няма такава потребителска библиотека

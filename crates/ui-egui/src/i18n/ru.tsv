@@ -5329,6 +5329,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no such spine point	такой точки остова нет
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` должен быть списком не более чем из 10000 индексов точек остова
 @msg	`with` moves points, not a handle	`with` перемещает точки, а не маркер
+@msg	`link` and `independent` cannot both be true	`link` и `independent` не могут одновременно быть true
+@msg	`link` places a handle: give `handle`	`link` размещает маркер: укажите `handle`
 @msg	no such spine segment	такого сегмента остова нет
 @msg	no such subpath	такого вложенного контура нет
 @msg	no such user library	такой пользовательской библиотеки нет
