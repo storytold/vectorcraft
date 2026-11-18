@@ -816,6 +816,19 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Paste without Formatting	Indsæt uden formatering
 	Clear	Fjern
 	Find and Replace…	Find og erstat…
+	Find and Replace	Find og erstat
+	Find:	Find:
+	Replace With:	Erstat med:
+	Replace & Find	Erstat og find
+	Replace All	Erstat alle
+	Match Case	Forskel på store og små bogstaver
+	Find Whole Word	Find hele ord
+	Search Backwards	Søg baglæns
+	Check Hidden Layers	Kontrollér skjulte lag
+	Check Locked Layers	Kontrollér låste lag
+@msg	No matches found	Ingen forekomster fundet
+@msg	Matches replaced: {n}	Erstattede forekomster: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen forekomst af `find` ved byte {_1}..{_2} i objekt {_3}
 	Find Next	Find næste
 	Spelling	Stavekontrol
 	Auto Spell Check	Automatisk stavekontrol
