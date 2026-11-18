@@ -152,6 +152,28 @@ mod tests {
     }
 
     #[test]
+    fn original_editor_reset_confirmation_preserves_cancel_and_defers_persistence() {
+        let mut app = app();
+        choose(&mut app, Some("/Apps/My Editor.app")).unwrap();
+        prefs_dialog::confirm(&mut app).unwrap();
+        prefs_dialog::open(&mut app, Some("File Handling"));
+        crate::dialogs::confirm::ask_reset_prefs(&mut app);
+        crate::dialogs::cancel(&mut app);
+        assert_eq!(app.original_editor.choice.path.as_deref(), Some("/Apps/My Editor.app"));
+        crate::dialogs::confirm::ask_reset_prefs(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert!(app.original_editor.choice.path.is_none());
+        assert_eq!(app.ui.original_editor.path.as_deref(), Some("/Apps/My Editor.app"));
+        crate::dialogs::cancel(&mut app);
+        prefs_dialog::open(&mut app, Some("File Handling"));
+        assert_eq!(app.original_editor.choice.path.as_deref(), Some("/Apps/My Editor.app"));
+        crate::dialogs::confirm::ask_reset_prefs(&mut app);
+        crate::dialogs::confirm(&mut app).unwrap();
+        prefs_dialog::confirm(&mut app).unwrap();
+        assert!(app.ui.original_editor.path.is_none());
+    }
+
+    #[test]
     fn original_editor_routing_and_errors() {
         let mut app = app();
         choose(&mut app, Some("/Apps/My Editor.app")).unwrap();
@@ -245,10 +267,30 @@ mod tests {
     #[test]
     fn original_editor_controls_are_desktop_only_and_draw_the_choice() {
         let mut app = app();
-        let text = crate::tests_labels::painted_text(&mut app, |a, ui| prefs_dialog::show(a, ui.ctx()));
+        let paint = |app: &mut VectorcraftApp| {
+            let d = app.ui.dialog.as_mut().unwrap();
+            d.fields.insert("__found".into(), json!("editOriginalSystemDefaults"));
+            d.fields.insert("__scrollTo".into(), json!(true));
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let mut text = String::new();
+            // The fixed-height Preferences list scrolls after its sizing pass.
+            for frame in 0..4 {
+                let input = egui::RawInput {
+                    time: Some(f64::from(frame)),
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 1000.0))),
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| prefs_dialog::show(app, ui.ctx()));
+                out.textures_delta.clear();
+                text = crate::tests_labels::shapes_text(&out);
+            }
+            text
+        };
+        let text = paint(&mut app);
         assert!(text.contains("Edit Original with:") && text.contains("PhotoCraft"), "{text}");
         app.services.check_application = None;
-        let text = crate::tests_labels::painted_text(&mut app, |a, ui| prefs_dialog::show(a, ui.ctx()));
+        let text = paint(&mut app);
         assert!(!text.contains("Edit Original with:"), "{text}");
     }
 }

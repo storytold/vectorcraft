@@ -28,6 +28,15 @@ pub struct TabStop {
     pub align_on: char,
 }
 
+impl TabStop {
+    /// The largest stop position `text.tabs.set` and a paragraph style take, in points.
+    pub const MAX_POSITION: f64 = 100_000.0;
+    /// The most leader characters a stop repeats.
+    pub const MAX_LEADER: usize = 8;
+    /// The most stops `text.tabs.set` and a paragraph style take in one list.
+    pub const MAX_STOPS: usize = 256;
+}
+
 fn default_align_on() -> char {
     '.'
 }
@@ -197,13 +206,39 @@ pub struct ParaList {
     /// ([`Self::depth`]). The file saves it only when it is not 1.
     #[serde(skip_serializing_if = "is_first_level", deserialize_with = "read_level")]
     pub level: u8,
+    /// The number a numbered paragraph is given, 1 to [`MAX_LIST_START`]: the numbered paragraphs
+    /// after it at its level count on from it ([`Self::next_marker`]). None: it counts on from the
+    /// numbered paragraph before it. A bulleted paragraph does not use it. A paragraph made
+    /// with Return in a paragraph that has one does not take it, and a paragraph style does not
+    /// keep it. A saved number outside the range is read as the nearest one. The file saves it
+    /// only when it is set.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "read_start")]
+    pub start: Option<u32>,
 }
 
 impl Default for ParaList {
-    /// A bulleted list with a dot, its marker aligned left, at level 1.
+    /// A bulleted list with a dot, its marker aligned left, at level 1, numbered on from the
+    /// paragraph before.
     fn default() -> Self {
-        Self { bullet: Bullet::default(), number: None, align: ListAlign::default(), level: 1 }
+        Self { bullet: Bullet::default(), number: None, align: ListAlign::default(), level: 1, start: None }
     }
+}
+
+/// The largest number a numbered paragraph can be given ([`ParaList::start`]).
+pub const MAX_LIST_START: u32 = 999_999_999;
+
+/// Reads a saved list start, a whole number or null, as the nearest of 1 to [`MAX_LIST_START`],
+/// so a start such as 0 or 5000000000 opens the file at 1 or [`MAX_LIST_START`]. Anything else
+/// is an error.
+fn read_start<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<u32>, D::Error> {
+    let start = match serde_json::Value::deserialize(d)? {
+        serde_json::Value::Null => return Ok(None),
+        serde_json::Value::Number(n) if n.is_i64() || n.is_u64() => {
+            n.as_i64().map_or(i64::from(MAX_LIST_START), |n| n.clamp(1, i64::from(MAX_LIST_START)))
+        }
+        _ => return Err(serde::de::Error::custom("a list start must be a whole number")),
+    };
+    Ok(u32::try_from(start).ok())
 }
 
 /// Is `level` the first list level, which the file does not save?
@@ -298,6 +333,12 @@ impl ParaList {
         Self { level, ..self }
     }
 
+    /// This list with the paragraph numbered `start` (1 to [`MAX_LIST_START`]; None: on from the
+    /// paragraph before).
+    pub fn starting_at(self, start: Option<u32>) -> Self {
+        Self { start, ..self }
+    }
+
     /// The list's level, 1 to [`LIST_LEVELS`]: [`Self::level`], a value outside the range taken
     /// as the nearest level.
     pub fn depth(&self) -> usize {
@@ -325,8 +366,9 @@ impl ParaList {
     /// paragraph has none and leaves the counts as they are. A paragraph with text sets the counts
     /// of the levels deeper than its own back to 0, so a deeper paragraph after it counts from 1
     /// again; a bulleted one has its bullet and leaves the count of its level as it is, and a
-    /// numbered one adds one to the count of its level and is numbered with it. A paragraph back
-    /// at a shallower level then goes on with that level's count.
+    /// numbered one adds one to the count of its level and is numbered with it, or with the number
+    /// it is given ([`Self::start`]), which becomes the count of its level. A paragraph back at a
+    /// shallower level then goes on with that level's count.
     pub fn next_marker(list: Option<ParaList>, empty: bool, counts: &mut ListCounts) -> Option<String> {
         let Some(list) = list else {
             *counts = ListCounts::default();
@@ -341,14 +383,14 @@ impl ParaList {
         }
         let count = &mut counts.0[level];
         if list.number.is_some() {
-            *count = count.saturating_add(1);
+            *count = list.start.map_or_else(|| count.saturating_add(1), |s| s.clamp(1, MAX_LIST_START));
         }
         Some(list.marker(*count))
     }
 
     /// The style the marker is set in: `first` (the style of the paragraph's first character)
     /// without its baseline shift, rotation, superscript or subscript, tracking, manual kerning,
-    /// tate-chu-yoko, underline and strikethrough.
+    /// Insert Aki, Tsume, tate-chu-yoko, warichu, underline and strikethrough.
     pub fn marker_style(first: &CharStyle) -> CharStyle {
         CharStyle {
             baseline_shift: 0.0,
@@ -356,8 +398,13 @@ impl ParaList {
             position: CharPosition::Normal,
             tracking: 0.0,
             kerning: None,
+            kerning_before: 0.0,
+            aki_left: 0.0,
+            aki_right: 0.0,
+            tsume: 0.0,
             optical_kerning: first.optical_kerning,
             tate_chu_yoko: false,
+            warichu: false,
             underline: false,
             strikethrough: false,
             ..first.clone()

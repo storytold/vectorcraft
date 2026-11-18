@@ -2,13 +2,17 @@
 //! scale, baseline shift, character rotation, the anti-aliasing method and the All Caps, Small Caps,
 //! Superscript, Subscript, Underline and Strikethrough toggles and the Language menu.
 
-use std::sync::{Mutex, OnceLock};
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use egui::{Key, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::text::TypeAntiAlias;
 use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_engine::DocState;
 use vectorcraft_tools::{Mods, ToolKey};
 
 use super::{pstate, set_pstate};
@@ -22,6 +26,13 @@ pub const SIZE_PRESETS: [f64; 15] = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0,
 /// The Kerning and Tracking dropdowns' presets in 1/1000 em.
 pub const TRACKING_PRESETS: [f64; 14] = [-100.0, -75.0, -50.0, -25.0, -10.0, -5.0, 0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 200.0];
 pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0, 150.0];
+/// Insert Aki Left and Right presets, in thousandths of an em: none, a quarter, half and a whole
+/// full-width space.
+pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
+/// Tsume presets, in percent.
+pub const TSUME_PRESETS: [f64; 5] = [0.0, 25.0, 50.0, 75.0, 100.0];
+/// Adjust Horizontal and Vertical Diacritic Position presets, in thousandths of an em.
+pub const DIACRITIC_PRESETS: [f64; 7] = [-200.0, -100.0, -50.0, 0.0, 50.0, 100.0, 200.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -39,14 +50,21 @@ pub(crate) fn text_style(app: &VectorcraftApp) -> Option<(CharStyle, vectorcraft
 
 /// The first selected text descendant, shared by Character and Paragraph controls.
 pub(crate) fn first_selected_text(app: &VectorcraftApp) -> Option<&vectorcraft_doc::TextObject> {
+    match &first_selected_text_node(app)?.kind {
+        NodeKind::Text(t) => Some(t.as_ref()),
+        _ => None,
+    }
+}
+
+/// The node of [`first_selected_text`]: the first text object among the selected objects and
+/// their descendants, in selection order, then paint order within each selected object.
+pub(crate) fn first_selected_text_node(app: &VectorcraftApp) -> Option<&vectorcraft_doc::Node> {
     let st = app.session.active()?;
     for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
         let mut text = None;
         node.walk(&mut |n| {
-            if text.is_none()
-                && let NodeKind::Text(t) = &n.kind
-            {
-                text = Some(t.as_ref());
+            if text.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                text = Some(n);
             }
         });
         if text.is_some() {
@@ -89,10 +107,24 @@ pub(crate) fn shared_text_flag(app: &VectorcraftApp, f: impl Fn(&vectorcraft_doc
 }
 
 /// `f` of the character styles the panels act on: the runs the Type tool's selection covers (the
-/// caret's style at a caret), else every run of the selected type, groups' included. `None` (a
-/// blank field) where they differ, or with no type.
+/// caret's style at a caret), else every run of every frame of the selected stories
+/// ([`selected_stories`]). `None` (a blank field) where they differ, or with no type.
 pub(crate) fn shared<T: PartialEq>(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> T) -> Option<T> {
     shared_styles(app, |_, _, style, _| Some(f(style)))
+}
+
+/// The fonts (family and style) of the character styles the panels act on ([`shared`]), each
+/// once, in the order the runs come.
+pub(crate) fn selected_fonts(app: &VectorcraftApp) -> Vec<(String, String)> {
+    let fonts = std::cell::RefCell::new(Vec::<(String, String)>::new());
+    shared_styles(app, |_, _, style, _| {
+        let mut fonts = fonts.borrow_mut();
+        if !fonts.iter().any(|(family, face)| *family == style.font_family && *face == style.font_style) {
+            fonts.push((style.font_family.clone(), style.font_style.clone()));
+        }
+        Some(())
+    });
+    fonts.into_inner()
 }
 
 /// Dimensional controls use document units and tolerate arithmetic roundoff when comparing
@@ -130,37 +162,52 @@ fn shared_styles<T: PartialEq>(
     app: &VectorcraftApp,
     f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool) -> Option<T>,
 ) -> Option<T> {
-    let st = app.session.active()?;
+    let mut acc = Shared::None;
+    each_style(app, |t, para, style, inline| acc.add(f(t, para, style, inline)));
+    acc.value().flatten()
+}
+
+/// Whether `f` holds for any of the character styles [`shared`] reads.
+pub(crate) fn any_style(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> bool) -> bool {
+    let mut any = false;
+    each_style(app, |_, _, style, _| any = any || f(style));
+    any
+}
+
+/// Call `f` with each character style the panels act on, as [`shared_styles`] describes: the
+/// caret's style at a Type tool caret, else each piece of the runs the Type tool's selection
+/// covers, else of every run of every frame of the selected stories.
+fn each_style(app: &VectorcraftApp, mut f: impl FnMut(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool)) {
+    let Some(st) = app.session.active() else {
+        return;
+    };
     let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Some(t),
         _ => None,
     };
-    let mut acc = Shared::None;
     if let Some((id, a, b)) = text_editing(app) {
-        let t = text(id)?;
+        let Some(t) = text(id) else {
+            return;
+        };
         if b <= a {
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
-            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            return;
         }
         match text_story(app) {
             // After Select All in threaded text: all the text of every frame of the story.
             Some(story) => {
                 for t in story.into_iter().filter_map(text) {
-                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+                    each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
                 }
             }
-            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline))),
+            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| f(t, para, style, inline)),
         }
     } else {
-        for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-            n.walk(&mut |c| {
-                if let NodeKind::Text(t) = &c.kind {
-                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
-                }
-            });
+        for t in selected_story_texts(app) {
+            each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
         }
     }
-    acc.value().flatten()
 }
 
 /// `f` of the paragraph and style of each piece of `t`'s runs that lies in one paragraph (a
@@ -233,13 +280,15 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
 
 /// [`format`] that returns the command's result: `text.setRangeStyle` on the range the Type tool
 /// has selected (the whole text when nothing is selected) while it edits text, else
-/// `text.setFormat` on the selected text objects.
+/// `text.setFormat` on the selected stories ([`selected_stories`]).
 pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
-    let Some((id, a, b)) = text_editing(app) else { return app.run("text.setFormat", p) };
+    let Some((id, a, b)) = text_editing_kept(app)? else {
+        target_selected_stories(app, &mut p);
+        return app.run("text.setFormat", p);
+    };
     if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
         return story_style(app, first, p);
     }
-    end_typing(app);
     p["id"] = json!(id.0);
     if b > a {
         p["start"] = json!(a);
@@ -254,10 +303,30 @@ pub(crate) fn shared_tcy_offsets(app: &VectorcraftApp) -> (Option<f64>, Option<f
     (shared_effective(app, |s| s.tcy_up_down), shared_effective(app, |s| s.tcy_left_right))
 }
 
+/// The Warichu Settings the characters the panels act on share: Lines, Line Gap (document
+/// points), Scale (percent) and Alignment; `None` for each that differs, or with no type.
+pub(crate) struct SharedWarichu {
+    pub lines: Option<u8>,
+    pub gap: Option<f64>,
+    pub scale: Option<f64>,
+    pub align: Option<vectorcraft_doc::WarichuAlign>,
+}
+
+pub(crate) fn shared_warichu(app: &VectorcraftApp) -> SharedWarichu {
+    SharedWarichu {
+        lines: shared(app, |s| s.warichu_lines),
+        gap: shared_effective(app, |s| s.warichu_gap),
+        scale: shared(app, |s| s.warichu_scale),
+        align: shared(app, |s| s.warichu_align),
+    }
+}
+
 /// Apply character attributes: to the selected range while the Type tool edits text (the whole
-/// object when nothing is selected), else to the selected text objects.
-fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
+/// object when nothing is selected), else to every frame of the selected stories
+/// ([`selected_stories`]).
+fn char_cmd(app: &mut VectorcraftApp, cmd: &str, mut p: Value) {
     if text_editing(app).is_none() {
+        target_selected_stories(app, &mut p);
         app.run(cmd, p).ok();
         return;
     }
@@ -266,10 +335,12 @@ fn char_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 
 /// Set the Kerning field's `value` (a number, "auto", or "optical"). At a caret in text the Type tool edits
 /// it is the pair kerning after the character before the caret, as Alt+←/→ steps it
-/// (`type.step`); nowhere to set at the start of the text. Else it is a character attribute like
-/// the others: the selected range, or all the text.
+/// (`type.step`), or at the start of a line the space before the character after it, where Auto
+/// and Optical set no space (#5111); nowhere to set at an empty line's start. Else it is a
+/// character attribute like the others: the selected range, or all the text.
 fn set_kerning(app: &mut VectorcraftApp, value: Value) {
-    let Some((id, a, b)) = text_editing(app) else {
+    let Ok(editing) = text_editing_kept(app) else { return };
+    let Some((id, a, b)) = editing else {
         format(app, json!({"kerning": value}));
         return;
     };
@@ -278,15 +349,17 @@ fn set_kerning(app: &mut VectorcraftApp, value: Value) {
         return;
     }
     let Some(NodeKind::Text(t)) = app.session.active().and_then(|st| st.doc.node(id)).map(|n| &n.kind) else { return };
-    let start = vectorcraft_text::edit::prev_char(&t.plain_text(), a);
-    if start >= a {
-        return;
-    }
-    end_typing(app);
-    app.run("text.setRangeStyle", json!({"id": id.0, "start": start, "end": a, "kerning": value})).ok();
+    let Some((target, before)) = vectorcraft_text::edit::caret_kerning_target(&t.plain_text(), a) else { return };
+    let params = if before {
+        json!({"id": id.0, "start": target.start, "end": target.end, "kerningBefore": value.as_f64().unwrap_or(0.0)})
+    } else {
+        json!({"id": id.0, "start": target.start, "end": target.end, "kerning": value})
+    };
+    app.run("text.setRangeStyle", params).ok();
 }
 
-/// The pair before the caret, in 1/1000 em, using the layout the canvas draws.
+/// The kerning at the caret, in 1/1000 em, using the layout the canvas draws: the pair before it,
+/// or at the start of a line the space before the character after it.
 fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     let (id, a, b) = text_editing(app)?;
     if a != b {
@@ -294,11 +367,12 @@ fn caret_kerning(app: &VectorcraftApp, ui: &Ui) -> Option<(f64, bool)> {
     }
     let NodeKind::Text(t) = &app.session.active()?.doc.node(id)?.kind else { return None };
     let text = t.plain_text();
-    let start = vectorcraft_text::edit::prev_char(&text, a);
-    if start >= a {
-        return None;
-    }
+    let (target, before) = vectorcraft_text::edit::caret_kerning_target(&text, a)?;
+    let start = target.start;
     let style = vectorcraft_text::edit::style_at(&t.runs, start + 1);
+    if before {
+        return Some((style.kerning_before, false));
+    }
     if let Some(v) = style.kerning {
         return Some((v, false));
     }
@@ -409,12 +483,14 @@ pub(crate) fn toggle_face(app: &mut VectorcraftApp, face: Face) -> Result<Value,
     Ok(json!({ "style": name }))
 }
 
-/// The Character panel fields that the Highlight Font Name, Highlight Kerning and Highlight
-/// Tracking commands give the keyboard focus ([`highlight`]).
+/// The Character panel fields that the Highlight Font Name, Highlight Font Size (Type › Size ›
+/// Other…), Highlight Kerning and Highlight Tracking commands give the keyboard focus
+/// ([`highlight`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Field {
     /// The font family menu: it opens, and its search field takes the focus.
     FontName,
+    FontSize,
     Kerning,
     Tracking,
 }
@@ -424,6 +500,7 @@ impl Field {
     fn salt(self) -> &'static str {
         match self {
             Field::FontName => "ch-font",
+            Field::FontSize => "ch-size",
             Field::Kerning => "ch-kern",
             Field::Tracking => "ch-track",
         }
@@ -432,23 +509,25 @@ impl Field {
     fn name(self) -> &'static str {
         match self {
             Field::FontName => "fontName",
+            Field::FontSize => "fontSize",
             Field::Kerning => "kerning",
             Field::Tracking => "tracking",
         }
     }
 }
 
-/// `type.highlightFontName`, `type.highlightKerning` and `type.highlightTracking`: show the
-/// Character panel if it is hidden (a shown one is activated, so its floating window comes
-/// forward), and give `field` the keyboard focus when the panel next draws it, a number field with
-/// its value selected (typing replaces it, Enter applies it). Without selected type or text the
-/// Type tool edits, the panel shows, nothing takes the focus and the command fails. → `{field}`.
+/// `type.highlightFontName`, `type.highlightFontSize`, `type.highlightKerning` and
+/// `type.highlightTracking`: show the Character panel if it is hidden (a shown one is activated,
+/// so its floating window comes forward), and give `field` the keyboard focus when the panel next
+/// draws it, a number field with its value selected (typing replaces it, Enter applies it).
+/// Without selected type or text the Type tool edits, the panel shows, nothing takes the focus and
+/// the command fails. → `{field}`.
 pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value, String> {
     // `window.panel` would hide a floating panel in front of its window, or an open flyout.
-    if crate::panel_docking::showing(&app.ui, "character") {
+    if crate::panel_docking::visible(&app.ui, "character") {
         app.run("window.panel.activate", json!({"panel": "character"}))?;
     } else {
-        app.run("window.panel", json!({"panel": "character"}))?;
+        crate::panel_docking::reveal_panel(app, "character")?;
     }
     if text_style(app).is_none() {
         app.character_focus = None;
@@ -461,21 +540,35 @@ pub(crate) fn highlight(app: &mut VectorcraftApp, field: Field) -> Result<Value,
 /// `type.underline` (Cmd+Shift+U): what the Underline button does, on the text the panels act on.
 /// Returns whether the text is now underlined: off only when every character was underlined.
 pub(crate) fn toggle_underline(app: &mut VectorcraftApp) -> Result<Value, String> {
+    // The typing Real-time Drawing off left unapplied is applied before the text is read.
+    text_editing_kept(app)?;
     text_style(app).ok_or("select some type first")?;
     let on = shared(app, |s| s.underline) != Some(true);
-    format(app, json!({"underline": on}));
+    run_format(app, json!({"underline": on}))?;
     Ok(json!(on))
+}
+
+/// `type.superscript` (Cmd+Shift+=) and `type.subscript` (Cmd+Alt+Shift+=): what the Superscript
+/// or Subscript button does, on the text the panels act on. Returns the position the text now
+/// has: `"normal"` only when every character had `position`, else `position`.
+pub(crate) fn toggle_position(app: &mut VectorcraftApp, position: &str) -> Result<Value, String> {
+    // The typing Real-time Drawing off left unapplied is applied before the text is read.
+    text_editing_kept(app)?;
+    text_style(app).ok_or("select some type first")?;
+    let change = position_toggle(shared_position(app), position);
+    let to = change["position"].clone();
+    run_format(app, change)?;
+    Ok(to)
 }
 
 /// `text.setRangeStyle` with `p` on the range the Type tool has selected (the whole text when
 /// nothing is selected). Does nothing unless the Type tool edits text.
 pub(crate) fn range_style(app: &mut VectorcraftApp, p: Value) {
-    let Some((id, a, b)) = text_editing(app) else { return };
+    let Ok(Some((id, a, b))) = text_editing_kept(app) else { return };
     if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
         story_style(app, first, p).ok();
         return;
     }
-    end_typing(app);
     let mut q = p;
     q["id"] = json!(id.0);
     if b > a {
@@ -499,6 +592,15 @@ pub(crate) fn text_editing(app: &VectorcraftApp) -> Option<(NodeId, usize, usize
     Some((id, g("start"), g("end")))
 }
 
+/// [`text_editing`] after [`end_typing`], for an edit of the text: the selection is read in the
+/// text with the typing applied, which Real-time Drawing off leaves unapplied until then. When the
+/// typing can't be kept, the error (also shown in the status bar), so the edit stops instead of
+/// acting on a selection in the text without the typing.
+pub(crate) fn text_editing_kept(app: &mut VectorcraftApp) -> Result<Option<(NodeId, usize, usize)>, String> {
+    try_end_typing(app)?;
+    Ok(text_editing(app))
+}
+
 /// The frames of the threaded story whose whole text the Type tool has selected after Select All,
 /// in the order of the edited frame's thread as the document holds it now; `None` when its
 /// selection is in one type object.
@@ -513,6 +615,110 @@ pub(crate) fn text_story(app: &VectorcraftApp) -> Option<Vec<NodeId>> {
     (ids.len() >= 2).then_some(ids)
 }
 
+/// The type objects the panels act on with the Selection tool: the selected type objects and those
+/// in selected groups, each with every frame of its threaded story (locked and hidden frames
+/// included), each once, the frames of a story in thread order.
+pub(crate) fn selected_stories(app: &VectorcraftApp) -> Vec<NodeId> {
+    app.session.active().map_or_else(Vec::new, |st| story_frames(st).to_vec())
+}
+
+/// The last list [`selected_stories`] worked out, with the document version (its address, which
+/// the held `Weak` keeps from being reused, and its revision) and the selected objects it was
+/// worked out for. The Character and Paragraph panels read the list once for each field they show.
+struct StoryFrames {
+    doc: Weak<vectorcraft_doc::Document>,
+    revision: u64,
+    selection: Vec<NodeId>,
+    frames: Rc<[NodeId]>,
+}
+
+thread_local! {
+    static STORY_FRAMES: RefCell<Option<StoryFrames>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`build_selected_stories`] ran on this thread.
+    static STORY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether [`story_frames`] builds the list on every read instead of keeping it.
+    static STORIES_UNKEPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// [`selected_stories`] of `st`: the kept list while `st`'s document, revision and selected
+/// objects are the ones it was worked out for, else a new one, kept in its place.
+fn story_frames(st: &DocState) -> Rc<[NodeId]> {
+    #[cfg(test)]
+    if STORIES_UNKEPT.get() {
+        return build_selected_stories(st).into();
+    }
+    STORY_FRAMES.with_borrow_mut(|kept| {
+        if let Some(k) = kept.as_ref()
+            && k.revision == st.revision
+            && k.doc.strong_count() > 0
+            && std::ptr::eq(k.doc.as_ptr(), Arc::as_ptr(&st.doc))
+            && k.selection == st.selection.objects
+        {
+            return k.frames.clone();
+        }
+        let frames: Rc<[NodeId]> = build_selected_stories(st).into();
+        *kept = Some(StoryFrames {
+            doc: Arc::downgrade(&st.doc),
+            revision: st.revision,
+            selection: st.selection.objects.clone(),
+            frames: frames.clone(),
+        });
+        frames
+    })
+}
+
+/// The list [`selected_stories`] describes, worked out from `st`'s selection.
+fn build_selected_stories(st: &DocState) -> Vec<NodeId> {
+    #[cfg(test)]
+    STORY_BUILDS.set(STORY_BUILDS.get() + 1);
+    let mut frames = Vec::new();
+    let mut taken = HashSet::new();
+    for selected in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
+        selected.walk(&mut |child| {
+            if matches!(child.kind, NodeKind::Text(_)) && !taken.contains(&child.id) {
+                for id in st.doc.story_of(child.id) {
+                    if taken.insert(id) {
+                        frames.push(id);
+                    }
+                }
+            }
+        });
+    }
+    frames
+}
+
+/// The type objects of [`selected_stories`].
+pub(crate) fn selected_story_texts(app: &VectorcraftApp) -> Vec<&vectorcraft_doc::TextObject> {
+    let Some(st) = app.session.active() else { return Vec::new() };
+    story_frames(st)
+        .iter()
+        .filter_map(|&id| match st.doc.node(id).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some(t.as_ref()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Give the command parameters `p` the `ids` of [`selected_stories`], so a command run with the
+/// Selection tool sets every frame of each selected story. `p` stays as it is when it names its
+/// targets, with no type selected, and while an object of a symbol instance's art is selected,
+/// which the commands refuse.
+pub(crate) fn target_selected_stories(app: &VectorcraftApp, p: &mut Value) {
+    if p.get("ids").is_some() || p.get("id").is_some() || app.session.active().is_none_or(|st| st.selection.symbol_part.is_some()) {
+        return;
+    }
+    let ids = selected_stories(app);
+    if let Some(params) = p.as_object_mut()
+        && !ids.is_empty()
+    {
+        params.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
+    }
+}
+
 /// `text.setRangeStyle` with `p` on all the text of every frame of the story that `first` is a
 /// frame of, as one undo step.
 fn story_style(app: &mut VectorcraftApp, first: NodeId, mut p: Value) -> Result<Value, String> {
@@ -522,13 +728,25 @@ fn story_style(app: &mut VectorcraftApp, first: NodeId, mut p: Value) -> Result<
     app.run("text.setRangeStyle", p)
 }
 
-/// Close the Type tool's typing session (one undo step) before another command edits the text.
+/// Close the Type tool's typing session (one undo step) before another command edits the text. The
+/// typing Real-time Drawing off left unapplied is applied first; when it can't be kept, the error
+/// shows and the session goes on.
 pub(crate) fn end_typing(app: &mut VectorcraftApp) {
+    try_end_typing(app).ok();
+}
+
+/// [`end_typing`] that also returns the error when the typing can't be kept.
+fn try_end_typing(app: &mut VectorcraftApp) -> Result<(), String> {
     if app.session.tool_options().get("typing").and_then(Value::as_bool) == Some(true) {
+        if let Err(e) = app.keep_typing() {
+            app.status(e.clone());
+            return Err(e);
+        }
         app.session.set_tool_option("commitTyping", &json!(true));
         app.session.commit_interaction().ok();
         app.sync_views();
     }
+    Ok(())
 }
 
 static CTX: OnceLock<egui::Context> = OnceLock::new();
@@ -537,7 +755,8 @@ static CTX: OnceLock<egui::Context> = OnceLock::new();
 static CLIP: Mutex<String> = Mutex::new(String::new());
 static CLIP_RUNS: Mutex<Option<Value>> = Mutex::new(None);
 
-fn text_copy(app: &mut VectorcraftApp) -> bool {
+/// Copy the Type tool's selected text (with `cut`, for a Cut, whose caller then deletes it).
+fn text_copy(app: &mut VectorcraftApp, cut: bool) -> bool {
     let Some((id, a, b)) = text_editing(app) else { return false };
     let story = text_story(app);
     // An empty selection has nothing to copy, unless the story's text is in the other frames.
@@ -565,7 +784,7 @@ fn text_copy(app: &mut VectorcraftApp) -> bool {
         // plain-text copy would replace its formats, so let the publisher provide both text and
         // rich art. Paste on the canvas can then keep the runs after Type editing ends.
         if app.services.system_clipboard.is_some() {
-            app.publish_clipboard();
+            app.publish_clipboard(cut);
             return true;
         }
     }
@@ -636,10 +855,10 @@ pub(crate) fn intercept_text_command(app: &mut VectorcraftApp, id: &str) -> Opti
     }
     match id {
         "edit.copy" => {
-            text_copy(app);
+            text_copy(app, false);
         }
         "edit.cut" => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
@@ -730,10 +949,10 @@ pub(crate) fn apply_type_input(app: &mut VectorcraftApp, t: TextInput) {
     match t {
         TextInput::Key(k, m) => text_key(app, k, m),
         TextInput::Copy => {
-            text_copy(app);
+            text_copy(app, false);
         }
         TextInput::Cut => {
-            if text_copy(app) {
+            if text_copy(app, true) {
                 text_key(app, ToolKey::Delete, Mods::default());
             }
         }
@@ -761,9 +980,11 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 
 /// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
 /// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
-/// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown). With Show Font
-/// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
-/// Properties panel shows its first rows.
+/// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
+/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume, and with Show Indic
+/// Options (the Middle Eastern options) on a row with Adjust Horizontal and Vertical Diacritic
+/// Position. With Show Font Height Options on, a row under Font Size holds the Set Font Height
+/// Reference dropdown. The Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
@@ -842,6 +1063,48 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
         ui.label("");
         cell(ui, "aa", tl!("Anti-aliasing Method"), |ui| anti_alias_method(app, ui, fw));
         ui.end_row();
+        // Insert Aki Left and Right, with the East Asian options: space before and after each
+        // character, in thousandths of an em.
+        if app.session.prefs.show_east_asian_options {
+            for (field, label, key, icon) in
+                [("ch-aki-left", tl!("Insert Aki Left"), "akiLeft", "↔A"), ("ch-aki-right", tl!("Insert Aki Right"), "akiRight", "A↔")]
+            {
+                cell(ui, icon, label, |ui| {
+                    let value = shared(app, |s| if key == "akiLeft" { s.aki_left } else { s.aki_right });
+                    if let Some(v) = widgets::spin_plain(ui, field, value, "", 0, fw, 10.0, 0.0, &AKI_PRESETS) {
+                        // The field stops at the largest value the command takes.
+                        format(app, json!({ key: v.min(vectorcraft_doc::text::MAX_AKI) }));
+                    }
+                });
+            }
+            ui.end_row();
+            // Tsume: the share of the blank space beside each character's ink taken away.
+            cell(ui, "→A←", tl!("Tsume"), |ui| {
+                if let Some(v) = widgets::spin_plain(ui, "ch-tsume", shared(app, |s| s.tsume), "%", 1, fw, 1.0, 0.0, &TSUME_PRESETS) {
+                    // The field stops at the largest value the command takes.
+                    format(app, json!({ "tsume": v.min(vectorcraft_doc::text::MAX_TSUME) }));
+                }
+            });
+            ui.end_row();
+        }
+        // Adjust Horizontal and Vertical Diacritic Position, with the Middle Eastern options: the
+        // marks of the characters move across and up, in thousandths of an em.
+        if app.session.prefs.show_indic_options {
+            let max = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+            for (field, label, key, icon) in [
+                ("ch-diacritic-h", tl!("Adjust Horizontal Diacritic Position"), "diacriticHorizontal", "´↔"),
+                ("ch-diacritic-v", tl!("Adjust Vertical Diacritic Position"), "diacriticVertical", "´↕"),
+            ] {
+                cell(ui, icon, label, |ui| {
+                    let value = shared(app, |s| if key == "diacriticHorizontal" { s.diacritic_horizontal } else { s.diacritic_vertical });
+                    if let Some(v) = widgets::spin_plain(ui, field, value, "", 0, fw, 10.0, -max, &DIACRITIC_PRESETS) {
+                        // The field stops at the largest value the command takes.
+                        format(app, json!({ key: v.min(max) }));
+                    }
+                });
+            }
+            ui.end_row();
+        }
     });
 }
 
@@ -860,7 +1123,8 @@ fn anti_alias_method(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
 }
 
 /// The anti-aliasing method of the type objects the panel acts on: the one the Type tool edits,
-/// else the selected type (groups' included). `None` where they differ, or with no type.
+/// else every frame of the selected stories ([`selected_stories`]). `None` where they differ, or
+/// with no type.
 fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
     let st = app.session.active()?;
     let mut acc = Shared::None;
@@ -871,12 +1135,8 @@ fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
             }
         }
         None => {
-            for n in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-                n.walk(&mut |c| {
-                    if let NodeKind::Text(t) = &c.kind {
-                        acc.add(t.anti_alias);
-                    }
-                });
+            for t in selected_story_texts(app) {
+                acc.add(t.anti_alias);
             }
         }
     }
@@ -884,12 +1144,14 @@ fn shared_anti_alias(app: &VectorcraftApp) -> Option<TypeAntiAlias> {
 }
 
 /// Set the anti-aliasing method `m` of the frame the Type tool edits, whatever part of its text
-/// is selected, else the selected type objects (`text.setFormat {antiAlias}`).
+/// is selected, else every frame of the selected stories (`text.setFormat {antiAlias}`).
 fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
     let mut p = json!({"antiAlias": m.id()});
     if let Some((id, _, _)) = text_editing(app) {
         end_typing(app);
         p["ids"] = json!([id.0]);
+    } else {
+        target_selected_stories(app, &mut p);
     }
     app.run("text.setFormat", p).ok();
 }
@@ -897,8 +1159,13 @@ fn set_anti_alias(app: &mut VectorcraftApp, m: TypeAntiAlias) {
 /// The Font Size combo (Character and Properties panels, Control bar): typed, stepped, scrubbed or
 /// picked from the presets, in the type unit, blank where the selected text's sizes differ.
 pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width: f32) {
+    size_field_named(app, ui, id, None, width);
+}
+
+/// [`size_field`] named `name` for screen readers, where no label stands beside it.
+fn size_field_named(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, name: Option<&str>, width: f32) {
     let size = shared_effective(app, |s| s.size);
-    if let Some(v) = widgets::spin_field(ui, id, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
+    if let Some(v) = widgets::spin_field_named(ui, id, name, size, app.session.type_unit(), width, 1.0, 0.1, &SIZE_PRESETS) {
         style(app, json!({"size": v}));
     }
 }
@@ -915,15 +1182,89 @@ const FONT_HEIGHT_REFERENCES: [(vectorcraft_doc::FontHeightReference, &str); 4] 
     (vectorcraft_doc::FontHeightReference::IcfBox, "icfBox"),
 ];
 
+/// The size of the icon before each name in the Set Font Height Reference dropdown.
+const FONT_HEIGHT_ICON: f32 = 16.0;
+
 /// The Set Font Height Reference dropdown, `width` wide: the height of the font that the Font Size
-/// measures, blank where the characters the panel acts on differ.
+/// measures, blank where the characters the panel acts on differ. Each reference shows an icon of
+/// the height it measures before its name ([`paint_font_height_icon`], #6304).
 fn font_height_reference(app: &mut VectorcraftApp, ui: &mut Ui, width: f32) {
     // The labels of [`FONT_HEIGHT_REFERENCES`], in its order.
     let labels = [tl!("Em Box"), tl!("Cap Height"), tl!("x-Height"), tl!("ICF Box")];
     let current = shared(app, |s| s.font_height_reference);
-    let shown = FONT_HEIGHT_REFERENCES.iter().zip(labels).find(|(r, _)| Some(r.0) == current).map_or("", |(_, l)| l);
-    if let Some((_, key)) = widgets::dropdown_names(ui, "ch-font-height", shown, &labels, width).and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
+    let shown = FONT_HEIGHT_REFERENCES.iter().position(|(r, _)| Some(*r) == current);
+    let accent = Tokens::get(ui.ctx()).accent;
+    let icon = |ui: &Ui, rect: egui::Rect, i: usize, ink: egui::Color32, highlighted: bool| {
+        // On the highlighted row the selection fill is accent-tinted, so the measure takes the
+        // name's colour there to keep its contrast.
+        let mark = if highlighted { ink } else { accent };
+        if let Some((r, _)) = FONT_HEIGHT_REFERENCES.get(i) {
+            paint_font_height_icon(ui.painter(), rect, *r, ink, mark);
+        }
+    };
+    let picked = widgets::dropdown_icon_names(ui, "ch-font-height", shown, &labels, width, FONT_HEIGHT_ICON, icon);
+    if let Some((_, key)) = picked.and_then(|i| FONT_HEIGHT_REFERENCES.get(i)) {
         format(app, json!({"fontHeightReference": key}));
+    }
+}
+
+/// Paints the icon of font height reference `r` into the square `rect` (#6304): a letter drawn in
+/// `ink` on a baseline, and in `mark` the height the reference measures. Em Box frames the whole
+/// square around an "A"; Cap Height puts a bar from the baseline to the top of a capital "A"
+/// beside it; x-Height a bar from the baseline to the top of a lowercase "x"; ICF Box frames a
+/// square inset in the faint em square around an ideograph-like cross, as the ideographic
+/// character face sits inside the em box. The drawings are VectorCraft's own.
+fn paint_font_height_icon(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    r: vectorcraft_doc::FontHeightReference,
+    ink: egui::Color32,
+    mark: egui::Color32,
+) {
+    use vectorcraft_doc::FontHeightReference as R;
+    // A point at (x, y) in the unit square mapped onto `rect`.
+    let p = |x: f32, y: f32| rect.lerp_inside(vec2(x, y));
+    let glyph = egui::Stroke::new(1.3, ink);
+    let measure = egui::Stroke::new(1.2, mark);
+    let line = |a: (f32, f32), b: (f32, f32), stroke: egui::Stroke| painter.line_segment([p(a.0, a.1), p(b.0, b.1)], stroke);
+    let frame = |min: f32, max: f32, stroke: egui::Stroke| {
+        painter.rect_stroke(egui::Rect::from_min_max(p(min, min), p(max, max)), 0.0, stroke, egui::StrokeKind::Middle);
+    };
+    // A capital A from `left` to `right`, its apex at `top` and its feet on `base`.
+    let capital = |left: f32, right: f32, top: f32, base: f32| {
+        let mid = (left + right) / 2.0;
+        painter.add(egui::Shape::line(vec![p(left, base), p(mid, top), p(right, base)], glyph));
+        let bar = top + (base - top) * 0.62;
+        let inset = (right - left) * 0.5 * 0.62;
+        line((mid - inset, bar), (mid + inset, bar), glyph);
+    };
+    // A vertical measure from `top` to `base` at `x`, with ticks at its ends.
+    let height_bar = |x: f32, top: f32, base: f32| {
+        line((x, top), (x, base), measure);
+        line((x - 0.1, top), (x + 0.1, top), measure);
+        line((x - 0.1, base), (x + 0.1, base), measure);
+    };
+    let (base, cap_top, x_top) = (0.86, 0.16, 0.46);
+    match r {
+        R::EmBox => {
+            frame(0.06, 0.94, measure);
+            capital(0.26, 0.74, 0.26, 0.76);
+        }
+        R::CapHeight => {
+            capital(0.06, 0.6, cap_top, base);
+            height_bar(0.82, cap_top, base);
+        }
+        R::XHeight => {
+            line((0.1, x_top), (0.54, base), glyph);
+            line((0.54, x_top), (0.1, base), glyph);
+            height_bar(0.82, x_top, base);
+        }
+        R::IcfBox => {
+            frame(0.06, 0.94, egui::Stroke::new(1.0, ink.gamma_multiply(0.4)));
+            frame(0.2, 0.8, measure);
+            line((0.33, 0.5), (0.67, 0.5), glyph);
+            line((0.5, 0.31), (0.5, 0.69), glyph);
+        }
     }
 }
 
@@ -937,7 +1278,7 @@ pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle,
         "cb-font" => Some(crate::font_menu::WheelOwner::Control),
         _ => None,
     };
-    font_pickers_owned(app, ui, s, ids, widths, wheel_owner);
+    font_pickers_owned(app, ui, s, ids, widths, wheel_owner, (None, None));
 }
 
 fn font_pickers_owned(
@@ -947,16 +1288,17 @@ fn font_pickers_owned(
     ids: (&str, &str),
     widths: (f32, f32),
     wheel_owner: Option<crate::font_menu::WheelOwner>,
+    a11y: (Option<&str>, Option<&str>),
 ) {
     crate::font_menu::sync_wheel_target(app, ui.ctx(), ui.ctx().viewport_id());
     let sample = crate::font_menu::sample_text(app);
-    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, ..crate::font_menu::MenuLook::of(app) };
+    let look = crate::font_menu::MenuLook { wheel: true, wheel_owner, name: a11y.0, ..crate::font_menu::MenuLook::of(app) };
     if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), look) {
         crate::font_menu::apply(app, ui.ctx(), pick);
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
     let names: Vec<&str> = styles.iter().map(String::as_str).collect();
-    if let Some(name) = widgets::dropdown_names(ui, ids.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
+    if let Some(name) = widgets::dropdown_names_named(ui, ids.1, a11y.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
         style(app, json!({"style": name}));
     }
 }
@@ -1016,9 +1358,10 @@ pub(crate) fn axis_sliders(app: &mut VectorcraftApp, ui: &mut Ui, face: &vectorc
 
 /// Set Variable Font settings `axes` on the text the panel acts on, live while a slider drags.
 fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
-    match text_editing(app) {
-        Some((id, a, b)) => {
-            end_typing(app);
+    match text_editing_kept(app) {
+        // The typing can't be kept (the error shows): nothing is set.
+        Err(_) => {}
+        Ok(Some((id, a, b))) => {
             let mut q = json!({"id": id.0, "fontAxes": axes});
             // After Select All in threaded text: every frame of the story.
             if let Some(first) = text_story(app).and_then(|story| story.first().copied()) {
@@ -1030,25 +1373,78 @@ fn axes_cmd(app: &mut VectorcraftApp, axes: Value, phase: widgets::Live) {
             }
             super::live_run(app, "Character", "text.setRangeStyle", q, phase);
         }
-        None => super::live_run(app, "Character", "text.setFormat", json!({ "fontAxes": axes }), phase),
+        Ok(None) => {
+            let mut p = json!({ "fontAxes": axes });
+            target_selected_stories(app, &mut p);
+            super::live_run(app, "Character", "text.setFormat", p, phase);
+        }
     }
 }
 
 /// The Control bar's type controls while type is selected or edited: the Character link (the
-/// Character panel in a popover), the font family and style menus and the Font Size combo.
-pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some((s, _)) = text_style(app) else { return };
-    let link = ui
-        .link(egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline())
-        .on_hover_text(tl!("Character options"));
+/// Character panel in a popover), the font family and style menus and the Font Size combo. They
+/// show whole, with `reserve` left after them, or not at all: it returns false when type is selected
+/// or edited and the row has no room for them.
+pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) -> bool {
+    let Some((s, _)) = text_style(app) else { return true };
+    if ui.available_width() < control_bar_width(ui) + reserve {
+        return false;
+    }
+    let link = ui.link(control_bar_link_text(ui)).on_hover_text(tl!("Character options"));
     widgets::popover(&link, link.clicked(), |ui| {
         ui.set_width(260.0);
         show_owned(app, ui, crate::font_menu::WheelOwner::ControlPopover(link.id));
     });
-    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (150.0, 96.0));
-    size_field(app, ui, "cb-font-size", 96.0);
+    let [family, style, size] = CONTROL_BAR_WIDTHS;
+    font_pickers(app, ui, &s, ("cb-font", "cb-font-style"), (family, style));
+    size_field(app, ui, "cb-font-size", size);
     ui.add_space(4.0);
-    ui.separator();
+    crate::chrome::group_separator(ui);
+    true
+}
+
+/// The Control bar's widths of the font family menu, the font style dropdown and the Font Size combo.
+const CONTROL_BAR_WIDTHS: [f32; 3] = [150.0, 96.0, 96.0];
+
+/// The text of the Control bar's Character link, as [`control_bar`] draws it.
+fn control_bar_link_text(ui: &Ui) -> egui::RichText {
+    egui::RichText::new(tl!("Character:")).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
+}
+
+/// The room [`control_bar`]'s link, menus and Font Size combo take in the Control bar's row, with
+/// the spacing after each.
+fn control_bar_width(ui: &Ui) -> f32 {
+    let spacing = ui.spacing().item_spacing.x;
+    widgets::text_width(ui, control_bar_link_text(ui)) + CONTROL_BAR_WIDTHS.iter().sum::<f32>() + 4.0 * spacing
+}
+
+/// The Contextual Task Bar's widths of the font family menu, the font style dropdown and the
+/// Font Size combo.
+pub(crate) const TASK_BAR_WIDTHS: [f32; 3] = [140.0, 90.0, 76.0];
+
+/// The smallest share of [`TASK_BAR_WIDTHS`] the Contextual Task Bar's type controls narrow to.
+const TASK_BAR_MIN_SCALE: f32 = 0.4;
+
+/// The gaps between the Contextual Task Bar's type controls.
+fn task_bar_gaps() -> f32 {
+    6.0 * (TASK_BAR_WIDTHS.len() - 1) as f32
+}
+
+/// The narrowest room the Contextual Task Bar's type controls fit in, with their spacing.
+pub(crate) fn task_bar_min_room() -> f32 {
+    TASK_BAR_MIN_SCALE * TASK_BAR_WIDTHS.iter().sum::<f32>() + task_bar_gaps()
+}
+
+/// The Contextual Task Bar's type controls while type is selected or edited: the font family and
+/// style menus and the Font Size combo, as the Control bar has them, named for screen readers.
+/// They narrow, down to 40% of their widths, to fit in `room` points with their spacing.
+pub(crate) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, room: f32) {
+    let Some((s, _)) = text_style(app) else { return };
+    let k = ((room - task_bar_gaps()) / TASK_BAR_WIDTHS.iter().sum::<f32>()).clamp(TASK_BAR_MIN_SCALE, 1.0);
+    let [family, style, size] = TASK_BAR_WIDTHS.map(|w| w * k);
+    let owner = Some(crate::font_menu::WheelOwner::TaskBar);
+    font_pickers_owned(app, ui, &s, ("tb-font", "tb-font-style"), (family, style), owner, (Some(tl!("Font Family")), Some(tl!("Style"))));
+    size_field_named(app, ui, "tb-font-size", Some(tl!("Font Size")), size);
 }
 
 /// The panel state key of the panel menu's Show Snap to Glyph Options.
@@ -1121,7 +1517,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
     if let Some(f) = app.character_focus {
         widgets::arm_field_focus(ui.ctx(), f.salt());
     }
-    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner));
+    font_pickers_owned(app, ui, &s, ("ch-font", "ch-style"), (w - 4.0, w - 4.0), Some(owner), (None, None));
     variable_font(app, ui, &s, w - 4.0);
     ui.add_space(2.0);
     let hidden = pstate::<bool>(ui.ctx(), "ch-hide-options");
@@ -1137,7 +1533,7 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
         // On only when every character the panel acts on has it; a mixed selection turns it on.
         let all_caps = shared(app, |s| s.all_caps) == Some(true);
         let small = shared(app, |s| s.small_caps.is_some()) == Some(true);
-        let position = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+        let position = shared_position(app);
         let underline = shared(app, |s| s.underline) == Some(true);
         let strike = shared(app, |s| s.strikethrough) == Some(true);
         for (kind, tip, on, change) in [
@@ -1164,6 +1560,25 @@ fn attributes(app: &mut VectorcraftApp, ui: &mut Ui, owner: crate::font_menu::Wh
             format(app, json!({"language": name}));
         }
     });
+}
+
+/// The position kind (`normal`, `superscript` or `subscript`) that every character a Superscript
+/// or Subscript toggle changes has, else `""`: at a Type tool caret with no characters selected
+/// every character of the text (of each frame of a threaded story), as the toggle changes all of
+/// it there ([`run_format`], [`range_style`]), else the characters [`shared`] reads. Superscripts
+/// in different proportions count as superscript.
+fn shared_position(app: &VectorcraftApp) -> &'static str {
+    let Some((id, _, _)) = text_editing(app).filter(|&(_, a, b)| b <= a) else {
+        return shared(app, |s| s.position.id()).unwrap_or("");
+    };
+    let Some(st) = app.session.active() else { return "" };
+    let mut acc = Shared::None;
+    for frame in text_story(app).unwrap_or_else(|| vec![id]) {
+        if let Some(NodeKind::Text(t)) = st.doc.node(frame).map(|n| &n.kind) {
+            each_paragraph_run(t, None, |_, style, _| acc.add(style.position.id()));
+        }
+    }
+    acc.value().unwrap_or("")
 }
 
 /// The `text.setFormat` params of the Superscript or Subscript toggle `p` for text whose
@@ -1313,7 +1728,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     let small = shared(app, |s| s.small_caps.is_some()) == Some(true);
-    let position = shared(app, |s| s.position).map(|p| p.id()).unwrap_or("");
+    let position = shared_position(app);
     for (label, on, change) in [
         (tl!("Small Caps"), small, json!({"smallCaps": !small})),
         (tl!("Superscript"), position == "superscript", position_toggle(position, "superscript")),
@@ -1359,6 +1774,18 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         // Tate-chu-yoko Settings…: the Up/Down and Left/Right that move a tate-chu-yoko block.
         if menu_item(ui, tl!("Tate-chu-yoko Settings…"), has, false)
             && let Err(e) = app.run("ui.tateChuYokoSettings", json!({}))
+        {
+            app.status(e);
+        }
+        // Warichu: the selected characters set smaller and stacked on lines inside their line.
+        // Checked when every selected character has it; a mixed selection turns it on.
+        let warichu = shared(app, |s| s.warichu) == Some(true);
+        if menu_item(ui, tl!("Warichu"), has, warichu) {
+            format(app, json!({"warichu": !warichu}));
+        }
+        // Warichu Settings…: the Lines, Line Gap, Scale and Alignment of a warichu block.
+        if menu_item(ui, tl!("Warichu Settings…"), has, false)
+            && let Err(e) = app.run("ui.warichuSettings", json!({}))
         {
             app.status(e);
         }
@@ -1439,9 +1866,11 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// method, and the characters the panel acts on ([`char_cmd`]) take tracking 0, Auto leading and
 /// kerning, no baseline shift, 100% scales, no rotation, no underline or strikethrough, All Caps
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
-/// character alignment, Proportional Metrics, Tate-chu-yoko, Standard Vertical Roman Alignment and
-/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the Default character direction,
-/// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
+/// character alignment, Proportional Metrics, Tate-chu-yoko, Warichu, Standard Vertical Roman Alignment and
+/// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the default Warichu Settings (2 lines, no
+/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
+/// Kashidas on, the Default digits, Adjust Horizontal and Vertical Diacritic Position 0 and the Em Box
+/// font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
@@ -1459,9 +1888,12 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "kerning": "auto", "baselineShift": 0, "hScale": 100, "vScale": 100, "rotation": 0, "underline": false, "strikethrough": false,
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
-            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right,
+            "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right, "akiLeft": d.aki_left, "akiRight": d.aki_right,
+            "tsume": d.tsume, "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
+            "warichuAlign": d.warichu_align,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
-            "digits": d.digits, "fontHeightReference": d.font_height_reference
+            "digits": d.digits, "diacriticHorizontal": d.diacritic_horizontal, "diacriticVertical": d.diacritic_vertical,
+            "fontHeightReference": d.font_height_reference
         }),
     );
     set_anti_alias(app, TypeAntiAlias::Sharp);

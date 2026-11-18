@@ -45,6 +45,7 @@ impl Serialize for Node {
             is_default(&self.bbox_angle),
             e.perspective.is_none(),
             e.dimension.is_none(),
+            e.flare.is_none(),
             e.intertwine.is_none(),
             e.intertwine_tiers.is_empty(),
             e.live_paint_gaps.is_none(),
@@ -55,6 +56,9 @@ impl Serialize for Node {
             e.symbol_overrides.is_empty(),
             e.envelope_edit_margin.is_none(),
             is_default(&e.pixel_aligned),
+            e.color_mask.is_none(),
+            is_default(&e.warp_piece),
+            is_default(&e.clip_pieces),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -88,6 +92,7 @@ impl Serialize for Node {
         field!("bbox_angle", &self.bbox_angle);
         field!("perspective", &e.perspective);
         field!("dimension", &e.dimension);
+        field!("flare", &e.flare);
         field!("intertwine", &e.intertwine);
         field!("intertwine_tiers", &e.intertwine_tiers);
         field!("live_paint_gaps", &e.live_paint_gaps);
@@ -98,6 +103,9 @@ impl Serialize for Node {
         field!("symbol_overrides", &e.symbol_overrides);
         field!("envelope_edit_margin", &e.envelope_edit_margin);
         field!("pixel_aligned", &e.pixel_aligned);
+        field!("color_mask", &e.color_mask);
+        field!("warp_piece", &e.warp_piece);
+        field!("clip_pieces", &e.clip_pieces);
         st.end()
     }
 }
@@ -145,9 +153,10 @@ fn count_one<E: serde::de::Error>() -> Result<(), E> {
 }
 
 /// A list read from a file (a member's Intertwine areas of tier 2 and up, an instance's symbol
-/// overrides), each item counting against [`with_node_budget`] as an object does: a compressed
-/// file of repeated empty items stays small while they take memory once read.
-fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+/// overrides, a document's saved ruler guides), each item counting against [`with_node_budget`]
+/// as an object does: a compressed file of repeated empty items stays small while they take
+/// memory once read.
+pub(crate) fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
     struct Items<T>(std::marker::PhantomData<T>);
     impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Items<T> {
         type Value = Vec<T>;
@@ -221,6 +230,8 @@ pub(super) struct NodeWire {
     #[serde(default)]
     dimension: Option<Box<crate::dimension::Dimension>>,
     #[serde(default)]
+    flare: Option<Box<crate::flare::FlareSpec>>,
+    #[serde(default)]
     intertwine: Option<Box<PathData>>,
     #[serde(default, deserialize_with = "counted_list")]
     intertwine_tiers: Vec<PathData>,
@@ -240,6 +251,12 @@ pub(super) struct NodeWire {
     envelope_edit_margin: Option<[f32; 4]>,
     #[serde(default)]
     pixel_aligned: bool,
+    #[serde(default)]
+    color_mask: Option<Box<crate::color_mask::ColorMask>>,
+    #[serde(default)]
+    warp_piece: bool,
+    #[serde(default)]
+    clip_pieces: bool,
 }
 
 impl From<NodeWire> for Node {
@@ -258,6 +275,7 @@ impl From<NodeWire> for Node {
             slice: w.slice,
             perspective: w.perspective,
             dimension: w.dimension,
+            flare: w.flare,
             intertwine: w.intertwine,
             intertwine_tiers: w.intertwine_tiers,
             live_paint_gaps: w.live_paint_gaps,
@@ -268,6 +286,9 @@ impl From<NodeWire> for Node {
             symbol_overrides: w.symbol_overrides,
             envelope_edit_margin: w.envelope_edit_margin,
             pixel_aligned: w.pixel_aligned,
+            color_mask: w.color_mask,
+            warp_piece: w.warp_piece,
+            clip_pieces: w.clip_pieces,
         };
         Node {
             id: w.id,

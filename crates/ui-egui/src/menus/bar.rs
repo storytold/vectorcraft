@@ -23,8 +23,9 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
         ctx.data_mut(|d| d.insert_temp::<Field>(field_key, field));
     }
     let mut clicked: Option<(String, Value)> = None;
+    let mut file_open = false;
     let tree = menu_tree_named(app.session.prefs.font_names_in_english);
-    // No application menu in the window (as in Illustrator): the bar starts at File on every
+    // No application menu in the window: the bar starts at File on every
     // platform. The VectorCraft menu stays in the tree: the native Mac bar takes it from there.
     let tree: Vec<(&str, Vec<Item>)> = tree.into_iter().filter(|(title, _)| *title != "VectorCraft").collect();
     // A menu bar for its layout and menu-button style, but the titles use `Popup::menu` directly:
@@ -36,12 +37,23 @@ pub fn menu_bar(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> f32 {
             for (title, items) in tree.iter() {
                 let text = egui::RichText::new(tl!(title)).size(13.0).color(t.text);
                 let resp = ui.add(egui::Button::new(text));
+                crate::palette::note_spot(ui, resp.rect, || crate::palette::SpotAt::Menu((*title).to_string()));
                 egui::Popup::menu(&resp).show(|ui| menu_body(app, ui, items, &mut clicked));
+                if *title == "File" {
+                    file_open = egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&resp));
+                }
                 titles.push(resp);
             }
             (ui.cursor().min.x, switch_on_hover(ui.ctx(), &titles))
         })
         .inner;
+    // The File menu opening reads the Scripts folder again, for File › Scripts.
+    let file_key = egui::Id::unique("menu-bar-file-open");
+    let file_was_open = ctx.data(|d| d.get_temp::<bool>(file_key)).unwrap_or(false);
+    ctx.data_mut(|d| d.insert_temp(file_key, file_open));
+    if file_open && !file_was_open {
+        crate::scripts_menu::refresh(app, Some(&ctx));
+    }
     // Whether a top-level menu is open: the docking renderer lowers the floating panels' OS windows
     // while one is, or the menu would open under them.
     ctx.data_mut(|d| d.insert_temp(menu_open_id(), open));
@@ -106,7 +118,7 @@ fn switch_on_hover(ctx: &egui::Context, titles: &[egui::Response]) -> bool {
 /// it scrolls when it is taller than the window.
 pub(super) fn menu_body(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Item], clicked: &mut Option<(String, Value)>) {
     widgets::menu_scroll(ui, |ui| {
-        ui.set_min_width(230.0);
+        widgets::menu_min_width(ui, 230.0);
         render_items(app, ui, items, true, clicked);
     });
 }
@@ -126,14 +138,27 @@ pub(super) fn render_items(app: &VectorcraftApp, ui: &mut egui::Ui, items: &[Ite
             Entry::Sub(label, children) => {
                 ui.menu_button(label, |ui| {
                     widgets::menu_scroll(ui, |ui| {
-                        ui.set_min_width(200.0);
-                        render_items(app, ui, children, checks, clicked);
+                        widgets::menu_min_width(ui, 200.0);
+                        render_items(app, ui, children, checks || shows_marks(app, children), clicked);
                     });
                 });
             }
             Entry::Item(row) => render_row(app, ui, &row, checks, clicked),
         }
     }
+}
+
+/// Whether a submenu of a menu drawn without check marks (the canvas context menu) still shows
+/// them: when every item can be on or off, or when it holds Auto Spell Check (the Spelling
+/// submenu, with Check Spelling… after it), since a toggle's label alone can't say whether it is on.
+fn shows_marks(app: &VectorcraftApp, items: &[Item]) -> bool {
+    only_toggles(app, items) || items.iter().any(|it| matches!(it, Item::Cmd(_, "edit.autoSpellCheck", _)))
+}
+
+/// Whether every item of a submenu can be on or off.
+fn only_toggles(app: &VectorcraftApp, items: &[Item]) -> bool {
+    let mut rows = items.iter().filter_map(|it| entry(app, it)).filter(|e| !matches!(e, Entry::Sep)).peekable();
+    rows.peek().is_some() && rows.all(|e| matches!(e, Entry::Item(r) if r.checked.is_some()))
 }
 
 /// One menu item: its label (with a check mark, or the room for one, under `checks`), its shortcut,
@@ -161,7 +186,7 @@ fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, 
             let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
             let out = ui.add_enabled_ui(row.enabled, |ui| button.atom_ui(ui)).inner;
             if let Some(rect) = out.rect(slot) {
-                crate::font_menu::menu_item_sample(ui, rect, family);
+                crate::font_menu::menu_item_sample(ui, rect, family, app.session.prefs.font_samples_on_white);
             }
             out.response
         }

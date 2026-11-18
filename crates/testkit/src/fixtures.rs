@@ -263,20 +263,20 @@ impl DocBuilder {
     }
 }
 
-/// All non-layer nodes of a document in paint order.
+/// All nodes of a document other than layers and ruler guides, in paint order.
 pub fn art_nodes(doc: &Document) -> Vec<&Node> {
     let mut v = Vec::new();
     doc.walk(|n| {
-        if !n.is_layer() {
+        if !n.is_layer() && !n.is_ruler_guide() {
             v.push(n)
         }
     });
     v
 }
 
-/// Ids of the top-level art (direct children of layers), bottom first.
+/// Ids of the top-level art (direct children of layers other than ruler guides), bottom first.
 pub fn top_level_ids(doc: &Document) -> Vec<NodeId> {
-    doc.layers.iter().flat_map(|l| l.children().into_iter().flatten().map(|n| n.id)).collect()
+    doc.layers.iter().flat_map(|l| l.children().into_iter().flatten().filter(|n| !n.is_ruler_guide()).map(|n| n.id)).collect()
 }
 
 /// Every node id (layers included), paint order.

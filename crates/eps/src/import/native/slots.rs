@@ -446,7 +446,21 @@ pub(super) fn letters(s: &str) -> String {
 /// the page draws a right-to-left paragraph's words in the order they show (" 120.5 mm " as
 /// "mm 120.5"), its text object keeps them in the order they are typed.
 pub(super) fn words(s: &str) -> Vec<String> {
-    s.split_whitespace().map(letters).filter(|w| !w.is_empty()).collect()
+    word_pieces(s).map(letters).filter(|w| !w.is_empty()).collect()
+}
+
+/// The words of `s`, split at spaces and at private-use characters too. The page's type names a
+/// font's ligature glyph that has no character of its own (`uniE028`, the Adobe Glyph List
+/// specification's `uniXXXX` names: <https://github.com/adobe-type-tools/agl-specification>) by a
+/// private-use character, where its text object has the letters ("Qual\u{E028}y" for
+/// "Quality"): what is around it is compared, each piece as a word.
+pub(super) fn word_pieces(s: &str) -> impl Iterator<Item = &str> {
+    s.split(|c: char| c.is_whitespace() || private_use(c)).filter(|w| !w.is_empty())
+}
+
+/// Is `c` in one of Unicode's private use areas (Unicode Standard §23.5)?
+fn private_use(c: char) -> bool {
+    matches!(u32::from(c), 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD)
 }
 
 /// Does `n` hold type that is where `story` lays one of its lines out: the line, or a piece of it

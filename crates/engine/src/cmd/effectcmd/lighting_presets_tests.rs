@@ -115,3 +115,32 @@ fn lighting_presets_refuse_extrude_and_bevel_classic_and_leave_a_mixed_selection
     let params = &s.doc().unwrap().doc.node(NodeId(classic)).unwrap().appearance.effects[0].params;
     assert_eq!((params["lightRotation"].as_f64(), params["lightHeight"].as_f64()), (Some(135.0), Some(45.0)));
 }
+
+#[test]
+fn lighting_presets_refuse_revolve_classic() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("path.create", &json!({"d":"M100 40 L130 60 L130 140 L100 160"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("paint.setFill", &json!({"color":"#3366cc"})).unwrap();
+    s.execute("effect.apply", &json!({"effect":"threeD.classicRevolve","item":null,"params":{"surface":"diffuse"}})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.lightingPreset", &json!({"ids":[id],"index":0,"item":null,"preset":"topLeft"})).unwrap_err().to_string();
+    assert!(err.contains(&format!("object {id}: Revolve (Classic) at index 0 has no lighting presets")), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert!(!s.doc().unwrap().is_dirty());
+}
+
+#[test]
+fn lighting_presets_refuse_rotate_classic() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("shape.rectangle", &json!({"x":100,"y":100,"width":80,"height":60})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect":"threeD.classicRotate","item":null,"params":{"lightRotation":40}})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.lightingPreset", &json!({"ids":[id],"index":0,"item":null,"preset":"diffuse"})).unwrap_err().to_string();
+    assert!(err.contains(&format!("object {id}: Rotate (Classic) at index 0 has no lighting presets")), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert!(!s.doc().unwrap().is_dirty());
+}

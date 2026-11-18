@@ -10,8 +10,8 @@
 
 use vectorcraft_geom::{FillRule, PathData, Rect};
 
-use crate::solid::{Face3, extrude_faces, inflate_faces, plane_faces};
-use crate::{Extrude, Inflate, Revolve, V3, View};
+use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
+use crate::{Extrude, Facet, Inflate, Revolve, V3, View};
 
 /// Most steps the triangulation of one solid may take: a face's ears and bridges each test the
 /// face's other corners.
@@ -56,12 +56,12 @@ impl Mesh {
 
 /// Extrude & Bevel's solid ([`crate::extrude`]) as a mesh.
 pub fn extrude_mesh(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Mesh, String> {
-    extrude_faces(path, rule, bounds, options, view, true).and_then(|(_, faces)| mesh(&faces))
+    extrude_faces(path, rule, bounds, options, view, Keep::Faces).and_then(|(_, faces, _)| mesh(&faces?))
 }
 
 /// Rotate's plane ([`crate::plane`]) as a mesh.
 pub fn plane_mesh(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Mesh, String> {
-    plane_faces(path, rule, bounds, view, true).and_then(|(_, faces)| mesh(&faces))
+    plane_faces(path, rule, bounds, view, Keep::Faces).and_then(|(_, faces, _)| mesh(&faces?))
 }
 
 /// Inflate's solids for several shapes of one object ([`crate::inflate_together`]) as meshes, one
@@ -72,19 +72,63 @@ pub fn inflate_meshes(
     options: Inflate,
     view: View,
 ) -> impl Iterator<Item = Result<Mesh, String>> + use<> {
-    inflate_faces(shapes, bounds, options, view, true).map(|r| r.and_then(|(_, faces)| mesh(&faces)))
+    inflate_faces(shapes, bounds, options, view, Keep::Faces).map(|r| r.and_then(|(_, faces, _)| mesh(&faces?)))
+}
+
+/// One solid built once for both its drawing and its mesh: the facets [`crate::extrude`] or
+/// [`crate::inflate_each`] gives, and the faces before projection that [`MeshedSolid::mesh`] cuts
+/// into the mesh [`extrude_mesh`] or [`inflate_meshes`] gives.
+#[derive(Clone, Debug)]
+pub struct MeshedSolid {
+    pub facets: Vec<Facet>,
+    /// The faces before projection, or the error the mesh alone gives when there are too many.
+    faces: Result<Vec<Face3>, String>,
+}
+
+/// A solid with no facets and an empty mesh.
+impl Default for MeshedSolid {
+    fn default() -> Self {
+        Self { facets: vec![], faces: Ok(vec![]) }
+    }
+}
+
+impl MeshedSolid {
+    /// The solid as a mesh. The faces are cut into triangles on each call.
+    pub fn mesh(&self) -> Result<Mesh, String> {
+        mesh(self.faces.as_ref().map_err(String::clone)?)
+    }
+}
+
+/// Extrude & Bevel's solid ([`crate::extrude`]) and its mesh ([`extrude_mesh`]) from one build. An
+/// error where [`crate::extrude`] gives one.
+pub fn extrude_meshed(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<MeshedSolid, String> {
+    extrude_faces(path, rule, bounds, options, view, Keep::Both).map(|(facets, faces, _)| MeshedSolid { facets, faces })
+}
+
+/// Inflate's solids for several shapes of one object ([`crate::inflate_each`]) and their meshes
+/// ([`inflate_meshes`]), each solid built once, as the iterator reaches it. An error where
+/// [`crate::inflate_each`] gives one.
+pub fn inflate_meshed(
+    shapes: &[(&PathData, FillRule)],
+    bounds: Rect,
+    options: Inflate,
+    view: View,
+) -> impl Iterator<Item = Result<MeshedSolid, String>> + use<> {
+    inflate_faces(shapes, bounds, options, view, Keep::Both).map(|r| r.map(|(facets, faces, _)| MeshedSolid { facets, faces }))
 }
 
 /// Revolve's surface ([`crate::revolve`]) as a mesh. As the effect draws it, a sweep of less than
-/// 360° caps its ends with sectors and leaves its two cut sides open ([`Revolve::cap_ends`]).
-pub fn revolve_mesh(path: &PathData, bounds: Rect, options: Revolve) -> Result<Mesh, String> {
+/// 360° caps its ends with sectors and closes its two cut sides with flat faces ([`Revolve::cap_ends`]).
+/// The walls of holes under `rule`, such as the counter of an O, face into the hole, and the cut
+/// sides leave those holes open.
+pub fn revolve_mesh(path: &PathData, rule: FillRule, bounds: Rect, options: Revolve) -> Result<Mesh, String> {
     let mut faces = vec![];
-    crate::revolve_faces(path, bounds, options, Some(&mut faces))?;
+    crate::revolve_faces(path, rule, bounds, options, Some(&mut faces))?;
     mesh(&faces)
 }
 
 /// The area-weighted normal of `contours` (Newell's method).
-fn newell(contours: &[Vec<V3>]) -> V3 {
+pub(crate) fn newell(contours: &[Vec<V3>]) -> V3 {
     let mut n = V3::default();
     for c in contours {
         for (a, b) in c.iter().zip(c.iter().cycle().skip(1)).take(c.len()) {
@@ -167,7 +211,7 @@ fn spend(work: &mut usize, steps: usize) -> Result<(), String> {
 
 /// The triangles covering one face: `contours` (outlines one way round, holes the other) on the
 /// plane across `normal` (its Newell normal).
-fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) -> Result<Vec<[V3; 3]>, String> {
+pub(crate) fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) -> Result<Vec<[V3; 3]>, String> {
     // Cut the face on the coordinate plane it is least slanted to, turned so outlines run
     // counterclockwise.
     let (ax, ay, az) = (normal.0.abs(), normal.1.abs(), normal.2.abs());

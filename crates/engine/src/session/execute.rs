@@ -1,7 +1,28 @@
 use super::{
-    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, Value, cmd, find_command, given_ids, guard,
-    strip_replay_only, waits_for_tool_edit,
+    CommandSpec, EngineError, JOURNALED_READS, NodeId, Result, SELECTS_GIVEN_IDS, Selection, Session, TAKES_GUIDE_IDS, Value, cmd, find_command,
+    given_ids, guard, strip_replay_only, waits_for_tool_edit,
 };
+
+/// A command's result `r` with the warnings of the previews that settling an interaction applied
+/// before it ran: `previewWarning` holds them, and `warning` too when the command gives none of its
+/// own, so the status bar shows the command's own warning when there is one. A null result becomes
+/// an object holding them; any other result that isn't an object is returned as it is.
+fn with_settled_warnings(mut r: Value, settled: &[String]) -> Value {
+    if settled.is_empty() {
+        return r;
+    }
+    if r.is_null() {
+        r = Value::Object(serde_json::Map::new());
+    }
+    if let Value::Object(m) = &mut r {
+        let w = Value::String(settled.join("; "));
+        if m.get("warning").is_none_or(Value::is_null) {
+            m.insert("warning".into(), w.clone());
+        }
+        m.insert("previewWarning".into(), w);
+    }
+    r
+}
 
 impl Session {
     /// `spec`'s `enabled` with `ids` selected instead of the selection, which is then put back.
@@ -39,6 +60,14 @@ impl Session {
     /// Execute a command by id. This is THE entry point for every frontend.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
+        // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
+        if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
+            return Err(EngineError::Busy);
+        }
+        // A step of a batch a script runs is held to the same rule as the script's own commands.
+        if self.script_in_run && crate::script::refused_to_scripts(id) {
+            return Err(EngineError::Other(crate::script::refused_text(id)));
+        }
         // An edit the active tool is computing on another thread (a Shape Builder merge) is
         // applied before a command that may edit, select, save or give a document a new revision,
         // as the click came first. Queries that only read do not wait for it.
@@ -46,7 +75,14 @@ impl Session {
             self.finish_tool_edit_later()?;
         }
         let outer = std::mem::replace(&mut self.reading, !spec.journal || JOURNALED_READS.contains(&id));
-        let r = self.execute_spec(spec, id, params);
+        // A preview that a top-level command applied first (a drag with Real-time Drawing off, kept
+        // before Undo) reports its warning in the command's result.
+        let r = if self.depth == 0 {
+            let (r, settled) = self.collect_settled_warnings(|s| s.execute_spec(spec, id, params));
+            r.map(|v| with_settled_warnings(v, &settled))
+        } else {
+            self.execute_spec(spec, id, params)
+        };
         self.reading = outer;
         r
     }
@@ -60,6 +96,11 @@ impl Session {
         if !self.replaying {
             self.check_params(id, params)?;
         }
+        // A command with a parameter schema runs only with params that pass it, and with the
+        // defaults of omitted values filled in; the journal keeps the params as given. Saved steps
+        // keep their keys the schema doesn't name, as above.
+        let checked = crate::schemas::check(spec, params, self.replaying)?;
+        let run_params = checked.as_ref().unwrap_or(params);
         // Objects given as `id` (where it stands for `ids` of one) or as `ids` beside it are checked
         // before anything else: a malformed one, or one naming no object, is an error under this
         // command's id, never the selection in its place. `effect.apply {id: "stylize.dropShadow"}`
@@ -69,7 +110,13 @@ impl Session {
             && params.get("ids").is_none_or(Value::is_null)
             && params.get("id").and_then(Value::as_str).is_some_and(|e| !e.starts_with('$'));
         if cmd::params::id_stands_for_ids(spec.params) && !effect_named && self.active().is_some() {
-            cmd::given_objects(self, params, id)?;
+            // `effect.refreshDeferred` looks its objects up itself: they can also be in the art of
+            // a symbol, pattern, brush or opacity mask.
+            if id == "effect.refreshDeferred" {
+                cmd::given_object_ids(params, id)?;
+            } else {
+                cmd::given_nodes(self, params, id, TAKES_GUIDE_IDS.contains(&id))?;
+            }
         }
         if SELECTS_GIVEN_IDS.contains(&id) {
             self.check_given_ids(id, params)?;
@@ -86,6 +133,14 @@ impl Session {
         // the artboards the journal recorded need only a document too, whatever is selected and
         // whichever tool is chosen.
         let given = given_ids(spec.params, params);
+        // The guide commands take ruler guides by index; an object command given one's id is refused.
+        if !TAKES_GUIDE_IDS.contains(&id)
+            && let (Some(ids), Some(st)) = (&given, self.active())
+            && let Some(guide) = ids.iter().find(|i| st.doc.node(**i).is_some_and(|n| n.is_ruler_guide()))
+        {
+            let value = guide.0;
+            return Err(cmd::bad(id, format!("id {value} is a ruler guide, not an object")));
+        }
         let enabled = if (id == "edit.clear" && params.get("ids").is_some())
             || (matches!(id, "edit.copy" | "edit.cut") && params.get("selectedArtboards").is_some())
         {
@@ -126,7 +181,7 @@ impl Session {
             if let Some(ids) = &select_first {
                 s.execute("select.set", &serde_json::json!({ "ids": ids }))?;
             }
-            let r = cmd::run_spec(s, spec, params);
+            let r = cmd::run_spec(s, spec, run_params);
             if r.is_err()
                 && let Some((uid, selection, layer)) = selected_before
                 && let Some(st) = s.docs.iter_mut().find(|d| d.uid == uid)
@@ -142,6 +197,10 @@ impl Session {
         let (doc, journal, grouped) = (self.active().map(|d| d.uid), self.journal.len(), self.undo_group_docs());
         let open = (self.depth == 0).then(|| self.docs.iter().map(|d| d.uid).collect::<Vec<_>>());
         let r = if self.depth == 0 { self.run_guarded(id, run) } else { self.run_nested(run) };
+        // Colors are drawn and converted through the profiles of the document in front now, also
+        // after an undone or redone Assign Profile, a failed or panicked command's documents put
+        // back, and a batch step, before the next step converts through them.
+        self.sync_front_profiles();
         if r.is_err() && self.depth == 0 {
             self.batch_paint_docs.clear();
             // A failed or panicked command's documents are put back: type is drawn in their
@@ -187,6 +246,7 @@ impl Session {
         }
         if self.depth == 0 {
             self.journal_in_undo_groups(doc, &grouped, journal);
+            self.trim_histories();
             self.after_command(Some(id));
         } else if matches!(id, "edit.undo" | "edit.redo") {
             // A step of `command.batch`: the tool hears of it as it does of the command alone.
@@ -297,8 +357,13 @@ impl Session {
     /// document goes back to how it was before the command (its art, selection, interaction and
     /// undo history), and the same document stays active, instead of crashing the frontend.
     pub(crate) fn run_guarded(&mut self, id: &str, f: impl FnOnce(&mut Self) -> Result<Value>) -> Result<Value> {
-        let snapshot: Vec<_> =
-            self.docs.iter().map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), d.history.clone())).collect();
+        // In a script's run a panic ends the run, and the run's rollback puts the histories back.
+        let in_run = self.script_in_run;
+        let snapshot: Vec<_> = self
+            .docs
+            .iter()
+            .map(|d| (d.uid, d.doc.clone(), d.selection.clone(), d.interaction.clone(), (!in_run).then(|| d.history.clone())))
+            .collect();
         let active = self.active().map(|d| d.uid);
         let r = match guard::catch_panic(|| self.run_nested(f)) {
             Ok(r) => r,
@@ -311,7 +376,9 @@ impl Session {
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
-                    st.history = history;
+                    if let Some(history) = history {
+                        st.history = history;
+                    }
                     cmd::globaledit::follow_history(st);
                     st.drop_stale_variables_highlight();
                     st.revision += 1;
@@ -328,5 +395,27 @@ impl Session {
             st.sync_new_art();
         }
         r
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::with_settled_warnings;
+
+    /// The command's own warning stays the one the status bar shows, and the settled preview's is
+    /// kept beside it; a null result holds the preview's; other results are left as they are.
+    #[test]
+    fn settled_warnings_join_the_result() {
+        let settled = ["a".to_string(), "b".to_string()];
+        assert_eq!(
+            with_settled_warnings(json!({"ran": 1, "warning": "own"}), &settled),
+            json!({"ran": 1, "warning": "own", "previewWarning": "a; b"})
+        );
+        assert_eq!(with_settled_warnings(json!({"warning": null}), &settled), json!({"warning": "a; b", "previewWarning": "a; b"}));
+        assert_eq!(with_settled_warnings(json!(null), &settled[..1]), json!({"warning": "a", "previewWarning": "a"}));
+        assert_eq!(with_settled_warnings(json!([1]), &settled), json!([1]));
+        assert_eq!(with_settled_warnings(json!({"ran": 1}), &[]), json!({"ran": 1}));
     }
 }

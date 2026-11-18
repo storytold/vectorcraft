@@ -113,7 +113,8 @@ pub(super) fn batch_trace_folder(s: &mut Session, p: &Value) -> Result<Value> {
     for path in &files {
         let opened_before = s.documents().len();
         let one = |s: &mut Session| -> Result<String> {
-            s.execute("document.open", &json!({ "path": path }))?;
+            // A PSD or PSB is traced as its merged image, not as the first of its layers.
+            s.execute("document.open", &json!({ "path": path, "layers": false }))?;
             s.execute("select.all", &json!({}))?;
             s.execute(trace, &json!({ "preset": preset }))?;
             let stem = fileio::file_stem(path);

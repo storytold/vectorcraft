@@ -1074,9 +1074,49 @@ fn transform_effect_preview_commit_cancel_and_undo_cover_artwork_targets() {
                 }
                 "image" => {
                     let mut png = Vec::new();
-                    image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]))
-                        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-                        .unwrap();
+                    {
+                        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(20, 20, image::Rgba([255, 0, 0, 255]))).into();
+                        let (__w, __h) = (__dyn.width(), __dyn.height());
+                        let (__layout, __sample, __raw) = match __dyn {
+                            image::DynamicImage::ImageLuma8(b) => {
+                                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageLumaA8(b) => {
+                                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageRgb8(b) => {
+                                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageRgba8(b) => {
+                                (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw())
+                            }
+                            image::DynamicImage::ImageLuma16(b) => (
+                                craft_image_codecs::ChannelLayout::Gray,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageLumaA16(b) => (
+                                craft_image_codecs::ChannelLayout::GrayA,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageRgb16(b) => (
+                                craft_image_codecs::ChannelLayout::Rgb,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            image::DynamicImage::ImageRgba16(b) => (
+                                craft_image_codecs::ChannelLayout::Rgba,
+                                craft_image_codecs::SampleType::U16,
+                                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                            ),
+                            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+                        };
+                        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+                        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+                            .map(|__b| png.extend_from_slice(&__b))
+                    }
+                    .unwrap();
                     app.run(
                         "file.place",
                         json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "link": false, "at": [30, 70]}),
@@ -1993,4 +2033,80 @@ fn the_drop_buttons_light_up_while_a_row_is_dragged() {
     drop_buttons_on(&ctx, &mut app, vec![button(held, false)]);
     assert_eq!(drop_buttons_on(&ctx, &mut app, vec![]), [false, false], "dark again once it is released");
     assert_eq!(stack_items(&app).len(), 2, "released elsewhere: nothing removed");
+}
+
+/// #6429: a dash length typed into the Stroke panel that the Appearance panel's "Stroke:" row or
+/// the Properties panel's Stroke link opens sticks when a click outside closes the popup, as it
+/// does when Enter ends the edit. The popup used to close without drawing again, so the field
+/// never saw itself lose the keyboard and the value went back.
+#[test]
+fn a_dash_typed_in_a_stroke_popup_sticks_when_a_click_outside_closes_it() {
+    type Panel = fn(&mut VectorcraftApp, &mut egui::Ui);
+    let hosts: [(&str, Panel); 2] = [("Stroke:", appearance::show), ("Stroke", super::properties::show)];
+    for (link, show) in hosts {
+        let mut app = app_with_rect();
+        run(&mut app, "stroke.set", json!({"dash": [10.0]}));
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, link).center(), show);
+        // The popup's first dash field: a click gives it the keyboard with its text selected.
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "10").center(), show);
+        frame_events(&ctx, &mut app, vec![egui::Event::Text("4".into())], show);
+        let dash = |app: &VectorcraftApp| current_stroke(app).and_then(|s| s.dash).map(|d| d.pattern);
+        assert_eq!(dash(&app), Some(vec![10.0]), "{link}: nothing set while typing");
+        click(&ctx, &mut app, egui::pos2(5.0, 3000.0), show);
+        let surrender = ctx.options(|o| o.input_options.surrender_focus_on);
+        assert_eq!(surrender, egui::SurrenderFocusOn::Clicks, "{link}: fields let go of the keyboard on a click again");
+        frame_events(&ctx, &mut app, vec![], show);
+        assert_eq!(dash(&app).and_then(|p| p.first().copied()), Some(4.0), "{link}: the typed dash stuck: {:?}", dash(&app));
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        assert!(!texts.iter().any(|(t, _)| t == "Dashed Line"), "{link}: the popup closed");
+    }
+}
+
+/// `first_selected` gives the `Arc` the document holds for the first selected object, nested in a
+/// group too, not a copy of it; nothing with nothing selected or no document open.
+#[test]
+fn first_selected_is_the_node_the_document_holds() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    assert!(first_selected(&app).is_none(), "no document");
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let a = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].clone();
+    let b = run(&mut app, "shape.ellipse", json!({"x": 70, "y": 10, "width": 50, "height": 50}))["id"].clone();
+    let held = |app: &VectorcraftApp, id: &Value| layers::node_arc(&app.session.active().unwrap().doc, NodeId(id.as_u64().unwrap())).unwrap();
+    run(&mut app, "select.set", json!({ "ids": [a, b] }));
+    let id = app.session.active().unwrap().selection.objects[0];
+    let first = first_selected(&app).expect("a selected object");
+    assert_eq!(first.id, id, "the first of the selection");
+    assert!(Arc::ptr_eq(&first, &held(&app, &json!(id.0))), "the first selected object, as the document holds it");
+    run(&mut app, "object.group", json!({}));
+    run(&mut app, "select.set", json!({ "ids": [a] }));
+    assert!(Arc::ptr_eq(&first_selected(&app).expect("the rectangle"), &held(&app, &a)), "a node inside a group");
+    run(&mut app, "select.none", json!({}));
+    assert!(first_selected(&app).is_none(), "nothing selected");
+}
+
+/// Properties, Appearance and Transparency show the selected object's current opacity after an
+/// edit and after Undo, never an earlier one.
+#[test]
+fn panels_show_the_selected_object_after_an_edit_and_after_undo() {
+    type Panel = fn(&mut VectorcraftApp, &mut egui::Ui);
+    let panels: [(&str, Panel); 3] = [("Properties", properties::show), ("Appearance", appearance::show), ("Transparency", transparency::show)];
+    let mut app = app_with_rect();
+    // One context per panel, kept across the edits, as the app keeps its own.
+    let ctxs: Vec<egui::Context> = panels.iter().map(|_| egui::Context::default()).collect();
+    let shows = |app: &mut VectorcraftApp, want: &str, not: &str| {
+        for ((name, panel), ctx) in panels.iter().zip(&ctxs) {
+            let texts = frame_in(ctx, app, *panel);
+            assert!(texts.iter().any(|t| t.contains(want)), "{name} shows {want}: {texts:?}");
+            assert!(!texts.iter().any(|t| t.contains(not)), "{name} no longer shows {not}: {texts:?}");
+        }
+    };
+    run(&mut app, "transparency.set", json!({"opacity": 60}));
+    shows(&mut app, "60%", "35%");
+    run(&mut app, "transparency.set", json!({"opacity": 35}));
+    shows(&mut app, "35%", "60%");
+    run(&mut app, "edit.undo", json!({}));
+    shows(&mut app, "60%", "35%");
 }

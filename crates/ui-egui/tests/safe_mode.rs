@@ -325,3 +325,33 @@ fn help_safe_mode_enables_a_plug_in_for_the_next_launch_only() {
     done(&launch_dir);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn help_safe_mode_lists_a_plug_in_found_under_several_files_once() {
+    let _f = fresh();
+    let dir = store_with_two("help-files");
+    let launch_dir = dir.join("Launch");
+    let mut app = launch(&dir, &launch_dir, false);
+    let x = |file: &str| Item { id: Some("test.ui.x".into()), file: Some(file.into()), name: Some("X".into()) };
+    let y = Item { id: Some("test.ui.y".into()), file: None, name: Some("Y".into()) };
+    let z = Item { id: None, file: Some("z.wasm".into()), name: None };
+    // x is turned off by its id, then found under two files, as loading a folder finds it.
+    let x_by_id = Item { file: None, ..x("") };
+    for item in [&x_by_id, &y, &z] {
+        assert!(safe_mode::set_enabled(item, false));
+    }
+    assert!(safe_mode::disable_file_of(&x("a.wasm")));
+    assert!(safe_mode::disable_file_of(&x("b.wasm")));
+    assert!(app.session.store_disabled_plugins());
+    assert_eq!(safe_mode::disabled().len(), 4, "an entry for each of x's files");
+    app.run("help.safeMode", json!({})).unwrap();
+    let items = app.ui.dialog.as_ref().unwrap().fields["items"].as_array().unwrap().clone();
+    let labels: Vec<&str> = items.iter().map(|v| v["label"].as_str().unwrap()).collect();
+    assert_eq!(labels, ["X", "Y", "z.wasm"], "one row for each plug-in");
+    frame(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields["items"][0]["enable"] = json!(true);
+    dialogs::confirm(&mut app).unwrap();
+    assert_eq!(safe_mode::disabled(), [y, z], "every entry with x's id is turned on");
+    done(&launch_dir);
+    let _ = std::fs::remove_dir_all(&dir);
+}
