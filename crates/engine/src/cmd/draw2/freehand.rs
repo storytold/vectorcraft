@@ -174,9 +174,13 @@ fn no_stroke(name: &str) -> EngineError {
     bad("brush.freehand", format!("cannot apply brush `{name}`: path has no stroke"))
 }
 
-/// Sets brush `name` on the stroke of object `id` of `d`.
+/// Sets brush `name` on the stroke of object `id` of `d`. The stroke's own settings for another
+/// brush (Options of Selected Object) are cleared.
 fn set_brush(d: &mut Document, id: NodeId, name: &str) {
     if let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {
+        if st.brush.as_deref() != Some(name) {
+            st.brush_options.clear();
+        }
         st.brush = Some(name.to_string());
     }
 }

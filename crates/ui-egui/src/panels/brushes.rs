@@ -23,7 +23,7 @@ use vectorcraft_engine::cmd::swatchlib::LibraryInfo;
 
 use super::library_panel::{self, LibraryKind, LibraryRef, Row};
 use super::memo::Memo;
-use super::{first_selected, pstate, set_pstate};
+use super::{first_node, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::brush_options;
 use crate::menus::Item;
@@ -168,7 +168,7 @@ pub(crate) fn definition_chip(ui: &Ui, r: egui::Rect, st: Option<&DocState>, def
 }
 
 fn selected_brush(app: &VectorcraftApp) -> Option<String> {
-    first_selected(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
+    first_node(app).and_then(|n| n.appearance.stroke().and_then(|s| s.brush.clone()))
 }
 
 /// What the panel's last click was made with: the document, its selected objects and the current
@@ -520,6 +520,12 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     // On the selected path's brush, else the current one.
     if menu_item(ui, tl!("Brush Options…"), brush_options::available(app), false)
         && let Err(e) = app.run("ui.brushOptions", json!({}))
+    {
+        app.status(e);
+    }
+    // The selected brushed paths' own settings: the brush stays as it is.
+    if menu_item(ui, tl!("Options of Selected Object…"), brush_options::object_available(app), false)
+        && let Err(e) = app.run("ui.brushObjectOptions", json!({}))
     {
         app.status(e);
     }

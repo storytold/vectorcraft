@@ -94,8 +94,7 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
 /// the Selection tool these are the paragraphs of every frame of the selected stories
 /// ([`super::character::selected_stories`]).
 pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
-    if let Some((id, a, b)) = super::character::text_editing(app) {
-        super::character::end_typing(app);
+    if let Some((id, a, b)) = super::character::text_editing_kept(app)? {
         match super::character::text_story(app) {
             // After Select All in threaded text: every paragraph of every frame.
             Some(story) => p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>()),

@@ -5783,6 +5783,37 @@ fn an_empty_last_frame_keeps_the_style_of_the_last_paragraph() {
     assert_eq!(justify, [Justify::Left, Justify::Right]);
 }
 
+/// Each First Baseline kind the text document holds, Em Box Height included, comes back with its
+/// minimum, without a warning.
+#[test]
+fn every_first_baseline_kind_comes_back_with_its_minimum() {
+    use vectorcraft_doc::{FirstBaseline, TextKind, TextObject};
+    for (kind, min) in [
+        (FirstBaseline::Ascent, 0.0),
+        (FirstBaseline::CapHeight, 6.0),
+        (FirstBaseline::XHeight, 0.0),
+        (FirstBaseline::Leading, 4.0),
+        (FirstBaseline::EmBoxHeight, 0.0),
+        (FirstBaseline::EmBoxHeight, 18.5),
+        (FirstBaseline::Fixed, 40.0),
+    ] {
+        let mut d = Document::new(300.0, 200.0);
+        let layer = d.layers[0].id;
+        let mut area = TextObject::point(vectorcraft_geom::Point::ZERO, "Area", style(12.0, Color::BLACK));
+        area.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(20.0, 20.0, 140.0, 160.0)) };
+        area.xf = Affine::IDENTITY;
+        area.area.first_baseline = kind;
+        area.area.first_baseline_min = min;
+        let n = text_node(&mut d, area);
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+        let warnings = export_ai_editing(&d, &opts()).unwrap().warnings;
+        assert!(warnings.is_empty(), "{kind:?}: {warnings:?}");
+        let back = read_back(&d);
+        let NodeKind::Text(t) = &back.layers[0].children().unwrap()[0].kind else { panic!("type") };
+        assert_eq!((t.area.first_baseline, t.area.first_baseline_min), (kind, min), "{kind:?}");
+    }
+}
+
 /// A minimum first baseline with the Ascent first baseline is reported, and kept with the others.
 /// An end bracket of an open path that the reader would read as none is reported, and one further
 /// from the path's end comes back.
