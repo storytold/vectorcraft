@@ -8482,6 +8482,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`{f}` is the copy of a document open now	`{f}` é a cópia de um documento aberto agora
 @msg	`{id}` is no writable format (see document.formats)	`{id}` não é um formato gravável (veja document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` não é uma biblioteca carregada
+@msg	`{file}` has no swatches of its own	`{file}` não tem amostras próprias
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` tem amostras de padrão, que um arquivo .vcswatches não pode conter
 @msg	`{key}` has no colours	`{key}` não tem cores
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` contém mais de {MAX_EDIT_WORDS} palavras
 @msg	`{key}` is a design name	`{key}` é o nome de um projeto

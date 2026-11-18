@@ -6261,6 +6261,8 @@ imageTrace	Outline	Contour
 @msg	`{f}` is the copy of a document open now	`{f}` is de kopie van een document dat nu geopend is
 @msg	`{id}` is no writable format (see document.formats)	`{id}` is geen schrijfbare indeling (zie document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` is geen geladen bibliotheek
+@msg	`{file}` has no swatches of its own	`{file}` heeft geen eigen stalen
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` heeft patroonstalen, die een .vcswatches-bestand niet kan bevatten
 @msg	`{key}` has no colours	`{key}` heeft geen kleuren
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` bevat meer dan {MAX_EDIT_WORDS} woorden
 @msg	`{key}` is a design name	`{key}` is de naam van een ontwerp
