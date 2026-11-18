@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|emBoxHeight|fixed (emBoxHeight: the top of the first line's ideographic em box, the largest on the line, touches the top of the type area inside the inset), firstBaselineMin?: pt (the least distance from that top to the first baseline; with fixed, the distance), verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -1038,7 +1038,17 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
         // not in a scaled label's own units).
         let mut labels_changed = false;
         if range.is_none() {
-            labels_changed = super::graph::capture_label_styles(d, &ids, &|st| {
+            let gives_character = font.is_some()
+                || style.is_some()
+                || size.is_some()
+                || leading.is_some()
+                || tracking.is_some()
+                || fill.is_some()
+                || stroke.is_some()
+                || !stroke_weight.is_empty()
+                || features.is_some()
+                || feature_changes.as_ref().is_some_and(|c| !c.is_empty());
+            let change = |st: &mut vectorcraft_doc::CharStyle| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
                     st.font_version = None;
@@ -1079,7 +1089,13 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(c) = &feature_changes {
                     st.features = super::textedit::change_features(&st.features, c);
                 }
-            });
+            };
+            // A command that gives character attributes keeps the style even when they equal the labels' own.
+            labels_changed = if gives_character {
+                super::graph::capture_label_styles_given(d, &ids, &change)
+            } else {
+                super::graph::capture_label_styles(d, &ids, &change)
+            };
         }
         Ok(((), labels_changed))
     })?;

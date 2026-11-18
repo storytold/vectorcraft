@@ -257,22 +257,12 @@ pub(crate) fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// Hexadecimal digits (whitespace ignored, an odd last digit padded with 0); `None` on others.
 pub(crate) fn hex_decode(body: &[u8]) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity(body.len() / 2);
-    let mut high: Option<u8> = None;
-    for &b in body {
-        if is_space(b) {
-            continue;
-        }
-        let v = char::from(b).to_digit(16)? as u8;
-        match high.take() {
-            Some(h) => out.push(h << 4 | v),
-            None => high = Some(v),
-        }
+    // Callers pass an already-delimited body. Do not let the filter decoder's EOD
+    // handling silently accept a stray terminator or discard bytes after it.
+    if body.contains(&b'>') {
+        return None;
     }
-    if let Some(h) = high {
-        out.push(h << 4);
-    }
-    Some(out)
+    craft_stream_codecs::asciihex::decode(body, body.len().div_ceil(2)).ok()
 }
 
 /// A number token (`12`, `-3.5`, `.5`, `1e-3`, `16#ff`), or `None`.
@@ -309,5 +299,34 @@ mod tests {
         assert!(number("16#+ff").is_none());
         assert!(number("16#-ff").is_none());
         assert!(matches!(number("16#ff"), Some(Obj::Int(255))));
+    }
+    #[test]
+    fn shared_hex_decode_keeps_body_boundaries_and_odd_nibbles() {
+        assert_eq!(hex_decode(b" 4\t1\n4\r2\x0c4\0"), Some(vec![0x41, 0x42, 0x40]));
+        assert_eq!(hex_decode(b""), Some(vec![]));
+        for invalid in [b"41>42".as_slice(), b">", b"4g", b"4\x0b1", b"\xff"] {
+            assert_eq!(hex_decode(invalid), None);
+        }
+        // Every byte pairs with each possible nibble, including all whitespace
+        // and invalid-byte combinations; this is the former body-only contract.
+        for first in 0..=255u8 {
+            for second in 0..=255u8 {
+                let input = [first, second];
+                let mut digits = Vec::new();
+                let mut valid = true;
+                for b in input {
+                    if is_space(b) {
+                        continue;
+                    }
+                    match char::from(b).to_digit(16) {
+                        Some(d) => digits.push(d as u8),
+                        None => valid = false,
+                    }
+                }
+                let expected =
+                    if !valid { None } else { Some(digits.chunks(2).map(|pair| (pair[0] << 4) | pair.get(1).copied().unwrap_or(0)).collect()) };
+                assert_eq!(hex_decode(&input), expected, "{input:?}");
+            }
+        }
     }
 }

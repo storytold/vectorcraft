@@ -254,6 +254,7 @@ pub const CONTEXT_LABELS: &[&str] = &[
     "Add to Dictionary",
     "No Suggestions",
     "Isolate Selected Group",
+    "Isolate Selected Path",
     "Exit Isolation Mode",
     "Lock Artboards",
     "Lock Selected",

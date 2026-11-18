@@ -235,11 +235,7 @@ pub fn has_multi(s: &Session) -> std::result::Result<(), String> {
 /// editing and symbol editing mode isolate their own layer, which does not count here; an object
 /// isolated inside them counts.
 pub(crate) fn ordinary_isolation(st: &crate::DocState) -> Option<vectorcraft_doc::NodeId> {
-    st.isolation.filter(|l| {
-        !st.doc.pattern_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.mask_edit.as_ref().is_some_and(|e| e.layer == *l)
-            && !st.doc.symbol_edit.as_ref().is_some_and(|e| e.layer == *l)
-    })
+    vectorcraft_tools::ordinary_isolation(&st.doc, st.isolation)
 }
 /// Objects are selected ([`has_selection`]), and in isolation mode ([`ordinary_isolation`]) at
 /// least one of them is inside the isolated object: Object › Lock's and Object › Hide's items.
@@ -825,6 +821,8 @@ pub(crate) fn unique_name_from(base: &str, next: &mut std::collections::HashMap<
 pub(crate) const MAX_IMPORTED_PRESETS: usize = 1000;
 
 pub(crate) use addons::{DecodedImages, refresh_color_masks};
+/// Packaging Tools' blanks and the objects their print leaves out, for the Fold Preview window.
+pub use addons::{fold_source, print_hidden};
 /// Document Info's category titles and the Objects category's count labels.
 pub use docinfo::{CATEGORIES, OBJECT_LABELS};
 pub use docmenu::guide_indexes;
@@ -890,6 +888,9 @@ pub(crate) use buildcmds::TracePresetChanges;
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 
+/// The Shape Mode commands' warning when a selected open path encloses no area.
+pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
+
 /// The gaps View › Show Live Paint Gaps shows on a Live Paint group.
 pub use buildcmds::live_paint_gaps;
 
@@ -897,9 +898,17 @@ pub use buildcmds::live_paint_gaps;
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
 
+/// The Symbols panel's current symbol, as `symbol.list` answers it (the panel reads it on every
+/// frame without running the command).
+pub use brushsym::current_symbol;
+
 /// The byte order of UTF-16 text without a byte-order mark, by Import Data Sets' rule (the Graph
 /// Data window reads files by it too).
 pub use variablecmds::utf16_order_without_mark;
+
+/// How the Graph Data window's Import Data and Import Data Sets' `%` columns read a graph data
+/// file: its size limit, its text, its cells and the data `graph.setData` takes from them.
+pub use graph::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
 
 /// The Variables panel's sort (`variable.sort`) and its rows in that order.
 pub use variablecmds::{VariableSort, VariableSortKey, variable_order};

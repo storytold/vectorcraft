@@ -8,7 +8,10 @@ pub(super) struct CatalogFamily {
     /// Non-English family name from the name table, when the scan found one.
     pub(super) native: Option<String>,
     pub(super) faces: Vec<CatalogFace>,
-    /// The family's kind (from its first face found); variable when any face found is.
+    /// The family's kind (from its first face found); variable when any face found is. Its
+    /// likeness is the one of the face found nearest an upright Regular ([`regular_rank`]).
+    ///
+    /// [`regular_rank`]: super::traits::regular_rank
     pub(super) traits: Option<FontTraits>,
 }
 
@@ -21,6 +24,9 @@ pub(super) struct CatalogFace {
     /// Weight and italic as the style lists them (by its name, or a named instance's axes).
     pub(super) weight: f32,
     pub(super) italic: bool,
+    /// When the file was created ([`FontDb::recently_added`]); `None` when the file system keeps
+    /// no creation time.
+    pub(super) created: Option<std::time::SystemTime>,
 }
 
 /// The installed fonts by ASCII-lowercased family name (lookups ignore ASCII case, as
