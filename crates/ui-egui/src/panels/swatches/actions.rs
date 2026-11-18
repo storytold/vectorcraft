@@ -86,10 +86,14 @@ pub(super) fn bottom(app: &mut VectorcraftApp, ui: &mut Ui, sel: &[String]) {
             app.run("ui.newColorGroup", json!({"swatches": deletable(app, sel)})).ok();
         }
         // Alt-click skips the dialog; Ctrl/Cmd-click makes a spot color, and Ctrl/Cmd+Shift-click
-        // makes a global process color.
-        if widgets::icon_button(ui, "dc-new-item", tl!("New Swatch"), false, 24.0).clicked() {
+        // makes a global process color. Swatches dragged from the list and dropped on it are
+        // duplicated.
+        let copies = dragged_swatches(app, ui.ctx());
+        let new = widgets::icon_button(ui, "dc-new-item", tl!("New Swatch"), false, 24.0);
+        if new.clicked() {
             new_swatch(app, sel, ui.input(|i| i.modifiers));
         }
+        drop_on_new(app, ui, &new, copies);
         // Alt-click deletes without asking. Swatches or color groups dragged from the list can be
         // dropped on it, also with nothing selected: the button is enabled while they are held.
         let del = deletable(app, sel);
@@ -110,11 +114,19 @@ pub(super) const DRAG_DOC: &str = "swatch-drag-doc";
 /// drag, and for a drag started in another document.
 fn dragged_deletable(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
     let Some(st) = app.session.active() else { return vec![] };
+    let d = &st.doc;
+    dragged_rows(app, ctx).into_iter().filter(|n| d.swatch_name_taken(n) && d.swatch(n).is_none_or(|w| !w.is_reserved())).collect()
+}
+
+/// The names of the swatches or color groups of the active document being dragged from the list,
+/// in panel order. Empty for any other drag, and for a drag started in another document.
+fn dragged_rows(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
     if pstate::<Option<u64>>(ctx, DRAG_DOC) != Some(st.uid) {
         return vec![];
     }
     match egui::DragAndDrop::payload::<PanelDrag>(ctx).as_deref() {
-        Some(PanelDrag::Paint { rows: Some(r), .. }) => deletable(app, &r.names).into_iter().filter(|n| st.doc.swatch_name_taken(n)).collect(),
+        Some(PanelDrag::Paint { rows: Some(r), .. }) => r.names.clone(),
         _ => vec![],
     }
 }
@@ -133,6 +145,48 @@ fn drop_on_delete(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: V
     }
     if button.dnd_release_payload::<PanelDrag>().is_some() {
         delete(app, names, false);
+    }
+}
+
+/// The swatches of the active document being dragged from the list that New Swatch can duplicate,
+/// in panel order: the dragged rows ([`dragged_rows`]) that are swatches still in the document,
+/// other than None and Registration.
+fn dragged_swatches(app: &VectorcraftApp, ctx: &egui::Context) -> Vec<String> {
+    let Some(st) = app.session.active() else { return vec![] };
+    dragged_rows(app, ctx).into_iter().filter(|n| st.doc.swatch(n).is_some_and(|w| !w.is_reserved())).collect()
+}
+
+/// Swatches (`names`) dragged onto New Swatch (`button`): the button is outlined while they are
+/// held over it, and the release of the primary button duplicates them ([`duplicate`]), whatever
+/// modifiers are held. The release of another button ends the drag, and other drags are left to
+/// their own targets.
+fn drop_on_new(app: &mut VectorcraftApp, ui: &Ui, button: &Response, names: Vec<String>) {
+    if names.is_empty() || button.dnd_hover_payload::<PanelDrag>().is_none() {
+        return;
+    }
+    widgets::drop_target_outline(ui, button.rect);
+    if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
+        return;
+    }
+    if button.dnd_release_payload::<PanelDrag>().is_some() {
+        duplicate(app, ui.ctx(), &names);
+    }
+}
+
+/// Duplicates the swatches `names` (`swatch.duplicate`, each copy just after its swatch and in its
+/// color group) in one undo step and selects the copies. A failure is shown in the status bar and
+/// changes nothing.
+fn duplicate(app: &mut VectorcraftApp, ctx: &egui::Context, names: &[String]) {
+    let made = if let [name] = names {
+        app.run("swatch.duplicate", json!({ "name": name })).map(|r| vec![r])
+    } else {
+        let commands: Vec<Value> = names.iter().map(|n| json!({ "command": "swatch.duplicate", "params": { "name": n } })).collect();
+        app.run("command.batch", json!({ "label": "Duplicate Swatch", "commands": commands }))
+            .map(|r| r["results"].as_array().cloned().unwrap_or_default())
+    };
+    match made {
+        Ok(made) => set_pstate(ctx, "swatch-selected", made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect::<Vec<_>>()),
+        Err(e) => app.status(e),
     }
 }
 
