@@ -763,6 +763,7 @@ antiAlias	Sharp	锐利
 	Delete Brush	删除画笔
 	Delete Color	删除颜色
 	Restore Generated Table	恢复生成的颜色表
+	Unshift All Colors	取消偏移所有颜色
 	Delete Character Style	删除字符样式
 	Delete Empty Artboards	删除空白画板
 	Delete Freeform Point	删除自由点
@@ -3140,6 +3141,8 @@ digits	Malayalam	马拉雅拉姆数字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指针或拖动的点在屏幕上需离图稿多近，智能参考线才会吸附；该距离在任何缩放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	吸附线段的端点或从中心绘制的圆，使其与附近的曲线相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
@@ -3342,6 +3345,9 @@ digits	Malayalam	马拉雅拉姆数字
 	No menu item	无菜单项
 	Toolbar	工具栏
 	{toolbar}, in the {tool} group	{toolbar}，位于 {tool} 组中
+	In the menu bar: {path}	在菜单栏中：{path}
+	In the {group} group: press and hold to open it	在“{group}”组中：按住即可打开
+	{home}, not shown now	{home}，当前未显示
 @plural	{n} result|{n} results	{n} 个结果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
@@ -4769,6 +4775,7 @@ imageTrace	Outline	轮廓
 @msg	paste unavailable	无法粘贴
 @msg	Save for Web: the image is empty	存储为 Web 所用格式：图像为空
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：颜色表中至少要保留一种颜色
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted：`{k}` 与另一个键指的是同一种颜色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是颜色，例如 "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 种颜色
 @msg	no artboard {i} (0-based; the document has {_1})	没有画板 {i} (从 0 开始计数；文档有 {_1} 个)
@@ -7646,6 +7653,7 @@ breakText	Glyphs	字形
 @msg	One path lies inside the other, so they have no common tangents	一条路径位于另一条之内，因此它们没有公切线
 @msg	The paths overlap, so they have no internal tangents	路径相互重叠，因此它们没有内公切线
 @msg	One path lies inside the other, so they have no internal tangents	一条路径位于另一条之内，因此它们没有内公切线
+@msg	The point lies inside the path, so it has no tangents	该点位于路径之内，因此没有切线
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	将短划线扩展为路径
 @msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
@@ -9969,3 +9977,8 @@ breakText	Glyphs	字形
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
 	Dashed Arrow	虚线箭头
+	Pressure Sensitive	压感画笔
+	Flex Ribbon	柔韧色带
+	Pulse Stroke	脉动笔触
+	Round Flow	圆头流线
+	Chisel Flow	斜头流线
