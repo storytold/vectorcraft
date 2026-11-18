@@ -5877,7 +5877,8 @@ and `layerRows`, the rows highlighted in the panel.
   `layer.locate {id?, layersOnly?}` (highlights the selected object's row, or with several selected the row of the
   one frontmost in the stacking order, whatever order they were selected in; an `id` locates that object instead;
   the panel opens the rows around it;
-  it scrolls to it on every call, also when the row was already highlighted;
+  it scrolls to it on every call, also when the row was already highlighted, unless Show Layers Only, a search or the
+  filter leaves the row out of the list, in which case it does not scroll;
   `layersOnly: true`, which the panel sends while Show Layers Only is on, as Locate Layer, highlights the innermost
   layer or sublayer holding the object instead, or a layer `id` itself, and returns `{id, objectId, ancestry}`)
   and `layer.clippingMask.toggle`.
