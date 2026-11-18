@@ -80,6 +80,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 pub mod new_text_style;
+pub mod object_mosaic;
 pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
@@ -442,6 +443,7 @@ registry! {
     ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
     ScriptFiles: [script_run::PICKER_KIND] => script_run::PICKER_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
+    ObjectMosaic: [object_mosaic::KIND] => object_mosaic::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
     SmartPunctuation: [smart_punctuation::KIND] => smart_punctuation::SPEC,
@@ -621,11 +623,20 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     if d.kind == new_document::KIND || new_document::popup_open(d) {
         new_document::note_set(d, &field);
     }
+    // Create Object Mosaic's Resize Using Percentages shows the new size the other way, as its checkbox does.
+    if d.kind == object_mosaic::KIND && field == "percentages" {
+        object_mosaic::set_percentages(d, &value);
+        return;
+    }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
+    let mosaic = (d.kind == object_mosaic::KIND).then(|| field.clone());
     let graph = (d.kind == graph_data::KIND).then(|| field.clone());
     d.fields.insert(field, value);
     if let Some(field) = dxf {
         dxf_options::note_set(d, &field);
+    }
+    if let Some(field) = mosaic {
+        object_mosaic::note_set(d, &field);
     }
     if let Some(field) = graph {
         graph_data::note_set(d, &field);
