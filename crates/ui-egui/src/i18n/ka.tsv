@@ -8387,6 +8387,11 @@ liquify-list-end	{0}, {1}	{0} და {1}
 	Hide Template	შაბლონის დამალვა
 	Show Template	შაბლონის ჩვენება
 	Path Length	ტრაექტორიის სიგრძე
+	Grid Size	ბადის ზომა
+	Grid Colors	ბადის ფერები
+	Flattener Preset	გაბრტყელების პრესეტი
+	X	X
+	Y	Y
 	Filter	ფილტრი
 	Clear All	ყველას გასუფთავება
 	By Object	ობიექტის მიხედვით
