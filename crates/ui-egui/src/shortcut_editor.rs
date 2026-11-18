@@ -152,12 +152,23 @@ pub fn sync(ui: &UiState) {
     crate::custom_toolbars::sync(ui);
 }
 
-/// Registry default shortcut of a command (engine or UI command).
+/// Registry default shortcut of a command (engine or UI command) on [`crate::keymap::platform`].
 pub fn default_command_shortcut(id: &str) -> Option<&'static str> {
+    default_command_shortcut_on(id, crate::keymap::platform())
+}
+
+/// Registry default shortcut of a command on platform `p`.
+fn default_command_shortcut_on(id: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return c.shortcut;
     }
-    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| c.2).filter(|s| !s.is_empty())
+    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| ui_command_default(c.0, c.2, p)).filter(|s| !s.is_empty())
+}
+
+/// The default shortcut `sc` of UI command `id` on platform `p` (empty for none). Select Last
+/// Selection Tool has none on macOS, which takes Cmd+` to switch between an app's windows.
+pub(crate) fn ui_command_default(id: &str, sc: &'static str, p: craft_keymap::Platform) -> &'static str {
+    if id == "tool.selectLastSelection" && p.is_mac() { "" } else { sc }
 }
 
 /// Window menu items that show a panel (`window.panel {panel}`) with a default shortcut: (panel
@@ -184,15 +195,21 @@ pub const PANEL_SHORTCUTS: &[(&str, &str)] = &[
     ("openType", "Cmd+Alt+Shift+T"),
 ];
 
-/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id).
+/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id) on
+/// [`crate::keymap::platform`].
 pub fn default_of(key: &str) -> Option<&'static str> {
+    default_on(key, crate::keymap::platform())
+}
+
+/// Default shortcut of an entry key on platform `p`.
+pub(crate) fn default_on(key: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(t) = key.strip_prefix("tool:") {
         return vectorcraft_tools::tool_info(t).and_then(|t| t.shortcut);
     }
-    if let Some(p) = key.strip_prefix("panel:") {
-        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == p).map(|(_, sc)| *sc);
+    if let Some(panel) = key.strip_prefix("panel:") {
+        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == panel).map(|(_, sc)| *sc);
     }
-    default_command_shortcut(key)
+    default_command_shortcut_on(key, p)
 }
 
 /// Effective shortcut of an entry key, honouring the user's overrides.
@@ -1000,14 +1017,10 @@ fn names_a_required_field(params: &str) -> bool {
         !(f.is_empty() || f.starts_with('…') || f[end..].starts_with('=') || f[..end].split('|').all(|n| n.trim().ends_with('?')))
     };
     let Some(rest) = params.strip_prefix('{') else { return false };
-    let (mut depth, mut quoted, mut start) = (0usize, false, 0);
-    for (i, ch) in rest.char_indices() {
+    let mut start = 0;
+    for (i, ch, depth) in outside_quotes(rest) {
         match ch {
-            '"' => quoted = !quoted,
-            _ if quoted => {}
-            '{' | '[' | '(' => depth += 1,
             '}' if depth == 0 => return required(&rest[start..i]),
-            '}' | ']' | ')' => depth = depth.saturating_sub(1),
             ',' if depth == 0 => {
                 if required(&rest[start..i]) {
                     return true;
@@ -1018,6 +1031,29 @@ fn names_a_required_field(params: &str) -> bool {
         }
     }
     false
+}
+
+/// Each character of `text` that is not a double quote or inside a pair of them, with its byte
+/// offset and the number of `{`, `[` and `(` groups open before it. A closing `}`, `]` or `)` comes
+/// with a count that includes the group it closes, and one with no group open counts none.
+pub(crate) fn outside_quotes(text: &str) -> impl Iterator<Item = (usize, char, usize)> + '_ {
+    let (mut depth, mut quoted) = (0usize, false);
+    text.char_indices().filter_map(move |(i, ch)| {
+        if ch == '"' {
+            quoted = !quoted;
+            return None;
+        }
+        if quoted {
+            return None;
+        }
+        let before = depth;
+        match ch {
+            '{' | '[' | '(' => depth += 1,
+            '}' | ']' | ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        Some((i, ch, before))
+    })
 }
 
 pub fn entry(key: &str) -> Option<Entry> {
@@ -3094,6 +3130,8 @@ mod tests {
         assert_eq!(shown("file.new"), Some(("File".into(), "New…".into(), true)));
         assert_eq!(shown("text.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), false)));
         assert_eq!(shown("type.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), true)));
+        assert_eq!(shown("text.convertListToText"), Some(("Type".into(), "Convert to Text".into(), false)));
+        assert_eq!(shown("type.convertListToText"), Some(("Type › Bullets and Numbering".into(), "Convert to Text".into(), false)));
         for id in ["file.exportInBackground", "file.openInBackground"] {
             assert_eq!(shown(id), Some(("File".into(), "Continue in Background".into(), true)), "{id}");
         }
@@ -3116,6 +3154,26 @@ mod tests {
         record(&mut d, &mut km, "type.fitHeadline", "Cmd+Alt+Shift+F10");
         record(&mut d, &mut km, "text.fitHeadline", "Cmd+Alt+Shift+F10");
         assert!(d.str("__message").contains("was already used by Type › Fit Headline (type.fitHeadline) "), "{}", d.str("__message"));
+    }
+
+    /// No two entries of Keyboard Shortcuts have the same name in any UI language: each catalog
+    /// translates two different English names two different ways.
+    #[test]
+    fn no_two_entries_have_the_same_name_in_any_language() {
+        let all = entries();
+        let mut shared = vec![];
+        let previous = crate::i18n::current();
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            let mut by_name: HashMap<String, Vec<&str>> = HashMap::new();
+            for e in all.iter() {
+                by_name.entry(shown_name(e)).or_default().push(e.key.as_str());
+            }
+            shared.extend(by_name.into_iter().filter(|(_, keys)| keys.len() > 1).map(|(name, keys)| (lang.code(), name, keys)));
+        }
+        crate::i18n::set_current(previous);
+        shared.sort();
+        assert!(shared.is_empty(), "{} names: {shared:#?}", shared.len());
     }
 
     /// Two filter plug-ins with the same name in the same menu show their ids, and a third whose
