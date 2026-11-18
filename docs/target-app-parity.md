@@ -2909,7 +2909,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-17 | minor | Panels: in a docked, floating or resized panel the 10 pt margin under the pinned footer is painted with the panel background and takes its clicks, so a list scrolled behind the footer (the Swatches tiles in a short panel) no longer shows through below the buttons (#8307; `panel_docking::tests::the_margin_under_a_pinned_footer_hides_a_list_scrolled_behind_it`). Scores and estimates unchanged. |
+| 2026-11-17 | minor | Panels: in a docked, floating or resized panel the 10 pt margin under the pinned footer is painted with the panel background and takes its clicks and drags, so a list scrolled behind the footer (the Swatches tiles in a short panel) no longer shows through below the buttons (#8307; `panel_docking::tests::the_margin_under_a_pinned_footer_hides_a_list_scrolled_behind_it`). Scores and estimates unchanged. |
 | 2026-11-16 | minor | Layers panel: an Alt-drag copies a row above or below its own place (`layer.move` with `copy` and that row as the target), so the top layer dragged up, the bottom layer dragged down and a document's only layer are copied (#8237). Scores and estimates unchanged. |
 | 2026-11-16 | minor | Layers panel: rows or the selected-art square dragged over the list show the copy cursor while Alt is held, as the drop then copies, and the grabbing hand otherwise (#8217). Scores and estimates unchanged. |
 | 2026-11-16 | minor | Gradient panel: the strip under the ramp, where a click adds a stop, shows the white arrow with a plus on Windows and X11, where the system copy cursor showed as the plain arrow (#8241). Scores and estimates unchanged. |
