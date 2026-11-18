@@ -12914,11 +12914,12 @@ fn text_thread_overlays_keep_document_order_with_mixed_selection() {
         .run("text.create", json!({"x": 20, "y": 100, "text": "An unselected story. ".repeat(20), "area": {"width": 150, "height": 60}}))
         .unwrap());
     let unselected_next = id(app.run("text.thread.add", json!({"from": unselected.0, "at": [300, 100]})).unwrap());
-    let unrelated = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
-    app.run("select.set", json!({"ids": [second_next.0, unrelated.0, first.0]})).unwrap();
+    let unrelated_a = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
+    let unrelated_b = id(app.run("shape.rectangle", json!({"x": 480, "y": 300, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [unrelated_a.0, unrelated_b.0, second_next.0, first.0]})).unwrap();
 
     let state = app.session.active().unwrap();
-    assert_eq!(state.selection.objects, [second_next, unrelated, first]);
+    assert_eq!(state.selection.objects, [unrelated_a, unrelated_b, second_next, first]);
     assert_eq!(state.doc.text_threads, [vec![first, first_next], vec![second, second_next], vec![unselected, unselected_next]]);
     let frame = |id| match &state.doc.node(id).unwrap().kind {
         NodeKind::Text(text) => (**text).clone(),
@@ -13012,6 +13013,46 @@ fn text_thread_overlays_keep_two_early_hits_with_many_unrelated_paths() {
         })
         .collect();
     assert_eq!(ports, expected.into_iter().flat_map(|(a, b)| [a, b]).collect::<Vec<_>>());
+}
+
+/// One two-frame thread misses a selection of 512 unrelated paths.
+/// This checks ordinary empty output, not elapsed time or allocation.
+#[test]
+fn text_thread_overlays_skip_one_unselected_thread_with_many_unrelated_paths() {
+    use std::sync::Arc;
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::{ported, ports_shown};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let text = "Words that fill more than the frame holds. ".repeat(10);
+    let id = |value: serde_json::Value| NodeId(value["id"].as_u64().unwrap());
+    let first = id(app.run("text.create", json!({"x": 20, "y": 20, "text": text, "area": {"width": 150, "height": 60}})).unwrap());
+    let next = id(app.run("text.thread.add", json!({"from": first.0, "at": [300, 20]})).unwrap());
+    let path = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
+    let mut selected = vec![path];
+    {
+        let st = app.session.active_mut().unwrap();
+        let doc = Arc::make_mut(&mut st.doc);
+        let template = doc.node(path).unwrap().clone();
+        let mut additions = Vec::with_capacity(511);
+        for _ in 1..512 {
+            let mut p = template.clone();
+            p.id = doc.alloc_id();
+            selected.push(p.id);
+            additions.push(Arc::new(p));
+        }
+        Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().extend(additions);
+        doc.drop_lookup_cache();
+    }
+    app.run("select.set", json!({"ids": selected.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(st.doc.text_threads, [vec![first, next]]);
+    assert_eq!(st.selection.objects, selected);
+    assert_eq!(st.selection.objects.len(), 512);
+    assert!(selected.iter().all(|id| *id != first && *id != next));
+    assert!([first, next].into_iter().all(|id| ported(&st.doc, id).is_some()), "both thread frames have ports");
+    assert!(ports_shown(&st.doc, &st.selection.objects));
+    assert!(thread_overlays(&app, 1.0).is_empty());
 }
 
 /// A double-click with the Selection tool on the out port of a threaded frame breaks the

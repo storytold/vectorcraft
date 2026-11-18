@@ -454,19 +454,23 @@ pub(super) fn thread_overlays(app: &VectorcraftApp, zoom: f64) -> Vec<Overlay> {
     let boxes = ports_shown(&st.doc, &st.selection.objects);
     let selection = &st.selection.objects;
     let mut selected: Option<HashSet<NodeId>> = None;
-    // A single thread matching the first lookup needs no index.
-    let mut first_lookup = true;
+    // The first two full searches need no index.
+    let mut full_searches = 0;
     let mut is_selected = |id: &NodeId| {
         if selection.len() <= 1 {
             return selection.contains(id);
         }
-        if first_lookup {
-            first_lookup = false;
+        if full_searches == 0 {
+            full_searches = 1;
             return selection.contains(id);
         }
         // Two early selection hits need no index.
         if selected.is_none() && selection[..2].contains(id) {
             return true;
+        }
+        if selected.is_none() && full_searches < 2 {
+            full_searches += 1;
+            return selection.contains(id);
         }
         selected.get_or_insert_with(|| selection.iter().copied().collect::<HashSet<_>>()).contains(id)
     };
