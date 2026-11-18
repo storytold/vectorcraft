@@ -4,7 +4,8 @@
 //! [`crate::ai_editing`] for the form). Each style is read back before it is written
 //! ([`crate::import::read_parsed_style`]: the `.ai` reader's style parser and its reading of a graphic
 //! style, with the object's own gradient): one that reads back differently is not written, and the
-//! object is written as its drawn look alone. Each style text is parsed once per save ([`Parsed`]).
+//! object is written as its drawn look alone. Style texts are kept parsed for the save, up to a
+//! limit ([`Parsed`]).
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -172,15 +173,27 @@ pub(in crate::ai_editing) struct Styles {
     next_anon: u64,
     /// How many objects were written with the graphic style they are linked to.
     pub(super) links_written: usize,
-    /// Every style text checked so far, as the reader parses it.
+    /// The style texts checked so far, as the reader parses them.
     pub(super) parsed: Parsed,
 }
 
-/// Style texts as the reader parses them ([`crate::import::parse_art_style`]), each parsed once
-/// however many styles and objects are checked with it; a text the reader doesn't parse is kept
-/// as `None`.
+/// The most style texts [`Parsed`] keeps parsed in one save.
+const MAX_PARSED: usize = 4096;
+/// The most bytes of style text [`Parsed`] keeps parsed in one save.
+const MAX_PARSED_BYTES: usize = 8 << 20;
+
+/// Style texts as the reader parses them ([`crate::import::parse_art_style`]). The first
+/// [`MAX_PARSED`] texts, up to [`MAX_PARSED_BYTES`] bytes in all, are each parsed once however many
+/// styles and objects are checked with them; a text the reader doesn't parse is kept as `None`.
+/// Past that, only the last text checked is kept, and each other text is parsed again when checked.
 #[derive(Default)]
-pub(super) struct Parsed(HashMap<String, Option<crate::import::ParsedStyle>>);
+pub(super) struct Parsed {
+    kept: HashMap<String, Option<crate::import::ParsedStyle>>,
+    /// The bytes of the texts in `kept`.
+    bytes: usize,
+    /// The last text checked that `kept` doesn't hold, with its parse.
+    last: Option<(String, Option<crate::import::ParsedStyle>)>,
+}
 
 #[cfg(test)]
 thread_local! {
@@ -192,14 +205,21 @@ impl Parsed {
     /// Style text `text` as the reader parses it (`None` when it doesn't).
     pub(super) fn get(&mut self, text: &str) -> Option<&crate::import::ParsedStyle> {
         #[cfg(test)]
-        if REPARSE.get() {
-            self.0.remove(text);
+        let reparse = REPARSE.get();
+        #[cfg(not(test))]
+        let reparse = false;
+        if !reparse && self.kept.contains_key(text) {
+            return self.kept.get(text).and_then(Option::as_ref);
         }
-        if !self.0.contains_key(text) {
+        if reparse || self.last.as_ref().is_none_or(|(last, _)| last != text) {
             let parsed = crate::import::parse_art_style(known_style("x", text).as_bytes(), "x");
-            self.0.insert(text.to_owned(), parsed);
+            if !reparse && self.kept.len() < MAX_PARSED && self.bytes.saturating_add(text.len()) <= MAX_PARSED_BYTES {
+                self.bytes += text.len();
+                return self.kept.entry(text.to_owned()).or_insert(parsed).as_ref();
+            }
+            self.last = Some((text.to_owned(), parsed));
         }
-        self.0.get(text).and_then(Option::as_ref)
+        self.last.as_ref().and_then(|(_, parsed)| parsed.as_ref())
     }
 }
 
@@ -1069,5 +1089,54 @@ pub(super) fn near(a: &Value, b: &Value) -> bool {
         (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(x, y)| near(x, y)),
         (Value::Object(x), Value::Object(y)) => x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| near(v, w))),
         _ => a == b,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A style text after its name: a stroke `width` pt wide.
+    fn stroke_style(width: usize) -> String {
+        format!(
+            "/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                2 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n/StrokeStyle : 0 R\n0 0 0 0 0 0 1 XA\n0 J 0 j {width} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n\
+                ; /Dict ;\n /Part ,\n/BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n"
+        )
+    }
+
+    /// `text` parsed on its own, as the reader parses it.
+    fn fresh(text: &str) -> String {
+        format!("{:?}", crate::import::parse_art_style(known_style("x", text).as_bytes(), "x"))
+    }
+
+    /// A save that checks more distinct style texts than [`Parsed`] keeps, stroke styles and texts
+    /// that aren't styles, keeps at most [`MAX_PARSED`] texts and [`MAX_PARSED_BYTES`] bytes, and each
+    /// check still gives the text's own parse, kept or not, the first time and again.
+    #[test]
+    fn parsed_styles_kept_in_a_save_stay_within_the_limits() {
+        let mut parsed = Parsed::default();
+        for i in 0..MAX_PARSED + 100 {
+            let text = if i % 2 == 0 { stroke_style(i + 1) } else { format!("not a style {i}") };
+            let got = format!("{:?}", parsed.get(&text).cloned());
+            assert_eq!(got, fresh(&text), "{i}");
+            assert_eq!(format!("{:?}", parsed.get(&text).cloned()), got, "{i}");
+            assert!(parsed.kept.len() <= MAX_PARSED && parsed.bytes <= MAX_PARSED_BYTES, "{i}: {} texts", parsed.kept.len());
+        }
+        assert_eq!(parsed.kept.len(), MAX_PARSED);
+        for i in [0, 1, MAX_PARSED - 1, MAX_PARSED, MAX_PARSED + 98, MAX_PARSED + 99] {
+            let text = if i % 2 == 0 { stroke_style(i + 1) } else { format!("not a style {i}") };
+            assert_eq!(format!("{:?}", parsed.get(&text).cloned()), fresh(&text), "{i}");
+        }
+
+        let mut parsed = Parsed::default();
+        let long = |i: usize| format!("{i} {}", "x".repeat(1 << 20));
+        for i in 0..MAX_PARSED_BYTES / (1 << 20) + 4 {
+            assert_eq!(format!("{:?}", parsed.get(&long(i)).cloned()), fresh(&long(i)), "{i}");
+            assert!(parsed.bytes <= MAX_PARSED_BYTES, "{i}: {} bytes", parsed.bytes);
+            assert_eq!(parsed.bytes, parsed.kept.keys().map(String::len).sum::<usize>());
+        }
+        assert!(parsed.kept.len() < MAX_PARSED_BYTES / (1 << 20));
     }
 }
