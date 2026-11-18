@@ -42,9 +42,10 @@ pub use color::{
     hex_field, hex_field_named, hsb32, hue_ring, region_texture, ring_square, segment_color, segment_color_on, segmented_wheel, stepped_area,
     wheel_of,
 };
-pub(crate) use color::{HEX_FIELD_CHARS, hex_text, pointer_phase};
+pub(crate) use color::{HEX_FIELD_CHARS, focus_by_pointer, hex_text, pointer_phase};
 pub use drag::{
-    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drop, doc_preview, drag_ghost, drag_source, drop_target_outline, ghost_row, row_click,
+    PanelDrag, RowClick, SwatchRows, apply_row_click, art_drag_doc, art_drop, doc_preview, drag_art, drag_ghost, drag_source, drop_target_outline,
+    ghost_row, row_click,
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;

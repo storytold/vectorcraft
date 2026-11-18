@@ -818,6 +818,8 @@ font-technology	Variable	Variables
 	Delete Artboard	Supprimer le plan de travail
 	Delete Artboards	Supprimer les plans de travail
 	Delete Brush	Supprimer la forme
+	Delete Color	Supprimer la couleur
+	Restore Generated Table	Restaurer la table générée
 	Delete Character Style	Supprimer le style de caractère
 	Delete Empty Artboards	Supprimer les plans de travail vides
 	Delete Freeform Point	Supprimer le point libre
@@ -887,6 +889,7 @@ font-technology	Variable	Variables
 	Direct Selection Tool	Outil Sélection directe
 	Direction Handles	Poignées de direction
 	Disable Auto Add/Delete	Désactiver l’ajout/suppression automatique
+	Interpolate Control Points When Moving Anchors	Interpoler les poignées de direction lors du déplacement des points d’ancrage
 	Disable Opacity Mask	Désactiver le masque d’opacité
 	Discard	Ignorer
 	Discard Empty Type	Supprimer le texte vide
@@ -2255,6 +2258,7 @@ font-technology	Variable	Variables
 	Scatter:	Dispersion :
 	Rotation:	Rotation :
 	Rotation relative to:	Rotation par rapport à :
+	Hue Jitter:	Variation de teinte :
 	Brush Scale Options	Options de mise à l’échelle de la forme
 	Scale Proportionately	Mettre à l’échelle proportionnellement
 	Stretch to Fit Stroke Length	Étirer selon la longueur du contour
@@ -2291,6 +2295,7 @@ font-technology	Variable	Variables
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Le noir reste noir et le blanc reste blanc. Les autres couleurs deviennent des ombres de la couleur du contour quand elles sont foncées et des teintes de celle-ci quand elles sont claires.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	La couleur clé devient la couleur du contour. Les autres couleurs tournent sur le cercle chromatique autant que la couleur clé et gardent leur saturation et leur luminosité.
 	Key Color:	Couleur clé :
+	Roundness	Arrondi
 	Roundness:	Arrondi :
 	Fixed	Fixe
 	Pressure	Pression
@@ -2729,6 +2734,7 @@ font-technology	Variable	Variables
 	Line Properties:	Propriétés de la ligne :
 	Line Length:	Longueur de la ligne :
 	Line Angle:	Angle de la ligne :
+	Constrain Pie Angle	Conserver l’angle du secteur
 	Polygon Tool	Outil Polygone
 	Portrait	Portrait
 	Power Saving (integrated)	Économie d’énergie (intégrée)
@@ -2888,6 +2894,9 @@ digits	Malayalam	Malayalam
 	Real World:	Monde réel :
 	Real-time Drawing and Editing	Dessin et édition en temps réel
 	Use Monitor Profile for Canvas	Utiliser le profil du moniteur pour la zone de travail
+	Refresh Monitor Profile	Actualiser le profil du moniteur
+@msg	turn on Use Monitor Profile for Canvas first	activez d’abord « Utiliser le profil du moniteur pour la zone de travail »
+@msg	this build doesn't read display profiles	cette version ne lit pas les profils d’affichage
 	The canvas is drawn in sRGB.	La zone de travail est affichée en sRGB.
 	Canvas display profile:	Profil d’affichage de la zone de travail :
 	The system matches the window to the display's colors.	Le système adapte la fenêtre aux couleurs de l’écran.
@@ -3149,6 +3158,7 @@ digits	Malayalam	Malayalam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La molette de la souris avec Cmd/Ctrl enfoncée fait défiler la zone de travail latéralement.
 	Dragging sideways on a numeric field's label changes the field's value.	Faire glisser latéralement le libellé d’un champ numérique modifie la valeur du champ.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un geste de rotation à deux doigts sur un pavé tactile fait pivoter la vue de la zone de travail.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quand vous déplacez des points d’ancrage, chaque courbe dont une extrémité bouge garde sa forme par rapport à ses extrémités.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Maintenir le raccourci d’un outil choisit cet outil jusqu’à ce que vous le relâchiez, puis l’outil précédent est de nouveau choisi.
 	Shows the bounding box while you move the selection or draw a shape.	Affiche le cadre de sélection pendant que vous déplacez la sélection ou dessinez une forme.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Créer des traits de coupe dessine des traits de style japonais au lieu de traits romains.
@@ -4543,6 +4553,7 @@ imageTrace	Outline	Contour
 	Bevel	Biseauté
 	Offset	Décalage
 	Axis	Axe
+	Axis Angle	Angle de l’axe
 axis	Horizontal	Horizontal
 axis	Vertical	Vertical
 axis	Both	Les deux
@@ -4770,6 +4781,14 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`name` must be the name of a script engine	`name` doit être le nom d’un moteur de script
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	le moteur de script principal est nouveau à chaque exécution et n’est jamais conservé, il ne peut donc pas être supprimé
 @msg	there is no script engine named {name}	il n’y a aucun moteur de script nommé {name}
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` doit être un nombre entier de 1 à {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` est imbriqué sur plus de 64 niveaux
+@msg	`args` must be an object	`args` doit être un objet
+@msg	`args` is larger than 1 MiB	`args` dépasse 1 Mio
+@msg	`path` is empty	`path` est vide
+@msg	`installed` takes a `path`, not a `source`	`installed` prend un `path`, pas un `source`
+@msg	`path` must name a .js or .jsx file	`path` doit désigner un fichier .js ou .jsx
+@msg	give exactly one of `path` and `source`	indiquez exactement un paramètre parmi `path` et `source`
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l’application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
@@ -5035,6 +5054,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	choose a folder to export to	choisissez un dossier d’exportation
 @msg	choose a location for the package	choisissez un emplacement pour l’assemblage
 @msg	clipboard is empty	le presse-papiers est vide
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: au moins une couleur doit rester dans la table des couleurs
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what} : `{h}` n’est pas une couleur comme "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what} : {MAX_TABLE} couleurs au maximum
 @msg	command `{0}` is not available right now: {1}	la commande `{0}` n’est pas disponible pour le moment : {1}
@@ -5102,6 +5122,12 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no PNG encoder	aucun encodeur PNG
 @msg	no active document	aucun document actif
 @msg	no active perspective plane	aucun plan de perspective actif
+@msg	the perspective grid is hidden	la grille de perspective est masquée
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Le positionnement automatique du plan est désactivé : activez anchorPoint ou gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint doit valoir true ou false
+@msg	gridlineIntersection must be true or false	gridlineIntersection doit valoir true ou false
+@msg	tolerance must be 0 or more	tolerance doit être supérieur ou égal à 0
+@msg	give `at` or `clear`, not both	indiquez `at` ou `clear`, pas les deux
 @msg	no anchor points selected	aucun point d’ancrage sélectionné
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` doit contenir deux ou trois paires de nombres [x, y]
 @msg	direct-select two or three anchor points, or give `points`	sélectionnez deux ou trois points d’ancrage avec l’outil Sélection directe, ou indiquez `points`
@@ -5572,6 +5598,8 @@ variable-list-end	{0}, {1}	{0} et {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Rechargez la page pour continuer (les modifications non encore enregistrées risquent d’être perdues).
 @msg	tool (a tool id) is required	tool (un identifiant d’outil) est obligatoire
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ne fait pas partie d’un groupe de plusieurs outils dans la barre d’outils
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	pour afficher les barres d’outils masquées par le Mode Présentation, changez de mode d’affichage
+@msg	Tab has hidden the toolbars: press Tab to show them	pour afficher les barres d’outils masquées par Tab, appuyez sur Tab
 @msg	onto must name a panel floating in another group	onto doit désigner un panneau flottant dans un autre groupe
 @msg	below and above must name a panel floating in another group	below et above doivent désigner un panneau flottant dans un autre groupe
 @msg	give only one of onto, below and above	indiquez un seul de onto, below et above
@@ -5712,6 +5740,7 @@ variable-list-end	{0}, {1}	{0} et {1}
 @msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié est hors des dossiers racines de lecture
 @msg	a linked image file is outside the read roots	un fichier image lié est hors des dossiers racines de lecture
 @msg	a linked file's export folder is outside the read roots	le dossier d’exportation d’un fichier lié est hors des dossiers racines de lecture
+@msg	a linked file's editing data can't be read to check it against the read roots	impossible de lire les données d’édition d’un fichier lié pour les vérifier par rapport aux dossiers racines de lecture
 @msg	automation path rejected: outside the write root {root}: {path}	chemin d’automatisation refusé : hors du dossier racine d’écriture {root} : {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	chemin d’automatisation refusé : hors des dossiers racines d’écriture {roots} : {path}
 @msg	automation path rejected: path is empty	chemin d’automatisation refusé : le chemin est vide
@@ -5993,6 +6022,7 @@ lighting	Light	Lumière
 	Cove	Cavet
 	Depth	Profondeur
 	Front	Avant
+	Side	Côté
 	Isometric Bottom	Isométrique dessous
 	Isometric Left	Isométrique gauche
 	Isometric Right	Isométrique droite
@@ -6087,6 +6117,7 @@ lighting	Light	Lumière
 @msg	each of `{GRAPHICS}` must be an object	chaque élément de `{GRAPHICS}` doit être un objet
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	les éléments de `{GRAPHICS}` acceptent symbol, face, x, y, scale et rotation, pas `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	chaque élément de `{GRAPHICS}` nécessite `symbol`, le nom d’un symbole
+@msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` doit valoir front, back ou side
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` doit valoir front ou back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` doit être un nombre de {lo} à {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` doit être un tableau
@@ -7748,6 +7779,14 @@ breakText	Glyphs	Glyphes
 	Remove Gaps	Supprimer les écarts
 @msg	that makes too many pieces (at most 100000): make the dashes longer	cela donne trop de morceaux (100000 au plus) : allongez les tirets
 @msg	select paths, or segments, to divide	sélectionnez des tracés ou des segments à diviser
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pont lissé…
+	Smooth Bridge	Pont lissé
+	Keep Originals	Conserver les originaux
+@msg	select two circles to bridge	sélectionnez deux cercles à relier
+@msg	one circle is inside the other	un cercle est à l’intérieur de l’autre
+@msg	the circles are too far apart for this radius: raise the radius	les cercles sont trop éloignés pour ce rayon : augmentez le rayon
+@msg	the circles are too far apart for this radius	les cercles sont trop éloignés pour ce rayon
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangentes communes…
 	Common Tangents	Tangentes communes

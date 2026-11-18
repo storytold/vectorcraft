@@ -409,7 +409,18 @@ pub fn command_specs() -> &'static [CommandSpec] {
 /// The command `id`: a built-in one, or a command an installed plug-in adds
 /// ([`plugin::command_specs`]).
 pub fn find_command(id: &str) -> Option<&'static CommandSpec> {
-    command_specs().iter().find(|c| c.id == id).or_else(|| plugin::find_spec(id))
+    static INDEX: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static CommandSpec>> = std::sync::OnceLock::new();
+    INDEX.get_or_init(|| index_by_id(command_specs())).get(id).copied().or_else(|| plugin::find_spec(id))
+}
+
+/// `specs` by id. An id that more than one spec has names the first of them, as a search of
+/// `specs` in order finds.
+pub(crate) fn index_by_id(specs: &[CommandSpec]) -> std::collections::HashMap<&'static str, &CommandSpec> {
+    let mut index = std::collections::HashMap::with_capacity(specs.len());
+    for spec in specs {
+        index.entry(spec.id).or_insert(spec);
+    }
+    index
 }
 
 /// Runs command `spec`'s implementation with `p`. A plug-in command's runs the plug-in

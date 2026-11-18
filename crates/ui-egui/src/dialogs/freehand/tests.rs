@@ -54,6 +54,30 @@ fn the_tip_preview_is_as_flat_as_the_tip_the_brush_draws() {
     }
 }
 
+/// A Roundness dot of the tip preview gives its distance from the center along the tip's short
+/// axis as a percentage of half the tip's length, on either side and at any Angle: 0% at the
+/// center, 100% at half the length and past it. A move along the long axis leaves it as it is, and
+/// the dots drawn for a Roundness give that Roundness back.
+#[test]
+fn a_roundness_dot_sets_its_distance_along_the_short_axis() {
+    for angle in [0.0, 30.0, 90.0, -135.0, 180.0] {
+        let (u, v) = blob_tip_axes(angle);
+        for (along, want) in [(0.0, 0.0), (4.5, 25.0), (-9.0, 50.0), (18.0, 100.0), (-18.0, 100.0), (40.0, 100.0), (-400.0, 100.0)] {
+            for sideways in [0.0, 7.0, -30.0] {
+                assert_eq!(blob_tip_roundness_at(v * along + u * sideways, angle), want, "angle {angle}, {along} along, {sideways} sideways");
+            }
+        }
+        let center = egui::pos2(32.0, 32.0);
+        for roundness in [0.0, 1.0, 37.0, 50.0, 99.0, 100.0] {
+            let [a, b] = blob_tip_dots(center, angle, roundness);
+            assert!(((a - center) + (b - center)).length() < 1e-4, "the dots face each other across the center");
+            for dot in [a, b] {
+                assert_eq!(blob_tip_roundness_at(dot - center, angle), roundness, "angle {angle}");
+            }
+        }
+    }
+}
+
 /// The labels the open dialog paints.
 fn painted(app: &mut VectorcraftApp) -> String {
     crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))

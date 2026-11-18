@@ -55,7 +55,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         // Transform Each opens on the values it was last confirmed with (#1732).
         "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::open_fields(app)),
         "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
-        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
+        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal", "axisAngle": 0})),
         "path.average" => ("average", json!({"axis": "both"})),
         // Average & Join opens on the joined anchor chosen last (Corner the first time).
         "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
@@ -79,6 +79,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::bridge::COMMAND => (crate::addons::pathtools::bridge::KIND, crate::addons::pathtools::bridge::fields()),
         crate::addons::pathtools::tangent_circle::COMMAND => {
             (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
         }

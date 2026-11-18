@@ -167,6 +167,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
     (
+        "view.refreshMonitorProfile",
+        "Refresh Monitor Profile",
+        "",
+        "{} read the display's profile for Use Monitor Profile for Canvas (monitorProfileDisplay) again on the next frame, without waiting for the 10-second reading or the 1-second display check; while a reading runs, the request waits for it to end → {requested: true}, before the profile is read (ui.inspect › displayProfile reports the reading, and readRequested while it waits); an error while the preference is off, and where nothing reads the display's profile (the web build)",
+    ),
+    (
         "edit.autoSpellCheck",
         "Auto Spell Check",
         "",
@@ -895,6 +901,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
     (
+        "help.discover",
+        "VectorCraft Help…",
+        "F1",
+        "{query?: string (at most 1024 characters, VectorCraft's limit)} show the Help panel without toggling it closed; a supplied query searches tools, menu commands, and built-in tutorials; omission keeps the current search. Returns {query, results: [{kind: tool|command|tutorial, id, label, path, shortcut}], selected: index|null}",
+    ),
+    (
+        "help.discover.search",
+        "Search",
+        "",
+        "{query: string (at most 1024 characters, VectorCraft's limit)} search tools, menu commands, and built-in tutorials and show the Help panel; empty or whitespace-only text clears the results. Returns the help.discover result",
+    ),
+    (
+        "help.discover.choose",
+        "Select",
+        "",
+        "{index: zero-based result index} show a tool's location, a tutorial's steps in Help, or a command's menu path and shortcut without running it; an invalid index is an error. Returns {result: chosen result, location: tool location, tutorial id, or command path}",
+    ),
+    ("help.discover.back", "Back", "", "{} return from a Help result to its search results without changing the query"),
+    (
         "help.safeMode",
         "Safe Mode…",
         "",
@@ -947,7 +972,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.brushOptions",
         "Brush Options…",
         "",
-        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
+        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path, hueJitter 0..180°), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
     ),
     (
         "ui.brushObjectOptions",

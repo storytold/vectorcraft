@@ -286,6 +286,16 @@ the suite) keep the agent to the folders you give it:
   linked native document with `relink: false`, as it is: when the native document such a file is or carries
   keeps a folder outside the read roots, the package is refused before anything is written with "a linked
   file's export folder is outside the read roots", which names no file or folder.
+- An exporter plug-in's format (`plugin.<id>`) carries the native document too: its plug-in is given the
+  document's JSON. The JavaScript and linked image rules above refuse its files from every command that writes
+  them, before the plug-in runs and before any file or folder is written, and the JSON the plug-in is given
+  leaves out an Export for Screens folder outside the read roots.
+- `file.package` refuses, before anything is written, a linked file whose native document it can't read to
+  check against the read roots: a native document that doesn't load, a PDF or `.ai` file that can't be opened
+  (one that needs a password to open, or a damaged one), and a PDF, `.ai` or EPS file whose editing data
+  doesn't load. The error, "a linked file's editing data can't be read to check it against the read roots",
+  names no file or folder. A PDF, `.ai` or EPS file without editing data is copied as before, and the person at
+  the keyboard packages every linked file as before.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -3446,6 +3456,39 @@ own layout rules.
 {"name":"invoke_menu","arguments":{"command":"window.toolbar.dock","params":{"name":"Toolbar 1","side":"left","order":0}}}
 ```
 
+## Help search
+
+Help › VectorCraft Help… and F1 show the Help panel. `help.discover {query?}` opens it without
+toggling it closed. A supplied string searches tools, menu commands, and VectorCraft's built-in
+tutorials. Omitting `query` preserves the current search. Empty or whitespace-only text clears
+the results. VectorCraft limits a query to 1024 characters and rejects a longer supplied string.
+
+`help.discover.search {query}` runs the same search and shows the panel. Both commands return
+`{query, results: [{kind, id, label, path, shortcut}], selected}`. `kind` is `tool`, `command`, or
+`tutorial`; `selected` is a zero-based result index or `null`. Search matches all the query's
+words without regard to case, using translated tool labels, command labels as their menus show
+them, and the English labels, ids, and menu paths. A result's `path` names the menus as they are
+drawn, with plug-in submenus and Scripts folders under their own names. Outside macOS, items of
+the VectorCraft application menu, which only the macOS menu bar shows, are left out. Tutorial text remains in English. After a shortcut or the interface
+language changes, the kept results show the current shortcuts, labels, and menu paths, with the
+query and the selected result unchanged. A command result also shows its menu item's current
+label (Show Grid becomes Hide Grid), and a command that no menu lists any more, such as a removed
+recent file, drops out of the results. Parameters other than an object are an error.
+
+`help.discover.choose {index}` shows that result. A tool result marks its toolbar location without
+choosing the tool. A command result shows its menu path and current shortcut without running it.
+A tutorial result shows its numbered steps; a tool link in a step marks that tool's location.
+The reply is `{result, location}`, with the chosen result and the tool-location reply, tutorial
+id, or command path. An invalid index returns an error and preserves the selected result. When a
+tool cannot be marked because Tab or Presentation Mode hides the toolbars, the panel shows the
+tool-location reply's `reason` in the status bar.
+
+Home clears the search. Back and `help.discover.back {}` return to its results with the query
+preserved. Escape in the search field closes the panel. Escape on the canvas still cancels an
+active tool operation. The panel uses the existing tool-location marks; command guidance is a
+menu path. Articles, Quick Actions, personalized recommendations, and Discover preferences are
+not included.
+
 ## Learn panel
 
 Window › Learn and the Explore tutorials button beside the search field at the right end of the app bar show and hide
@@ -3647,6 +3690,12 @@ already walks Image Trace. Short agent entry points:
   when that document is no longer open; plug-ins cannot call it), `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask and its bounding box, square after
   `object.resetBoundingBox`; a hidden or locked instance's
   art stays hidden or locked and is not selected), `symbol.replace`,
+  `symbol.update {name, ids?|id?, keepArt?: false}` (Redefine Symbol: the selection, or `ids`, becomes the symbol's art and an instance
+  of it in one undo step; with `keepArt: true` the art stays ordinary art in its place, with its ids, and stays selected
+  unless it is hidden or locked, and the result's `id` is null; a `keepArt` other than true or false is an error; art that holds an instance of the symbol (opacity masks included), directly or through the art
+  of the symbols it holds instances of, is refused and nothing changes; the Symbols panel menu's Redefine Symbol sends `keepArt: true` when it
+  is chosen with Shift held, and the panel sends it with the dragged art's `ids` when art dragged
+  off the canvas is released on a symbol's tile or row with Alt (Option on macOS) held),
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
   `artboard`, the active one the app passes, or in a document without artboards on `viewCenter`, the view's center the
@@ -3771,7 +3820,21 @@ already walks Image Trace. Short agent entry points:
   `brush.new` or `brush.options` without a `key` takes the color that the art's fills and strokes use most (on a tie,
   the one found first), or black when they use no solid color. `brush.options` changes only the fields of
   `colorization` and of an art brush's `scale` that `params` gives, so `{colorization: {method: "hueShift"}}` keeps a
-  Hue Shift brush's key. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
+  Hue Shift brush's key. A scatter brush's `hue_jitter` (0 to 180 degrees, VectorCraft's own range; 0, the
+  default, leaves every copy's colors as the colorization gives them) turns the hue of each copy's solid fills and
+  strokes, its type's characters included, by that copy's own amount between minus and plus that many degrees. The
+  turn comes after the colorization: with None it turns the art's own colors, with Tints and Tints and Shades the
+  tints and shades of the stroke color, and with Hue Shift the shifted colors. Black, white and grays (equal RGB
+  values, a Gray color, CMYK without C, M or Y ink, Lab without a or b) have no hue and stay as they are, so a Tints
+  brush on a black or gray stroke draws its copies unturned. A color turns in its own model: RGB in the HSB of its
+  values, CMYK over its C, M and Y with its K kept, and Lab by turning its a and b, so its saturation and brightness
+  (Lab: lightness and chroma) stay. Gradients and patterns stay as they are, and a turned color loses its swatch
+  link. A symbol instance in the art turns only its own fill, the stain it draws its symbol's art with; the
+  symbol's own colors stay. The amounts depend only on the stroke's path
+  and the brush's name, so a stroke draws the same colors on every redraw, after Save and Open, and in export. Hue
+  jitter does not change where the copies go or their size and rotation. A value outside the range is clamped, as
+  the brush's other values are. A brush saves `hue_jitter` only when it is above 0, and a brush without the key
+  reads as 0; `brush.get` shows it for every scatter brush. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
   `brush.new` refuses a longer one, counting the number it adds to a taken name, and `brush.options` refuses a
   longer `newName`. `brush.duplicate` does not check the length. A bristle brush that already has a longer name
   keeps it, and `brush.options` without a new name, or with a `newName` that only trims the white space around the
@@ -4755,20 +4818,24 @@ unique) and leaves the art as it is: the 3D and Materials panel's Add as Single 
 `name` that is not a string or is empty, or any other key, is refused.
 
 `threeD.mapGraphic {symbol, face?, x?, y?, scale?, rotation?, index?, item?, ids?|id?}` adds a graphic to the 3D
-effect of each selected object, in one undo step: `face` is `front` (default) or `back`, `x` and `y` are the
+effect of each selected object, in one undo step: `face` is `front` (default), `back` or `side`, `x` and `y` are the
 offset in points of the graphic's center from the center of the object's bounds in the face's plane, `scale` is a
 percentage of the symbol's size (1..10000; omitted, 100 or less so the graphic fits inside the object) and
 `rotation` is in degrees counterclockwise (-360..360). Without `index` each object's first 3D effect takes it, and `item` is refused.
-Every object's 3D effect must be Extrude & Bevel with Cap on (front only at a depth of 0), Rotate (the Plane type,
-front only) or Revolve (front only: its swept side), and `symbol` must name a document symbol; otherwise the command is refused and nothing changes. It returns `{ids, graphic}`.
-On Revolve, `x` and `y` are measured on the side unrolled flat from its middle, and a graphic that does not fit
-starts scaled to fit the half of the side seen from the front ([three-d.md](three-d.md#graphics)).
+Every object's 3D effect must be Extrude & Bevel (front only at a depth of 0; `front` and `back` need Cap on, and
+`side`, its walls and bevels, does not), Rotate (the Plane type, front only) or Revolve (front only: its swept
+side), and `symbol` must name a document symbol; otherwise the command is refused and nothing changes. It returns `{ids, graphic}`.
+On Revolve and on Extrude & Bevel's side, `x` and `y` are measured on the side unrolled flat from its middle (on
+Extrude & Bevel, `x` along the outline, clockwise from its top, and `y` from the front toward the back), and a
+graphic that does not fit starts scaled to fit the part of Extrude & Bevel's side unrolled about `x` = 0 that does
+not reach its cut, or the half of Revolve's side seen from the front ([three-d.md](three-d.md#graphics)).
 
 The graphics are the `graphics` parameter of `threeD.extrude`, `threeD.rotate` and `threeD.revolve`, which `effect.setParams` also
 edits: an array of up to 64 `{symbol, face, x, y, scale, rotation}` objects, drawn on the face turned,
 foreshortened and shaded with it and clipped to it ([Map artworks on 3D object](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/create-3d-graphics/map-artwork-on-3d-objects.html)).
 Revolve takes graphics on its swept side and shades them with the object's light ([the archived reference, page 185](https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=185));
-how a graphic wraps around the side is VectorCraft's own rule.
+how a graphic wraps around the side is VectorCraft's own rule. Extrude & Bevel takes graphics on its side, its
+walls and bevels unrolled as one surface; how they are unrolled is VectorCraft's own rule.
 A graphic naming a symbol the document does not have is refused, unless the effect already holds a graphic of it.
 The drawing rules are VectorCraft's own; see [three-d.md](three-d.md#graphics).
 
@@ -6689,6 +6756,21 @@ and Shift steps follow the box the same way; a Reflect axis drawn with the tool 
 {"name":"run_command","arguments":{"command":"object.reflect","params":{"axis":"vertical","basis":"page"}}}
 ```
 
+## Shear along an angled axis
+
+`object.shear` takes `axis` as `"horizontal"`, `"vertical"` or a number of degrees from -359 to 359. A number is a
+line on the page at that angle, counter-clockwise from horizontal, as `object.reflect`'s numeric `axis` is, and the art
+slides along that line about `origin` by the shear `angle`, which stays a separate value. 0 shears as `"horizontal"`
+and 90 as `"vertical"`. A numeric `axis` outside the range, a number given as a string, or any other value is an
+error, and nothing changes. The shear `angle` is clamped to -89 through 89. The Shear dialog's Axis has Horizontal,
+Vertical and Angle; the Axis Angle field beside it starts at 0° and takes input while Angle is chosen. The [help page](https://helpx.adobe.com/illustrator/desktop/manage-objects/reshape-transform-objects/shear-objects.html)
+describes the Angle axis as a custom slant direction between -359° and 359°, measured from the horizontal. The
+counter-clockwise direction on the page and the 0° starting value are VectorCraft's own.
+
+```json
+{"name":"run_command","arguments":{"command":"object.shear","params":{"angle":30,"axis":45}}}
+```
+
 ## Free Distort on a turned bounding box
 
 `object.distort` maps the corners of `from` (TL, TR, BR, BL) onto `corners`, which are page coordinates. With
@@ -6829,8 +6911,11 @@ polygon (Polygon Properties): `sides` (3–1000), `polygonAngle` (degrees counte
 at 0), `polygonRadius` (pt, centre to vertex), `sideLength` (pt, which sets the radius) and `makeSidesEqual: true`,
 which drops an uneven scale or shear (its sides then differ) and keeps its centre, angle and mean radius; a radius or
 length that isn't a number above 0 is an error. An ellipse (Ellipse Properties): `pieStart` and `pieEnd` (degrees
-counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. A line drawn
-with the Line Segment tool (Line Properties): `lineLength` (pt, above 0; the line's first end stays in place) and
+counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them.
+`constrainPie: true` with one of `pieStart` and `pieEnd` (the panels' Constrain Pie Angle link) moves the other angle
+by as much, so each selected ellipse keeps its own span, counterclockwise from its start to its end; a whole ellipse
+stays whole. `constrainPie: true` with both angles, with neither, or with `invertPie: true` is a parameter error. A
+line drawn with the Line Segment tool (Line Properties): `lineLength` (pt, above 0; the line's first end stays in place) and
 `lineAngle` (degrees counterclockwise from 3 o'clock, from the first end to the second; the line turns about its
 midpoint; any finite value is brought into 0 to 360). With both, the length applies first. A line whose ends meet reads
 0° and keeps its place under `lineAngle`; `lineLength` points it to the right. A length that isn't a number above 0,
@@ -6847,6 +6932,7 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"pieStart":350,"constrainPie":true}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"lineLength":72,"lineAngle":90}}}
 ```
 
@@ -7195,8 +7281,9 @@ wide.
 
 `object.align` needs `horizontal` or `vertical`. The three Align commands, `object.reflect` and `object.shear` return
 an error that lists the choices of a `horizontal`, `vertical`, `to`, `axis` or `bounds` param given another value
-(`object.reflect` also takes an angle and names the value given), and one for a `spacing` that is not a number; nothing
-moves.
+(`object.reflect` and `object.shear` also take a numeric `axis` and name the value given; `object.shear`'s numeric
+`axis` runs from -359 to 359, while its `angle` is clamped to -89 through 89), and one for a `spacing` that is not a
+number; nothing moves.
 
 ## Glyph bounds for type
 
@@ -7255,6 +7342,22 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `showHandlesMultipleAnchors` (on by default): off, Direct Selection (and the Anchor Point tool, and the Pen with Alt)
   shows and drags direction handles only while a single anchor is selected. On, the handles of the direct-selected
   anchors, or of every anchor of a path selected as a whole, show and drag. `handleStyle` (`solid`, `hollow`, `large`) draws their ends (desktop app).
+- `interpolateControlPoints` (General › Interpolate Control Points When Moving Anchors, off by default): the default of
+  the `interpolate` param of `path.moveAnchors` (a Direct Selection drag), `object.nudge` (the arrow keys),
+  `object.move`, `object.transform` and `object.transformAgain`. It applies when they move direct-selected anchors
+  without turning or scaling them. `object.setBounds` (only `x` or `y` changed) and `guide.move` (with art selected
+  too) take the same param and follow the preference when they move direct-selected anchors.
+  On, both handles of each segment with one moved end are re-mapped by the turn, uniform scale and move that take the
+  segment's old ends to its new ends, so a segment between two corner anchors keeps its shape relative to its ends. A
+  segment with both ends moved, or with its ends at the same place before or after the move, moves as it does with the
+  preference off. A smooth anchor keeps its handles in line: its re-mapped handle takes the new length and stays in
+  line with the other handle, and when both of its handles were re-mapped they point along the mean of their
+  directions. When the two point the same way, both move with the anchor as with the preference off. A retracted
+  handle stays retracted. The value used joins the command's journal entry and Transform Again's options; a saved step
+  without `interpolate` (an action or journal entry recorded before it) moves the handles as with the preference off,
+  as it did when it was recorded. Align and
+  Distribute, and the anchors of type paths and area type frames (`text.reshapePath`, `text.reshapeArea`), move as
+  before. Off, the handles of a moved anchor move with it and the other handles stay where they are.
 - `hideCornerWidgetAbove` (177° by default): corners wider than this show no Live Corners widget (a rectangle's right
   angles hide below 90°).
 - `transformPatternTiles` (off by default): the default of the transforms' `patterns` param (`object.transform`,
@@ -7320,13 +7423,20 @@ output's `_ICC_PROFILE` property when colord has no usable profile, then the scr
 Color on (HDR or Automatic Color Management) and macOS windows are converted by the system, and nothing is converted
 again. In a Wayland session, and where no profile is set or the profile is not an RGB display profile of at most 1 MiB,
 the canvas stays sRGB. The app reads the display again every 10 seconds and when the window moves to another display.
+Edit › Refresh Monitor Profile (`view.refreshMonitorProfile`, `{}`; a desktop UI command) reads it again on the next
+frame without waiting for either interval, for example after a new profile is installed for the display; a request
+made while a reading runs starts when that reading ends. It returns `{requested: true}` before the profile is read,
+and is an error while `monitorProfileDisplay` is off (nothing is queued) and where nothing reads the display's profile
+(the web build). It changes no document, proof setting or preference and records no undo step; reading the same
+profile again leaves the canvas as it is.
 Exports, `ui.render`, the document, panels and thumbnails are not converted; with Proof Colors on, the proof is drawn
 first and then converted. Translucent art and the antialiased edges of art over an artboard's paper or the
 transparency grid are blended with it in sRGB, and the blend is converted; over the pasteboard and in Outline the art
 is converted on its own.
 `ui.inspect` returns `displayProfile`: `{enabled, display, source, profile, from, applied, reason,
-osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
-`pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.
+osManaged, readRequested}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
+`pending` or `unsupported`, `applied` says whether the canvas is converted, `reason` says why not, and `readRequested`
+says whether a reading Refresh Monitor Profile asked for has not started yet.
 
 `lowLatencyDrawing` (Preferences › Performance › Low-Latency Drawing, off by default; desktop app) is read when the app
 starts. On, the window presents without vsync (wgpu's `AutoNoVsync`) and frames start at most 240 times a second.
@@ -7904,6 +8014,12 @@ path and save.
 A built-in preset names its category's profile in `file.newPresets` (`profile`). Saved and Recent presets keep the
 profile of the preset they were made from. `file.new {profile: "Print"}` picks a profile for any settings, and
 `profile: null` starts with the defaults. A document made without a preset starts with the defaults.
+
+A profile also sets the default font of its documents: new type starts in [Normal Character Style], so when the profile
+redefines that style (`charStyle.setAttrs {name: "[Normal Character Style]", attrs: {font_family, font_style, size}}` in
+the document `file.newProfiles.edit` opens, then save), type made in the profile's documents takes its font, style, size
+and fill. A `font`, `style`, `size` or `color` given to `text.create` still wins
+([Change the default font](https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/change-the-default-font-in-illustrator.html)).
 
 The profiles are `.vectorcraft` files named after their category in the `New Document Profiles` folder next to the
 preferences (VectorCraft's own place and form). A category without a file has the shipped profile, which holds the
@@ -9435,7 +9551,7 @@ File → Export → Save for Web (Legacy) writes optimised web images: `document
 …}` renders the artboard (`clipToArtboard`, the default; `artboard` picks one) or the visible art and the slices, at
 `width`, `height` or `percent`, and encodes it with the format's settings: for GIF and PNG-8 `reduction`, `colors`,
 `dither`, `ditherAmount`, `transparency`, `matte`, `interlaced`, `webSnap`, `lossy` (GIF) and `colorTable {locked,
-transparent, webShift, sort}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
+transparent, webShift, sort, deleted, customPalette}`; for JPEG `quality`, `progressive`, `optimized`, `embedProfile` and `matte`; for PNG-24
 `transparency`, `matte` and `interlaced`. `metadata` (none, copyright, contact, all) writes File Info as PNG text or a
 GIF/JPEG comment; `convertToSrgb` marks PNGs as sRGB. `<stem>` is the name of `path` without its extension, or
 without `path` the document's title with the characters Windows does not allow in a file name as `-` and a `-` after
@@ -9451,6 +9567,25 @@ file size), `seconds` to download at `kbps` (default 56.6), the size, and for pa
 (`colors: [{color, source, transparent, locked, webShifted, webSafe}]`). The colour table's lists name colours by
 `source` (the colour the reduction made), so a colour keeps its edits when it is web-shifted or snapped. `slice: n`
 previews one slice; `image: true` adds the file; `warnings` holds the export's warnings.
+
+Delete Color is `colorTable.deleted: ["#rrggbb"…]`, by `source`. The deleted colors leave the table and the file, and
+their pixels take the nearest color left, with the current reduction's color distance and dither; the preview and the
+file agree. A deleted color also leaves `locked`, `transparent` and `webShift`. A color the table does not hold is
+ignored. Deleting every opaque color is an error, and the settings, preview and files do not change; the transparent
+entry of transparent pixels cannot be deleted. `colorTable.customPalette: ["#rrggbb"…]` is a fixed palette (a Custom
+table) used instead of the reduction's own, at most `colors` entries with the transparent one included, so a color it
+lacks is not made again; the dialog's Delete Color sets it to the table's colors on the first deletion. Both lists hold
+at most 256 colors, and `#rrggbbaa` is refused. A `reduction` change without `colorTable` in the same params clears
+both lists. JPEG and PNG-24 have no color table and do not read them. Presets and `webExport.settings` keep them. In
+the dialog a click selects one color, Shift-click selects the colors between it and the last one clicked, and
+Ctrl-click (Command-click on macOS) adds or removes one (`__colors` holds the selection, `__color` the last one
+clicked). The trash button and Delete Color in the table's menu delete the selection in one edit, Restore Generated
+Table in that menu clears `deleted` and `customPalette`, and the table reads Custom while either is set. Choosing
+another reduction in the dialog also clears them.
+
+```json
+{"name":"run_command","arguments":{"command":"document.exportForWeb.preview","params":{"format":"png8","colorTable":{"deleted":["#ff0000"],"customPalette":["#0000ff","#00ff00","#ff0000"]}}}}
+```
 
 Optimize to File Size (the dialog's button under Preset) is `webExport.optimizeToFileSize {desiredK, startWith?,
 use?, slice?, …settings}`. It searches for settings whose files fit in `desiredK` K (1 K is 1024 bytes; above 0, at
@@ -10242,7 +10377,7 @@ thread. When `effect.expandAppearance` keeps a frame as type in a group (type wi
 effects are shadows, outer glows or Crop Marks), the type stays in the thread in the frame's place. Object › Expand
 (`object.expand`) outlines type with these two commands. `object.flattenTransparency` takes each frame of threaded text
 that it outlines (`textToOutlines`) or turns into flat regions or an image out of its thread in the same way.
-`symbol.new` (New Symbol) and `symbol.update` (Redefine Symbol) take each frame of threaded text in the selection out
+`symbol.new` (New Symbol) and `symbol.update` (Redefine Symbol, without `keepArt: true`) take each frame of threaded text in the selection out
 of its thread in the same way, and the symbol's art holds a copy of the frame with the text it shows. When every frame
 of a thread goes into the symbol, the copy of the last frame keeps the text it has no room for.
 
@@ -13147,6 +13282,18 @@ Commands:
   drawn, and the path's fills stay on it, below its dashes (a path without fills goes). A compound path's dashes are
   plain paths with its appearance. Paths without a dashed stroke stay as they are, and it is an error if none has one.
   The dashes are selected; more than 100,000 (or a pattern too fine to draw) is refused. → `{ids, dashes}`.
+- `addon.pathtools.bridge {radius?, keepOriginals?, ids?}` joins two circles (`ids`, default: the selection; paths
+  whose outline is a circle, not hidden or locked) into one closed outline, as one undo step (Object › Plug-ins › Path
+  Precision Tools › Smooth Bridge…). The outline goes around each circle on its side away from the other and along two
+  concave arcs, one on each side of the line through the centers, each touching both circles from outside, so every
+  anchor is smooth. `radius` is the arcs' radius as a percentage of the smaller circle's radius (1 to 1,000, 100 by
+  default): a larger radius makes a wider, gentler bridge. Overlapping and touching circles are joined at every radius.
+  One circle inside the other is an error, and so are circles too far apart for the radius: the arcs would not reach
+  both circles, or would cross before they do. The error suggests a larger radius only when one up to 1,000 would
+  bridge the circles. The outline replaces the two circles, painted as the upper one (a plain
+  path), unless `keepOriginals` is true: then it goes directly above the upper circle, painted as it, and the circles
+  stay. The outline is selected. → `{id}`. Smooth Bridge… opens a dialog (`ui.menuDialog {command}`, kind
+  `smoothBridge`) with a Radius field in percent, Keep Originals and Preview.
 - `addon.pathtools.tangentCircle {ids?, radius?, circle?}` draws the circles that touch two paths or compound paths
   and have `radius` (0.01 to 1,000,000 pt, needed with two), or that touch three (which set the radius themselves, so
   `radius` is then an error), as one undo step (Object › Plug-ins › Path Precision Tools › Tangent Circle…). `ids`

@@ -780,6 +780,8 @@ font-technology	Variable	可變
 	Delete Artboard	刪除工作區域
 	Delete Artboards	刪除工作區域
 	Delete Brush	刪除筆刷
+	Delete Color	刪除顏色
+	Restore Generated Table	還原產生的色彩表
 	Delete Character Style	刪除字元樣式
 	Delete Empty Artboards	刪除空白工作區域
 	Delete Freeform Point	刪除任意形狀錨點
@@ -848,6 +850,7 @@ font-technology	Variable	可變
 	Direct Selection Tool	直接選取工具
 	Direction Handles	控制把手
 	Disable Auto Add/Delete	停用自動增加/刪除
+	Interpolate Control Points When Moving Anchors	移動錨點時內插控制把手
 	Disable Opacity Mask	停用不透明度遮色片
 	Discard	捨棄
 	Preserve	保留
@@ -2230,6 +2233,7 @@ file-filter	Templates	範本
 @msg	Create Outlines: select text objects	建立外框：請選取文字物件
 @msg	paste unavailable	無法貼上
 @msg	Save for Web: the image is empty	儲存為網頁用：影像是空的
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：色彩表中至少要保留一種顏色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是像 "#ff8800" 這樣的顏色
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 種顏色
 @msg	no artboard {i} (0-based; the document has {_1})	沒有工作區域 {i} (從 0 起算；文件有 {_1} 個)
@@ -2469,6 +2473,12 @@ file-filter	Templates	範本
 @msg	no preset editor	沒有預設集編輯器
 @msg	no perspective grid preset named `{name}`	沒有名為 `{name}` 的透視格點預設集
 @msg	no active perspective plane	沒有作用中的透視平面
+@msg	the perspective grid is hidden	透視格點已隱藏
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	「自動平面定位」已關閉：請開啟 anchorPoint 或 gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint 必須是 true 或 false
+@msg	gridlineIntersection must be true or false	gridlineIntersection 必須是 true 或 false
+@msg	tolerance must be 0 or more	tolerance 必須大於或等於 0
+@msg	give `at` or `clear`, not both	請提供 `at` 或 `clear`，不能同時提供兩者
 @msg	plane must be left, right or ground	plane 必須是 left、right 或 ground
 @msg	missing `id` (see plugin.list)	未提供 `id` (請參閱 plugin.list)
 @msg	no plug-in {id} is installed	未安裝增效模組 {id}
@@ -2783,6 +2793,14 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 僅適用於沒有人可詢問的執行：在應用程式中，由使用者回答每個對話框
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 必須是 1 到 {_1} 之間的整數
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 的巢狀層次超過 64 層
+@msg	`args` must be an object	`args` 必須是物件
+@msg	`args` is larger than 1 MiB	`args` 大於 1 MiB
+@msg	`path` is empty	`path` 為空
+@msg	`installed` takes a `path`, not a `source`	`installed` 需要 `path`，而不是 `source`
+@msg	`path` must name a .js or .jsx file	`path` 必須指向 .js 或 .jsx 檔案
+@msg	give exactly one of `path` and `source`	`path` 和 `source` 請只提供其中一個
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
 @msg	Script file access denied: {path}	指令碼的檔案存取遭拒：{path}
@@ -2899,6 +2917,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the {tool} tool has no options	{tool} 工具沒有選項
 @msg	unknown tool `{tool}`	未知的工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多個工具的工具列群組中
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	簡報模式會隱藏工具列：請變更螢幕模式以顯示工具列
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab 已隱藏工具列：請按 Tab 以顯示工具列
 @msg	no such document	沒有這個文件
 @msg	{_1}: not saved, so not closed	{_1}：未儲存，因此未關閉
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` 是內建工作區；請選擇其他名稱
@@ -2940,6 +2960,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	a linked JavaScript file is outside the read roots	連結的 JavaScript 檔案位於所有讀取根目錄之外
 @msg	a linked image file is outside the read roots	連結的影像檔案位於所有讀取根目錄之外
 @msg	a linked file's export folder is outside the read roots	連結檔案的匯出資料夾位於所有讀取根目錄之外
+@msg	a linked file's editing data can't be read to check it against the read roots	無法讀取連結檔案的編輯資料，因此無法對照讀取根目錄進行檢查
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的
@@ -3482,6 +3503,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Scatter:	散佈：
 	Rotation:	旋轉：
 	Rotation relative to:	旋轉相對於：
+	Hue Jitter:	色相抖動：
 	Brush Scale Options	筆刷縮放選項
 	Scale Proportionately	等比例縮放
 	Stretch to Fit Stroke Length	延伸以符合筆畫長度
@@ -3518,6 +3540,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	黑色變為筆畫顏色，白色維持白色。其他顏色變為筆畫顏色的淺色，顏色越淺，淺色就越淺。
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	黑色維持黑色，白色維持白色。其他顏色較暗時變為筆畫顏色的暗色，較亮時變為筆畫顏色的淺色。
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	主要顏色變為筆畫顏色。其他顏色在色輪上移動與主要顏色相同的距離，並保留其飽和度和亮度。
+	Roundness	圓度
 	Roundness:	圓度：
 	Fixed	固定
 	Pressure	壓力
@@ -3962,6 +3985,7 @@ diagnostics	ui	介面
 	Line Properties:	直線內容：
 	Line Length:	直線長度：
 	Line Angle:	直線角度：
+	Constrain Pie Angle	強制扇形角度
 	Polygon Tool	多邊形工具
 	Portrait	直向
 	Power Saving (integrated)	節能 (內建顯示晶片)
@@ -4126,6 +4150,9 @@ digits	Malayalam	馬來亞拉姆數字
 	Real World:	真實世界：
 	Real-time Drawing and Editing	即時繪圖與編輯
 	Use Monitor Profile for Canvas	畫布使用顯示器描述檔
+	Refresh Monitor Profile	重新整理顯示器描述檔
+@msg	turn on Use Monitor Profile for Canvas first	請先開啟「畫布使用顯示器描述檔」
+@msg	this build doesn't read display profiles	此版本不讀取顯示器描述檔
 	The canvas is drawn in sRGB.	畫布以 sRGB 繪製。
 	Canvas display profile:	畫布顯示描述檔：
 	The system matches the window to the display's colors.	系統會讓視窗符合顯示器的色彩。
@@ -4388,6 +4415,7 @@ digits	Malayalam	馬來亞拉姆數字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 捲動滑鼠滾輪會橫向捲動畫布。
 	Dragging sideways on a numeric field's label changes the field's value.	在數值欄位的標籤上橫向拖曳可變更欄位的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在觸控式軌跡板上以雙指旋轉手勢可旋轉畫布檢視。
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移動錨點時，只有一端移動的每條曲線都會保持其相對於兩端的形狀。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快速鍵時選擇該工具，放開後重新選擇之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移動選取範圍或繪製形狀時顯示邊框。
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	建立剪裁標記繪製日式標記，而不是西式標記。
@@ -5816,6 +5844,7 @@ imageTrace	Outline	輪廓
 	Bevel	斜角
 	Offset	位移
 	Axis	軸
+	Axis Angle	軸角度
 axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	兩者
@@ -6137,6 +6166,7 @@ lighting	Light	光源
 	Cove	凹圓
 	Depth	深度
 	Front	正面
+	Side	側面
 	Isometric Bottom	等角底部
 	Isometric Left	等角左側
 	Isometric Right	等角右側
@@ -6231,7 +6261,7 @@ lighting	Light	光源
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` 的每個項目都必須是物件
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 的項目接受 symbol、face、x、y、scale 和 rotation，不接受 `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` 的每個項目都需要 `symbol`，也就是符號的名稱
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必須是 front 或 back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必須是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必須是介於 {lo} 到 {hi} 之間的數字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必須是陣列
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	圖形會對應到「平面」、「突出」與「迴轉」物件類型
@@ -7409,6 +7439,14 @@ breakText	Glyphs	字符
 	Remove Gaps	移除間隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	這會產生過多片段（最多 100000 個）：請加長短破折號
 @msg	select paths, or segments, to divide	請選取要分割的路徑或線段
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	平滑橋接…
+	Smooth Bridge	平滑橋接
+	Keep Originals	保留原始物件
+@msg	select two circles to bridge	請選取兩個要橋接的圓形
+@msg	one circle is inside the other	一個圓形位於另一個圓形內
+@msg	the circles are too far apart for this radius: raise the radius	就此半徑而言，兩個圓形相距太遠：請增加半徑
+@msg	the circles are too far apart for this radius	就此半徑而言，兩個圓形相距太遠
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	公切線…
 	Common Tangents	公切線
