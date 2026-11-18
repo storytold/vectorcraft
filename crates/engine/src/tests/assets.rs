@@ -302,6 +302,23 @@ fn the_shared_settings_drive_the_export_and_arent_an_undo_step() {
     assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"]["formats"][0]["format"], "jpg");
 }
 
+/// The shared settings are not an undo step, so undo and redo of the steps before them leave them
+/// as they are.
+#[test]
+fn undo_and_redo_keep_the_shared_settings() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0, 10.0, 20.0, 20.0);
+    run(&mut s, "assets.add", json!({"ids": [a]}));
+    run(&mut s, "assets.settings.set", json!({"formats": [{"format": "svg"}], "prefix": "ic_"}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"], settings);
+    run(&mut s, "assets.settings.set", json!({"formats": [{"format": "jpg"}], "prefix": ""}));
+    let settings = run(&mut s, "document.exportSettings", json!({}))["settings"].clone();
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(run(&mut s, "document.exportSettings", json!({}))["settings"], settings);
+}
+
 /// An export preset sets the shared settings as the Asset Export panel applies one: its rows (or
 /// mobile/density), its format settings over the saved ones, its prefix and its sub-folders.
 #[test]

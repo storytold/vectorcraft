@@ -277,7 +277,13 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "{h: amount (10), v: amount (10), relative: bool (true: % of size), anchors: bool (true), in: bool (true), out: bool (true), seed: int (0)}",
             json!({"h": 10.0, "v": 10.0, "relative": true, "anchors": true, "in": true, "out": true, "seed": 0}),
         ),
-        g("distort.twist", "Twist…", DT, "{angle: deg (-3600..3600, 10)}", json!({"angle": 10.0})),
+        g(
+            "distort.twist",
+            "Twist…",
+            DT,
+            "{angle: deg (-3600..3600, 10)} Outer-circle anchors stay fixed; their handles follow the inward tangent.",
+            json!({"angle": 10.0}),
+        ),
         g(
             "distort.zigZag",
             "Zig Zag…",

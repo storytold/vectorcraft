@@ -31,7 +31,7 @@ mod symbol_nine_slice;
 pub mod symbol_overrides;
 mod symbol_pixel_aligned;
 mod symbol_registration;
-pub use inline::{SYMBOL_HALF, SYMBOL_SIZES};
+pub use inline::{InlineMeasured, InlinePass, SYMBOL_HALF, SYMBOL_SIZES};
 pub use shared::Shared;
 pub use symbol_export_type::{SYMBOL_EXPORT_TYPE, SymbolExportType};
 pub use symbol_nine_slice::{
@@ -168,7 +168,7 @@ use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use stored_art::{StoredPlace, StoredRoot};
-pub use units::{ColorMode, Unit, parse_number};
+pub use units::{ColorMode, Unit, decimal_point, finite_in_every_unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {

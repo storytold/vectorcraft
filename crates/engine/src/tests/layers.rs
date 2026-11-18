@@ -643,6 +643,45 @@ fn alt_drag_copies_rows_and_the_selected_art_moves_between_layers() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![a, g], "it stays selected");
 }
 
+/// #8237: a copy may go above or below a row it copies, so a lone layer, the top layer dragged up
+/// and the bottom one dragged down can be copied. A move there, or a copy inside the row, is still
+/// refused.
+#[test]
+fn a_copy_goes_above_or_below_a_row_it_copies() {
+    let mut s = session();
+    let layers = |s: &Session| s.doc().unwrap().doc.layers.iter().map(|l| l.id).collect::<Vec<_>>();
+    let [only] = layers(&s)[..] else { panic!("one layer") };
+    for place in ["above", "below", "inside"] {
+        assert!(s.execute("layer.move", &json!({"ids": [only.0], "target": only.0, "place": place})).is_err(), "a move {place} itself");
+    }
+    assert!(s.execute("layer.move", &json!({"ids": [only.0], "target": only.0, "place": "inside", "copy": true})).is_err());
+    assert_eq!(layers(&s), vec![only], "nothing changed");
+    let above = ids(&run(&mut s, "layer.move", json!({"ids": [only.0], "target": only.0, "place": "above", "copy": true})));
+    assert_eq!(layers(&s), vec![only, above[0]], "the copy above the original");
+    let below = ids(&run(&mut s, "layer.move", json!({"ids": [only.0], "target": only.0, "place": "below", "copy": true})));
+    assert_eq!(layers(&s), vec![below[0], only, above[0]], "and one below it");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(layers(&s), vec![only, above[0]], "each copy is one undo step");
+}
+
+/// #8237 review: rows that hold an object can't sit beside a top-level layer, so copied beside a
+/// top-level layer among them they would go inside it: a copy of that layer inside itself. Refused,
+/// and nothing changes.
+#[test]
+fn a_copy_with_objects_beside_a_copied_top_level_layer_is_refused() {
+    let mut s = session();
+    let bottom = s.doc().unwrap().doc.layers[0].id;
+    let other = id(&run(&mut s, "layer.new", json!({})));
+    let r = rect(&mut s, 0.0);
+    assert_eq!(s.doc().unwrap().doc.parent_of(r), Some(other), "the rectangle is in the other layer");
+    let count = s.doc().unwrap().doc.node_count();
+    for place in ["above", "below"] {
+        let p = json!({"ids": [bottom.0, r.0], "target": bottom.0, "place": place, "copy": true});
+        assert!(s.execute("layer.move", &p).is_err(), "{place}: the layer's copy would go inside it");
+    }
+    assert_eq!(s.doc().unwrap().doc.node_count(), count, "nothing copied");
+}
+
 /// The selected art in rows dragged into a hidden layer or group is deselected, the key object
 /// included. Undo puts the rows back and selects the art again.
 #[test]
@@ -902,6 +941,38 @@ fn locate_object_highlights_its_row() {
     assert_eq!(run(&mut s, "layer.locate", json!({"id": b.0}))["id"], b.0);
     run(&mut s, "select.none", json!({}));
     assert!(s.execute("layer.locate", &json!({})).is_err());
+}
+
+/// Locate Layer (`layersOnly`, sent while Show Layers Only is on) highlights the innermost layer
+/// or sublayer holding the object, through any groups; a layer locates itself.
+#[test]
+fn locate_layer_highlights_the_layer_holding_the_object() {
+    let mut s = session();
+    let (layer, sub, _, g, b, c) = tree(&mut s);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    let r = run(&mut s, "layer.locate", json!({"layersOnly": true}));
+    assert_eq!(r, json!({"id": sub.0, "objectId": b.0, "ancestry": [layer.0, sub.0]}), "the group's sublayer");
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub]);
+    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "the Layers panel reveals the located row");
+    s.doc_mut().unwrap().locate_reveal = None;
+    let undo = s.doc().unwrap().history.undo.len();
+    run(&mut s, "layer.locate", json!({"layersOnly": true}));
+    assert_eq!(s.doc().unwrap().locate_reveal, Some(sub), "again for a row already highlighted");
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0, "layersOnly": true}))["id"], layer.0, "art directly in a layer");
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![layer]);
+    let r = run(&mut s, "layer.locate", json!({"id": sub.0, "layersOnly": true}));
+    assert_eq!((r["id"].clone(), r["objectId"].clone()), (json!(sub.0), json!(sub.0)), "a sublayer locates itself");
+    // Off, the object's own row is highlighted, as before.
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": g.0, "layersOnly": false})), json!({"id": g.0, "ancestry": [layer.0, sub.0, g.0]}));
+    // Bad input changes nothing.
+    for p in [json!({"id": b.0, "layersOnly": "yes"}), json!({"id": 999_999, "layersOnly": true})] {
+        assert!(s.execute("layer.locate", &p).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g], "{p}");
+        assert_eq!(s.doc().unwrap().locate_reveal, Some(g), "{p}");
+    }
+    run(&mut s, "select.none", json!({}));
+    assert!(s.execute("layer.locate", &json!({"layersOnly": true})).is_err(), "nothing selected");
 }
 
 #[test]

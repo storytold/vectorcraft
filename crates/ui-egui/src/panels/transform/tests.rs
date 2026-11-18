@@ -82,6 +82,35 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
     assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
 }
 
+/// Object › Transform › Rotate Bounding Box… asks for an angle and turns the box, not the art, in
+/// one undo step: the panel then shows the box's angle.
+#[test]
+fn rotate_bounding_box_menu_item_turns_the_box_by_the_dialog_angle() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let entry = crate::menus::menu_entries(&app)
+        .into_iter()
+        .find(|e| e.path == ["Object", "Transform"] && e.label == "Rotate Bounding Box…")
+        .expect("menu item");
+    let (id, p) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
+    crate::menus::invoke(&mut app, &id, p);
+    let d = app.ui.dialog.as_mut().expect("a dialog opens");
+    assert_eq!(d.str("__command"), "object.rotateBoundingBox");
+    d.fields.insert("angle".into(), json!(90));
+    let bounds = |app: &VectorcraftApp| {
+        let st = app.session.doc().unwrap();
+        st.doc.bounds_of(&st.selection.objects, false)
+    };
+    let art = bounds(&app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(bounds(&app), art, "the art stays where it is");
+    let shown = texts(&mut app, show);
+    assert!(shown.iter().any(|t| t == "90°"), "{shown:?}");
+}
+
 /// #812: a selected live polygon shows its Polygon Properties in the Transform panel and the
 /// Properties panel's Transform section, and Make Sides Equal evens it out after a stretch.
 #[test]
@@ -123,6 +152,52 @@ fn an_ellipse_shows_its_pie_properties() {
     app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
     let shown = texts(&mut app, show);
     assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
+}
+
+/// A live line shows its Line Properties in the Transform panel and the Properties panel's
+/// Transform section: a typed length keeps its first end in place and a typed angle turns it
+/// about its midpoint, each one undo step. A line with other objects selected, and a line after
+/// Expand Shape, show none.
+#[test]
+fn a_line_shows_and_takes_its_line_properties() {
+    let ends = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Line { a, b } => (a, b),
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let near = |p: Point, x: f64, y: f64| (p.x - x).abs() < 1e-6 && (p.y - y).abs() < 1e-6;
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        // 100 pt long, going down the page to the right: 53.13° clockwise, 306.87° counterclockwise.
+        let id = app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 110, "y2": 130})).unwrap()["id"].as_u64().unwrap();
+        let shown = texts(&mut app, draw);
+        for t in ["Line Properties:", "Line Length:", "100 pt", "Line Angle:", "306.9°"] {
+            assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        type_into(&ctx, &mut app, draw, "100 pt", "50");
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "{a:?} {b:?}");
+        type_into(&ctx, &mut app, draw, "306.9°", "90");
+        let (a, b) = ends(&app);
+        assert!(near(a, 65.0, 95.0) && near(b, 65.0, 45.0), "{a:?} {b:?}");
+        assert!(texts(&mut app, draw).iter().any(|s| s == "90°"));
+        app.run("edit.undo", json!({})).unwrap();
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "one undo step: {a:?} {b:?}");
+        // With a rectangle selected too, the fields would set the line alone: they don't show.
+        let rect = app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id, rect]})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert!(texts(&mut app, draw).iter().any(|s| s == "Line Properties:"));
+        app.run("object.expandShape", json!({})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+    }
 }
 
 #[test]

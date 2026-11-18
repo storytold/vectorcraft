@@ -1461,3 +1461,25 @@ fn an_export_preset_adds_no_notes() {
     let r = export(&mut s, json!({"exportPreset": "Mixed"}));
     assert!(unused(&r).is_empty(), "{r}");
 }
+
+/// Assets, layers and selected objects each write a native, `.ai` or EPS file of their own art:
+/// every piece's file holds its own artboard, named after it, not the first piece's.
+#[test]
+fn each_piece_writes_its_own_native_document() {
+    let mut s = session(1);
+    s.execute("shape.ellipse", &json!({"x": 2, "y": 2, "width": 10, "height": 10})).unwrap();
+    let ids: Vec<u64> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id.0).collect();
+    let mut assets = vec![];
+    for (id, name) in ids.iter().zip(["Square", "Circle"]) {
+        assets.push(s.execute("assets.add", &json!({"ids": [id], "name": name})).unwrap()["assets"][0].as_u64().unwrap());
+    }
+    let r = export(&mut s, json!({"assets": assets, "formats": [{"format": "vectorcraft"}, {"format": "eps"}]}));
+    let written = files(&r);
+    assert_eq!(written.len(), 4, "{r}");
+    for (name, bytes) in written {
+        let native = if name.ends_with(".eps") { vectorcraft_eps::native(&bytes).expect("native document") } else { bytes };
+        let doc = vectorcraft_format::load(&native).unwrap();
+        let board = doc.artboards[0].name.clone();
+        assert!(name.contains(&board), "{name} holds the artboard {board}");
+    }
+}
