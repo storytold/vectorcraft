@@ -1,12 +1,13 @@
 use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{Metrics, optical_hangs, optical_hangs_rtl, optical_share, roman_share};
-use super::flow::list_markers;
+use super::flow::{list_markers, repeat_mark_glyph};
 use super::region::in_range;
 use super::{
     Affine, ArcPath, BezPath, Ctx, GlyphBend, Justify, LineInfo, ListMarker, ParamCurve, PathAlign, PathData, PathEffect, PathEl, Point, Range,
-    SGlyph, Shape, TextObject, Vec2, style_metrics,
+    SGlyph, Shape, TextObject, Vec2, apply_desired, style_metrics,
 };
 use crate::fontdb::PathAlignHeights;
+use std::collections::HashMap;
 use unicode_bidi::{BidiClass, BidiInfo};
 
 /// The distance along type on a path each glyph takes: its advance measured `spacing` points above
@@ -409,6 +410,41 @@ fn hide_before_open_path(cx: &mut Ctx<'_>, ap: &ArcPath, lead: bool, at: usize, 
     true
 }
 
+/// Kurikaeshi Moji Shori: type on a path is one line, which starts with the first character of its
+/// first paragraph `pr` (shaped as `glyphs`). When that paragraph continues from the frame before
+/// and has the setting on, a repeat mark there is drawn as the character before it in the frames
+/// before ([`TextObject::first_para_lead`]): its glyph in `glyphs` is replaced, and the mark's byte
+/// and the character drawn are returned.
+fn line_start_repeat(cx: &Ctx<'_>, t: &TextObject, pr: &Range<usize>, glyphs: &mut [SGlyph]) -> Option<(usize, char)> {
+    if !t.first_para_continues || !t.para_at(0).kurikaeshi_moji_shori {
+        return None;
+    }
+    let at = glyphs.iter().position(|g| g.len > 0 && g.byte == pr.start)?;
+    let (glyph, c) = repeat_mark_glyph(cx, glyphs.get(at)?, glyphs.get(at + 1), || Some(t.first_para_lead))?;
+    let g = glyphs.get_mut(at)?;
+    *g = glyph;
+    Some((g.byte, c))
+}
+
+/// Justification…: paragraph `pi`'s glyphs at its Desired word and letter spacing and glyph scaling
+/// (vertical type is not glyph scaled), with the Desired Glyph Scaling of each glyph it scales put
+/// in `scales` by byte offset. Type on a path is one line that is never justified to a width, so
+/// Minimum and Maximum are not used.
+fn set_desired(cx: &Ctx<'_>, t: &TextObject, pi: usize, glyphs: &mut [SGlyph], scales: &mut HashMap<usize, f64>) {
+    let flex = apply_desired(glyphs, &t.layout_justification(t.para_at(pi)), !cx.vertical);
+    scales.extend(glyphs.iter().zip(&flex).filter(|(_, f)| f.scale != 1.0).map(|(g, f)| (g.byte, f.scale)));
+}
+
+/// Records on the glyph just drawn for `g` the Desired Glyph Scaling it is drawn at (`scales`, by
+/// byte offset). A list marker's glyphs (no length) share their paragraph's first byte and are not
+/// scaled.
+fn record_scale(cx: &mut Ctx<'_>, g: &SGlyph, scales: &HashMap<usize, f64>) {
+    let scale = if g.len > 0 { scales.get(&g.byte).copied() } else { None };
+    if let (Some(scale), Some(out)) = (scale, cx.out.glyphs.last_mut()) {
+        out.scale = scale;
+    }
+}
+
 /// Lay type on a path out along `path` (text space), between its brackets.
 pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, path: &PathData) {
     cx.out.on_path = true;
@@ -418,11 +454,15 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
     let mut rtl = None;
     let mut shaped = Vec::new();
     let markers = list_markers(t, paras);
+    // The Desired Glyph Scaling each scaled glyph is drawn at, by its byte offset.
+    let mut scales = HashMap::new();
     for (pi, pr) in paras.iter().enumerate() {
         let text = cx.text;
         let bidi = para_bidi_with(text.get(pr.clone()).unwrap_or_default(), para.direction, &cx.char_directions(pr));
         rtl.get_or_insert(is_rtl(bidi.as_ref()) && !cx.vertical);
         let mut glyphs = cx.shape_para(pr.clone(), bidi.as_ref(), t.para_at(pi));
+        // Justification…, before anything measures the glyphs along the path.
+        set_desired(cx, t, pi, &mut glyphs, &mut scales);
         // Bullets and numbers: a list paragraph's text starts after its marker here too, unless
         // the paragraph continues from the frame before in its thread.
         if pi > 0 || !t.first_para_continues {
@@ -431,6 +471,8 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         }
         shaped.push((pr.clone(), bidi.filter(|b| b.has_rtl() && !cx.vertical), glyphs));
     }
+    // Kurikaeshi Moji Shori: the repeat mark that starts the line, recorded when its glyph is drawn.
+    let mut repeat = shaped.first_mut().and_then(|(pr, _, glyphs)| line_start_repeat(cx, t, pr, glyphs));
     let rtl = rtl.unwrap_or(false);
     // The text before byte `cut` in visual order, as area type reorders each line it breaks.
     let visual = |cut: usize| {
@@ -709,7 +751,11 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         }
         let at = cx.out.glyphs.len();
         cx.emit(g, pre, origin, angle, g.adv, 0);
+        record_scale(cx, g, &scales);
         let hidden = hide_before_open_path(cx, &ap, lead, at, s + step * 0.5, rise);
+        if !hidden && let Some(mark) = repeat.take_if(|&mut (byte, _)| g.len > 0 && g.byte == byte) {
+            cx.out.repeat_marks.push(mark);
+        }
         // A glyph of a script whose letters join is bent along a curved path (Rainbow), so its
         // joining strokes meet its neighbours' instead of standing off the curve.
         if !hidden && t.path_effect == PathEffect::Rainbow && g.cursive && !cx.vertical && g.inline.is_none() {

@@ -9,11 +9,53 @@ use super::names::SYSTEM_FALLBACKS;
 use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
 use super::scan::{enumerate_faces, font_files};
-use super::traits::{Alias, FontMatch, FontTraits};
-use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
+use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
+use super::{
+    Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, DrawSettings, FontDb, GlyphId, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX,
+    Ordering, Size,
+};
 
 /// The most faces [`FontDb::postscript_faces`] gives, and the most families it loads.
 const MAX_POSTSCRIPT_FACES: usize = 16;
+
+/// Keeps `other`'s variable flag in `traits`, and its likeness when it is nearer an upright
+/// Regular.
+fn merge_traits(traits: &mut FontTraits, other: &FontTraits) {
+    traits.variable |= other.variable;
+    if regular_rank(&other.likeness) < regular_rank(&traits.likeness) {
+        traits.likeness = other.likeness;
+    }
+}
+
+/// The traits of the loaded faces of each family, or of `only` that family, keyed by the family's
+/// name in ASCII lowercase: the first face's, with the other faces merged in ([`merge_traits`]).
+fn loaded_traits(faces: &[Arc<FontFace>], only: Option<&str>) -> std::collections::HashMap<String, FontTraits> {
+    let mut found = std::collections::HashMap::<String, FontTraits>::new();
+    for f in faces.iter().filter(|f| only.is_none_or(|o| f.family.eq_ignore_ascii_case(o))) {
+        match found.entry(f.family.to_ascii_lowercase()) {
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(f.traits);
+            }
+            std::collections::hash_map::Entry::Occupied(mut e) => merge_traits(e.get_mut(), &f.traits),
+        }
+    }
+    found
+}
+
+/// A family's traits from its `loaded` faces with what the scan in `catalog` found for `key` (its
+/// name in ASCII lowercase) merged in, or the scan's alone when none is loaded.
+fn scanned_traits(loaded: Option<FontTraits>, catalog: &Catalog, key: &str) -> FontTraits {
+    let scanned = catalog.get(key).and_then(|c| c.traits);
+    match loaded {
+        None => scanned.unwrap_or_default(),
+        Some(mut traits) => {
+            if let Some(found) = scanned {
+                merge_traits(&mut traits, &found);
+            }
+            traits
+        }
+    }
+}
 
 impl FontDb {
     /// The family's own name and the style for a name given in a document: any of a family's
@@ -83,24 +125,73 @@ impl FontDb {
     /// loaded face, else from the system font scan. Variable when any of its faces, loaded or
     /// scanned, is: a family may install static files beside a variable one. Cheap: no font file
     /// is read, and a loaded family doesn't start the scan. A composite font takes its base font's.
+    /// Its likeness is the one of its face nearest an upright Regular, loaded or scanned.
     pub fn family_traits(&self, family: &str) -> FontTraits {
         if let Some((base, _)) = self.composite_base(family) {
             return self.family_traits(&base);
         }
-        let loaded = {
-            let faces = self.read_faces();
-            let mut of_family = faces.iter().filter(|f| f.family.eq_ignore_ascii_case(family));
-            of_family.next().map(|first| FontTraits { variable: first.traits.variable || of_family.any(|f| f.traits.variable), ..first.traits })
-        };
-        let scanned = |catalog: &Catalog| catalog.get(&family.to_ascii_lowercase()).and_then(|c| c.traits);
+        let key = family.to_ascii_lowercase();
+        let loaded = loaded_traits(&self.read_faces(), Some(family)).remove(&key);
         match loaded {
-            None => scanned(&self.read_catalog()).unwrap_or_default(),
-            Some(traits) if traits.variable => traits,
-            Some(traits) => {
-                let variable = scanned(&self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner)).is_some_and(|t| t.variable);
-                FontTraits { variable, ..traits }
-            }
+            None => scanned_traits(None, &self.read_catalog(), &key),
+            // What the scan found so far, without starting it.
+            Some(_) => scanned_traits(loaded, &self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner), &key),
         }
+    }
+
+    /// The name [`family_traits`](Self::family_traits) takes `family`'s traits by, in ASCII
+    /// lowercase: a composite font's base font's.
+    fn traits_key(&self, family: &str) -> String {
+        match self.composite_base(family) {
+            Some((base, _)) => self.traits_key(&base),
+            None => family.to_ascii_lowercase(),
+        }
+    }
+
+    /// `families` ordered by how alike they look to `family` (Show Similar Fonts): `family` itself
+    /// first when listed, then the families that set the same script as it (Japanese, Thai or
+    /// neither, as [`FontTraits`] tells), then the others, each group nearest first by
+    /// [`FontLikeness::distance`](super::FontLikeness::distance) of their
+    /// [`family_traits`](Self::family_traits), a family of another kind ([`FontTraits::class`])
+    /// counting 2 further. A family that shares none of those numbers with `family` comes after
+    /// every family that shares one in its group. Families equally far keep their order in
+    /// `families`. Reads no font
+    /// file, as `family_traits` does not.
+    pub fn similar_families(&self, family: &str, families: &[String]) -> Vec<String> {
+        let base = self.family_traits(family);
+        let script = |t: &FontTraits| {
+            if t.japanese {
+                0
+            } else if t.thai {
+                1
+            } else {
+                2
+            }
+        };
+        // Every family's traits from one pass over the loaded faces and one look at the scan, as
+        // `family_traits` finds them; composite fonts are resolved before any lock is held.
+        let keys: Vec<String> = families.iter().map(|f| self.traits_key(f)).collect();
+        let loaded = loaded_traits(&self.read_faces(), None);
+        let catalog = if keys.iter().all(|k| loaded.contains_key(k)) {
+            self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner)
+        } else {
+            self.read_catalog()
+        };
+        let mut keyed: Vec<(bool, f32, &String)> = families
+            .iter()
+            .zip(&keys)
+            .map(|(f, key)| {
+                let traits = scanned_traits(loaded.get(key).copied(), &catalog, key);
+                let d = if f.eq_ignore_ascii_case(family) {
+                    -1.0
+                } else {
+                    base.likeness.distance(&traits.likeness) + if traits.class == base.class { 0.0 } else { 2.0 }
+                };
+                (script(&traits) != script(&base), d, f)
+            })
+            .collect();
+        keyed.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        keyed.into_iter().map(|(_, _, f)| f.clone()).collect()
     }
 
     /// [`face`](Self::face) by any of the family's names ([`canonical`](Self::canonical)), and how
@@ -564,9 +655,10 @@ impl FontDb {
             return p.clone();
         }
         let mut pen = FlipPen(BezPath::new());
-        if let Ok(font) = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
-            // As before, keep the prefix emitted before a malformed glyph reports an error.
-            let _ = font.draw_to(gid, &mut pen);
+        if let Some(f) = face.skrifa()
+            && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
+        {
+            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen);
         }
         let p = Arc::new(pen.0);
         let mut cache = self.outlines.lock().unwrap_or_else(|e| e.into_inner());
@@ -628,100 +720,5 @@ impl FontDb {
         let key = (face.id, gid, if used { coloured } else { None });
         self.colours.lock().unwrap_or_else(std::sync::PoisonError::into_inner).keep(key, content.clone());
         content
-    }
-}
-
-#[cfg(test)]
-mod shared_outline_tests {
-    use super::super::glyph_pen::FlipPen;
-    use super::*;
-    use skrifa::instance::Size;
-    use skrifa::outline::DrawSettings;
-    use skrifa::{GlyphId, MetadataProvider};
-
-    #[test]
-    fn shared_outlines_match_original_pen_for_variable_instances() {
-        let db = FontDb::with_font_dirs(vec![]);
-        let Some(bytes) = crate::test_fonts::variable_font() else { return };
-        assert!(db.add_font(bytes) > 0);
-        let face = db.face(crate::test_fonts::VARIABLE_FAMILY, "Bold").expect("named instance is registered");
-        let f = face.skrifa().expect("font parses");
-        for ch in ['A', 'V', ' ', 'a'] {
-            let Some(glyph) = f.charmap().map(ch) else { continue };
-            let mut old = FlipPen(BezPath::new());
-            if let Some(outline) = f.outline_glyphs().get(GlyphId::new(glyph.to_u32())) {
-                // Match the prior production behavior, including a partial path on error.
-                let _ = outline.draw(DrawSettings::unhinted(Size::unscaled(), face.location()), &mut old);
-            }
-            assert_eq!(*db.outline(&face, glyph.to_u32()), old.0, "glyph {ch}");
-        }
-    }
-
-    #[test]
-    fn malformed_cff_prefix_matches_original_pen() {
-        use skrifa::raw::ps::cff::CffFontRef;
-        let Ok(dir) = std::env::var("CRAFT_FONTS_DIR") else { return };
-        let mut bytes = std::fs::read(std::path::Path::new(&dir).join("fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf")).unwrap();
-        let (gid, start) = {
-            let f = skrifa::FontRef::new(&bytes).unwrap();
-            let table = f.table_data(skrifa::Tag::new(b"CFF ")).unwrap().as_bytes();
-            let cff = CffFontRef::new(table, 0, None).unwrap();
-            let (gid, cs) = (0..cff.num_glyphs())
-                .find_map(|gid| {
-                    let cs = cff.charstrings().get(gid as usize)?;
-                    (cs.len() >= 8).then_some((gid, cs))
-                })
-                .unwrap();
-            (gid, cs.as_ptr() as usize - bytes.as_ptr() as usize)
-        };
-        bytes[start..start + 8].copy_from_slice(&[139, 139, 21, 239, 139, 5, 10, 14]);
-        let f = skrifa::FontRef::new(&bytes).unwrap();
-        let mut old = FlipPen(BezPath::new());
-        let result = f
-            .outline_glyphs()
-            .get(GlyphId::new(gid))
-            .unwrap()
-            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old);
-        assert!(result.is_err());
-        assert!(!old.0.elements().is_empty());
-        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
-        let mut streamed = FlipPen(BezPath::new());
-        assert!(shared.draw_to(gid, &mut streamed).is_err());
-        assert_eq!(streamed.0, old.0);
-    }
-
-    #[test]
-    fn large_valid_outline_matches_original_pen() {
-        let Ok(dir) = std::env::var("CRAFT_FONTS_DIR") else { return };
-        let source = std::fs::read(std::path::Path::new(&dir).join("fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf")).unwrap();
-        let source = skrifa::FontRef::new(&source).unwrap();
-        let mut program = vec![139, 139, 21];
-        for _ in 0..100_001 {
-            program.extend_from_slice(&[140, 6]);
-        }
-        program.push(14);
-        let mut cff = vec![1, 0, 4, 4, 0, 1, 1, 1, 2, b'X', 0, 1, 1, 1, 7, 29, 0, 0, 0, 25, 17, 0, 0, 0, 0];
-        cff.extend_from_slice(&[0, 1, 4]);
-        cff.extend_from_slice(&1u32.to_be_bytes());
-        cff.extend_from_slice(&((program.len() as u32) + 1).to_be_bytes());
-        cff.extend_from_slice(&program);
-        let mut builder = write_fonts::FontBuilder::new();
-        for tag in [b"head", b"maxp", b"hhea", b"hmtx"] {
-            builder.add_raw(write_fonts::types::Tag::new(tag), source.table_data(skrifa::Tag::new(tag)).unwrap().as_bytes().to_vec());
-        }
-        builder.add_raw(write_fonts::types::Tag::new(b"CFF "), cff);
-        let bytes = builder.build();
-        let f = skrifa::FontRef::new(&bytes).unwrap();
-        let mut old = FlipPen(BezPath::new());
-        f.outline_glyphs()
-            .get(GlyphId::new(0))
-            .unwrap()
-            .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old)
-            .unwrap();
-        assert!(old.0.elements().len() > 100_000);
-        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
-        let mut streamed = FlipPen(BezPath::new());
-        shared.draw_to(0, &mut streamed).unwrap();
-        assert_eq!(streamed.0, old.0);
     }
 }

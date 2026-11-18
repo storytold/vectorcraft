@@ -97,9 +97,15 @@ mod tests {
     fn commits_the_chosen_palette_as_one_step() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-        let mut png = Vec::new();
-        let img = image::RgbaImage::from_raw(2, 1, vec![200, 30, 90, 255, 20, 40, 220, 255]).unwrap();
-        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let img = craft_image_codecs::Image::from_raw(
+            2,
+            1,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            vec![200, 30, 90, 255, 20, 40, 220, 255],
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         let id = app
             .session
             .edit("Place", |d, sel| {

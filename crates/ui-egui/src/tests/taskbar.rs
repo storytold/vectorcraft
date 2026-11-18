@@ -2,7 +2,8 @@
 //! Path, compound paths and clipping masks their Release, images selected with vector art Make
 //! Clipping Mask, type converts between point and area type, type on a path opens its options, and
 //! a basic shape shows its properties in place of Lock. The basic shape tools show Edit Path, Fill,
-//! Stroke and Shape Properties for the shape they draw. Type, and the Type tools while they edit it,
+//! Stroke and Shape Properties for the shape they draw, and the Smooth tool its Fidelity and Tool
+//! Options… for a path it can smooth. Type, and the Type tools while they edit it,
 //! show the font family, font style and Font Size controls.
 
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
@@ -156,9 +157,41 @@ fn a_clipping_mask_offers_edit_clipping_path_and_release() {
 fn an_image_with_vector_art_offers_make_clipping_mask() {
     let mut app = app();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 128, 255, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 128, 255, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let dir = crate::tests_folder::Folder::new("ui-taskbar");
     let path = dir.file("blue.png", &png);
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
@@ -180,6 +213,185 @@ fn an_image_with_vector_art_offers_make_clipping_mask() {
     select(&mut app, &[a, b]);
     let (_, texts) = bar(&mut app);
     assert!(has(&texts, "Unite") && !has(&texts, "Make Clipping Mask"), "{texts:?}");
+}
+
+/// Places a 2 by 2 pixel image from `dir` and returns its id.
+fn place_image(app: &mut VectorcraftApp, dir: &crate::tests_folder::Folder) -> u64 {
+    let raw = [0u8, 128, 255, 255].repeat(4);
+    let image = craft_image_codecs::Image::from_raw(2, 2, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, raw).unwrap();
+    let png = craft_image_codecs::encode(&image, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    let path = dir.file("tile.png", &png);
+    app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+    app.run("file.place", json!({"path": path, "link": false})).unwrap();
+    let img = app.session.active().unwrap().selection.objects[0].0;
+    assert!(matches!(kind(app, img), NodeKind::Image(_)));
+    img
+}
+
+/// Whether the bar offers Make Clipping Mask, worked out by counting the selected images: some of
+/// the selected ids, but not all, are images.
+fn mixed_by_count(st: &vectorcraft_engine::DocState) -> bool {
+    let n = st.selection.len();
+    let images = st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).filter(|o| matches!(o.kind, NodeKind::Image(_))).count();
+    images > 0 && images < n
+}
+
+/// Sets the selected objects and anchors directly, as no command can select an id with no object,
+/// and moves the document's revision as every selection change does.
+fn set_selection(app: &mut VectorcraftApp, ids: &[u64], anchors: &[u64]) {
+    let st = app.session.active_mut().unwrap();
+    st.selection.objects = ids.iter().map(|i| NodeId(*i)).collect();
+    st.selection.anchors = anchors.iter().map(|i| (NodeId(*i), [(0, 0)].into_iter().collect())).collect();
+    st.revision += 1;
+}
+
+/// The task bar's check for images selected with other objects gives the count's answer for every
+/// selection: empty, one object, paths only, images only, images with paths or type, an id
+/// selected twice, anchors picked out, and ids with no object.
+#[test]
+fn images_with_other_art_matches_the_image_count() {
+    let mut app = app();
+    let dir = crate::tests_folder::Folder::new("ui-taskbar-mixed");
+    let img = place_image(&mut app, &dir);
+    let img2 = place_image(&mut app, &dir);
+    let a = id(app.run("shape.rectangle", json!({"x": 10, "y": 200, "width": 40, "height": 40})).unwrap());
+    let b = id(app.run("shape.rectangle", json!({"x": 30, "y": 210, "width": 40, "height": 40})).unwrap());
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello"})).unwrap());
+    let stale = 1_000_000;
+    assert!(app.session.active().unwrap().doc.node(NodeId(stale)).is_none());
+    let ctx = egui::Context::default();
+    let cases: [(&[u64], &[u64], bool); 17] = [
+        (&[], &[], false),
+        (&[a], &[], false),
+        (&[img], &[], false),
+        (&[a, b], &[], false),
+        (&[img, img2], &[], false),
+        (&[img, a], &[], true),
+        (&[a, img], &[], true),
+        (&[a, b, img], &[], true),
+        (&[img, t], &[], true),
+        (&[img, img], &[], false),
+        (&[img, img, a], &[], true),
+        (&[img, a], &[a], true),
+        (&[a, b], &[a, b], false),
+        (&[img, stale], &[], true),
+        (&[img, img2, stale], &[], true),
+        (&[a, stale], &[], false),
+        (&[stale, stale], &[], false),
+    ];
+    for (ids, anchors, mixed) in cases {
+        set_selection(&mut app, ids, anchors);
+        let st = app.session.active().unwrap();
+        assert_eq!(mixed_by_count(st), mixed, "{ids:?} with anchors on {anchors:?}: the count");
+        assert_eq!(canvas::images_with_other_art(st, &ctx), mixed, "{ids:?} with anchors on {anchors:?}");
+    }
+}
+
+/// The check is worked out once for each revision of the document: an unchanged revision gives the
+/// kept answer, and a selection change, which moves the revision, works it out again.
+#[test]
+fn images_with_other_art_is_kept_for_the_revision() {
+    let mut app = app();
+    let dir = crate::tests_folder::Folder::new("ui-taskbar-mixed-kept");
+    let img = place_image(&mut app, &dir);
+    let a = id(app.run("shape.rectangle", json!({"x": 10, "y": 200, "width": 40, "height": 40})).unwrap());
+    let b = id(app.run("shape.rectangle", json!({"x": 30, "y": 210, "width": 40, "height": 40})).unwrap());
+    select(&mut app, &[img, a]);
+    let ctx = egui::Context::default();
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &ctx));
+    // Changing the objects behind the revision's back shows the kept answer is used.
+    app.session.active_mut().unwrap().selection.objects = vec![NodeId(a), NodeId(b)];
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &ctx), "the revision's answer is kept");
+    select(&mut app, &[a, b]);
+    assert!(!canvas::images_with_other_art(app.session.active().unwrap(), &ctx), "a new revision works it out again");
+    select(&mut app, &[b, img]);
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &ctx));
+    // Another context keeps its own answer.
+    assert!(canvas::images_with_other_art(app.session.active().unwrap(), &egui::Context::default()));
+}
+
+/// The CPU time this thread has used, where the system reports it (Linux), else none.
+fn cpu_time() -> Option<std::time::Duration> {
+    std::fs::read_to_string("/proc/thread-self/schedstat")
+        .ok()
+        .and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok())
+        .map(std::time::Duration::from_nanos)
+}
+
+/// Runs `f` and returns the CPU time it used (zero where the system does not report it) and the
+/// time it took.
+fn timed(f: impl FnOnce()) -> (std::time::Duration, std::time::Duration) {
+    let (cpu, wall) = (cpu_time(), std::time::Instant::now());
+    f();
+    let wall = wall.elapsed();
+    (cpu_time().zip(cpu).map_or_else(Default::default, |(b, a)| b.saturating_sub(a)), wall)
+}
+
+/// Times the image check on a selection of 131,072 rectangles: 120 frames with an unchanged
+/// revision, counting each frame as before against the kept answer, and the first frame after a
+/// change. Each cell is the median of 7 runs, CPU time then elapsed time. Run with
+/// `cargo test -p vectorcraft-ui-egui --lib images_with_other_art_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "a timing run on a large selection"]
+fn images_with_other_art_timing() {
+    let dir = crate::tests_folder::Folder::new("ui-taskbar-mixed-timing");
+    let doubled = |app: &mut VectorcraftApp, times: usize| {
+        for _ in 0..times {
+            app.run("select.all", json!({})).unwrap();
+            app.run("edit.duplicate", json!({})).unwrap();
+        }
+        app.run("select.all", json!({})).unwrap();
+    };
+    let rects = |app: &mut VectorcraftApp| {
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        doubled(app, 17);
+    };
+    let mut variants: Vec<(&str, VectorcraftApp)> = vec![];
+    let mut none = app();
+    rects(&mut none);
+    variants.push(("131,072 rectangles", none));
+    let mut one = app();
+    rects(&mut one);
+    place_image(&mut one, &dir);
+    one.run("select.all", json!({})).unwrap();
+    variants.push(("131,072 rectangles and 1 image", one));
+    let mut images = app();
+    place_image(&mut images, &dir);
+    doubled(&mut images, 9);
+    variants.push(("512 images", images));
+    let median = |mut v: Vec<(std::time::Duration, std::time::Duration)>| {
+        let mut wall: Vec<_> = v.iter().map(|t| t.1).collect();
+        v.sort();
+        wall.sort();
+        format!("{:.2?} / {:.2?}", v[v.len() / 2].0, wall[wall.len() / 2])
+    };
+    println!("| Selection | Count, 120 frames | Kept, 120 frames | Count, 1 frame | First frame after a change |");
+    println!("| --- | --- | --- | --- | --- |");
+    for (name, mut app) in variants {
+        let mut runs = [vec![], vec![], vec![], vec![]];
+        for _ in 0..7 {
+            let ctx = egui::Context::default();
+            let st = app.session.active().unwrap();
+            let expected = mixed_by_count(st);
+            assert_eq!(canvas::images_with_other_art(st, &ctx), expected, "{name}");
+            runs[0].push(timed(|| {
+                for _ in 0..120 {
+                    assert_eq!(std::hint::black_box(mixed_by_count(st)), expected);
+                }
+            }));
+            runs[1].push(timed(|| {
+                for _ in 0..120 {
+                    assert_eq!(std::hint::black_box(canvas::images_with_other_art(st, &ctx)), expected);
+                }
+            }));
+            runs[2].push(timed(|| assert_eq!(std::hint::black_box(mixed_by_count(st)), expected)));
+            app.session.active_mut().unwrap().revision += 1;
+            let st = app.session.active().unwrap();
+            runs[3].push(timed(|| assert_eq!(std::hint::black_box(canvas::images_with_other_art(st, &ctx)), expected)));
+        }
+        let [a, b, c, d] = runs.map(median);
+        println!("| {name} ({} selected) | {a} | {b} | {c} | {d} |", app.session.active().unwrap().selection.len());
+    }
 }
 
 #[test]
@@ -719,6 +931,86 @@ fn shape_tool_bar_retargets_after_another_shape_and_undo() {
     assert_eq!(app.session.tool_id(), "ellipse");
     click_button(&mut app, "Edit Path");
     assert_eq!(app.session.tool_id(), "directSelection");
+}
+
+/// Where the text the bar draws just right of `label`, on the same row, centers: the field after
+/// the label.
+fn field_after(texts: &[(String, Rect)], label: &str) -> Pos2 {
+    let l = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("no `{label}` in {texts:?}")).1;
+    texts
+        .iter()
+        .filter(|(_, r)| r.left() > l.right() && (r.center().y - l.center().y).abs() < 8.0)
+        .min_by(|a, b| a.1.left().total_cmp(&b.1.left()))
+        .unwrap_or_else(|| panic!("no field after `{label}` in {texts:?}"))
+        .1
+        .center()
+}
+
+/// The Smooth tool, with a path it can smooth selected, shows its Fidelity field and Tool Options…,
+/// and none of the selection tools' actions or chips. A value typed in the field sets the tool's
+/// Fidelity, and Tool Options… opens the tool's options with that value.
+#[test]
+fn the_smooth_tool_shows_fidelity_and_tool_options_for_a_path() {
+    let mut app = app();
+    let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+    select(&mut app, &[path]);
+    app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+    let (_, named) = buttons(&mut app);
+    let names = names(&named);
+    for name in ["Tool Options…", "More Options"] {
+        assert!(names.contains(&name), "{name} in {names:?}");
+    }
+    for name in ["Fill", "Stroke", "Recolor Artwork", "Lock (⌘2)", "Duplicate", "Edit Path", "Offset Path", "Simplify", "Smooth"] {
+        assert!(!names.contains(&name), "{name} is left out of {names:?}");
+    }
+    let (ctx, texts) = bar(&mut app);
+    let p = field_after(&texts, "Fidelity:");
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(p), press(true), press(false)]);
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![Event::Text("7".into())]);
+    let enter = Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![enter]);
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.session.tool_options()["fidelity"].as_f64(), Some(7.0));
+    assert_eq!(app.session.tool_id(), "smooth");
+    assert_eq!(app.session.active().unwrap().selection.objects, [NodeId(path)], "the selection is kept");
+    click_button(&mut app, "Tool Options…");
+    let d = app.ui.dialog.as_ref().expect("the Smooth tool's options");
+    assert_eq!((d.kind.as_str(), d.str("tool").as_str()), (crate::dialogs::freehand::KIND, "smooth"));
+    assert_eq!(d.f64("fidelity", 0.0), 7.0);
+}
+
+/// The Smooth tool shows no bar without a selected path it can smooth: with nothing selected, a
+/// straight line or type. With a selection tool the bar has the selection's actions again, without
+/// Fidelity.
+#[test]
+fn the_smooth_tool_shows_no_bar_without_a_path_to_smooth() {
+    let mut app = app();
+    let path = id(app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 120, "height": 80})).unwrap());
+    let line = id(app.run("shape.line", json!({"x1": 150, "y1": 200, "x2": 300, "y2": 240})).unwrap());
+    let text = id(app.run("text.create", json!({"x": 220, "y": 60, "text": "Type"})).unwrap());
+    app.run("tool.select", json!({"tool": "smooth"})).unwrap();
+    for (what, ids) in [("nothing", vec![]), ("a straight line", vec![line]), ("type", vec![text])] {
+        select(&mut app, &ids);
+        let (ctx, _) = bar(&mut app);
+        assert!(canvas::task_bar_rect(&ctx).is_none(), "{what}: no bar");
+    }
+    select(&mut app, &[path, line]);
+    let (ctx, texts) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_some() && has(&texts, "Fidelity:"), "a path with a line: the bar, {texts:?}");
+    // On one canvas the bar follows each change of the selection.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    for (ids, shown) in [(vec![path], true), (vec![line], false), (vec![], false), (vec![path], true)] {
+        select(&mut app, &ids);
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        assert_eq!(canvas::task_bar_rect(&ctx).is_some(), shown, "{ids:?}");
+    }
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let (_, texts) = bar(&mut app);
+    assert!(has(&texts, "Duplicate") && !has(&texts, "Fidelity:"), "{texts:?}");
 }
 
 /// A compound path under the Direct Selection tool isn't offered Edit Path, which would only switch

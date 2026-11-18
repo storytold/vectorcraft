@@ -450,10 +450,14 @@ fn bad_stroke_styles_and_effect_records_are_refused() {
 
 /// A `w` × `h` PNG whose pixels vary with their column, half transparent.
 fn png(w: u32, h: u32) -> Vec<u8> {
-    let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 100) as u8, (y * 7) as u8, 30, 128]));
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
-    out
+    let mut data = Vec::with_capacity((w * h * 4) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            data.extend_from_slice(&[(x * 100) as u8, (y * 7) as u8, 30, 128]);
+        }
+    }
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, data).unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 /// An image object `w` × `h` pixels showing blob `key`, linked to `link`.
@@ -590,8 +594,12 @@ fn declared_embedded_and_linked_images_have_distinct_metadata_and_pixel_omission
     let id = d.insert(Some(layer), usize::MAX, n).unwrap();
     assert_eq!(encode_read_only(&d, d.node(id).unwrap()).unwrap()["pixelsOmitted"], json!(true), "too large to count");
     // Gray pixels, and data that isn't an image.
-    let mut gray = vec![];
-    image::GrayImage::from_pixel(2, 2, image::Luma([90])).write_to(&mut std::io::Cursor::new(&mut gray), image::ImageFormat::Png).unwrap();
+    let gray = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(2, 2, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![90; 4]).unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     for (blob, mode) in [(ImageBlob::png(gray), "gray"), (ImageBlob::png(b"not an image".to_vec()), "unknown")] {
         d.images.insert("x".into(), blob);
         let n = image_node(&mut d, "x", (2, 2), None);

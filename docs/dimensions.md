@@ -20,12 +20,17 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   first point was picked on an anchor, the second also snaps onto the construction guides through
   it; any other first point has no construction guides through it. The guides
   show while hovering, before each click. VectorCraft's own rules decide where a point lands: an
-  anchor within 8 pixels takes it first; a point on a guide stays on the guide where the pointer
+  anchor within 8 pixels takes it first; with Smart Guides or Snap to Point on, the end of a line
+  of a visible, unlocked dimension already drawn (its dimension line, or the far end of an
+  extension line) within 8 pixels takes it next, without a link to that dimension; a point on a
+  guide stays on the guide where the pointer
   is, except that it moves onto a segment within the Smart Guides snapping tolerance, or, on a
   construction guide or a Snap to Glyph guide that runs at an angle, onto the place where that
   guide crosses another object's alignment line within twice that tolerance; a point that no
-  anchor, guide, grid or pixel snapping places lands on the closest point of a segment within 8
-  pixels.
+  anchor, guide, grid or pixel snapping places lands on the closest point of a segment, or of a
+  line of a dimension already drawn, within 8 pixels. With Smart Guides and Anchor/Path Labels
+  on, a point on an anchor or a line end shows the "anchor" label, and a point on a segment or
+  line shows the "path" label. These rules apply to the Linear points.
   A linear dimension is aligned, horizontal or vertical, as the
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
   describes: after the second click, clicking again places an aligned dimension, and moving the
@@ -46,6 +51,11 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   point as before. An unlinked dimension that
   turns has its line where the turn puts it, or, when that would put it between the points, as
   far past the outermost point as before.
+  With Smart Guides on, a linear dimension placed with its line within the Smart Guides snapping
+  tolerance of the level of a parallel line of a visible, unlocked linear dimension already drawn
+  anywhere in the document has its line on that level. This is VectorCraft's own rule. With
+  Alignment Guides on, a guide runs along the level across both lines while the dimension is
+  placed.
 - **Angular:** hover a corner where two straight segments meet and drag outwards. Or click two
   straight lines that meet (or would, extended), then click to place.
 - **Radial:** hover a circle, or a segment that is a perfect arc, and drag: outwards gives its
