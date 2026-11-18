@@ -111,6 +111,12 @@ fn bend_ends(stroke: &mut Vec<Point>, a: Option<Point>, b: Option<Point>, reach:
     {
         (c0, c1) = (Some(y), Some(x));
     }
+    // Both bends stop at the same place (a stroke twice `reach` long): one point there.
+    if let (Some(x), Some(y)) = (c0, c1)
+        && (y - x).abs() < 1e-9
+    {
+        c1 = None;
+    }
     let mut points = Vec::with_capacity(stroke.len() + 2);
     let mut dists = Vec::with_capacity(stroke.len() + 2);
     let mut before: Option<(Point, f64)> = None;
@@ -279,7 +285,7 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
     // The Pencil's preview of a stroke that redraws a path draws it as a new path but leaves the
     // selection as it is: the path being redrawn stays selected until the release redraws it.
-    let leave_selection = switch_or(p, "leaveSelection", false, C)?;
+    let preview = switch_or(p, "preview", false, C)?;
     let filled = switch_or(p, "fill", false, C)?;
     let extend = p.get("extend").filter(|v| !v.is_null());
     if extend.is_none() && p.get("connect").is_some_and(|v| !v.is_null()) {
@@ -528,8 +534,13 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
             st.brush = Some(name.to_string());
         }
     }
-    let out = insert_look(s, label, path_kind(PathData::single(sp)), look, None, keep_selected)?;
-    if !keep_selected && !leave_selection {
+    // A preview goes on top as Draw Normal places it: Draw Inside would put it in the selected
+    // path's clip group, clipped, and Draw Behind behind the path.
+    let mode = if preview { std::mem::replace(&mut s.draw_mode, crate::DrawMode::Normal) } else { s.draw_mode };
+    let out = insert_look(s, label, path_kind(PathData::single(sp)), look, None, keep_selected && !preview);
+    s.draw_mode = mode;
+    let out = out?;
+    if !keep_selected && !preview {
         // A new stroke with Keep selected off leaves nothing selected: Illustrator starts the stroke
         // by dropping the earlier selection, it does not keep it (#5752).
         s.select(|_, sel| sel.clear())?;
@@ -734,5 +745,13 @@ mod bend_tests {
         assert_eq!(pts.first(), Some(&Point::new(0.0, 10.0)), "{pts:?}");
         assert!(pts.contains(&Point::new(40.0, 0.0)), "a point where the bend stops: {pts:?}");
         assert!(pts.iter().filter(|p| p.x >= 40.0).all(|p| p.y == 0.0), "beyond the reach, as drawn: {pts:?}");
+    }
+
+    /// Where both bends stop at the same place, one point is added there, not two.
+    #[test]
+    fn bend_ends_adds_one_point_where_both_bends_stop() {
+        let mut pts = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
+        bend_ends(&mut pts, Some(Point::new(0.0, 10.0)), Some(Point::new(100.0, 10.0)), 50.0);
+        assert_eq!(pts, [Point::new(0.0, 10.0), Point::new(50.0, 0.0), Point::new(100.0, 10.0)]);
     }
 }

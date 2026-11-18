@@ -1495,8 +1495,8 @@ impl GestureTool {
     }
 
     /// The preview of a stroke being drawn: [`Self::freehand_params`], except that a stroke that
-    /// redraws a selected path is shown as it is drawn, with no fill, and leaves the path and the
-    /// selection as they are: where the stroke ends is only known at the release, which redraws
+    /// redraws a selected path is shown as it is drawn, with no fill, on top in any drawing mode,
+    /// and leaves the path and the selection as they are: where the stroke ends is only known at the release, which redraws
     /// the path (`finish`).
     fn drawing_params(&self, cx: &ToolContext) -> Value {
         let mut v = self.freehand_params(cx, false);
@@ -1508,7 +1508,7 @@ impl GestureTool {
         }
         v["fill"] = json!(false);
         v["keepSelected"] = json!(false);
-        v["leaveSelection"] = json!(true);
+        v["preview"] = json!(true);
         v
     }
 

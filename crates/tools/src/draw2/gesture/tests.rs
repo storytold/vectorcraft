@@ -837,7 +837,7 @@ fn pencil_previews_a_redraw_as_the_stroke_drawn_and_redraws_at_the_release() {
     let previews: Vec<&Value> = drawing.iter().flatten().filter_map(|a| if let Action::Preview(_, v) = a { Some(v) } else { None }).collect();
     assert!(!previews.is_empty(), "{acts:?}");
     for v in previews {
-        assert!(v.get("redraw").is_none() && v["fill"] == false && v["keepSelected"] == false && v["leaveSelection"] == true, "{v}");
+        assert!(v.get("redraw").is_none() && v["fill"] == false && v["keepSelected"] == false && v["preview"] == true, "{v}");
         assert_eq!(v["points"][0], json!([350.0, 304.0]), "the stroke as drawn: {v}");
     }
     assert!(matches!(release.as_slice(), [Action::Preview(_, v), Action::Commit] if v["redraw"]["id"] == id.0 && v["fill"] == true), "{release:?}");
