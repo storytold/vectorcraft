@@ -56,6 +56,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("rectangle", "Rectangle Tool", Some("M"), "tool-rect"),
         t("roundedRectangle", "Rounded Rectangle Tool", None, "tool-rounded-rect"),
         t("ellipse", "Ellipse Tool", Some("L"), "tool-ellipse"),
+        t(crate::circle::ID, "Circle Tool", None, "tool-circle"),
         t("polygon", "Polygon Tool", None, "tool-polygon"),
         t("star", "Star Tool", None, "tool-star"),
         t("flare", "Flare Tool", None, "tool-flare"),

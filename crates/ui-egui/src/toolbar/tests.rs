@@ -853,7 +853,7 @@ fn window_float_tools_floats_and_puts_back_a_group() {
     assert!(app.ui.floating_flyouts.is_empty() && check(&app) == Some(false));
     assert_eq!(app.run("window.floatTools", json!({"tool": "pen", "floating": false})).unwrap(), json!(false));
     // A tool alone in its slot, an unknown tool, a bad flag.
-    assert!(app.run("window.floatTools", json!({"tool": "ellipse"})).is_err());
+    assert!(app.run("window.floatTools", json!({"tool": "polygon"})).is_err());
     assert!(app.run("window.floatTools", json!({"tool": "nope"})).is_err());
     assert!(app.run("window.floatTools", json!({})).is_err());
     assert!(app.run("window.floatTools", json!({"tool": "pen", "floating": "yes"})).is_err());
