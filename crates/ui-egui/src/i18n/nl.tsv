@@ -2316,6 +2316,7 @@ digits	Malayalam	Malayalam
 	Rule:	Regel:
 	Save changes to {name}	Wijzigingen opslaan in {name}
 	Save theme to My Themes	Thema opslaan in Mijn thema's
+	Set the current fill or stroke to the selected color	De huidige vulling of contour op de geselecteerde kleur instellen
 	Set the selected color to the current color	De geselecteerde kleur op de huidige kleur instellen
 	Copy All Styles	Alle stijlen kopiëren
 	Exported {path}	{path} geëxporteerd
@@ -2674,7 +2675,7 @@ digits	Malayalam	Malayalam
 	Overprint Preview (separations)	Overprintvoorbeeld (separaties)
 	Show All Plates	Alle platen weergeven
 	Show all plates	Alle platen weergeven
-	Show/hide plate (Alt-click: only this plate)	Plaat weergeven/verbergen (Alt-klik: alleen deze plaat)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Plaat weergeven/verbergen (Alt-klik: alleen deze plaat; nogmaals Alt-klik: alle platen)
 	Simulate Paper	Papier simuleren
 	Use Black Point Compensation	Zwartpuntcompensatie gebruiken
 	Working CMYK (don't tag)	Werk-CMYK (niet taggen)
@@ -2714,6 +2715,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Punt steekt uit voorbij het eindpunt
 	Tip on the end point	Punt op het eindpunt
 	Variable Width Profile	Variabel breedteprofiel
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Het penseel van de contour behoudt zijn eigen grootte, dus een breedteprofiel verandert de contour niet. Verwijder het penseel om een profiel te gebruiken.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Het penseel van de contour behoudt zijn eigen grootte, dus een breedteprofiel verandert de contour niet. Verwijder het penseel om een profiel te gebruiken.
 	Weight:	Dikte:
 	Art using a deleted global swatch keeps its colour.	Artwork met een verwijderd globaal staal behoudt zijn kleur.
 	Color Group: {name}	Kleurgroep: {name}
@@ -2823,6 +2826,9 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Horizontaal spiegelen
 	Flip Vertical	Verticaal spiegelen
 	Polygon Properties:	Veelhoekeigenschappen:
+	Line Properties:	Lijneigenschappen:
+	Line Length:	Lijnlengte:
+	Line Angle:	Lijnhoek:
 	Rectangle Properties:	Rechthoekeigenschappen:
 	Shape Properties:	Vormeigenschappen:
 	Shape Properties	Vormeigenschappen
@@ -3566,6 +3572,8 @@ antiAlias	Sharp	Scherp
 	Every option matches {base}.	Elke optie komt overeen met {base}.
 	Files of a PDF standard can't be password-protected.	Bestanden volgens een PDF-standaard kunnen niet met een wachtwoord worden beveiligd.
 	Files of this standard tag their colours with ICC profiles.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen, behalve CMYK-kleuren in het profiel voor uitvoerintentie, die als DeviceCMYK worden geschreven.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Met ‘Geen profielen opnemen’ en een CMYK-uitvoerintentie wordt elke CMYK-kleur als DeviceCMYK geschreven, tenzij deze wordt omgezet naar een CMYK-bestemming met een ander profiel.
 	Flattener preset:	Voorinstelling voor afvlakking:
 	General › Thumbnails	Algemeen › Miniaturen
 	Grayscale images	Grijswaardenafbeeldingen
@@ -3749,6 +3757,12 @@ antiAlias	Sharp	Scherp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opties tekstexport
+	Chinese Big 5	Chinees Big 5
+	Cyrillic	Cyrillisch
+	Greek	Grieks
+	Turkish	Turks
+	Baltic	Baltisch
+	Central European	Centraal-Europees
 	Character Set:	Tekenset:
 	Join the lines of each paragraph	De regels van elke alinea samenvoegen
 	Line Breaks	Regeleinden
@@ -3778,6 +3792,9 @@ antiAlias	Sharp	Scherp
 	Variable Options	Variabeleopties
 	Define a variable first	Definieer eerst een variabele
 	Adjust Adjoining Width Points	Aangrenzende breedtepunten aanpassen
+	Incoming	Inkomend
+	Outgoing	Uitgaand
+	Single Width Only	Slechts één breedte
 	Keep both sides the same width	Beide zijden dezelfde breedte houden
 	Side 1:	Zijde 1:
 	Side 2:	Zijde 2:
@@ -4163,6 +4180,7 @@ theme	Appearance	Vormgeving
 	Select Art	Kunst selecteren
 	Set Current Layer	Huidige laag instellen
 	Flatten Artwork	Kunst afvlakken
+	Locate Layer	Laag lokaliseren
 	Locate Object	Object lokaliseren
 	Lock Others	Overigen vergrendelen
 	Merge Selected	Selectie samenvoegen
@@ -4981,6 +4999,8 @@ font-technology	Variable	Variabel
 	Couldn't paste from the clipboard: {e}	Kon niet vanaf het klembord plakken: {e}
 	Channel	Kanaal
 	Circle	Cirkel
+	Circle Tool	Cirkelgereedschap
+	Circle too large	Cirkel te groot
 	Clip to Art	Clippen op artwork
 	Colorize	Inkleuren
 	Gamma	Gamma
@@ -5464,8 +5484,8 @@ imageTrace	Outline	Contour
 @msg	no active document	geen actief document
 @msg	no active perspective plane	geen actief perspectiefvlak
 @msg	no anchor points selected	geen ankerpunten geselecteerd
-@msg	`points` must be three [x, y] pairs of numbers	`points` moet uit drie getallenparen [x, y] bestaan
-@msg	direct-select three anchor points, or give `points`	selecteer met directe selectie drie ankerpunten of geef `points` op
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` moet uit twee of drie getallenparen [x, y] bestaan
+@msg	direct-select two or three anchor points, or give `points`	selecteer met directe selectie twee of drie ankerpunten of geef `points` op
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
 @msg	no app to open files here	hier is geen app om bestanden mee te openen
 @msg	no artboard	geen tekengebied
@@ -5556,6 +5576,9 @@ imageTrace	Outline	Contour
 @msg	no such user library	gebruikersbibliotheek bestaat niet
 @msg	no such view	weergave bestaat niet
 @msg	no such width point	breedtepunt bestaat niet
+@msg	`single` must be `incoming` or `outgoing`	`single` moet `incoming` of `outgoing` zijn
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` en `outIndex` moeten de twee helften van één onderbroken breedtepunt zijn
+@msg	a discontinuous width point keeps its place	een onderbroken breedtepunt behoudt zijn plaats
 @msg	no swatch `{name}`	geen staal `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	geen stalenbibliotheek `{l}` (zie swatch.library.list)
 @msg	no symbol instances selected	geen symboolinstanties geselecteerd
@@ -6637,6 +6660,7 @@ imageTrace	Outline	Contour
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	samengestelde vormen accepteren paden, samengestelde paden, groepen, samengestelde vormen, tekst, mengsels en omvormingen
 @msg	compound {_1} must contain exactly one open path to join	samengesteld object {_1} moet precies één open pad bevatten om te verbinden
 @msg	connect needs a path other than the one extended	connect heeft een ander pad nodig dan het pad dat wordt verlengd
+@msg	connect needs extend	connect heeft extend nodig
 @msg	connect needs id	connect heeft id nodig
 @msg	connect path has no open end	het pad van connect heeft geen open uiteinde
 @msg	continuation must be an array of path chunks	continuation moet een array van padstukken zijn
@@ -10080,3 +10104,13 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Fold Preview	Vouwvoorbeeld
+	Fold	Vouwen
+	Show Fold Lines	Vouwlijnen tonen
+	Three-Quarter	Driekwart
+	Open a document to preview its folded shape.	Open een document om de gevouwen vorm te bekijken.
+@msg	Check the fold lines first.	Controleer eerst de vouwlijnen.
+@msg	Panels: {panels}, hinges: {hinges}	Panelen: {panels}, scharnieren: {hinges}
+@msg	Other blanks not shown: {count}	Andere uitslagen niet getoond: {count}
+@msg	A joint does not close by {gap} pt.	Een naad sluit {gap} pt niet.
+@msg	Two panels pass through each other.	Twee panelen gaan door elkaar heen.
