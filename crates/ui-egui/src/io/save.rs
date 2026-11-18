@@ -501,6 +501,16 @@ pub(crate) fn show_with_notes(app: &mut VectorcraftApp, status: String, notes: V
     app.ui.status_notes = (!notes.is_empty()).then(|| (app.ui.status.clone(), notes));
 }
 
+/// Clear the status bar's message and its hover notes when `left` is still what the status bar
+/// shows: a message with notes, and [`crate::state::UiState::status_sets`] when it was shown.
+/// A message set since stays, one with the same text included.
+pub(crate) fn clear_notes_left(app: &mut VectorcraftApp, left: Option<(String, u64)>) {
+    if left.is_some_and(|(status, sets)| status == app.ui.status && sets == app.ui.status_sets) {
+        app.status("");
+        app.ui.status_notes = None;
+    }
+}
+
 /// [`report_saved`]'s message.
 pub(crate) fn saved_status(path: &str, r: &Value) -> String {
     let warnings = notes_of(r);

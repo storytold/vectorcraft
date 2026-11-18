@@ -570,6 +570,98 @@ fn ending_during_a_pen_gesture_commits_and_clears_it() {
     }
 }
 
+/// Choosing the Pen again ends the path being drawn as Escape does, with the rubber band on or off
+/// and for a one-anchor path: the preview goes, nothing is added to the document, and the next
+/// click starts a new path. Mid-drag it commits the anchor being placed first. With no path being
+/// drawn it changes nothing.
+#[test]
+fn choosing_the_pen_again_ends_the_path() {
+    let p = paint();
+    let created = |acts: &[Action]| matches!(acts, [Action::Begin(_), Action::Preview(c, _)] if c == "path.create");
+    let preview = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Path { .. } | Overlay::Measure { .. }));
+    for pts in [vec![Point::new(100.0, 300.0), Point::new(200.0, 300.0)], vec![Point::new(100.0, 300.0)]] {
+        let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&pts, false));
+        for band in [true, false] {
+            let cx = ToolContext { pen_rubber_band: band, ..cx(&d, &s, &p) };
+            let mut t = PenTool { drawing: true, ..PenTool::default() };
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Move, 300.0, 410.0));
+            assert!(preview(&t.overlays(&cx)), "band {band}");
+            assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::PenDrawing);
+            assert!(t.chosen_again(&cx).is_empty(), "nothing to commit");
+            assert!(!preview(&t.overlays(&cx)), "band {band}");
+            assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::Pen);
+            let acts = click(&mut t, &cx, 300.0, 410.0, Mods::default());
+            assert!(created(&acts), "{} anchors, band {band}: {acts:?}", pts.len());
+        }
+        // Chosen again (through `tool.select`) while a drag places an anchor: it is committed.
+        let cx = cx(&d, &s, &p);
+        let mut t = PenTool { drawing: true, ..PenTool::default() };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 300.0, 410.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 320.0, 440.0));
+        assert_eq!(t.chosen_again(&cx), vec![Action::Commit]);
+        assert!(!t.busy());
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 320.0, 440.0)).is_empty());
+        assert!(created(&click(&mut t, &cx, 300.0, 500.0, Mods::default())));
+    }
+    let (d, _, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false));
+    let cx = cx(&d, &s, &p);
+    let mut t = PenTool::default();
+    assert!(t.chosen_again(&cx).is_empty());
+    assert_eq!(t.cursor(&cx, Point::new(300.0, 410.0), Mods::default()), Cursor::Pen);
+}
+
+/// Choosing the Pen again while it draws a path inside a compound path ends that path as Escape
+/// and Enter do: the compound path is selected, the path is not closed, no undo step is added,
+/// and the next click starts a new path. Ending a path outside any compound path sends no
+/// selection change.
+#[test]
+fn choosing_the_pen_again_selects_the_compound_parent_of_the_path_being_drawn() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let (a, b, compound) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let open = |x: f64| {
+        vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(x, 300.0), Point::new(x + 100.0, 300.0)], false))
+    };
+    let path = |id, x| std::sync::Arc::new(vectorcraft_doc::Node::path(id, open(x), vectorcraft_doc::Appearance::default_art()));
+    let mut node = vectorcraft_doc::Node::new(
+        compound,
+        NodeKind::Compound { children: vec![path(a, 10.0), path(b, 300.0)], rule: vectorcraft_geom::FillRule::NonZero },
+    );
+    node.appearance = vectorcraft_doc::Appearance::default_art().into();
+    d.insert(Some(l), 1, node).unwrap();
+    let p = paint();
+    // The member path alone is the selection while the Pen draws it.
+    let mut s = Selection::default();
+    s.set([a]);
+    let inside = cx(&d, &s, &p);
+    // The selection once the engine ran `select.set`: the compound path.
+    let mut sc = Selection::default();
+    sc.set([compound]);
+    let after = cx(&d, &sc, &p);
+    let select_compound = vec![Action::Exec("select.set".into(), json!({"ids": [compound.0]}))];
+    for key in [None, Some(ToolKey::Escape), Some(ToolKey::Enter)] {
+        let mut t = PenTool { drawing: true, path: Some(a), subpath: Some(0), ..PenTool::default() };
+        assert_eq!(t.cursor(&inside, Point::new(250.0, 450.0), Mods::default()), Cursor::PenDrawing, "{key:?}");
+        let acts = match key {
+            Some(k) => t.key(&inside, k, Mods::default()),
+            None => t.chosen_again(&inside),
+        };
+        assert_eq!(acts, select_compound, "{key:?}: only the selection changes, with no close and no undo step");
+        assert!(!t.busy() && t.active(&after).is_none(), "{key:?}: the path is done");
+        assert_eq!(t.cursor(&after, Point::new(250.0, 450.0), Mods::default()), Cursor::Pen, "{key:?}");
+        let next = click(&mut t, &after, 250.0, 450.0, Mods::default());
+        assert!(
+            matches!(next.as_slice(), [Action::Begin(_), Action::Preview(c, _)] if c == "path.create"),
+            "{key:?}: the next click starts a new path: {next:?}"
+        );
+    }
+    let (d, id, s) = drawing(vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false));
+    let plain = cx(&d, &s, &p);
+    let mut t = PenTool { drawing: true, path: Some(id), subpath: Some(0), ..PenTool::default() };
+    assert!(t.chosen_again(&plain).is_empty());
+    assert!(!t.busy() && t.active(&plain).is_none());
+}
+
 /// #501: a press on the first anchor closes the path, however far the drag then goes: the
 /// closing preview leaves the path closed (so not one the pen extends), and each move still
 /// previews the close with the incoming handle mirroring the pointer (Alt keeps the outgoing one

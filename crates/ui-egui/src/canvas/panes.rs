@@ -1,5 +1,6 @@
 //! Window › Arrange › Tile: every open document in a pane of its own, edge to edge in the document
-//! area. The current document's pane is the canvas ([`super::show`]). Each other pane draws its
+//! area, in a grid, side by side or stacked; the 2-up to 6-up layouts show that many and leave the
+//! rest under their tabs ([`Layout`]). The current document's pane is the canvas ([`super::show`]). Each other pane draws its
 //! document from a render of its own, with its artboards, guides and selected objects, and a press
 //! in it makes its document the current one. A Selection drag released in it drops the dragged
 //! artwork into its document ([`crate::document_drag::drop_on_pane`]). Each view Window › New
@@ -39,6 +40,9 @@ pub struct Panes {
     pending: HashMap<Slot, CacheKey>,
     /// The panes the last frame drew, as (window, pane rect).
     pub(crate) last: Vec<(Win, egui::Rect)>,
+    /// The slots of `last`'s windows, in the same order: which windows they were, as document
+    /// indices shift when a document closes.
+    last_slots: Vec<Option<Slot>>,
     /// By slot: the size of the view's area its view was last fitted to in a pane, and the zoom and
     /// center the fit gave.
     fits: HashMap<Slot, (egui::Vec2, f64, Point)>,
@@ -50,6 +54,7 @@ impl Panes {
         self.shown.clear();
         self.pending.clear();
         self.last.clear();
+        self.last_slots.clear();
         self.fits.clear();
     }
 
@@ -162,37 +167,123 @@ fn render_pane(
     img
 }
 
-/// The grid of `n` panes in `area`, filled row by row: as many columns as the square root of `n`
-/// rounded up, and as many rows as those columns need. The panes meet edge to edge and cover
-/// `area`; the spare cells of the last row stay empty.
-pub(crate) fn cells(n: usize, area: egui::Rect) -> Vec<egui::Rect> {
-    if n == 0 {
-        return vec![];
+/// How Tile lays out the panes (`window.arrange.tile`'s `layout`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Layout {
+    /// A grid: as many columns as the square root of the number of panes rounded up.
+    #[default]
+    Grid,
+    /// Side by side in one row, each pane as tall as the document area.
+    Vertical,
+    /// Stacked in one column, each pane as wide as the document area.
+    Horizontal,
+    /// At most this many panes (2, 3, 4 or 6); the other windows stay under their tabs.
+    Up(usize),
+}
+
+impl Layout {
+    /// Each layout with its name in `layout`, in the order the menus list them.
+    pub(crate) const ALL: [(&'static str, Layout); 7] = [
+        ("grid", Layout::Grid),
+        ("vertical", Layout::Vertical),
+        ("horizontal", Layout::Horizontal),
+        ("2up", Layout::Up(2)),
+        ("3up", Layout::Up(3)),
+        ("4up", Layout::Up(4)),
+        ("6up", Layout::Up(6)),
+    ];
+
+    /// The layout's name in `layout`.
+    pub(crate) fn name(self) -> &'static str {
+        Self::ALL.iter().find(|(_, l)| *l == self).map_or("grid", |(n, _)| n)
     }
+
+    /// The layout `p`'s `layout` names, the grid without one. Any other value is an error.
+    pub(crate) fn from_params(p: &serde_json::Value) -> Result<Layout, String> {
+        let key = "layout";
+        match p.get(key) {
+            None => Ok(Layout::Grid),
+            Some(v) => v
+                .as_str()
+                .and_then(|s| Self::ALL.iter().find(|(n, _)| *n == s))
+                .map(|(_, l)| *l)
+                .ok_or_else(|| format!("`{key}` must be one of {}", Self::ALL.map(|(n, _)| n).join(", "))),
+        }
+    }
+
+    /// How many of `n` windows the layout gives a pane.
+    fn panes(self, n: usize) -> usize {
+        match self {
+            Layout::Up(k) => n.min(k),
+            _ => n,
+        }
+    }
+
+    /// How many columns the layout puts `n` panes in.
+    fn columns(self, n: usize) -> usize {
+        match self {
+            Layout::Grid => grid_columns(n),
+            Layout::Vertical => n,
+            Layout::Horizontal => 1,
+            Layout::Up(k) if k <= 3 => n,
+            Layout::Up(k) => grid_columns(k).min(n),
+        }
+    }
+}
+
+/// The square root of `n` rounded up.
+fn grid_columns(n: usize) -> usize {
     let mut cols = 1;
     while cols * cols < n {
         cols += 1;
     }
+    cols
+}
+
+/// The `n` panes `layout` places in `area`, filled row by row, in as many rows as its columns
+/// need (the grid: as many columns as the square root of `n` rounded up). The panes meet edge to
+/// edge and cover `area`; the spare cells of the last row stay empty.
+pub(crate) fn layout_cells(layout: Layout, n: usize, area: egui::Rect) -> Vec<egui::Rect> {
+    if n == 0 {
+        return vec![];
+    }
+    let cols = layout.columns(n).clamp(1, n);
     let rows = n.div_ceil(cols);
     let x = |c: usize| if c == cols { area.right() } else { area.left() + area.width() * c as f32 / cols as f32 };
     let y = |r: usize| if r == rows { area.bottom() } else { area.top() + area.height() * r as f32 / rows as f32 };
     (0..n).map(|i| egui::Rect::from_min_max(pos2(x(i % cols), y(i / cols)), pos2(x(i % cols + 1), y(i / cols + 1)))).collect()
 }
 
-/// `window.arrange.tile`: every open document, and each further view of one, in a pane of its own,
-/// each fitted to its pane. With fewer than two windows open (when the menu item is grayed out) it
-/// leaves the view and `tiled` as they are. The windows floating come back under the tabs for it.
-pub(crate) fn tile(app: &mut VectorcraftApp) -> Result<serde_json::Value, String> {
+/// The windows of `docked` (in tab order) that `layout` gives a pane: all of them, or as many of
+/// the first ones as it shows, with the current window `active` in the last pane when it is not
+/// among them.
+pub(crate) fn shown_windows(layout: Layout, docked: &[Win], active: Option<Win>) -> Vec<Win> {
+    let k = layout.panes(docked.len());
+    let mut shown = docked[..k].to_vec();
+    if let (Some(a), Some(last)) = (active.filter(|a| !shown.contains(a) && docked.contains(a)), shown.last_mut()) {
+        *last = a;
+    }
+    shown
+}
+
+/// `window.arrange.tile`: every open document, and each further view of one, in a pane of its own
+/// as `layout` places them (the grid without one), each fitted to its pane. With fewer than two
+/// windows open (when the menu item is grayed out) it leaves the view, `tiled` and the layout as
+/// they are. The windows floating come back under the tabs for it. A `layout` that is not one of
+/// [`Layout::ALL`]'s names is an error.
+pub(crate) fn tile(app: &mut VectorcraftApp, p: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let layout = Layout::from_params(p)?;
     app.sync_views();
     let n = crate::doc_windows::windows(app).len();
     if n < 2 {
-        return Ok(json!({"tiled": app.ui.tiled, "panes": n}));
+        return Ok(json!({"tiled": app.ui.tiled, "panes": n, "layout": app.ui.tile_layout.name()}));
     }
     crate::doc_windows::dock_all(app);
     app.ui.tiled = true;
+    app.ui.tile_layout = layout;
     app.ui.home = None;
     crate::doc_windows::unfit_all(app);
-    Ok(json!({"tiled": app.ui.tiled, "panes": n}))
+    Ok(json!({"tiled": app.ui.tiled, "panes": layout.panes(n), "layout": layout.name()}))
 }
 
 /// `window.arrange.consolidateAllWindows`: one document at a time again, under its tab, the
@@ -220,27 +311,43 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             app.canvas.panes.clear();
         }
         app.canvas.panes.last.clear();
+        app.canvas.panes.last_slots.clear();
         return false;
     }
     // The current window's pane is the canvas, unless it is a floating one.
     let active = crate::doc_windows::current(app).filter(|a| docked.contains(a));
+    // The 2-up to 6-up layouts leave the windows past their panes under the tabs.
+    let layout = app.ui.tile_layout;
+    let shown = shown_windows(layout, &docked, active);
     app.sync_views();
-    let live: Vec<Slot> = crate::doc_windows::windows(app).into_iter().filter_map(|w| slot(app, w)).collect();
+    // The renders of the panes and the floating windows stay; a window under its tab has none.
+    let live: Vec<Slot> =
+        crate::doc_windows::windows(app).into_iter().filter(|w| shown.contains(w) || !docked.contains(w)).filter_map(|w| slot(app, w)).collect();
     app.canvas.panes.shown.retain(|s, _| live.contains(s));
     app.canvas.panes.pending.retain(|s, _| live.contains(s));
     app.canvas.panes.fits.retain(|s, _| live.contains(s));
-    // A window opened, closed, floated or docked changes the grid, and so does coming back to the
-    // panes from one window: each window fits its new pane.
-    if app.canvas.panes.last.iter().map(|(w, _)| *w).ne(docked.iter().copied()) {
-        for w in &docked {
-            if let Some(v) = crate::doc_windows::view_mut(app, *w) {
-                v.fitted = false;
-            }
+    // A window that moved to another pane fits it, and so does a window whose pane changed place or
+    // size because a window opened, closed, floated or docked, or because the panes came back from
+    // one window. A window that keeps its pane keeps its zoom and scroll, as when a tab brings its
+    // window into the last pane of a 2-up to 6-up layout, or when 6-Up loses its sixth document.
+    // Windows are compared by their slots, since a closed document shifts the indices of the
+    // documents after it, and panes by their place in the layout.
+    let before = std::mem::take(&mut app.canvas.panes.last_slots);
+    let now: Vec<Option<Slot>> = shown.iter().map(|w| slot(app, *w)).collect();
+    let unit = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(1.0, 1.0));
+    let (cells_before, cells_now) = (layout_cells(layout, before.len(), unit), layout_cells(layout, now.len(), unit));
+    for (i, (w, s)) in shown.iter().zip(&now).enumerate() {
+        if s.is_some() && before.get(i) == Some(s) && cells_before.get(i) == cells_now.get(i) {
+            continue;
+        }
+        if let Some(v) = crate::doc_windows::view_mut(app, *w) {
+            v.fitted = false;
         }
     }
+    app.canvas.panes.last_slots = now;
     let t = Tokens::get(ui.ctx());
     let ppp = ui.ctx().pixels_per_point();
-    let cells: Vec<(Win, egui::Rect)> = docked.iter().copied().zip(cells(n, ui.available_rect_before_wrap())).collect();
+    let cells: Vec<(Win, egui::Rect)> = shown.iter().copied().zip(layout_cells(layout, shown.len(), ui.available_rect_before_wrap())).collect();
     let areas: Vec<(Win, egui::Rect)> = cells.iter().map(|(w, cell)| (*w, view_rects(app, *cell, ppp).1)).collect();
     let unfitted = refit_resized(app, &areas);
     let mut activate = None;
