@@ -65,6 +65,7 @@ pub mod zip;
 
 use serde_json::{Value, json};
 
+pub(crate) use action_batch::action_step;
 pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{
