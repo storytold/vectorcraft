@@ -2774,6 +2774,10 @@ The rest of this section is VectorCraft's own rules:
   read finds new names after the menus have shown 16,384 different script and folder names since VectorCraft started.
   When the folder is there and cannot be read, the menu shows
   `The Scripts folder cannot be read`.
+- Until the first read ends, the menu shows `Loading scripts…` in place of the listing, and
+  `The Scripts folder is still being read` once that read has taken 2 seconds. A first read that cannot start, or
+  ends without a listing, shows `The Scripts folder cannot be read`, and the next read tries again. Later reads keep
+  the last listing in the menu while they run.
 - A listed file is checked again when it is chosen. A file that is gone, is no longer a `.js` or `.jsx` file under
   the folder, or is or lies behind a link ends with `the script is no longer in the Scripts folder`, and nothing runs.
   The file is read once for that check, and the text that read checked is the text that runs; its `#include` lines

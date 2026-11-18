@@ -5039,6 +5039,8 @@ theme	Appearance	Giao diện
 @msg	the script is no longer in the Scripts folder	tập lệnh không còn trong thư mục Scripts
 	Some scripts were not listed	Một số tập lệnh không được liệt kê
 	The Scripts folder cannot be read	Không thể đọc thư mục Scripts
+	Loading scripts…	Đang tải tập lệnh…
+	The Scripts folder is still being read	Thư mục Scripts vẫn đang được đọc
 @msg	the script's run is no longer available	lần chạy tập lệnh không còn khả dụng
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	một lệnh thất bại đã thay đổi các bước hoàn tác không thể khôi phục, nên tập lệnh đã bị dừng
 @msg	a recovery copy could not be written, so the script was not run	không thể ghi bản sao khôi phục nên tập lệnh không được chạy

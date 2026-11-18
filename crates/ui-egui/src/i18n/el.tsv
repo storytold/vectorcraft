@@ -2454,6 +2454,8 @@ axis	Both	Και τα δύο
 @msg	the script is no longer in the Scripts folder	το σενάριο δεν βρίσκεται πλέον στον φάκελο Scripts
 	Some scripts were not listed	Ορισμένα σενάρια δεν εμφανίζονται στη λίστα
 	The Scripts folder cannot be read	Δεν είναι δυνατή η ανάγνωση του φακέλου Scripts
+	Loading scripts…	Φόρτωση σεναρίων…
+	The Scripts folder is still being read	Ο φάκελος Scripts διαβάζεται ακόμα
 @msg	the script's run is no longer available	η εκτέλεση του σεναρίου δεν είναι πλέον διαθέσιμη
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	μια εντολή που απέτυχε άλλαξε βήματα αναίρεσης που δεν ήταν δυνατό να επαναφερθούν, οπότε το σενάριο σταμάτησε
 @msg	a recovery copy could not be written, so the script was not run	δεν ήταν δυνατή η εγγραφή αντιγράφου ανάκτησης, οπότε το σενάριο δεν εκτελέστηκε
