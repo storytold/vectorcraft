@@ -3473,6 +3473,7 @@ theme	Appearance	Wygląd
 	Delete Brush	Usuń pędzel
 	Delete Color	Usuń kolor
 	Restore Generated Table	Przywróć wygenerowaną tablicę
+	Unshift All Colors	Cofnij przesunięcie wszystkich kolorów
 	Delete Symbol	Usuń symbol
 	Delete the selected symbol?	Usunąć zaznaczony symbol?
 	Delete the selected symbols?	Usunąć zaznaczone symbole?
@@ -4440,6 +4441,9 @@ font-technology	Variable	Zmienne
 	No menu item	Brak pozycji menu
 	Toolbar	Pasek narzędzi
 	{toolbar}, in the {tool} group	{toolbar}, w grupie {tool}
+	In the menu bar: {path}	Na pasku menu: {path}
+	In the {group} group: press and hold to open it	W grupie {group}: naciśnij i przytrzymaj, aby ją otworzyć
+	{home}, not shown now	{home}, teraz niewidoczne
 @plural	{n} result|{n} results	{n} wynik|{n} wyniki|{n} wyników
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} wyniku. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.|{shown} z {n} wyników. Pisz dalej, aby je zawęzić.
 	Recent Commands	Ostatnie polecenia
@@ -4557,6 +4561,8 @@ font-technology	Variable	Zmienne
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blisko na ekranie wskaźnik lub przeciągany punkt musi znaleźć się przy kompozycji, aby inteligentne linie pomocnicze go przyciągnęły; odległość jest taka sama przy każdym powiększeniu.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Przyciąga koniec odcinka lub okrąg rysowany od środka tak, aby dotykał pobliskiej krzywej.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Przyciąga koniec odcinka tak, aby spotykał pobliski prosty segment pod kątem prostym.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Pokazuje na obszarze roboczym numer każdego plasterka w ramce w jego lewym górnym rogu; po wyłączeniu kontury plasterków nadal są widoczne.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Kolor konturów plasterków użytkownika i obiektów oraz ramek z ich numerami; plasterki automatyczne używają bledszego odcienia tego koloru.
 	Reset all preferences to their defaults?	Przywrócić domyślne wartości wszystkich preferencji?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Wartości domyślne zostaną zastosowane po kliknięciu OK w Preferencjach. Anuluj w tym oknie zachowuje bieżące preferencje.
 	Smaller ↔ Larger	Mniejszy ↔ większy
@@ -5207,6 +5213,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	choose a location for the package	wybierz lokalizację pakietu
 @msg	clipboard is empty	schowek jest pusty
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: w tablicy kolorów musi zostać co najmniej jeden kolor
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` wskazuje kolor, który wskazuje też inny klucz
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nie jest kolorem w rodzaju "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksymalnie {MAX_TABLE} kolorów
 @msg	command `{0}` is not available right now: {1}	polecenie `{0}` jest teraz niedostępne: {1}
@@ -7706,6 +7713,7 @@ breakText	Glyphs	Glify
 @msg	One path lies inside the other, so they have no common tangents	Jedna ścieżka leży wewnątrz drugiej, więc nie mają wspólnych stycznych
 @msg	The paths overlap, so they have no internal tangents	Ścieżki nachodzą na siebie, więc nie mają stycznych wewnętrznych
 @msg	One path lies inside the other, so they have no internal tangents	Jedna ścieżka leży wewnątrz drugiej, więc nie mają stycznych wewnętrznych
+@msg	The point lies inside the path, so it has no tangents	Punkt leży wewnątrz ścieżki, więc nie ma stycznych
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozszerz kreski na ścieżki
 @msg	select paths with dashed strokes to expand	zaznacz ścieżki z przerywanym konturem do rozszerzenia
@@ -10017,6 +10025,11 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Pressure Sensitive	Czułe na nacisk
+	Flex Ribbon	Elastyczna wstążka
+	Pulse Stroke	Pulsujące pociągnięcie
+	Round Flow	Okrągły ślad
+	Chisel Flow	Skośny ślad
 	Fold Preview	Podgląd złożenia
 	Fold	Złożenie
 	Show Fold Lines	Pokaż linie zgięcia
