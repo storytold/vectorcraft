@@ -166,6 +166,11 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             }
             return;
         }
+        // A click or double-click that would edit type set in fonts that aren't available.
+        vectorcraft_tools::text::MISSING_FONT_EDIT => {
+            super::confirm::ask_missing_font_edit(app, &p);
+            return;
+        }
         _ => return,
     };
     app.ui.dialog = Some(d);

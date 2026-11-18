@@ -8,6 +8,11 @@ fn num(desc: &str) -> Value {
     json!({"type": "number", "description": desc})
 }
 
+/// A number or null.
+fn num_or_null(desc: &str) -> Value {
+    json!({"description": desc, "anyOf": [{"type": "number"}, {"type": "null"}]})
+}
+
 fn string(desc: &str) -> Value {
     json!({"type": "string", "description": desc})
 }
@@ -470,16 +475,16 @@ pub fn tool_definitions() -> Vec<Value> {
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "dx": num("Move right"),
-                    "dy": num("Move down"),
-                    "rotate": num("Rotation in degrees counter-clockwise"),
-                    "scale": num("Uniform scale in %"),
-                    "scaleX": num("Horizontal scale in %"),
-                    "scaleY": num("Vertical scale in %"),
-                    "reflect": {"type": "string", "enum": ["vertical", "horizontal"]},
-                    "shear": num("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
-                    "origin": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
-                    "copy": {"type": "boolean"},
+                    "dx": num_or_null("Move right (null: 0)"),
+                    "dy": num_or_null("Move down (null: 0)"),
+                    "rotate": num_or_null("Rotation in degrees counter-clockwise"),
+                    "scale": num_or_null("Uniform scale in %"),
+                    "scaleX": num_or_null("Horizontal scale in %"),
+                    "scaleY": num_or_null("Vertical scale in %"),
+                    "reflect": {"anyOf": [{"type": "string", "enum": ["vertical", "horizontal"]}, {"type": "null"}]},
+                    "shear": num_or_null("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
+                    "origin": {"anyOf": [{"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, {"type": "null"}]},
+                    "copy": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
                 }),
                 &[],
             ),
