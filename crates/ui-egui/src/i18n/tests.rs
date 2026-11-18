@@ -595,8 +595,9 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
         .flat_map(|(_, lib)| lib.brushes.iter().map(|b| b.name.clone()).collect::<Vec<_>>())
         .collect();
     names.sort();
+    let duplicates: Vec<&str> = names.windows(2).filter(|pair| pair[0] == pair[1]).map(|pair| pair[0].as_str()).collect();
+    assert_eq!(duplicates, ["Zigzag"], "only the established Pattern Borders / Game Trails name is shared");
     names.dedup();
-    assert_eq!(names.len(), 46, "{names:?}");
     let mut bad = vec![];
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         let missing: Vec<&String> = names.iter().filter(|n| lang.catalog().plain(n).is_none()).collect();
@@ -802,6 +803,21 @@ fn anti_aliasing_method_labels_are_in_complete_catalogs() {
         }
         assert!(cat.contextual("antiAlias", "Sharp").is_some(), "{} is missing the antiAlias Sharp row", lang.code);
     }
+}
+
+/// Each row in the `search` context, which adds a language's words to a group of words with the same
+/// meaning for the command palette, names a group and adds single words of no other group. No
+/// catalog has to have these rows.
+#[test]
+fn search_rows_name_a_group_and_add_single_words() {
+    let mut bad = Vec::new();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        for (_, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == crate::palette::words::CONTEXT) {
+            bad.extend(crate::palette::words::row_problems(src, tr).into_iter().map(|p| format!("{}: {p}", l.code)));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
 }
 
 /// The Painted and Sketched graphic style library's name and its styles' names have a row in every

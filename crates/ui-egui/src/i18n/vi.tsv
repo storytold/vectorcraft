@@ -157,6 +157,7 @@
 	Add Used Colors	Thêm các màu đã dùng
 	Additional Fonts Folder	Thư mục phông bổ sung
 	Additional Plug-ins Folder	Thư mục plug-in bổ sung
+	Plug-in Instruction Budget	Ngân sách lệnh của plug-in
 	Adjust Adjoining Width Points	Điều chỉnh các điểm chiều rộng kề nhau
 	Incoming	Phía vào
 	Outgoing	Phía ra
@@ -944,6 +945,7 @@ font-technology	Variable	Biến thiên
 	Delete Brush	Xóa cọ
 	Delete Color	Xóa màu
 	Restore Generated Table	Khôi phục bảng đã tạo
+	Unshift All Colors	Bỏ dịch chuyển tất cả màu
 	Delete Character Style	Xóa kiểu ký tự
 	Delete Data Set	Xóa tập dữ liệu
 	Delete Design	Xóa thiết kế
@@ -3598,6 +3600,8 @@ mark-style	Japanese	Kiểu Nhật
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Con trỏ hoặc điểm đang kéo phải đến gần hình vẽ trên màn hình bao nhiêu để đường căn thông minh hút vào; khoảng cách này như nhau ở mọi mức thu phóng.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Hút đầu mút của đoạn thẳng, hoặc hình tròn vẽ từ tâm, để nó chạm vào một đường cong ở gần.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Hút đầu mút của đoạn thẳng để nó gặp một đoạn thẳng ở gần theo góc vuông.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Hiển thị trên khung vẽ số của mỗi lát cắt trong một ô ở góc trên bên trái của nó; khi tắt, đường viền của các lát cắt vẫn hiện.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Màu của đường viền lát cắt người dùng và lát cắt đối tượng cùng các ô số của chúng; lát cắt tự động dùng một sắc độ nhạt hơn của màu này.
 	Reset all preferences to their defaults?	Đặt lại tất cả tùy chọn về mặc định?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Giá trị mặc định được áp dụng khi bạn nhấn OK trong Tùy chọn. Hủy ở đó giữ nguyên các tùy chọn hiện tại của bạn.
 	Restore Recovered Documents	Khôi phục tài liệu đã phục hồi
@@ -3859,6 +3863,14 @@ mark-style	Japanese	Kiểu Nhật
 	Search commands, tools, panels and effects…	Tìm kiếm lệnh, công cụ, bảng và hiệu ứng…
 	No commands match	Không có lệnh nào khớp
 	{pos} of {total}: {name}	{pos} trên {total}: {name}
+	No menu item	Không có mục menu
+	Toolbar	Thanh công cụ
+	{toolbar}, in the {tool} group	{toolbar}, trong nhóm {tool}
+	In the menu bar: {path}	Trên thanh menu: {path}
+	In the {group} group: press and hold to open it	Trong nhóm {group}: nhấn giữ để mở
+	{home}, not shown now	{home}, hiện không hiển thị
+	Tool	Công cụ
+	Command	Lệnh
 @plural	{n} result|{n} results	{n} kết quả
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} trên {n} kết quả. Tiếp tục gõ để thu hẹp.
 	Recent Commands	Lệnh gần đây
@@ -5063,6 +5075,7 @@ theme	Appearance	Giao diện
 @msg	a linked JavaScript file is outside the read roots	một tệp JavaScript được liên kết nằm ngoài các thư mục gốc đọc
 @msg	a linked image file is outside the read roots	một tệp hình ảnh được liên kết nằm ngoài các thư mục gốc đọc
 @msg	a linked file's export folder is outside the read roots	thư mục xuất của một tệp được liên kết nằm ngoài các thư mục gốc đọc
+@msg	a linked file's editing data can't be read to check it against the read roots	không thể đọc dữ liệu chỉnh sửa của một tệp được liên kết để kiểm tra với các thư mục gốc đọc
 @msg	the library's file is outside the read roots	tệp của thư viện nằm ngoài các thư mục gốc đọc
 @msg	{file} names more than one linked JavaScript file	{file} khớp với nhiều hơn một tệp JavaScript được liên kết
 @msg	automation path rejected: outside the write root {root}: {path}	đường dẫn tự động bị từ chối: ngoài thư mục gốc ghi {root}: {path}
@@ -5115,6 +5128,7 @@ theme	Appearance	Giao diện
 @msg	clipboard is empty	khay nhớ tạm trống
 @msg	closing needs three anchors	đóng đường dẫn cần ba điểm neo
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: phải giữ lại ít nhất một màu trong bảng màu
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` chỉ một màu mà khóa khác cũng chỉ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` không phải là màu như "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: tối đa {MAX_TABLE} màu
 @msg	column must be true or a number from 1	column phải là true hoặc số từ 1
@@ -7449,6 +7463,7 @@ breakText	Glyphs	Glyph
 @msg	One path lies inside the other, so they have no common tangents	Một đường dẫn nằm bên trong đường dẫn kia, nên chúng không có tiếp tuyến chung
 @msg	The paths overlap, so they have no internal tangents	Các đường dẫn chồng lên nhau, nên chúng không có tiếp tuyến trong
 @msg	One path lies inside the other, so they have no internal tangents	Một đường dẫn nằm bên trong đường dẫn kia, nên chúng không có tiếp tuyến trong
+@msg	The point lies inside the path, so it has no tangents	Điểm nằm bên trong đường dẫn, nên nó không có tiếp tuyến
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Mở rộng nét đứt thành đường dẫn
 @msg	select paths with dashed strokes to expand	chọn các đường dẫn có nét đứt để mở rộng
@@ -7956,4 +7971,9 @@ breakText	Glyphs	Glyph
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"
+	Pressure Sensitive	Nhạy áp lực
+	Flex Ribbon	Dải mềm
+	Pulse Stroke	Nét rung
+	Round Flow	Nét tròn
+	Chisel Flow	Nét vát
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: hãy dùng "{_1}" hoặc "{_2}"
