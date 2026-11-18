@@ -529,11 +529,32 @@ impl Tool for FamilyTool {
             }
         }
     }
+    /// The options the tool shows ([`Self::options`]): those of the arc, the spiral or the grid.
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        if self.options().get(key).is_none() {
+            return Err(c::unknown(key));
+        }
+        let skew = vectorcraft_geom::shapes::GRID_SKEW_MAX;
+        match key {
+            "lengthX" | "lengthY" => c::number(key, v, 1e-9, 1e6),
+            "width" | "height" => c::positive(key, v, 1e6),
+            "reference" => c::whole(key, v, 0, 8),
+            "baseAlong" => c::one_of(key, v, &["x", "y", "X", "Y"]),
+            "slope" => c::number(key, v, -100.0, 100.0),
+            "decay" => c::number(key, v, 5.0, 99.99),
+            "segments" => c::whole(key, v, 2, 1000),
+            "rows" | "concentric" | "columns" | "radial" => c::whole(key, v, 0, 999),
+            "rowSkew" | "concentricSkew" | "columnSkew" | "radialSkew" => c::number(key, v, -skew, skew),
+            _ => c::boolean(key, v),
+        }
+    }
 }
 
-/// Arc segment length from a dialog or preference value.
+/// Arc segment length from a dialog or preference value, from 1e-9 to 1e6 pt (as the option check
+/// takes it).
 fn arc_length(v: &Value, current: f64) -> f64 {
-    v.as_f64().filter(|n| n.is_finite()).map_or(current, |n| n.abs().max(1e-9))
+    v.as_f64().filter(|n| n.is_finite()).map_or(current, |n| n.abs().clamp(1e-9, 1e6))
 }
 
 /// A grid's Default Size side from option value `v`: a finite positive length (at most 1e6 pt),
@@ -576,6 +597,28 @@ mod tests {
             t.set_option("decay", &invalid);
             assert_eq!(t.options()["decay"], json!(99.99));
         }
+    }
+
+    /// A number `tool.setOption` takes is kept as given, and a number the tool would keep as
+    /// another value is refused: `decay` past 99.99 is an error.
+    #[test]
+    fn family_tools_keep_the_numbers_their_option_check_takes() {
+        let tries = [-1e9, -150.0, -100.0, -1.0, 0.0, 1e-12, 0.5, 1.0, 2.0, 5.0, 8.0, 99.99, 100.0, 120.0, 150.0, 999.0, 1000.0, 1e6, 1e9];
+        for id in ["arc", "spiral", "rectangularGrid", "polarGrid"] {
+            let defaults = FamilyTool::new(id).options();
+            for (k, _) in defaults.as_object().into_iter().flatten().filter(|(_, v)| v.is_number()) {
+                for n in tries {
+                    let mut t = FamilyTool::new(id);
+                    if t.check_option(k, &json!(n)).is_ok() {
+                        t.set_option(k, &json!(n));
+                        assert_eq!(t.options()[k].as_f64(), Some(n), "{id} `{k}` = {n}");
+                    }
+                }
+            }
+        }
+        let t = FamilyTool::new("spiral");
+        assert_eq!(t.check_option("decay", &json!(120.0)).err(), Some("`decay` must be a number from 5 to 99.99".into()));
+        assert!(t.check_option("decay", &json!(99.99)).is_ok());
     }
 
     #[test]
@@ -1067,6 +1110,10 @@ mod tests {
                 "fillArc": true,
             })
         );
+        // A length past 1e6 pt is kept at 1e6, which `tool.setOption` takes back.
+        t.set_option("lengthX", &json!(-1e9));
+        assert_eq!(t.options()["lengthX"], json!(1e6));
+        assert_eq!(t.check_option("lengthX", &t.options()["lengthX"]), Ok(()));
     }
 
     /// While an arc is dragged out, C switches it between open and closed, F switches its base

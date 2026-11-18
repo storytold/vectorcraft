@@ -1093,8 +1093,12 @@ digits	Malayalam	말라얄람어
 	Add to Selection	선택 영역에 추가
 	Add to Swatches	견본에 추가
 	Additional Plug-ins Folder	추가 플러그인 폴더
+	Plug-in Instruction Budget	플러그인 명령어 예산
 	Additional Fonts Folder	추가 글꼴 폴더
 	Adjust Adjoining Width Points	인접한 너비 점 조정
+	Incoming	들어오는 쪽
+	Outgoing	나가는 쪽
+	Single Width Only	한 너비만
 	Adjust Colors	색상 조정
 	Adjust Options:	조정 옵션:
 	Advanced Options	고급 옵션
@@ -1265,6 +1269,12 @@ antiAlias	Sharp	날카롭게
 	Channel	채널
 	Character / Paragraph	문자 / 단락
 	Character Rotation	문자 회전
+	Chinese Big 5	중국어 Big 5
+	Cyrillic	키릴 자모
+	Greek	그리스어
+	Turkish	터키어
+	Baltic	발트어
+	Central European	중앙 유럽어
 	Character Set:	문자 집합:
 	Character Style Options	문자 스타일 옵션
 	Check Links	링크 확인
@@ -1324,6 +1334,8 @@ antiAlias	Sharp	날카롭게
 	Choose a folder	폴더 선택
 	Choose…	선택…
 	Circle	원
+	Circle Tool	점 기준 원 도구
+	Circle too large	원이 너무 큽니다
 	Clear All Tabs	모든 탭 지우기
 	Above Text	문자 위
 	Position Panel Above Text	패널을 문자 위에 배치
@@ -1508,6 +1520,9 @@ antiAlias	Sharp	날카롭게
 	Delete Artboard	아트보드 삭제
 	Delete Artboards	아트보드 삭제
 	Delete Brush	브러시 삭제
+	Delete Color	색상 삭제
+	Restore Generated Table	생성된 표 복원
+	Unshift All Colors	모든 색상 이동 취소
 	Delete Character Style	문자 스타일 삭제
 	Delete Empty Artboards	빈 아트보드 삭제
 	Delete Freeform Point	자유 형태 포인트 삭제
@@ -1570,6 +1585,7 @@ antiAlias	Sharp	날카롭게
 	Dimensions	치수
 	Direct Selection Tool	직접 선택 도구
 	Disable Auto Add/Delete	자동 추가/삭제 사용 안 함
+	Interpolate Control Points When Moving Anchors	앵커 포인트 이동 시 방향 핸들 보간
 	Disable Opacity Mask	불투명 마스크 사용 안 함
 	Discard	삭제
 	Preserve	보존
@@ -1859,6 +1875,8 @@ antiAlias	Sharp	날카롭게
 	Files	파일
 	Files of a PDF standard can't be password-protected.	PDF 표준 파일은 암호로 보호할 수 없습니다.
 	Files of this standard tag their colours with ICC profiles.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	이 표준의 파일은 ICC 프로파일로 색상을 태그합니다. 단, 출력 의도 프로파일의 CMYK 색상은 DeviceCMYK로 기록됩니다.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	'프로파일 포함 안 함'과 CMYK 출력 의도를 사용하면, 다른 프로파일의 CMYK 대상으로 변환되지 않는 한 모든 CMYK 색상이 DeviceCMYK로 기록됩니다.
 	Fill	칠
 	Fill New Type Objects With Placeholder Text	새 문자 개체를 대체 텍스트로 채우기
 	Start Lists From Typed Markers	입력한 기호로 목록 시작
@@ -2363,6 +2381,7 @@ antiAlias	Sharp	날카롭게
 	Load SVG into Clipboard	SVG를 클립보드로 불러오기
 	Load Text into Clipboard	텍스트를 클립보드로 불러오기
 	Local Libraries	로컬 라이브러리
+	Locate Layer	레이어 찾기
 	Locate Object	개체 찾기
 	Locate Selected Objects	선택한 개체 찾기
 	Location	위치
@@ -2484,6 +2503,7 @@ antiAlias	Sharp	날카롭게
 	Scatter:	흩뿌림:
 	Rotation:	회전:
 	Rotation relative to:	회전 기준:
+	Hue Jitter:	색조 변화:
 	Brush Scale Options	브러시 크기 조절 옵션
 	Scale Proportionately	비율에 맞게 크기 조절
 	Stretch to Fit Stroke Length	선 길이에 맞게 늘이기
@@ -2520,6 +2540,7 @@ antiAlias	Sharp	날카롭게
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	검정은 선 색상이 되고 흰색은 흰색으로 남습니다. 다른 색상은 선 색상의 틴트가 되며, 색상이 밝을수록 틴트도 밝아집니다.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	검정은 검정으로 남고 흰색은 흰색으로 남습니다. 다른 색상은 어두우면 선 색상의 셰이드가 되고 밝으면 틴트가 됩니다.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	키 색상은 선 색상이 됩니다. 다른 색상은 키 색상과 같은 만큼 색상환에서 이동하며 채도와 밝기를 유지합니다.
+	Roundness	원형률
 	Roundness:	원형률:
 	Fixed	고정
 	Pressure	필압
@@ -2853,6 +2874,10 @@ diagnostics	ui	UI
 	Polar Grid Tool	극좌표 격자 도구
 	Polygon	다각형
 	Polygon Properties:	다각형 속성:
+	Line Properties:	선 속성:
+	Line Length:	선 길이:
+	Line Angle:	선 각도:
+	Constrain Pie Angle	파이 각도 고정
 	Polygon Tool	다각형 도구
 	Portrait	세로
 	Portuguese	Português
@@ -2954,6 +2979,9 @@ mark-style	Japanese	일본식
 	Real World:	실제 크기:
 	Real-time Drawing and Editing	실시간 그리기 및 편집
 	Use Monitor Profile for Canvas	캔버스에 모니터 프로필 사용
+	Refresh Monitor Profile	모니터 프로필 새로 고침
+@msg	turn on Use Monitor Profile for Canvas first	먼저 "캔버스에 모니터 프로필 사용"을 켜세요
+@msg	this build doesn't read display profiles	이 빌드는 디스플레이 프로필을 읽지 않습니다
 	The canvas is drawn in sRGB.	캔버스는 sRGB로 그려집니다.
 	Canvas display profile:	캔버스 디스플레이 프로필:
 	The system matches the window to the display's colors.	시스템이 창을 디스플레이 색상에 맞춥니다.
@@ -3166,6 +3194,7 @@ mark-style	Japanese	일본식
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl 키를 누른 채 마우스 휠을 돌리면 캔버스가 가로로 스크롤됩니다.
 	Dragging sideways on a numeric field's label changes the field's value.	숫자 필드의 레이블을 옆으로 드래그하면 필드 값이 바뀝니다.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	트랙패드에서 두 손가락으로 회전하는 동작을 하면 캔버스 보기가 회전합니다.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	고정점을 이동하면 한쪽 끝이 이동한 각 곡선은 양 끝을 기준으로 모양을 유지합니다.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	도구의 바로 가기 키를 누르고 있는 동안 그 도구가 선택되고, 키를 놓으면 이전 도구가 다시 선택됩니다.
 	Shows the bounding box while you move the selection or draw a shape.	선택 영역을 이동하거나 모양을 그리는 동안 테두리 상자를 표시합니다.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	트림 마크 만들기에서 서양식 대신 일본식 표시를 그립니다.
@@ -3246,6 +3275,8 @@ mark-style	Japanese	일본식
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	스마트 안내선이 스냅하려면 포인터나 드래그한 점이 화면에서 아트에 얼마나 가까이 와야 하는지입니다. 이 거리는 모든 확대/축소에서 같습니다.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	선 세그먼트의 끝이나 중심에서 그린 원을 가까운 곡선에 닿도록 스냅합니다.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
@@ -3378,6 +3409,14 @@ mark-style	Japanese	일본식
 	Search commands, tools, panels and effects…	명령, 도구, 패널 및 효과 검색…
 	No commands match	일치하는 명령이 없습니다
 	{pos} of {total}: {name}	{total}개 중 {pos}번째: {name}
+	No menu item	메뉴 항목 없음
+	Toolbar	도구 모음
+	{toolbar}, in the {tool} group	{toolbar}, {tool} 그룹
+	In the menu bar: {path}	메뉴 막대: {path}
+	In the {group} group: press and hold to open it	{group} 그룹: 길게 눌러 여세요
+	{home}, not shown now	{home}, 지금 표시되지 않음
+	Tool	도구
+	Command	명령
 @plural	{n} result|{n} results	결과 {n}개
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	결과 {n}개 중 {shown}개. 계속 입력하여 범위를 좁히세요.
 	Recent Commands	최근 명령
@@ -3435,6 +3474,7 @@ mark-style	Japanese	일본식
 	Set Text	문자 설정
 	Set Zoom	확대/축소 설정
 	Set base color to the current color	기준 색상을 현재 색상으로 설정
+	Set the current fill or stroke to the selected color	현재 칠 또는 선을 선택한 색상으로 설정
 	Set the selected color to the current color	선택한 색상을 현재 색상으로 설정
 	Setup…	설정…
 	Shape Builder	모양 빌더
@@ -3493,7 +3533,7 @@ mark-style	Japanese	일본식
 	Show all plates	모든 분판 표시
 	Show handles when multiple anchors are selected	여러 앵커 선택 시 핸들 표시
 	Show {kind} Brushes	{kind} 브러시 표시
-	Show/hide plate (Alt-click: only this plate)	분판 표시/숨기기(Alt 클릭: 이 분판만)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	분판 표시/숨기기(Alt 클릭: 이 분판만, 다시 Alt 클릭: 모든 분판)
 	Show:	표시:
 	Shown with the optimised preview.	최적화된 미리 보기와 함께 표시됩니다.
 	Side 1:	면 1:
@@ -3848,6 +3888,8 @@ mark-style	Japanese	일본식
 	User Swatch Library 9	사용자 견본 라이브러리 9
 	V Spacing:	세로 간격:
 	Variable Width Profile	가변 너비 프로파일
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	선의 브러시는 고유한 크기를 유지하므로 너비 프로파일로 바뀌지 않습니다. 프로파일을 사용하려면 브러시를 제거하세요.
 	Variation:	변형:
 	Vector Halftone	벡터 하프톤
 	Vector illustration — fast, open, scriptable.	벡터 일러스트레이션 — 빠르고 개방적이며 스크립트 지원.
@@ -4523,6 +4565,7 @@ imageTrace	Outline	윤곽선
 	Bevel	베벨
 	Offset	오프셋
 	Axis	축
+	Axis Angle	축 각도
 axis	Horizontal	가로
 axis	Vertical	세로
 axis	Both	양쪽
@@ -4855,8 +4898,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	image would be too large; lower the resolution	이미지가 너무 커집니다. 해상도를 낮추세요
 @msg	clipboard is empty	클립보드가 비어 있습니다
 @msg	no anchor points selected	선택한 앵커 포인트가 없습니다
-@msg	`points` must be three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 세 개여야 합니다
-@msg	direct-select three anchor points, or give `points`	앵커 포인트 세 개를 직접 선택하거나 `points`를 지정하세요
+@msg	`points` must be two or three [x, y] pairs of numbers	`points`는 숫자 쌍 [x, y] 두 개 또는 세 개여야 합니다
+@msg	direct-select two or three anchor points, or give `points`	앵커 포인트 두 개 또는 세 개를 직접 선택하거나 `points`를 지정하세요
 @msg	no circle passes through these points: two are the same or all three lie on one line	이 점들을 지나는 원이 없습니다: 두 점이 같거나 세 점이 모두 한 직선 위에 있습니다
 @msg	select at least two objects	개체를 두 개 이상 선택하세요
 @msg	exit isolation mode first	먼저 격리 모드를 종료하세요
@@ -4981,6 +5024,8 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	Create Outlines: select text objects	윤곽선 만들기: 텍스트 개체를 선택하세요
 @msg	paste unavailable	붙여넣을 수 없습니다
 @msg	Save for Web: the image is empty	웹용으로 저장: 이미지가 비어 있습니다
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: 색상 표에 색상이 하나 이상 남아 있어야 합니다
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}`이(가) 다른 키와 같은 색상을 가리킵니다
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}`은(는) "#ff8800" 같은 색상이 아닙니다
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: 색상은 최대 {MAX_TABLE}개입니다
 @msg	no artboard {i} (0-based; the document has {_1})	아트보드 {i}이(가) 없습니다(0부터 시작, 문서의 아트보드 수: {_1})
@@ -5228,6 +5273,12 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	no preset editor	프리셋 편집기가 없습니다
 @msg	no perspective grid preset named `{name}`	`{name}`이라는 원근 격자 프리셋이 없습니다
 @msg	no active perspective plane	활성 원근 평면이 없습니다
+@msg	the perspective grid is hidden	원근 격자가 숨겨져 있습니다
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	자동 평면 배치가 꺼져 있습니다: anchorPoint 또는 gridlineIntersection을 켜세요 (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint는 true 또는 false여야 합니다
+@msg	gridlineIntersection must be true or false	gridlineIntersection은 true 또는 false여야 합니다
+@msg	tolerance must be 0 or more	tolerance는 0 이상이어야 합니다
+@msg	give `at` or `clear`, not both	`at`과 `clear` 중 하나만 지정하세요
 @msg	plane must be left, right or ground	plane은 left, right 또는 ground여야 합니다
 @msg	missing `id` (see plugin.list)	`id`가 없습니다(plugin.list 참조)
 @msg	no plug-in {id} is installed	플러그인 {id}이(가) 설치되어 있지 않습니다
@@ -5278,6 +5329,9 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}`은(는) 색상이 아닙니다(#rrggbb 또는 프리셋 이름)
 @msg	give the path `id` and the width point `index`	패스 `id`와 너비 점 `index`를 지정하세요
 @msg	no such width point	해당 너비 점이 없습니다
+@msg	`single` must be `incoming` or `outgoing`	`single`은 `incoming` 또는 `outgoing`이어야 합니다
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index`와 `outIndex`는 하나의 불연속 너비 점의 두 절반이어야 합니다
+@msg	a discontinuous width point keeps its place	불연속 너비 점은 위치를 유지합니다
 @msg	onto must name a panel floating in another group	onto는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	below and above must name a panel floating in another group	below와 above는 다른 그룹에 떠 있는 패널을 지정해야 합니다
 @msg	give only one of onto, below and above	onto, below, above 중 하나만 지정하세요
@@ -5542,6 +5596,14 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	기본 스크립트 엔진은 실행마다 새로 만들어지고 유지되지 않으므로 삭제할 수 없습니다
 @msg	there is no script engine named {name}	이름이 {name}인 스크립트 엔진이 없습니다
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers`는 물어볼 사람이 없는 실행에만 쓰입니다. 앱에서는 사람이 각 대화 상자에 답합니다
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel`은(는) 1에서 {_1} 사이의 정수여야 합니다
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}`이(가) 64단계보다 깊게 중첩되어 있습니다
+@msg	`args` must be an object	`args`은(는) 개체여야 합니다
+@msg	`args` is larger than 1 MiB	`args`이(가) 1 MiB보다 큽니다
+@msg	`path` is empty	`path`이(가) 비어 있습니다
+@msg	`installed` takes a `path`, not a `source`	`installed`에는 `source`가 아니라 `path`를 지정하세요
+@msg	`path` must name a .js or .jsx file	`path`은(는) .js 또는 .jsx 파일을 가리켜야 합니다
+@msg	give exactly one of `path` and `source`	`path`, `source` 중 정확히 하나를 지정하세요
 @msg	Running a script	스크립트 실행 중
 @msg	Copied the script report	스크립트 보고서를 복사했습니다
 @msg	Script file access denied: {path}	스크립트 파일 접근이 거부되었습니다: {path}
@@ -5659,6 +5721,8 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	the {tool} tool has no options	{tool} 도구에는 옵션이 없습니다
 @msg	unknown tool `{tool}`	알 수 없는 도구 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool}은(는) 여러 도구가 있는 도구 모음 그룹에 속하지 않습니다
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	프레젠테이션 모드에서는 도구 모음이 숨겨집니다: 표시하려면 화면 모드를 변경하세요
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab으로 도구 모음이 숨겨졌습니다: 표시하려면 Tab을 누르세요
 @msg	no such document	해당 문서가 없습니다
 @msg	{_1}: not saved, so not closed	{_1}: 저장되지 않아 닫지 않았습니다
 @msg	`{name}` is a built-in workspace; choose another name	`{name}`은(는) 기본 제공 작업 영역입니다: 다른 이름을 선택하세요
@@ -5710,6 +5774,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	a linked JavaScript file is outside the read roots	연결된 JavaScript 파일이 읽기 루트 밖에 있습니다
 @msg	a linked image file is outside the read roots	연결된 이미지 파일이 읽기 루트 밖에 있습니다
 @msg	a linked file's export folder is outside the read roots	연결된 파일의 내보내기 폴더가 읽기 루트 밖에 있습니다
+@msg	a linked file's editing data can't be read to check it against the read roots	연결된 파일의 편집 데이터를 읽을 수 없어 읽기 루트와 대조할 수 없습니다
 @msg	automation path rejected: outside the write root {root}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {root} 밖입니다: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	자동화 경로가 거부되었습니다: 쓰기 루트 {roots} 밖입니다: {path}
 @msg	automation path rejected: path is empty	자동화 경로가 거부되었습니다: 경로가 비어 있습니다
@@ -5987,6 +6052,7 @@ lighting	Light	광원
 	Cove	오목
 	Depth	깊이
 	Front	앞면
+	Side	옆면
 	Isometric Bottom	등각 밑면
 	Isometric Left	등각 왼쪽
 	Isometric Right	등각 오른쪽
@@ -6081,7 +6147,7 @@ lighting	Light	광원
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}`의 각 항목은 개체여야 합니다
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 항목에는 symbol, face, x, y, scale, rotation만 사용할 수 있으며 `{k}`은(는) 사용할 수 없습니다
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}`의 각 항목에는 심볼 이름인 `symbol`이 필요합니다
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`의 face는 front 또는 back이어야 합니다
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`의 face는 front, back 또는 side여야 합니다
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`의 {key}은(는) {lo}에서 {hi} 사이의 숫자여야 합니다
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}`은(는) 배열이어야 합니다
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	그래픽은 평면, 돌출, 회전체 개체 유형에 매핑됩니다
@@ -7328,6 +7394,14 @@ breakText	Glyphs	글리프
 	Remove Gaps	간격 제거
 @msg	that makes too many pieces (at most 100000): make the dashes longer	조각이 너무 많아집니다(최대 100000개). 대시를 더 길게 하십시오
 @msg	select paths, or segments, to divide	나눌 패스나 세그먼트를 선택하십시오
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	부드러운 브리지…
+	Smooth Bridge	부드러운 브리지
+	Keep Originals	원본 유지
+@msg	select two circles to bridge	연결할 원 두 개를 선택하십시오
+@msg	one circle is inside the other	한 원이 다른 원 안에 있습니다
+@msg	the circles are too far apart for this radius: raise the radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다. 반경을 늘리십시오
+@msg	the circles are too far apart for this radius	이 반경에서는 원이 너무 멀리 떨어져 있습니다
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	공통 접선…
 	Common Tangents	공통 접선
@@ -7344,6 +7418,7 @@ breakText	Glyphs	글리프
 @msg	One path lies inside the other, so they have no common tangents	한 패스가 다른 패스 안에 있어 공통 접선이 없습니다
 @msg	The paths overlap, so they have no internal tangents	패스가 겹쳐 있어 내부 접선이 없습니다
 @msg	One path lies inside the other, so they have no internal tangents	한 패스가 다른 패스 안에 있어 내부 접선이 없습니다
+@msg	The point lies inside the path, so it has no tangents	점이 패스 안에 있어 접선이 없습니다
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	대시를 패스로 확장
 @msg	select paths with dashed strokes to expand	확장할 점선 획의 패스를 선택하십시오
@@ -8426,6 +8501,7 @@ breakText	Glyphs	글리프
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
 @msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
 @msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
+@msg	connect needs extend	connect에는 extend가 필요합니다
 @msg	connect needs id	connect에는 id가 필요합니다
 @msg	connect path has no open end	connect 패스에 열린 끝이 없습니다
 @msg	continuation must be an array of path chunks	continuation은 패스 조각의 배열이어야 합니다
@@ -9653,3 +9729,18 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Pressure Sensitive	압력 감지
+	Flex Ribbon	유연한 리본
+	Pulse Stroke	맥동 획
+	Round Flow	둥근 흐름
+	Chisel Flow	비스듬한 흐름
+	Fold Preview	접기 미리 보기
+	Fold	접기
+	Show Fold Lines	접는 선 표시
+	Three-Quarter	3/4 보기
+	Open a document to preview its folded shape.	접은 모양을 미리 보려면 문서를 여세요.
+@msg	Check the fold lines first.	먼저 접는 선을 검사하세요.
+@msg	Panels: {panels}, hinges: {hinges}	패널: {panels}, 힌지: {hinges}
+@msg	Other blanks not shown: {count}	표시되지 않은 다른 전개도: {count}
+@msg	A joint does not close by {gap} pt.	이음매가 {gap} pt만큼 닫히지 않습니다.
+@msg	Two panels pass through each other.	두 패널이 서로 관통합니다.

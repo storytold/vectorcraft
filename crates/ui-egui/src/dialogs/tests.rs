@@ -178,6 +178,64 @@ fn effect_preview_is_kept_as_one_undo_step() {
     assert_eq!(app.session.doc().unwrap().doc, before);
 }
 
+/// A field label's colon is written as the UI language writes it, in the generic parameter
+/// dialogs and the effect dialogs alike (#7991): French puts a no-break space before it, Chinese
+/// writes a full-width colon, and English is unchanged.
+#[test]
+fn field_label_colons_follow_the_ui_language() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let text =
+        app.run("text.create", json!({"x": 20, "y": 80, "text": "Hello", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap();
+    // Each dialog, opened the way its menu item opens it, and the label it shows.
+    let entries = crate::menus::menu_entries(&app);
+    let clean_up = entries.iter().find(|e| e.path == ["Object", "Path"] && e.label == "Clean Up…").expect("listed");
+    let clean_up = crate::menus::click_target(&clean_up.label, clean_up.command.as_deref().unwrap(), &clean_up.params);
+    let dialogs = [
+        (clean_up.0, clean_up.1, "Stray Points"),
+        ("effect.dialog".to_string(), json!({"effect": "blur.radial"}), "Horizontal"),
+        ("text.areaOptions".to_string(), json!({}), "Text Flow"),
+    ];
+    for (command, params, label) in dialogs {
+        app.run("select.set", json!({"ids": [text]})).unwrap();
+        if command != "text.areaOptions" {
+            app.run("select.all", json!({})).unwrap();
+        }
+        crate::menus::invoke(&mut app, &command, params);
+        assert!(app.ui.dialog.is_some(), "{command} opened no dialog");
+        for (code, colon) in [("fr", "\u{a0}:"), ("zh-hans", "："), ("en", ":")] {
+            let lang = crate::i18n::Lang::from_code(code).unwrap();
+            crate::i18n::set_current(lang);
+            let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            let want = format!("{}{colon}", crate::i18n::tr(lang, label));
+            assert!(shown.lines().any(|l| l.trim() == want), "{command}, {code}: {want:?} in {shown}");
+            if code == "fr" {
+                let bare: Vec<_> = shown.lines().map(str::trim).filter(|l| l.ends_with(':') && !l.ends_with("\u{a0}:")).collect();
+                assert!(bare.is_empty(), "{command}: French labels with a bare colon: {bare:?}");
+            }
+        }
+        app.ui.dialog = None;
+    }
+    assert_eq!(super::form::humanized("strayPoints"), "Stray Points:", "English is unchanged");
+}
+
+/// A label followed by its value takes the UI language's colon too (#7991): Blur Center's value for
+/// screen readers, and a style's attribute list, which no longer shows a second colon.
+#[test]
+fn label_and_value_colons_follow_the_ui_language() {
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let center = super::effect::blur_center_value([0.5, 0.25]);
+    let attribute = super::form::attribute_line("fontSize", &json!(12));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (h, v) = (crate::i18n::tr(fr, "Horizontal"), crate::i18n::tr(fr, "Vertical"));
+    assert_eq!(center, format!("{h}\u{a0}: 50%, {v}\u{a0}: 25%"));
+    assert_eq!(attribute, format!("{}\u{a0}: 12", crate::i18n::tr(fr, "Font Size")));
+    assert_eq!(super::effect::blur_center_value([0.5, 0.25]), "Horizontal: 50%, Vertical: 25%");
+    assert_eq!(super::form::attribute_line("fontSize", &json!(12)), "Font Size: 12");
+}
+
 /// Drop Shadow's Color typed as text the effect can't draw: OK returns the error and keeps the
 /// dialog open, with Preview on or off, and the document stays as it was.
 #[test]
@@ -2850,6 +2908,61 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     assert_eq!(angle(&app), -45.0, "the drag ends down to the right");
     f.key(&mut app, ArrowRight, M::NONE);
     assert_eq!(angle(&app), -44.0, "the drag gives the preview the focus");
+}
+
+/// A drag that starts on a black dot of the Blob Brush tip preview sets the Roundness from the
+/// pointer's distance from the center along the tip's short axis, leaves the Angle as it is, goes
+/// on past the square's edge (stopping at 100%), and gives the Roundness slider the focus, whose
+/// keys step the Roundness by 1% (10% with Shift) within 0% to 100%. A drag that starts anywhere
+/// else sets only the Angle, and Tab goes from the Angle slider to the Roundness slider.
+#[test]
+fn a_drag_on_a_blob_brush_tip_dot_sets_the_roundness() {
+    use egui::Key::{ArrowDown, ArrowRight, ArrowUp, End, Home, Tab};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let values = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().expect("Blob Brush Tool Options is open");
+        (d.f64("angle", f64::NAN), d.f64("roundness", f64::NAN))
+    };
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (_, value, text) = slider_node(&out, "Roundness");
+    assert_eq!((value, text.as_deref()), (Some(100.0), Some("100%")));
+    let center = f.control(&mut app, "Roundness", egui::accesskit::Role::Slider);
+    // At 0° the dots are straight above and below the center, 18 pt from it at 100%. A click
+    // pressed 6 pt from the upper dot and released 11 pt from it in the same frame takes the dot.
+    let (down, up) = (center + egui::vec2(0.0, -12.0), center + egui::vec2(0.0, -7.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: M::NONE };
+    f.run(&mut app, vec![egui::Event::PointerMoved(down), button(down, true), egui::Event::PointerMoved(up), button(up, false)]);
+    assert_eq!(values(&app), (0.0, 39.0), "a click that starts on the upper dot");
+    f.drag(&mut app, center + egui::vec2(0.0, -7.0), egui::vec2(1.0, -11.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the upper dot dragged out to the tip's length");
+    f.drag(&mut app, center + egui::vec2(0.0, -18.0), egui::vec2(1.0, 9.0));
+    assert_eq!(values(&app), (0.0, 50.0), "the upper dot dragged half way to the center");
+    f.drag(&mut app, center + egui::vec2(0.0, 9.0), egui::vec2(3.0, 60.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the lower dot dragged out of the square");
+    f.drag(&mut app, center + egui::vec2(0.0, 18.0), egui::vec2(0.0, -18.0));
+    assert_eq!(values(&app), (0.0, 0.0), "the lower dot dragged to the center");
+    let mut seen = vec![];
+    for (key, mods, want) in
+        [(ArrowUp, M::NONE, 1.0), (ArrowRight, M::SHIFT, 11.0), (ArrowDown, M::NONE, 10.0), (End, M::NONE, 100.0), (Home, M::NONE, 0.0)]
+    {
+        f.key(&mut app, key, mods);
+        seen.push((key, mods.shift, values(&app)));
+        assert_eq!(values(&app), (0.0, want), "{seen:?}");
+    }
+    let out = f.run(&mut app, vec![]);
+    assert_eq!(slider_node(&out, "Roundness").2.as_deref(), Some("0%"));
+    // With a 0% tip the dots are at the center; a drag that starts away from them sets the Angle.
+    f.drag(&mut app, center + egui::vec2(20.0, 0.0), egui::vec2(0.0, -20.0));
+    assert_eq!(values(&app), (45.0, 0.0), "the drag ends up to the right");
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(values(&app), (46.0, 0.0), "the drag gives the Angle slider the focus");
+    f.key(&mut app, Tab, M::NONE);
+    f.key(&mut app, ArrowUp, M::NONE);
+    assert_eq!(values(&app), (46.0, 1.0), "Tab goes on to the Roundness slider");
 }
 
 /// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the
