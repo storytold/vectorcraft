@@ -14,6 +14,7 @@ pub mod cmyk;
 pub mod color_mask;
 pub mod compound_shape;
 pub mod corners;
+pub mod decode;
 pub mod depth;
 pub mod dimension;
 pub mod graph;
@@ -54,7 +55,7 @@ pub mod overprint;
 pub mod pattern;
 pub mod perspective;
 mod pixels;
-pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
+pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick, header_size};
 pub mod placed_document;
 pub mod plugin_data;
 pub mod ppi;
@@ -74,6 +75,9 @@ pub mod style_libs;
 pub mod swatches;
 mod symbols;
 pub use symbols::SymbolBoxes;
+#[cfg(any(test, feature = "symbol-read-count"))]
+#[doc(hidden)]
+pub use symbols::symbols_read;
 pub mod text;
 pub mod trace;
 pub mod twist;
@@ -96,8 +100,9 @@ pub use compound_shape::ShapeMode;
 pub use corners::LiveCorners;
 pub use depth::{MAX_DEPTH, MAX_SYMBOL_NODES};
 pub use graph::{
-    ColumnDesign, ColumnType, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows, LabelStyles, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES,
-    PiePosition, PieSort, SeriesPaint, TickLength, ValueAxisSide,
+    ColumnDesign, ColumnType, DEFAULT_FILLED_LINE_WIDTH, FILLED_LINE_OUTLINE_WIDTH, Fractions, GraphDesign, GraphKind, GraphSpec, LabelRows,
+    LabelStyles, MAX_FILLED_LINE_WIDTH, MAX_GRAPH_CATEGORIES, MAX_GRAPH_SERIES, MIN_FILLED_LINE_WIDTH, PiePosition, PieSort, SeriesPaint, TickLength,
+    ValueAxisSide,
 };
 pub use hit::{Hit, HitKind};
 pub use links::{LinkInfo, PlacementOptions};
@@ -163,7 +168,7 @@ use limits::MAX_NEXT_ID;
 pub use limits::{DocError, FORMAT_VERSION, MAX_COORD};
 pub use records::{ImageBlob, MaskEdit, NewArtIds, SavedSelection, SavedView, SvgFilter, Symbol, SymbolEdit};
 pub use stored_art::{StoredPlace, StoredRoot};
-pub use units::{ColorMode, Unit, parse_number};
+pub use units::{ColorMode, Unit, decimal_point, finite_in_every_unit, parse_number};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {

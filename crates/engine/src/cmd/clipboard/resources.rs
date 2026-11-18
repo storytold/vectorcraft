@@ -611,6 +611,11 @@ impl SwatchChoices {
             Some(v) => Ok(Self { all: one(v)?, by_name: BTreeMap::new() }),
         }
     }
+    /// Add for every conflict: each pasted swatch whose name the document gives another color
+    /// comes in renamed.
+    pub(crate) fn add_all() -> Self {
+        Self { all: SwatchChoice::Add, by_name: BTreeMap::new() }
+    }
     fn of(&self, name: &str) -> SwatchChoice {
         self.by_name.get(name).copied().unwrap_or(self.all)
     }
@@ -753,7 +758,7 @@ impl Relink {
                     pa.kinsoku_set = to.clone();
                 }
             }
-            for r in [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows].into_iter().flatten() {
+            for r in [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows, &mut l.axis_rows, &mut l.ring_rows].into_iter().flatten() {
                 r.paint.fill.iter_mut().chain(r.paint.stroke.iter_mut()).for_each(|p| self.paint(p));
             }
         }

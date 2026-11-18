@@ -307,6 +307,423 @@ fn hovers_past_more_clip_groups_than_the_boxes_kept_evaluate_few_again() {
     assert!(again < groups / 8, "{again} of {groups} regions evaluated again");
 }
 
+/// A stand-in for the engine's [`DrawnArt`]: an object with a visible effect named `test.shift`
+/// draws 100 pt to the right of its own place, and one with a visible effect named `test.copy`
+/// draws at its own place and 100 pt to the right. The effects are applied innermost first, and
+/// the art keeps the ids of the objects it is drawn from. An instance of a symbol whose art has a
+/// visible effect draws as a 50 pt square from (100, 0), white with a black 1 pt stroke. A clip
+/// group with a visible effect named `test.mask_only` draws as a group of its clipping path alone,
+/// as the engine's art for a clip group whose clipping path's strokes have geometry effects is.
+/// Without any of these, no geometry effect changes what an object draws.
+fn shifted_art(s: &SymbolBoxes<'_>, n: &Node) -> Option<Node> {
+    if n.clips()
+        && n.appearance.effects.iter().any(|e| e.visible && e.id == "test.mask_only")
+        && let Some(mask) = n.children().and_then(|c| c.first())
+    {
+        return Some(Node::group(n.id, vec![mask.clone()]));
+    }
+    fn draw(s: &SymbolBoxes<'_>, n: &Node, found: &mut bool) -> Node {
+        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+            && s.has_effects(symbol)
+        {
+            *found = true;
+            return Node::path(n.id, shapes::rectangle(Rect::new(100.0, 0.0, 150.0, 50.0)), Appearance::default_art());
+        }
+        let mut m = n.clone();
+        if let Some(children) = m.children_mut() {
+            for c in children.iter_mut() {
+                *c = Arc::new(draw(s, c, found));
+            }
+        }
+        let has = |id: &str| n.appearance.effects.iter().any(|e| e.visible && e.id == id);
+        let (shift, copy) = (has("test.shift"), has("test.copy"));
+        m.appearance.effects.retain(|e| e.id != "test.shift" && e.id != "test.copy");
+        *found |= shift || copy;
+        let shifted = |m: &Node| moved(m, vectorcraft_geom::Affine::translate((100.0, 0.0)));
+        if shift {
+            shifted(&m)
+        } else if copy {
+            Node::group(n.id, vec![Arc::new(shifted(&m)), Arc::new(m)])
+        } else {
+            m
+        }
+    }
+    let mut found = false;
+    let art = draw(s, n, &mut found);
+    found.then_some(art)
+}
+
+/// A visible effect named `id`.
+fn effect(id: &str) -> crate::Effect {
+    crate::Effect { id: id.into(), params: serde_json::json!({}), visible: true }
+}
+
+/// A 50 pt square at `x`, `y`, white with a black 1 pt stroke.
+fn square(d: &mut Document, x: f64, y: f64) -> Node {
+    Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 50.0, y + 50.0)), Appearance::default_art())
+}
+
+/// The leaf and the kind a click at (`x`, `y`) hits.
+fn hit_at(d: &Document, x: f64, y: f64, opt: HitOptions) -> Option<(NodeId, HitKind)> {
+    hit_test(d, Point::new(x, y), opt).map(|h| (h.leaf, h.kind))
+}
+
+/// A path that a geometry effect moves is clicked where it is drawn, and not at its own place,
+/// which it no longer paints; with Object Selection by Path Only on its drawn outline, not its
+/// fill. Outline view draws no effects: there its own outline is clicked. Hidden, the effect no
+/// longer moves what clicks hit.
+#[test]
+fn a_click_hits_a_paths_shifted_art_not_its_source() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let mut p = square(&mut d, 0.0, 0.0);
+    p.appearance.effects.push(effect("test.shift"));
+    let a = p.id;
+    d.insert(Some(l), 0, p).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(hit_at(&d, 125.0, 25.0, opt), Some((a, HitKind::Fill)), "where it is drawn");
+    assert_eq!(hit_at(&d, 25.0, 25.0, opt), None, "its own place");
+    assert_eq!(objects_at(&d, Point::new(125.0, 25.0), opt, None), [a]);
+    assert!(objects_at(&d, Point::new(25.0, 25.0), opt, None).is_empty());
+    let path_only = HitOptions { path_only: true, ..opt };
+    assert_eq!(hit_at(&d, 125.0, 25.0, path_only), None, "path only: the drawn fill");
+    assert_eq!(hit_at(&d, 100.0, 25.0, path_only), Some((a, HitKind::Stroke)), "path only: the drawn outline");
+    let outline = HitOptions { outline: true, ..opt };
+    assert_eq!(hit_at(&d, 0.5, 25.0, outline), Some((a, HitKind::Outline)), "outline: its own outline");
+    assert_eq!(hit_at(&d, 100.5, 25.0, outline), None, "outline: no drawn art");
+    d.node_mut(a).unwrap().appearance.effects[0].visible = false;
+    assert_eq!(hit_at(&d, 25.0, 25.0, opt), Some((a, HitKind::Fill)), "hidden effect: its own place");
+    assert_eq!(hit_at(&d, 125.0, 25.0, opt), None, "hidden effect: nothing drawn there");
+}
+
+/// A geometry effect that copies a path is clicked on the copy and on the path, the topmost of the
+/// stack first. The pointer moving over it evaluates its art once until it changes, and a path
+/// without effects is not evaluated.
+#[test]
+fn a_click_hits_a_paths_copy_and_evaluates_its_art_once_until_it_changes() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let below = square(&mut d, 100.0, 0.0);
+    let mut p = square(&mut d, 0.0, 0.0);
+    p.appearance.effects.push(effect("test.copy"));
+    let (a, b) = (p.id, below.id);
+    d.insert(Some(l), 0, below).unwrap();
+    d.insert(Some(l), 1, p).unwrap();
+    let evaluated = || DRAWN_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    let opt = HitOptions::default();
+    for _ in 0..3 {
+        assert_eq!(hit_at(&d, 25.0, 25.0, opt).map(|h| h.0), Some(a), "the path");
+        assert_eq!(hit_at(&d, 125.0, 25.0, opt).map(|h| h.0), Some(a), "its copy, over the square below");
+    }
+    assert_eq!(objects_at(&d, Point::new(125.0, 25.0), opt, None), [a, b]);
+    assert_eq!(evaluated(), before + 1, "evaluated once");
+    if let Some(NodeKind::Path { path, .. }) = d.node_mut(a).map(|n| &mut n.kind) {
+        *path = shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 50.0));
+    }
+    assert_eq!(hit_at(&d, 140.0, 25.0, opt).map(|h| h.0), Some(b), "narrowed, the copy leaves the square below");
+    assert_eq!(evaluated(), before + 2, "evaluated again after it changed");
+    // The square below has no effects: it is never evaluated.
+    assert_eq!(hit_at(&d, 145.0, 45.0, opt).map(|h| h.0), Some(b));
+    assert_eq!(evaluated(), before + 2);
+}
+
+/// A group without effects or fills and strokes of its own is not evaluated as a whole: a click
+/// on the art of a moved member in it evaluates that member only, and finds the group by it.
+#[test]
+fn a_click_in_a_plain_group_evaluates_only_its_member_with_effects() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let mut moved = square(&mut d, 0.0, 0.0);
+    moved.appearance.effects.push(effect("test.shift"));
+    let still = square(&mut d, 0.0, 100.0);
+    let (a, g) = (moved.id, d.alloc_id());
+    d.insert(Some(l), 0, Node::group(g, vec![Arc::new(moved), Arc::new(still)])).unwrap();
+    let evaluated = || DRAWN_EVALUATED.with(std::cell::Cell::get);
+    let before = evaluated();
+    let opt = HitOptions::default();
+    for _ in 0..3 {
+        assert_eq!(hit_at(&d, 125.0, 25.0, opt), Some((a, HitKind::Fill)));
+        assert_eq!(objects_at(&d, Point::new(125.0, 25.0), opt, None), [g]);
+    }
+    assert_eq!(evaluated(), before + 1, "only the member with effects, once");
+}
+
+/// A compound path that a geometry effect moves keeps its hole where it is drawn, for clicks and
+/// marquees.
+#[test]
+fn a_compound_paths_shifted_art_keeps_its_hole() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let outer = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 60.0, 60.0)), Appearance::default());
+    let hole = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 40.0, 40.0)), Appearance::default());
+    let c = d.alloc_id();
+    let mut compound = Node::new(c, NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(hole)], rule: FillRule::EvenOdd });
+    compound.appearance = Appearance::default_art().into();
+    compound.appearance.effects.push(effect("test.shift"));
+    d.insert(Some(l), 0, compound).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(hit_at(&d, 105.0, 5.0, opt), Some((c, HitKind::Fill)), "its drawn fill");
+    assert_eq!(hit_at(&d, 130.0, 30.0, opt), None, "its drawn hole");
+    assert_eq!(hit_at(&d, 5.0, 5.0, opt), None, "its own place");
+    assert_eq!(marquee(&d, Rect::new(155.0, 25.0, 165.0, 35.0), None, false), [c], "a marquee across the drawn edge");
+    assert!(marquee(&d, Rect::new(-5.0, 25.0, 5.0, 35.0), None, false).is_empty(), "a marquee across its own edge");
+}
+
+/// A marquee touches a path that a geometry effect moves where it is drawn, and not at its own
+/// place; in Outline view, at its own place.
+#[test]
+fn a_marquee_touches_a_paths_shifted_art_not_its_source() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let mut p = square(&mut d, 0.0, 0.0);
+    p.appearance.effects.push(effect("test.shift"));
+    let a = p.id;
+    d.insert(Some(l), 0, p).unwrap();
+    let (drawn, own) = (Rect::new(140.0, 40.0, 160.0, 60.0), Rect::new(40.0, 40.0, 60.0, 60.0));
+    for leaves in [false, true] {
+        assert_eq!(marquee(&d, drawn, None, leaves), [a], "where it is drawn");
+        assert!(marquee(&d, own, None, leaves).is_empty(), "its own place");
+        assert!(marquee_in_view(&d, drawn, None, leaves, true).is_empty(), "outline: no drawn art");
+        assert_eq!(marquee_in_view(&d, own, None, leaves, true), [a], "outline: its own place");
+    }
+}
+
+/// A group whose own geometry effect moves its members is clicked where each member is drawn: the
+/// member, inside the group, is hit, and a locked member lets the click through to what is below
+/// and is listed for unlocking there. A marquee there touches the group, or the member for Direct
+/// Selection.
+#[test]
+fn a_groups_own_effect_moves_where_its_members_are_hit() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let below = square(&mut d, 150.0, 0.0);
+    let (a, b) = (square(&mut d, 0.0, 0.0), square(&mut d, 50.0, 0.0));
+    let (below_id, a_id, b_id, g) = (below.id, a.id, b.id, d.alloc_id());
+    let mut group = Node::group(g, vec![Arc::new(a), Arc::new(b)]);
+    group.appearance.effects.push(effect("test.shift"));
+    d.insert(Some(l), 0, below).unwrap();
+    d.insert(Some(l), 1, group).unwrap();
+    let opt = HitOptions::default();
+    let h = hit_test(&d, Point::new(125.0, 25.0), opt).unwrap();
+    assert_eq!((h.leaf, h.top_object(None)), (a_id, g), "the first member, drawn there");
+    assert_eq!(h.ancestry, [l, g, a_id]);
+    assert_eq!(hit_at(&d, 175.0, 25.0, opt).map(|h| h.0), Some(b_id), "the second member, over the square below");
+    assert_eq!(hit_at(&d, 25.0, 25.0, opt), None, "the first member's own place");
+    assert_eq!(objects_at(&d, Point::new(175.0, 25.0), opt, None), [g, below_id]);
+    let drawn = Rect::new(195.0, 20.0, 205.0, 30.0);
+    assert_eq!(marquee(&d, drawn, None, false), [below_id, g]);
+    assert_eq!(marquee(&d, drawn, None, true), [below_id, b_id]);
+    assert!(marquee(&d, Rect::new(-5.0, 20.0, 5.0, 30.0), None, true).is_empty(), "the members' own place");
+    d.node_mut(b_id).unwrap().locked = true;
+    assert_eq!(hit_at(&d, 175.0, 25.0, opt).map(|h| h.0), Some(below_id), "a locked member lets the click through");
+    assert_eq!(marquee(&d, drawn, None, true), [below_id], "nor does a marquee collect it");
+    assert_eq!(locked_objects_at(&d, Point::new(175.0, 25.0), opt), [b_id], "the Unlock submenu lists it where it is drawn");
+    assert!(locked_objects_at(&d, Point::new(75.0, 25.0), opt).is_empty(), "and not at its own place");
+    // Outline view draws no effects: the members are clicked at their own places.
+    let outline = HitOptions { outline: true, ..opt };
+    assert_eq!(hit_at(&d, 0.5, 25.0, outline).map(|h| h.0), Some(a_id));
+}
+
+/// A layer whose own geometry effect moves its art is clicked and marqueed where the art is
+/// drawn. With the layer's Preview off, its art is clicked at its own place, in outline.
+#[test]
+fn a_layers_own_effect_moves_where_its_art_is_hit() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let a = square(&mut d, 0.0, 0.0);
+    let a_id = a.id;
+    d.insert(Some(l), 0, a).unwrap();
+    d.node_mut(l).unwrap().appearance.effects.push(effect("test.shift"));
+    let opt = HitOptions::default();
+    assert_eq!(hit_at(&d, 125.0, 25.0, opt), Some((a_id, HitKind::Fill)), "where it is drawn");
+    assert_eq!(hit_at(&d, 25.0, 25.0, opt), None, "its own place");
+    assert_eq!(objects_at(&d, Point::new(125.0, 25.0), opt, None), [a_id]);
+    assert!(objects_at(&d, Point::new(25.0, 25.0), opt, None).is_empty());
+    let (drawn, own) = (Rect::new(145.0, 20.0, 155.0, 30.0), Rect::new(-5.0, 20.0, 5.0, 30.0));
+    for leaves in [false, true] {
+        assert_eq!(marquee(&d, drawn, None, leaves), [a_id], "a marquee where it is drawn");
+        assert!(marquee(&d, own, None, leaves).is_empty(), "a marquee at its own place");
+    }
+    if let Some(NodeKind::Layer { preview, .. }) = d.node_mut(l).map(|n| &mut n.kind) {
+        *preview = false;
+    }
+    assert_eq!(hit_at(&d, 0.5, 25.0, opt), Some((a_id, HitKind::Outline)), "preview off: its own outline");
+    assert_eq!(hit_at(&d, 125.0, 25.0, opt), None, "preview off: no drawn art");
+    assert_eq!(marquee(&d, own, None, false), [a_id], "preview off: a marquee at its own place");
+}
+
+/// In a layer whose own geometry effect moves its art, a sublayer with Preview off is clicked in
+/// outline: on the outline of its art where the art is drawn, not inside its fill.
+#[test]
+fn a_preview_off_sublayer_of_an_effected_layer_is_clicked_in_outline() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let sub = d.alloc_id();
+    d.insert(Some(l), 0, Node::layer(sub, "Sub", crate::LayerColor::Preset(2))).unwrap();
+    let a = square(&mut d, 0.0, 0.0);
+    let a_id = a.id;
+    d.insert(Some(sub), 0, a).unwrap();
+    d.node_mut(l).unwrap().appearance.effects.push(effect("test.shift"));
+    let opt = HitOptions::default();
+    assert_eq!(hit_at(&d, 125.0, 25.0, opt), Some((a_id, HitKind::Fill)), "preview on: inside its fill");
+    if let Some(NodeKind::Layer { preview, .. }) = d.node_mut(sub).map(|n| &mut n.kind) {
+        *preview = false;
+    }
+    assert_eq!(hit_at(&d, 125.0, 25.0, opt), None, "preview off: inside its fill");
+    assert_eq!(hit_at(&d, 100.5, 25.0, opt), Some((a_id, HitKind::Outline)), "preview off: on its outline");
+}
+
+/// A group with fills and strokes of its own around an instance of a symbol whose art has an
+/// effect is clicked where its art is drawn, though no object in the group has an effect.
+#[test]
+fn a_painted_group_around_an_effected_symbols_instance_is_hit_where_its_art_is_drawn() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let mut art = square(&mut d, 0.0, 0.0);
+    art.appearance.effects.push(effect("test.raster"));
+    d.symbols.push(crate::Symbol { dynamic: false, name: "Effected".into(), art: Arc::new(art) });
+    let (g, inst) = (d.alloc_id(), d.alloc_id());
+    let instance = Node::new(inst, NodeKind::SymbolInstance { symbol: "Effected".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    let mut group = Node::group(g, vec![Arc::new(instance)]);
+    group.appearance = Appearance::default_art().into();
+    d.insert(Some(l), 0, group).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(hit_at(&d, 125.0, 25.0, opt), Some((inst, HitKind::Fill)), "where its art is drawn");
+    assert_eq!(objects_at(&d, Point::new(125.0, 25.0), opt, None), [g]);
+}
+
+/// In a layer with fills and strokes of its own whose art is evaluated for a member's geometry
+/// effect, an Intertwine group's members are still clicked in the order they are drawn at the
+/// click: where the lower member is woven over the upper one, the click takes the lower member.
+#[test]
+fn an_intertwine_group_in_a_layers_drawn_art_is_hit_in_its_woven_order() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    d.node_mut(l).unwrap().appearance = Appearance::default_art().into();
+    let mut a = square(&mut d, 0.0, 100.0);
+    a.extras_mut().intertwine = Some(Box::new(shapes::rectangle(Rect::new(25.0, 100.0, 50.0, 150.0))));
+    let b = square(&mut d, 25.0, 100.0);
+    let (a_id, b_id, g) = (a.id, b.id, d.alloc_id());
+    d.insert(Some(l), 0, Node::new(g, NodeKind::Intertwine { children: vec![Arc::new(a), Arc::new(b)] })).unwrap();
+    let mut moved = square(&mut d, 200.0, 0.0);
+    moved.appearance.effects.push(effect("test.shift"));
+    d.insert(Some(l), 1, moved).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(hit_at(&d, 40.0, 125.0, opt), Some((a_id, HitKind::Fill)), "where the lower member is woven over");
+    assert_eq!(hit_at(&d, 60.0, 125.0, opt), Some((b_id, HitKind::Fill)), "where the upper member is drawn over");
+}
+
+/// The clipping path of a clip group and of a clipping layer is still marqueed by its own geometry
+/// when a geometry effect moves what it draws.
+#[test]
+fn a_clipping_path_keeps_its_own_geometry_under_a_geometry_effect() {
+    set_drawn_art(shifted_art);
+    let edge = Rect::new(-5.0, 40.0, 5.0, 60.0);
+    // A clip group.
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(effect("test.shift"));
+    let (g, mask_id, art_id) = (d.alloc_id(), mask.id, art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    d.insert(Some(l), 0, clip).unwrap();
+    assert_eq!(marquee(&d, edge, None, true), [mask_id, art_id], "clip group");
+    // A clipping layer.
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let (mut mask, art) = half_clipped(&mut d);
+    mask.appearance.effects.push(effect("test.shift"));
+    let (mask_id, art_id) = (mask.id, art.id);
+    let layer = d.node_mut(l).unwrap();
+    if let NodeKind::Layer { children, clip, .. } = &mut layer.kind {
+        (*children, *clip) = (vec![Arc::new(mask), Arc::new(art)], true);
+    }
+    assert_eq!(marquee(&d, edge, None, true), [mask_id, art_id], "clipping layer");
+}
+
+/// The selection tools take the clipping path of a clip group whose own geometry effect moves it
+/// on its outline where it is drawn, before the art it clips, and not at its own place.
+#[test]
+fn a_clip_groups_own_effect_moves_where_its_mask_outline_is_hit() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(400.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, mask_id, art_id) = (d.alloc_id(), mask.id, art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    clip.appearance.effects.push(effect("test.shift"));
+    d.insert(Some(l), 0, clip).unwrap();
+    let tools = HitOptions { clip_outlines: true, ..HitOptions::default() };
+    assert_eq!(hit_at(&d, 199.5, 50.0, tools), Some((mask_id, HitKind::Outline)), "the drawn edge, over the art");
+    assert_eq!(hit_at(&d, 150.0, 50.0, tools).map(|h| h.0), Some(art_id), "the drawn art inside the mask");
+    assert_eq!(hit_at(&d, 0.5, 50.0, tools), None, "the mask's own edge");
+    // The same clip group in a group whose own effect moves it.
+    let mut d = Document::new(400.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, mask_id, art_id) = (d.alloc_id(), mask.id, art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    let mut outer = Node::group(d.alloc_id(), vec![Arc::new(clip)]);
+    outer.appearance.effects.push(effect("test.shift"));
+    d.insert(Some(l), 0, outer).unwrap();
+    assert_eq!(hit_at(&d, 199.5, 50.0, tools), Some((mask_id, HitKind::Outline)), "in a moved group: the drawn edge, over the art");
+    assert_eq!(hit_at(&d, 150.0, 50.0, tools).map(|h| h.0), Some(art_id), "in a moved group: the drawn art");
+}
+
+/// In isolation mode in a clip group whose own geometry effect moves it, the selection tools take
+/// the art outside the clipping mask by its own geometry, for a marquee as for a click.
+#[test]
+fn an_isolated_clip_group_with_its_own_effect_is_marqueed_by_its_members_own_geometry() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(400.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    clip.appearance.effects.push(effect("test.shift"));
+    d.insert(Some(l), 0, clip).unwrap();
+    let tools = HitOptions { clip_outlines: true, scope: Some(g), ..HitOptions::default() };
+    assert_eq!(hit_at(&d, 150.0, 50.0, tools).map(|h| h.0), Some(art_id), "a click outside the mask");
+    let edge = Rect::new(190.0, 40.0, 210.0, 60.0);
+    for leaves in [false, true] {
+        assert_eq!(marquee(&d, edge, Some(g), leaves), [art_id], "a marquee across its own edge outside the mask");
+    }
+}
+
+/// A clip group whose drawn art holds only its clipping path still has the art it clips clicked
+/// inside the mask.
+#[test]
+fn a_clip_groups_art_is_hit_when_its_drawn_art_holds_only_the_clipping_path() {
+    set_drawn_art(shifted_art);
+    let mut d = Document::new(400.0, 200.0);
+    let l = d.layers[0].id;
+    let (mask, art) = half_clipped(&mut d);
+    let (g, art_id) = (d.alloc_id(), art.id);
+    let mut clip = Node::group(g, vec![Arc::new(mask), Arc::new(art)]);
+    clip.set_clips(true);
+    clip.appearance.effects.push(effect("test.mask_only"));
+    d.insert(Some(l), 0, clip).unwrap();
+    let opt = HitOptions::default();
+    assert_eq!(hit_at(&d, 50.0, 50.0, opt), Some((art_id, HitKind::Fill)), "inside the mask");
+    assert_eq!(objects_at(&d, Point::new(50.0, 50.0), opt, None), [g]);
+    assert!(hit_at(&d, 150.0, 50.0, opt).is_none(), "outside the mask");
+}
+
 /// Every test of a clip group by its clipping path follows the region a live effect moved it to:
 /// the selected art hidden by the mask, a click into a group holding the clip group, the locked
 /// objects under the pointer, and, below a clipping layer whose Preview is on, art on a sublayer

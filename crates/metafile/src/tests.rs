@@ -43,10 +43,15 @@ pub(crate) fn blue() -> Paint {
 
 /// A `w` × `h` PNG of `rgba`.
 pub(crate) fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
-    let img = image::RgbaImage::from_pixel(w, h, image::Rgba(rgba));
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
-    out
+    let img = craft_image_codecs::Image::from_raw(
+        w,
+        h,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.repeat((w * h) as usize),
+    )
+    .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 /// CRC-32 of a PNG chunk.
@@ -64,8 +69,12 @@ pub(crate) fn crc32(data: &[u8]) -> u32 {
 /// A 1 × 1 PNG whose IHDR claims `w` × `h` (and whose CRC matches): its size reads from the header,
 /// but its pixel data no longer matches, so decoding it fails.
 pub(crate) fn png_claiming(w: u32, h: u32) -> Vec<u8> {
-    let mut png = vec![];
-    image::GrayImage::new(1, 1).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(1, 1, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![0]).unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     png[16..20].copy_from_slice(&w.to_be_bytes());
     png[20..24].copy_from_slice(&h.to_be_bytes());
     let crc = crc32(&png[12..29]);
