@@ -5837,8 +5837,11 @@ and `layerRows`, the rows highlighted in the panel.
   locked or nested art included, dialog `confirm` asks "Delete this layer and its artwork?" for one layer, else "Delete
   the selected items and their artwork?"; OK deletes the rows it asked about in that document, one undo step, and
   Cancel keeps them; an empty layer, a layer with only guides, and groups or objects alone are deleted at once),
-  `layer.locate {id?, layersOnly?}` (highlights the selected object's row; the panel opens the rows around it and
-  scrolls to it on every call, also when the row was already highlighted; `layersOnly: true`, which the panel sends while Show Layers Only is on, as Locate Layer, highlights the innermost
+  `layer.locate {id?, layersOnly?}` (highlights the selected object's row, or with several selected the row of the
+  one frontmost in the stacking order, whatever order they were selected in; an `id` locates that object instead;
+  the panel opens the rows around it;
+  it scrolls to it on every call, also when the row was already highlighted;
+  `layersOnly: true`, which the panel sends while Show Layers Only is on, as Locate Layer, highlights the innermost
   layer or sublayer holding the object instead, or a layer `id` itself, and returns `{id, objectId, ancestry}`)
   and `layer.clippingMask.toggle`.
 - **Panel menu**: `layer.duplicate {ids?}`, `layer.merge {ids?}` (into the layer highlighted last, keeping the

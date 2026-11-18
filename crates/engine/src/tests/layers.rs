@@ -1102,6 +1102,43 @@ fn locate_object_highlights_its_row() {
     assert!(s.execute("layer.locate", &json!({})).is_err());
 }
 
+/// With several objects selected, Locate Object finds the frontmost one in the stacking order,
+/// whatever order they were selected in; an `id` still wins.
+#[test]
+fn locate_object_finds_the_frontmost_selected_object() {
+    let mut s = session();
+    let (_, sub, a, g, b, c) = tree(&mut s);
+    let top = id(&run(&mut s, "layer.new", json!({"top": true})));
+    let d = rect(&mut s, 400.0);
+    let locate = |s: &mut Session, ids: &[NodeId]| {
+        run(s, "select.set", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}));
+        assert_eq!(s.doc().unwrap().selection.objects.last(), ids.last(), "selected in this order");
+        run(s, "layer.locate", json!({}))["id"].clone()
+    };
+    // In one sublayer, the group in front of the rectangle selected last.
+    assert_eq!(locate(&mut s, &[g, a]), json!(g.0));
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![g]);
+    // The sublayer sits in front of the art directly in its layer.
+    assert_eq!(locate(&mut s, &[a, c]), json!(a.0));
+    // A higher layer wins over everything below it.
+    assert_eq!(locate(&mut s, &[d, b, c]), json!(d.0));
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![d]);
+    // A group and its member: the member paints after the group it is in.
+    assert_eq!(locate(&mut s, &[b, g]), json!(b.0));
+    // Added one at a time, as by Shift-clicks.
+    run(&mut s, "select.set", json!({"ids": [d.0]}));
+    run(&mut s, "select.add", json!({"ids": [a.0]}));
+    assert_eq!(run(&mut s, "layer.locate", json!({}))["id"], d.0);
+    // An id still locates that object, behind the selection or not.
+    assert_eq!(run(&mut s, "layer.locate", json!({"id": c.0}))["id"], c.0);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![c]);
+    // Locate Layer takes the layer of the frontmost selected object.
+    run(&mut s, "select.set", json!({"ids": [d.0, a.0]}));
+    assert_eq!(run(&mut s, "layer.locate", json!({"layersOnly": true})), json!({"id": top.0, "objectId": d.0, "ancestry": [top.0]}));
+    run(&mut s, "select.set", json!({"ids": [a.0, c.0]}));
+    assert_eq!(run(&mut s, "layer.locate", json!({"layersOnly": true}))["id"], sub.0);
+}
+
 /// Locate Layer (`layersOnly`, sent while Show Layers Only is on) highlights the innermost layer
 /// or sublayer holding the object, through any groups; a layer locates itself.
 #[test]
