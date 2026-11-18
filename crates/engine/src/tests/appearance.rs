@@ -227,6 +227,112 @@ fn stroke_options_on_a_group_with_its_own_stroke_edit_that_stroke() {
     assert_eq!((st.paint, st.width), (Paint::solid(Color::BLACK), 3.0));
 }
 
+/// `brushed_strokes_profiled` reads the strokes `stroke.set` edits: a group's own stroke when it
+/// has one, else its members'. It answers only while each of them draws with a brush, and not
+/// while an object has no stroke row, which `stroke.set` would give a plain stroke.
+#[test]
+fn brushed_strokes_profiled_reads_the_strokes_stroke_set_edits() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 100.0), rect(&mut s, 250.0));
+    run(&mut s, "brush.apply", json!({"ids": [a.0, b.0], "name": "3 pt. Round"}));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), Some(false), "both draw with a brush, neither has a profile");
+    run(&mut s, "stroke.set", json!({"ids": [b.0], "profile": "lens"}));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), Some(true), "one has a profile");
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [a.0, b.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), Some(true), "a group without its own stroke: its members'");
+    run(&mut s, "appearance.addStroke", json!({"ids": [g.0]}));
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), None, "the group's own plain stroke takes the profile");
+    let c = rect(&mut s, 400.0);
+    run(&mut s, "appearance.removeItem", json!({"ids": [c.0], "index": 1}));
+    assert!(node(&s, c).appearance.stroke().is_none());
+    run(&mut s, "select.set", json!({"ids": [a.0, c.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), None, "an object without a stroke row takes a plain stroke");
+}
+
+/// A compound shape's own stroke is the one `stroke.set` edits: brushed members do not count.
+#[test]
+fn brushed_strokes_profiled_reads_a_compound_shapes_own_stroke() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 100.0), rect(&mut s, 120.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    let c = NodeId(run(&mut s, "object.compoundShape.make", json!({"mode": "add"}))["id"].as_u64().unwrap());
+    assert!(node(&s, c).appearance.stroke().is_some_and(|st| st.brush.is_none()), "the compound shape's own plain stroke");
+    s.edit("Brush", |d, _| {
+        for id in [a, b] {
+            if let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {
+                st.brush = Some("3 pt. Round".into());
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), None);
+    s.edit("Brush", |d, _| {
+        d.node_mut(c).unwrap().appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        Ok(())
+    })
+    .unwrap();
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), Some(false));
+}
+
+/// A targeted layer with its own plain Stroke row active: `stroke.set` edits that row, so the
+/// brushed path inside the layer does not count.
+#[test]
+fn brushed_strokes_profiled_reads_a_targeted_layers_active_stroke_row() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0);
+    run(&mut s, "brush.apply", json!({"ids": [a.0], "name": "3 pt. Round"}));
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    run(&mut s, "layer.target", json!({"id": layer.0}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    let rows = &node(&s, layer).appearance.items;
+    let index = rows.iter().position(|it| matches!(it, AppearanceItem::Stroke(st) if st.brush.is_none())).expect("the layer's own stroke row");
+    run(&mut s, "appearance.setActiveItem", json!({"index": index}));
+    assert_eq!(s.brushed_strokes_profiled(), None, "the layer's plain stroke takes the profile");
+    run(&mut s, "stroke.set", json!({"profile": "lens"}));
+    assert!(node(&s, layer).appearance.items.get(index).is_some_and(|it| matches!(it, AppearanceItem::Stroke(st) if st.profile.is_some())));
+    assert!(node(&s, a).appearance.stroke().is_some_and(|st| st.profile.is_none()), "the brushed path is left as it was");
+}
+
+/// A symbol instance selected with a brushed path takes no stroke from `stroke.set`, so it does
+/// not count; the brushed path alone decides.
+#[test]
+fn brushed_strokes_profiled_leaves_out_symbol_instances() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0);
+    run(&mut s, "brush.apply", json!({"ids": [a.0], "name": "3 pt. Round"}));
+    let r = rect(&mut s, 300.0);
+    run(&mut s, "select.set", json!({"ids": [r.0]}));
+    let inst = NodeId(run(&mut s, "symbol.new", json!({"name": "Dot"}))["id"].as_u64().unwrap());
+    assert!(matches!(node(&s, inst).kind, NodeKind::SymbolInstance { .. }));
+    run(&mut s, "select.set", json!({"ids": [a.0, inst.0]}));
+    assert_eq!(s.brushed_strokes_profiled(), Some(false));
+}
+
+/// With the active row a stroke of the first object that another selected object has no equal
+/// row for, `stroke.set` edits that object's top stroke, so its top stroke decides.
+#[test]
+fn brushed_strokes_profiled_falls_back_to_the_top_stroke_where_the_active_row_has_no_match() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 100.0), rect(&mut s, 250.0));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "appearance.addStroke", json!({}));
+    run(&mut s, "brush.apply", json!({"ids": [a.0, b.0], "name": "3 pt. Round"}));
+    run(&mut s, "stroke.set", json!({"ids": [b.0], "weight": 5}));
+    let rows = &node(&s, a).appearance.items;
+    let index = rows.iter().position(|it| matches!(it, AppearanceItem::Stroke(st) if st.brush.is_some())).expect("a's brushed stroke");
+    assert!(index >= node(&s, b).appearance.items.len() || node(&s, b).appearance.items[index].is_fill(), "{rows:?}");
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "appearance.setActiveItem", json!({"index": index}));
+    assert_eq!(s.brushed_strokes_profiled(), Some(false), "b's top stroke has the brush too");
+}
+
 #[test]
 fn text_items_take_item_paint() {
     let mut s = session();
