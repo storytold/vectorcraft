@@ -75,10 +75,11 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
         }
         return;
     }
-    // A symbol from the Symbols panel: an instance centred where it is dropped, on art or not.
-    if let widgets::PanelDrag::Symbol(name) = &*d {
+    // A symbol from the Symbols panel: an instance centred where it is dropped, on art or not. A
+    // symbol of another document is added to this one first.
+    if let widgets::PanelDrag::Symbol { document, name } = &*d {
         let at = xf.to_doc(pos);
-        if let Err(e) = app.run("symbol.place", json!({"name": name, "x": at.x, "y": at.y})) {
+        if let Err(e) = app.run("symbol.placeFromDocument", json!({"sourceDocument": document, "name": name, "x": at.x, "y": at.y})) {
             app.status(e);
         }
         return;
@@ -155,7 +156,7 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
         // Art dragged back onto the canvas: its move was already dropped. (A symbol was placed
         // above.)
         widgets::PanelDrag::Art(_)
-        | widgets::PanelDrag::Symbol(_)
+        | widgets::PanelDrag::Symbol { .. }
         | widgets::PanelDrag::LibrarySymbol { .. }
         | widgets::PanelDrag::LibraryGraphic { .. } => return,
         // A Libraries panel style or group only moves within that panel.
