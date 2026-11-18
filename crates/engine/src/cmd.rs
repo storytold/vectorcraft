@@ -903,6 +903,8 @@ pub(crate) use buildcmds::TracePresetChanges;
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 
+/// The tile counts Create Object Mosaic would use (the dialog's Use Ratio button sets them).
+pub use menucmds::mosaic_counts;
 /// The Shape Mode commands' warning when a selected open path encloses no area.
 pub use pathops::SHAPE_MODE_OPEN_PATH_NO_AREA;
 
