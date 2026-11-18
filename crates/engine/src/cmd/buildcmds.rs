@@ -279,7 +279,8 @@ fn paint_param(s: &Session, p: &Value, key: &str, cmd: &str) -> Result<Option<Pa
     match p.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v @ Value::Object(o)) if o.contains_key("color") || o.contains_key("swatch") || o.contains_key("gradient") || o.contains_key("none") => {
-            paint_from(s, v)
+            // A paint key whose value is not a paint, such as `{"swatch": 123}`, gives no paint.
+            paint_from(s, v)?.map(Some).ok_or_else(|| bad(cmd, format!("bad {key} {v}")))
         }
         Some(v) => color_value(v).map(|c| Some(Paint::solid(super::paint::new_color(s, p, c)))).ok_or_else(|| bad(cmd, format!("bad {key} {v}"))),
     }

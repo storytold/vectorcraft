@@ -453,6 +453,12 @@ fn fill_area_outside_every_area_changes_nothing() {
     for p in [json!({}), json!({"point": [50]}), json!({"point": [50, 70], "fill": "nope"}), json!({"point": [50, 70], "stroke": 3})] {
         assert!(s.execute("shapeBuilder.copyRegion", &p).is_err(), "{p}");
     }
+    for paint in [json!({"swatch": 123}), json!({"color": 5}), json!({"color": "nope"})] {
+        for key in ["fill", "stroke"] {
+            let p = json!({"point": [50, 70], key: paint});
+            assert!(s.execute("shapeBuilder.copyRegion", &p).is_err(), "{p}");
+        }
+    }
     assert!(s.execute("shapeBuilder.copyRegion", &json!({"point": [50, 70], "ids": [999_999]})).is_err());
     assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
 }
