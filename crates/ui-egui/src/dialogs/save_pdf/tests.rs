@@ -721,3 +721,226 @@ fn advanced_section_shows_raster_resolution_note() {
     frame(&mut app);
     assert!(app.ui.dialog.is_some());
 }
+
+/// Headless frames of the dialog layer with screen-reader output.
+struct Reader(egui::Context);
+
+impl Reader {
+    fn new() -> Self {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        theme::install_fonts(&ctx);
+        Self(ctx)
+    }
+
+    fn run(&self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let mut out =
+            self.0.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        out
+    }
+
+    /// The Custom… button of the open dialog, with whether it is enabled.
+    fn custom(&self, app: &mut VectorcraftApp) -> Option<(egui::accesskit::NodeId, bool)> {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = &out.platform_output.accesskit_update.as_ref()?.nodes;
+        nodes.iter().find(|(_, n)| n.label() == Some("Custom…") && n.role() == egui::accesskit::Role::Button).map(|(id, n)| (*id, !n.is_disabled()))
+    }
+
+    /// The labels and values the open dialog shows.
+    fn texts(&self, app: &mut VectorcraftApp) -> Vec<String> {
+        self.run(app, vec![]);
+        let out = self.run(app, vec![]);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        nodes.iter().flat_map(|(_, n)| [n.label(), n.value()]).flatten().map(str::to_string).collect()
+    }
+
+    /// Click Custom… in Save PDF's Advanced section.
+    fn click_custom(&self, app: &mut VectorcraftApp) {
+        let (node, enabled) = self.custom(app).expect("a Custom… button");
+        assert!(enabled, "Custom… is enabled");
+        let click = egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target_node: node,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            data: None,
+        };
+        self.run(app, vec![egui::Event::AccessKitActionRequest(click)]);
+    }
+}
+
+fn kind(app: &VectorcraftApp) -> Option<&str> {
+    app.ui.dialog.as_ref().map(|d| d.kind.as_str())
+}
+
+/// Save PDF on `params` (and `path`), showing Advanced.
+fn open_advanced(app: &mut VectorcraftApp, params: Value) {
+    let mut p = params;
+    p["path"] = json!("/tmp/out.pdf");
+    app.run("ui.savePdfDialog", p).unwrap();
+    set_field(app, "__section", json!("Advanced"));
+}
+
+/// A second rectangle, half transparent, over the first one.
+fn transparent_overlap(app: &mut VectorcraftApp) {
+    app.run("select.none", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 30, "y": 20, "width": 50, "height": 40})).unwrap();
+    app.run("transparency.set", json!({"opacity": 50})).unwrap();
+}
+
+/// The images a written PDF reopens with.
+fn images(pdf: &[u8]) -> usize {
+    let doc = vectorcraft_pdf::import(pdf).unwrap();
+    let mut n = 0;
+    for l in &doc.layers {
+        l.walk(&mut |x| n += matches!(x.kind, vectorcraft_doc::NodeKind::Image(_)) as usize);
+    }
+    n
+}
+
+#[test]
+fn custom_is_enabled_where_the_save_flattens() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    for (params, flattens) in [
+        (json!({"compatibility": "1.3"}), true),
+        (json!({"standard": "pdfX1a"}), true),
+        (json!({"standard": "pdfX3"}), true),
+        (json!({"compatibility": "1.4"}), false),
+        (json!({"standard": "pdfX4"}), false),
+    ] {
+        open_advanced(&mut app, params.clone());
+        assert_eq!(r.custom(&mut app).map(|(_, enabled)| enabled), Some(flattens), "{params}");
+    }
+    // PDF presets keep no custom flattener options, so the preset editor has no Custom….
+    open_preset(&mut app, &json!({})).unwrap();
+    set_field(&mut app, "__section", json!("Advanced"));
+    set_field(&mut app, "compatibility", json!("1.3"));
+    assert_eq!(r.custom(&mut app), None);
+}
+
+#[test]
+fn custom_starts_from_the_preset_and_cancel_goes_back_unchanged() {
+    let (mut app, _, _) = app();
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "low"}));
+    let r = Reader::new();
+    r.custom(&mut app);
+    let before = app.ui.dialog.as_ref().unwrap().fields.clone();
+    r.click_custom(&mut app);
+    assert_eq!(kind(&app), Some(CUSTOM_KIND));
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.f64("balance", 0.0), d.f64("gradientPpi", 0.0)), (75.0, 150.0), "Low Resolution's");
+    // Low Resolution doesn't clip, but the PDF 1.3 writer does.
+    assert!(d.bool("clipComplexRegions"), "shown as written");
+    app.ui.dialog.as_mut().unwrap().fields.insert("balance".into(), json!(10));
+    super::super::cancel(&mut app);
+    assert_eq!(kind(&app), Some(KIND));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields, before, "Cancel leaves Save PDF as it was");
+}
+
+#[test]
+fn custom_options_are_written_until_a_preset_is_chosen() {
+    let (mut app, written, _) = app();
+    transparent_overlap(&mut app);
+    open_advanced(&mut app, json!({"compatibility": "1.3"}));
+    let r = Reader::new();
+    r.click_custom(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("balance".into(), json!(0));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(KIND), "OK goes back to Save PDF");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["flattener"]["balance"].as_f64(), Some(0.0));
+    let saved = &app.session.prefs.flattener_presets;
+    assert_ne!(flattener(d, saved).ok(), FlattenOptions::preset(pdf::DEFAULT_FLATTENER), "the preset shows [Custom]");
+    // A preset set from outside drops the custom options.
+    let mut copy = d.clone();
+    set(&mut copy, "flattenerPreset", json!("Low Resolution"));
+    field_set(&mut copy, "flattenerPreset");
+    assert!(!copy.fields.contains_key("flattener"));
+    super::super::confirm(&mut app).unwrap();
+    assert!(images(&written.borrow()[0].1) > 0, "balance 0 rasterizes the flattened art");
+    open_advanced(&mut app, json!({"compatibility": "1.3"}));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(images(&written.borrow()[1].1), 0, "High Resolution keeps it vector");
+}
+
+#[test]
+fn custom_options_equal_to_the_preset_leave_its_name() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    for overprint in ["preserve", "discard"] {
+        open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "medium", "advanced": {"overprint": overprint}}));
+        r.click_custom(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().bool("preserveOverprints"), overprint == "preserve", "{overprint}");
+        super::super::confirm(&mut app).unwrap();
+        assert_eq!(kind(&app), Some(KIND));
+        assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("flattener"), "{overprint}");
+    }
+}
+
+#[test]
+fn custom_shows_alpha_as_the_pdf_1_3_writer_drops_it() {
+    let (mut app, written, _) = app();
+    transparent_overlap(&mut app);
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattener": {"balance": 0, "preserveAlpha": true}}));
+    Reader::new().click_custom(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveAlpha"), "shown as written");
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(KIND));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["flattener"]["preserveAlpha"].as_bool(), Some(false));
+    super::super::confirm(&mut app).unwrap();
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3") && images(&written.borrow()[0].1) > 0);
+}
+
+#[test]
+fn bad_custom_options_keep_the_dialog_open() {
+    let (mut app, _, _) = app();
+    open_advanced(&mut app, json!({"compatibility": "1.3"}));
+    Reader::new().click_custom(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert("gradientPpi".into(), json!(9000));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert!(e.contains("resolutions"), "{e}");
+    assert_eq!(kind(&app), Some(CUSTOM_KIND));
+}
+
+#[test]
+fn custom_options_outlive_a_saved_preset_deleted_meanwhile() {
+    let (mut app, written, _) = app();
+    app.run("flattener.presets.save", json!({"name": "Mine", "balance": 20})).unwrap();
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattenerPreset": "Mine"}));
+    Reader::new().click_custom(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().f64("balance", 0.0), 20.0, "the saved preset's");
+    app.run("flattener.presets.delete", json!({"name": "Mine"})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("balance".into(), json!(30));
+    super::super::confirm(&mut app).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("flattenerPreset"), d.fields["flattener"]["balance"].as_f64()), (String::new(), Some(30.0)));
+    super::super::confirm(&mut app).unwrap();
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3"));
+}
+
+#[test]
+fn save_preset_says_it_leaves_the_custom_flattener_options_out() {
+    let (mut app, _, _) = app();
+    let r = Reader::new();
+    let note = "The PDF preset keeps the flattener preset but not the Custom… settings.";
+    app.run("ui.savePdfDialog", json!({"compatibility": "1.3", "flattener": {"balance": 10}})).unwrap();
+    set_field(&mut app, SAVE_AS, json!("Mine"));
+    assert!(r.texts(&mut app).iter().any(|t| t == note), "with Custom… options");
+    app.ui.dialog.as_mut().unwrap().fields.remove("flattener");
+    assert!(!r.texts(&mut app).iter().any(|t| t == note), "without them");
+}
+
+#[test]
+fn save_pdf_opens_with_the_flattener_options_given_and_refuses_bad_ones() {
+    let (mut app, _, _) = app();
+    app.run("ui.savePdfDialog", json!({"compatibility": "1.3", "flattener": {"lineArtPpi": 600}})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["flattener"], json!({"lineArtPpi": 600}));
+    for bad in [json!({"bogus": 1}), json!(5), json!({"gradientPpi": 9000})] {
+        app.ui.dialog = None;
+        assert!(app.run("ui.savePdfDialog", json!({"flattener": bad})).is_err(), "{bad}");
+        assert!(app.ui.dialog.is_none(), "{bad}");
+    }
+}
