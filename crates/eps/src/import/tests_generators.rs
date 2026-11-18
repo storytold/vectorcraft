@@ -50,7 +50,24 @@ pub(super) fn pixel(d: &Document, x: u32, y: u32) -> [u8; 4] {
             _ => None,
         })
         .unwrap();
-    let img = image::load_from_memory(&d.images[&im].bytes).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&d.images[&im].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     img.get_pixel(x, y).0
 }
 
@@ -197,7 +214,24 @@ end"##,
     assert_eq!(of_kind(d, "Image").len(), 2);
     let im = all(d).into_iter().find(|n| matches!(&n.kind, NodeKind::Image(im) if im.width == 2)).unwrap();
     let NodeKind::Image(im) = &im.kind else { panic!() };
-    let img = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+    let img = craft_image_codecs::decode(&d.images[&im.key].bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     // Painted where the mask is 1, transparent where it is 0.
     assert_eq!([img.get_pixel(0, 0).0, img.get_pixel(1, 0).0], [[255, 0, 0, 255], [0, 255, 0, 0]]);
     assert_eq!([img.get_pixel(0, 1).0, img.get_pixel(1, 1).0], [[0, 0, 255, 0], [255, 255, 255, 255]]);
@@ -677,6 +711,10 @@ fn mesh_and_function_shadings_become_gradient_meshes() {
     let NodeKind::Mesh(g) = &m.kind else { panic!() };
     // Its first corner (the domain's origin) is the first sample.
     assert_eq!(g.points[0].color, Color::rgb(1.0, 0.0, 0.0));
+    // Between the samples it is interpolated (PLRM 3rd ed. §3.10.1, type 0 functions), not the
+    // nearest sample: the middle of the 17 × 17 grid is the average of red, green, blue and black.
+    let mid = g.points[8 * 17 + 8].color.to_rgb_uncalibrated();
+    assert!(mid.iter().all(|c| (c - 0.25).abs() < 1e-3), "{mid:?}");
 
     // Type 4 packed: 8-bit flags, coordinates and components; a triangle and one on its edge.
     let tri = [[0u8, 0, 0, 255, 0, 0], [0, 255, 0, 0, 255, 0], [0, 0, 255, 0, 0, 255], [1, 255, 255, 255, 255, 0]].concat();
@@ -1140,4 +1178,32 @@ fn filter_output_counts_against_the_memory_budget() {
     let many = import(&file("t", &format!("/z <{z}> def 100 {{ z /FlateDecode filter pop }} repeat 0 0 1 1 rectfill")));
     let Err(err) = many else { panic!("the budget ends the program") };
     assert!(err.contains("too much memory"), "{err}");
+}
+
+/// A sampled function of one input in an axial shading: interpolated linearly, its gradient has a
+/// stop at every sample (exact, not sampled evenly); with `Order 3` it is a cubic through the
+/// samples (PLRM 3rd ed. §3.10.1, Table 3.36), kept in its range.
+#[test]
+fn sampled_functions_interpolate_linearly_or_by_cubics() {
+    let shading = |order: &str| {
+        let r = read(&format!(
+            "<< /ShadingType 2 /ColorSpace /DeviceGray /Coords [0 0 100 0] /Function << /FunctionType 0 /Domain [0 1] \
+             /Range [0 1] /Size [4] /BitsPerSample 8 {order} /DataSource <00ffff00> >> >> shfill"
+        ));
+        let Some(Paint::Gradient(g)) = all(&r.document).into_iter().find_map(|n| fill(&n).cloned()) else { panic!("no gradient") };
+        g.gradient.stops.iter().map(|s| (s.offset, s.color.to_rgb_uncalibrated()[0])).collect::<Vec<_>>()
+    };
+    let linear = shading("");
+    assert_eq!(linear.len(), 4, "{linear:?}");
+    for ((t, v), (et, ev)) in linear.iter().zip([(0.0, 0.0), (1.0 / 3.0, 1.0), (2.0 / 3.0, 1.0), (1.0, 0.0)]) {
+        assert!((t - et).abs() < 1e-4 && (v - ev).abs() < 1e-3, "{linear:?}");
+    }
+    // Sampled evenly; at 3/32 (0.28 of the way from the first sample to the second) the cubic
+    // through 0, 0, 1 and 1 (the first sample repeated before it) is 0.237, where a straight line
+    // would be 0.281. Between the two white samples it would overshoot past 1, and is kept at 1.
+    let cubic = shading("/Order 3");
+    let at = |t: f32| cubic.iter().find(|s| (s.0 - t).abs() < 1e-4).map(|s| s.1);
+    assert!(at(3.0 / 32.0).is_some_and(|v| (v - 0.237).abs() < 0.01), "{cubic:?}");
+    assert!(cubic.iter().all(|s| (0.0..=1.0).contains(&s.1)), "{cubic:?}");
+    assert!(cubic.iter().any(|s| s.1 == 1.0), "{cubic:?}");
 }

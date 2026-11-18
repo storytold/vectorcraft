@@ -177,6 +177,27 @@ pub fn is_intertwine(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Intertwine { .. })
 }
 
+/// Why `n` can't be in an Intertwine group, if it can't: it is or holds an Intertwine group, a
+/// Repeat, a graph or a Live Paint group (the help page's limits).
+pub fn refused_member(n: &Node) -> Option<&'static str> {
+    let mut why = None;
+    n.walk(&mut |c| {
+        why = why.or(match &c.kind {
+            NodeKind::Intertwine { .. } => Some("an Intertwine group"),
+            NodeKind::Repeat(_) => Some("a Repeat"),
+            NodeKind::Group { .. } if c.extras().graph.is_some() => Some("a graph"),
+            NodeKind::Group { .. } if crate::builder::is_live_paint(c) => Some("a Live Paint group"),
+            _ => None,
+        });
+    });
+    why
+}
+
+/// Whether `id` is an Intertwine group or lies inside one.
+pub fn in_intertwine(doc: &Document, id: NodeId) -> bool {
+    doc.ancestry(id).unwrap_or_default().iter().any(|a| doc.node(*a).is_some_and(is_intertwine))
+}
+
 // ---------- the tool ----------
 
 /// The overlap areas of an Intertwine group, kept for the document revision they were found in.
@@ -341,6 +362,10 @@ impl Tool for IntertwineTool {
         if key == "prev" {
             self.prev = value.as_str().filter(|t| *t != "intertwine").map(str::to_string);
         }
+    }
+
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        if key == "prev" { crate::option_check::string_or_null(key, value) } else { Err(crate::option_check::unknown(key)) }
     }
 
     fn busy(&self) -> bool {

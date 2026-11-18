@@ -53,6 +53,7 @@ pub(crate) fn off_the_ui_thread(services: &mut Services) -> (Shown, Written) {
     services.pick_open = Some(Box::new(in_line));
     services.pick_save = Some(Box::new(in_line));
     services.pick_open_multi = Some(Box::new(|| panic!("no dialog on the UI thread")));
+    services.pick_open_files = Some(Box::new(|_: &FilePick| panic!("no dialog on the UI thread")));
     services.pick_folder = Some(Box::new(|| panic!("no dialog on the UI thread")));
     services.read = Some(Box::new(|_: &str| Ok(SVG.to_vec())));
     services.write = Some(Box::new(move |path: &str, _: &[u8]| {
@@ -210,6 +211,38 @@ fn save_as_goes_on_with_the_path_picked() {
     assert_eq!(*written.borrow(), ["/art/poster.svg"]);
 }
 
+/// Save as PDF with View PDF after Saving, asked for by automation without a path: the save panel
+/// it opened answers as automation's, so the PDF is written but not opened in the viewer, even
+/// when a person picked the file. The person's own Save as PDF opens it.
+#[test]
+fn a_pdf_automation_asked_for_is_not_opened_when_its_save_panel_answers() {
+    let opened = Rc::new(RefCell::new(Vec::<String>::new()));
+    let u = opened.clone();
+    let mut services =
+        Services { dialogs_are_sheets: true, open_url: Some(Box::new(move |p: &str| u.borrow_mut().push(p.to_string()))), ..Default::default() };
+    let (shown, written) = off_the_ui_thread(&mut services);
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    let view = json!({"viewAfterSaving": true});
+
+    app.ui.answering_control = true;
+    let _ = app.run("file.export.pdf", view.clone());
+    app.ui.answering_control = false;
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
+    shown.answer(&["/art/automated.pdf"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/automated.pdf"]);
+    assert!(opened.borrow().is_empty(), "{:?}", opened.borrow());
+
+    let _ = app.run("file.export.pdf", view);
+    shown.answer(&["/art/mine.pdf"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/automated.pdf", "/art/mine.pdf"]);
+    assert_eq!(opened.borrow().len(), 1, "{:?}", opened.borrow());
+    assert!(opened.borrow()[0].ends_with("/art/mine.pdf"), "{:?}", opened.borrow());
+}
+
 #[test]
 fn a_dialogs_folder_button_fills_its_field_when_the_picker_answers() {
     let (mut app, shown, _) = app();
@@ -334,18 +367,17 @@ fn load_variable_library_asks_off_the_ui_thread() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// The Variables panel menu's Save Variable Library… is enabled once the document has a text
-/// variable, and then asks off the UI thread: the library is written
-/// to the path the dialog answers, Load Variable Library reads it back, and the warning about the
-/// visibility variable it left out shows in the status bar.
+/// The Variables panel menu's Save Variable Library… is enabled once the document has a variable,
+/// of any kind, and then asks off the UI thread: the library is written to the path the dialog
+/// answers, and Load Variable Library reads back its visibility and text variables.
 #[test]
 fn save_variable_library_asks_off_the_ui_thread() {
     let (mut app, shown, _) = app();
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
-    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
-    // Without a text variable the item is disabled and asks for no file.
+    // Without a variable the item is disabled and asks for no file.
     click(&mut app, "Save Variable Library…", crate::panels::variables::menu);
     assert!(shown.requests().is_empty(), "{:?}", shown.requests());
+    app.run("variable.define", json!({"name": "Shown", "kind": "visibility"})).unwrap();
     app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
     app.run("dataset.new", json!({"name": "A", "values": {"Name": "x", "Shown": true}})).unwrap();
     let dir = vectorcraft_testkit::temp_dir("picks-save-variable-library");
@@ -360,10 +392,11 @@ fn save_variable_library_asks_off_the_ui_thread() {
     assert!(!library.exists(), "nothing is written before the dialog answers");
     shown.answer(&[&library.to_string_lossy()]);
     poll(&mut app);
-    assert_eq!(app.ui.status, "variables that aren't text were left out: visibility (1)");
     let xml = std::fs::read_to_string(&library).unwrap_or_else(|e| panic!("{e}: {}", app.ui.status));
     let loaded = app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
-    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Name"]), json!(["A"])));
+    assert_eq!((loaded["variables"].clone(), loaded["names"].clone()), (json!(["Shown", "Name"]), json!(["A"])));
+    let values = &app.session.doc().unwrap().doc.variables.datasets[0].values;
+    assert_eq!(values.get("Shown"), Some(&vectorcraft_doc::DataValue::Visible(true)));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -405,6 +438,115 @@ fn keyboard_shortcuts_import_and_export_ask_off_the_ui_thread() {
     assert_eq!(*written.borrow(), ["/keys/out.json", "/keys/command.json"]);
 }
 
+/// The Keyboard Shortcuts dialog's Export Text… asks off the UI thread for a `.txt` file and writes
+/// the dialog's working set, as edited so far, as text where the dialog answers.
+#[test]
+fn keyboard_shortcuts_export_text_writes_the_working_set_as_text() {
+    let (mut app, shown, _) = app();
+    let texts: Rc<RefCell<Vec<(String, String)>>> = Default::default();
+    let t = texts.clone();
+    app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+        t.borrow_mut().push((path.to_string(), String::from_utf8_lossy(b).into_owned()));
+        Ok(())
+    }));
+    let ov = crate::keymap::overrides_from(&[("view.grid", "Ctrl+Alt+G")]);
+    let revision = crate::menus::plugin_revision();
+    app.run("edit.keyboardShortcuts", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().expect("Keyboard Shortcuts");
+    d.fields.insert("overrides".into(), crate::keymap::stored::to_value(&ov));
+    d.fields.insert("set".into(), json!("Custom"));
+    click(&mut app, "Export Text…", dialogs);
+    match shown.requests().as_slice() {
+        [PickRequest::Save(pick)] => {
+            assert_eq!(pick.filters, FilePick::filters([("Text", &["txt"][..]), ("Shortcut sheet", &["pdf"][..]), ("CSV", &["csv"][..])]))
+        }
+        other => panic!("{other:?}"),
+    }
+    shown.answer(&["/keys/list.txt"]);
+    poll(&mut app);
+    let texts = texts.borrow();
+    let [(path, text)] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(path, "/keys/list.txt");
+    // Another test installing or removing a plug-in meanwhile changes the Effect menu's rows.
+    if crate::menus::plugin_revision() == revision {
+        assert_eq!(*text, crate::shortcut_editor::export_text("Custom", &ov));
+    }
+    assert!(text.starts_with("Keyboard Shortcuts\nSet: Custom\n"), "{text}");
+    assert!(text.contains(&format!("\t{}\n", crate::menus::pretty_shortcut("Ctrl+Alt+G"))), "{text}");
+    assert!(app.ui.shortcut_overrides.is_empty(), "the working set is kept only on OK");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("shortcuts"), "the dialog stays open");
+}
+
+/// The file type picked in Export Text…'s save dialog picks the file: the PDF sheet or the CSV file
+/// for a name typed with `.pdf` or `.csv`, and for a type the dialog reports with a name typed
+/// without an extension, that type's file under the name with its extension.
+#[test]
+fn keyboard_shortcuts_export_text_writes_the_format_picked_in_its_save_dialog() {
+    for (answer, path, start) in [
+        (&["/keys/list.pdf"][..], "/keys/list.pdf", &b"%PDF-"[..]),
+        (&["/keys/list.csv"][..], "/keys/list.csv", &b"\xef\xbb\xbfGroup,Command,Shortcut\r\n"[..]),
+        (&["/keys/table", "csv"][..], "/keys/table.csv", &b"\xef\xbb\xbfGroup,Command,Shortcut\r\n"[..]),
+        (&["/keys/sheet", "pdf"][..], "/keys/sheet.pdf", &b"%PDF-"[..]),
+        (&["/keys/plain", "txt"][..], "/keys/plain.txt", &b"Keyboard Shortcuts\n"[..]),
+    ] {
+        let (mut app, shown, _) = app();
+        type Files = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
+        let files: Files = Default::default();
+        let f = files.clone();
+        app.services.write = Some(Box::new(move |path: &str, b: &[u8]| {
+            f.borrow_mut().push((path.to_string(), b.to_vec()));
+            Ok(())
+        }));
+        app.run("edit.keyboardShortcuts", json!({})).unwrap();
+        click(&mut app, "Export Text…", dialogs);
+        shown.answer(answer);
+        poll(&mut app);
+        let files = files.borrow();
+        let [(written, bytes)] = files.as_slice() else { panic!("{files:?}") };
+        assert_eq!(written, path);
+        assert!(bytes.starts_with(start), "{path}: {:?}", String::from_utf8_lossy(&bytes[..bytes.len().min(40)]));
+    }
+}
+
+/// `shortcuts.exportText` with a `format` and no `path` gives the name its save dialog answers
+/// that format's extension, though the dialog reports no file type.
+#[test]
+fn export_text_with_a_format_gives_the_answered_name_its_extension() {
+    let (mut app, shown, _) = app();
+    let written: Rc<RefCell<Vec<String>>> = Default::default();
+    let w = written.clone();
+    app.services.write = Some(Box::new(move |path: &str, _: &[u8]| {
+        w.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    let _ = app.run("shortcuts.exportText", json!({"format": "sheet"}));
+    shown.answer(&["/keys/sheet"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/keys/sheet.pdf"]);
+}
+
+/// A name that Export Text… gives the picked type's extension names a file the save dialog did
+/// not check: when one is there, a question asks before replacing it and nothing is written
+/// meanwhile.
+#[test]
+fn keyboard_shortcuts_export_text_asks_before_replacing_a_file_its_extension_names() {
+    let (mut app, shown, _) = app();
+    let written: Rc<RefCell<Vec<String>>> = Default::default();
+    let w = written.clone();
+    app.services.write = Some(Box::new(move |path: &str, _: &[u8]| {
+        w.borrow_mut().push(path.to_string());
+        Ok(())
+    }));
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| p == "/keys/list.pdf"));
+    app.run("edit.keyboardShortcuts", json!({})).unwrap();
+    click(&mut app, "Export Text…", dialogs);
+    shown.answer(&["/keys/list.txt", "pdf"]);
+    poll(&mut app);
+    assert!(written.borrow().is_empty(), "{:?}", written.borrow());
+    let d = app.ui.dialog.as_ref().expect("a question");
+    assert_eq!(d.str("path"), "/keys/list.pdf");
+}
+
 /// Keyboard Shortcuts' Import… opens a shortcut set another app saved as text (`.kys`) in Import
 /// Shortcut Set over the dialog when its file dialog answers, and the dialog's working set stays in
 /// Keyboard Shortcuts, which Cancel shows again.
@@ -429,6 +571,29 @@ fn keyboard_shortcuts_import_opens_a_text_set_over_the_dialog() {
     crate::dialogs::cancel(&mut app);
     assert_eq!(dialog_kind(&app), Some("shortcuts"));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// `shortcuts.export` and `shortcuts.import` given a `path` that is not a string open no file
+/// dialog, read and write nothing, and give an error naming `path`; a null `path` still asks.
+#[test]
+fn keyboard_shortcuts_commands_reject_a_path_that_is_not_a_string() {
+    let (mut app, shown, written) = app();
+    let read: Written = Default::default();
+    let r = read.clone();
+    app.services.read = Some(Box::new(move |path: &str| {
+        r.borrow_mut().push(path.to_string());
+        Ok(SVG.to_vec())
+    }));
+    for path in [json!(5), json!(true), json!({"file": "/keys/a.json"}), json!(["/keys/a.json"])] {
+        for id in ["shortcuts.export", "shortcuts.import"] {
+            assert_eq!(app.run(id, json!({ "path": path })), Err("`path` must be a string".to_string()), "{id} {path}");
+            assert!(shown.requests().is_empty(), "{id} {path}: {:?}", shown.requests());
+        }
+    }
+    assert!(written.borrow().is_empty() && read.borrow().is_empty());
+    assert!(app.ui.shortcut_overrides.is_empty());
+    assert_eq!(app.run("shortcuts.export", json!({"path": null})), Err("cancelled".to_string()));
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
 }
 
 /// A dialog's folder button answered after the dialog closed fills nothing, and the status says
@@ -479,7 +644,7 @@ fn preset_dialogs_export_asks_off_the_ui_thread() {
 #[test]
 fn a_sheets_answer_given_its_extension_asks_before_replacing() {
     let (mut app, shown, written) = app();
-    app.services.exists = Some(Box::new(|p: &str| p == "/art/card.vectorcraft"));
+    app.services.exists = Some(std::sync::Arc::new(|p: &str| p == "/art/card.vectorcraft"));
     app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
     assert!(app.run("file.save", json!({})).is_err());
     shown.answer(&["/art/card"]);
@@ -506,7 +671,7 @@ fn a_preset_dialogs_export_asks_before_replacing_over_it() {
             w.borrow_mut().push(path.to_string());
             Ok(())
         })),
-        exists: Some(Box::new(|_: &str| true)),
+        exists: Some(std::sync::Arc::new(|_: &str| true)),
         ..Default::default()
     };
     let mut app = VectorcraftApp::new(Session::new(), services);
@@ -770,6 +935,28 @@ fn save_changes_answers_for_its_own_document() {
     assert_eq!((d.kind.as_str(), &d.fields["uid"]), (crate::unsaved::KIND, &json!(uids[2])));
 }
 
+/// Closing a modified background tab whose Save opens a Save dialog: once the dialog answers,
+/// the document closes and the document that was in front before the question is in front again.
+#[test]
+fn save_changes_answered_by_a_save_dialog_keeps_the_front_document() {
+    let (mut app, shown, written) = with_dialogs(false);
+    // A clean and in front, B modified and untitled, C clean.
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    app.session.set_active(0);
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    app.run("file.close", json!({"index": 1})).unwrap();
+    assert!(crate::dialogs::confirm(&mut app).is_err());
+    assert!(matches!(shown.requests().as_slice(), [PickRequest::Save(_)]));
+    shown.answer(&["/art/b.vectorcraft"]);
+    poll(&mut app);
+    assert_eq!(*written.borrow(), ["/art/b.vectorcraft"], "{}", app.ui.status);
+    assert_eq!(app.session.documents().iter().map(|d| d.uid).collect::<Vec<_>>(), [uids[0], uids[2]]);
+    assert_eq!(app.session.active().map(|d| d.uid), Some(uids[0]), "A is in front again");
+}
+
 /// A dialog asked for while another is open is refused, and the status bar says so rather than
 /// "cancelled".
 #[test]
@@ -982,11 +1169,11 @@ fn without_tests(code: &str) -> String {
 }
 
 /// The calls in `code` (from [`code_only`]) of the host's in-line dialogs: [`Services`]'
-/// `pick_open`, `pick_save`, `pick_folder` and `pick_open_multi` used other than to ask whether
-/// the host has them (`.is_some()`, `.is_none()`).
+/// `pick_open`, `pick_save`, `pick_folder`, `pick_folder_at`, `pick_open_multi` and
+/// `pick_open_files` used other than to ask whether the host has them (`.is_some()`, `.is_none()`).
 fn in_line_dialogs(code: &str) -> Vec<String> {
     let mut found = vec![];
-    for name in ["pick_open", "pick_save", "pick_folder", "pick_open_multi"] {
+    for name in ["pick_open", "pick_save", "pick_folder", "pick_folder_at", "pick_open_multi", "pick_open_files"] {
         let field = format!(".{name}");
         let mut rest = code;
         while let Some(at) = rest.find(&field) {

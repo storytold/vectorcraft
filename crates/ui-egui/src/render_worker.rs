@@ -24,6 +24,18 @@ pub struct Job {
     /// The automation roots in force where the job was made: the render reads linked files under
     /// them, as it would on that thread.
     pub scope: ScopeHandle,
+    /// The document's deferred live-effect plug-in stages and first-view budget: the render runs
+    /// inside their view ([`vectorcraft_plugins::deferred::Deferrals::view`]).
+    pub effects: vectorcraft_plugins::deferred::Deferrals,
+    /// The render may copy pixels from the worker's last frame ([`crate::canvas::render_job`]).
+    /// Off: it renders the whole frame.
+    pub may_copy: bool,
+    /// The worker may keep the frame for its next frame to copy from
+    /// ([`crate::canvas::render_job`]). Off: the worker holds no frame after this one.
+    pub may_keep: bool,
+    /// The display profile the finished frame is converted into ([`crate::display_profile`]).
+    /// The frame the worker keeps stays sRGB.
+    pub display: Option<Arc<vectorcraft_color::cms::display::DisplayTransform>>,
 }
 
 pub struct Done {
@@ -35,6 +47,18 @@ pub struct Done {
     pub ms: f64,
     /// [`vectorcraft_render::FrameStats::moved`] of the frame.
     pub moved: usize,
+    /// The frame holds pixels copied from the worker's last frame ([`crate::canvas::render_job`]),
+    /// and `ms` is the time of the copy and of the parts rendered.
+    pub reused: bool,
+}
+
+/// Render `job` as the worker thread does: inside the job's automation roots and deferred
+/// effects, with the worker's renderer `r` and its last frame `kept`.
+pub(crate) fn render(r: &mut Renderer, kept: &mut Option<crate::canvas::KeptFrame>, job: Job) -> Done {
+    let t0 = crate::now_ms();
+    let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(r, kept, &job)));
+    let ms = crate::now_ms() - t0;
+    Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused }
 }
 
 pub struct Worker {
@@ -55,15 +79,13 @@ impl Worker {
             .name("vectorcraft-render".into())
             .spawn(move || {
                 let mut r = Renderer::new();
+                let mut kept = None;
                 while let Ok(mut job) = jobs.recv() {
                     // Skip stale jobs: only the newest matters.
                     while let Ok(newer) = jobs.try_recv() {
                         job = newer;
                     }
-                    let t0 = crate::now_ms();
-                    let img = job.scope.clone().run(|| r.render(&job.doc, job.w, job.h, job.view, &job.opts));
-                    if done_tx.send(Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: crate::now_ms() - t0, moved: r.stats.moved }).is_err()
-                    {
+                    if done_tx.send(render(&mut r, &mut kept, job)).is_err() {
                         break;
                     }
                     ctx.request_repaint();

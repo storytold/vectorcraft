@@ -562,3 +562,135 @@ fn alt_drag_moves_a_copy_of_the_artboard() {
     assert_eq!(a, vec![Action::Cancel, Action::Begin("Duplicate Artboard".into()), moved(70.0, true)]);
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 100.0).with_mods(alt)), vec![Action::Commit]);
 }
+
+/// The sides of the active artboard that show an add button.
+fn button_sides(t: &ArtboardTool, c: &ToolContext) -> Vec<ArtboardSide> {
+    t.edge_buttons(c).into_iter().map(|(side, _)| side).collect()
+}
+
+/// The rings the add buttons draw.
+fn button_rings(t: &ArtboardTool, c: &ToolContext) -> usize {
+    t.overlays(c).iter().filter(|o| matches!(o, Overlay::Path { dashed: false, .. })).count()
+}
+
+#[test]
+fn add_buttons_show_only_on_sides_with_room_for_an_artboard_of_the_same_size() {
+    let mut d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let t = ArtboardTool::default();
+    // Artboard 1 (0–500): a copy on its right (520–1020) would overlap artboard 2 (600–800).
+    let c = cx(&d, &s, &p);
+    assert_eq!(button_sides(&t, &c), vec![ArtboardSide::Top, ArtboardSide::Bottom, ArtboardSide::Left]);
+    assert_eq!(button_rings(&t, &c), 3);
+    // Artboard 2 (600–800 × 0–200): its left would overlap artboard 1, the rest has room.
+    let t2 = ArtboardTool { active: 1, ..Default::default() };
+    assert_eq!(button_sides(&t2, &c), vec![ArtboardSide::Top, ArtboardSide::Right, ArtboardSide::Bottom]);
+    // At the canvas's edge there is no room past it.
+    let m = vectorcraft_doc::MAX_COORD;
+    d.artboards[1].rect = Rect::new(m - 200.0, 0.0, m, 200.0);
+    let c = cx(&d, &s, &p);
+    assert_eq!(button_sides(&t2, &c), vec![ArtboardSide::Top, ArtboardSide::Bottom, ArtboardSide::Left]);
+    // The buttons sit just outside the middle of each edge.
+    let off = c.tol(EDGE_BUTTON_OFFSET);
+    assert_eq!(t.edge_buttons(&c)[0].1, Point::new(250.0, -off));
+}
+
+#[test]
+fn add_buttons_hide_with_several_artboards_selected_or_during_a_drag() {
+    let d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let t = ArtboardTool { active: 1, others: vec![0], ..Default::default() };
+    assert!(button_sides(&t, &c).is_empty());
+    assert_eq!(button_rings(&t, &c), 0);
+    let off = c.tol(EDGE_BUTTON_OFFSET);
+    assert_eq!(t.edge_button_at(&c, Point::new(700.0, 200.0 + off)), None, "no button takes a press");
+    let mut t = ArtboardTool::default();
+    t.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
+    t.pointer(&c, &ev(PointerKind::Drag, 720.0, 100.0));
+    assert!(button_sides(&t, &c).is_empty(), "none while an artboard is dragged");
+}
+
+/// The tooltips the add buttons carry: each one's center, radius and text.
+fn button_tips(t: &ArtboardTool, c: &ToolContext) -> Vec<(Point, f64, &'static str)> {
+    t.overlays(c)
+        .into_iter()
+        .filter_map(|o| if let Overlay::HoverText { center, radius, text } = o { Some((center, radius, text)) } else { None })
+        .collect()
+}
+
+#[test]
+fn each_add_button_has_a_tooltip_over_the_area_a_press_takes() {
+    let mut d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let t = ArtboardTool::default();
+    let radius = c.tol(EDGE_BUTTON_RADIUS);
+    let want: Vec<_> = t.edge_buttons(&c).into_iter().map(|(_, at)| (at, radius, EDGE_BUTTON_TIP)).collect();
+    assert_eq!(want.len(), 3, "no button and no tooltip on the side without room");
+    assert_eq!(button_tips(&t, &c), want);
+    // The tooltip's disc is the one a press takes.
+    for (at, r, _) in &want {
+        assert!(t.edge_button_at(&c, *at + Vec2::new(r * 0.99, 0.0)).is_some());
+        assert!(t.edge_button_at(&c, *at + Vec2::new(r * 1.01, 0.0)).is_none());
+    }
+    // None with several artboards selected or during a drag.
+    let several = ArtboardTool { active: 1, others: vec![0], ..Default::default() };
+    assert!(button_tips(&several, &c).is_empty());
+    let mut dragging = ArtboardTool::default();
+    dragging.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
+    dragging.pointer(&c, &ev(PointerKind::Drag, 720.0, 100.0));
+    assert!(button_tips(&dragging, &c).is_empty(), "none while an artboard is dragged");
+    // A locked artboard's buttons tell only what a click does: an Alt-click does nothing there.
+    d.artboards[0].locked = true;
+    let c = cx(&d, &s, &p);
+    let tips = button_tips(&t, &c);
+    assert_eq!(tips.len(), 3);
+    assert!(tips.iter().all(|(_, _, text)| *text == EDGE_BUTTON_TIP_LOCKED), "{tips:?}");
+}
+
+#[test]
+fn an_add_button_adds_an_empty_artboard_and_alt_duplicates_on_that_side() {
+    let d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let off = c.tol(EDGE_BUTTON_OFFSET);
+    let below = Point::new(250.0, 500.0 + off);
+    let mut t = ArtboardTool::default();
+    assert_eq!(t.cursor(&c, below, Mods::default()), Cursor::Arrow);
+    let a = t.pointer(&c, &ev(PointerKind::Down, below.x, below.y));
+    assert_eq!(a, vec![Action::Exec("artboard.new".into(), json!({"beside": 0, "side": "bottom"})), Action::Notify("created".into())]);
+    // The release that follows adds nothing more.
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, below.x, below.y)), vec![]);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let left = Point::new(-off, 250.0);
+    let a = t.pointer(&c, &ev(PointerKind::Down, left.x, left.y).with_mods(alt));
+    assert_eq!(
+        a,
+        vec![Action::Exec("artboard.duplicate".into(), json!({"index": 0, "side": "left", "art": true})), Action::Notify("created".into())]
+    );
+    // The new artboard, last in the document, becomes the active one.
+    let mut d3 = d.clone();
+    d3.artboards.push(d.artboards[0].clone());
+    t.notify(&cx(&d3, &s, &p), "created");
+    assert_eq!((t.active, t.others.clone()), (2, vec![]));
+}
+
+/// On a locked artboard, a click on an add button still adds an empty artboard beside it, but an
+/// Alt-click does nothing: the tool doesn't copy a locked artboard.
+#[test]
+fn an_alt_click_on_a_locked_artboards_add_button_does_not_duplicate_it() {
+    let mut d = two_boards();
+    d.artboards[0].locked = true;
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let off = c.tol(EDGE_BUTTON_OFFSET);
+    let left = Point::new(-off, 250.0);
+    let mut t = ArtboardTool::default();
+    let alt = Mods { alt: true, ..Mods::default() };
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Down, left.x, left.y).with_mods(alt)), vec![]);
+    assert_eq!(t.pointer(&c, &ev(PointerKind::Up, left.x, left.y).with_mods(alt)), vec![]);
+    assert_eq!((t.active, t.others.clone()), (0, vec![]));
+    let a = t.pointer(&c, &ev(PointerKind::Down, left.x, left.y));
+    assert_eq!(a, vec![Action::Exec("artboard.new".into(), json!({"beside": 0, "side": "left"})), Action::Notify("created".into())]);
+}

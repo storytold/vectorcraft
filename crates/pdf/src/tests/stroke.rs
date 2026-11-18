@@ -52,7 +52,7 @@ pub(crate) fn painted_boxes(d: &Document) -> (Vec<Rect>, Vec<Rect>) {
 fn arrowheads_and_the_trimmed_line_match_the_shared_geometry() {
     for align in [ArrowAlign::Extend, ArrowAlign::Tip] {
         for kind in Arrowhead::ALL {
-            let (d, n) = line_doc(arrow_stroke(kind, align, 1.0));
+            let (d, n) = line_doc(arrow_stroke(kind.clone(), align, 1.0));
             let bp = n.path_data().unwrap().to_bezpath();
             let st = n.appearance.stroke().unwrap();
             let pieces = stroke_pieces(&bp, st);

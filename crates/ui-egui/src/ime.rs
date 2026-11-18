@@ -109,7 +109,7 @@ pub(crate) fn install_hooks(ctx: &Context) {
 }
 
 /// The base eligibility every custom-descriptor consumer shares: a hidden viewport, the Home
-/// screen, a modal dialog, the palette, a file sheet, an unfocused window, another egui keyboard
+/// screen, a modal dialog, an update dialog, the palette, a file sheet, an unfocused window, another egui keyboard
 /// owner or no Type-tool text edit all mean this pass publishes a stock descriptor or none. One
 /// helper so the pre-UI route test, the post-UI finalizer and the end-of-pass observation cannot
 /// drift apart; Home in particular is an ineligible route even though the Type tool keeps its
@@ -118,6 +118,7 @@ fn pass_eligible(app: &VectorcraftApp, ctx: &Context) -> bool {
     !app.viewport_hidden(ctx)
         && !crate::menus::home_showing(app)
         && app.ui.dialog.is_none()
+        && !crate::updates_ui::blocks_input(app)
         && !app.ui.palette_open
         && !app.file_sheet_open()
         && ctx.input(|input| input.focused)
@@ -801,6 +802,31 @@ pub(crate) fn write_output(ctx: &Context, update: Option<ImeContextUpdate>, rect
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+
+    /// The update prompt ends the Type tool's IME route, as a dialog does.
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn the_update_prompt_ends_the_type_tools_route() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 80, "text": "Text", "size": 12, "color": "#000000"})).unwrap()["id"].as_u64().unwrap();
+        let view = app.view_info();
+        app.session.select_tool("type", view).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"id": id, "start": 4, "end": 4}));
+        assert!(app.session.tool_wants_text());
+        let ctx = Context::default();
+        let eligible = |app: &VectorcraftApp| {
+            let mut eligible = false;
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| eligible = pass_eligible(app, ui.ctx()));
+            out.textures_delta.clear();
+            eligible
+        };
+        assert!(eligible(&app));
+        crate::updates_ui::open_prompt_for_test(&mut app);
+        assert!(!eligible(&app), "no canvas descriptor behind the prompt");
+    }
 
     /// A changed context generation or IME purpose for the same owner requires a replacement reset,
     /// while an unchanged descriptor keeps the existing request.

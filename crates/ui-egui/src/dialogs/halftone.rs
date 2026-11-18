@@ -29,6 +29,12 @@ pub fn fields() -> Value {
     json!({"shape": "circle", "frequency": 20, "angle": 45, "mode": "mono", "color": "#000000", "invert": false, "clip": true, "keepOriginal": false, "preview": true})
 }
 
+/// Whether the open Object → Vector Halftone dialog is showing its temporary dot group.
+pub(crate) fn previewing(app: &VectorcraftApp) -> bool {
+    app.ui.dialog.as_ref().is_some_and(|d| d.kind == KIND)
+        && app.session.active().and_then(|st| st.interaction.as_ref()?.preview.as_ref()).is_some_and(|(cmd, _)| cmd == CMD)
+}
+
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     screen_fields(ui, d);
     form::check(ui, d, "keepOriginal", tl!("Keep Original"));
