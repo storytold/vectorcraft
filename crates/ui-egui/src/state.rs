@@ -832,6 +832,9 @@ pub struct UiState {
     /// The EPS Options chosen last (`document.exportEps` options; null: never used).
     #[serde(default)]
     pub eps_options: Value,
+    /// The HP-GL Options chosen last (`document.export` HP-GL options; null: never used).
+    #[serde(default)]
+    pub hpgl_options: Value,
     /// The Offset Path fields confirmed last (offset, joins, miterLimit; null: never used): its
     /// dialog opens on them (#1152).
     #[serde(default)]
@@ -1304,6 +1307,7 @@ impl Default for UiState {
             links_search: None,
             dxf_options: Value::Null,
             eps_options: Value::Null,
+            hpgl_options: Value::Null,
             offset_path: Value::Null,
             smart_punctuation: Value::Null,
             average_join: Value::Null,
