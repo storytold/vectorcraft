@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use serde_json::json;
 use vectorcraft_engine::Session;
 
-use super::SAVE_COPY;
+use super::{EXPORT_ALL, SAVE_COPY};
 use crate::{VectorcraftApp, menus};
 
 /// A new, empty folder of its own for test `name`.
@@ -43,6 +43,64 @@ fn save_a_timestamped_copy_writes_beside_the_document() {
     assert_eq!(names.len(), 2, "{names:?}");
     assert!(names.iter().any(|n| n.starts_with("card_20") && n.ends_with(".vectorcraft")), "{names:?}");
     assert!(app.ui.status.starts_with("Saved "), "{}", app.ui.status);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A `.ai` timestamped copy, and a `.ai` copy Export All Open Documents writes, name the view's
+/// active artboard as their active one.
+#[test]
+fn ai_copies_name_the_views_active_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3})).unwrap();
+    app.sync_views();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let opts = vectorcraft_engine::cmd::fileio::LoadOptions { native: false, ..Default::default() };
+    for (i, (cmd, artboard)) in [(SAVE_COPY, 2), (EXPORT_ALL, 1)].into_iter().enumerate() {
+        let dir = folder(&format!("active-artboard-{i}"));
+        if let Some(v) = app.view_mut() {
+            v.artboard = artboard;
+        }
+        app.run(cmd, json!({"folder": dir, "format": "ai"})).unwrap();
+        let names = files(&dir);
+        assert_eq!(names.len(), 1, "{cmd}: {names:?}");
+        let bytes = std::fs::read(dir.join(&names[0])).unwrap();
+        let l = vectorcraft_engine::cmd::fileio::load_with("a.ai", &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{cmd}: {:?}", l.warnings);
+        assert_eq!(l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)), Some(artboard), "{cmd}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// Export All Open Documents as `.ai` names each document's own active artboard, also for a
+/// document whose artboard changed in its view after the last command and that is not active.
+#[test]
+fn export_all_names_each_documents_active_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    for name in ["first", "second"] {
+        app.run("file.new", json!({"width": 60, "height": 40, "artboards": 3, "name": name})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    }
+    app.sync_views();
+    // Choosing a tab and an artboard runs no command.
+    assert!(app.session.set_active(0));
+    if let Some(v) = app.view_mut() {
+        v.artboard = 2;
+    }
+    assert!(app.session.set_active(1));
+    if let Some(v) = app.view_mut() {
+        v.artboard = 1;
+    }
+    let dir = folder("export-all-active-artboards");
+    let r = app.run(EXPORT_ALL, json!({"folder": dir, "format": "ai"})).unwrap();
+    let opts = vectorcraft_engine::cmd::fileio::LoadOptions { native: false, ..Default::default() };
+    let written = r["files"].as_array().unwrap();
+    assert_eq!(written.len(), 2, "{r}");
+    for (f, artboard) in written.iter().zip([2, 1]) {
+        let bytes = std::fs::read(f["path"].as_str().unwrap()).unwrap();
+        let l = vectorcraft_engine::cmd::fileio::load_with("a.ai", &bytes, &opts).unwrap();
+        assert!(l.editing_data && !l.restored, "{:?}", l.warnings);
+        assert_eq!(l.doc.opened_artboard.and_then(|id| l.doc.artboards.iter().position(|a| a.id == id)), Some(artboard), "{}", f["title"]);
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -121,5 +179,31 @@ fn export_all_open_documents_writes_each_to_the_folder_picked() {
     // The engine command refuses a missing folder and an unknown format.
     assert!(app.session.execute(super::EXPORT_ALL, &json!({})).is_err());
     assert!(app.session.execute(super::EXPORT_ALL, &json!({"folder": out, "format": "doc"})).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// #4921: Batch Trace Folder from Object › Plug-ins › Document Tools asks for the folder of images,
+/// then the destination, traces each image there and reports the count (a status the catalogs
+/// translate); cancelling either does nothing.
+#[test]
+fn batch_trace_folder_asks_for_both_folders() {
+    let dir = folder("batch-trace");
+    let (src, out) = (dir.join("in"), dir.join("out"));
+    std::fs::create_dir_all(&src).unwrap();
+    image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 0, 0, 255])).save(src.join("a.png")).unwrap();
+    std::fs::write(src.join("b.png"), b"not a png").unwrap();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let mut picks = vec![out.to_string_lossy().into_owned(), src.to_string_lossy().into_owned()];
+    app.services.pick_folder = Some(Box::new(move || picks.pop()));
+    click(&mut app, "Batch Trace Folder");
+    assert!(out.join("a.vectorcraft").exists(), "{}", app.ui.status);
+    assert_eq!(app.ui.status, "Traced 1 image; not traced: 1");
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    assert_eq!(crate::i18n::message(de, &app.ui.status), "1 Bild nachgezeichnet; nicht nachgezeichnet: 1");
+    assert_eq!(crate::i18n::message(de, "Traced 2 images"), "2 Bilder nachgezeichnet");
+    assert_eq!(crate::i18n::message(de, "2 images couldn't be traced"), "2 Bilder konnten nicht nachgezeichnet werden");
+    assert!(app.session.documents().is_empty(), "the images' documents are closed");
+    app.services.pick_folder = Some(Box::new(|| None));
+    assert_eq!(app.run(super::BATCH_TRACE, json!({})).unwrap_err(), "cancelled");
     let _ = std::fs::remove_dir_all(&dir);
 }

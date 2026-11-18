@@ -814,7 +814,7 @@ fn nested_array_inserts_of_nothing_stop_at_the_work_budget() {
     blocks.extend(block("*C", None));
     let top = [(0, "INSERT"), (2, "*A"), (10, "0"), (20, "0"), (70, "300"), (44, "1")];
     let r = open(&drawing(&[], &[], &blocks, &top), &points());
-    assert!(r.warnings.iter().any(|w| w.contains("more than")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("too much work")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -997,7 +997,12 @@ fn binary_dwg_damaged_and_foreign_files() {
     binary.extend([0u8; 40]);
     assert!(is_dxf(&binary));
     let e = import(&binary, &ImportOptions::default()).unwrap_err();
-    assert!(e.contains("binary DXF") && e.contains("ASCII"), "{e}");
+    assert!(e.contains("binary DXF") && e.contains("damaged"), "{e}");
+    // A binary DXF opens as its ASCII form does.
+    let ascii = entities(LINE);
+    let tags = craft_dxf::parse(&ascii).unwrap();
+    let r = open(&craft_dxf::write_binary(&tags, true), &points());
+    assert_eq!(leaves(&r.document).len(), 1);
     let e = import(b"AC1032\x00\x00\x00", &ImportOptions::default()).unwrap_err();
     assert!(e.contains("DWG"), "{e}");
     for junk in [&b""[..], b"hello", b"<svg/>", b"999\nnote\n"] {
@@ -1166,9 +1171,8 @@ fn many_array_inserts_of_a_missing_block_stay_bounded() {
     let one = [(0, "INSERT"), (8, "0"), (2, "NOPE"), (10, "0"), (20, "0"), (70, "100"), (71, "100"), (44, "1"), (45, "1")];
     let e: Vec<(i32, &str)> = (0..3000).flat_map(|_| one).collect();
     let bytes = entities(&e);
-    let text = reader::decode(&bytes);
-    let (pairs, _) = reader::pairs(&text).unwrap();
-    let d = reader::Drawing::read(&pairs);
+    let tags = craft_dxf::parse(&bytes).unwrap();
+    let d = reader::Drawing::read(craft_dxf::model::Document::read(&tags));
     let model = d.layout("Model").or(d.layouts.first()).unwrap();
     let mut conv = entity::Converter::default();
     let items = conv.items(&d.layout_records(model));
@@ -1273,5 +1277,77 @@ fn arrays_of_blocks_of_hidden_art_stop_at_the_work_budget() {
     blocks.push((0, "ENDBLK"));
     let insert = [(0, "INSERT"), (2, "*U1"), (10, "0"), (20, "0"), (70, "50"), (71, "50"), (44, "1"), (45, "1")];
     let r = open(&drawing(&[], &tables, &blocks, &insert), &points());
-    assert!(r.warnings.iter().any(|w| w.contains("more than")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("too much work")), "{:?}", r.warnings);
+}
+
+#[test]
+fn dashed_compound_paths_charge_every_copy_of_their_pattern() {
+    // 100 pattern hatches of 9 loops in a two-length linetype: each keeps its dashes on the
+    // compound path and on each loop, 2,000 dash lengths, past the 1,000 tests import with.
+    let tables = [(0, "TABLE"), (2, "LTYPE"), (0, "LTYPE"), (2, "DASHED"), (73, "2"), (40, "15"), (49, "10"), (49, "-5"), (0, "ENDTAB")];
+    let corners = ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90"];
+    let mut hatch = vec![(0, "HATCH"), (6, "DASHED"), (10, "0"), (20, "0"), (30, "0"), (2, "ANSI31"), (70, "0"), (71, "0"), (91, "9")];
+    for i in 0..9 {
+        let (a, b) = (corners[i], corners[i + 1]);
+        hatch.extend([
+            (92, "2"),
+            (72, "0"),
+            (73, "1"),
+            (93, "4"),
+            (10, a),
+            (20, "0"),
+            (10, b),
+            (20, "0"),
+            (10, b),
+            (20, "5"),
+            (10, a),
+            (20, "5"),
+            (97, "0"),
+        ]);
+    }
+    hatch.extend([(75, "0"), (76, "1"), (98, "0")]);
+    let e: Vec<(i32, &str)> = (0..100).flat_map(|_| hatch.iter().copied()).collect();
+    let r = open(&drawing(&[], &tables, &[], &e), &points());
+    let (mut compounds, mut kept) = (0, 0);
+    r.document.walk(|n| {
+        compounds += usize::from(matches!(n.kind, NodeKind::Compound { .. }));
+        kept += n.appearance.stroke().and_then(|s| s.dash.as_ref()).map_or(0, |d| d.pattern.len());
+    });
+    assert_eq!(compounds, 100, "{:?}", r.warnings);
+    assert!(kept > 0 && kept <= 1_000, "{kept} dash lengths kept");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn solid")), "{:?}", r.warnings);
+}
+
+#[test]
+fn symbols_of_a_long_block_name_stop_at_the_text_budget() {
+    // A 1,000-byte block name inserted in 100 colours its art takes: a symbol per colour, each
+    // keeping its own copy of the name, past the 64 KB tests import with.
+    let name = "N".repeat(1000);
+    let blocks = [
+        (0, "BLOCK"),
+        (2, name.as_str()),
+        (10, "0"),
+        (20, "0"),
+        (0, "LINE"),
+        (8, "0"),
+        (62, "0"),
+        (10, "0"),
+        (20, "0"),
+        (11, "1"),
+        (21, "0"),
+        (0, "ENDBLK"),
+    ];
+    let colours: Vec<String> = (1..=100).map(|c| c.to_string()).collect();
+    let inserts: Vec<(i32, &str)> =
+        colours.iter().flat_map(|c| [(0, "INSERT"), (2, name.as_str()), (62, c.as_str()), (10, "0"), (20, "0")]).collect();
+    let r = open(&drawing(&[], &[], &blocks, &inserts), &points());
+    let mut bytes: usize = r.document.symbols.iter().map(|s| s.name.len()).sum();
+    r.document.walk(|n| {
+        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+            bytes += symbol.len();
+        }
+    });
+    assert!(!r.document.symbols.is_empty());
+    assert!(bytes <= 64 << 10, "{bytes} bytes of symbol names");
+    assert!(r.warnings.iter().any(|w| w.contains("64 MB of text")), "{:?}", r.warnings);
 }

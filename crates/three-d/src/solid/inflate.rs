@@ -1,7 +1,12 @@
-use super::build::{Builder, Camera, Order, Turn, check_bounds, cuts, fit, newell, outward};
-use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, filled, material};
-use super::rings::{MAX_SOLID_POINTS, rings, signed_area};
-use super::{Facet, FillRule, Inflate, MAX_FACES, PathData, Point, Rect, V3, Vec2, View};
+use super::build::{Builder, Built, Camera, Keep, Order, Turn, check_bounds, cuts, fit, newell, outward};
+use super::membrane::{Edges, MAX_MATERIAL_SEGMENTS, Membrane, cell_triangles, clip, crossings, filled, material};
+use super::rings::{MAX_SOLID_POINTS, TOO_COMPLEX_SURFACE, curve_pieces, signed_area, solid_rings};
+use super::{Facet, FillRule, Inflate, MAX_FACES, MAX_SOLID_FACES, PathData, Point, Rect, V3, Vec2, View};
+
+/// The slices the sides are cut into: more to follow a twist or taper.
+fn slices(o: &Inflate) -> usize {
+    if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 }
+}
 
 /// A shape to inflate: its rings and the membrane under them on the grid of the bounds.
 struct Puff {
@@ -16,21 +21,56 @@ struct Puff {
     height: f64,
 }
 
+/// The pieces each curve of `path` is sampled in for Inflate's solid ([`curve_pieces`]); an error
+/// when its outline does not fit the solid's limits.
+fn outline_pieces(path: &PathData, bounds: Rect, o: &Inflate) -> Result<u32, String> {
+    // The sides take one face for each edge of the outline in each slice; the grid's faces are
+    // counted as they are built.
+    curve_pieces(path, bounds.width().max(bounds.height()), if o.depth > 0.0 { slices(o) } else { 0 }, 0)
+}
+
+/// Whether `path` has few enough anchors that [`curve_pieces`] might take it: fewer than
+/// [`MAX_SOLID_POINTS`] contours, and at most three times as many anchors (a contour of one anchor
+/// adds one, and every other takes at most two anchors for each segment it adds). Counts the
+/// contours' anchors without reading them.
+pub(super) fn might_fit(path: &PathData) -> bool {
+    let mut anchors = 0usize;
+    for (contours, sp) in path.subpaths.iter().enumerate() {
+        anchors = anchors.saturating_add(sp.anchors.len());
+        if contours >= MAX_SOLID_POINTS || anchors > MAX_SOLID_POINTS.saturating_mul(3) {
+            return false;
+        }
+    }
+    true
+}
+
 /// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
 fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
-    let rings = rings(path, rule, bounds.width().max(bounds.height()), MAX_SOLID_POINTS)?;
+    #[cfg(test)]
+    PUFFED.with(|n| n.set(n.get() + 1));
+    let size = bounds.width().max(bounds.height());
+    let most = outline_pieces(path, bounds, o)?;
+    let rings = solid_rings(path, rule, size, MAX_SOLID_POINTS, most)?;
     if rings.is_empty() {
         return Ok(None);
     }
-    let size = bounds.width().max(bounds.height());
     if size <= 0.0 {
         return Ok(None);
     }
     const CELLS: usize = 48;
     let cell = size / CELLS as f64;
-    let (nx, ny) = (((bounds.width() / cell).ceil() as usize).max(1), ((bounds.height() / cell).ceil() as usize).max(1));
-    let edges = Edges::new(&rings);
+    // A subnormal size gives cells of no size (the grid would be `usize::MAX` cells wide), and a
+    // subnormal cell underflows the solver's stencil products.
+    if !cell.is_normal() {
+        return Ok(None);
+    }
+    let side = |len: f64| ((len / cell).ceil() as usize).clamp(1, CELLS + 1);
+    let (nx, ny) = (side(bounds.width()), side(bounds.height()));
+    let edges = Edges::new(&rings)?;
     let m = Membrane::solve(&rings, &edges, bounds.origin(), cell, nx + 1, ny + 1);
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     // A circle of radius r puffs into a half sphere of radius r at 50 % (its membrane peaks at r²/4).
     let height = 2.0 * m.peak.sqrt() * o.volume / 50.0;
     Ok(Some(Puff { rings, edges, cell, nx, ny, m, height }))
@@ -45,23 +85,125 @@ pub fn inflate(path: &PathData, rule: FillRule, bounds: Rect, options: Inflate, 
 /// on its own over the grid of `bounds`, and one eye sees them all, as far away as the highest
 /// puff needs with Perspective. One result for each shape, in order.
 pub fn inflate_together(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View) -> Vec<Result<Vec<Facet>, String>> {
+    inflate_each(shapes, bounds, options, view).collect()
+}
+
+/// [`inflate_together`], each solid built only as the iterator reaches it: a caller that stops early
+/// builds none of the solids after (and with no volume, solves none of their puffs).
+pub fn inflate_each(
+    shapes: &[(&PathData, FillRule)],
+    bounds: Rect,
+    options: Inflate,
+    view: View,
+) -> impl Iterator<Item = Result<Vec<Facet>, String>> + use<> {
+    inflate_faces(shapes, bounds, options, view, Keep::Facets).map(|r| r.map(|(facets, ..)| facets))
+}
+
+/// [`inflate_together`], keeping each solid's facets, its faces before projection, or both, as
+/// `keep` asks. Every shape's membrane is solved at once (the eye depends on the highest puff),
+/// except with no volume: nothing puffs then, and each shape's membrane is solved when its solid
+/// is taken. Each solid is built as the iterator reaches it.
+pub(crate) fn inflate_faces(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View, keep: Keep) -> Solids {
     let o = options.sanitized();
+    let later = o.volume == 0.0;
+    #[cfg(test)]
+    let later = later && !SOLVE_FIRST.with(std::cell::Cell::get);
+    if later {
+        // A shape is copied to be solved later only when its anchors are few enough for the
+        // solid's point limit; a larger one is refused now, with the error its puff gives.
+        let shapes: Vec<Result<(PathData, FillRule), String>> = shapes
+            .iter()
+            .map(|(path, rule)| {
+                check_bounds(bounds)?;
+                if !might_fit(path) {
+                    outline_pieces(path, bounds, &o)?;
+                }
+                Ok(((*path).clone(), *rule))
+            })
+            .collect();
+        return Solids { pending: Pending::Later(shapes.into_iter()), bounds, o, view, reach: 0.0, keep };
+    }
     let puffs: Vec<Result<Option<Puff>, String>> =
         shapes.iter().map(|(path, rule)| check_bounds(bounds).and_then(|()| puff(path, *rule, bounds, &o))).collect();
     let reach = puffs.iter().flatten().flatten().map(|p| p.height).fold(0.0, f64::max);
-    puffs
-        .into_iter()
-        .map(|p| match p {
-            Ok(Some(p)) => inflated(p, bounds, o, view, reach),
-            Ok(None) => Ok(vec![]),
+    Solids { pending: Pending::Solved(puffs.into_iter()), bounds, o, view, reach, keep }
+}
+
+/// The shapes' puffs still to take: every one solved when the shapes were laid out, or each
+/// shape's path and fill rule (or the error its bounds or outline already gives), its puff solved
+/// when its solid is taken.
+enum Pending {
+    Solved(std::vec::IntoIter<Result<Option<Puff>, String>>),
+    Later(std::vec::IntoIter<Result<(PathData, FillRule), String>>),
+}
+
+/// The solids of [`inflate_faces`], one result for each shape in order, each built as it is taken.
+pub(crate) struct Solids {
+    pending: Pending,
+    bounds: Rect,
+    o: Inflate,
+    view: View,
+    /// The highest puff of the shapes drawn together.
+    reach: f64,
+    keep: Keep,
+}
+
+impl Solids {
+    /// Pass over the next shape without building its solid, or solving its puff if that waits.
+    pub(crate) fn pass(&mut self) {
+        match &mut self.pending {
+            Pending::Solved(puffs) => {
+                puffs.next();
+            }
+            Pending::Later(shapes) => {
+                shapes.next();
+            }
+        }
+    }
+}
+
+impl Iterator for Solids {
+    type Item = Result<Built, String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let p = match &mut self.pending {
+            Pending::Solved(puffs) => puffs.next()?,
+            Pending::Later(shapes) => shapes.next()?.and_then(|(path, rule)| puff(&path, rule, self.bounds, &self.o)),
+        };
+        Some(match p {
+            Ok(Some(p)) => inflated(p, self.bounds, self.o, self.view, self.reach, self.keep),
+            Ok(None) => Ok((vec![], Ok(vec![]), None)),
             Err(e) => Err(e),
         })
-        .collect()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match &self.pending {
+            Pending::Solved(puffs) => puffs.size_hint(),
+            Pending::Later(shapes) => shapes.size_hint(),
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many puffs this thread has solved, for the tests.
+    pub(crate) static PUFFED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Solve every shape's puff before the first solid is taken even with no volume, as with
+    /// volume, for the tests that compare the two.
+    pub(crate) static SOLVE_FIRST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// How many inflated solids this thread has built, for the tests.
+    pub(crate) static INFLATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The grid work of the last solid this thread inflated in full, for the tests.
+    pub(super) static GRID_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The facets of one inflated shape, for a camera that allows for a puff `reach` high (or the
-/// shape's own, if higher): `reach` is the highest puff of the shapes drawn together.
-fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result<Vec<Facet>, String> {
+/// shape's own, if higher): `reach` is the highest puff of the shapes drawn together. Its faces
+/// before projection instead, or both, as `keep` asks.
+fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64, keep: Keep) -> Result<Built, String> {
+    #[cfg(test)]
+    INFLATED.with(|n| n.set(n.get() + 1));
     let Puff { rings, edges, cell, nx, ny, m, height } = p;
     let outline: Vec<(Rect, vectorcraft_geom::SubPath)> = rings
         .iter()
@@ -100,7 +242,7 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
     let smooth = view.shade && view.has_colored_lights();
     let camera = Camera::new(view, bounds, o.depth + 2.0 * height.max(reach));
     // Without its back cap the object is a shell open behind, its inside showing.
-    let mut b = Builder { camera: &camera, closed: o.cap, facets: vec![] };
+    let mut b = Builder::new(&camera, o.cap, false, keep);
     let half = o.depth / 2.0;
     // The back: turned and scaled by the twist and taper, its puff too.
     let back_turn = Turn::new(bounds, o.twist, o.taper, 1.0);
@@ -118,14 +260,41 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
     // builds the topology of every outline ring near its cell, so a self-crossing outline cost its
     // crossings again in every cell it spans. Past it, cells take their clipped pieces.
     let material_left = std::cell::Cell::new(MAX_MATERIAL_SEGMENTS);
-    // The shape's part of a rectangle, as rings.
+    // Every ring's bounds, and the crossings of the last few rows the cells' centres lie on (a
+    // row of cells has at most seven, at its three levels).
+    let ring_bounds: Vec<Option<Rect>> =
+        rings.iter().map(|r| Some(r.iter().skip(1).fold(Rect::from_points(*r.first()?, *r.first()?), |b, p| b.union_pt(*p)))).collect();
+    let points = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+    let rows: std::cell::RefCell<Vec<(u64, Vec<f64>)>> = std::cell::RefCell::new(vec![]);
+    let filled_at = |p: Point| -> bool {
+        let mut rows = rows.borrow_mut();
+        if let Some((_, xs)) = rows.iter().find(|(y, _)| *y == p.y.to_bits()) {
+            return filled(xs, p.x);
+        }
+        let xs = if edges.charge(points) { crossings(&rings, p.y) } else { vec![] };
+        let inside = filled(&xs, p.x);
+        if rows.len() >= 8 {
+            rows.remove(0);
+        }
+        rows.push((p.y.to_bits(), xs));
+        inside
+    };
+    // The shape's part of a rectangle, as rings: only the rings whose bounds meet it are clipped,
+    // each point counted as work.
     let cut = |r: Rect| -> Vec<Vec<Point>> {
         // A cell no edge crosses is wholly inside the shape or wholly outside it.
         if !edges.touch(r) {
             let corners = vec![Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x1, r.y1), Point::new(r.x0, r.y1)];
-            return if filled(&rings, r.center()) { vec![corners] } else { vec![] };
+            return if filled_at(r.center()) { vec![corners] } else { vec![] };
         }
-        let pieces: Vec<Vec<Point>> = rings.iter().map(|ring| clip(ring, r)).filter(|c| !c.is_empty()).collect();
+        let pieces: Vec<Vec<Point>> = rings
+            .iter()
+            .zip(&ring_bounds)
+            .filter(|(_, b)| b.is_some_and(|b| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1))
+            .filter(|(ring, _)| edges.charge(ring.len()))
+            .map(|(ring, _)| clip(ring, r))
+            .filter(|c| !c.is_empty())
+            .collect();
         if pieces.iter().map(|p| signed_area(p)).sum::<f64>() <= 1e-9 * r.area() {
             return vec![];
         }
@@ -160,6 +329,9 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
             }
         })
         .collect();
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
+    }
     let level =
         |i: isize, j: isize| -> u32 { if i < 0 || j < 0 || i as usize >= nx || j as usize >= ny { 0 } else { levels[j as usize * nx + i as usize] } };
     for j in 0..ny {
@@ -176,6 +348,9 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
                 for sx in (bx0..bx1).step_by(step) {
                     let r = Rect::from_points(at(sx, sy), at(sx + step, sy + step));
                     let pieces = cut(r);
+                    if edges.spent() {
+                        return Err(TOO_COMPLEX_SURFACE.into());
+                    }
                     if pieces.is_empty() {
                         continue;
                     }
@@ -287,19 +462,53 @@ fn inflated(p: Puff, bounds: Rect, o: Inflate, view: View, reach: f64) -> Result
     }
     if o.depth > 0.0 {
         // The sides, cut into slices that follow a twist or taper.
-        let slices = if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
+        let slices = slices(&o);
         let at = |ring: &[Point], k: usize| -> Vec<V3> {
             let t = k as f64 / slices as f64;
             let turn = Turn::new(bounds, o.twist, o.taper, t);
             ring.iter().map(|p| camera.place(turn.apply(*p), half - o.depth * t)).collect()
         };
-        let mut pieces: Vec<Vec<usize>> = rings.iter().map(|r| if o.twist != 0.0 { cuts(&at(r, 0), &at(r, 1)) } else { vec![] }).collect();
-        fit(&mut pieces, slices, MAX_FACES.saturating_sub(b.facets.len()));
-        for (ring, pieces) in rings.iter().zip(&pieces) {
-            for k in 0..slices {
-                b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;
+        let cut: Vec<Vec<usize>> = rings.iter().map(|r| if o.twist != 0.0 { cuts(&at(r, 0), &at(r, 1)) } else { vec![] }).collect();
+        let mut pieces = cut.clone();
+        fit(&mut pieces, slices, MAX_FACES.saturating_sub(b.len()));
+        let edges = rings.iter().map(Vec::len).fold(0usize, usize::saturating_add);
+        if b.len().saturating_add(edges.saturating_mul(slices)) > MAX_SOLID_FACES {
+            return Err(TOO_COMPLEX_SURFACE.into());
+        }
+        let sides = |b: &mut Builder<'_>, pieces: &[Vec<usize>]| -> Result<(), String> {
+            for (ring, pieces) in rings.iter().zip(pieces) {
+                for k in 0..slices {
+                    b.band(&at(ring, k), &at(ring, k + 1), pieces, |i| outward(ring, i, 0.0))?;
+                }
+            }
+            Ok(())
+        };
+        // A mesh kept with the facets has the sides a mesh alone has: limited, and with a twist
+        // cut, by the faces the mesh holds, which can be more than the facets.
+        let mut own_sides = None;
+        if let Some(kept) = b.faces_kept() {
+            let mut own = cut;
+            fit(&mut own, slices, MAX_FACES.saturating_sub(kept));
+            if kept.saturating_add(edges.saturating_mul(slices)) > MAX_SOLID_FACES {
+                b.lose_mesh();
+            } else if own != pieces {
+                own_sides = Some((own, b.mesh.take()));
             }
         }
+        sides(&mut b, &pieces)?;
+        if let Some((own, faces)) = own_sides {
+            let mut m = Builder::new(&camera, o.cap, false, Keep::Faces);
+            m.mesh = faces;
+            match sides(&mut m, &own) {
+                Ok(()) => b.mesh = m.mesh,
+                Err(_) => b.lose_mesh(),
+            }
+        }
+    }
+    #[cfg(test)]
+    GRID_WORK.with(|w| w.set(edges.work()));
+    if edges.spent() {
+        return Err(TOO_COMPLEX_SURFACE.into());
     }
     Ok(b.finish())
 }

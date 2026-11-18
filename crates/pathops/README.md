@@ -61,11 +61,20 @@ Unlike `regions`, which splits the filled areas of closed shapes, `live_paint` t
 
 `shape_builder` gives the Shape Builder's regions. With closed paths only, they are the `regions`. Once an open path is among them, they are the `live_paint` faces, so a stroke-only line across a shape splits it and lines can enclose a region of their own. The second list holds the pieces of each path that has no closed subpath, keyed by its index, so the Shape Builder can delete them one by one. The caller closes any open path whose fill should count. Inputs with more than `SHAPE_BUILDER_MAX_SEGMENTS` segments fall back to the filled areas.
 
+```rust
+pub struct Adjacency { pub faces: Vec<MapFace>, pub edges: Vec<MapEdge>, pub slivers: Vec<PathData>, pub outlines: Vec<MapOutline> }
+pub struct MapEdge { pub path: PathData, pub sources: Vec<usize>, pub left: Option<usize>, pub right: Option<usize>, pub piece: usize }
+pub fn adjacency(shapes: &[Shape], precision: f64) -> Option<Adjacency>;
+```
+
+`adjacency` maps the paths as `live_paint` does and also reports, for each edge, every input it lies on and the faces on its left and right as it runs along its path (document coordinates, y down). A line drawn on top of another keeps both inputs on the edge, whatever the input order. A piece of line that ends inside a face has that face on both sides. Faces narrower than `precision` are listed as slivers, and `outlines` holds the outer boundary of each connected piece of the paths. It returns `None` for more than `SHAPE_BUILDER_MAX_SEGMENTS` segments, non-finite input or a `precision` that is not a positive number.
+
 ## Offset / stroke
 
 ```rust
 pub use kurbo::{Cap, Join};
 pub fn offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> PathData; // delta < 0 insets
+pub fn try_offset_path(path: &PathData, delta: f64, join: Join, miter_limit: f64) -> Result<PathData, PathOpsError>;
 pub fn outline_stroke(path: &PathData, width: f64, cap: Cap, join: Join, miter_limit: f64) -> PathData;
 ```
 
@@ -85,6 +94,27 @@ pub fn split_into_grid(rect: Rect, rows: usize, cols: usize, gutter: f64) -> Vec
 ```
 
 `simplify` fits least-squares cubics with fixed end tangents, then reparameterizes with Newton steps and splits at the point of worst error. Any anchor that turns more than the corner threshold (30° by default) stays a corner.
+
+## Limits
+
+Every boolean, Pathfinder operation, region map and normalization goes through one sweep. The `try_` functions
+(`try_boolean`, `try_normalize`, `try_unite_all`, …) refuse input it can't sweep with a [`PathOpsError`](src/lib.rs)
+rather than answering with part of the art missing. The others have no error to return: `boolean`, `normalize` and
+`area` answer an empty path or 0, and `unite_all` leaves a refused input out of the union, or answers an empty path
+when the inputs together are refused.
+
+- `NonFinite`: a coordinate is NaN or infinite.
+- `Degenerate`: the coordinates are so large that the sweep's tolerance would pass one unit (`MAX_SWEEP_EPS`), so
+  features thinner than it would collapse. A panic inside the sweep on rare near-degenerate input is caught and
+  reported as `Degenerate` too (on native builds; on the web a panic aborts).
+- `OpenPath`: the sweep could not form closed contours from what it was given (open subpaths are closed before it).
+- `TooComplex`: more than [`MAX_SEGMENT_PAIRS`](src/budget.rs) pairs of segments have overlapping bounds. They
+  are counted exactly before the sweep, in O(n log n). This bounds what the sweep is given, not how many times the
+  segments cross: a compact path that crosses itself many times can stay under it and still take seconds.
+
+Results are refitted within the precision (`DEFAULT_PRECISION`, unless `try_boolean`, `unite_all_with`,
+`try_unite_all_with` or `pathfinder_with` is given one) and contours thinner than it on average are dropped as slivers
+(see Booleans above).
 
 ## Caveats
 

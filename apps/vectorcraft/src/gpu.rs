@@ -310,7 +310,7 @@ fn pci_ids(device_id: &str) -> Option<(u32, u32)> {
     let field = |key: &str| {
         device_id.split(['\\', '&']).find_map(|part| {
             let (name, hex) = part.split_at_checked(key.len())?;
-            if name.eq_ignore_ascii_case(key) { u32::from_str_radix(hex, 16).ok() } else { None }
+            if name.eq_ignore_ascii_case(key) && hex.bytes().all(|b| b.is_ascii_hexdigit()) { u32::from_str_radix(hex, 16).ok() } else { None }
         })
     };
     Some((field("VEN_")?, field("DEV_")?))
@@ -753,13 +753,22 @@ enum FirstFrame {
     Shown,
     /// Overdue.
     Hung,
+    /// Overdue, but the UI is still building the first frame: the app's own work (on a slow
+    /// machine, or with antivirus reading every font file), not the adapter, which has been given
+    /// nothing to show yet.
+    Busy,
 }
 
-/// The window's start after `frames` frames run, `since` its first frame was due.
-fn first_frame(frames: u64, since: Duration, minimized: bool) -> FirstFrame {
+/// The window's start after `frames` frames run, `since` its first frame was due and
+/// `since_built` the first frame's UI pass ended (`None` while it runs). A frame counts once its
+/// UI pass ends, before it is painted, so the adapter's time starts there: with no frame run, the
+/// UI thread is in the app's code, and starting again without the adapter wouldn't help (#5160).
+fn first_frame(frames: u64, since: Duration, since_built: Option<Duration>, minimized: bool) -> FirstFrame {
     if frames >= 2 || minimized {
         FirstFrame::Shown
-    } else if since >= FIRST_FRAME_TIMEOUT {
+    } else if frames == 0 {
+        if since >= FIRST_FRAME_TIMEOUT { FirstFrame::Busy } else { FirstFrame::Wait }
+    } else if since_built.unwrap_or(since) >= FIRST_FRAME_TIMEOUT {
         FirstFrame::Hung
     } else {
         FirstFrame::Wait
@@ -767,18 +776,34 @@ fn first_frame(frames: u64, since: Duration, minimized: bool) -> FirstFrame {
 }
 
 /// Watch the window's first frame from another thread: once it reaches the screen, clear the start
-/// from [`START_FILE`]; when it hasn't reached the screen [`FIRST_FRAME_TIMEOUT`] after the app was
-/// created ([`Startup::ready`]), start the app again without the adapter, as [`finish`] does for
-/// one that failed, and end this process, whose UI thread is stuck in the graphics driver.
+/// from [`START_FILE`]; when it hasn't reached the screen [`FIRST_FRAME_TIMEOUT`] after its UI pass
+/// ended, start the app again without the adapter, as [`finish`] does for one that failed, and end
+/// this process, whose UI thread is stuck in the graphics driver. A first frame still being built
+/// that long is waited for, with a note in the log.
 pub fn watch_first_frame(startup: Arc<Startup>) {
+    let mut built: Option<Instant> = None;
+    let mut noted = false;
     let watch = move || loop {
         std::thread::sleep(Duration::from_millis(250));
         let Some(due) = startup.ready.get() else { continue };
         let ui = startup.ui.get();
         let frames = ui.map_or(0, egui::Context::cumulative_frame_nr);
+        if frames >= 1 && built.is_none() {
+            built = Some(Instant::now());
+        }
         let minimized = ui.and_then(|c| c.input(|i| i.viewport().minimized)).unwrap_or(false);
-        match first_frame(frames, due.elapsed(), minimized) {
+        match first_frame(frames, due.elapsed(), built.map(|t| t.elapsed()), minimized) {
             FirstFrame::Wait => continue,
+            FirstFrame::Busy => {
+                if !noted {
+                    log::warn!(
+                        "the window's first frame is still being built after {}s: waiting for it (the app's work, not the graphics adapter)",
+                        FIRST_FRAME_TIMEOUT.as_secs()
+                    );
+                    noted = true;
+                }
+                continue;
+            }
             FirstFrame::Shown => {
                 startup.presented();
                 return;

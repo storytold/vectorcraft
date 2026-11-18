@@ -8,7 +8,9 @@ use vectorcraft_geom::shapes;
 use crate::*;
 
 /// Every file reads as a 40×20 artboard filled blue; a file whose bytes start with `loop` also
-/// places itself (the same key) in its middle, and one whose bytes start with `bad` can't be read.
+/// places itself (the same key) in its middle, one whose bytes start with `cut` also shows an
+/// image whose pixels can't be decoded over its left half, and one whose bytes start with `bad`
+/// can't be read.
 fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     if bytes.starts_with(b"bad") {
         return None;
@@ -17,6 +19,19 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
     d.layers.clear();
     let blue = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
     let mut children = vec![Arc::new(Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)), blue))];
+    if bytes.starts_with(b"cut") {
+        d.images.insert("cut-image".into(), ImageBlob::new("image/png", b"not a PNG: placed document".to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "cut-image".into(),
+            width: 20,
+            height: 20,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(3), NodeKind::Image(Box::new(im)))));
+    }
     if bytes.starts_with(b"loop") {
         d.images.insert(p.key.clone(), ImageBlob::new("application/json", bytes.to_vec()));
         let me = PlacedDocument { xf: Affine::translate((10.0, 5.0)) * Affine::scale(0.5), ..p.clone() };
@@ -120,7 +135,7 @@ fn an_enveloped_placed_document_shows_its_file_once_read() {
     let placed = d.remove(NodeId(50)).unwrap();
     let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("a placed document") };
     let p = (**p).clone();
-    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true };
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
     let envelope = NodeKind::Envelope {
         content: vec![placed],
         kind: Box::new(kind),
@@ -254,6 +269,36 @@ fn a_bitmap_that_cant_be_made_is_not_asked_for_again() {
     assert!(shown != [255, 255, 255] && shown != [0, 0, 255], "the placeholder: {shown:?}");
 }
 
+/// A bitmap made for a frame that marks images whose pixels can't be decoded shows such an image
+/// in the file as a crossed box; one made for a frame that does not shows the art under it.
+#[test]
+fn a_bitmap_marks_undecoded_images_when_the_frame_does() {
+    let d = doc_with("cut-1", b"cut");
+    let Some(NodeKind::PlacedDocument(p)) = d.node(NodeId(50)).map(|n| &n.kind) else { panic!("a placed document") };
+    let Some(blob) = d.images.get("cut-1") else { panic!("the file's bytes") };
+    for mark in [false, true] {
+        // 40 × 20 pixels at one pixel a point; the image covers x 0 to 20.
+        let Some(pm) = placed_document::bitmap(p, blob, 1.0, mark) else { panic!("a bitmap") };
+        let pixel = |x: usize, y: usize| pm.data_as_u8_slice()[(y * 40 + x) * 4..][..4].to_vec();
+        assert_eq!(pixel(30, 10), [0, 0, 255, 255], "mark {mark}: the art beside the image");
+        assert_eq!(pixel(5, 10) != [0, 0, 255, 255], mark, "mark {mark}: the crossed box over the art: {:?}", pixel(5, 10));
+    }
+}
+
+/// Frames with and without marks on undecoded images ask for bitmaps of their own, so a bitmap
+/// made for one is not shown in the other. The file can't be read, so no bitmap is made after
+/// the test ends.
+#[test]
+fn bitmaps_with_and_without_undecoded_marks_are_asked_for_apart() {
+    let _serial = serial();
+    let d = doc_with("marks-1", b"bad");
+    for mark in [false, true] {
+        let opts = RenderOptions { progressive_placed: true, mark_undecoded_images: mark, ..Default::default() };
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    }
+    assert_eq!(placed_document::scheduled("marks-1"), 2, "one for each");
+}
+
 /// Once bitmaps are ready, drawing again where [`placed_area`] says gives what drawing the whole
 /// frame again gives. The area of a file covers every object showing it (a group's member and
 /// an object with a drop shadow too) and no object showing another file; art of a brush or a
@@ -329,7 +374,41 @@ fn a_placed_document_kept_as_its_preview_draws_the_preview() {
     // Only the preview (a 20×10 green PNG) is there, and the file can't be read here.
     let img = image::RgbaImage::from_pixel(20, 10, image::Rgba([0, 200, 0, 255]));
     let mut png = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut blob = ImageBlob::new("image/png", png);
     blob.proxy = Some(blob.bytes.clone());
     d.images.insert("preview-1".into(), blob);

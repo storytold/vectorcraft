@@ -4,9 +4,21 @@
 mod arrange;
 mod cleanup;
 mod color;
+mod contour;
+mod cutting;
 mod document;
+mod image;
+mod packaging;
 mod pathtools;
 mod pen;
+mod select;
+mod shapes;
+mod typetools;
+mod units;
+
+pub(crate) use image::{DecodedImages, refresh_color_masks};
+pub use packaging::{fold_source, print_hidden};
+pub(crate) use packaging::{role_swatch_edited, role_swatches_merged};
 
 use super::CommandSpec;
 
@@ -15,8 +27,16 @@ pub fn specs() -> Vec<CommandSpec> {
     let mut v = arrange::specs();
     v.extend(cleanup::specs());
     v.extend(color::specs());
+    v.extend(contour::specs());
+    v.extend(cutting::specs());
     v.extend(document::specs());
+    v.extend(image::specs());
+    v.extend(packaging::specs());
     v.extend(pathtools::specs());
     v.extend(pen::specs());
+    v.extend(select::specs());
+    v.extend(shapes::specs());
+    v.extend(typetools::specs());
+    v.extend(units::specs());
     v
 }

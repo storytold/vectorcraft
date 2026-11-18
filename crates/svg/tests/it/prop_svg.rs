@@ -82,6 +82,27 @@ proptest! {
         let _ = import(&format!("<svg xmlns=\"http://www.w3.org/2000/svg\">{s}</svg>"));
     }
 
+    /// Any `textLength` and `lengthAdjust`, on the text or a tspan (vertical too), imports to a
+    /// valid document without panicking.
+    #[test]
+    fn import_random_text_lengths(
+        len in "-?[0-9]{0,12}(\\.[0-9]{0,4})?(e[+-]?[0-9]{1,3})?(%|px|em|pt)?|[a-z ]{0,6}",
+        adjust in "spacing|spacingAndGlyphs|[a-zA-Z]{0,8}",
+        text in "[A-Za-z \u{5d0}-\u{5ea}]{0,12}",
+        on_span in any::<bool>(),
+        vertical in any::<bool>(),
+    ) {
+        let attrs = format!("textLength=\"{len}\" lengthAdjust=\"{adjust}\"");
+        let (outer, inner) = if on_span { ("", attrs.as_str()) } else { (attrs.as_str(), "") };
+        let wm = if vertical { " writing-mode=\"tb\"" } else { "" };
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><text x=\"10\" y=\"50\"{wm} {outer}>a<tspan {inner}>{text}</tspan>b</text></svg>"
+        );
+        if let Ok(doc) = import(&svg) {
+            check_document(&doc).map_err(TestCaseError::fail)?;
+        }
+    }
+
     /// Importing random path data never panics and gives a valid document.
     #[test]
     fn import_random_path_data(d in "[MLCQZHVAmlcqzhva0-9 .,eE+-]{0,80}") {

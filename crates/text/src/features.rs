@@ -43,21 +43,44 @@ pub struct OtFeatures {
     pub swash: bool,
     /// The features of [`EXTRA_FEATURES`] turned on, one bit each (off by default): stylistic
     /// sets, alternates, titling, proportional and lining figures, superscript, subscript,
-    /// numerators and denominators.
+    /// numerators and denominators, `aalt`, H or V Style (`hkna`) and Roman Italics (`ital`).
     pub extra: u32,
+    /// The value of each feature of [`EXTRA_FEATURES`] that is on, as a tag `salt=2` gives it: for
+    /// a feature with alternates, which of them the font draws (the HarfBuzz feature value, 1 for
+    /// the first). 0 stands for 1, a plain `salt`. Only read for a feature whose bit of
+    /// [`Self::extra`] is on; use [`Self::set_extra`] to change a bit and its value together.
+    pub extra_values: [u16; EXTRA_FEATURES.len()],
+    /// The value `swsh=N` gives swashes ([`Self::swash`]), as [`Self::extra_values`] for `salt`.
+    pub swash_value: u16,
+    /// Set a complex script (Indic, Arabic, Hebrew) glyph by glyph as the font maps its
+    /// characters, with none of its layout tables: the Standard composers. Set per paragraph by
+    /// layout from the paragraph's composer, not by a style.
+    pub unshaped_complex: bool,
 }
+
+/// The largest value a `tag=N` feature takes: a font's glyph ids are 16 bits, so is an alternate's
+/// position in a set.
+pub const MAX_FEATURE_VALUE: u16 = u16::MAX;
 
 /// The most entries of a style's feature list read: every segment of its text reads the list again.
 pub const MAX_STYLE_FEATURES: usize = 256;
 
 /// Features beyond the named fields, off unless asked for, each bit `i` of [`OtFeatures::extra`]:
 /// stylistic sets `ss01`–`ss20`, stylistic alternates `salt`, titling `titl`, proportional `pnum`
-/// and lining `lnum` figures, superscript `sups`, subscript `subs`, numerators `numr` and
-/// denominators `dnom`.
-pub const EXTRA_FEATURES: [&str; 28] = [
+/// and lining `lnum` figures, superscript `sups`, subscript `subs`, numerators `numr`,
+/// denominators `dnom`, access all alternates `aalt`, and the OpenType panel menu's H or V Style
+/// `hkna` (shaped as `vkna` in vertical type) and Roman Italics `ital`.
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_ae#tag-aalt>
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-hkna>
+/// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-ital>
+pub const EXTRA_FEATURES: [&str; 31] = [
     "ss01", "ss02", "ss03", "ss04", "ss05", "ss06", "ss07", "ss08", "ss09", "ss10", "ss11", "ss12", "ss13", "ss14", "ss15", "ss16", "ss17", "ss18",
-    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom",
+    "ss19", "ss20", "salt", "titl", "pnum", "lnum", "sups", "subs", "numr", "dnom", "aalt", "hkna", "ital",
 ];
+
+/// The features of [`EXTRA_FEATURES`] that are only on or off: they substitute one form for each
+/// glyph, so they take no alternate's number (`hkna=2` is refused).
+const SWITCH_FEATURES: [&str; 2] = ["hkna", "ital"];
 
 impl Default for OtFeatures {
     fn default() -> Self {
@@ -73,12 +96,55 @@ impl Default for OtFeatures {
             ordinals: false,
             swash: false,
             extra: 0,
+            extra_values: [0; EXTRA_FEATURES.len()],
+            swash_value: 0,
+            unshaped_complex: false,
         }
     }
 }
 
-fn f(tag: &[u8; 4], on: bool) -> Feature {
-    Feature::new(Tag::new(tag), on as u32, ..)
+/// A feature of `value` over the whole text: 1 and 0 turn it on and off, more picks the font's
+/// alternate of that number.
+fn f(tag: &[u8; 4], value: impl Into<u32>) -> Feature {
+    Feature::new(Tag::new(tag), value.into(), ..)
+}
+
+/// What a feature tag of a style's list says about one feature ([`parse_tag`]).
+struct ParsedTag<'a> {
+    /// The tag without a `-` or `+` prefix or a `=N` value.
+    name: &'a str,
+    /// On (`tag`, `+tag`, `tag=N` for `N` from 1) or off (`-tag`, `tag=0`).
+    on: bool,
+    /// The value `tag=N` gives; 1 for a plain tag.
+    value: u16,
+}
+
+/// Can feature `name` take a value (`salt=2`)? The features of [`EXTRA_FEATURES`] but
+/// [`SWITCH_FEATURES`], and `swsh`, can: each substitutes glyphs, and the value says which
+/// alternate.
+fn takes_value(name: &str) -> bool {
+    name == "swsh" || (EXTRA_FEATURES.contains(&name) && !SWITCH_FEATURES.contains(&name))
+}
+
+/// Read a feature tag: `tag`, `+tag`, `-tag` or, for a feature that takes a value, `tag=N` (`N`
+/// from 0 to [`MAX_FEATURE_VALUE`] in decimal digits; `-tag=N` is refused). `None` for a tag this
+/// set does not understand.
+fn parse_tag(tag: &str) -> Option<ParsedTag<'_>> {
+    let (off, rest) = match tag.strip_prefix('-') {
+        Some(r) => (true, r),
+        None => (false, tag.strip_prefix('+').unwrap_or(tag)),
+    };
+    let (name, value) = match rest.split_once('=') {
+        None => (rest, None),
+        Some((name, digits)) => {
+            if off || digits.is_empty() || digits.len() > 5 || !digits.bytes().all(|b| b.is_ascii_digit()) || !takes_value(name) {
+                return None;
+            }
+            (name, Some(u16::try_from(digits.parse::<u32>().ok()?).ok()?))
+        }
+    };
+    let known = matches!(name, "liga" | "calt" | "dlig" | "smcp" | "frac" | "onum" | "tnum" | "ordn" | "swsh") || EXTRA_FEATURES.contains(&name);
+    known.then_some(ParsedTag { name, on: !off && value != Some(0), value: value.unwrap_or(1) })
 }
 
 impl OtFeatures {
@@ -104,6 +170,9 @@ impl OtFeatures {
             ordinals: true,
             swash: true,
             extra: u32::MAX >> (32 - EXTRA_FEATURES.len()),
+            extra_values: [0; EXTRA_FEATURES.len()],
+            swash_value: 0,
+            unshaped_complex: false,
         };
         change(&mut off);
         change(&mut on);
@@ -137,28 +206,68 @@ impl OtFeatures {
             (self.swash, d.swash, "swsh"),
         ] {
             if on != def {
-                v.push(if on { tag.to_string() } else { format!("-{tag}") });
+                v.push(match (on, tag, self.swash_value) {
+                    (true, "swsh", n @ 2..) => format!("{tag}={n}"),
+                    (true, ..) => tag.to_string(),
+                    (false, ..) => format!("-{tag}"),
+                });
             }
         }
-        v.extend(EXTRA_FEATURES.iter().enumerate().filter(|(i, _)| self.extra & (1 << i) != 0).map(|(_, t)| t.to_string()));
+        v.extend(EXTRA_FEATURES.iter().enumerate().filter(|(i, _)| self.extra & (1 << i) != 0).map(|(i, t)| match self.extra_values.get(i) {
+            None | Some(0 | 1) => t.to_string(),
+            Some(n) => format!("{t}={n}"),
+        }));
         v
     }
 
-    /// Is `tag` (optionally prefixed with `-` or `+`) one this set understands?
+    /// Is `tag` one this set understands? A feature tag, optionally prefixed with `-` or `+`, or
+    /// `tag=N` (`N` from 0 to [`MAX_FEATURE_VALUE`], no prefix but `+`) for a feature of
+    /// [`EXTRA_FEATURES`] or `swsh`, which picks the font's alternate number `N` (`salt=2`; 0 is
+    /// off, 1 is a plain tag).
     pub fn known_tag(tag: &str) -> bool {
-        let t = tag.trim_start_matches(['-', '+']);
-        matches!(t, "liga" | "calt" | "dlig" | "smcp" | "frac" | "onum" | "tnum" | "ordn" | "swsh") || EXTRA_FEATURES.contains(&t)
+        parse_tag(tag).is_some()
+    }
+
+    /// The feature a tag of a style's list names, without its `-` or `+` prefix or `=N` value
+    /// (`salt` for `-salt`, `+salt` and `salt=2`).
+    pub fn tag_name(tag: &str) -> &str {
+        let t = tag.strip_prefix(['-', '+']).unwrap_or(tag);
+        t.split_once('=').map_or(t, |(name, _)| name)
+    }
+
+    /// The value feature `tag` of [`EXTRA_FEATURES`] or `swsh` is on with: `Some(1)` for a plain
+    /// tag, `Some(N)` for `tag=N`, `None` when it is off or is another tag.
+    pub fn feature_value(&self, tag: &str) -> Option<u16> {
+        if tag == "swsh" {
+            return self.swash.then_some(self.swash_value.max(1));
+        }
+        let i = EXTRA_FEATURES.iter().position(|e| *e == tag)?;
+        (self.extra & (1 << i) != 0).then(|| self.extra_values.get(i).copied().unwrap_or(0).max(1))
+    }
+
+    /// Turn the features of [`EXTRA_FEATURES`] in `mask` (bit `i` for the feature `i`) on, with
+    /// value 1 (a plain tag), or off.
+    pub fn set_extra(&mut self, mask: u32, on: bool) {
+        for (i, value) in self.extra_values.iter_mut().enumerate() {
+            if mask & (1 << i) != 0 {
+                *value = 0;
+            }
+        }
+        if on {
+            self.extra |= mask;
+        } else {
+            self.extra &= !mask;
+        }
     }
 
     /// This set with `tags` applied on top.
     pub fn with_tags<'a>(mut self, tags: impl IntoIterator<Item = &'a str>) -> Self {
         let o = &mut self;
         for t in tags {
-            let (on, t) = match t.strip_prefix('-') {
-                Some(r) => (false, r),
-                None => (true, t.strip_prefix('+').unwrap_or(t)),
-            };
-            match t {
+            let Some(ParsedTag { name, on, value }) = parse_tag(t) else { continue };
+            // 1 is a plain tag: only a value from 2 is kept.
+            let kept = if on && value > 1 { value } else { 0 };
+            match name {
                 "liga" => o.ligatures = on,
                 "calt" => o.contextual = on,
                 "dlig" => o.discretionary_ligatures = on,
@@ -167,13 +276,15 @@ impl OtFeatures {
                 "onum" => o.oldstyle_figures = on,
                 "tnum" => o.tabular_figures = on,
                 "ordn" => o.ordinals = on,
-                "swsh" => o.swash = on,
+                "swsh" => {
+                    o.swash = on;
+                    o.swash_value = kept;
+                }
                 _ => {
-                    if let Some(i) = EXTRA_FEATURES.iter().position(|e| *e == t) {
-                        if on {
-                            o.extra |= 1 << i;
-                        } else {
-                            o.extra &= !(1 << i);
+                    if let Some(i) = EXTRA_FEATURES.iter().position(|e| *e == name) {
+                        o.set_extra(1 << i, on);
+                        if let Some(slot) = o.extra_values.get_mut(i) {
+                            *slot = kept;
                         }
                     }
                 }
@@ -190,7 +301,8 @@ impl OtFeatures {
         let own = self.with_tags(listed.iter().map(String::as_str));
         let s = &own;
         let mut v = Vec::with_capacity(8);
-        if st.kerning.is_some() {
+        // A monospaced width form turns the font's pair kerning off as well.
+        if st.kerning.is_some() || st.glyph_form.is_width() {
             v.push(f(b"kern", false));
         }
         let liga = s.ligatures && (!ligatures_suppressed_by(st.tracking) || explicit_ligatures(listed));
@@ -214,13 +326,18 @@ impl OtFeatures {
             (s.swash, b"swsh"),
         ] {
             if on {
-                v.push(f(tag, true));
+                v.push(f(tag, if tag == b"swsh" { u32::from(s.swash_value.max(1)) } else { 1 }));
             }
         }
         for (i, tag) in EXTRA_FEATURES.iter().enumerate() {
             if let (true, Ok(t)) = (s.extra & (1 << i) != 0, <[u8; 4]>::try_from(tag.as_bytes())) {
-                v.push(f(&t, true));
+                // H or V Style: the kana forms made for the writing direction, `vkna` in vertical type.
+                let t = if self.vertical && &t == b"hkna" { *b"vkna" } else { t };
+                v.push(f(&t, u32::from(s.extra_values.get(i).copied().unwrap_or(0).max(1))));
             }
+        }
+        if let Some(tag) = st.glyph_form.feature() {
+            v.push(f(tag, true));
         }
         if self.vertical {
             // Not `vrt2`: its glyphs are already turned on their side, and the layout turns Latin
@@ -232,15 +349,20 @@ impl OtFeatures {
             // Kerning for the glyphs `palt` makes proportional (OpenType `apkn`), with automatic
             // kerning only.
             v.push(f(b"apkn", st.kerning.is_none()));
+        } else if st.glyph_form.is_width() {
+            // Listed as off, not left out: in runs shaped together with proportional text, a
+            // feature left out is set back to the shaper's default, which for `apkn` is on.
+            v.push(f(b"apkn", false));
         }
         v
     }
 
     /// Does text in style `st` take proportional widths (`palt`)? Proportional Metrics in
-    /// horizontal type; vertical type takes proportional heights instead
+    /// horizontal type, except with a monospaced width form ([`vectorcraft_doc::GlyphForm::is_width`]),
+    /// which sets the characters on a fixed width; vertical type takes proportional heights instead
     /// ([`Self::proportional_vertical`]).
     pub(crate) fn proportional(&self, st: &CharStyle) -> bool {
-        st.proportional_metrics && !self.vertical
+        st.proportional_metrics && !self.vertical && !st.glyph_form.is_width()
     }
 
     /// Does text in style `st` take proportional heights (`vpal`)? Proportional Metrics in
@@ -306,6 +428,9 @@ mod tests {
             assert!(OtFeatures::known_tag(t), "{t}");
         }
         assert!(!OtFeatures::known_tag("ss21"));
+        for tag in ["--liga", "+-dnom", "-+ss01", "++liga"] {
+            assert!(!OtFeatures::known_tag(tag), "{tag}");
+        }
         let o = OtFeatures::from_tags(["ss03", "pnum", "sups", "-liga"]);
         assert_eq!(o.to_tags(), vec!["-liga", "ss03", "pnum", "sups"]);
         assert_eq!(OtFeatures::from_tags(["ss03", "-ss03"]).to_tags(), Vec::<String>::new(), "turned off again");
@@ -331,6 +456,31 @@ mod tests {
         }
     }
 
+    /// H or V Style (`hkna`) and Roman Italics (`ital`) are known, round-trip through the stored
+    /// tags and reach the shaper: `hkna` as itself in horizontal type and as `vkna` in vertical
+    /// type, `ital` in both. Neither takes an alternate's number.
+    #[test]
+    fn kana_style_and_roman_italics_are_kept_and_shaped() {
+        for t in ["hkna", "-hkna", "+ital", "ital"] {
+            assert!(OtFeatures::known_tag(t), "{t}");
+        }
+        for t in ["hkna=2", "ital=0", "vkna"] {
+            assert!(!OtFeatures::known_tag(t), "{t}");
+        }
+        assert_eq!(OtFeatures::from_tags(["ital", "hkna", "smcp"]).to_tags(), ["smcp", "hkna", "ital"]);
+        assert_eq!(OtFeatures::from_tags(["hkna", "ital", "-hkna"]).to_tags(), ["ital"]);
+        let st = CharStyle { features: vec!["hkna".into(), "ital".into()], ..CharStyle::default() };
+        let on = |vertical: bool| -> Vec<String> {
+            OtFeatures { vertical, ..OtFeatures::default() }.resolve(&st).iter().filter(|f| f.value == 1).map(|f| f.tag.to_string()).collect()
+        };
+        assert_eq!(on(false), ["hkna", "ital"]);
+        assert_eq!(on(true), ["vkna", "ital", "vert"]);
+        let plain = |vertical: bool| OtFeatures { vertical, ..OtFeatures::default() }.resolve(&CharStyle::default());
+        for vertical in [false, true] {
+            assert!(!plain(vertical).iter().any(|f| [b"hkna", b"vkna", b"ital"].iter().any(|t| f.tag == Tag::new(t))), "off by default");
+        }
+    }
+
     /// `changes` lists the features a change turns on and off and leaves out the ones it keeps,
     /// and applying them to any set makes the same change.
     #[test]
@@ -350,6 +500,69 @@ mod tests {
             let tags = OtFeatures::changes(figure);
             assert_eq!(OtFeatures::from_tags(start.iter().copied()).with_tags(tags.iter().map(String::as_str)), want, "{start:?}");
         }
+    }
+
+    /// `tag=N` gives a feature a value: parsed, validated, kept in the style's list as written
+    /// (1 is a plain tag, 0 is off), replaced by the next value or by `-tag`, and given to the
+    /// shaper as that value.
+    #[test]
+    fn feature_values_are_parsed_validated_and_shaped() {
+        for t in ["salt=2", "+salt=2", "ss03=12", "aalt=65535", "swsh=3", "salt=0", "salt=01", "titl=2"] {
+            assert!(OtFeatures::known_tag(t), "{t}");
+        }
+        for t in [
+            "salt=",
+            "salt=-1",
+            "salt=65536",
+            "salt=1.5",
+            "salt=x",
+            "-salt=2",
+            "liga=2",
+            "dlig=1",
+            "zzzz=2",
+            "salt==2",
+            "=2",
+            "salt=2=3",
+            "salt=123456",
+            "salt= 2",
+        ] {
+            assert!(!OtFeatures::known_tag(t), "{t}");
+        }
+        assert_eq!(OtFeatures::tag_name("salt=2"), "salt");
+        assert_eq!((OtFeatures::tag_name("-ss01"), OtFeatures::tag_name("+salt=3"), OtFeatures::tag_name("liga")), ("ss01", "salt", "liga"));
+        let o = OtFeatures::from_tags(["salt=2", "ss01", "-liga", "swsh=4"]);
+        assert_eq!(o.to_tags(), ["-liga", "swsh=4", "ss01", "salt=2"]);
+        assert_eq!(
+            (o.feature_value("salt"), o.feature_value("ss01"), o.feature_value("swsh"), o.feature_value("ss02")),
+            (Some(2), Some(1), Some(4), None)
+        );
+        // The next value replaces the last, `salt=1` is a plain `salt`, `salt=0` and `-salt` are off.
+        assert_eq!(OtFeatures::from_tags(["salt=2", "salt=3"]).to_tags(), ["salt=3"]);
+        assert_eq!(OtFeatures::from_tags(["salt=3", "salt"]).to_tags(), ["salt"]);
+        assert_eq!(OtFeatures::from_tags(["salt=1"]).to_tags(), ["salt"]);
+        assert_eq!(OtFeatures::from_tags(["salt=2", "-salt"]).to_tags(), Vec::<String>::new());
+        assert_eq!(OtFeatures::from_tags(["salt=2", "salt=0"]).to_tags(), Vec::<String>::new());
+        assert_eq!(OtFeatures::from_tags(["salt=2", "-salt", "salt"]).to_tags(), ["salt"], "a value does not outlive being turned off");
+        // A tag with a value this set does not know is ignored.
+        assert_eq!(OtFeatures::from_tags(["salt=x", "liga=2"]), OtFeatures::default());
+        // The panel's own switches turn a feature on at value 1.
+        let mut f = OtFeatures::from_tags(["salt=3"]);
+        f.set_extra(1 << 20, false);
+        f.set_extra(1 << 20, true);
+        assert_eq!(f.to_tags(), ["salt"]);
+        let values = |tags: &[&str]| -> Vec<(String, u32)> {
+            let st = CharStyle { features: tags.iter().map(|t| t.to_string()).collect(), ..CharStyle::default() };
+            OtFeatures::default()
+                .resolve(&st)
+                .iter()
+                .filter(|f| f.value > 0 && f.tag != harfrust::Tag::new(b"kern"))
+                .map(|f| (f.tag.to_string(), f.value))
+                .collect()
+        };
+        assert_eq!(values(&["salt=2"]), [("salt".to_string(), 2)]);
+        assert_eq!(values(&["salt"]), [("salt".to_string(), 1)]);
+        assert_eq!(values(&["swsh=3", "ss01"]), [("swsh".to_string(), 3), ("ss01".to_string(), 1)]);
+        assert!(values(&["-salt", "salt=0"]).is_empty());
     }
     use crate::{FontDb, layout};
     use vectorcraft_doc::TextObject;
@@ -388,6 +601,29 @@ mod tests {
         assert_eq!(per_run, [2, 1]);
     }
 
+    /// Bulgarian text gets the font's Bulgarian forms (`locl` for `BGR`, #5945): in the bundled
+    /// Source Sans 3 Italic, в, д, ж, з, к, л and ю differ from the Russian ones, and letters
+    /// the font draws alike stay alike.
+    #[test]
+    fn bulgarian_gets_the_fonts_bulgarian_forms() {
+        let st = |language: &str| CharStyle {
+            font_family: "Source Sans 3".into(),
+            font_style: "Italic".into(),
+            language: Some(language.to_string()),
+            ..Default::default()
+        };
+        // Each letter laid out on its own, so one letter's advance doesn't move the next.
+        let outline = |c: char, language| {
+            layout(FontDb::global(), &TextObject::point(Point::ZERO, &c.to_string(), st(language)))
+                .glyphs
+                .into_iter()
+                .map(|g| g.outline)
+                .collect::<Vec<_>>()
+        };
+        let differs: String = "вгджзийклптцшщюьъ".chars().filter(|c| outline(*c, "bg") != outline(*c, "ru")).collect();
+        assert_eq!(differs, "вджзклю");
+    }
+
     /// Serbian text gets the font's Serbian forms (`locl` for `SRB`): in the bundled Source Sans
     /// 3 Italic, б, г, д, п, т differ from the Russian ones, in either Serbian list entry.
     #[test]
@@ -405,5 +641,45 @@ mod tests {
         assert_eq!((serbian.len(), russian.len()), (5, 5));
         assert!(serbian.iter().zip(&russian).all(|(s, r)| s != r), "every letter in its Serbian form");
         assert_eq!(outlines("sr-Latn"), serbian);
+    }
+
+    /// A monospaced width form (`fwid`, `hwid`, `twid`, `qwid`) and Proportional Metrics' `palt`
+    /// are mutually exclusive: with a width form `palt` is left out and the font's pair kerning
+    /// (`kern`, and `apkn` for `palt`'s glyphs) is turned off, with automatic or manual kerning,
+    /// and with the other forms they stay.
+    /// <https://learn.microsoft.com/en-us/typography/opentype/spec/features_fj#tag-fwid>
+    #[test]
+    fn width_forms_turn_off_proportional_metrics() {
+        use vectorcraft_doc::GlyphForm;
+        let tags = |form, kerning, value| {
+            let st = CharStyle { proportional_metrics: true, glyph_form: form, kerning, ..CharStyle::default() };
+            OtFeatures::default().resolve(&st).iter().filter(|f| f.value == value).map(|f| f.tag.to_string()).collect::<Vec<_>>()
+        };
+        for form in [GlyphForm::Default, GlyphForm::Traditional, GlyphForm::Jis78] {
+            assert!(tags(form, None, 1).contains(&"palt".to_string()), "{form:?}: {:?}", tags(form, None, 1));
+            assert!(!tags(form, None, 0).contains(&"kern".to_string()), "{form:?}: {:?}", tags(form, None, 0));
+        }
+        for form in [GlyphForm::FullWidth, GlyphForm::HalfWidth, GlyphForm::ThirdWidth, GlyphForm::QuarterWidth] {
+            for kerning in [None, Some(0.0)] {
+                let on = tags(form, kerning, 1);
+                assert!(!on.contains(&"palt".to_string()) && !on.contains(&"apkn".to_string()), "{form:?}: {on:?}");
+                assert!(on.iter().any(|t| t.as_bytes() == form.feature().unwrap()), "{form:?}: {on:?}");
+                // Listed as off, so that runs shaped together with proportional text keep them off.
+                let off = tags(form, kerning, 0);
+                assert!(off.contains(&"kern".to_string()) && off.contains(&"apkn".to_string()), "{form:?} {kerning:?}: {off:?}");
+            }
+        }
+    }
+
+    /// A face's `GPOS` features are found apart from its `GSUB` ones: Source Sans 3 kerns with
+    /// `GPOS` and makes ligatures with `GSUB`.
+    #[test]
+    fn positioning_and_substitution_features_are_found_in_their_own_tables() {
+        let face = FontDb::global().face("Source Sans 3", "Regular").unwrap();
+        assert!(face.has_positioning_feature(*b"kern"));
+        assert!(!face.has_substitution_feature(*b"kern"));
+        assert!(face.has_substitution_feature(*b"liga"));
+        assert!(!face.has_positioning_feature(*b"liga"));
+        assert!(!face.has_positioning_feature(*b"fwid"));
     }
 }

@@ -150,18 +150,16 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn the_gpu_behind_a_device_number_comes_from_sysfs() -> std::io::Result<()> {
-        let dir = std::env::temp_dir().join(format!("vectorcraft-dev-char-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = tempfile::Builder::new().prefix("vectorcraft-dev-char-").tempdir()?;
         // /sys/dev/char/226:128 links to the render node, whose `device` is the PCI GPU.
-        std::fs::create_dir_all(dir.join("226:128/device"))?;
-        std::fs::write(dir.join("226:128/device/vendor"), "0x10de\n")?;
-        std::fs::write(dir.join("226:128/device/device"), "0x25ac\n")?;
+        std::fs::create_dir_all(dir.path().join("226:128/device"))?;
+        std::fs::write(dir.path().join("226:128/device/vendor"), "0x10de\n")?;
+        std::fs::write(dir.path().join("226:128/device/device"), "0x25ac\n")?;
         // A device that isn't a PCI GPU (a virtual one) has no ids.
-        std::fs::create_dir_all(dir.join("226:0/device"))?;
-        let render = super::pci_ids(&dir, makedev(226, 128));
-        let virtual_gpu = super::pci_ids(&dir, makedev(226, 0));
-        let missing = super::pci_ids(&dir, makedev(226, 1));
-        std::fs::remove_dir_all(&dir)?;
+        std::fs::create_dir_all(dir.path().join("226:0/device"))?;
+        let render = super::pci_ids(dir.path(), makedev(226, 128));
+        let virtual_gpu = super::pci_ids(dir.path(), makedev(226, 0));
+        let missing = super::pci_ids(dir.path(), makedev(226, 1));
         assert_eq!(render, Some((0x10de, 0x25ac)));
         assert_eq!(virtual_gpu, None);
         assert_eq!(missing, None);

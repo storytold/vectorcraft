@@ -72,7 +72,27 @@ fn wide(samples: &[u16]) -> Vec<u8> {
 /// The pixels `raster_image` stores for `f`, row by row.
 fn pixels(f: &[u8]) -> Vec<[u8; 4]> {
     let img = raster_image(f).unwrap();
-    image::load_from_memory(&img.blob.bytes).unwrap().to_rgba8().pixels().map(|p| p.0).collect()
+    craft_image_codecs::decode(&img.blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .pixels()
+        .map(|p| p.0)
+        .collect()
 }
 
 const RGBA: u16 = 15;
@@ -241,13 +261,64 @@ fn pxr_files_open_place_and_paste() {
         let node = doc.node(vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap())).unwrap();
         let vectorcraft_doc::NodeKind::Image(im) = &node.kind else { panic!("link {link}: an image, got {:?}", node.kind) };
         assert_eq!((im.link.is_some(), im.width, im.height), (link, 2, 1), "link {link}");
-        let shown = image::load_from_memory(&doc.images[&im.key].bytes).unwrap().to_rgba8();
+        let shown = craft_image_codecs::decode(&doc.images[&im.key].bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8();
         assert_eq!(shown.pixels().map(|p| p.0).collect::<Vec<_>>(), pixels(&f), "link {link}");
     }
     let _ = std::fs::remove_dir_all(&dir);
     // Open sizes it as a PNG of 2 × 1 pixels without a resolution.
     let mut png = vec![];
-    image::RgbaImage::new(2, 1).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::new(2, 1)).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut t = Session::new();
     t.execute("document.open", &json!({"name": "same.png", "dataBase64": b64(&png)})).unwrap();
     assert_eq!(t.doc().unwrap().doc.artboards[0].rect.size(), size);
@@ -360,4 +431,18 @@ fn damaged_files_are_refused_with_a_message() {
     for bad in [[0x80, 0xe8, 0, 1], [0xe8, 0x80, 0, 0], [0, 0, 0xe8, 0x80]] {
         assert!(!is_pxr(&bad), "{bad:?}");
     }
+}
+
+#[test]
+fn tile_pointers_into_the_header_or_table_are_refused() {
+    // Tile data follows the tile pointer table, which ends at byte 520 in a one-tile picture.
+    let rgb = one(head(2, 1, RGB, 2), &[1, 2, 3, 4, 5, 6]);
+    for pointer in [4u32, 511, 512, 519] {
+        let mut inside = rgb.clone();
+        inside[512..516].copy_from_slice(&pointer.to_le_bytes());
+        let e = raster_image(&inside).err().expect("refused").to_string();
+        assert_eq!(e, "the Pixar file's image data is damaged", "a pointer to byte {pointer}");
+    }
+    // A pointer at the table's end reads.
+    assert_eq!(pixels(&rgb), [[1, 2, 3, 255], [4, 5, 6, 255]]);
 }

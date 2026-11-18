@@ -126,7 +126,23 @@ fn preview_is_at_most_256_pixels() {
     let mut s = session();
     let bytes = saved(&mut s, json!({"preview": true, "compress": true}));
     let png = vectorcraft_format::preview(&bytes).expect("a preview");
-    let img = image::load_from_memory(&png).unwrap();
+    let img = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((img.width(), img.height()), (256, 128), "the 400×200 artboard fitted into 256 px");
     assert!(vectorcraft_format::preview(&saved(&mut s, json!({}))).is_none(), "off by default");
 }
@@ -154,7 +170,41 @@ fn saving_writes_through_a_temporary_file() {
 fn unused_images_are_left_out_of_saves() {
     let mut s = session();
     let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let r = s.execute("file.place", &json!({"name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
     let id = r["ids"][0].as_u64().unwrap();
     assert_eq!(json_of(&saved(&mut s, json!({})))["images"].as_object().unwrap().len(), 1);
@@ -186,9 +236,44 @@ fn newer_keys_and_legacy_profiles_survive_open_and_save() {
     assert_eq!(v2["document"]["unknown"]["colorProfiles"]["rgb"], "sRGB IEC61966-2.1");
 }
 
+/// A version 1 document saved before VectorCraft 0.21.0 turned its Twist effects counterclockwise
+/// for a positive angle. It opens with the angles negated, so its art turns as it did; saved
+/// again it is a document of the current version, and saved for an older file version it is version 1 again.
+#[test]
+fn a_version_1_documents_twist_turns_as_it_was_saved() {
+    use vectorcraft_doc::{Appearance, Document, Effect, Node};
+    use vectorcraft_geom::{PathData, Point, Rect, SubPath};
+    let mut d = Document::new(100.0, 100.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let right = PathData::single(SubPath::polyline(&[Point::new(55.0, 50.0), Point::new(56.0, 50.0)], false));
+    let mut a = Appearance::default_art();
+    a.effects.push(Effect { id: "distort.twist".into(), params: json!({"angle": 45}), visible: true });
+    d.insert(Some(l), 0, Node::path(id, right.clone(), a)).unwrap();
+    let mut j = json_of(&vectorcraft_format::save(&d, false));
+    j["document"]["version"] = json!(1);
+    j["generator"] = json!("VectorCraft 0.20.0");
+    let mut s = Session::new();
+    open(&mut s, "old.vectorcraft", &serde_json::to_vec(&j).unwrap());
+    let doc = &s.doc().unwrap().doc;
+    let n = doc.layers[0].children().and_then(|c| c.first()).cloned().unwrap();
+    let turned = vectorcraft_render::effects::apply_geometry(&n.appearance.effects, &right, Rect::new(0.0, 0.0, 100.0, 100.0));
+    // Counterclockwise on the page takes a point right of the center up (y runs down).
+    let p = turned.subpaths[0].anchors[0].p;
+    assert!(p.y < 49.5, "{p:?}");
+    let again = json_of(&saved(&mut s, json!({})));
+    assert_eq!(again["document"]["version"], vectorcraft_doc::FORMAT_VERSION);
+    assert!(again.to_string().contains(r#""angle":-45.0"#), "{again}");
+    // Saved for an older file version, it is version 1 with its angle as 0.20.0 saved it.
+    let older = json_of(&saved(&mut s, json!({"version": 3})));
+    assert_eq!(older["document"]["version"], 1);
+    assert!(older.to_string().contains(r#""angle":45.0"#), "{older}");
+}
+
 /// A save records the date the document was made in, so the same commands twice gave different
 /// bytes (#2880). A pinned date makes them identical — `file.new {created}` here, and
-/// `SOURCE_DATE_EPOCH` for an export that takes no date param.
+/// `SOURCE_DATE_EPOCH` for an export that takes no date param. The PDF a native file carries by
+/// default is dated by the document's dates, not by the time of writing.
 #[test]
 fn a_pinned_date_makes_saves_byte_identical() {
     let once = |t: i64| {
@@ -198,6 +283,9 @@ fn a_pinned_date_makes_saves_byte_identical() {
         saved(&mut s, json!({}))
     };
     let at = 1_791_208_980;
+    let pdf = vectorcraft_format::pdf_content(&once(at)).expect("a native save carries a PDF by default");
+    let info = vectorcraft_pdf::file_info(&pdf, None).unwrap();
+    assert_eq!((info.created, info.modified), (Some(at), Some(at)), "the PDF has the document's dates");
     assert_eq!(once(at), once(at), "the same document and date give the same bytes");
     // The date really is in the bytes, so the comparison above is not vacuous.
     assert_ne!(once(at), once(at + 1), "another date shows in the bytes");

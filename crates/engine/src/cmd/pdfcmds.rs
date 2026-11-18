@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use vectorcraft_pdf::{PdfPreset, builtin_preset, builtin_presets};
 
 use super::fileio::pdf::{find_preset, resolve};
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, str_param};
 
 /// The `format` of a PDF presets file, also its extension.
 pub const PRESET_FORMAT: &str = "vcpdfpresets";
@@ -46,7 +46,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save PDF Preset",
             [],
             None,
-            "{name?: (default: a new \"PDF Preset N\"), newName?: rename it, description?, preset?: the preset to start from (default: the saved preset `name`, else VectorCraft Default), …options of document.exportPdf} create or change a saved preset (built-in presets are read-only; passwords are never stored) → {name, created, settings}",
+            "{name?: (default: a new \"PDF Preset N\"), newName?: rename it, description?, preset?: the preset to start from (default: the saved preset `name`, else VectorCraft Default), …options of document.exportPdf} create or change a saved preset (built-in presets are read-only; passwords are never stored) → {name, created, settings}. A key PDF doesn't take, and an unknown key inside one of the option objects, are refused",
             always,
             save
         ),
@@ -196,8 +196,12 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     for q in &file.presets {
         q.settings.check_values().map_err(|e| bad(C, format!("`{}`: {e}", q.name)))?;
     }
+    if file.presets.len() > super::MAX_IMPORTED_PRESETS {
+        return Err(bad(C, format!("a PDF presets file with over {} presets", super::MAX_IMPORTED_PRESETS)));
+    }
     let replace = bool_or(p, "replace", false);
     let mut imported = vec![];
+    let mut next = std::collections::HashMap::new();
     for mut preset in file.presets {
         preset.settings.clear_passwords();
         let base = Some(preset.name.trim()).filter(|n| !n.is_empty()).unwrap_or("PDF Preset").to_string();
@@ -211,7 +215,7 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             None => {
-                preset.name = unique_name(&base, |n| s.pdf_preset_taken(n, None));
+                preset.name = super::unique_name_from(&base, &mut next, |n| s.pdf_preset_taken(n, None));
                 imported.push(preset.name.clone());
                 s.store_pdf_preset(None, &preset);
                 s.prefs.pdf_presets.push(preset);

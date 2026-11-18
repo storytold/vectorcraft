@@ -298,6 +298,30 @@ fn rescanning_drops_loaded_fonts_removed_since() {
     assert_eq!(db.outline(&again, glyph).elements(), db.outline(&face, glyph).elements());
 }
 
+/// The scan dates each installed family by its font files' creation times: a family installed
+/// just now is recently added for 30 days, and leaves the list when its files are removed and the
+/// folders scanned again. Where the file system keeps no creation time, nothing is listed.
+#[test]
+fn installed_fonts_are_recently_added_by_their_files_creation_time() {
+    let dir = font_dir("recently-added");
+    let regular = dir.join("Sysfont-Regular.ttf");
+    let created = std::fs::metadata(&regular).and_then(|m| m.created()).ok();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    let now = std::time::SystemTime::now();
+    let list = db.recently_added(now);
+    let Some(created) = created else {
+        assert_eq!(list, RecentlyAdded::default(), "no creation times: nothing is dated");
+        return;
+    };
+    assert_eq!(list.families, [FAMILY]);
+    assert!(list.recheck_at.is_some_and(|t| t >= created + RECENTLY_ADDED_WITHIN), "{list:?}");
+    assert!(db.recently_added(now + RECENTLY_ADDED_WITHIN + std::time::Duration::from_secs(60)).families.is_empty(), "31 days on");
+    std::fs::remove_file(&regular).unwrap();
+    std::fs::remove_file(dir.join("Sub/Sysfont-Bold.TTF")).unwrap();
+    assert_eq!(db.load_system_fonts(), 0);
+    assert_eq!(db.recently_added(now), RecentlyAdded::default(), "removed fonts leave the list");
+}
+
 #[test]
 fn a_background_scan_serves_the_first_lookup() {
     let dir = font_dir("background");
@@ -306,6 +330,36 @@ fn a_background_scan_serves_the_first_lookup() {
     // Waits for the scan when it is still running.
     assert!(has(&db.families(), FAMILY));
     assert_eq!(db.load_system_fonts(), 2, "a rescan catalogs the two faces again");
+}
+
+/// The menu bar's Type › Font is built in the window's first frame, so its family list doesn't wait
+/// for the scan of the installed fonts: a large library would hold the first frame past the
+/// first-frame watchdog, and the app would never show its window (#5483). Once the scan ends, the
+/// list has the installed fonts.
+#[cfg(unix)]
+#[test]
+fn the_menu_family_list_now_does_not_wait_for_the_scan() {
+    let dir = font_dir("held-scan");
+    // A named pipe with a font's name: the scan opens it and waits there until something writes.
+    let pipe = dir.join("Held.ttf");
+    assert!(std::process::Command::new("mkfifo").arg(&pipe).status().unwrap().success());
+    let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![dir])));
+    let generation = db.generation();
+    db.scan_in_background();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send((db.installed_fonts_ready(), db.menu_family_list_now()));
+    });
+    let listed = rx.recv_timeout(std::time::Duration::from_secs(10));
+    // Let the scan go on whatever happened: the pipe is opened and closed with nothing written.
+    drop(std::fs::OpenOptions::new().write(true).open(&pipe).unwrap());
+    let (ready, listed) = listed.expect("the list comes while the scan is held");
+    assert!(!ready && !has(&listed, FAMILY), "before the scan ends, only the fonts already loaded");
+    // Waits for the scan.
+    assert!(has(&db.menu_family_list(), FAMILY));
+    assert!(db.installed_fonts_ready());
+    assert_ne!(db.generation(), generation, "a menu built from the short list is built again");
+    assert!(has(&db.menu_family_list_now(), FAMILY));
 }
 
 #[test]
@@ -396,6 +450,29 @@ fn a_family_with_a_variable_file_beside_static_ones_is_variable() {
     db.add_font(renamed("SourceSans3-Regular.ttf"));
     assert!(db.is_loaded(FAMILY) && !db.face(FAMILY, "Regular").unwrap().traits.variable);
     assert!(db.family_traits(FAMILY).variable);
+}
+
+/// Show Similar Fonts: the scan reads the numbers a face is compared by as loading the face does,
+/// and a family's are its Regular face's whichever file is found first.
+#[test]
+fn the_scan_reads_a_familys_likeness_without_loading_it() {
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-likeness", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Sysfont-Italic.ttf"), renamed("SourceSans3-It.ttf")).unwrap();
+    std::fs::write(dir.join("Sysfont-Regular.ttf"), renamed("SourceSans3-Regular.ttf")).unwrap();
+    let scanned = FontDb::with_font_dirs(vec![dir.clone()]);
+    let likeness = scanned.family_traits(FAMILY).likeness;
+    assert!(!scanned.is_loaded(FAMILY), "the scan's numbers, nothing loaded");
+    let loaded = FontDb::with_font_dirs(vec![]);
+    assert_eq!(loaded.add_font(renamed("SourceSans3-Regular.ttf")), 1);
+    assert_eq!(likeness, loaded.face(FAMILY, "Regular").unwrap().traits.likeness);
+    assert!(likeness.avg_width > 0 && likeness.x_height > 0 && likeness.italic_angle == Some(0), "{likeness:?}");
+    // With only the italic loaded, the scanned Regular face still gives the family's numbers.
+    assert_eq!(scanned.add_font(renamed("SourceSans3-It.ttf")), 1);
+    assert!(scanned.is_loaded(FAMILY));
+    assert_eq!(scanned.family_traits(FAMILY).likeness, likeness);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -667,8 +744,8 @@ fn a_search_reads_at_most_its_share_of_a_font_file() {
         let r = (0..tables).map(|i| 12 + 16 * i).find(|&r| &face[r..r + 4] == tag).unwrap();
         u64::from(u32::from_be_bytes(face[r + 12..r + 16].try_into().unwrap()))
     };
-    // What one face costs: its table directory and its name and OS/2 tables.
-    let per_face = 12 + 16 * tables as u64 + len(b"name") + len(b"OS/2");
+    // What one face costs: its table directory, its name, OS/2 and head tables and the post table's header.
+    let per_face = 12 + 16 * tables as u64 + len(b"name") + len(b"OS/2") + len(b"head") + 32;
     let n = 300;
     let base = 12 + 4 * n;
     let mut ttc = b"ttcf".to_vec();

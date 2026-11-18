@@ -57,22 +57,37 @@ impl Reader<'_> {
     /// `Md`: the clipping path painted last since `Mb`, in the same group or layer, is the mask.
     fn define_multi_mask(&mut self) -> Result<(), String> {
         let depth = self.frames.len();
-        let Some(m) = self.multi_mask.as_mut() else { return Err("a multi-layer mask's operators are out of order".into()) };
+        let Some(m) = self.multi_mask.as_ref() else { return Err("a multi-layer mask's operators are out of order".into()) };
         if m.mask.is_some() || depth == 0 {
             return Err("a multi-layer mask's operators are out of order".into());
         }
         if m.depth != depth {
             return Err("a group crosses a multi-layer mask".into());
         }
+        let start = m.start;
         let Some(f) = self.frames.last_mut() else { return Err("a multi-layer mask's operators are out of order".into()) };
-        let Some(at) = f.clips.iter().copied().filter(|i| *i >= m.start && *i < f.children.len()).max() else {
+        let Some(at) = f.clips.iter().copied().filter(|i| *i >= start && *i < f.children.len()).max() else {
             return Err("a multi-layer mask needs one clipping path".into());
         };
-        let mask = f.children.remove(at);
+        let mut mask = f.children.remove(at);
         f.clips.retain(|i| *i != at);
         for i in &mut f.clips {
             if *i > at {
                 *i -= 1;
+            }
+        }
+        // The mask's fill paints once, where its path is, under the objects masked after it: it stays a path of its own
+        // among them, and the copies of the mask in each layer it covers have no fill.
+        if let Some(fill) = self.fill_apart(&mut mask) {
+            if self.nodes > MAX_NODES {
+                return Err(format!("it has more than {MAX_NODES} objects"));
+            }
+            let Some(f) = self.frames.last_mut() else { return Err("a multi-layer mask's operators are out of order".into()) };
+            f.children.insert(at, fill);
+            for i in &mut f.clips {
+                if *i >= at {
+                    *i += 1;
+                }
             }
         }
         let mut weight = mask.count_with_masks();
@@ -81,8 +96,10 @@ impl Reader<'_> {
                 weight = weight.saturating_add(path.anchor_count());
             }
         });
-        m.weight = weight;
-        m.mask = Some(mask);
+        if let Some(m) = self.multi_mask.as_mut() {
+            m.weight = weight;
+            m.mask = Some(mask);
+        }
         self.after_object = false;
         Ok(())
     }

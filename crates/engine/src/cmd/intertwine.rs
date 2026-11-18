@@ -10,7 +10,10 @@
 //!
 //! An overlap area is a face of the planar arrangement of what the members paint (their fills and
 //! strokes, type outlined; other objects by their bounds): the part where two or more of them
-//! overlap, split wherever a member's edge crosses it.
+//! overlap, split wherever a member's edge crosses it. The area a member is raised in is that
+//! face grown a little ([`SEAM`]) into the parts where only that member paints ([`raised_area`]),
+//! so its edge does not lie on the edge of the member it passes over: there, both edges would be
+//! anti-aliased and the member below would show through as a hairline (#5337).
 //!
 //! Behaviour: <https://helpx.adobe.com/illustrator/using/intertwine-objects.html> (Make,
 //! Release, clicking or drawing around an overlap, Bring to Front, Bring Forward, Send Backward
@@ -23,7 +26,9 @@ use serde_json::{Value, json};
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind};
 use vectorcraft_geom::{FillRule, PathData, Point, SubPath};
 use vectorcraft_pathops as po;
-use vectorcraft_tools::intertwine::{Face, drawn_order, face_at, faces, faces_in, is_intertwine, nonempty};
+use vectorcraft_tools::intertwine::{
+    Face, drawn_order, face_at, faces_in, faces_of, in_intertwine, is_intertwine, nonempty, painted_areas, refused_member,
+};
 
 use super::edit::selected_roots;
 use super::pathops::Beside;
@@ -73,8 +78,9 @@ pub fn specs() -> Vec<CommandSpec> {
 // ---------- predicates ----------
 
 /// The Intertwine groups of the selection: selected ones, and those around a selected object.
+/// None while an object of a dynamic symbol instance's art is selected.
 fn selected_groups(s: &Session) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
     let mut out = vec![];
     for id in &st.selection.objects {
         let group = st.doc.ancestry(*id).unwrap_or_default().into_iter().rev().find(|a| st.doc.node(*a).is_some_and(is_intertwine));
@@ -89,6 +95,7 @@ fn selected_groups(s: &Session) -> Vec<NodeId> {
 
 fn has_intertwine(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
+    super::edit::no_symbol_part(s)?;
     if selected_groups(s).is_empty() { Err("select an Intertwine group".into()) } else { Ok(()) }
 }
 
@@ -101,17 +108,7 @@ fn refused(d: &Document, n: &Node) -> Option<&'static str> {
     if around.iter().filter(|a| **a != n.id).filter_map(|a| d.node(*a)).any(is_intertwine) {
         return Some("an object already in an Intertwine group");
     }
-    let mut why = None;
-    n.walk(&mut |c| {
-        why = why.or(match &c.kind {
-            NodeKind::Intertwine { .. } => Some("an Intertwine group"),
-            NodeKind::Repeat(_) => Some("a Repeat"),
-            NodeKind::Group { .. } if c.extras().graph.is_some() => Some("a graph"),
-            NodeKind::Group { .. } if vectorcraft_tools::builder::is_live_paint(c) => Some("a Live Paint group"),
-            _ => None,
-        });
-    });
-    why
+    refused_member(n)
 }
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
@@ -174,10 +171,7 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
                 .flatten()
                 .map(|c| {
                     let mut c = (**c).clone();
-                    let mut e = c.extras_mut();
-                    e.intertwine = None;
-                    e.intertwine_tiers = Vec::new();
-                    drop(e);
+                    without_areas(&mut c);
                     c
                 })
                 .collect();
@@ -189,6 +183,92 @@ fn release(s: &mut Session, _: &Value) -> Result<Value> {
         Ok(out)
     })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+// ---------- members that come and go ----------
+
+/// Why `n` can't go into `parent`, an Intertwine group or a container inside one, if it can't
+/// ([`refused_member`]). Other containers take it as they did.
+pub(crate) fn refused_in(d: &Document, parent: Option<NodeId>, n: &Node) -> Option<&'static str> {
+    parent.filter(|p| in_intertwine(d, *p)).and_then(|_| refused_member(n))
+}
+
+/// The Intertwine groups that `ids` are members of, each once.
+pub(crate) fn groups_of(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    let mut seen = std::collections::HashSet::new();
+    ids.iter().filter_map(|i| d.parent_of(*i)).filter(|g| d.node(*g).is_some_and(is_intertwine) && seen.insert(*g)).collect()
+}
+
+/// `n` without the areas it is drawn over other members in.
+fn without_areas(n: &mut Node) {
+    if n.extras().intertwine.is_some() || !n.extras().intertwine_tiers.is_empty() {
+        let mut e = n.extras_mut();
+        e.intertwine = None;
+        e.intertwine_tiers = Vec::new();
+    }
+}
+
+/// Whether Intertwine group `g` has nothing of its own that changes how its members are drawn:
+/// it is visible and unlocked, with full opacity, normal blending, no appearance and no extras
+/// (an opacity mask among them).
+fn bare(g: &Node) -> bool {
+    let plain = Node::new(g.id, NodeKind::Intertwine { children: vec![] });
+    (g.visible, g.locked, g.opacity, g.blend, g.isolate, g.knockout, g.knockout_shape)
+        == (plain.visible, plain.locked, plain.opacity, plain.blend, plain.isolate, plain.knockout, plain.knockout_shape)
+        && g.appearance == plain.appearance
+        && *g.extras() == *plain.extras()
+}
+
+/// After objects moved in the Layers panel: each of `placed` (the objects now in place, each with
+/// the container it came from, None for a copy) that is not in the container it came from loses
+/// the areas it was drawn over other members in, so it joins an Intertwine group at no tier and
+/// leaves one as ordinary art. Then each of `left` (the Intertwine groups objects came from) that
+/// has fewer than two members is taken apart: its one member goes in its place without areas, and
+/// an empty one is removed. A group with one member and something of its own ([`bare`]) becomes a
+/// plain group of that member instead, keeping its id and all it has. The other members keep their
+/// areas.
+pub(crate) fn settle_members(d: &mut Document, placed: &[(NodeId, Option<NodeId>)], left: &[NodeId]) -> Result<()> {
+    for (id, from) in placed {
+        if d.node(*id).is_some_and(|n| n.extras().intertwine.is_some() || !n.extras().intertwine_tiers.is_empty())
+            && from.is_none_or(|f| d.parent_of(*id) != Some(f))
+        {
+            without_areas(d.node_mut(*id).ok_or(EngineError::NoNode(*id))?);
+        }
+    }
+    let lone: Vec<NodeId> =
+        left.iter().copied().filter(|g| d.node(*g).is_some_and(|n| is_intertwine(n) && n.children().is_none_or(|c| c.len() < 2))).collect();
+    let (kept, lone): (Vec<NodeId>, Vec<NodeId>) =
+        lone.into_iter().partition(|g| d.node(*g).is_some_and(|n| n.children().is_some_and(|c| c.len() == 1) && !bare(n)));
+    for g in &kept {
+        let n = d.node_mut(*g).ok_or(EngineError::NoNode(*g))?;
+        if let NodeKind::Intertwine { children } = &mut n.kind {
+            let children = std::mem::take(children)
+                .into_iter()
+                .map(|c| {
+                    let mut c = (*c).clone();
+                    without_areas(&mut c);
+                    Arc::new(c)
+                })
+                .collect();
+            n.kind = NodeKind::Group { children, clip: false };
+        }
+    }
+    let mut apart = Beside::replacing(d, &lone);
+    for g in &lone {
+        let Some(n) = d.node(*g) else { continue };
+        let members: Vec<Node> = n
+            .children()
+            .into_iter()
+            .flatten()
+            .map(|c| {
+                let mut c = (**c).clone();
+                without_areas(&mut c);
+                c
+            })
+            .collect();
+        apart.put(d, *g, members)?;
+    }
+    apart.finish(d)
 }
 
 // ---------- Expand ----------
@@ -302,13 +382,46 @@ fn tiers(order: &[usize]) -> Vec<(usize, usize)> {
         .collect()
 }
 
+/// How far (pt) the area a member is raised in reaches past its overlap face, into the parts only
+/// that member paints ([`raised_area`]).
+const SEAM: f64 = 2.0;
+
+/// The area member `i` is raised in for `face`: the face, and the parts within [`SEAM`] of it
+/// where only `i` paints (`areas`: what each member paints, [`painted_areas`]). Drawing `i` again
+/// there changes nothing, and the edge of the area then lies inside `i`, not on the edge of a
+/// member it passes over (where the anti-aliased edges of both would let that member show
+/// through as a hairline).
+fn raised_area(face: &PathData, i: usize, areas: &[Option<PathData>]) -> PathData {
+    let Some(own) = areas.get(i).and_then(Option::as_ref) else { return face.clone() };
+    let ring = po::offset_path(face, SEAM, po::Join::Round, 4.0);
+    let Some(near) = ring.bounds() else { return face.clone() };
+    let mut paths = vec![(&ring, FillRule::NonZero), (own, FillRule::NonZero)];
+    paths.extend(
+        areas
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| *k != i)
+            .filter_map(|(_, a)| a.as_ref())
+            .filter(|a| a.bounds().is_some_and(|b| b.overlaps(near)))
+            .map(|a| (a, FillRule::NonZero)),
+    );
+    let only = po::boolean_n(&paths, |inside| inside == [0, 1]);
+    if only.is_empty() {
+        return face.clone();
+    }
+    nonempty(po::boolean(face, FillRule::NonZero, &only, FillRule::NonZero, po::BoolOp::Union)).unwrap_or_else(|| face.clone())
+}
+
 /// Draw the members of `face` in `order` there (bottom first), leaving the other areas as they
-/// are.
-fn arrange_face(children: &mut [Arc<Node>], face: &Face, order: &[usize]) {
+/// are (`areas`: what each member paints, [`painted_areas`]).
+fn arrange_face(children: &mut [Arc<Node>], face: &Face, order: &[usize], areas: &[Option<PathData>]) {
     for (i, tier) in tiers(order) {
-        if let Some(c) = children.get_mut(i) {
-            set_tier(Arc::make_mut(c), &face.path, tier);
+        let Some(c) = children.get_mut(i) else { continue };
+        // A member drawn in its own order there with no areas has nothing to change.
+        if tier == 0 && c.extras().intertwine.is_none() && c.extras().intertwine_tiers.is_empty() {
+            continue;
         }
+        set_tier(Arc::make_mut(c), &raised_area(&face.path, i, areas), tier);
     }
 }
 
@@ -342,11 +455,14 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
             }
             id
         }
-        None => match selected_groups(s).as_slice() {
-            [g] => *g,
-            [] => return Err(bad(C, "select an Intertwine group")),
-            _ => return Err(bad(C, "select one Intertwine group")),
-        },
+        None => {
+            super::edit::refuse_symbol_part(s)?;
+            match selected_groups(s).as_slice() {
+                [g] => *g,
+                [] => return Err(bad(C, "select an Intertwine group")),
+                _ => return Err(bad(C, "select one Intertwine group")),
+            }
+        }
     };
     let at = match p.get("at") {
         Some(_) => Some(point_param(p, "at").filter(|q| q.x.is_finite() && q.y.is_finite()).ok_or_else(|| bad(C, "at must be [x, y]"))?),
@@ -379,7 +495,8 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
         Some(m) => Some(children.iter().position(|c| c.id == m).ok_or_else(|| bad(C, format!("object {} is not in this Intertwine group", m.0)))?),
         None => None,
     };
-    let all = faces(&children);
+    let painted = painted_areas(&children);
+    let all = faces_of(&painted);
     let found = match (at, &lasso) {
         (Some(p), _) => face_at(&all, p).into_iter().collect(),
         (None, Some(l)) => faces_in(&all, l),
@@ -423,7 +540,7 @@ fn arrange(s: &mut Session, p: &Value) -> Result<Value> {
         let n = d.node_mut(group).ok_or(EngineError::NoNode(group))?;
         let NodeKind::Intertwine { children } = &mut n.kind else { return Err(EngineError::NoNode(group)) };
         for (face, new) in &plans {
-            arrange_face(children, face, new);
+            arrange_face(children, face, new, &painted);
         }
         Ok(())
     })?;

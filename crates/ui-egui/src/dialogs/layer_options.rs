@@ -5,7 +5,8 @@
 //! Fields: `ids` (the rows edited; none for a new layer), `mode` (`edit`, `new` or `newSublayer`),
 //! `layer` (the rows are layers), `name`, `color` (a preset's name such as "Light Blue", or
 //! `#rrggbb`), `template`, `locked`, `visible`, `printable`, `preview`, `dimImages` and
-//! `dimPercent`. OK runs `layer.setProps`, `layer.new` or `layer.newSublayer`.
+//! `dimPercent`. OK runs `layer.setProps`, `layer.new` or `layer.newSublayer`. For several rows
+//! the dialog shows the first row's settings, and OK sends only the ones set in the dialog.
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{LAYER_COLORS, LayerColor, Node, NodeId, NodeKind};
@@ -17,6 +18,77 @@ use crate::{VectorcraftApp, widgets};
 
 /// The dialog kind of Layer Options.
 pub const KIND: &str = "layerOptions";
+
+/// The field listing the fields set in the dialog, by its controls or `ui.dialog.set`.
+const SET: &str = "__set";
+
+/// The field holding, for several rows, the first row's Template, Lock, Dim Images and its
+/// percentage as the dialog opened.
+const OPENED: &str = "__opened";
+
+/// Records that `field` was set.
+fn mark(d: &mut Dialog, field: &str) {
+    match d.fields.get_mut(SET) {
+        Some(Value::Array(a)) => {
+            if !a.iter().any(|k| k == field) {
+                a.push(json!(field));
+            }
+        }
+        _ => {
+            d.fields.insert(SET.into(), json!([field]));
+        }
+    }
+}
+
+/// Records that `ui.dialog.set` sets `field` to `value`. Template also sets Lock and Dim Images,
+/// as its checkbox does.
+pub(super) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
+    if field.starts_with("__") {
+        return;
+    }
+    match value.as_bool() {
+        Some(on) if field == "template" && on != d.bool("template") => set_template(d, on),
+        _ => mark(d, field),
+    }
+}
+
+/// Turns Template on or off. A template is locked and dims its images, and turning Template off
+/// unlocks it and turns Dim Images off; a Dim Images that was set in the dialog keeps its value.
+/// For several rows, OK sends Lock and Dim Images only when they are set in the dialog. `layer.setProps` then locks each row that becomes a template and
+/// dims it to 50%, unless a percentage is set in the dialog, so the dialog shows 50%; it unlocks
+/// each row that stops being a template and stops dimming it.
+/// When Template is set back to the first row's value, Lock and Dim Images that were not set in
+/// the dialog show the first row's values again.
+fn set_template(d: &mut Dialog, on: bool) {
+    choose(d, "template", json!(on));
+    d.fields.insert("locked".into(), json!(on));
+    if !is_set(d, "dimImages") {
+        d.fields.insert("dimImages".into(), json!(on));
+    }
+    let Some(opened) = d.fields.get(OPENED).cloned() else {
+        return;
+    };
+    if opened.get("template") == Some(&json!(on)) {
+        for key in ["locked", "dimImages", "dimPercent"] {
+            if let Some(v) = opened.get(key).filter(|_| !is_set(d, key)) {
+                d.fields.insert(key.into(), v.clone());
+            }
+        }
+    } else if on && !is_set(d, "dimPercent") {
+        d.fields.insert("dimPercent".into(), json!(50));
+    }
+}
+
+/// Whether `field` was set in the dialog.
+fn is_set(d: &Dialog, field: &str) -> bool {
+    d.fields.get(SET).and_then(Value::as_array).is_some_and(|a| a.iter().any(|k| k == field))
+}
+
+/// Sets `key` to `value` from one of the dialog's controls.
+fn choose(d: &mut Dialog, key: &str, value: Value) {
+    d.fields.insert(key.into(), value);
+    mark(d, key);
+}
 
 pub(super) const SPEC: DialogSpec = DialogSpec { heading, body, confirm, min_width: 320.0, ..DialogSpec::FORM };
 
@@ -73,6 +145,11 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let first = ids.first().and_then(|id| st.doc.node(*id)).ok_or("no such layer or object")?;
     let xml_id = app.session.prefs.identify_objects_by == "xmlId";
     let mut f = fields_of(first, xml_id);
+    if ids.len() > 1 {
+        let opened: serde_json::Map<_, _> =
+            ["template", "locked", "dimImages", "dimPercent"].iter().filter_map(|k| Some((k.to_string(), f.get(*k)?.clone()))).collect();
+        f.insert(OPENED.into(), Value::Object(opened));
+    }
     f.insert("ids".into(), json!(ids.iter().map(|i| i.0).collect::<Vec<_>>()));
     f.insert("mode".into(), json!("edit"));
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields: f });
@@ -109,7 +186,7 @@ fn toggle(ui: &mut egui::Ui, d: &mut Dialog, key: &str, text: &str, enabled: boo
     let v = d.bool(key);
     let changed = widgets::check(ui, text, v, enabled);
     if changed {
-        d.fields.insert(key.into(), json!(!v));
+        choose(d, key, json!(!v));
     }
     changed
 }
@@ -154,7 +231,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 let cur = d.str("color");
                 let shown = LAYER_COLORS.iter().map(|(n, _)| *n).find(|n| n.eq_ignore_ascii_case(&cur)).unwrap_or("Custom");
                 if let Some((n, _)) = color_dropdown(ui, shown).and_then(|i| LAYER_COLORS.get(i)) {
-                    d.fields.insert("color".into(), json!(n));
+                    choose(d, "color", json!(n));
                 }
                 let [r, g, b] = LAYER_COLORS
                     .iter()
@@ -169,7 +246,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     .unwrap_or(LAYER_COLORS[0].1);
                 let mut rgb = [r, g, b];
                 if ui.color_edit_button_srgb(&mut rgb).changed() {
-                    d.fields.insert("color".into(), json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
+                    choose(d, "color", json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
                 }
             });
             ui.end_row();
@@ -179,11 +256,9 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if layer {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
-                // A template is locked and dims its images; turning it off frees both.
-                if toggle(ui, d, "template", tl!("Template"), true) {
-                    let on = d.bool("template");
-                    d.fields.insert("locked".into(), json!(on));
-                    d.fields.insert("dimImages".into(), json!(on));
+                let template = d.bool("template");
+                if widgets::check(ui, tl!("Template"), template, true) {
+                    set_template(d, !template);
                 }
                 toggle(ui, d, "visible", tl!("Show"), true);
                 toggle(ui, d, "preview", tl!("Preview"), true);
@@ -191,8 +266,13 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     toggle(ui, d, "dimImages", tl!("Dim Images to:"), true);
                     let v = d.f64("dimPercent", 50.0);
                     let dim = d.bool("dimImages");
-                    if let Some(v) = ui.add_enabled_ui(dim, |ui| crate::widgets::range_field(ui, "dimPercent", v, 0.0..=100.0, "%", 0, 52.0)).inner {
-                        d.fields.insert("dimPercent".into(), json!(v));
+                    if let Some(v) = ui
+                        .add_enabled_ui(dim, |ui| {
+                            crate::widgets::range_field_named(ui, "dimPercent", Some(tl!("Dim Images to:")), v, 0.0..=100.0, "%", 0, 52.0)
+                        })
+                        .inner
+                    {
+                        choose(d, "dimPercent", json!(v));
                     }
                 });
             });
@@ -210,7 +290,8 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// The command and params OK runs.
+/// The command and params OK runs. For several rows only the settings set in the dialog are sent,
+/// so each row keeps its own values for the rest.
 pub(crate) fn params(d: &Dialog) -> (&'static str, Value) {
     let mut p = serde_json::Map::new();
     let many = d.fields.get("ids").and_then(Value::as_array).is_some_and(|a| a.len() > 1);
@@ -225,6 +306,12 @@ pub(crate) fn params(d: &Dialog) -> (&'static str, Value) {
         p.insert("printable".into(), json!(d.bool("printable")));
         p.insert("preview".into(), json!(d.bool("preview")));
         p.insert("dimImages".into(), if d.bool("dimImages") { json!(d.f64("dimPercent", 50.0).clamp(0.0, 100.0)) } else { json!(false) });
+    }
+    if many {
+        // A percentage set in the dialog is sent whenever Dim Images is on, also when Dim Images
+        // was turned on by Template.
+        let percent = d.bool("dimImages") && is_set(d, "dimPercent");
+        p.retain(|k, _| is_set(d, k) || (k == "dimImages" && percent));
     }
     match d.str("mode").as_str() {
         "new" => ("layer.new", Value::Object(p)),
@@ -259,8 +346,9 @@ mod tests {
         out.textures_delta.clear();
     }
 
+    /// Sets a field as `ui.dialog.set` does.
     fn set(app: &mut VectorcraftApp, k: &str, v: Value) {
-        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+        super::super::set_field(app.ui.dialog.as_mut().unwrap(), k.into(), v);
     }
 
     /// Explicit object ids must not silently disappear or fall back to the highlighted row.
@@ -298,6 +386,229 @@ mod tests {
         assert_eq!(n.display_name(), "Sky");
         assert!(matches!(n.kind, NodeKind::Layer { color: LayerColor::Custom([0, 255, 0]), dim_images: Some(30), preview: false, .. }));
         assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    }
+
+    /// Two layers with different options, the first plain and the second green, locked, in
+    /// outline view and dimmed to 30%.
+    fn two_layers(app: &mut VectorcraftApp) -> (NodeId, NodeId) {
+        let first = app.session.doc().unwrap().doc.layers[0].id;
+        let p = json!({"color": "#00ff00", "locked": true, "preview": false, "dimImages": 30});
+        let second = NodeId(app.session.execute("layer.new", &p).unwrap()["id"].as_u64().unwrap());
+        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
+        draw(app);
+        (first, second)
+    }
+
+    fn layer(app: &VectorcraftApp, id: NodeId) -> Node {
+        app.session.doc().unwrap().doc.node(id).unwrap().clone()
+    }
+
+    /// A setting set to the first layer's own value still goes to every layer.
+    #[test]
+    fn layer_options_for_several_layers_send_only_the_settings_set() {
+        let mut app = app();
+        let (first, second) = two_layers(&mut app);
+        set(&mut app, "printable", json!(false));
+        set(&mut app, "color", json!("Light Blue"));
+        let (_, p) = params(app.ui.dialog.as_ref().unwrap());
+        assert_eq!(p, json!({"printable": false, "color": "Light Blue", "ids": [first.0, second.0]}));
+        super::super::confirm(&mut app).unwrap();
+        let (a, b) = (layer(&app, first), layer(&app, second));
+        assert!(matches!(a.kind, NodeKind::Layer { color: LayerColor::Preset(0), printable: false, preview: true, dim_images: None, .. }));
+        assert!(!a.locked);
+        let NodeKind::Layer { color, printable, preview, dim_images, .. } = b.kind else { panic!("not a layer") };
+        assert_eq!((color, printable, preview, dim_images, b.locked), (LayerColor::Preset(0), false, false, Some(30), true));
+    }
+
+    /// Template locks and dims to 50% each layer whose Template it changes; a Dim Images
+    /// percentage set as well goes to every layer.
+    #[test]
+    fn template_for_several_layers_leaves_lock_and_dimming_to_each_layer() {
+        let mut app = app();
+        let (first, second) = two_layers(&mut app);
+        app.run("layer.setProps", json!({"ids": [second.0], "template": true, "dimImages": 30})).unwrap();
+        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
+        set(&mut app, "template", json!(true));
+        let (_, p) = params(app.ui.dialog.as_ref().unwrap());
+        assert_eq!(p, json!({"template": true, "ids": [first.0, second.0]}));
+        super::super::confirm(&mut app).unwrap();
+        let (a, b) = (layer(&app, first), layer(&app, second));
+        assert!(a.is_template() && a.locked && matches!(a.kind, NodeKind::Layer { dim_images: Some(50), .. }));
+        assert!(b.is_template() && b.locked && matches!(b.kind, NodeKind::Layer { dim_images: Some(30), .. }));
+        // The first layer is dimmed to 50% now; 50% set again goes to both.
+        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
+        set(&mut app, "dimPercent", json!(50));
+        let (_, p) = params(app.ui.dialog.as_ref().unwrap());
+        assert_eq!(p, json!({"dimImages": 50.0, "ids": [first.0, second.0]}));
+        super::super::confirm(&mut app).unwrap();
+        assert!(matches!(layer(&app, second).kind, NodeKind::Layer { dim_images: Some(50), .. }));
+        // A percentage set while Dim Images is off is sent once Dim Images is on.
+        app.run("layer.setProps", json!({"ids": [first.0], "template": false, "dimImages": false})).unwrap();
+        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
+        set(&mut app, "dimPercent", json!(20));
+        assert_eq!(params(app.ui.dialog.as_ref().unwrap()).1, json!({"ids": [first.0, second.0]}));
+        set(&mut app, "dimImages", json!(true));
+        assert_eq!(params(app.ui.dialog.as_ref().unwrap()).1, json!({"dimImages": 20.0, "ids": [first.0, second.0]}));
+    }
+
+    /// A percentage set while Dim Images is off is sent when Template turns Dim Images on.
+    #[test]
+    fn a_percentage_set_before_template_turns_dimming_on_goes_to_every_layer() {
+        let mut app = app();
+        let (first, second) = two_layers(&mut app);
+        set(&mut app, "dimPercent", json!(20));
+        set(&mut app, "template", json!(true));
+        let (_, p) = params(app.ui.dialog.as_ref().unwrap());
+        assert_eq!(p, json!({"template": true, "dimImages": 20.0, "ids": [first.0, second.0]}));
+        super::super::confirm(&mut app).unwrap();
+        for id in [first, second] {
+            assert!(matches!(layer(&app, id).kind, NodeKind::Layer { template: true, dim_images: Some(20), .. }));
+        }
+    }
+
+    /// The open dialog of `app` in a test harness, drawn and ready for clicks.
+    fn harness(app: VectorcraftApp) -> egui_kittest::Harness<'static, VectorcraftApp> {
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 700.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                super::super::show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(4);
+        h
+    }
+
+    /// Clicking Template ticks Lock and Dim Images and leaves them to each layer; clicking Dim
+    /// Images off afterwards sends that to every layer.
+    #[test]
+    fn dim_images_clicked_after_template_goes_to_every_layer() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = app();
+        let (first, second) = two_layers(&mut app);
+        let mut h = harness(app);
+        h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Template").click();
+        h.run_steps(3);
+        let d = h.state().ui.dialog.as_ref().unwrap();
+        assert!(d.bool("template") && d.bool("locked") && d.bool("dimImages"));
+        assert_eq!(params(d).1, json!({"template": true, "ids": [first.0, second.0]}));
+        h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Dim Images to:").click();
+        h.run_steps(3);
+        let (_, p) = params(h.state().ui.dialog.as_ref().unwrap());
+        assert_eq!(p, json!({"template": true, "dimImages": false, "ids": [first.0, second.0]}));
+        let app = h.state_mut();
+        super::super::confirm(app).unwrap();
+        for id in [first, second] {
+            let n = layer(app, id);
+            assert!(n.locked && matches!(n.kind, NodeKind::Layer { template: true, dim_images: None, .. }));
+        }
+    }
+
+    /// Template set through `ui.dialog.set` locks and dims as its checkbox does, and set back it
+    /// shows the first layer's Lock and Dim Images again and sends neither.
+    #[test]
+    fn template_set_and_set_back_leaves_lock_and_dimming_alone() {
+        let mut app = app();
+        let (first, second) = two_layers(&mut app);
+        app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
+        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
+        set(&mut app, "template", json!(true));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert!(d.bool("locked") && d.bool("dimImages"));
+        assert_eq!(params(d).1, json!({"template": true, "ids": [first.0, second.0]}));
+        set(&mut app, "template", json!(false));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert!(d.bool("locked") && !d.bool("dimImages"));
+        assert_eq!(params(d).1, json!({"template": false, "ids": [first.0, second.0]}));
+        super::super::confirm(&mut app).unwrap();
+        assert!(layer(&app, first).locked && layer(&app, second).locked);
+        assert!(matches!(layer(&app, second).kind, NodeKind::Layer { dim_images: Some(30), .. }));
+    }
+
+    /// Template turned on shows the 50% that `layer.setProps` dims each new template to, and
+    /// turned back off shows the first layer's own percentage again.
+    #[test]
+    fn template_shows_the_percentage_it_dims_to() {
+        let mut app = app();
+        let (first, second) = two_layers(&mut app);
+        app.run("layer.setProps", json!({"ids": [first.0], "dimImages": 30})).unwrap();
+        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
+        set(&mut app, "template", json!(true));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.f64("dimPercent", 0.0), 50.0);
+        set(&mut app, "template", json!(false));
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert!(d.bool("dimImages"));
+        assert_eq!(d.f64("dimPercent", 0.0), 30.0);
+        assert_eq!(params(d).1, json!({"template": false, "ids": [first.0, second.0]}));
+        set(&mut app, "template", json!(true));
+        super::super::confirm(&mut app).unwrap();
+        assert!(matches!(layer(&app, first).kind, NodeKind::Layer { template: true, dim_images: Some(50), .. }));
+    }
+
+    /// Template set through `ui.dialog.set` for one layer locks it and dims its images, as the
+    /// checkbox does.
+    #[test]
+    fn template_set_for_one_layer_locks_and_dims_it() {
+        let mut app = app();
+        let id = app.session.doc().unwrap().doc.layers[0].id;
+        app.run("ui.layerOptions", json!({"ids": [id.0]})).unwrap();
+        set(&mut app, "template", json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let n = layer(&app, id);
+        assert!(n.locked && matches!(n.kind, NodeKind::Layer { template: true, dim_images: Some(50), .. }));
+    }
+
+    /// A percentage typed in while Dim Images is on stays set when Template is then clicked on,
+    /// since Template leaves Dim Images on.
+    #[test]
+    fn a_percentage_typed_before_template_goes_to_every_layer() {
+        use egui_kittest::kittest::Queryable;
+        let mut app = app();
+        let (first, second) = two_layers(&mut app);
+        app.run("layer.setProps", json!({"ids": [first.0], "dimImages": 30})).unwrap();
+        app.run("ui.layerOptions", json!({"ids": [first.0, second.0]})).unwrap();
+        set(&mut app, "dimPercent", json!(40));
+        let mut h = harness(app);
+        h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Template").click();
+        h.run_steps(3);
+        let (_, p) = params(h.state().ui.dialog.as_ref().unwrap());
+        assert_eq!(p, json!({"template": true, "dimImages": 40.0, "ids": [first.0, second.0]}));
+        // Template off again shows the first layer's Dim Images, on, and the percentage still
+        // goes to every layer.
+        h.get_by_role_and_label(egui::accesskit::Role::CheckBox, "Template").click();
+        h.run_steps(3);
+        let (_, p) = params(h.state().ui.dialog.as_ref().unwrap());
+        assert_eq!(p, json!({"template": false, "dimImages": 40.0, "ids": [first.0, second.0]}));
+    }
+
+    /// A Dim Images set in the dialog stays as set when Template is set after it, so
+    /// `ui.dialog.set` gives the same result in either order. Template still locks the layers.
+    #[test]
+    fn template_keeps_dim_images_that_was_set() {
+        for dim_first in [true, false] {
+            let mut app = app();
+            let (first, second) = two_layers(&mut app);
+            if dim_first {
+                set(&mut app, "dimImages", json!(false));
+                set(&mut app, "template", json!(true));
+            } else {
+                set(&mut app, "template", json!(true));
+                set(&mut app, "dimImages", json!(false));
+            }
+            let d = app.ui.dialog.as_ref().unwrap();
+            assert!(d.bool("template") && d.bool("locked") && !d.bool("dimImages"), "dim first: {dim_first}");
+            assert_eq!(params(d).1, json!({"template": true, "dimImages": false, "ids": [first.0, second.0]}), "dim first: {dim_first}");
+            super::super::confirm(&mut app).unwrap();
+            for id in [first, second] {
+                let n = layer(&app, id);
+                assert!(n.locked && matches!(n.kind, NodeKind::Layer { template: true, dim_images: None, .. }), "{id:?}, dim first: {dim_first}");
+            }
+        }
     }
 
     #[test]

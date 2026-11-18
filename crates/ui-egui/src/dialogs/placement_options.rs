@@ -55,7 +55,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     ui.add_enabled_ui(free, |ui| {
         widgets::label_row(ui, tl!("Alignment:"), LABEL, |ui| {
             let current = ALIGN.iter().position(|a| *a == d.str("align")).unwrap_or(4);
-            if let Some(i) = widgets::reference_point(ui, current)
+            if let Some(i) = widgets::reference_point_named(ui, current, tl!("Alignment:"))
                 && let Some(a) = ALIGN.get(i)
             {
                 d.fields.insert("align".into(), json!(a));

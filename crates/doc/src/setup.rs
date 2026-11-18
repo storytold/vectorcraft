@@ -120,6 +120,21 @@ impl Quotes {
         prev.is_none_or(|p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '—' | '–') || quote_opened.unwrap_or_else(|| self.is_open(p)))
     }
 
+    /// The straight quote a typed curly quote stands for: `"` for `”` (U+201D) and nothing else.
+    /// The macOS Serbian Cyrillic layout has no straight `"` and types `”` on Shift+2, so with
+    /// Typographer's Quotes on, a `”` typed alone where a quote opens takes the document's opening
+    /// quote ([`Quotes::opens_after`]); where a quote closes it stays `”`. `“ „` and the single
+    /// quotes `‘ ’ ‚` stay as typed: that layout's apostrophe key already types `’`, as Serbian
+    /// wants, and `’90s` keeps its apostrophe.
+    pub fn typed_as_straight(c: char) -> Option<char> {
+        (c == '”').then_some('"')
+    }
+
+    /// Does a quote typed after `prev` (the character before it, `None` at the start) open?
+    pub fn opens_after(&self, prev: Option<char>) -> bool {
+        self.opens(prev, None)
+    }
+
     /// `text` with straight quotes (`"` and `'`) replaced by these quotes: opening or closing by
     /// context (an apostrophe is a closing single quote). `prev` is the character before `text`,
     /// and is updated to its last character, so text can be converted in pieces.
@@ -164,6 +179,9 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Polish", "pl", Quotes { double: ['„', '”'], single: ['‚', '’'] }),
     ("Czech", "cs", Quotes { double: ['„', '“'], single: ['‚', '‘'] }),
     ("Russian", "ru", Quotes { double: ['«', '»'], single: ['„', '“'] }),
+    // „…“ at either level: CLDR (https://github.com/unicode-org/cldr/blob/main/common/main/bg.xml,
+    // `delimiters`). Shaped as `bg`, fonts draw their Bulgarian forms (`locl` for `BGR`, #5945).
+    ("Bulgarian", "bg", Quotes { double: ['„', '“'], single: ['„', '“'] }),
     // „…” outside, ’…’ inside: Pravopis srpskoga jezika (Matica srpska, 2010, ISBN
     // 978-86-7946-079-0, т. 168, pp. 133–135) and CLDR
     // (https://github.com/unicode-org/cldr/blob/main/common/main/sr.xml, `delimiters`).
@@ -185,12 +203,28 @@ pub const LANGUAGES: &[(&str, &str, Quotes)] = &[
     ("Kannada", "kn", Quotes::ENGLISH),
     ("Malayalam", "ml", Quotes::ENGLISH),
     ("Odia", "or", Quotes::ENGLISH),
+    ("Assamese", "as", Quotes::ENGLISH),
+    ("Sanskrit", "sa", Quotes::ENGLISH),
     ("Urdu", "ur", Quotes::ENGLISH),
+    // “…” outside, ‘…’ inside: CLDR gives these no delimiters of their own (`↑↑↑`, inherited), so
+    // they take root's (https://github.com/unicode-org/cldr/blob/main/common/main/root.xml,
+    // `delimiters`): sa.xml, ne.xml, as.xml, kok.xml and sd.xml (Arabic script; sd_Deva.xml for
+    // Devanagari inherits too) in https://github.com/unicode-org/cldr/blob/main/common/main/.
+    ("Nepali", "ne", Quotes::ENGLISH),
+    ("Konkani", "kok", Quotes::ENGLISH),
+    ("Sindhi", "sd", Quotes::ENGLISH),
 ];
 
 /// The quotes of a [`LANGUAGES`] entry (case-insensitive).
 pub fn language_quotes(language: &str) -> Option<Quotes> {
     LANGUAGES.iter().find(|(l, _, _)| l.eq_ignore_ascii_case(language)).map(|(_, _, q)| *q)
+}
+
+/// The BCP 47 tag of the [`LANGUAGES`] entry named or tagged `language` (case-insensitive), the
+/// default's included (`en-US`): what a document's language ([`DocSetup::language`]) is written
+/// as in an exported file. `None` for a language not in the list.
+pub fn language_tag(language: &str) -> Option<&'static str> {
+    LANGUAGES.iter().find(|(n, t, _)| n.eq_ignore_ascii_case(language) || t.eq_ignore_ascii_case(language)).map(|(_, t, _)| *t)
 }
 
 /// The [`LANGUAGES`] entry named or tagged `language` (case-insensitive) as a character's
@@ -294,6 +328,13 @@ pub struct DocSetup {
     /// <https://helpx.adobe.com/illustrator/desktop/design-with-text/edit-format-text/turn-fractional-character-widths-off-or-on.html>
     #[serde(default, rename = "systemLayout", skip_serializing_if = "crate::skip::is_default")]
     pub system_layout: bool,
+    /// Align New Objects to Pixel Grid (New Document › Advanced Options, Transform panel menu):
+    /// paths and compound paths drawn from then on are pixel-aligned. Objects already in the
+    /// document, and objects pasted, duplicated or placed, keep their own setting. Off by default
+    /// and for documents from before it, and saved only when on.
+    /// <https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/pixel-preview-mode-for-web-graphics.html>
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub align_new_objects_to_pixel_grid: bool,
 }
 
 impl Default for DocSetup {
@@ -317,6 +358,7 @@ impl Default for DocSetup {
             export_text: ExportText::Editable,
             background: Background::Transparent,
             system_layout: false,
+            align_new_objects_to_pixel_grid: false,
         }
     }
 }
@@ -369,11 +411,23 @@ impl DocSetup {
 mod tests {
     use super::*;
 
+    /// A document's language is written by its tag, the default's included (#3644).
+    #[test]
+    fn document_languages_have_their_tags() {
+        assert_eq!(language_tag(&DocSetup::default().language), Some("en-US"));
+        assert_eq!(language_tag("French"), Some("fr"));
+        assert_eq!(language_tag("german: swiss"), Some("de-CH"));
+        assert_eq!(language_tag("sr-latn"), Some("sr-Latn"));
+        assert_eq!((language_tag("Klingon"), language_tag("")), (None, None));
+    }
+
     /// Characters store a language of the list by its tag, the default as none.
     #[test]
     fn char_languages_are_stored_by_tag() {
         assert_eq!(char_language("Turkish"), Ok(Some("tr")));
         assert_eq!(char_language("MR"), Ok(Some("mr")));
+        assert_eq!(char_language("Assamese"), Ok(Some("as")));
+        assert_eq!(char_language("Sanskrit"), Ok(Some("sa")));
         assert_eq!(char_language("english: usa"), Ok(None));
         assert_eq!(char_language("en-US"), Ok(None));
         assert!(char_language("Klingon").is_err() && char_language("").is_err());
@@ -385,7 +439,16 @@ mod tests {
         assert_eq!(char_language("Serbian: Cyrillic"), Ok(Some("sr-Cyrl")));
         assert_eq!(char_language("sr-latn"), Ok(Some("sr-Latn")));
         assert_eq!(char_language("Croatian"), Ok(Some("hr")));
+        // Bulgarian (#5945), by name or tag.
+        assert_eq!(char_language("Bulgarian"), Ok(Some("bg")));
+        assert_eq!(char_language("BG"), Ok(Some("bg")));
+        assert_eq!(char_language_name(Some("bg")), Some("Bulgarian"));
         assert_eq!(char_language_name(Some("sr-Cyrl")), Some("Serbian: Cyrillic"));
+        // Sanskrit, Nepali, Assamese, Konkani (a three-letter tag) and Sindhi, by name or tag.
+        for (name, tag) in [("Sanskrit", "sa"), ("Nepali", "ne"), ("Assamese", "as"), ("Konkani", "kok"), ("Sindhi", "sd")] {
+            assert_eq!((char_language(name), char_language(&tag.to_uppercase())), (Ok(Some(tag)), Ok(Some(tag))), "{name}");
+            assert_eq!(char_language_name(Some(tag)), Some(name));
+        }
         // Every entry has a tag of its own, and a name of its own.
         for (i, (n, t, _)) in LANGUAGES.iter().enumerate() {
             assert!(LANGUAGES.iter().skip(i + 1).all(|(n2, t2, _)| n2 != n && t2 != t), "{n} {t}");
@@ -409,6 +472,20 @@ mod tests {
         }
         let mut prev = None;
         assert_eq!(language_quotes("croatian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a ‚b‘ c“");
+        // Sanskrit, Nepali, Assamese, Konkani and Sindhi take CLDR root's quotes.
+        for name in ["Sanskrit", "Nepali", "Assamese", "Konkani", "Sindhi"] {
+            let mut prev = None;
+            assert_eq!(language_quotes(name).unwrap().apply("\"a 'b' c\"", &mut prev), "“a ‘b’ c”", "{name}");
+        }
+        // Only a typed `”` stands for a straight quote; the other curly quotes stay as typed.
+        assert_eq!(Quotes::typed_as_straight('”'), Some('"'));
+        assert!(['“', '„', '‘', '’', '‚', '"', '\'', '«', '»', '「', 'a'].iter().all(|&c| Quotes::typed_as_straight(c).is_none()));
+        // A quote opens at the start and after a space, and closes after a letter.
+        assert!(Quotes::ENGLISH.opens_after(None) && Quotes::ENGLISH.opens_after(Some(' ')));
+        assert!(!Quotes::ENGLISH.opens_after(Some('a')));
+        // Bulgarian: „…“ at either level, as CLDR has it.
+        let mut prev = None;
+        assert_eq!(language_quotes("bulgarian").unwrap().apply("\"a 'b' c\"", &mut prev), "„a „b“ c“");
         // Converting in pieces keeps the context.
         let mut prev = None;
         let a = Quotes::ENGLISH.apply("\"", &mut prev);

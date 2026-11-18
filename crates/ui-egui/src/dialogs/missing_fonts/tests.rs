@@ -1,21 +1,20 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::findfiles::Rules;
 
 use super::*;
+use crate::tests_folder::Folder;
 
 fn frame(app: &mut VectorcraftApp) -> String {
     crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
 }
 
-/// A fresh temporary folder (canonical, as a search reports it).
-fn folder(tag: &str) -> PathBuf {
+/// A fresh temporary folder (canonical, as a search reports it), removed when dropped.
+fn folder(tag: &str) -> Folder {
     let dir = vectorcraft_testkit::temp_dir(&format!("missing-fonts-{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap())
+    Folder::adopt(vectorcraft_engine::cmd::findfiles::plain(std::fs::canonicalize(&dir).unwrap()))
 }
 
 /// An app that reads files and whose searches may go anywhere in `root`, on two threads.
@@ -29,9 +28,41 @@ fn app_for(root: &Path) -> VectorcraftApp {
 
 fn png() -> Vec<u8> {
     let mut out = vec![];
-    image::RgbaImage::from_pixel(40, 30, image::Rgba([200, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
-        .unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(40, 30, image::Rgba([200, 0, 0, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -49,6 +80,8 @@ fn save_doc(app: &mut VectorcraftApp, path: &Path, font: &str, link: bool) {
     if link {
         std::fs::remove_file(&pic).unwrap();
     }
+    // Opened afresh by `open`: an open file would only come to the front (#3455).
+    app.run("file.close", json!({})).unwrap();
 }
 
 fn open(app: &mut VectorcraftApp, path: &Path) {
@@ -135,6 +168,8 @@ fn find_fonts_opens_find_font_on_the_missing_font() {
     app.run("text.create", json!({"x": 10, "y": 80, "text": "Gone", "font": "Zz Missing Family"})).unwrap();
     let doc = root.join("doc.vectorcraft");
     app.run("document.save", json!({"path": doc.to_string_lossy()})).unwrap();
+    // Opened afresh: an open file would only come to the front (#5369).
+    app.run("file.close", json!({})).unwrap();
     open(&mut app, &doc);
     assert_eq!(kind(&app), Some(KIND));
     app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
@@ -187,7 +222,7 @@ fn closing_the_dialog_stops_its_search() {
     app.session.search_threads = Some(1);
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("text.create", json!({"x": 10, "y": 40, "text": "Gone", "font": "No Such Font Family"})).unwrap();
-    app.run("ui.missingFontsDialog", json!({"folder": root})).unwrap();
+    app.run("ui.missingFontsDialog", json!({"folder": root.as_path()})).unwrap();
     let id = app.ui.dialog_search.expect("the dialog's search");
     super::super::cancel(&mut app);
     assert!(app.ui.dialog.is_none() && app.ui.dialog_search.is_none());
@@ -223,6 +258,7 @@ fn one_dialog_at_a_time_document_by_document() {
     super::super::cancel(&mut app);
     assert!(app.ui.dialog.is_none());
     // A document closed before its turn is passed over.
+    app.run("file.closeAll", json!({})).unwrap();
     open(&mut app, &a);
     open(&mut app, &b);
     let index = app.session.documents().iter().rposition(|d| d.path.as_deref() == Some(&*a.to_string_lossy())).unwrap();
@@ -270,7 +306,8 @@ fn the_question_comes_back_after_a_dialog_that_took_its_place() {
 /// opens without the question.
 #[test]
 fn generic_families_are_not_asked_about() {
-    let mut app = app_for(&folder("generic"));
+    let root = folder("generic");
+    let mut app = app_for(&root);
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="10" y="40" font-family="sans-serif">A</text></svg>"#;
     crate::io::open_bytes(&mut app, "generic.svg", svg.as_bytes(), None).unwrap();
     let listed = app.session.execute("text.fonts", &json!({})).unwrap();
@@ -295,6 +332,24 @@ fn a_search_folder_that_fails_is_not_tried_again() {
     assert_eq!(super::super::confirm(&mut app).err().as_deref(), Some("choose the font files to add"));
 }
 
+/// Opening a file that is already open only brings its tab to the front: Missing Fonts, closed
+/// once, is not asked again (#5369).
+#[test]
+fn reopening_an_open_document_does_not_ask_about_its_fonts_again() {
+    let root = folder("reopen");
+    let mut app = app_for(&root);
+    let doc = root.join("doc.vectorcraft");
+    save_doc(&mut app, &doc, "No Such Font Family", false);
+    open(&mut app, &doc);
+    assert_eq!(kind(&app), Some(KIND));
+    super::super::cancel(&mut app);
+    app.run("file.new", json!({})).unwrap();
+    open(&mut app, &doc);
+    frame(&mut app);
+    assert_eq!((app.session.documents().len(), app.session.active_index()), (2, Some(0)));
+    assert_eq!(kind(&app), None);
+}
+
 /// A placed document that Links › Edit Original opens asks about its fonts, as File › Open does.
 #[test]
 fn edit_original_asks_about_the_placed_documents_fonts() {
@@ -302,7 +357,6 @@ fn edit_original_asks_about_the_placed_documents_fonts() {
     let mut app = app_for(&root);
     let badge = root.join("badge.vectorcraft");
     save_doc(&mut app, &badge, "Badge Missing Family", false);
-    app.session.execute("file.close", &json!({})).unwrap();
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     app.run("file.place", json!({"path": badge.to_string_lossy(), "link": true})).unwrap();
     let tabs = app.session.documents().len();

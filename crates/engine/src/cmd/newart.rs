@@ -5,18 +5,22 @@
 //! `stroke.set` whatever is selected), a graphic style clicked with nothing selected (more fills
 //! and strokes, effects, opacity and blend mode, and the link to the style) or, with the Appearance
 //! panel's New Art Has Basic Appearance off, the whole appearance of the last selection. With the
-//! option on (the default) an inherited appearance gives new art its top stroke's options only.
-//! `paint.default` resets it.
+//! option on (the default) an inherited appearance gives new art its top stroke's options only,
+//! and a change of selection loads only the proxies. `paint.default` resets it.
+//!
+//! A document whose Default Graphic Style no longer has the shipped look (a New Document profile
+//! redefined it) gives the reset that style's fills, strokes and effects instead, and `file.new`
+//! resets new art when it opens such a document.
 
 use std::borrow::Cow;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, GraphicStyle, Node, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, ColorMode, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeKind, StrokeLayer};
 use vectorcraft_tools::PaintDefaults;
 
 use super::gradient::unplaced;
-use super::{CommandSpec, Result, Session, always, cmd};
+use super::{CommandSpec, Result, Session, always, cmd, switch_or};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -25,7 +29,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Art Has Basic Appearance",
             ["Window", "Appearance"],
             None,
-            "{on?: bool (omitted: toggle)} the Appearance panel option (the preference newArtBasic, on by default): on, new art takes one fill and stroke (with the Stroke panel's options); off, the whole appearance of the last selected object (every fill, stroke and effect, opacity and blend mode) → {on}",
+            "{on?: bool (omitted: toggle)} the Appearance panel option (the preference newArtBasic, on by default): on, new art takes one fill and stroke (with the Stroke panel's options), the fill, stroke and weight the selection shares when it last changed; off, the whole appearance of the last selected object (every fill, stroke and effect, opacity and blend mode) → {on}",
             always,
             set_basic
         ),
@@ -213,10 +217,40 @@ impl Session {
         let (ap, opacity, blend) = (super::style::captured(n), n.opacity, n.blend);
         self.take_new_art(ap, opacity, blend, style, true);
     }
+
+    /// After a command changed the selection, with New Art Has Basic Appearance on: the fill and
+    /// stroke proxies and the weight take what the selection shows in them, so new art looks like
+    /// it. A paint the selected objects don't share (a "?" proxy) stays as it was, and art without
+    /// paint (a placed image that isn't colorized, whose None would make new art invisible) changes
+    /// nothing. The template is left alone, and without a stroke to show the weight stays too.
+    pub(crate) fn load_selection_paints(&mut self) {
+        if !self.prefs.new_art_basic {
+            return;
+        }
+        let has_paint = self
+            .proxy_source(false)
+            .is_some_and(|(n, _)| matches!(n.kind, NodeKind::Text(_)) || !n.appearance.items.is_empty() || n.extras().colorize.is_some());
+        if !has_paint {
+            return;
+        }
+        let (fill_mixed, stroke_mixed) = self.proxy_mixed();
+        let (fill, stroke) = self.proxy_paints();
+        let weight_mixed = self.active().is_some_and(|st| st.stroke_mixed().weight);
+        let weight = self.shown_stroke().filter(|st| st.paint != Paint::None && !weight_mixed).map(|st| st.width);
+        if !fill_mixed {
+            self.paint.fill = unplaced(&fill);
+        }
+        if !stroke_mixed {
+            self.paint.stroke = unplaced(&stroke);
+        }
+        if let Some(width) = weight {
+            self.paint.stroke_width = width;
+        }
+    }
 }
 
 fn set_basic(s: &mut Session, p: &Value) -> Result<Value> {
-    let on = p.get("on").and_then(Value::as_bool).unwrap_or(!s.prefs.new_art_basic);
+    let on = switch_or(p, "on", !s.prefs.new_art_basic, "appearance.setNewArtBasic")?;
     s.prefs.new_art_basic = on;
     Ok(json!({ "on": on }))
 }
@@ -233,7 +267,35 @@ fn describe(s: &mut Session, _: &Value) -> Result<Value> {
     }))
 }
 
-/// The defaults for new art reset (`paint.default`): white fill, 1 pt black stroke, no template.
+/// The defaults for new art reset (`paint.default`): white fill, 1 pt black stroke, no template;
+/// in a document whose Default Graphic Style was redefined, that style's fills, strokes and effects
+/// at full opacity, not linked to the style.
 pub(crate) fn reset(s: &mut Session) {
     s.paint = PaintDefaults::default();
+    let style = s.doc().ok().and_then(|st| redefined_default_style(&st.doc)).cloned();
+    if let Some(g) = style {
+        let ap = if g.unit_box { g.appearance } else { unplace_all(g.appearance) };
+        s.take_new_art(ap, 1.0, BlendMode::Normal, None, false);
+    }
+}
+
+/// `d`'s Default Graphic Style when its fills, strokes, effects or transparency differ from the
+/// shipped style's (white fill, 1 pt black stroke), the shipped colors converted to `d`'s color mode
+/// as a New Document profile's are.
+pub(crate) fn redefined_default_style(d: &Document) -> Option<&GraphicStyle> {
+    let g = d.graphic_styles.iter().find(|g| g.name == DEFAULT_GRAPHIC_STYLE)?;
+    let same =
+        |o: &GraphicStyle| (&o.appearance, o.opacity, o.blend, o.isolate, o.knockout) == (&g.appearance, g.opacity, g.blend, g.isolate, g.knockout);
+    if same(&GraphicStyle::new(DEFAULT_GRAPHIC_STYLE, Appearance::default_art())) {
+        return None;
+    }
+    if d.color_mode != ColorMode::Rgb {
+        let mut shipped = Document::new_with_mode(1.0, 1.0, ColorMode::Rgb);
+        shipped.graphic_styles.retain(|o| o.name == DEFAULT_GRAPHIC_STYLE);
+        super::colormgmt::set_color_mode(&mut shipped, d.color_mode, true, None, super::colormgmt::Grays::Profile);
+        if shipped.graphic_styles.first().is_some_and(same) {
+            return None;
+        }
+    }
+    Some(g)
 }

@@ -4,9 +4,11 @@
 //! (Graphics Gems, 1990), written from the description there.
 
 use super::geom::{Cubic, bez};
-use kurbo::Vec2;
+use kurbo::{CubicBez, ParamCurveNearest, Vec2};
 use vectorcraft_geom::Point;
 
+/// From this depth a run still over the tolerance is cut in the middle, which bounds the recursion
+/// at this depth plus the logarithm of the run's length.
 const MAX_DEPTH: usize = 14;
 
 fn chord(p: &[Point]) -> Vec<f64> {
@@ -71,6 +73,13 @@ fn max_err(c: &Cubic, p: &[Point], u: &[f64]) -> (f64, usize) {
     best
 }
 
+/// The largest distance from a point of `p` to the nearest point of `c`, which `max_err`'s distance
+/// at a point's parameter can only overstate.
+fn max_distance(c: &Cubic, p: &[Point]) -> f64 {
+    let curve = CubicBez::new(c[0], c[1], c[2], c[3]);
+    p.iter().map(|&q| curve.nearest(q, 1e-6).distance_sq).fold(0.0, f64::max).sqrt()
+}
+
 fn rec(p: &[Point], t1: Vec2, t2: Vec2, tol: f64, depth: usize, out: &mut Vec<Cubic>) {
     let (Some(&a), Some(&b)) = (p.first(), p.last()) else { return };
     if p.len() == 2 {
@@ -96,11 +105,19 @@ fn rec(p: &[Point], t1: Vec2, t2: Vec2, tol: f64, depth: usize, out: &mut Vec<Cu
         }
     }
     let (e, split) = max_err(&c, p, &u);
-    if e < tol || depth >= MAX_DEPTH || p.len() < 6 {
+    let short = p.len() < 6;
+    let capped = depth >= MAX_DEPTH;
+    if e < tol || ((short || capped) && max_distance(&c, p) <= tol) {
         out.push(c);
         return;
     }
-    let s = split.clamp(2, p.len() - 3);
+    let s = if short {
+        split.clamp(1, p.len() - 2)
+    } else if capped {
+        p.len() / 2
+    } else {
+        split.clamp(2, p.len() - 3)
+    };
     let tc = match (p.get(s - 1), p.get(s + 1)) {
         (Some(&x), Some(&y)) if x.distance(y) > 1e-12 => (x - y) / x.distance(y),
         _ => t1,
@@ -179,6 +196,77 @@ mod tests {
         let cs = fit_cubics(&pts, tangent(&pts, 0, 4, 1), tangent(&pts, 399, 4, -1), 0.02);
         for w in cs.windows(2) {
             assert!(w[0][3].distance(w[1][0]) < 1e-9);
+        }
+    }
+
+    /// The largest distance from a point of `pts` to the nearest point of the fit.
+    fn exact_dev(cs: &[Cubic], pts: &[Point]) -> f64 {
+        pts.iter().map(|&q| cs.iter().map(|c| max_distance(c, &[q])).fold(f64::MAX, f64::min)).fold(0.0, f64::max)
+    }
+
+    /// Fits `pts` and checks that the pieces run from its first point to its last, each within `tol`.
+    fn assert_within(pts: &[Point], tol: f64) -> Vec<Cubic> {
+        let n = pts.len();
+        let cs = fit_cubics(pts, tangent(pts, 0, 4, 1), tangent(pts, n - 1, 4, -1), tol);
+        assert!(exact_dev(&cs, pts) <= tol, "{} points, tolerance {tol}: deviation {}", n, exact_dev(&cs, pts));
+        assert_eq!((cs[0][0], cs[cs.len() - 1][3]), (pts[0], pts[n - 1]));
+        for w in cs.windows(2) {
+            assert!(w[0][3].distance(w[1][0]) < 1e-9);
+        }
+        cs
+    }
+
+    #[test]
+    fn a_short_run_over_the_tolerance_is_cut_until_it_is_within() {
+        let spike = [(0.0, 0.0), (0.12, 0.0), (0.24, 0.5), (0.36, 0.0), (0.48, 0.0)].map(|(x, y)| Point::new(x, y));
+        assert!(assert_within(&spike, 0.1).len() > 1);
+        let four = [(0.0, 0.0), (0.2, 0.6), (0.4, -0.6), (0.6, 0.0)].map(|(x, y)| Point::new(x, y));
+        assert!(assert_within(&four, 0.1).len() > 1);
+        let three = [(0.0, 0.0), (0.2, 0.6), (0.4, 0.0)].map(|(x, y)| Point::new(x, y));
+        assert!(assert_within(&three, 0.1).len() > 1);
+    }
+
+    /// A zigzag that grows towards its end: the largest error is always next to the end, so each
+    /// split takes only a few points off the run.
+    fn growing_zigzag(n: usize) -> Vec<Point> {
+        (0..n).map(|i| Point::new(i as f64 * 0.1, if i % 2 == 0 { 1.0 } else { -1.0 } * 0.02 * 1.02f64.powi(i as i32))).collect()
+    }
+
+    #[test]
+    fn a_run_that_reaches_the_depth_limit_is_still_cut_until_it_is_within() {
+        assert_within(&growing_zigzag(300), 0.05);
+    }
+
+    #[test]
+    fn a_very_long_run_of_small_splits_is_fitted_without_deep_recursion() {
+        let pts: Vec<Point> =
+            (0..200_000).map(|i| Point::new(i as f64 * 0.1, if i % 2 == 0 { 1.0 } else { -1.0 } * (1.0 + i as f64 * 1e-3))).collect();
+        let cs = fit_cubics(&pts, tangent(&pts, 0, 4, 1), tangent(&pts, pts.len() - 1, 4, -1), 0.05);
+        assert_eq!((cs[0][0], cs[cs.len() - 1][3]), (pts[0], pts[pts.len() - 1]));
+    }
+
+    #[test]
+    fn random_runs_stay_within_the_tolerance() {
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for k in 0..300 {
+            let n = 3 + (next() % 200) as usize;
+            let tol = [0.04, 0.08, 0.14, 0.3, 0.8][(next() % 5) as usize];
+            let jitter = [0.02, 0.1, 0.5, 2.0][k % 4];
+            let (mut x, mut y, mut a) = (0.0f64, 0.0f64, 0.0f64);
+            let mut pts = Vec::with_capacity(n);
+            for _ in 0..n {
+                a += ((next() % 2001) as f64 / 1000.0 - 1.0) * [0.05, 0.4, 1.5][k % 3];
+                x += a.cos() * 0.12;
+                y += a.sin() * 0.12 + ((next() % 2001) as f64 / 1000.0 - 1.0) * jitter;
+                pts.push(Point::new(x, y));
+            }
+            assert_within(&pts, tol);
         }
     }
 

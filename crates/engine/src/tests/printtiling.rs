@@ -182,3 +182,18 @@ fn settings_saved_before_the_tile_origin_still_load() {
     assert_eq!((set["copies"].clone(), set["tileOrigin"]["placed"].clone()), (json!(2), json!(false)));
     assert_eq!(tiling(&mut s, json!({}))["pages"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn invalid_print_tiling_parameters_leave_the_view_unchanged() {
+    let mut s = session();
+    let undo = s.doc().unwrap().history.undo.len();
+    for params in [json!({"on": "true"}), json!({"on": 1})] {
+        assert!(s.execute("view.printTiling", &params).is_err(), "accepted {params}");
+        let st = s.doc().unwrap();
+        assert!(!st.print_tiling, "showed the tiling for {params}");
+        assert_eq!(st.history.undo.len(), undo, "recorded undo for {params}");
+    }
+    // Left out, or null as for every command, it toggles.
+    assert_eq!(s.execute("view.printTiling", &json!(null)).unwrap(), json!({"on": true}));
+    assert_eq!(s.execute("view.printTiling", &json!({"on": null})).unwrap(), json!({"on": false}));
+}

@@ -16,7 +16,24 @@ fn b64(v: &Value) -> Vec<u8> {
 }
 
 fn rgba(bytes: &[u8]) -> image::RgbaImage {
-    image::load_from_memory(bytes).unwrap().to_rgba8()
+    craft_image_codecs::decode(bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
 }
 
 /// A chunk's data by type (first match) in a PNG file.
@@ -30,6 +47,44 @@ fn png_chunk<'a>(file: &'a [u8], ty: &[u8; 4]) -> Option<&'a [u8]> {
         i += 12 + len;
     }
     None
+}
+
+#[test]
+fn raster_export_defaults_to_document_resolution() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 72, "height": 36, "rasterEffectsPpi": 300})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.raster_effects_ppi, 300.0);
+    for format in ["png", "psd"] {
+        for (options, size, ppi) in [
+            (json!({}), (300, 150), 300.0),
+            (json!({"scale": 1}), (72, 36), 72.0),
+            (json!({"scale": 2}), (144, 72), 144.0),
+            (json!({"ppi": 150, "scale": 2}), (150, 75), 150.0),
+        ] {
+            let mut params = options;
+            params["format"] = json!(format);
+            let bytes = b64(&s.execute("document.export", &params).unwrap());
+            assert_eq!(super::ppi::resolution(&bytes), Some((ppi, ppi)), "{params}");
+            let image = super::load::raster_image(&bytes).unwrap();
+            assert_eq!((image.width, image.height), size, "{params}");
+        }
+    }
+}
+
+#[test]
+fn raster_export_default_uses_the_sanitised_document_resolution() {
+    // A stored resolution that isn't finite or is outside 1–2400 ppi exports at the resolution the
+    // document reports (72 when not finite, else clamped), not at a zero, huge or failed size.
+    for (stored, (width, height), size) in [(f64::NAN, (72, 36), (72, 36)), (0.0, (144, 72), (2, 1)), (1e9, (36, 18), (1200, 600))] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": width, "height": height})).unwrap();
+        std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).raster_effects_ppi = stored;
+        for format in ["png", "psd"] {
+            let bytes = b64(&s.execute("document.export", &json!({"format": format})).unwrap());
+            let image = super::load::raster_image(&bytes).unwrap();
+            assert_eq!((image.width, image.height), size, "{format} with a stored {stored} ppi");
+        }
+    }
 }
 
 #[test]
@@ -183,7 +238,7 @@ fn formats_list_the_raster_options() {
         assert!(opts("png").get(k).is_some(), "png lists {k}");
     }
     assert_eq!(opts("png")["antiAlias"]["default"], "art");
-    assert_eq!(opts("png")["ppi"]["default"], 72);
+    assert_eq!(opts("png")["ppi"]["default"], Value::Null);
     assert!(opts("jpg").get("quality").is_some() && opts("jpg").get("interlaced").is_none());
     assert!(opts("webp").get("antiAlias").is_some() && opts("svg").get("antiAlias").is_none());
 }
@@ -388,4 +443,56 @@ fn export_for_screens_rows_keep_their_own_size() {
         )
         .unwrap();
     assert_eq!(rgba(&b64(&r["files"][0])).dimensions(), (512, 256), "{r}");
+}
+
+/// File › Open's raster path reads images through craft-image-codecs (#778) as it read them with
+/// the image crate: each format the image crate decoded for it (BMP, TGA, TIFF at 8 and 16 bits,
+/// gray and color, with and without alpha; a PNG, JPEG, GIF and WebP stored as they are) gives
+/// the same size, sample depth and pixels.
+#[test]
+fn opened_rasters_are_the_pixels_the_image_crate_read() {
+    use image::{DynamicImage as D, ImageFormat as F};
+    let rgba = image::RgbaImage::from_fn(11, 6, |x, y| image::Rgba([(x * 23) as u8, (y * 41) as u8, ((x ^ y) * 13) as u8, 255 - (x * y * 3) as u8]));
+    let deep = image::ImageBuffer::<image::Rgba<u16>, _>::from_fn(11, 6, |x, y| {
+        image::Rgba([(x * 5_003) as u16, (y * 9_011) as u16, 77, 65_535 - (x * y) as u16])
+    });
+    let images = [
+        D::ImageRgba8(rgba.clone()),
+        D::ImageRgb8(D::ImageRgba8(rgba.clone()).to_rgb8()),
+        D::ImageLuma8(D::ImageRgba8(rgba.clone()).to_luma8()),
+        D::ImageLumaA8(D::ImageRgba8(rgba).to_luma_alpha8()),
+        D::ImageRgba16(deep.clone()),
+        D::ImageRgb16(D::ImageRgba16(deep.clone()).to_rgb16()),
+        D::ImageLuma16(D::ImageRgba16(deep).to_luma16()),
+    ];
+    let mut checked = 0;
+    for img in &images {
+        for f in [F::Bmp, F::Tga, F::Tiff, F::Png, F::Jpeg, F::Gif, F::WebP] {
+            let mut bytes = Vec::new();
+            if img.write_to(&mut std::io::Cursor::new(&mut bytes), f).is_err() {
+                continue;
+            }
+            let what = format!("{f:?} {:?}", img.color());
+            let mut want = image::load_from_memory_with_format(&bytes, f).unwrap();
+            let opened = super::load::raster_image(&bytes).unwrap_or_else(|e| panic!("{what}: {e}"));
+            assert_eq!((opened.width, opened.height), (want.width(), want.height()), "{what}");
+            if opened.blob.mime != "image/png" {
+                // Stored as they are: the file's own bytes.
+                assert_eq!(opened.blob.bytes.as_slice(), bytes.as_slice(), "{what}");
+                checked += 1;
+                continue;
+            }
+            if f == F::Tga {
+                let mut px = want.to_rgba8();
+                super::tgaread::fix_alpha(&bytes, &mut px);
+                want = D::ImageRgba8(px);
+            }
+            let got = image::load_from_memory_with_format(&opened.blob.bytes, F::Png).unwrap();
+            let deep_samples = |c: image::ColorType| c.bytes_per_pixel() > c.channel_count();
+            assert_eq!(deep_samples(got.color()), deep_samples(want.color()), "{what}: {:?} {:?}", got.color(), want.color());
+            assert_eq!(got.to_rgba16().as_raw(), want.to_rgba16().as_raw(), "{what}");
+            checked += 1;
+        }
+    }
+    assert!(checked >= 25, "{checked}");
 }

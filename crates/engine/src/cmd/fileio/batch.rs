@@ -15,12 +15,12 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     let artboard = p.get("artboard").and_then(Value::as_u64);
     // What an error rolls back besides the documents: session-level state a step may change
     // (paint defaults, drawing mode, clipboard, the Untitled-N count, a begun undo group).
-    let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter, s.explicit_undo_group.clone());
     // A drag or typing still in progress is a step of its own, as before Undo: the batch's steps
     // would otherwise run inside it and take its baseline as theirs (#1697).
-    if s.active().is_some() {
+    if s.active().is_some() && !s.previewing {
         super::super::edit::settle_interaction(s)?;
     }
+    let saved = (s.paint.clone(), s.fill_active, s.draw_mode, s.draw_inside, s.clipboard.clone(), s.untitled_counter, s.explicit_undo_group.clone());
     // The documents as they are now, whole: what a failed step brings back. Their art, history,
     // file, format and saved state share their data with the open ones until a step changes them.
     let start = s.docs.clone();
@@ -41,16 +41,25 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
             roll_back(s, start, &stash);
             s.notify_text_tool("batch.rollBack");
             s.active = active;
+            s.sync_front_profiles();
             (s.paint, s.fill_active, s.draw_mode, s.draw_inside, s.clipboard, s.untitled_counter, s.explicit_undo_group) = saved;
             s.pending_paint = None;
             return Err(e);
         }
     };
     // Each document the steps edited keeps them as one undo step.
-    s.remember_pending_paint();
-    for st in &mut s.docs {
-        if let Some(it) = st.interaction.take() {
-            st.keep_interaction(it);
+    if !s.previewing {
+        s.remember_pending_paint();
+        for st in &mut s.docs {
+            if let Some(mut it) = st.interaction.take() {
+                // Redo restores the new-art colors the whole batch left, not the ones right after a
+                // color-mode step.
+                if let Some((_, after)) = &mut it.color_mode_paints {
+                    after.clone_from(&s.paint);
+                    s.batch_paint_docs.push(st.uid);
+                }
+                st.keep_interaction(it);
+            }
         }
     }
     // The batch journals itself, whichever document it ends in.
@@ -58,7 +67,9 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(o) = entry.as_object_mut() {
         o.insert("commands".into(), Value::Array(cmds));
     }
-    s.journal.push(("command.batch".into(), entry));
+    if !s.previewing {
+        s.journal.push(("command.batch".into(), entry));
+    }
     Ok(json!({ "results": results }))
 }
 
@@ -66,8 +77,15 @@ pub(super) fn batch(s: &mut Session, p: &Value) -> Result<Value> {
 /// starts (one for all the steps in that document), so a step may open, switch or close documents.
 /// A step that acts on the active artboard ([`crate::ON_ACTIVE_ARTBOARD`]) and names none gets
 /// `artboard`, as the Artboards panel shows it in the document the step runs in: past that
-/// document's last artboard, the last one. A step that resizes the active artboard
-/// ([`crate::FIT_ACTIVE_ARTBOARD`]) and names no `index` gets that artboard as its `index`.
+/// document's last artboard, the last one; a Paste in Place, in Front or in Back step that names
+/// `artboards` keeps them, and one that names neither, while the Artboard tool is chosen with
+/// several artboards selected, pastes on those. A Fit to Artwork Bounds step that names neither
+/// `index` nor `indices`, while the Artboard tool is chosen with two or more artboards selected when
+/// the step runs, gets those as its `indices`. Otherwise a step that resizes the active artboard
+/// ([`crate::FIT_ACTIVE_ARTBOARD`]) and names no `index` (nor `indices`, for Fit to Artwork Bounds)
+/// gets that artboard as its `index`. A Fit to Artwork Bounds step that still names neither gets
+/// `index` 0, the command's default. A Fit to Artwork Bounds step's journal entry records the
+/// `indices` or `index` it got.
 /// `grouped` gets each step's undo groups, as [`Session::batch_steps`] keeps them.
 fn run_steps(
     s: &mut Session,
@@ -82,32 +100,65 @@ fn run_steps(
         if id == "command.batch" {
             return Err(bad("command.batch", "batches cannot nest"));
         }
+        if id == "prefs.import" {
+            return Err(bad("command.batch", "`prefs.import` runs on its own, not as a batch step"));
+        }
         if s.active().is_some() {
             s.begin_interaction(label)?;
         }
-        let mut params = c.get("params").cloned().unwrap_or(json!({}));
+        // `"params": null` reads as no params, so the artboards below can still be added.
+        let mut params = c.get("params").filter(|v| !v.is_null()).cloned().unwrap_or(json!({}));
         let key = if crate::ON_ACTIVE_ARTBOARD.contains(&id.as_str()) {
             Some("artboard")
         } else {
             crate::FIT_ACTIVE_ARTBOARD.contains(&id.as_str()).then_some("index")
         };
+        // A paste step that names its `artboards` keeps them; one that names neither key, while the
+        // Artboard tool is chosen with several artboards selected, pastes on those.
+        let names_artboards = id.starts_with("edit.pasteIn")
+            && (params.get("artboards").is_some() || (params.get("artboard").is_none() && !crate::cmd::edit::artboard_tool_picks(s).is_empty()));
+        // A Fit to Artwork Bounds step that names neither `index` nor `indices`, while the Artboard
+        // tool is chosen with two or more artboards selected, fits those.
+        let fit_unnamed = id == "artboard.fitToArt" && params.get("index").is_none() && params.get("indices").is_none();
+        let fit_picks = if fit_unnamed { crate::cmd::edit::artboard_tool_picks(s) } else { Vec::new() };
+        if !fit_picks.is_empty()
+            && let Some(o) = params.as_object_mut()
+        {
+            o.insert("indices".into(), json!(fit_picks));
+        }
         if let Some(a) = artboard
             && let Some(key) = key
             && params.get(key).is_none()
+            && !(id == "artboard.fitToArt" && params.get("indices").is_some())
+            && !names_artboards
             && let Some(last) = s.active().and_then(|d| d.doc.artboards.len().checked_sub(1))
             && let Some(o) = params.as_object_mut()
         {
             o.insert(key.into(), json!(usize::try_from(a).map_or(last, |a| a.min(last))));
+        }
+        // With neither, the step fits the command's default, the first artboard, named here so the
+        // journal records it.
+        if fit_unnamed
+            && params.get("index").is_none()
+            && params.get("indices").is_none()
+            && let Some(o) = params.as_object_mut()
+        {
+            o.insert("index".into(), json!(0));
         }
         // The documents with an undo group open, held so that the step's first edit in one copies it.
         let start = s.active().map(|d| d.uid);
         let held: Vec<(u64, Arc<Document>)> = s.docs.iter().filter(|st| st.undo_group.is_some()).map(|st| (st.uid, st.doc.clone())).collect();
         let (v, noted) =
             s.execute_step(&id, &params).map_err(|e| EngineError::Other(format!("batch step {} (`{id}`) failed: {e}", results.len())))?;
+        if s.previewing && s.active().map(|d| d.uid) != start {
+            return Err(bad("command.batch", "a batch preview cannot switch documents"));
+        }
         grouped.push(step_groups(s, start, &held));
         // The step's journal entry records what it took from the preferences or the clock (a
-        // save's date, a new document's), as a command of its own would.
-        if noted != params
+        // save's date, a new document's), as a command of its own would, and the artboards a Fit to
+        // Artwork Bounds step took from the Artboard tool, the batch or the command's default, so a
+        // replay does not fit the artboards the Artboard tool has selected then.
+        if (noted != params || fit_unnamed)
             && let Some(c) = c.as_object_mut()
         {
             c.insert("params".into(), noted);

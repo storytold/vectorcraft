@@ -1,10 +1,10 @@
 //! The document walk: each visible object becomes DXF entities on its layer's DXF layer, in paint
-//! order. Fills are their outlines then solid hatches (the outlines alone in R12), strokes
-//! polylines and cubic splines with a lineweight and dashes, or filled outlines where the look
-//! needs them.
+//! order. Fills are their outlines then solid hatches (the outlines alone in R12 or with
+//! hatches left out), placed images are linked image files unless left out, strokes
+//! polylines (with bulges for circular arcs) and cubic splines with a lineweight and dashes, or
+//! filled outlines where the look needs them.
 
 use std::collections::HashMap;
-use std::io::Cursor;
 
 use kurbo::PathEl;
 use vectorcraft_color::Paint;
@@ -13,8 +13,8 @@ use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Vec2};
 
 use crate::aci::nearest_aci;
-use crate::writer::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, fixed};
 use crate::{CAP_HEIGHT, ColorDepth, DxfImage, DxfOptions, DxfOutput, MAX_NEST, Preserve, RasterFormat};
+use craft_dxf::drawing::{Codes, Drawing, EntityStyle, Handle, ImageDef, Layer, LineType, STANDARD_STYLE, fixed};
 
 /// Curves are flattened to within this distance (points) where DXF needs straight segments
 /// (hatch boundaries, R12 polylines).
@@ -28,6 +28,8 @@ const NO_TRUE_COLOR: &str = "true colour needs DXF 2004 or later: colours are wr
 const NO_TRANSPARENCY: &str = "transparency needs DXF 2004 or later: transparent objects are written opaque";
 const NO_FILLS: &str = "DXF R12 has no fills: filled areas are written as their outlines";
 const NO_IMAGES: &str = "DXF R12 has no images: placed images are left out";
+const IMAGES_OFF: &str = "placed images are left out (Include Placed Images is off)";
+const HATCHES_OFF: &str = "fill hatches are left out: filled areas are written as their outlines (Include Fill Hatches is off)";
 const WIDE_LINES: &str =
     "lines wider than 2.11 mm (the widest lineweight) are written at 2.11 mm: Alter Paths for Appearance writes their true width";
 const STROKE_EXTRAS: &str = "stroke alignment, width profiles, arrowheads and brushes are left out (Maximize Editability writes strokes as lines)";
@@ -66,6 +68,8 @@ struct CircularSub {
     centre: Point,
     radius: f64,
     samples: Vec<Point>,
+    /// The signed angle (radians) the curve turns through about `centre` in document space.
+    turn: f64,
 }
 
 fn cubic_point(p0: Point, p1: Point, p2: Point, p3: Point, t: f64) -> Point {
@@ -122,7 +126,12 @@ fn circular_subpath(sub: &Sub) -> Option<CircularSub> {
     if !centre.x.is_finite() || !centre.y.is_finite() || !radius.is_finite() || radius <= 1e-9 {
         return None;
     }
-    let tolerance = (radius * 5e-4).max(1e-6);
+    // The tolerance is a fraction of the smaller of the radius and the curve's extent, so the large
+    // radius of a shallow curve does not loosen it.
+    let (lo, hi) = samples
+        .iter()
+        .fold((samples[0], samples[0]), |(lo, hi), p| (Point::new(lo.x.min(p.x), lo.y.min(p.y)), Point::new(hi.x.max(p.x), hi.y.max(p.y))));
+    let tolerance = (radius.min(lo.distance(hi)) * 5e-4).max(1e-6);
     if samples.iter().any(|p| (centre.distance(*p) - radius).abs() > tolerance) {
         return None;
     }
@@ -181,7 +190,76 @@ fn circular_subpath(sub: &Sub) -> Option<CircularSub> {
     } else if total_turn.abs() < 1e-6 || total_turn.abs() >= std::f64::consts::TAU - 1e-3 {
         return None;
     }
-    Some(CircularSub { centre, radius, samples })
+    Some(CircularSub { centre, radius, samples, turn: total_turn })
+}
+
+/// The points of the circle about `centre` of `radius` furthest left, right, up and down that lie on
+/// its arc from `from` through `turn` radians, for the drawing extents.
+fn arc_extrema(centre: Point, radius: f64, from: Point, turn: f64) -> Vec<Point> {
+    let start = (from.y - centre.y).atan2(from.x - centre.x);
+    (0..4)
+        .map(|k| f64::from(k) * std::f64::consts::FRAC_PI_2)
+        .filter(|a| ((a - start) * turn.signum()).rem_euclid(std::f64::consts::TAU) <= turn.abs())
+        .map(|a| Point::new(centre.x + radius * a.cos(), centre.y + radius * a.sin()))
+        .collect()
+}
+
+/// The most cubics one bulge arc is fitted to; the cubics after them start the next arc.
+const MAX_ARC_RUN: usize = 64;
+
+/// A subpath of straight segments and circular arcs as polyline vertices, in document space.
+struct BulgedSub {
+    /// The anchors, without a closed subpath's repeated start.
+    pts: Vec<Point>,
+    /// For each anchor, the angle (radians, document space) the segment that starts there turns
+    /// through: 0 for a straight segment.
+    turns: Vec<f64>,
+    /// The arcs' extreme points ([`arc_extrema`]), for the drawing extents.
+    extrema: Vec<Point>,
+}
+
+/// Fit a subpath with curves to straight segments and circular arcs: each run of cubics on one
+/// circle, turning one way and less than a whole turn, becomes one arc ([`circular_subpath`]'s
+/// tolerance). `None` when the subpath has no curves or a curve that is not a circular arc.
+fn bulged_subpath(sub: &Sub) -> Option<BulgedSub> {
+    if !sub.segs.iter().any(|s| matches!(s, Seg::Cubic(..))) {
+        return None;
+    }
+    let mut pts = vec![sub.start];
+    let mut turns = vec![];
+    let mut extrema = vec![];
+    let mut from = sub.start;
+    let mut i = 0;
+    while let Some(seg) = sub.segs.get(i) {
+        if let Seg::Line(p) = *seg {
+            turns.push(0.0);
+            pts.push(p);
+            from = p;
+            i += 1;
+            continue;
+        }
+        let mut best = None;
+        let mut j = i;
+        while j < sub.segs.len() && j - i < MAX_ARC_RUN && matches!(sub.segs[j], Seg::Cubic(..)) {
+            let run = Sub { start: from, segs: sub.segs[i..=j].to_vec(), closed: false };
+            let Some(arc) = circular_subpath(&run) else { break };
+            best = Some((j, arc));
+            j += 1;
+        }
+        let (j, arc) = best?;
+        turns.push(arc.turn);
+        extrema.extend(arc_extrema(arc.centre, arc.radius, from, arc.turn));
+        from = sub.segs[j].end();
+        pts.push(from);
+        i = j + 1;
+    }
+    if sub.closed && pts.last().is_some_and(|p| p.distance(sub.start) <= 1e-9) {
+        pts.pop();
+    } else {
+        // The segment from the last anchor: the straight closing edge, or none for an open subpath.
+        turns.push(0.0);
+    }
+    (pts.len() >= 2).then_some(BulgedSub { pts, turns, extrema })
 }
 
 /// A closed subpath that is the four-cubic circle under an affine map: an ellipse, or a circle
@@ -260,6 +338,32 @@ fn subpaths(bp: &BezPath) -> Vec<Sub> {
         cur.get_or_insert_with(|| Sub { start: last, segs: vec![], closed: false }).segs.push(seg);
     }
     out.extend(cur);
+    out
+}
+
+/// `bp` with each open subpath that can enclose an area closed, as a fill closes it: two or more
+/// segments, or one curve. A single straight segment stays open.
+fn closed_fill(bp: &BezPath) -> BezPath {
+    let mut out = BezPath::new();
+    let (mut segs, mut curved) = (0usize, false);
+    let close = |out: &mut BezPath, segs: usize, curved: bool| {
+        if segs >= 2 || (segs == 1 && curved) {
+            out.close_path();
+        }
+    };
+    for el in bp.elements() {
+        match *el {
+            PathEl::MoveTo(_) => {
+                close(&mut out, segs, curved);
+                (segs, curved) = (0, false);
+            }
+            PathEl::ClosePath => (segs, curved) = (0, false),
+            PathEl::LineTo(_) => segs += 1,
+            PathEl::QuadTo(..) | PathEl::CurveTo(..) => (segs, curved) = (segs + 1, true),
+        }
+        out.push(*el);
+    }
+    close(&mut out, segs, curved);
     out
 }
 
@@ -415,6 +519,8 @@ pub(crate) struct Scene<'a> {
     /// Image keys → index into `images` (`None`: left out).
     by_key: HashMap<String, Option<usize>>,
     warnings: Vec<String>,
+    /// What was left out because an option asked for it ([`DxfOutput::setting_notes`]).
+    setting_notes: Vec<String>,
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
     extents: Option<[f64; 4]>,
     /// The opacity of the containers around the current object.
@@ -436,7 +542,7 @@ impl<'a> Scene<'a> {
             o,
             to_dxf: Affine::new([k, 0.0, 0.0, -k, -r.x0 * k, r.y1 * k]),
             k,
-            e: Codes::new(o.version),
+            e: Codes::new(o.version.into()),
             next: fixed::FIRST_FREE,
             layers: vec![],
             layer_names: Names::with(&["0", "Defpoints"]),
@@ -444,11 +550,12 @@ impl<'a> Scene<'a> {
             flags: LayerFlags { off: false, locked: false, plot: true },
             linetypes: vec![],
             styles: vec![],
-            style_names: Names::with(&[crate::writer::STANDARD_STYLE]),
+            style_names: Names::with(&[STANDARD_STYLE]),
             images: vec![],
             files: vec![],
             by_key: HashMap::new(),
             warnings: vec![],
+            setting_notes: vec![],
             brushes: None,
             extents: None,
             opacity: 1.0,
@@ -471,7 +578,7 @@ impl<'a> Scene<'a> {
         let one = (self.o.scale - 1.0).abs() < 1e-12;
         let insunits = if one { crate::insunits_code(self.o.unit).unwrap_or(0) } else { 0 };
         let drawing = Drawing {
-            version: self.o.version,
+            version: self.o.version.into(),
             layers: self.layers,
             linetypes: self.linetypes,
             styles: self.styles,
@@ -483,12 +590,21 @@ impl<'a> Scene<'a> {
             metric: matches!(self.o.unit, Unit::Millimeters | Unit::Centimeters | Unit::Meters),
             next: self.next,
         };
-        DxfOutput { bytes: drawing.write().into_bytes(), images: self.files, warnings: self.warnings }
+        DxfOutput { bytes: drawing.write().into_bytes(), images: self.files, warnings: self.warnings, setting_notes: self.setting_notes }
     }
 
+    /// Note `w`, once, about something of the document that the drawing leaves out or that reaches
+    /// it changed. A note about an option goes to [`Self::note_setting`].
     fn warn(&mut self, w: &str) {
         if !self.warnings.iter().any(|x| x == w) {
             self.warnings.push(w.to_string());
+        }
+    }
+
+    /// Note `w`, once, about something left out because an option turns it off.
+    fn note_setting(&mut self, w: &str) {
+        if !self.setting_notes.iter().any(|x| x == w) {
+            self.setting_notes.push(w.to_string());
         }
     }
 
@@ -507,7 +623,8 @@ impl<'a> Scene<'a> {
     }
 
     fn node(&mut self, n: &Node, force: bool) {
-        if let NodeKind::Layer { template: true, .. } = n.kind {
+        // Ruler guides draw on screen only: no entity and no loss warning.
+        if n.is_ruler_guide() || n.is_template() {
             return;
         }
         // Symbols that hold symbols are written in full for each instance: depth alone doesn't
@@ -554,7 +671,7 @@ impl<'a> Scene<'a> {
                 self.shape(n, &bp, *rule);
             }
             NodeKind::Text(t) => self.text(n, t),
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let doc = self.doc;
                 if self.symbol_nodes >= vectorcraft_doc::MAX_SYMBOL_NODES {
@@ -565,7 +682,7 @@ impl<'a> Scene<'a> {
                 {
                     // Symbols holding instances of symbols are written in full for each instance,
                     // empty or not: every instance's art counts against one budget for the export.
-                    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                    let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n);
                     let count = art.count_with_masks() as u64;
                     // Counted as `place_symbol_art_unclipped` places it: no clip groups.
                     let most = doc.symbol_slice_map(symbol, *xf).map_or(count, |m| m.most_placed_unclipped(&art, doc));
@@ -600,6 +717,8 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
         self.opacity = opacity;
     }
@@ -799,13 +918,13 @@ impl<'a> Scene<'a> {
         Some(vectorcraft_brush::stroke_pieces(doc, b, bp, st))
     }
 
-    /// A filled area as its outlines followed by a solid hatch (R12: the outlines alone). Laser
-    /// and cutter software reads the outlines and skips hatches. `clean`: the path has no
+    /// A filled area as its outlines followed by a solid hatch (R12, or with hatches left out: the
+    /// outlines alone). Laser and cutter software reads the outlines and skips hatches. `clean`: the path has no
     /// overlaps, so the hatch's even-odd rule reads it as it is.
     fn area(&mut self, bp: &BezPath, rule: FillRule, style: &EntityStyle, clean: bool) {
         if !self.o.version.handles() {
             self.warn(NO_FILLS);
-            self.lines(bp, style, 0.0);
+            self.lines(&closed_fill(bp), style, 0.0);
             return;
         }
         let several = bp.elements().iter().filter(|e| matches!(e, PathEl::MoveTo(_))).count() > 1;
@@ -814,11 +933,17 @@ impl<'a> Scene<'a> {
             .flatten()
             .map(|p| p.to_bezpath());
         let outline = normalized.as_ref().unwrap_or(bp);
+        // A fill with no loop of three points or more encloses no area: no outline and no hatch.
         let loops: Vec<Vec<Point>> = polygons(outline).into_iter().filter(|p| p.len() >= 3).collect();
         if loops.is_empty() {
             return;
         }
-        self.lines(outline, style, 0.0);
+        // The outlines close as the fill does, so an open path's fill keeps its closing edge.
+        self.lines(&closed_fill(outline), style, 0.0);
+        if !self.o.include_hatches {
+            self.note_setting(HATCHES_OFF);
+            return;
+        }
         let h = self.handle();
         let layer = self.layer.clone();
         self.e.entity("HATCH", h, fixed::MODEL_RECORD, &layer, style, "AcDbHatch");
@@ -846,7 +971,9 @@ impl<'a> Scene<'a> {
     }
 
     /// Path `bp` as lines: a line for an open subpath of one straight segment, polylines for
-    /// other straight subpaths (and for curves in R12, flattened), cubic splines for curved ones.
+    /// other straight subpaths, circles, arcs and ellipses where the curves are one, polylines
+    /// with bulges for subpaths of straight segments and circular arcs, and cubic splines for
+    /// other curved ones (flattened polylines in R12).
     /// `width`: the stroke weight, which DXF before 2000 gives polylines as a width.
     fn lines(&mut self, bp: &BezPath, style: &EntityStyle, width: f64) {
         let v = self.o.version;
@@ -863,7 +990,7 @@ impl<'a> Scene<'a> {
                 // A LINE has no width, so a stroke before 2000 keeps its polyline width.
                 match (sub.closed, width, pts.as_slice()) {
                     (false, None, &[a, b]) => self.line(a, b, style),
-                    _ => self.polyline(&pts, sub.closed, style, width),
+                    _ => self.polyline(&pts, &[], sub.closed, style, width),
                 }
             } else if (v.handles() || width.is_none()) && self.circular(&sub, style) {
                 // Native circles/arcs are preferred by CAD/CAM software. In R12, however, a
@@ -871,6 +998,12 @@ impl<'a> Scene<'a> {
                 // its width. Non-circular curves continue through the existing fallback.
             } else if v.handles() && self.elliptical(&sub, style) {
                 // R13 and later write an ellipse as a native ELLIPSE.
+            } else if let Some(b) = bulged_subpath(&sub) {
+                // Straight segments and circular arcs: one polyline whose bulges draw the arcs.
+                b.extrema.iter().for_each(|p| _ = self.pt(*p));
+                let flip = if self.to_dxf.determinant() < 0.0 { -1.0 } else { 1.0 };
+                let bulges: Vec<f64> = b.turns.iter().map(|t| flip * (t / 4.0).tan()).collect();
+                self.polyline(&b.pts, &bulges, sub.closed, style, width);
             } else if v.handles() {
                 self.spline(&sub, style);
             } else {
@@ -883,7 +1016,7 @@ impl<'a> Scene<'a> {
                     }
                 }
                 for pts in polygons(&path) {
-                    self.polyline(&pts, sub.closed, style, width);
+                    self.polyline(&pts, &[], sub.closed, style, width);
                 }
             }
         }
@@ -900,8 +1033,9 @@ impl<'a> Scene<'a> {
     }
 
     /// A polyline through `pts` (document space): lightweight from R14, else a polyline with a
-    /// vertex entity per point.
-    fn polyline(&mut self, pts: &[Point], closed: bool, style: &EntityStyle, width: Option<f64>) {
+    /// vertex entity per point. `bulges`: the bulge (group 42) of the segment that starts at each
+    /// point, in drawing space; empty for straight segments only.
+    fn polyline(&mut self, pts: &[Point], bulges: &[f64], closed: bool, style: &EntityStyle, width: Option<f64>) {
         if pts.len() < 2 {
             return;
         }
@@ -917,8 +1051,11 @@ impl<'a> Scene<'a> {
             if let Some(w) = width {
                 self.e.num(43, w);
             }
-            for p in &pts {
+            for (i, p) in pts.iter().enumerate() {
                 self.e.xy(10, p.x, p.y);
+                if let Some(&b) = bulges.get(i).filter(|b| **b != 0.0) {
+                    self.e.num(42, b);
+                }
             }
             return;
         }
@@ -930,13 +1067,16 @@ impl<'a> Scene<'a> {
             self.e.num(40, w);
             self.e.num(41, w);
         }
-        for p in &pts {
+        for (i, p) in pts.iter().enumerate() {
             let vh = self.handle();
             self.e.entity("VERTEX", vh, h, &layer, style, "AcDbVertex");
             if self.o.version.handles() {
                 self.e.raw(100, "AcDb2dVertex");
             }
             self.e.xyz(10, p.x, p.y);
+            if let Some(&b) = bulges.get(i).filter(|b| **b != 0.0) {
+                self.e.num(42, b);
+            }
         }
         let end = self.handle();
         self.e.entity("SEQEND", end, h, &layer, style, "");
@@ -960,8 +1100,8 @@ impl<'a> Scene<'a> {
             return false;
         }
 
-        // Count sampled points in the drawing extents. For a full circle include all cardinal
-        // points exactly; for an arc, the dense samples conservatively cover its visible span.
+        // Count the curve's extreme points in the drawing extents: all four cardinal points of a
+        // full circle; an arc's ends and the cardinal points on it.
         if sub.closed {
             let r = circle.radius;
             for p in [
@@ -973,8 +1113,8 @@ impl<'a> Scene<'a> {
                 self.pt(p);
             }
         } else {
-            for p in &circle.samples {
-                self.pt(*p);
+            for p in [sub.start, last].into_iter().chain(arc_extrema(circle.centre, circle.radius, sub.start, circle.turn)) {
+                self.pt(p);
             }
         }
 
@@ -1136,10 +1276,10 @@ impl<'a> Scene<'a> {
                 let Some(&first) = run.first() else { continue };
                 let lo = run.iter().map(|g| g.byte).min().unwrap_or(first.byte);
                 let hi = run.iter().map(|g| g.byte + g.len).max().unwrap_or(lo);
-                // A right-to-left paragraph's marker is drawn with its tab first and its number's
-                // period at the number's left; the TEXT entity holds the characters in that order.
+                // A right-to-left paragraph's marker is drawn with its number's period at the
+                // number's left; the TEXT entity holds the characters in that order.
                 let marker = chunk.first().and_then(|(_, _, m)| *m).map(|m| match m.text.strip_suffix('.') {
-                    Some(number) if m.tab == m.glyphs.start => format!(".{number}"),
+                    Some(number) if layout.glyphs.get(m.tab).is_some_and(|g| g.rtl) => format!(".{number}"),
                     _ => m.text.clone(),
                 });
                 let Some(s) = marker.as_deref().or_else(|| plain.get(lo..hi).map(str::trim_end)).filter(|s| !s.trim().is_empty()) else { continue };
@@ -1189,6 +1329,10 @@ impl<'a> Scene<'a> {
     fn image(&mut self, im: &ImageObject) {
         if !self.o.version.handles() {
             self.warn(NO_IMAGES);
+            return;
+        }
+        if !self.o.include_images {
+            self.note_setting(IMAGES_OFF);
             return;
         }
         let Some(i) = self.image_def(im) else { return };
@@ -1258,35 +1402,37 @@ impl<'a> Scene<'a> {
 
     /// Image `im` as a file in the chosen format, and its size in pixels.
     fn encode_image(&self, im: &ImageObject) -> Result<(DxfImage, (u32, u32)), String> {
+        use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image as CodecImage, SampleType};
         let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty()).ok_or_else(|| "an image has no pixels and was left out".to_string())?;
         // The pixels it converts to (RGBA, 4 bytes each) are read from its header before decoding.
-        let (w, h) = image::ImageReader::new(Cursor::new(blob.bytes.as_slice()))
-            .with_guessed_format()
-            .ok()
-            .and_then(|r| r.into_dimensions().ok())
-            .ok_or_else(|| UNDECODED.to_string())?;
+        let (w, h) = vectorcraft_doc::header_size(&blob.bytes).ok_or_else(|| UNDECODED.to_string())?;
         if u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS {
             return Err("an image is too large for DXF and was left out".to_string());
         }
-        let img = image::load_from_memory(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
-        let size = (img.width(), img.height());
-        let mut bytes = vec![];
-        let written = match self.o.raster {
-            RasterFormat::Png => img.to_rgba8().write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png),
+        let decoded = craft_image_codecs::decode(&blob.bytes).map_err(|_| UNDECODED.to_string())?;
+        let size = decoded.dimensions();
+        let mut rgba = decoded.to_rgba8();
+        let bytes = match self.o.raster {
+            RasterFormat::Png => {
+                let img = CodecImage::from_raw(size.0, size.1, ChannelLayout::Rgba, SampleType::U8, rgba)
+                    .map_err(|e| format!("an image could not be written: {e}"))?;
+                craft_image_codecs::encode(&img, Format::Png, &EncodeOptions::default())
+            }
             RasterFormat::Jpeg => {
                 // No alpha in JPEG: transparent pixels over white.
-                let mut rgba = img.to_rgba8();
-                for p in rgba.pixels_mut() {
+                let mut rgb = Vec::with_capacity(rgba.len() / 4 * 3);
+                for p in rgba.as_chunks_mut::<4>().0 {
                     let a = u32::from(p[3]);
-                    for c in 0..3 {
-                        p[c] = ((u32::from(p[c]) * a + 255 * (255 - a)) / 255) as u8;
+                    for c in &p[..3] {
+                        rgb.push(((u32::from(*c) * a + 255 * (255 - a)) / 255) as u8);
                     }
                 }
-                let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
-                rgb.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 90))
+                let img = CodecImage::from_raw(size.0, size.1, ChannelLayout::Rgb, SampleType::U8, rgb)
+                    .map_err(|e| format!("an image could not be written: {e}"))?;
+                craft_image_codecs::encode(&img, Format::Jpeg, &EncodeOptions { jpeg_quality: 90, ..EncodeOptions::default() })
             }
-        };
-        written.map_err(|e| format!("an image could not be written: {e}"))?;
+        }
+        .map_err(|e| format!("an image could not be written: {e}"))?;
         Ok((DxfImage { name: format!("{}.{}", blob.content_key(), self.o.raster.extension()), bytes }, size))
     }
 }

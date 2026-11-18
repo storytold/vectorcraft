@@ -76,7 +76,7 @@ fn dash_state(dash: Option<&Dash>, last: Option<(Vec<f64>, bool)>) -> (Vec<f64>,
 }
 
 /// Six dash/gap fields → a dash pattern: stops at the first empty dash; a dash without a gap
-/// repeats its length as the gap (Illustrator's behaviour).
+/// repeats its length as the gap.
 pub fn dash_pattern(fields: &[Option<f64>; 6]) -> Vec<f64> {
     edited_dash_pattern(fields, &[])
 }
@@ -100,8 +100,35 @@ pub(crate) fn edited_dash_pattern(fields: &[Option<f64>; 6], previous: &[f64]) -
     out
 }
 
-fn arrow_label(a: Option<Arrowhead>) -> &'static str {
+fn arrow_label(a: Option<&Arrowhead>) -> &'static str {
     a.map_or("None", Arrowhead::label)
+}
+
+/// The name an arrowhead menu shows for `a`: a built-in head's in the interface language, a
+/// custom head's own.
+fn arrow_name(a: Option<&Arrowhead>) -> String {
+    match a {
+        Some(Arrowhead::Custom(c)) => c.name.clone(),
+        _ => tl!(arrow_label(a)).to_string(),
+    }
+}
+
+/// The preview cache key of `a`: its name, and for a custom head its art.
+fn arrow_key(a: Option<&Arrowhead>) -> String {
+    match a {
+        Some(Arrowhead::Custom(c)) => {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            for s in &c.path.subpaths {
+                (s.anchors.len(), s.closed).hash(&mut h);
+                for p in s.anchors.iter().flat_map(|a| [a.p, a.h_in, a.h_out]) {
+                    (p.x.to_bits(), p.y.to_bits()).hash(&mut h);
+                }
+            }
+            format!("custom:{}:{:x}", c.name, h.finish())
+        }
+        _ => format!("{a:?}"),
+    }
 }
 
 /// Apply Stroke panel options (`stroke.set` params): while the Type tool edits text, to the
@@ -137,14 +164,20 @@ pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weig
 }
 
 /// The underlined Stroke link (`label`: the Control bar's "Stroke:", the Properties panel's
-/// "Stroke"): a click toggles the Stroke panel in a popover under it.
+/// "Stroke"): a click toggles the Stroke panel in a popover under it, and a drag scrubs the weight
+/// field after it ([`crate::scrub`]).
 pub(crate) fn link(app: &mut VectorcraftApp, ui: &mut Ui, label: &str) {
-    let t = Tokens::get(ui.ctx());
-    let resp = ui.link(egui::RichText::new(label).size(12.0).color(t.text).underline()).on_hover_text(tl!("Stroke options"));
+    // A drag on it scrubs the weight field after it (#4088).
+    let resp = crate::scrub::link_label(ui, link_text(ui, label)).on_hover_text(tl!("Stroke options"));
     widgets::popover(&resp, resp.clicked(), |ui| {
         ui.set_width(260.0);
         show(app, ui);
     });
+}
+
+/// The text of the Stroke [`link`] labeled `label`, as it draws it and the Control bar measures it.
+pub(crate) fn link_text(ui: &Ui, label: &str) -> egui::RichText {
+    egui::RichText::new(label).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -270,14 +303,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     widgets::divider(ui);
     // Arrowheads.
-    let (sa, ea) = (st.as_ref().and_then(|s| s.start_arrow), st.as_ref().and_then(|s| s.end_arrow));
+    let (sa, ea) = (st.as_ref().and_then(|s| s.start_arrow.clone()), st.as_ref().and_then(|s| s.end_arrow.clone()));
+    // The custom heads of the arrowheads file follow the built-in ones.
+    let custom: Vec<Arrowhead> = app.session.arrowheads.heads().iter().cloned().map(Arrowhead::Custom).collect();
     ui.horizontal(|ui| {
         row_label(ui, tl!("Arrowheads:"));
-        if let Some(a) = arrow_dropdown(ui, "arrow-start", sa, true) {
-            set(app, json!({"startArrow": a.map(|a| format!("{a:?}"))}));
+        // A custom head goes with its art, as document.inspect reports it.
+        if let Some(a) = arrow_dropdown(ui, "arrow-start", sa.as_ref(), &custom, true) {
+            set(app, json!({ "startArrow": a }));
         }
-        if let Some(a) = arrow_dropdown(ui, "arrow-end", ea, false) {
-            set(app, json!({"endArrow": a.map(|a| format!("{a:?}"))}));
+        if let Some(a) = arrow_dropdown(ui, "arrow-end", ea.as_ref(), &custom, false) {
+            set(app, json!({ "endArrow": a }));
         }
         if widgets::icon_button_enabled(ui, "arrow-left-right", tl!("Swap start and end arrowheads"), false, st.is_some(), 22.0).clicked() {
             app.run("stroke.setAdvanced", json!({"swapArrows": true})).ok();
@@ -319,10 +355,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Profile.
     ui.horizontal(|ui| {
         row_label(ui, tl!("Profile:"));
-        if let Some(id) = profile_dropdown(app, ui, st.as_ref().and_then(|s| s.profile.as_ref())) {
+        if let Some(id) = profile_dropdown(app, ui, st.as_ref()) {
             set(app, json!({"profile": id}));
         }
-        let can_flip = st.as_ref().is_some_and(|s| s.profile.is_some());
+        let can_flip = st.as_ref().is_some_and(|s| s.profile.is_some()) && brush_keeps_size(app, ui.ctx(), st.as_ref()).is_none();
         // Lucide names these icons for their mirror line: the vertical-line icon flips the
         // profile along the path, while the horizontal-line icon flips it across the path.
         if widgets::icon_button_enabled(ui, "flip-vertical-2", tl!("Flip Along"), false, can_flip, 22.0).clicked() {
@@ -335,22 +371,44 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 }
 
 /// The document an arrowhead preview renders: a `w`×`h` pt line with head `a` at its left
-/// (`start`) or right end, its tip on the end point, drawn white (the preview is tinted).
-pub(super) fn arrow_doc(a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Option<Document> {
-    let mut doc = Document::new(w, h);
-    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 1.5);
-    let st = ap.stroke_mut()?;
+/// (`start`) or right end, its tip on the end point, drawn white (the preview is tinted). A custom
+/// head is made smaller than the built-in ones when it would not fit (below the smallest head
+/// weight, its outline is scaled down), and the line's end moves in by as much as the head reaches
+/// past its tip.
+pub(super) fn arrow_doc(mut a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Option<Document> {
+    const WIDTH: f64 = 1.5;
+    // The smallest weight `StrokeLayer::arrow_weight` gives a head.
+    const LEAST: f64 = 0.25;
     // Heads of weight 2.5 pt: 10 pt long and wide.
-    st.arrow_scale = (500.0 / 3.0, 500.0 / 3.0);
+    let mut scale: f64 = 500.0 / 3.0;
+    let mut inset = 0.0;
+    if let Some(Arrowhead::Custom(c)) = &a
+        && let Some(b) = c.path.control_bounds()
+    {
+        let (long, half) = (b.x1.max(0.0) - b.x0.min(0.0), b.y0.abs().max(b.y1.abs()));
+        let fit = |room: f64, units: f64| if units > 1e-9 { room.max(0.0) / units } else { f64::INFINITY };
+        let weight = fit(w - 6.0, long).min(fit(h / 2.0 - 1.0, half)).min(2.5);
+        inset = -b.x0.min(0.0) * weight;
+        if weight < LEAST {
+            let path = c.path.transformed(vectorcraft_geom::Affine::scale(weight / LEAST));
+            a = Some(Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path))));
+        }
+        scale = scale.min(weight.max(LEAST) / WIDTH * 100.0);
+    }
+    let mut doc = Document::new(w, h);
+    let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), WIDTH);
+    let st = ap.stroke_mut()?;
+    st.arrow_scale = (scale, scale);
     st.arrow_align = ArrowAlign::Tip;
     if start {
         st.start_arrow = a
     } else {
         st.end_arrow = a
     }
+    let (x0, x1) = if start { (3.0 + inset, w - 3.0) } else { (3.0, w - 3.0 - inset) };
     let mut bp = vectorcraft_geom::BezPath::new();
-    bp.move_to((3.0, h / 2.0));
-    bp.line_to((w - 3.0, h / 2.0));
+    bp.move_to((x0, h / 2.0));
+    bp.line_to((x1, h / 2.0));
     let (id, l) = (doc.alloc_id(), doc.layers[0].id);
     doc.insert(Some(l), 0, Node::path(id, vectorcraft_geom::PathData::from_bezpath(&bp), ap)).ok()?;
     Some(doc)
@@ -358,14 +416,15 @@ pub(super) fn arrow_doc(a: Option<Arrowhead>, start: bool, w: f64, h: f64) -> Op
 
 /// Draw an arrowhead preview (the head as the canvas draws it) in `r`: a line with the head at the
 /// left (`start`) or right end.
-fn paint_arrow(ui: &Ui, r: Rect, a: Option<Arrowhead>, start: bool, color: Color32) {
-    if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{a:?}:{start}"), r.size(), |w, h| arrow_doc(a, start, w, h)) {
+pub(crate) fn paint_arrow(ui: &Ui, r: Rect, a: Option<&Arrowhead>, start: bool, color: Color32) {
+    if let Some(tex) = widgets::doc_preview(ui, &format!("arrow:{}:{start}", arrow_key(a)), r.size(), |w, h| arrow_doc(a.cloned(), start, w, h)) {
         ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), color);
     }
 }
 
-/// Dropdown whose button and items show drawn arrowhead previews. Returns Some(choice).
-fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) -> Option<Option<Arrowhead>> {
+/// Dropdown whose button and items show drawn arrowhead previews: None, the built-in heads, then
+/// the `custom` ones. Returns Some(choice).
+fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<&Arrowhead>, custom: &[Arrowhead], start: bool) -> Option<Option<Arrowhead>> {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(64.0, 24.0), Sense::click());
     ui.painter().rect_filled(r, 2, t.input);
@@ -378,23 +437,27 @@ fn arrow_dropdown(ui: &mut Ui, id: &str, cur: Option<Arrowhead>, start: bool) ->
     egui::Popup::menu(&resp).id(egui::Id::unique(("arrow-pop", id))).show(|ui| {
         ui.set_min_width(170.0);
         egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-            for a in std::iter::once(None).chain(Arrowhead::ALL.map(Some)) {
+            let built_in = Arrowhead::ALL;
+            for a in std::iter::once(None).chain(built_in.iter().map(Some)).chain(custom.iter().map(Some)) {
                 let (row, rr) = ui.allocate_exact_size(vec2(170.0, 22.0), Sense::click());
                 if a == cur {
                     ui.painter().rect_filled(row, 0.0, t.row_selected);
                 } else if rr.hovered() {
                     ui.painter().rect_filled(row, 0.0, t.hover);
                 }
-                paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
+                // Only the rows in view render their previews.
+                if ui.is_rect_visible(row) {
+                    paint_arrow(ui, Rect::from_min_size(row.min + vec2(4.0, 0.0), vec2(56.0, 22.0)), a, start, t.text_strong);
+                }
                 ui.painter().text(
                     row.left_center() + vec2(66.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    tl!(arrow_label(a)),
+                    arrow_name(a),
                     egui::FontId::proportional(11.5),
                     t.text,
                 );
                 if rr.clicked() {
-                    out = Some(a);
+                    out = Some(a.cloned());
                     ui.close();
                 }
             }
@@ -432,24 +495,69 @@ pub fn paint_profile(ui: &Ui, r: Rect, points: Option<&[(f64, f64, f64)]>, color
     ui.painter().with_clip_rect(r).add(egui::Shape::mesh(mesh));
 }
 
-/// The Profile dropdown (Stroke panel, Control bar): the stroke's own silhouette on the button
-/// (a custom profile too), the built-in profiles and then the saved ones in the list. Returns the
-/// id or name picked.
-pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, cur: Option<&WidthProfile>) -> Option<String> {
+/// The width of the [`profile_dropdown`] button.
+pub(crate) const PROFILE_DROPDOWN_WIDTH: f32 = 100.0;
+
+/// While a width profile changes none of the strokes the Profile list edits, because each draws
+/// with a brush: whether any of them has a profile. None while a profile changes one of them.
+/// With nothing selected the list sets up the next object drawn, whose stroke is `shown` (the
+/// stroke the panels show). Otherwise it edits the strokes `stroke.set` targets
+/// ([`vectorcraft_engine::Session::brushed_strokes_profiled`], cached per document revision and
+/// active Appearance row), such as a selected group's own stroke while `shown` is its first
+/// member's.
+pub(crate) fn brush_keeps_size(app: &VectorcraftApp, ctx: &egui::Context, shown: Option<&StrokeLayer>) -> Option<bool> {
+    let st = app.session.active()?;
+    if st.selection.objects.is_empty() && st.selection.subjects().is_empty() {
+        let s = shown?;
+        let name = s.brush.as_deref()?;
+        return super::brushes::document_brushes(st).iter().any(|b| b.name == name).then_some(s.profile.is_some());
+    }
+    let key = (st.uid, st.revision, app.session.appearance_item());
+    match pstate::<Option<((u64, u64, Option<usize>), Option<bool>)>>(ctx, "stroke-brushed") {
+        Some((k, v)) if k == key => v,
+        _ => {
+            let v = app.session.brushed_strokes_profiled();
+            set_pstate(ctx, "stroke-brushed", Some((key, v)));
+            v
+        }
+    }
+}
+
+/// The Profile dropdown (Stroke panel, Properties panel, Control bar): the stroke's own silhouette
+/// on the button (a custom profile too), the built-in profiles and then the saved ones in the list.
+/// Returns the id or name picked. While the strokes draw with a brush ([`brush_keeps_size`]), the
+/// button is dimmed and says why when hovered; it opens no list while every one is uniform, and
+/// only the Uniform row, which removes the profiles, while one has a profile.
+pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, shown: Option<&StrokeLayer>) -> Option<String> {
     let t = Tokens::get(ui.ctx());
-    let (r, resp) = ui.allocate_exact_size(vec2(100.0, 24.0), Sense::click());
+    let cur = shown.and_then(|s| s.profile.as_ref());
+    let brushed = brush_keeps_size(app, ui.ctx(), shown);
+    let keeps_size = brushed.is_some();
+    let uniform = brushed == Some(false);
+    let sense = if uniform { Sense::hover() } else { Sense::click() };
+    let (r, resp) = ui.allocate_exact_size(vec2(PROFILE_DROPDOWN_WIDTH, 24.0), sense);
     ui.painter().rect_filled(r, 2, t.input);
-    ui.painter().rect_stroke(r, 2, Stroke::new(1.0, if resp.hovered() { t.text } else { t.input_border }), StrokeKind::Inside);
+    let border = if resp.hovered() && !uniform { t.text } else { t.input_border };
+    ui.painter().rect_stroke(r, 2, Stroke::new(1.0, border), StrokeKind::Inside);
     let body = Rect::from_min_max(r.min + vec2(6.0, 5.0), pos2(r.right() - 20.0, r.bottom() - 5.0));
-    paint_profile(ui, body, cur.and_then(|p| silhouette(&p.points)), t.text_strong);
-    icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(r.right() - 9.0, r.center().y), vec2(10.0, 10.0)), t.icon);
-    let resp = resp.on_hover_text(tl!("Variable Width Profile"));
+    let (shape, icon) = if keeps_size { (t.text_disabled, t.text_disabled) } else { (t.text_strong, t.icon) };
+    paint_profile(ui, body, cur.and_then(|p| silhouette(&p.points)), shape);
+    icons::paint(ui, "chevron-down", Rect::from_center_size(pos2(r.right() - 9.0, r.center().y), vec2(10.0, 10.0)), icon);
+    let tip = if keeps_size {
+        tl!("The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.")
+    } else {
+        tl!("Variable Width Profile")
+    };
+    let resp = resp.on_hover_text(tip);
+    if uniform {
+        return None;
+    }
     let mut out = None;
     egui::Popup::menu(&resp).show(|ui| {
         egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
             // A divider between the built-in profiles and the saved ones.
             let mut divide = true;
-            for e in app.session.profile_entries() {
+            for e in app.session.profile_entries().filter(|e| !keeps_size || e.matches(None)) {
                 if !e.built_in && std::mem::take(&mut divide) {
                     ui.separator();
                 }
@@ -497,6 +605,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if menu_item(ui, tl!("Reset Profiles"), crate::menus::enabled(app, "stroke.widthProfile.reset"), false) {
         app.run("stroke.widthProfile.reset", json!({})).ok();
+    }
+    ui.separator();
+    // Opens the arrowheads file, whose symbols are the custom heads; saving it reloads them.
+    if menu_item(ui, tl!("Edit Arrowheads…"), crate::menus::enabled(app, "stroke.arrowheads.edit"), false) {
+        app.run("stroke.arrowheads.edit", json!({})).ok();
     }
 }
 
@@ -645,7 +758,7 @@ mod tests {
         assert!(silhouette(WidthProfile::PRESETS[0].points).is_none(), "uniform draws the plain bar");
         let lens = WidthProfile::lens();
         assert_eq!(silhouette(&lens.points), Some(lens.points.as_slice()));
-        assert_eq!(arrow_label(Some(Arrowhead::CircleOpen)), "Circle (open)");
+        assert_eq!(arrow_label(Some(&Arrowhead::CircleOpen)), "Circle (open)");
     }
 
     #[test]
