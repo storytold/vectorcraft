@@ -379,6 +379,14 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	dele af tegningen, der er indlejret for dybt eller ligger ud over importgrænserne, blev udeladt
 @msg	damaged parts of the drawing were left out	beskadigede dele af tegningen blev udeladt
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-sider, der er længere end 163.830 pt, blev åbnet i den længde, og grafik nær deres kanter ligger uden for tegnefladen
+@msg	this CMX file can't be read ({why})	denne CMX-fil kan ikke læses ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	tekst, billeder, rektangler, ellipser, beskæringsstier og andre CMX-objekter, som VectorCraft endnu ikke læser, blev udeladt
+@msg	CMX fills other than uniform colors were left out	CMX-udfyldninger, der ikke er ensfarvede, blev udeladt
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	farver i CMX-farvemodeller, som VectorCraft ikke læser, blev åbnet som sorte
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-biblioteksfarver, som filen kun gemmer som et nummer, blev åbnet som sorte spotfarver
+@msg	CMX outline arrowheads were left out	pilespidser på CMX-konturer blev udeladt
+@msg	CMX lenses were not applied	CMX-linser blev ikke anvendt
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CMX-sider, der er længere end 163.830 pt, blev åbnet i den længde, og grafik nær deres kanter ligger uden for tegnefladen
 @msg	the JPEG XL file is cut short	JPEG XL-filen er afkortet
 @msg	the JPEG XL container is too large to read	JPEG XL-containeren er for stor til at blive læst
 @msg	CMYK JPEG XL images can't be read	CMYK-billeder i JPEG XL kan ikke læses

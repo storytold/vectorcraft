@@ -5823,6 +5823,14 @@ variable-list-end	{0}, {1}	{0} et {1}
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	les parties du dessin trop profondément imbriquées ou au-delà des limites d’importation ont été ignorées
 @msg	damaged parts of the drawing were left out	les parties endommagées du dessin ont été ignorées
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	les pages CDR de plus de 163 830 pt ont été ouvertes à cette longueur, et l’illustration proche de leurs bords se trouve hors du plan de travail
+@msg	this CMX file can't be read ({why})	impossible de lire ce fichier CMX ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	les textes, images, rectangles, ellipses, tracés de détourage et autres objets CMX que VectorCraft ne lit pas encore ont été ignorés
+@msg	CMX fills other than uniform colors were left out	les remplissages CMX autres que les couleurs unies ont été ignorés
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	les couleurs des modèles colorimétriques CMX que VectorCraft ne lit pas ont été ouvertes en noir
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	les couleurs de bibliothèque CMX que le fichier enregistre uniquement par numéro ont été ouvertes comme tons directs noirs
+@msg	CMX outline arrowheads were left out	les pointes de flèche des contours CMX ont été ignorées
+@msg	CMX lenses were not applied	les lentilles CMX n’ont pas été appliquées
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	les pages CMX de plus de 163 830 pt ont été ouvertes à cette longueur, et l’illustration proche de leurs bords se trouve hors du plan de travail
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	l’image PSD est trop grande pour être lue ({_1} × {_2} pixels)
 @msg	zipped 1-bit PSD image data with prediction can't be read	les données d’image PSD 1 bit compressées en ZIP avec prédiction ne peuvent pas être lues
 @msg	the PSD file's layer data uses an unknown compression ({m})	les données de calque du fichier PSD utilisent une compression inconnue ({m})

@@ -6330,6 +6330,14 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	kimaradtak a rajz túl mélyen egymásba ágyazott vagy az importálási korlátokon túli részei
 @msg	damaged parts of the drawing were left out	kimaradtak a rajz sérült részei
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	a 163 830 pt-nál hosszabb CDR-oldalak ekkora hosszal nyíltak meg, és a szélük közelében lévő grafika a rajztáblán kívül esik
+@msg	this CMX file can't be read ({why})	ez a CMX-fájl nem olvasható ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	kimaradtak a CMX szövegei, képei, téglalapjai, ellipszisei, vágógörbéi és egyéb objektumai, amelyeket a VectorCraft még nem olvas
+@msg	CMX fills other than uniform colors were left out	kimaradtak a CMX kitöltései, amelyek nem egyszínűek
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	a CMX olyan színmodelljeiben megadott színek, amelyeket a VectorCraft nem olvas, feketeként nyíltak meg
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	a CMX könyvtári színei, amelyeket a fájl csak számként tárol, fekete direktszínként nyíltak meg
+@msg	CMX outline arrowheads were left out	kimaradtak a CMX körvonalainak nyílhegyei
+@msg	CMX lenses were not applied	a CMX lencsék nem lettek alkalmazva
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	a 163 830 pt-nál hosszabb CMX-oldalak ekkora hosszal nyíltak meg, és a szélük közelében lévő grafika a rajztáblán kívül esik
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	a PSD-kép túl nagy a beolvasáshoz ({_1} × {_2} pixel)
 @msg	the Save PDF dialog didn't open	a PDF mentése párbeszédablak nem nyílt meg
 @msg	the scale is not a usable number	a méretarány nem használható szám

@@ -331,6 +331,14 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	delen van de tekening die te diep genest zijn of buiten de importlimieten vallen, zijn weggelaten
 @msg	damaged parts of the drawing were left out	beschadigde delen van de tekening zijn weggelaten
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CDR-pagina’s langer dan 163.830 pt zijn op die lengte geopend, en illustraties bij de randen ervan liggen buiten het tekengebied
+@msg	this CMX file can't be read ({why})	dit CMX-bestand kan niet worden gelezen ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	CMX-tekst, afbeeldingen, rechthoeken, ellipsen, uitknippaden en andere objecten die VectorCraft nog niet leest, zijn weggelaten
+@msg	CMX fills other than uniform colors were left out	CMX-vullingen die geen egale kleuren zijn, zijn weggelaten
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	kleuren in CMX-kleurmodellen die VectorCraft niet leest, zijn als zwart geopend
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX-bibliotheekkleuren die het bestand alleen als nummer opslaat, zijn als zwarte steunkleuren geopend
+@msg	CMX outline arrowheads were left out	pijlpunten van CMX-contouren zijn weggelaten
+@msg	CMX lenses were not applied	CMX-lenzen zijn niet toegepast
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	CMX-pagina’s langer dan 163.830 pt zijn op die lengte geopend, en illustraties bij de randen ervan liggen buiten het tekengebied
 @msg	the JPEG XL file is cut short	het JPEG XL-bestand is afgebroken
 @msg	the JPEG XL container is too large to read	de JPEG XL-container is te groot om te lezen
 @msg	CMYK JPEG XL images can't be read	CMYK-afbeeldingen in JPEG XL kunnen niet worden gelezen

@@ -3034,6 +3034,14 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	已略過繪圖中巢狀過深或超出讀入限制的部分
 @msg	damaged parts of the drawing were left out	已略過繪圖中損壞的部分
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	長度超過 163,830 pt 的 CDR 頁面已以該長度開啟，其邊緣附近的圖稿位於工作區域之外
+@msg	this CMX file can't be read ({why})	無法讀取此 CMX 檔案 ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	已略過 VectorCraft 尚無法讀取的 CMX 文字、影像、矩形、橢圓、剪裁路徑和其他物件
+@msg	CMX fills other than uniform colors were left out	已略過 CMX 中均勻色彩以外的填色
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	VectorCraft 無法讀取的 CMX 色彩模式中的顏色已以黑色開啟
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	檔案僅以編號儲存的 CMX 色彩庫顏色已以黑色特別色開啟
+@msg	CMX outline arrowheads were left out	已略過 CMX 外框線的箭頭
+@msg	CMX lenses were not applied	未套用 CMX 透鏡
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	長度超過 163,830 pt 的 CMX 頁面已以該長度開啟，其邊緣附近的圖稿位於工作區域之外
 @msg	the PSD image is too large to read ({_1} × {_2} pixels)	PSD 影像過大，無法讀取 ({_1} × {_2} 像素)
 @msg	zipped 1-bit PSD image data with prediction can't be read	無法讀取使用預測的 ZIP 壓縮 1 位元 PSD 影像資料
 @msg	the PSD file's layer data uses an unknown compression ({m})	PSD 檔案的圖層資料使用了不明的壓縮方式 ({m})

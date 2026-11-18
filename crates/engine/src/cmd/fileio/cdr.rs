@@ -4,7 +4,8 @@
 //! `vectorcraft-cdr` reads, mapped to editable VectorCraft art. Pages become
 //! artboards side by side; layers of the same name on different pages become one layer where the
 //! pages stack them in the same order. What the
-//! reader leaves out is listed in the warnings, one line for each kind ([`note`]).
+//! reader leaves out is listed in the warnings, one line for each kind ([`note`]). `.cmx` exchange
+//! files with 32-bit coordinates are mapped the same way, with their own warnings ([`cmx_note`]).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,6 +31,15 @@ const TOO_DEEP: &str = "parts of the drawing nested too deeply, or past the impo
 const DAMAGED: &str = "damaged parts of the drawing were left out";
 const PAGES_CUT: &str = "CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard";
 
+const CMX_UNSUPPORTED_OBJECTS: &str =
+    "CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out";
+const CMX_UNSUPPORTED_FILLS: &str = "CMX fills other than uniform colors were left out";
+const CMX_UNKNOWN_COLORS: &str = "colors in CMX color models VectorCraft doesn't read were opened as black";
+const CMX_SPOT_LOOKS: &str = "CMX library colors that the file stores only by number were opened as black spot colors";
+const CMX_ARROWHEADS: &str = "CMX outline arrowheads were left out";
+const CMX_LENSES: &str = "CMX lenses were not applied";
+const CMX_PAGES_CUT: &str = "CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard";
+
 /// What reading a drawing left out or changed, for each kind the reader reports.
 fn note(w: Warning) -> &'static str {
     match w {
@@ -40,6 +50,20 @@ fn note(w: Warning) -> &'static str {
         Warning::Arrowheads => ARROWHEADS,
         Warning::Envelopes => ENVELOPES,
         Warning::Lenses => LENSES,
+        Warning::TooDeep => TOO_DEEP,
+        Warning::Damaged => DAMAGED,
+    }
+}
+
+/// What reading a `.cmx` file left out or changed. The reader reports no envelopes in one.
+fn cmx_note(w: Warning) -> &'static str {
+    match w {
+        Warning::UnsupportedObjects | Warning::Envelopes => CMX_UNSUPPORTED_OBJECTS,
+        Warning::UnsupportedFills => CMX_UNSUPPORTED_FILLS,
+        Warning::UnknownColors => CMX_UNKNOWN_COLORS,
+        Warning::SpotLooks => CMX_SPOT_LOOKS,
+        Warning::Arrowheads => CMX_ARROWHEADS,
+        Warning::Lenses => CMX_LENSES,
         Warning::TooDeep => TOO_DEEP,
         Warning::Damaged => DAMAGED,
     }
@@ -79,8 +103,25 @@ pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
         }
         why => err(format!("this CDR drawing can't be read ({why})")),
     })?;
+    Ok(build(&d, note, PAGES_CUT))
+}
+
+/// Is `bytes` a `.cmx` file, of any byte order or coordinate size?
+pub(super) fn is_cmx(bytes: &[u8]) -> bool {
+    vectorcraft_cdr::is_cmx(bytes)
+}
+
+/// A `.cmx` file with 32-bit coordinates: its pages, layers, groups and curves with uniform fills
+/// and outlines, mapped as a `.cdr` drawing's are.
+pub(super) fn import_cmx(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
+    let d = vectorcraft_cdr::read_cmx(bytes, Limits::default()).map_err(|why| err(format!("this CMX file can't be read ({why})")))?;
+    Ok(build(&d, cmx_note, CMX_PAGES_CUT))
+}
+
+/// The document of `d`, and one warning for each kind of content left out or changed.
+fn build(d: &cd::Drawing, note: fn(Warning) -> &'static str, pages_cut: &str) -> (Document, Vec<String>) {
     let mut b = shapes::Builder::new();
-    let mut doc = b.document(&d);
+    let mut doc = b.document(d);
     let mut warnings: Vec<String> = Vec::new();
     for w in d.warnings.iter().chain(&b.notes) {
         if !warnings.iter().any(|x| x == note(*w)) {
@@ -88,10 +129,10 @@ pub(super) fn import(bytes: &[u8]) -> Result<(Document, Vec<String>)> {
         }
     }
     if b.pages_cut {
-        warnings.push(PAGES_CUT.to_string());
+        warnings.push(pages_cut.to_string());
     }
     doc.limit_depth_noting(&mut warnings);
-    Ok((doc, warnings))
+    (doc, warnings)
 }
 
 /// Where each page lies in the document: its artboard, and the map from its own space (points

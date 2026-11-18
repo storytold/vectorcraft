@@ -15,7 +15,8 @@ pub struct Limits {
     pub members: usize,
     /// Nested lists below the file's own. Deeper content is left out with a warning.
     pub depth: usize,
-    /// Chunks in the index, nested ones included, and the entries and styles of the style table.
+    /// Chunks in the index, nested ones included, and the entries and styles of the style table;
+    /// in a `.cmx` file, its chunks, table entries and page instructions.
     pub chunks: usize,
     /// Objects mapped (shapes, groups and guidelines).
     pub objects: usize,

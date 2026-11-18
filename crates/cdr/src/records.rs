@@ -212,7 +212,7 @@ fn counted_utf16(r: &mut Rd, warn: &mut Vec<Warning>) -> Option<String> {
 
 /// The color of the property list of a tagged uniform fill (R11) or outline (R12): its color
 /// record, named by the library name it carries.
-fn property_color(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<Color> {
+pub(crate) fn property_color(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<Color> {
     let mut r = Rd::new(b);
     let (mut found, mut name) = (None, None);
     while r.left() >= 5 {

@@ -537,6 +537,9 @@ pub const FORMATS: &[Format] = &[
     // them.
     reader("cdr", "CDR Drawing", &["cdr"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
     reader("cdt", "CDR Template", &["cdt"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
+    // `.cmx` exchange files with 32-bit coordinates, read by `vectorcraft-cdr`; exports don't write
+    // them.
+    reader("cmx", "CMX", &["cmx"], "image/x-cmx", false),
     // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
     reader("pict", "PICT", &["pct", "pic", "pict"], "image/x-pict", false),
 ];
@@ -598,17 +601,18 @@ pub const OPEN_EXTS: &[&str] = &[
     "afpub",
     "cdr",
     "cdt",
+    "cmx",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
 /// raster editors, so Finder and file managers don't offer a vector app for them, and there is no
-/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF, JPEG XL or `.cdr` type, nor one for the `.pns`, `.dib` and `.rle` names of
+/// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF, JPEG XL, `.cdr` or `.cmx` type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
 /// The packaging declares no type for HP-GL plot files or PICT pictures either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl", "cdr", "cdt", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
+    "heic", "heif", "jxl", "cdr", "cdt", "cmx", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -697,6 +701,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "afpub",
     "cdr",
     "cdt",
+    "cmx",
     "txt",
     "rtf",
     "docx",

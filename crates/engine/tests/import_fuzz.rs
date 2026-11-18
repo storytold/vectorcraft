@@ -9,6 +9,7 @@
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
 //! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
+//! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
 //! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -430,6 +431,52 @@ proptest! {
             let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "placing CDR garbage of version 1 or 2 panicked: {:?}", r.err());
+    }
+}
+
+// ---------- .cmx files ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cmx_mutated_files_render_and_export(
+        cut in prop::option::of(12usize..4096),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = vectorcraft_cdr::synth_cmx::sample();
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CMX file", || vectorcraft_engine::cmd::fileio::load("x.cmx", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cmx", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cmx_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        // A 32-bit header, so the garbage is walked as chunks, tables and instructions.
+        let mut bytes = b"RIFF".to_vec();
+        let cont = vectorcraft_cdr::synth_cmx::cont(b'4', 1e-7);
+        bytes.extend(((4 + cont.len() + tail.len()) as u32).to_le_bytes());
+        bytes.extend(b"CMX1");
+        bytes.extend(cont);
+        bytes.extend(tail);
+        survive("CMX garbage", || vectorcraft_engine::cmd::fileio::load("x.cmx", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cmx", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
     }
 }
 

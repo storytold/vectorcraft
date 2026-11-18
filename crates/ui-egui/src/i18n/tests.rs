@@ -3607,6 +3607,26 @@ fn cdr_import_notes_are_translated() {
     }
 }
 
+/// The notes a CMX import adds to its warnings are translated in every complete catalog.
+#[test]
+fn cmx_import_notes_are_translated() {
+    let notes = [
+        "CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out",
+        "CMX fills other than uniform colors were left out",
+        "colors in CMX color models VectorCraft doesn't read were opened as black",
+        "CMX library colors that the file stores only by number were opened as black spot colors",
+        "CMX outline arrowheads were left out",
+        "CMX lenses were not applied",
+        "CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard",
+    ];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for note in notes {
+            assert_ne!(message(lang, note), note, "{code}: {note}");
+        }
+    }
+}
+
 /// The plug-in host's status and error messages (manifests, modules, runs and the output of
 /// importers, exporters and effects) have an `@msg` row in every complete-message catalog.
 #[test]

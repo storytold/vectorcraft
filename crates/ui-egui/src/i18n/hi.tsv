@@ -9103,6 +9103,14 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	ड्रॉइंग के बहुत गहराई तक नेस्ट किए गए या आयात सीमाओं से परे के हिस्से छोड़ दिए गए
 @msg	damaged parts of the drawing were left out	ड्रॉइंग के क्षतिग्रस्त हिस्से छोड़ दिए गए
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt से लंबे CDR पेज उसी लंबाई पर खोले गए, और उनके किनारों के पास का आर्ट आर्टबोर्ड के बाहर है
+@msg	this CMX file can't be read ({why})	इस CMX फ़ाइल को पढ़ा नहीं जा सकता ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	CMX के टेक्स्ट, इमेज, आयत, दीर्घवृत्त, क्लिपिंग पाथ और अन्य ऑब्जेक्ट, जिन्हें VectorCraft अभी नहीं पढ़ता, छोड़ दिए गए
+@msg	CMX fills other than uniform colors were left out	एकसमान रंगों के अलावा CMX के फ़िल छोड़ दिए गए
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	जिन CMX रंग मॉडलों को VectorCraft नहीं पढ़ता, उनके रंग काले के रूप में खोले गए
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	CMX लाइब्रेरी के जिन रंगों को फ़ाइल केवल संख्या से सहेजती है, वे काले स्पॉट रंगों के रूप में खोले गए
+@msg	CMX outline arrowheads were left out	CMX आउटलाइन के तीर-शीर्ष छोड़ दिए गए
+@msg	CMX lenses were not applied	CMX लेंस लागू नहीं किए गए
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	163,830 pt से लंबे CMX पेज उसी लंबाई पर खोले गए, और उनके किनारों के पास का आर्ट आर्टबोर्ड के बाहर है
 @msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000 फ़ाइल में असमर्थित कलर स्पेस या JPX सामग्री है
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	वेक्टर क्रेफ्ट की अंतिम शुरुआत अपनी विंडो दिखाई देने से पहले {name} पर समाप्त हुई, इसलिए यह {summary} पर शुरू हुआ। उस ग्राफिक्स प्रोसेसर को फिर से आज़माने के लिए, वरीयताओं को बदलें › प्रदर्शन › ग्राफिक्स प्रोसेसर या WGPU_BACKEND सेट के साथ शुरू होता है।
 @msg	The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	जब यह ग्राफिक्स प्रोसेसर को सूचीबद्ध करता है, तो यह केवल ओपनजीएल के साथ {summary} पर शुरू हुआ। फिर से अन्य ग्राफिक्स बैकेंड की कोशिश करने के लिए, वरीयताओं को बदलें › प्रदर्शन › ग्राफिक्स प्रोसेसर या WGPU_BACKEND सेट के साथ शुरू होता है।

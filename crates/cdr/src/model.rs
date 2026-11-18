@@ -241,7 +241,8 @@ pub enum Warning {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Drawing {
     /// In hundreds, as a RIFF file stores it: 300 to 2799. A file of version 1 or 2 stores no
-    /// number: it gives 200 when its marker byte is the one of version 2, and 100 otherwise.
+    /// number: it gives 200 when its marker byte is the one of version 2, and 100 otherwise. A
+    /// `.cmx` file gives 0.
     pub version: u16,
     /// Page size from the document settings, in points.
     pub page_size: Option<(f64, f64)>,

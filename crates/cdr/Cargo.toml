@@ -1,6 +1,6 @@
 [package]
 name = "vectorcraft-cdr"
-description = "Bounded reader for .cdr drawings of versions 1 to 27: WL records, RIFF index, compressed lists, ZIP packages, shapes, fills, outlines, pages and layers"
+description = "Bounded reader for .cdr drawings of versions 1 to 27 and .cmx files: WL records, RIFF index, compressed lists, ZIP packages, shapes, fills, outlines, pages and layers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

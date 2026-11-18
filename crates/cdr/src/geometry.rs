@@ -91,7 +91,7 @@ fn points(b: &[u8], mut r: Rd, count: usize, p: &Profile, budget: &mut Budget, w
 }
 
 /// The subpaths that points and their type bytes draw.
-fn path_of(points: &[Pt], types: &[u8]) -> Path {
+pub(crate) fn path_of(points: &[Pt], types: &[u8]) -> Path {
     let mut subpaths = Vec::new();
     let mut cur: Option<SubPath> = None;
     // The last two control points: a curve end uses only those.

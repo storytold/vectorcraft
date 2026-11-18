@@ -57,12 +57,32 @@ reports version 1 for the marker `e` and version 2 for the other two. A RIFF fil
 a version before 3 is refused, and so is the version 4 template form type `CDST`, which reads as
 not a `.cdr` drawing.
 
+## `.cmx` files
+
+`read_cmx` reads `.cmx` exchange files with 32-bit coordinates (rows R53 to R63) into the same
+drawing model, with a version of 0. It reads the color, pen, line type, dash, outline and
+arrowhead tables, then each page's instructions in drawing order:
+
+| In the `.cmx` file | Read as |
+|---|---|
+| Pages, with the size the page gives, or else the size of the drawing's bounds that the page stores | pages; a page sized to the bounds is centered on them |
+| Layers, by their UTF-16 or 8-bit name | drawing layers; a layer that holds nothing is left out |
+| Groups | groups |
+| Curves (moves, lines and cubic curves, as `.cdr` point lists) | paths |
+| Uniform fills: CMYK in percent or 0 to 255, RGB, and library colors with their names | colors, spot colors |
+| Outlines: width, color, caps, joins, dashes, the no-outline, behind-the-fill and scaled-with flags | outlines |
+
+Text, images, rectangles, ellipses, clipping paths, fills other than uniform ones, outline
+arrowheads and lenses are not read; the drawing's `warnings` name each kind it held. A clipping
+path is left out and the objects it clips are read without it. Files in big-endian byte order and
+files with 16-bit coordinates are refused.
+
 ## Provenance
 
 `PROVENANCE.md` lists every record layout the reader relies on, with its public source and status.
 Code cites the rows by id (`R1` ...), and `tests/it/provenance.rs` fails when a cited id has no row.
-The test inputs are synthetic drawings built by `src/synth.rs` (the `synth` feature); no
-third-party file is committed.
+The test inputs are synthetic drawings built by `src/synth.rs` and `src/synth_cmx.rs` (the
+`synth` feature); no third-party file is committed.
 
 ## Limits
 

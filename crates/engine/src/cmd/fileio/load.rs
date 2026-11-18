@@ -96,6 +96,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
         // A template keeps its meaning from the extension.
         return by_name.filter(|f| f.id == "cdt").or_else(|| format("cdr"));
     }
+    if super::cdr::is_cmx(bytes) {
+        return format("cmx");
+    }
     if vectorcraft_format::sniff(bytes) {
         // A template keeps its meaning from the extension, like .ait.
         return by_name.filter(|f| f.id == "template").or_else(|| format("vectorcraft"));
@@ -549,6 +552,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             let (doc, warnings) = super::cdr::import(bytes)?;
             (doc, warnings, false)
         }
+        "cmx" => {
+            let (doc, warnings) = super::cdr::import_cmx(bytes)?;
+            (doc, warnings, false)
+        }
         // A PSD or PSB file's layers become layers (`layers`, default on); without layers, or with
         // `layers: false`, its merged image opens. Layers that can't be read leave the merged image.
         "psd" | "psb" if opts.layers => match super::psdlayers::import_active(bytes, opts.hidden_layers) {
@@ -800,12 +807,12 @@ fn open_loaded(
         loaded.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     // EPS now has an ordinary Save path. Its preview, partial-program and damaged-editing
     // fallbacks must ask before overwriting the richer source they could not fully read. Every
-    // warning of a `.cdr` drawing names content the import left out or changed.
+    // warning of a `.cdr` drawing or a `.cmx` file names content the import left out or changed.
     let losses: Vec<String> = warnings
         .iter()
         .filter(|w| {
             is_loss(w)
-                || matches!(format.id, "cdr" | "cdt")
+                || matches!(format.id, "cdr" | "cdt" | "cmx")
                 || (format.id == "eps"
                     && (matches!(w.as_str(), EDITING_DAMAGED | EDITING_STALE)
                         || w.starts_with("this file's PostScript couldn't be read")

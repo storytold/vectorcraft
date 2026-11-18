@@ -8078,6 +8078,14 @@ breakText	Glyphs	Glifs
 @msg	parts of the drawing nested too deeply, or past the import limits, were left out	s’han omès les parts del dibuix imbricades massa a fons o fora dels límits d’importació
 @msg	damaged parts of the drawing were left out	s’han omès les parts danyades del dibuix
 @msg	CDR pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	les pàgines del CDR de més de 163.830 pt s’han obert amb aquesta longitud, i el dibuix a prop de les vores queda fora del tauler
+@msg	this CMX file can't be read ({why})	no es pot llegir aquest fitxer CMX ({why})
+@msg	CMX text, images, rectangles, ellipses, clipping paths and other objects VectorCraft doesn't read yet were left out	s’han omès els textos, les imatges, els rectangles, les el·lipses, els camins de retall i altres objectes del CMX que el VectorCraft encara no llegeix
+@msg	CMX fills other than uniform colors were left out	s’han omès els emplenaments del CMX que no són colors uniformes
+@msg	colors in CMX color models VectorCraft doesn't read were opened as black	els colors en models de color del CMX que el VectorCraft no llegeix s’han obert en negre
+@msg	CMX library colors that the file stores only by number were opened as black spot colors	els colors de biblioteca del CMX que el fitxer desa només pel número s’han obert com a colors directes negres
+@msg	CMX outline arrowheads were left out	s’han omès les puntes de fletxa dels contorns del CMX
+@msg	CMX lenses were not applied	no s’han aplicat les lents del CMX
+@msg	CMX pages longer than 163,830 pt were opened at that length, and art near their edges lies outside the artboard	les pàgines del CMX de més de 163.830 pt s’han obert amb aquesta longitud, i el dibuix a prop de les vores queda fora del tauler
 @msg	You must choose a side pattern.	Heu de triar un patró lateral.
 @msg	invalid pattern tile choice	opció de mosaic de patró no vàlida
 @msg	no pattern named `{choice}`	no hi ha cap patró anomenat `{choice}`
