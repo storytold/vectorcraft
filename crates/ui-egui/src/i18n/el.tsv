@@ -123,6 +123,9 @@
 	Additional Plug-ins Folder	Πρόσθετος φάκελος επεκτάσεων
 	Additional Fonts Folder	Πρόσθετος φάκελος γραμματοσειρών
 	Adjust Adjoining Width Points	Ρύθμιση γειτονικών σημείων πλάτους
+	Incoming	Εισερχόμενο
+	Outgoing	Εξερχόμενο
+	Single Width Only	Μόνο ένα πλάτος
 	Adjust Color Balance…	Ρύθμιση ισορροπίας χρωμάτων…
 	Adjust Colors	Ρύθμιση χρωμάτων
 	Adjust Options:	Επιλογές ρύθμισης:
@@ -463,6 +466,8 @@ font-technology	Variable	Μεταβλητές
 	Choose a folder	Επιλογή φακέλου
 	Choose…	Επιλογή…
 	Circle	Κύκλος
+	Circle Tool	Εργαλείο κύκλου
+	Circle too large	Ο κύκλος είναι πολύ μεγάλος
 	Classic Defaults	Κλασικές προεπιλογές
 	Clean Up…	Εκκαθάριση…
 	Clear	Εκκαθάριση
@@ -770,6 +775,8 @@ font-technology	Variable	Μεταβλητές
 	Delete Artboard	Διαγραφή πίνακα σχεδίασης
 	Delete Artboards	Διαγραφή πινάκων σχεδίασης
 	Delete Brush	Διαγραφή πινέλου
+	Delete Color	Διαγραφή χρώματος
+	Restore Generated Table	Επαναφορά του παραγόμενου πίνακα
 	Delete Character Style	Διαγραφή στυλ χαρακτήρων
 	Delete Empty Artboards	Διαγραφή κενών πινάκων σχεδίασης
 	Delete Freeform Point	Διαγραφή ελεύθερου σημείου
@@ -838,6 +845,7 @@ font-technology	Variable	Μεταβλητές
 	Direct Selection Tool	Άμεση επιλογή (Direct Selection Tool)
 	Direction Handles	Λαβές κατεύθυνσης
 	Disable Auto Add/Delete	Απενεργοποίηση αυτόματης προσθήκης/διαγραφής
+	Interpolate Control Points When Moving Anchors	Παρεμβολή λαβών κατεύθυνσης κατά τη μετακίνηση σημείων αγκύρωσης
 	Disable Opacity Mask	Απενεργοποίηση μάσκας αδιαφάνειας
 	Discard	Απόρριψη
 	Discard Empty Type	Απόρριψη κενού κειμένου
@@ -1215,6 +1223,8 @@ font-technology	Variable	Μεταβλητές
 	Files	Αρχεία
 	Files of a PDF standard can't be password-protected.	Τα αρχεία αυτού του προτύπου PDF δεν μπορούν να προστατεύονται με κωδικό.
 	Files of this standard tag their colours with ICC profiles.	Τα αρχεία αυτού του προτύπου χαρακτηρίζουν τα χρώματά τους με προφίλ ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Τα αρχεία αυτού του προτύπου χαρακτηρίζουν τα χρώματά τους με προφίλ ICC, εκτός από τα χρώματα CMYK στο προφίλ προορισμού εξόδου, τα οποία γράφονται ως DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Με «Να μη συμπεριληφθούν προφίλ» και προορισμό εξόδου CMYK, κάθε χρώμα CMYK γράφεται ως DeviceCMYK, εκτός αν μετατραπεί σε προορισμό CMYK άλλου προφίλ.
 	Fill	Γέμισμα
 	Fill & Stroke	Γέμισμα και περίγραμμα
 	Fill (X), double-click for the Color Picker	Γέμισμα (X), διπλό κλικ για τον επιλογέα χρώματος
@@ -1933,6 +1943,7 @@ font-technology	Variable	Μεταβλητές
 	Rotation:	Περιστροφή:
 	Flip:	Αναστροφή:
 	Fit	Προσαρμογή
+	Roundness	Στρογγυλότητα
 	Roundness:	Στρογγυλότητα:
 	Fixed	Σταθερό
 	Pressure	Πίεση
@@ -2650,6 +2661,14 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
 @msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
+@msg	`maxFuel` must be a whole number from 1 to {_1}	το `maxFuel` πρέπει να είναι ακέραιος από 1 έως {_1}
+@msg	`args{place}` is nested more than 64 levels deep	το `args{place}` έχει ένθεση μεγαλύτερη των 64 επιπέδων
+@msg	`args` must be an object	το `args` πρέπει να είναι αντικείμενο
+@msg	`args` is larger than 1 MiB	το `args` είναι μεγαλύτερο από 1 MiB
+@msg	`path` is empty	το `path` είναι κενό
+@msg	`installed` takes a `path`, not a `source`	το `installed` δέχεται `path`, όχι `source`
+@msg	`path` must name a .js or .jsx file	το `path` πρέπει να ορίζει αρχείο .js ή .jsx
+@msg	give exactly one of `path` and `source`	δώστε ακριβώς ένα από τα `path` και `source`
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
 @msg	Script file access denied: {path}	Η πρόσβαση του σεναρίου σε αρχεία απορρίφθηκε: {path}
@@ -3175,6 +3194,7 @@ theme	Appearance	Εμφάνιση
 	Load SVG into Clipboard	Φόρτωση SVG στο πρόχειρο
 	Load Text into Clipboard	Φόρτωση κειμένου στο πρόχειρο
 	Local Libraries	Τοπικές βιβλιοθήκες
+	Locate Layer	Εντοπισμός επιπέδου
 	Locate Object	Εντοπισμός αντικειμένου
 	Locate Selected Objects	Εντοπισμός επιλεγμένων αντικειμένων
 	Lock (⌘2)	Κλείδωμα (⌘2)
@@ -3320,6 +3340,7 @@ theme	Appearance	Εμφάνιση
 	Art Brush Options	Επιλογές πινέλου σχεδίου
 	Pattern Brush Options	Επιλογές πινέλου μοτίβου
 	Rotation relative to:	Περιστροφή ως προς:
+	Hue Jitter:	Διακύμανση απόχρωσης:
 	Brush Scale Options	Επιλογές κλιμάκωσης πινέλου
 	Scale Proportionately	Αναλογική κλιμάκωση
 	Stretch to Fit Stroke Length	Επέκταση για προσαρμογή στο μήκος περιγράμματος
@@ -3624,6 +3645,10 @@ theme	Appearance	Εμφάνιση
 	Polar Grid Tool	Πολικό πλέγμα (Polar Grid Tool)
 	Polygon	Πολύγωνο
 	Polygon Properties:	Ιδιότητες πολυγώνου:
+	Line Properties:	Ιδιότητες γραμμής:
+	Line Length:	Μήκος γραμμής:
+	Line Angle:	Γωνία γραμμής:
+	Constrain Pie Angle	Διατήρηση γωνίας κυκλικού τομέα
 	Power Saving (integrated)	Εξοικονόμηση ενέργειας (ενσωματωμένη GPU)
 	Portuguese	Πορτογαλικά
 	PostScript:	PostScript:
@@ -3743,6 +3768,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
 	Use Monitor Profile for Canvas	Χρήση προφίλ οθόνης για τον καμβά
+	Refresh Monitor Profile	Ανανέωση προφίλ οθόνης
+@msg	turn on Use Monitor Profile for Canvas first	ενεργοποιήστε πρώτα τη «Χρήση προφίλ οθόνης για τον καμβά»
+@msg	this build doesn't read display profiles	αυτή η έκδοση δεν διαβάζει προφίλ οθονών
 	The canvas is drawn in sRGB.	Ο καμβάς σχεδιάζεται σε sRGB.
 	Canvas display profile:	Προφίλ οθόνης καμβά:
 	The system matches the window to the display's colors.	Το σύστημα προσαρμόζει το παράθυρο στα χρώματα της οθόνης.
@@ -3956,6 +3984,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Ο τροχός του ποντικιού με πατημένο το Cmd/Ctrl κυλά τον καμβά οριζόντια.
 	Dragging sideways on a numeric field's label changes the field's value.	Η μεταφορά προς τα πλάγια πάνω στην ετικέτα ενός αριθμητικού πεδίου αλλάζει την τιμή του πεδίου.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Μια κίνηση περιστροφής με δύο δάχτυλα σε επιφάνεια αφής περιστρέφει την προβολή του καμβά.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Όταν μετακινείτε σημεία αγκύρωσης, κάθε καμπύλη με ένα μετακινημένο άκρο διατηρεί το σχήμα της σε σχέση με τα άκρα της.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Όσο κρατάτε πατημένη τη συντόμευση ενός εργαλείου, το εργαλείο είναι επιλεγμένο, και μετά επιλέγεται ξανά το προηγούμενο εργαλείο.
 	Shows the bounding box while you move the selection or draw a shape.	Εμφανίζει το πλαίσιο οριοθέτησης όσο μετακινείτε την επιλογή ή σχεδιάζετε ένα σχήμα.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Η Δημιουργία σημαδιών ξακρίσματος σχεδιάζει σημάδια ιαπωνικού τύπου αντί για ρωμαϊκά.
@@ -4221,6 +4250,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Set Slice Rectangle	Ορισμός ορθογωνίου τομής
 	Set Tab Stops	Ορισμός στηλοθετών
 	Set Text	Ορισμός κειμένου
+	Set the current fill or stroke to the selected color	Ορισμός επιλεγμένου χρώματος ως τρέχοντος γεμίσματος ή περιγράμματος
 	Set the selected color to the current color	Ορισμός επιλεγμένου χρώματος ως τρέχοντος
 	Set Zoom	Ορισμός ζουμ
 	Setup…	Ρύθμιση…
@@ -4323,7 +4353,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	Show Vivid/Muted	Εμφάνιση έντονων/απαλών
 	Show Warm/Cool	Εμφάνιση θερμών/ψυχρών
 	Show {kind} Brushes	Εμφάνιση πινέλων {kind}
-	Show/hide plate (Alt-click: only this plate)	Εμφάνιση/απόκρυψη πλάκας (Alt-κλικ: μόνο αυτή η πλάκα)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Εμφάνιση/απόκρυψη πλάκας (Alt-κλικ: μόνο αυτή η πλάκα· ξανά Alt-κλικ: όλες οι πλάκες)
 	Shown with the optimised preview.	Εμφανίζεται με τη βελτιστοποιημένη προεπισκόπηση.
 	Side 1:	Πλευρά 1:
 	Side 2:	Πλευρά 2:
@@ -4774,6 +4804,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	V Spacing:	Κατακόρυφη απόσταση:
 	V:	Κατακόρυφα:
 	Variable Width Profile	Προφίλ μεταβλητού πλάτους
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Το πινέλο του περιγράμματος διατηρεί το δικό του μέγεθος, οπότε ένα προφίλ πλάτους δεν το αλλάζει. Αφαιρέστε το πινέλο για να χρησιμοποιήσετε προφίλ.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Το πινέλο του περιγράμματος διατηρεί το δικό του μέγεθος, οπότε ένα προφίλ πλάτους δεν το αλλάζει. Αφαιρέστε το πινέλο για να χρησιμοποιήσετε προφίλ.
 	New Variable	Νέα μεταβλητή
 	Delete Variable	Διαγραφή μεταβλητής
 	Lock Variables	Κλείδωμα μεταβλητών
@@ -4913,6 +4945,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	{people} contributors · {commits} commits	{people} συνεισφέροντες · {commits} commits
 	Joins	Συνδέσεις
 	Axis	Άξονας
+	Axis Angle	Γωνία άξονα
 	Drag to move	Σύρετε για μετακίνηση
 	Drag to float as a toolbar	Σύρετε για αποδέσμευση ως γραμμή εργαλείων
 	Put back in the toolbar	Επαναφορά στη γραμμή εργαλείων
@@ -5008,6 +5041,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	choose a folder to export to	επιλέξτε φάκελο εξαγωγής
 @msg	choose a location for the package	επιλέξτε τοποθεσία συσκευασίας
 @msg	clipboard is empty	το πρόχειρο είναι κενό
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: τουλάχιστον ένα χρώμα πρέπει να παραμείνει στον πίνακα χρωμάτων
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: το `{h}` δεν είναι έγκυρο χρώμα, όπως το "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: επιτρέπονται το πολύ {MAX_TABLE} χρώματα
 @msg	command `{0}` is not available right now: {1}	η εντολή `{0}` δεν είναι διαθέσιμη αυτήν τη στιγμή: {1}
@@ -5075,9 +5109,15 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no PNG encoder	δεν υπάρχει κωδικοποιητής PNG
 @msg	no active document	δεν υπάρχει ενεργό έγγραφο
 @msg	no active perspective plane	δεν υπάρχει ενεργό επίπεδο προοπτικής
+@msg	the perspective grid is hidden	το πλέγμα προοπτικής είναι κρυφό
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Η αυτόματη τοποθέτηση επιπέδου είναι απενεργοποιημένη: ενεργοποιήστε το anchorPoint ή το gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	το anchorPoint πρέπει να είναι true ή false
+@msg	gridlineIntersection must be true or false	το gridlineIntersection πρέπει να είναι true ή false
+@msg	tolerance must be 0 or more	το tolerance πρέπει να είναι 0 ή μεγαλύτερο
+@msg	give `at` or `clear`, not both	δώστε `at` ή `clear`, όχι και τα δύο
 @msg	no anchor points selected	δεν έχουν επιλεγεί σημεία αγκύρωσης
-@msg	`points` must be three [x, y] pairs of numbers	το `points` πρέπει να είναι τρία ζεύγη αριθμών [x, y]
-@msg	direct-select three anchor points, or give `points`	επιλέξτε άμεσα τρία σημεία αγκύρωσης ή δώστε `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	το `points` πρέπει να είναι δύο ή τρία ζεύγη αριθμών [x, y]
+@msg	direct-select two or three anchor points, or give `points`	επιλέξτε άμεσα δύο ή τρία σημεία αγκύρωσης ή δώστε `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης
@@ -5179,6 +5219,9 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no such user library	δεν υπάρχει τέτοια βιβλιοθήκη χρήστη
 @msg	no such view	δεν υπάρχει τέτοια προβολή
 @msg	no such width point	δεν υπάρχει τέτοιο σημείο πλάτους
+@msg	`single` must be `incoming` or `outgoing`	το `single` πρέπει να είναι `incoming` ή `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	τα `index` και `outIndex` πρέπει να είναι τα δύο μισά ενός ασυνεχούς σημείου πλάτους
+@msg	a discontinuous width point keeps its place	ένα ασυνεχές σημείο πλάτους διατηρεί τη θέση του
 @msg	no swatch `{name}`	δεν υπάρχει δείγμα χρώματος `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	δεν υπάρχει βιβλιοθήκη δειγμάτων `{l}` (δείτε swatch.library.list)
 @msg	no symbol instances selected	δεν έχουν επιλεγεί στιγμιότυπα συμβόλων
@@ -5541,6 +5584,8 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Ανανεώστε τη σελίδα για να συνεχίσετε (οι μη αποθηκευμένες αλλαγές ενδέχεται να χαθούν).
 @msg	tool (a tool id) is required	απαιτείται tool (αναγνωριστικό εργαλείου)
 @msg	{tool} isn't in a toolbar group of several tools	το {tool} δεν ανήκει σε ομάδα πολλών εργαλείων της γραμμής εργαλείων
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	η Λειτουργία παρουσίασης κρύβει τις γραμμές εργαλείων: αλλάξτε τη λειτουργία οθόνης για να εμφανιστούν
+@msg	Tab has hidden the toolbars: press Tab to show them	το Tab έκρυψε τις γραμμές εργαλείων: πατήστε Tab για να εμφανιστούν
 @msg	onto must name a panel floating in another group	το onto πρέπει να ορίζει πίνακα που αιωρείται σε άλλη ομάδα
 @msg	below and above must name a panel floating in another group	τα below και above πρέπει να ορίζουν πίνακα που αιωρείται σε άλλη ομάδα
 @msg	give only one of onto, below and above	δώστε μόνο ένα από τα onto, below και above
@@ -5801,6 +5846,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 	Both sides	Και οι δύο πλευρές
 	Cove	Κοίλη ακμή
 	Front	Μπροστά
+	Side	Πλάι
 	Isometric Bottom	Ισομετρική κάτω όψη
 	Isometric Left	Ισομετρική αριστερή όψη
 	Isometric Right	Ισομετρική δεξιά όψη
@@ -5887,7 +5933,7 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	each of `{GRAPHICS}` must be an object	κάθε στοιχείο του `{GRAPHICS}` πρέπει να είναι αντικείμενο
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	οι καταχωρίσεις του `{GRAPHICS}` δέχονται symbol, face, x, y, scale και rotation, όχι `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	κάθε στοιχείο του `{GRAPHICS}` χρειάζεται `symbol`, το όνομα ενός συμβόλου
-@msg	`{GRAPHICS}` face must be front or back	το face του `{GRAPHICS}` πρέπει να είναι front ή back
+@msg	`{GRAPHICS}` face must be front, back or side	το face του `{GRAPHICS}` πρέπει να είναι front, back ή side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	το {key} του `{GRAPHICS}` πρέπει να είναι αριθμός από {lo} έως {hi}
 @msg	`{GRAPHICS}` must be an array	το `{GRAPHICS}` πρέπει να είναι πίνακας
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Τα γραφικά αντιστοιχίζονται στους τύπους αντικειμένου Επίπεδο, Εξώθηση και Περιστροφή γύρω από άξονα
@@ -7722,6 +7768,14 @@ breakText	Glyphs	Γλύφοι
 	Remove Gaps	Αφαίρεση κενών
 @msg	that makes too many pieces (at most 100000): make the dashes longer	αυτό δίνει πάρα πολλά κομμάτια (το πολύ 100000): κάντε τις παύλες μεγαλύτερες
 @msg	select paths, or segments, to divide	επιλέξτε διαδρομές ή τμήματα για διαίρεση
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Ομαλή γέφυρα…
+	Smooth Bridge	Ομαλή γέφυρα
+	Keep Originals	Διατήρηση πρωτοτύπων
+@msg	select two circles to bridge	επιλέξτε δύο κύκλους για γεφύρωση
+@msg	one circle is inside the other	ο ένας κύκλος βρίσκεται μέσα στον άλλο
+@msg	the circles are too far apart for this radius: raise the radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα: αυξήστε την ακτίνα
+@msg	the circles are too far apart for this radius	οι κύκλοι απέχουν πολύ μεταξύ τους για αυτή την ακτίνα
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Κοινές εφαπτόμενες…
 	Common Tangents	Κοινές εφαπτόμενες

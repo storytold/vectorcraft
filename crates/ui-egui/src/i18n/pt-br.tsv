@@ -149,6 +149,9 @@
 	Additional Plug-ins Folder	Pasta Adicional de Plug-ins
 	Additional Fonts Folder	Pasta Adicional de Fontes
 	Adjust Adjoining Width Points	Ajustar Pontos de Largura Adjacentes
+	Incoming	Entrada
+	Outgoing	Saída
+	Single Width Only	Somente Uma Largura
 	Adjust Color Balance…	Ajustar Equilíbrio de Cores…
 	Adjust Colors	Ajustar Cores
 	Adjust Options:	Opções de Ajuste:
@@ -460,6 +463,8 @@ antiAlias	Sharp	Nítido
 	Choose a folder	Escolher uma pasta
 	Choose…	Escolher…
 	Circle	Círculo
+	Circle Tool	Ferramenta Círculo
+	Circle too large	Círculo grande demais
 	Clean Up…	Limpar…
 	Clear	Limpar
 	Clear All Tabs	Limpar Todas as Paradas de Tabulação
@@ -725,6 +730,8 @@ antiAlias	Sharp	Nítido
 	Delete Artboard	Excluir Mesa de Trabalho
 	Delete Artboards	Excluir Mesas de Trabalho
 	Delete Brush	Excluir Pincel
+	Delete Color	Excluir Cor
+	Restore Generated Table	Restaurar Tabela Gerada
 	Delete Character Style	Excluir Estilo de Caractere
 	Delete Empty Artboards	Excluir Mesas de Trabalho Vazias
 	Delete Freeform Point	Excluir Ponto Livre
@@ -791,6 +798,7 @@ antiAlias	Sharp	Nítido
 	Direct Selection Tool	Ferramenta Seleção Direta
 	Direction Handles	Alças de Direção
 	Disable Auto Add/Delete	Desativar Adicionar/Excluir Automático
+	Interpolate Control Points When Moving Anchors	Interpolar Alças de Direção ao Mover Pontos de Ancoragem
 	Disable Opacity Mask	Desativar Máscara de Opacidade
 	Discard	Descartar
 	Discard Empty Type	Descartar Texto Vazio
@@ -1163,6 +1171,8 @@ antiAlias	Sharp	Nítido
 	Files	Arquivos
 	Files of a PDF standard can't be password-protected.	Arquivos de um padrão PDF não podem ser protegidos por senha.
 	Files of this standard tag their colours with ICC profiles.	Os arquivos deste padrão etiquetam suas cores com perfis ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Os arquivos deste padrão etiquetam suas cores com perfis ICC, exceto as cores CMYK no perfil de intenção de saída, que são gravadas como DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Com “Não incluir perfis” e uma intenção de saída CMYK, cada cor CMYK é gravada como DeviceCMYK, a menos que seja convertida para um destino CMYK de outro perfil.
 	Fill	Preenchimento
 	Fill & Stroke	Preenchimento e Traçado
 	Fill Color	Cor de Preenchimento
@@ -1736,6 +1746,7 @@ antiAlias	Sharp	Nítido
 	Load SVG into Clipboard	Carregar SVG na Área de Transferência
 	Load Text into Clipboard	Carregar Texto na Área de Transferência
 	Local Libraries	Bibliotecas Locais
+	Locate Layer	Localizar Camada
 	Locate Object	Localizar Objeto
 	Location	Local
 	Location:	Local:
@@ -2250,6 +2261,10 @@ antiAlias	Sharp	Nítido
 	Polar Grid Tool	Ferramenta Grade Polar
 	Polygon	Polígono
 	Polygon Properties:	Propriedades do Polígono:
+	Line Properties:	Propriedades da Linha:
+	Line Length:	Comprimento da Linha:
+	Line Angle:	Ângulo da Linha:
+	Constrain Pie Angle	Restringir Ângulo da Fatia
 	Polygon Tool	Ferramenta Polígono
 	Portrait	Retrato
 	Portuguese	Português
@@ -2392,6 +2407,9 @@ digits	Malayalam	Malaiala
 	Real World:	Mundo Real:
 	Real-time Drawing and Editing	Desenho e Edição em Tempo Real
 	Use Monitor Profile for Canvas	Usar Perfil do Monitor para a Tela
+	Refresh Monitor Profile	Atualizar Perfil do Monitor
+@msg	turn on Use Monitor Profile for Canvas first	ative primeiro "Usar Perfil do Monitor para a Tela"
+@msg	this build doesn't read display profiles	esta versão não lê perfis de monitor
 	The canvas is drawn in sRGB.	A tela é desenhada em sRGB.
 	Canvas display profile:	Perfil do monitor para a tela:
 	The system matches the window to the display's colors.	O sistema ajusta a janela às cores do monitor.
@@ -2628,6 +2646,7 @@ digits	Malayalam	Malaiala
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	A roda do mouse com Cmd/Ctrl pressionado rola a tela para os lados.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrastar para os lados sobre o rótulo de um campo numérico muda o valor do campo.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Um gesto de rotação com dois dedos no trackpad gira a visualização da tela.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Ao mover pontos de ancoragem, cada curva com uma extremidade movida mantém sua forma em relação às extremidades.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Manter pressionado o atalho de uma ferramenta a escolhe até você soltar, e então a ferramenta anterior é escolhida de novo.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra a caixa delimitadora enquanto você move a seleção ou desenha uma forma.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Criar Marcas de Corte desenha marcas no estilo japonês em vez de romanas.
@@ -2975,6 +2994,7 @@ digits	Malayalam	Malaiala
 	Set Text	Definir Texto
 	Set Zoom	Definir Zoom
 	Set base color to the current color	Definir cor base para a cor atual
+	Set the current fill or stroke to the selected color	Definir o preenchimento ou traçado atual para a cor selecionada
 	Set the selected color to the current color	Definir a cor selecionada para a cor atual
 	Setup…	Configuração…
 	Shadows and Glows	Sombras e Brilhos
@@ -3082,7 +3102,7 @@ digits	Malayalam	Malaiala
 	Show handles when multiple anchors are selected	Mostrar alças quando vários pontos de ancoragem estão selecionados
 	Show in Folder	Mostrar na Pasta
 	Show {kind} Brushes	Mostrar Pincéis de {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostrar/ocultar placa (Alt-clique: somente esta placa)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostrar/ocultar placa (Alt-clique: somente esta placa; Alt-clique de novo: todas as placas)
 	Show:	Mostrar:
 	Shown with the optimised preview.	Exibido com a visualização otimizada.
 	Side 1:	Lado 1:
@@ -3488,6 +3508,8 @@ digits	Malayalam	Malaiala
 	V Spacing:	Espaçamento V:
 	V:	V:
 	Variable Width Profile	Perfil de Largura Variável
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	O pincel do traçado mantém o próprio tamanho, então um perfil de largura não o altera. Remova o pincel para usar um perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	O pincel do traçado mantém o próprio tamanho, então um perfil de largura não o altera. Remova o pincel para usar um perfil.
 	Variables	Variáveis
 	New Variable…	Nova variável…
 	Unbind Variable	Desassociar variável
@@ -3896,6 +3918,7 @@ font-technology	Variable	Variáveis
 	Scatter:	Dispersão:
 	Rotation:	Rotação:
 	Rotation relative to:	Rotação relativa a:
+	Hue Jitter:	Variação de matiz:
 	Brush Scale Options	Opções de escala do pincel
 	Scale Proportionately	Dimensionar proporcionalmente
 	Stretch to Fit Stroke Length	Esticar para ajustar ao comprimento do traço
@@ -4320,6 +4343,7 @@ axis	Both	Ambos
 @msg	choose a folder to export to	escolha uma pasta para exportar
 @msg	choose a location for the package	escolha um local para o pacote
 @msg	clipboard is empty	a área de transferência está vazia
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: pelo menos uma cor deve permanecer na tabela de cores
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` não é uma cor como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: no máximo {MAX_TABLE} cores
 @msg	command `{0}` is not available right now: {1}	o comando `{0}` não está disponível agora: {1}
@@ -4386,9 +4410,15 @@ axis	Both	Ambos
 @msg	no PNG encoder	sem codificador de PNG
 @msg	no active document	nenhum documento ativo
 @msg	no active perspective plane	nenhum plano de perspectiva ativo
+@msg	the perspective grid is hidden	a grade de perspectiva está oculta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	O posicionamento automático do plano está desativado: ative anchorPoint ou gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint deve ser true ou false
+@msg	gridlineIntersection must be true or false	gridlineIntersection deve ser true ou false
+@msg	tolerance must be 0 or more	tolerance deve ser 0 ou mais
+@msg	give `at` or `clear`, not both	informe `at` ou `clear`, não ambos
 @msg	no anchor points selected	nenhum ponto de ancoragem selecionado
-@msg	`points` must be three [x, y] pairs of numbers	`points` deve ter três pares de números [x, y]
-@msg	direct-select three anchor points, or give `points`	selecione diretamente três pontos de ancoragem ou informe `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` deve ter dois ou três pares de números [x, y]
+@msg	direct-select two or three anchor points, or give `points`	selecione diretamente dois ou três pontos de ancoragem ou informe `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	nenhum círculo passa por esses pontos: dois são iguais ou os três estão na mesma reta
 @msg	no app to open files here	nenhum aplicativo para abrir arquivos aqui
 @msg	no artboard	nenhuma prancheta
@@ -4490,6 +4520,9 @@ axis	Both	Ambos
 @msg	no such user library	biblioteca do usuário inexistente
 @msg	no such view	vista inexistente
 @msg	no such width point	ponto de largura inexistente
+@msg	`single` must be `incoming` or `outgoing`	`single` deve ser `incoming` ou `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` e `outIndex` devem ser as duas metades de um mesmo ponto de largura descontínuo
+@msg	a discontinuous width point keeps its place	um ponto de largura descontínuo mantém sua posição
 @msg	no swatch `{name}`	nenhuma amostra `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	nenhuma biblioteca de amostras `{l}` (veja swatch.library.list)
 @msg	no symbol instances selected	nenhuma instância de símbolo selecionada
@@ -4852,6 +4885,8 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Recarregue a página para continuar (alterações ainda não salvas podem ser perdidas).
 @msg	tool (a tool id) is required	tool (um id de ferramenta) é obrigatório
 @msg	{tool} isn't in a toolbar group of several tools	{tool} não está em um grupo de barra de ferramentas com várias ferramentas
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	o Modo de Apresentação oculta as barras de ferramentas: altere o modo de tela para mostrá-las
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ocultou as barras de ferramentas: pressione Tab para mostrá-las
 @msg	onto must name a panel floating in another group	onto deve nomear um painel flutuante em outro grupo
 @msg	below and above must name a panel floating in another group	below e above devem nomear um painel flutuante em outro grupo
 @msg	give only one of onto, below and above	informe apenas um entre onto, below e above
@@ -5418,6 +5453,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 	Name 40%	Nome 40%
 	Name* @ 66.67 % (RGB/Preview)	Nome* @ 66.67 % (RGB/Visualização)
 	Name* @ 66.67% (RGB/Preview)	Nome* @ 66.67% (RGB/Visualização)
+	Roundness	Arredondamento
 	Roundness:	Arredondamento:
 	Fixed	Fixo
 	Pressure	Pressão
@@ -5693,6 +5729,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 	[Normal Paragraph Style]	[Estilo de Parágrafo Normal]
 	Joins	Junções
 	Axis	Eixo
+	Axis Angle	Ângulo do eixo
 	Run	Executar
 	Run Script	Executar script
 	Stop Script	Parar script
@@ -6363,6 +6400,7 @@ mark-style	Japanese	Japonesas
 	Cove	Côncavo
 	Depth	Profundidade
 	Front	Frente
+	Side	Lateral
 	Isometric Bottom	Isométrico Inferior
 	Isometric Left	Isométrico Esquerdo
 	Isometric Right	Isométrico Direito
@@ -6457,7 +6495,7 @@ mark-style	Japanese	Japonesas
 @msg	each of `{GRAPHICS}` must be an object	cada item de `{GRAPHICS}` deve ser um objeto
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	as entradas de `{GRAPHICS}` aceitam symbol, face, x, y, scale e rotation, não `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada item de `{GRAPHICS}` precisa de `symbol`, o nome de um símbolo
-@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` deve ser front ou back
+@msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` deve ser front, back ou side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` deve ser um número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` deve ser uma matriz
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Os gráficos são mapeados nos tipos de objeto Plano, Extrusão e Revolver
@@ -7761,6 +7799,14 @@ breakText	Glyphs	Glifos
 	Remove Gaps	Remover distâncias
 @msg	that makes too many pieces (at most 100000): make the dashes longer	isso gera peças demais (no máximo 100000): aumente os traços
 @msg	select paths, or segments, to divide	selecione demarcadores ou segmentos para dividir
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Ponte suave…
+	Smooth Bridge	Ponte suave
+	Keep Originals	Manter originais
+@msg	select two circles to bridge	selecione dois círculos para unir
+@msg	one circle is inside the other	um círculo está dentro do outro
+@msg	the circles are too far apart for this radius: raise the radius	os círculos estão muito afastados para este raio: aumente o raio
+@msg	the circles are too far apart for this radius	os círculos estão muito afastados para este raio
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangentes comuns…
 	Common Tangents	Tangentes comuns
@@ -8346,6 +8392,14 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` tem mais de {MAX_ANSWERS} respostas
 @msg	`answers` is larger than 1 MiB	`answers` tem mais de 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` é só para uma execução sem ninguém a quem perguntar: no app, a pessoa responde a cada caixa de diálogo
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` deve ser um número inteiro de 1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` está aninhado em mais de 64 níveis
+@msg	`args` must be an object	`args` deve ser um objeto
+@msg	`args` is larger than 1 MiB	`args` tem mais de 1 MiB
+@msg	`path` is empty	`path` está vazio
+@msg	`installed` takes a `path`, not a `source`	`installed` aceita um `path`, não um `source`
+@msg	`path` must name a .js or .jsx file	`path` deve indicar um arquivo .js ou .jsx
+@msg	give exactly one of `path` and `source`	informe exatamente um de `path` e `source`
 @msg	`answers` must be a list of answers	`answers` deve ser uma lista de respostas
 @msg	`artboard` must be the index of an artboard of the document	`artboard` deve ser o índice de uma prancheta do documento
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` deve ser [x, y]
@@ -8889,6 +8943,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	formas compostas aceitam caminhos, caminhos compostos, grupos, formas compostas, texto, mesclagens e envelopes
 @msg	compound {_1} must contain exactly one open path to join	o composto {_1} deve conter exatamente um caminho aberto para unir
 @msg	connect needs a path other than the one extended	connect precisa de um caminho diferente do que foi estendido
+@msg	connect needs extend	connect precisa de extend
 @msg	connect needs id	connect precisa de id
 @msg	connect path has no open end	o caminho de connect não tem extremidade aberta
 @msg	continuation must be an array of path chunks	continuation deve ser uma matriz de trechos de caminho
