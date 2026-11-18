@@ -1040,7 +1040,12 @@ fn preview_or_rollback(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &
 pub(super) fn preview_now(app: &mut crate::VectorcraftApp, d: &mut Dialog, label: &str, cmd: &str, params: Value) -> Option<Value> {
     let mut result = None;
     if d.fields.get(PREVIEWED) != Some(&params) || !app.session.in_interaction() {
-        let _ = app.session.begin_interaction(label);
+        // A failure to begin (typing that can't be kept) shows, and nothing previews on the
+        // interaction still in progress.
+        if let Err(e) = app.begin_interaction(label) {
+            app.status(e);
+            return None;
+        }
         match app.session.preview(cmd, &params) {
             Ok(r) => {
                 d.fields.remove(REFUSED);
@@ -1164,6 +1169,98 @@ mod plugin_field_tests {
             assert_eq!(read_number_list(bad, &spec), None, "{bad:?}");
         }
         assert_eq!(read_number_list("1", &ParamSpec::Bool { default: false }), None, "not a list");
+    }
+}
+
+#[cfg(test)]
+mod settled_typing_tests {
+    use super::*;
+    use vectorcraft_engine::{Session, ViewInfo};
+    use vectorcraft_tools::{PointerEvent, PointerKind};
+
+    /// An app with Real-time Drawing off and " world" typed after "Hello", not yet applied → the
+    /// type's id.
+    fn typing(app: &mut crate::VectorcraftApp) -> u64 {
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("prefs.set", json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        let id = app.run("text.create", json!({"x": 100, "y": 100, "text": "Hello", "size": 20})).unwrap()["id"].as_u64().unwrap();
+        let v = ViewInfo::default();
+        app.session.select_tool("type", v).unwrap();
+        let b = app.session.active().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(id)], false).unwrap();
+        for k in [PointerKind::Down, PointerKind::Up] {
+            app.session.pointer(&PointerEvent::new(k, b.x1 - 1.0, b.center().y), v).unwrap();
+        }
+        app.session.tool_text(" world", v).unwrap();
+        id
+    }
+
+    fn plain(app: &crate::VectorcraftApp, id: u64) -> String {
+        match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+            vectorcraft_doc::NodeKind::Text(t) => t.plain_text(),
+            _ => panic!("not text"),
+        }
+    }
+
+    /// A dialog's preview while typing is in progress keeps the typing as its own step and starts
+    /// from it; the status bar shows the warning of the typing's preview that keeping it applied.
+    #[test]
+    fn a_dialog_preview_keeps_the_typing_and_shows_its_warning() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        let id = typing(&mut app);
+        assert_eq!(plain(&app, id), "Hello", "the typing waits");
+        let steps = app.session.active().unwrap().history.undo.len();
+        let mut d = Dialog::new("test", json!({}));
+        assert!(preview_now(&mut app, &mut d, "Fill Color", "paint.setFill", json!({"color": "#00a000"})).is_some());
+        assert_eq!(plain(&app, id), "Hello world");
+        let st = app.session.active().unwrap();
+        assert_eq!(st.history.undo.len(), steps + 1, "the typing is a step of its own");
+        assert_eq!(st.interaction.as_ref().map(|it| it.label.as_str()), Some("Fill Color"));
+
+        // The typing's deferred preview warns that type is skipped (as Bloat does with type selected).
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let rect = app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 200, "height": 200})).unwrap();
+        let text = app.run("text.create", json!({"x": 300, "y": 200, "text": "Hi"})).unwrap();
+        app.run("select.set", json!({"ids": [rect["id"], text["id"]]})).unwrap();
+        app.run("prefs.set", json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        app.session.begin_interaction("Typing").unwrap();
+        let p = json!({"tool": "bloat", "points": [[290.0, 200.0]], "width": 200.0, "height": 200.0});
+        app.session.doc_mut().unwrap().interaction.as_mut().unwrap().preview = Some(("object.liquify".into(), p));
+        app.ui.status.clear();
+        let mut d = Dialog::new("test", json!({}));
+        assert!(preview_now(&mut app, &mut d, "Fill Color", "paint.setFill", json!({"color": "#00a000"})).is_some());
+        assert!(app.ui.status.contains("type"), "{:?}", app.ui.status);
+    }
+
+    /// The font menus end the typing session before their preview: the typing Real-time Drawing
+    /// off left unapplied is kept as a step of its own.
+    #[test]
+    fn ending_typing_for_the_font_menus_keeps_the_typing() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        let id = typing(&mut app);
+        let steps = app.session.active().unwrap().history.undo.len();
+        crate::panels::character::end_typing(&mut app);
+        assert_eq!(plain(&app, id), "Hello world");
+        let st = app.session.active().unwrap();
+        assert_eq!(st.history.undo.len(), steps + 1);
+        assert!(st.interaction.is_none());
+        assert_ne!(app.session.tool_options().get("typing").and_then(Value::as_bool), Some(true), "the typing session is over");
+    }
+
+    /// A Character panel change keeps the typing first and acts on the characters the Type tool
+    /// selected in the typed text, not on a selection cut short to the text before the typing.
+    #[test]
+    fn a_character_change_acts_on_characters_selected_in_the_typing() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        let id = typing(&mut app);
+        app.session.set_tool_option("select", &json!({"start": 6, "end": 11}));
+        crate::panels::character::range_style(&mut app, json!({"underline": true}));
+        assert_eq!(plain(&app, id), "Hello world");
+        let vectorcraft_doc::NodeKind::Text(t) = &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else {
+            panic!("not text")
+        };
+        let underlined: String = t.runs.iter().filter(|r| r.style.underline).map(|r| r.text.as_str()).collect();
+        assert_eq!(underlined, "world");
     }
 }
 
