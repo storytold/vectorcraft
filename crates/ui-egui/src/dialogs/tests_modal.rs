@@ -532,7 +532,7 @@ fn simplify_slider_and_dialog_simplify_only_the_direct_selected_part_of_a_path()
     let anchors: Vec<_> = (0..=40).map(|i| json!({"x": 20 + i * 8, "y": 150.0 + 60.0 * (f64::from(i) / 6.0).sin()})).collect();
     let id = app.run("path.create", json!({"anchors": anchors})).unwrap()["id"].as_u64().unwrap();
     let path = |app: &VectorcraftApp| {
-        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.clone()
+        app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).and_then(|n| n.path_data()).expect("a path").subpaths[0].anchors.to_vec()
     };
     let original = path(&app);
     let run: Vec<_> = (10..=30).map(|i| json!([0, i])).collect();
@@ -678,6 +678,14 @@ fn simplify_dialog_preview_counts_and_cancel_restore_the_original() {
     let texts = frame(&ctx, &mut app, vec![]);
     let preview = texts.iter().find(|(t, _)| t == "Preview").map(|(_, r)| *r).expect("a Preview checkbox");
     assert!(texts.iter().any(|(t, _)| t == "Anchor Points: 20 → 2"), "the reduction is visible: {texts:?}");
+    // In French the label ends in a no-break space and a colon (#7991).
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let french = frame(&ctx, &mut app, vec![]);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let want = format!("{}\u{a0}: 20 → 2", crate::i18n::tr(fr, "Anchor Points"));
+    assert!(french.iter().any(|(t, _)| *t == want), "{want:?} in {french:?}");
+    frame(&ctx, &mut app, vec![]);
     assert!(app.session.in_interaction());
     assert!(app.session.doc().unwrap().selection.anchors.is_empty());
     assert_eq!(app.session.doc().unwrap().history.undo.len(), undo_len);

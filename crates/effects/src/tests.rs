@@ -4,8 +4,14 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod clipfx;
+mod imageoutline;
+mod painted;
+mod rasterfollow;
 mod scale;
+mod solidcontext;
 mod transformfx;
+mod typestroke;
 
 fn fx(id: &str, params: Value) -> Effect {
     Effect { id: id.into(), params, visible: true }
@@ -885,6 +891,108 @@ fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_move() {
     }
 }
 
+/// Under a Warp effect a hidden path in a layer that keeps its shape past the budget does not hold
+/// the layer's gradient in place either: it moves and scales from the layer's bounds to the warped
+/// square's bounds, as the art and inside the art.
+#[test]
+fn a_hidden_path_past_the_budget_leaves_a_layers_gradients_free_to_follow_a_warp() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, LayerColor, NodeId, NodeKind, color::Paint};
+    let stops = vec![GradientStop::new(0.0, vectorcraft_color::Color::BLACK), GradientStop::new(1.0, vectorcraft_color::Color::WHITE)];
+    let geom = GradientGeom { start: (0.0, 50.0).into(), end: (100.0, 50.0).into(), aspect: 1.0, focal: None };
+    let placed = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..GradientPaint::new(Gradient::new(GradientKind::Linear, stops)) }));
+    let ends = |ap: &Appearance| match ap.fill_paint() {
+        Paint::Gradient(g) => g.geom.map(|g| (g.start, g.end)),
+        _ => None,
+    };
+    let oval = || shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0));
+    // A layer with a visible square and a hidden circle, both 0..100, and a gradient fill of its own.
+    let layer = || {
+        let square = Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default()));
+        let mut circle = Node::path(NodeId(4), oval(), Appearance::default());
+        circle.visible = false;
+        let mut layer = Node::layer(NodeId(2), "Layer 1", LayerColor::Preset(0));
+        if let NodeKind::Layer { children, .. } = &mut layer.kind {
+            *children = vec![square, Arc::new(circle)];
+        }
+        layer.appearance.items.push(AppearanceItem::Fill(FillLayer::new(placed.clone())));
+        layer
+    };
+    // The box map from the layer's bounds (the square's) to `b`: (0, 50) and (100, 50) go to the
+    // middles of b's sides.
+    let near = |got: Option<(Point, Point)>, b: Rect| {
+        let mid = (b.y0 + b.y1) / 2.0;
+        got.is_some_and(|(s, e)| s.distance(Point::new(b.x0, mid)) < 1e-6 && e.distance(Point::new(b.x1, mid)) < 1e-6)
+    };
+    for style in ["arc", "inflate", "flag"] {
+        let warp = fx(&format!("warp.{style}"), json!({"bend": 40.0, "horizontal": 20.0}));
+        // Room for the warped square beside the circle as it was, and not for the warped circle
+        // beside the warped square: the paths take the budget in turn, so the circle keeps its shape.
+        let mut probe = layer();
+        crate::reshape::reshape_leaves_within(&mut probe, &[&warp], Budget::EFFECTS, None);
+        let warped = |k: usize| util::line_estimate(probe.children().unwrap()[k].path_data().unwrap());
+        let circle = util::line_estimate(&oval());
+        assert!(warped(1) > circle, "warp.{style}: the warped circle is drawn with more lines");
+        let budget = Budget { anchors: usize::MAX, lines: warped(0) + circle };
+        let mut art = layer();
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&warp], budget, None);
+        assert_eq!(art.children().unwrap()[1].path_data(), Some(&oval()), "{}: the hidden circle keeps its shape", warp.id);
+        let square = art.children().unwrap()[0].geometric_bounds().unwrap();
+        assert!(square != Rect::new(0.0, 0.0, 100.0, 100.0), "{}: the square takes the effect: {square:?}", warp.id);
+        let mut own = Appearance::clone(&art.appearance);
+        carry.apply(&mut own);
+        assert!(near(ends(&own), square), "{}: the layer's gradient, as the art: {:?} for {square:?}", warp.id, ends(&own));
+        let mut art = Node::group(NodeId(9), vec![Arc::new(layer())]);
+        crate::reshape::reshape_leaves_within(&mut art, &[&warp], budget, None);
+        let got = ends(&art.children().unwrap()[0].appearance);
+        assert!(near(got, square), "{}: the layer's gradient, inside the art: {got:?} for {square:?}", warp.id);
+    }
+}
+
+/// A freeform gradient whose points were edited moves its points with a Warp effect from the
+/// bounds before the warp to the bounds after it, on a path, on a group inside the art and on the
+/// art itself, as a placed gradient does.
+#[test]
+fn edited_freeform_points_follow_a_warp() {
+    use std::sync::Arc;
+
+    use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint};
+    use vectorcraft_doc::{AppearanceItem, FillLayer, NodeId, color::Paint};
+    let mut ramp = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Gradient::default() });
+    let pt = |x: f64, c| FreeformPoint::new(Point::new(x, 50.0), c);
+    ramp.set_freeform(Freeform { points: vec![pt(0.0, Color::BLACK), pt(100.0, Color::WHITE)], ..Default::default() });
+    assert!(ramp.geom.is_none() && !ramp.is_placed());
+    let freeform = Paint::Gradient(Box::new(ramp));
+    let points = |ap: &Appearance| match ap.fill_paint() {
+        Paint::Gradient(g) => g.freeform.as_ref().map(|f| f.points.iter().map(|p| p.at).collect::<Vec<_>>()),
+        _ => None,
+    };
+    let square = |ap: Appearance| Arc::new(Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), ap));
+    // The box map from the square's bounds to `b`: (0, 50) and (100, 50) go to the middles of b's sides.
+    let near = |got: Option<Vec<Point>>, b: Rect| {
+        let mid = (b.y0 + b.y1) / 2.0;
+        got.is_some_and(|p| p.len() == 2 && p[0].distance(Point::new(b.x0, mid)) < 1e-6 && p[1].distance(Point::new(b.x1, mid)) < 1e-6)
+    };
+    for style in ["arc", "inflate", "rise"] {
+        let e = fx(&format!("warp.{style}"), json!({"bend": 40.0, "vertical": 20.0}));
+        let mut inner = Node::group(NodeId(2), vec![square(Appearance::default())]);
+        inner.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
+        let mut art = Node::group(NodeId(9), vec![square(Appearance::basic(freeform.clone(), Paint::None, 0.0)), Arc::new(inner)]);
+        art.appearance.items.push(AppearanceItem::Fill(FillLayer::new(freeform.clone())));
+        let carry = crate::reshape::reshape_leaves_within(&mut art, &[&e], Budget::EFFECTS, None);
+        let b = art.geometric_bounds().unwrap();
+        assert!(b != Rect::new(0.0, 0.0, 100.0, 100.0), "{}: the warp changes the bounds: {b:?}", e.id);
+        let members = art.children().unwrap();
+        assert!(near(points(&members[0].appearance), b), "{}: the path's points {:?} for {b:?}", e.id, points(&members[0].appearance));
+        assert!(near(points(&members[1].appearance), b), "{}: the inner group's points {:?} for {b:?}", e.id, points(&members[1].appearance));
+        let mut own = Appearance::clone(&art.appearance);
+        carry.apply(&mut own);
+        assert!(near(points(&own), b), "{}: the art's own points {:?} for {b:?}", e.id, points(&own));
+    }
+}
+
 /// A freeform gradient whose points were edited (its vector still fitted to the bounds) moves its
 /// points with a Transform effect and Free Distort, on a path, on a group inside the art and on the
 /// art itself, as a placed gradient does.
@@ -1252,6 +1360,96 @@ fn roughen_smooth_makes_no_cusps() {
 }
 
 #[test]
+fn roughen_at_size_0_keeps_the_outline_and_spaces_its_points_evenly() {
+    use vectorcraft_geom::AnchorKind;
+    use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+    let (a, b) = (Point::new(0.0, 0.0), Point::new(300.0, 0.0));
+    let curve = PathData::single(SubPath::new(
+        vec![
+            vectorcraft_geom::Anchor::with_handles(a, a, Point::new(10.0, 40.0)),
+            vectorcraft_geom::Anchor::with_handles(b, Point::new(100.0, 200.0), b),
+        ],
+        false,
+    ));
+    let ellipse = shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 50.0));
+    // Two subpaths with lines and curves: a closed one whose last segment is a line, and an open
+    // one that ends with a line.
+    let (c, d, e, f) = (Point::new(100.0, 100.0), Point::new(200.0, 0.0), Point::new(300.0, 0.0), Point::new(300.0, 100.0));
+    let mixed = PathData::new(vec![
+        SubPath::new(
+            vec![
+                vectorcraft_geom::Anchor::corner(a),
+                vectorcraft_geom::Anchor::with_handles(Point::new(100.0, 0.0), Point::new(100.0, 0.0), Point::new(160.0, 20.0)),
+                vectorcraft_geom::Anchor::with_handles(c, Point::new(160.0, 80.0), c),
+            ],
+            true,
+        ),
+        SubPath::new(
+            vec![
+                vectorcraft_geom::Anchor::with_handles(d, d, Point::new(220.0, 60.0)),
+                vectorcraft_geom::Anchor::with_handles(e, Point::new(280.0, 60.0), e),
+                vectorcraft_geom::Anchor::corner(f),
+            ],
+            false,
+        ),
+    ]);
+    for path in [square(), ellipse, curve, mixed] {
+        let all: Vec<_> = path.subpaths.iter().flat_map(|sp| (0..sp.segment_count()).map(|i| sp.segment(i))).collect();
+        let off = |q: Point| all.iter().map(|c| c.nearest(q, 1e-9).distance_sq).fold(f64::INFINITY, f64::min).sqrt();
+        for params in
+            [json!({"size": 0}), json!({"size": 0, "points": "corner"}), json!({"size": 0, "relative": false, "points": "corner", "seed": 7})]
+        {
+            let out = run("distort.roughen", params.clone(), &path);
+            assert!(out.anchor_count() > path.anchor_count(), "{params}: the points are added");
+            assert_eq!(out.subpaths.len(), path.subpaths.len(), "{params}");
+            for (sp, got) in path.subpaths.iter().zip(&out.subpaths) {
+                assert_eq!(got.closed, sp.closed);
+                // Walk the result one original segment at a time: its pieces end on the segment's end anchor.
+                let mut at = 0;
+                for i in 0..sp.segment_count() {
+                    let (orig, end) = (sp.segment(i), sp.anchors[(i + 1) % sp.anchors.len()]);
+                    let start = got.anchors[at];
+                    let was = sp.anchors[i];
+                    assert_eq!((start.p, start.kind, start.has_in(), start.has_out()), (was.p, was.kind, was.has_in(), was.has_out()), "{params}");
+                    let mut pieces = vec![];
+                    loop {
+                        let piece = got.segment(at);
+                        for j in 0..=8 {
+                            let q = piece.eval(j as f64 / 8.0);
+                            assert!(off(q) < 1e-6, "{params}: {q:?} is {} off the outline", off(q));
+                        }
+                        pieces.push(piece.arclen(1e-6));
+                        at += 1;
+                        if piece.p3.distance(end.p) < 1e-9 {
+                            break;
+                        }
+                        // A point the effect added: a corner without handles on a line, a smooth
+                        // point whose handles follow the curve.
+                        let added = got.anchors[at];
+                        if sp.segment_is_line(i) {
+                            assert_eq!((added.kind, added.has_in(), added.has_out()), (AnchorKind::Corner, false, false), "{params}");
+                        } else {
+                            assert_eq!(added.kind, AnchorKind::Smooth, "{params}");
+                            let (hi, ho) = (added.h_in - added.p, added.h_out - added.p);
+                            assert!(hi.cross(ho).abs() < 1e-6 * hi.hypot() * ho.hypot() && hi.dot(ho) < 0.0, "{params}: {added:?}");
+                        }
+                    }
+                    assert!(pieces.len() > 1, "{params}: segment {i} is split");
+                    assert!(close(pieces.iter().sum::<f64>(), orig.arclen(1e-6), 1e-3), "{params}: {pieces:?}");
+                    let (lo, hi) = pieces.iter().fold((f64::INFINITY, 0.0f64), |(lo, hi), &l| (lo.min(l), hi.max(l)));
+                    assert!(hi - lo < 1e-3, "{params}: segment {i}'s pieces from {lo} to {hi}");
+                }
+                assert_eq!(at, got.segment_count(), "{params}");
+                if !sp.closed {
+                    let (last, was) = (got.anchors[at], sp.anchors[sp.anchors.len() - 1]);
+                    assert_eq!((last.p, last.kind, last.has_in(), last.has_out()), (was.p, was.kind, was.has_in(), was.has_out()), "{params}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn zigzag_ridge_count_and_amplitude() {
     let out = run("distort.zigZag", json!({"ridges": 4, "points": "corner", "size": 10}), &square());
     assert_eq!(out.anchor_count(), 4 * 5);
@@ -1374,6 +1572,27 @@ fn outline_object_is_a_geometry_effect_that_keeps_the_path() {
     assert_eq!(apply_geometry(&[fx("path.outlineObject", json!({})), offset.clone()], &square(), b), apply_geometry(&[offset], &square(), b));
 }
 
+/// A symbol instance given to Pathfinder and compound shapes as its art: the group takes the
+/// instance's box angle and the art turns with it, turned with the instance or reset to 0.
+#[test]
+fn outline_object_turns_an_instances_art_with_its_box() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::orient::transformed_angle;
+    use vectorcraft_doc::{Appearance, Document, NodeId, Symbol};
+    let mut d = Document::new(500.0, 500.0);
+    d.symbols.push(Symbol { dynamic: false, name: "s".into(), art: Arc::new(Node::path(NodeId(0), square(), Appearance::default())) });
+    let xf = Affine::translate((200.0, 100.0)) * Affine::rotate(0.35);
+    for box_angle in [transformed_angle(0.0, xf), 0.0] {
+        let mut inst = Node::new(NodeId(3), NodeKind::SymbolInstance { symbol: "s".into(), xf });
+        inst.bbox_angle = box_angle;
+        let out = outline_object(Some(&d), &inst).unwrap();
+        let mut angles = vec![];
+        out.walk(&mut |c| angles.push(c.bbox_angle));
+        assert!(angles.len() == 2 && angles.iter().all(|a| close(*a, box_angle, 1e-9)), "{box_angle}: {angles:?}");
+    }
+}
+
 #[test]
 fn convert_to_shape_sizes() {
     let r = run("convertToShape.rectangle", json!({"extraW": 20, "extraH": 10}), &square()).bounds().unwrap();
@@ -1466,6 +1685,136 @@ fn twist_turns_clockwise_for_positive_angles() {
     let turned = |angle: f64| apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &right, bounds).subpaths[0].anchors[0].p;
     assert!(turned(45.0).y > 50.5, "{:?}", turned(45.0));
     assert!(turned(-45.0).y < 49.5, "{:?}", turned(-45.0));
+}
+
+/// Twist turns a line into a smooth spiral: the points it adds join their pieces without a kink,
+/// however far it turns (#7069).
+#[test]
+fn twist_joins_its_pieces_smoothly() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(40.0, 30.0), Point::new(60.0, 30.0)], false));
+    let bounds = Rect::new(40.0, 30.0, 60.0, 30.0);
+    for angle in [90.0, 400.0, -720.0] {
+        let out = apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &line, bounds);
+        let anchors = &out.subpaths[0].anchors;
+        assert!(anchors.len() > 8, "{angle}°: {} anchors", anchors.len());
+        for a in anchors.iter().skip(1).take(anchors.len() - 2) {
+            let (into, out) = (a.p - a.h_in, a.h_out - a.p);
+            if into.hypot() < 1e-9 || out.hypot() < 1e-9 {
+                continue;
+            }
+            let kink = (into.x * out.y - into.y * out.x).atan2(into.dot(out)).to_degrees().abs();
+            assert!(kink < 1.0, "{angle}°: a kink of {kink:.1}° at {:?}", a.p);
+        }
+    }
+}
+
+#[test]
+fn twist_boundary_handles_follow_the_inward_tangent() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(40.0, 30.0), Point::new(60.0, 30.0)], false));
+    let bounds = Rect::new(40.0, 30.0, 60.0, 30.0);
+    for angle in [90.0_f64, 400.0, -720.0] {
+        let out = apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &line, bounds);
+        let anchors = &out.subpaths[0].anchors;
+        let start = anchors.first().unwrap();
+        let end = anchors.last().unwrap();
+        assert_eq!(start.p, Point::new(40.0, 30.0));
+        assert_eq!(end.p, Point::new(60.0, 30.0));
+        for (actual, expected) in [
+            (start.h_out - start.p, vectorcraft_geom::Vec2::new(1.0, -angle.to_radians())),
+            (end.h_in - end.p, vectorcraft_geom::Vec2::new(-1.0, angle.to_radians())),
+        ] {
+            assert!(actual.hypot() > 1e-9);
+            let error = (actual.x * expected.y - actual.y * expected.x).atan2(actual.dot(expected)).to_degrees().abs();
+            assert!(error < 0.05, "{angle} degrees: boundary tangent differs by {error} degrees");
+        }
+    }
+}
+
+#[test]
+fn twist_large_coordinate_joins_preserve_boundary_sides() {
+    use vectorcraft_geom::Anchor;
+
+    let center = 1e16;
+    for offset in [32.0, 64.0] {
+        let p = Point::new(center + offset, 0.0);
+        let line = PathData::single(SubPath::new(
+            vec![
+                Anchor::corner(Point::new(p.x - 18.0, 0.0)),
+                Anchor::with_handles(p, Point::new(p.x - 6.0, 0.0), Point::new(p.x + 6.0, 0.0)),
+                Anchor::corner(Point::new(p.x + 18.0, 0.0)),
+            ],
+            false,
+        ));
+        let out = crate::distort::twist(&line, Rect::new(center - 64.0, 0.0, center + 64.0, 0.0), 90.0, 3);
+        let join = &out.subpaths[0].anchors[1];
+        if offset == 64.0 {
+            assert_eq!(join.h_out, Point::new(p.x + 6.0, 0.0));
+            let actual = join.h_in - join.p;
+            let expected = vectorcraft_geom::Vec2::new(-1.0, std::f64::consts::FRAC_PI_2);
+            let error = actual.cross(expected).atan2(actual.dot(expected)).abs();
+            assert!(error < 1e-9, "{actual:?}");
+        } else {
+            let incoming = join.p - join.h_in;
+            let outgoing = join.h_out - join.p;
+            assert!(incoming.cross(outgoing).abs() < 1e-9, "{incoming:?} {outgoing:?}");
+            assert!(incoming.dot(outgoing) > 0.0);
+        }
+    }
+}
+
+#[test]
+fn twist_fractional_boundary_handles_use_each_sides_derivative() {
+    use vectorcraft_geom::Anchor;
+
+    for (bounds, step) in [(Rect::new(40.1, 30.0, 60.3, 30.0), 1.0), (Rect::new(-60.3, 30.0, -40.1, 30.0), 1.0)] {
+        for x in [bounds.x0, bounds.x1] {
+            for angle in [90.0_f64, 400.0, -720.0] {
+                let p = Point::new(x, 30.0);
+                let line = PathData::single(SubPath::new(
+                    vec![
+                        Anchor::corner(Point::new(x - 3.0 * step, 30.0)),
+                        Anchor::with_handles(p, Point::new(x - step, 30.0), Point::new(x + step, 30.0)),
+                        Anchor::corner(Point::new(x + 3.0 * step, 30.0)),
+                    ],
+                    false,
+                ));
+                let out = crate::distort::twist(&line, bounds, angle, 3);
+                assert!(
+                    out.subpaths[0].anchors.iter().all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite()),
+                    "x={x} angle={angle}: {:?}",
+                    out.subpaths[0].anchors
+                );
+                let join = &out.subpaths[0].anchors[1];
+                assert!(join.p.distance(p) < 1e-10, "{:?}", join.p);
+                let a = angle.to_radians();
+                let expected = if x == bounds.x0 { [(-1.0, 0.0), (1.0, -a)] } else { [(-1.0, a), (1.0, 0.0)] };
+                for (actual, (dx, dy)) in [join.h_in - join.p, join.h_out - join.p].into_iter().zip(expected) {
+                    let expected = vectorcraft_geom::Vec2::new(dx, dy);
+                    let error = actual.cross(expected).atan2(actual.dot(expected)).abs();
+                    assert!(error < 1e-9, "x={x} angle={angle}: {actual:?}, join={join:?}, source={:?}", line.subpaths[0].anchors[1]);
+                }
+            }
+        }
+    }
+    let bounds = Rect::new(1e16, 30.0, 1e16 + 18.0, 30.0);
+    let center = bounds.center();
+    let line = PathData::single(SubPath::polyline(&[Point::new(center.x - 4.0, center.y), center, Point::new(center.x + 4.0, center.y)], false));
+    let out = crate::distort::twist(&line, bounds, 90.0, 3);
+    assert_eq!(out.subpaths[0].anchors[1].p, center);
+    let bounds = Rect::new(0.0, 30.0, 2e16, 30.0);
+    let p = Point::new(bounds.x1 - 8.0, 30.0);
+    let line = PathData::single(SubPath::new(
+        vec![
+            Anchor::corner(Point::new(p.x - 12.0, p.y)),
+            Anchor::with_handles(p, Point::new(p.x - 4.0, p.y), Point::new(p.x + 4.0, p.y)),
+            Anchor::corner(Point::new(p.x + 12.0, p.y)),
+        ],
+        false,
+    ));
+    let out = crate::distort::twist(&line, bounds, 90.0, 3);
+    let join = &out.subpaths[0].anchors[1];
+    assert!(join.p.y - p.y > 10.0, "{:?}", join.p);
+    assert!(join.h_out.y - join.p.y < -4.0, "{join:?}");
 }
 
 #[test]
@@ -1632,6 +1981,7 @@ fn rasterize_compose_leaves_the_raster_alone_when_the_sizes_do_not_fit() {
         to_doc: Affine::IDENTITY,
         px: 1.0,
         center: Point::new(1.0, 1.0),
+        size: vectorcraft_geom::Vec2::new(2.0, 2.0),
         channels: pixel::Channels::Rgb,
         line: 1.0,
         extent: std::f64::consts::SQRT_2,

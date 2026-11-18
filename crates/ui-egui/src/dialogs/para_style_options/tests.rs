@@ -158,7 +158,7 @@ fn reset_panel_clears_only_its_section() {
     let mut app = app();
     let all = json!({"justify": "Center", "space_after": 6.0, "composer": "singleLine", "roman_hanging": true, "hyphenate": true,
         "hyphenation": {"words_longer_than": 8}, "justification": {"auto_leading": 150.0}, "tabs": [{"position": 20.0}],
-        "korean_line_break_anywhere": true});
+        "korean_line_break_anywhere": true, "bunri_kinshi": true});
     app.run("paraStyle.new", json!({"name": "Body", "attrs": all})).unwrap();
     let stored = def(&app, "Body");
     for (section, cleared) in [
@@ -167,7 +167,7 @@ fn reset_panel_clears_only_its_section() {
         ("composition", &["composer", "roman_hanging"]),
         ("hyphenation", &["hyphenate", "hyphenation"]),
         ("justification", &["justification"]),
-        ("eastAsian", &["korean_line_break_anywhere"]),
+        ("eastAsian", &["korean_line_break_anywhere", "bunri_kinshi"]),
     ] {
         app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
         assert!(app.run("ui.paraStyleOptions.resetPanel", json!({})).is_err(), "General has no Reset Panel");
@@ -284,6 +284,34 @@ fn korean_line_break_anywhere_is_set_by_the_east_asian_section() {
     super::super::confirm(&mut app).unwrap();
     assert_eq!(def(&app, "Body").get("korean_line_break_anywhere"), Some(&json!(true)));
     assert!(paras(&app, id)[0].korean_line_break_anywhere, "the style's paragraphs take it");
+}
+
+/// East Asian Composition Settings › Bunri-Kinshi sets the style's attribute, which its paragraphs
+/// take; set off again, the style holds it off, and unset, the style leaves it out.
+#[test]
+fn bunri_kinshi_is_set_by_the_east_asian_section() {
+    let mut app = app();
+    let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "あ——い"})).unwrap()["id"].as_u64().unwrap();
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
+    app.run("paraStyle.apply", json!({"name": "Body", "id": id})).unwrap();
+    assert!(!paras(&app, id)[0].bunri_kinshi);
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().fields["bunri_kinshi"].is_null());
+    set(&mut app, "section", json!("eastAsian"));
+    set(&mut app, "bunri_kinshi", json!(true));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("bunri_kinshi"), Some(&json!(true)));
+    assert!(paras(&app, id)[0].bunri_kinshi, "the style's paragraphs take it");
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["bunri_kinshi"], json!(true));
+    set(&mut app, "bunri_kinshi", json!(false));
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("bunri_kinshi"), Some(&json!(false)));
+    assert!(!paras(&app, id)[0].bunri_kinshi);
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    set(&mut app, "bunri_kinshi", Value::Null);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(def(&app, "Body").get("bunri_kinshi"), None);
 }
 
 /// The rows of the `tabs` field of the open dialog.
@@ -534,6 +562,7 @@ fn every_section_draws_its_fields() {
         ("hyphenation", "Hyphenation Zone:"),
         ("justification", "Glyph Scaling:"),
         ("eastAsian", "Korean Line Break Anywhere"),
+        ("eastAsian", "Bunri-Kinshi"),
     ] {
         set(&mut app, "section", json!(section));
         let mut texts = String::new();
@@ -546,6 +575,65 @@ fn every_section_draws_its_fields() {
         }
         for shown in [label, "General", "Basic Paragraph Formats", "Tabs", "Justification", "Reset Panel", "OK", "Cancel"] {
             assert!(texts.contains(shown), "{shown} is drawn in {section}: {texts}");
+        }
+    }
+}
+
+/// The texts of one headless frame at a screen `w` by `h`, with their screen rects.
+fn texts_at(ctx: &egui::Context, app: &mut VectorcraftApp, w: f32, h: f32) -> Vec<(String, egui::Rect)> {
+    fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match s {
+            egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+            _ => {}
+        }
+    }
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
+    out.textures_delta.clear();
+    let mut texts = vec![];
+    for c in &out.shapes {
+        collect(&c.shape, &mut texts);
+    }
+    texts
+}
+
+/// Going from a shorter section to a longer one keeps OK and Cancel on a small screen in the first
+/// frame after the switch, not only once the window has measured itself again.
+#[test]
+fn switching_to_a_long_section_keeps_the_buttons_on_a_small_screen() {
+    let mut app = app();
+    let mut attrs: Value = serde_json::from_str(KEPT).unwrap();
+    for (key, value) in [
+        ("right_indent", json!(4.0)),
+        ("first_line_indent", json!(12.0)),
+        ("space_after", json!(6.0)),
+        ("composer", json!("singleLine")),
+        ("roman_hanging", json!(true)),
+        ("hyphenate", json!(true)),
+        ("justification", json!({"auto_leading": 150.0})),
+        ("korean_line_break_anywhere", json!(true)),
+    ] {
+        attrs[key] = value;
+    }
+    app.run("paraStyle.new", json!({"name": "Body", "attrs": attrs})).unwrap();
+    app.run("ui.paraStyleOptions", json!({"name": "Body"})).unwrap();
+    for h in [500.0, 560.0, 640.0, 720.0] {
+        for to in SECTIONS {
+            for from in SECTIONS.into_iter().filter(|s| *s != to) {
+                let ctx = egui::Context::default();
+                crate::theme::install_fonts(&ctx);
+                set(&mut app, "section", json!(from));
+                for _ in 0..5 {
+                    let _ = texts_at(&ctx, &mut app, 900.0, h);
+                }
+                set(&mut app, "section", json!(to));
+                let texts = texts_at(&ctx, &mut app, 900.0, h);
+                for label in ["OK", "Cancel"] {
+                    let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
+                    assert!(r.bottom() <= h + 1.0, "{label} stays on a {h}-point screen going from {from} to {to}: {r:?}");
+                }
+            }
         }
     }
 }

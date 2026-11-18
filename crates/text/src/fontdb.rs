@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use kurbo::BezPath;
 use skrifa::instance::{Location, LocationRef, Size};
-use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::outline::OutlinePen;
 use skrifa::raw::FileRef;
 use skrifa::string::StringId;
 use skrifa::{GlyphId, MetadataProvider, Tag};
@@ -17,6 +17,7 @@ use crate::GlyphImage;
 use crate::colr::ColourContent;
 use vectorcraft_doc::color::Color;
 
+mod added;
 mod alternates;
 mod build;
 mod cache;
@@ -33,6 +34,9 @@ mod stylistic_sets;
 mod traits;
 mod wanted;
 
+#[cfg(test)]
+pub(crate) use added::recently_added_of;
+pub use added::{RECENTLY_ADDED_WITHIN, RecentlyAdded};
 pub use alternates::GlyphAlternate;
 pub(crate) use alternates::listed;
 pub use build::style_weight;
@@ -54,7 +58,7 @@ pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins};
 pub(crate) use glyph_pen::FlipPen;
-pub use gsub::{GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
+pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 #[cfg(not(target_arch = "wasm32"))]
 use names::SysFallback;
 #[cfg(test)]
@@ -70,7 +74,7 @@ pub use stylistic_sets::StylisticSet;
 use traits::Alias;
 #[cfg(test)]
 use traits::{FaceKeys, face_names};
-pub use traits::{FontClass, FontMatch, FontTraits};
+pub use traits::{FontClass, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, is_generic_family};
 #[cfg(test)]
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
@@ -105,6 +109,8 @@ pub struct FontDb {
     family_cache: Mutex<Option<Arc<[String]>>>,
     menu_cache: Mutex<Option<MenuFamilies>>,
     generation: AtomicU64,
+    /// This database's [`FontDb::id`].
+    id: u64,
     /// System fallback state: characters no system font covers.
     #[cfg(not(target_arch = "wasm32"))]
     sys: Mutex<SysFallback>,
@@ -114,10 +120,12 @@ pub struct FontDb {
     /// Faces instanced at the axis settings of type's Variable Font sliders ([`FontDb::instance`]).
     instances: Mutex<Instances>,
     /// Composite fonts (Type › Composite Fonts…) by lowercased name ([`FontDb::set_composite_font`]):
-    /// type naming one as its family is set in its parts' fonts.
+    /// type naming one as its family is set in its parts' fonts. A thread's guards can lend others
+    /// in their place ([`FontDb::lend_composite_fonts`]).
     composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
-    /// The composite fonts [`FontDb::lend_composite_fonts`] put in, by lowercased name.
-    composite_loans: Mutex<HashMap<String, composite::CompositeLoan>>,
+    /// The lookups of the custom character sets of the composite fonts held or lent, each built
+    /// when first used.
+    custom_classes: Mutex<composite::CustomClasses>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.

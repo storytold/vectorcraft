@@ -71,7 +71,9 @@ pub struct TileGrid {
 
 /// Calls `f` with the bounds of each object of `n` that prints: visible, not on a template
 /// layer and not a guide (layers are already picked by the Print Layers option). Symbol
-/// instances are measured by their art from `symbols`.
+/// instances are measured by their art from `symbols`. A box grows by the room brush art can
+/// paint past the brushed strokes of the object and of the objects in it
+/// ([`vectorcraft_brush::reach_within`]).
 fn printed(n: &Node, symbols: &SymbolBoxes, f: &mut impl FnMut(Rect)) {
     if !n.visible {
         return;
@@ -85,7 +87,8 @@ fn printed(n: &Node, symbols: &SymbolBoxes, f: &mut impl FnMut(Rect)) {
         }
         _ => {
             if let Some(b) = n.visual_bounds_with(symbols) {
-                f(b);
+                let reach = vectorcraft_brush::reach_within(n);
+                f(if reach > 0.0 { b.inflate(reach, reach) } else { b });
             }
         }
     }
@@ -102,9 +105,10 @@ fn has_art(doc: &Document, r: Rect) -> bool {
     any
 }
 
-/// The bounds of all the art that prints.
+/// The bounds of all the art that prints, with the brush art it paints. The box of a symbol
+/// instance whose art holds brushed strokes grows as in [`has_art`].
 fn art_bounds(doc: &Document) -> Option<Rect> {
-    let symbols = doc.symbol_boxes();
+    let symbols = doc.symbol_boxes().with_brush_art();
     let mut all: Option<Rect> = None;
     for l in &doc.layers {
         printed(l, &symbols, &mut |b| all = Some(all.map_or(b, |a| a.union(b))));
@@ -184,8 +188,14 @@ fn too_many_pages() -> PdfError {
 }
 
 /// The pages of `doc` (whose layers are those that print) as `set` lays them out, the tiles of
-/// each artboard when tiling, and warnings (art that doesn't fit the imageable area).
-pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<String>) -> Result<(Vec<Layout>, Vec<TileGrid>), PdfError> {
+/// each artboard when tiling. `warnings` gets what doesn't print (art outside the imageable area,
+/// an artboard with no area), and `setting_notes` the copies per sheet that don't fit.
+pub(crate) fn layout(
+    doc: &Document,
+    set: &PrintSettings,
+    warnings: &mut Vec<String>,
+    setting_notes: &mut Vec<String>,
+) -> Result<(Vec<Layout>, Vec<TileGrid>), PdfError> {
     let marks = set.marks.printer_marks();
     let bleed = set.bleed.of(doc);
     let (pw, ph) = set.paper();
@@ -278,7 +288,7 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             let fit = set.copies_per_sheet.then(|| (fitting(imageable.width(), extent.0, gutter), fitting(imageable.height(), extent.1, gutter)));
             let grid = match fit {
                 Some((cols, rows)) if cols < 1.0 || rows < 1.0 => {
-                    warnings.push(format!("{what} with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"));
+                    setting_notes.push(format!("{what} with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"));
                     None
                 }
                 Some((cols, rows)) if cols * rows > MAX_COPIES_PER_SHEET as f64 => {

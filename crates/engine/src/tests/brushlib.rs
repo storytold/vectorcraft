@@ -106,7 +106,20 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
     let ids: Vec<&str> = libs.iter().map(|l| l["id"].as_str().unwrap()).collect();
     assert_eq!(
         ids,
-        ["art-ribbons", "calligraphic-nibs", "bristle-brushes", "pattern-borders", "scatter-shapes", "game-trails", "energy-beams", "dry-media"]
+        [
+            "art-ribbons",
+            "ink-and-wash",
+            "calligraphic-nibs",
+            "pressure-sensitive",
+            "bristle-brushes",
+            "pattern-borders",
+            "scatter-shapes",
+            "game-trails",
+            "energy-beams",
+            "dry-media",
+            "tech-circuit",
+            "arrows"
+        ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
@@ -120,37 +133,48 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
-    assert_eq!(libs[5]["count"].as_u64(), Some(4));
+    assert_eq!(libs[7]["count"].as_u64(), Some(4));
     let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
     assert_eq!(
         beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
     );
-    assert_eq!(libs[6]["count"].as_u64(), Some(4));
+    assert_eq!(libs[8]["count"].as_u64(), Some(4));
     let dry = run(&mut s, "brush.library", json!({"library": "Dry Media"}));
     assert_eq!(
         dry["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
-    assert_eq!((libs[7]["name"].as_str(), libs[7]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    assert_eq!((libs[9]["name"].as_str(), libs[9]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    let arrows = run(&mut s, "brush.library", json!({"library": "Arrows"}));
+    assert_eq!(
+        arrows["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
+        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art"), ("Dashed Arrow", "art")]
+    );
+    assert_eq!((libs[11]["name"].as_str(), libs[11]["count"].as_u64()), (Some("Arrows"), Some(5)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
     assert_eq!(strs(&added["added"]), ["Laser Bolt"]);
-    // One kind of brush per library, every brush drawing something.
+    // One kind of brush per library (Ink and Wash: art brushes and a calligraphic one), every
+    // brush drawing something.
     for (id, kind) in [
         ("art-ribbons", "art"),
+        ("ink-and-wash", "art"),
         ("calligraphic-nibs", "calligraphic"),
+        ("pressure-sensitive", "art"),
         ("bristle-brushes", "bristle"),
         ("pattern-borders", "pattern"),
         ("scatter-shapes", "scatter"),
         ("game-trails", "art"),
         ("energy-beams", "art"),
         ("dry-media", "art"),
+        ("arrows", "art"),
     ] {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
         for b in &lib.brushes {
+            let kind = if ["Brush Pen", "Round Flow", "Chisel Flow"].contains(&b.name.as_str()) { "calligraphic" } else { kind };
             assert_eq!(b.kind.type_id(), kind, "{}", b.name);
             let mut line = vectorcraft_geom::BezPath::new();
             line.move_to((0.0, 0.0));
@@ -174,6 +198,352 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         assert!(lib.brushes.iter().all(|b| !defaults.contains(&b.name.as_str())), "{id}");
     }
     assert!(s.execute("brush.library", &json!({"library": "nope"})).is_err());
+}
+
+/// Every path of brush art `n`: (anchors, opacity).
+fn art_paths(n: &vectorcraft_doc::Node) -> Vec<(usize, f32)> {
+    let mut out = vec![];
+    n.walk(&mut |c| {
+        if let Some(p) = c.path_data() {
+            out.push((p.anchor_count(), c.opacity));
+        }
+    });
+    out
+}
+
+/// The Ink and Wash library, made once.
+fn inks(s: &Session) -> std::sync::Arc<cmd::brushlib::BrushLibrary> {
+    cmd::brushlib::library(s, "ink-and-wash").unwrap().1
+}
+
+/// A straight line from the origin to (`x`, 0).
+fn line_to(x: f64) -> vectorcraft_geom::BezPath {
+    let mut line = vectorcraft_geom::BezPath::new();
+    line.move_to((0.0, 0.0));
+    line.line_to((x, 0.0));
+    line
+}
+
+fn black_stroke() -> vectorcraft_doc::StrokeLayer {
+    vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
+}
+
+#[test]
+fn arrows_library_lists_renders_and_applies_original_brushes() {
+    let mut s = session();
+    let listed = run(&mut s, "brush.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "arrows").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Arrows"), Some("builtIn"), Some(5)));
+    let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
+    assert_eq!(
+        lib.brushes.iter().map(|b| (b.name.as_str(), b.kind.type_id())).collect::<Vec<_>>(),
+        [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art"), ("Dashed Arrow", "art")]
+    );
+    for b in &lib.brushes {
+        for length in [2.0, 200.0] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(length), &black_stroke());
+            let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{} at {length} pt", b.name);
+        }
+    }
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    let before = undo_len(&s);
+    let added = run(&mut s, "brush.addFromLibrary", json!({"library": "arrows", "name": "Double Arrow", "apply": true, "ids": [path]}));
+    assert_eq!(strs(&added["added"]), ["Double Arrow"]);
+    assert_eq!(added["applied"], json!([path]));
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some("Double Arrow"));
+    run(&mut s, "edit.undo", json!({}));
+    assert!(vectorcraft_brush::find(doc(&s), "Double Arrow").is_none());
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(brush(&s, "Double Arrow"), lib.brushes[2]);
+}
+
+#[test]
+fn the_chevron_arrows_second_chevron_keeps_its_length_on_a_long_path() {
+    let s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
+    let b = lib.brush("Chevron Arrow").unwrap();
+    let widths = |length: f64| {
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(length), &black_stroke());
+        let children = pieces[0].children().unwrap();
+        assert_eq!(children.len(), 3, "shaft, head and second chevron");
+        children[1..].iter().map(|n| n.geometric_bounds().unwrap().width()).collect::<Vec<_>>()
+    };
+    let short = widths(100.0);
+    for (long, short) in widths(400.0).into_iter().zip(short) {
+        assert!((long - short).abs() < 1e-6, "the heads keep their length: {long} on 400 pt, {short} on 100 pt");
+    }
+}
+
+#[test]
+fn dashed_arrow_keeps_separate_dashes_and_survives_library_save() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Arrows").unwrap();
+    let b = lib.brush("Dashed Arrow").unwrap();
+    let mut curve = line_to(40.0);
+    curve.curve_to((60.0, -40.0), (140.0, 40.0), (200.0, 0.0));
+    for path in [line_to(2.0), line_to(200.0), curve] {
+        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &path, &black_stroke());
+        let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+        assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()));
+    }
+    let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(200.0), &black_stroke());
+    let children = pieces[0].children().unwrap();
+    assert_eq!(children.len(), 6, "five separate dashes and one head");
+    let bounds: Vec<_> = children.iter().map(|n| n.geometric_bounds().unwrap()).collect();
+    assert!(bounds.windows(2).all(|p| p[0].x1 < p[1].x0), "the dashes and head remain separated");
+    run(&mut s, "brush.addFromLibrary", json!({"library": "arrows", "name": "Dashed Arrow"}));
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": ["Dashed Arrow"]}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::find(&reopened, "Dashed Arrow").unwrap(), *b);
+}
+
+/// Original circuit art and repeat tiles survive adding, applying and saving a library.
+#[test]
+fn the_tech_circuit_library_constructs_adds_and_applies_each_brush() {
+    let mut s = session();
+    let listed = run(&mut s, "brush.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "tech-circuit").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Tech Circuit"), Some("builtIn"), Some(3)));
+    let (_, lib) = cmd::brushlib::library(&s, "Tech Circuit").unwrap();
+    let expected = [("Circuit Trace", "art"), ("Bus Lines", "pattern"), ("Terminal Nodes", "pattern")];
+    assert_eq!(lib.brushes.iter().map(|b| (b.name.as_str(), b.kind.type_id())).collect::<Vec<_>>(), expected);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    let curve = {
+        let mut p = line_to(40.0);
+        p.curve_to((60.0, -40.0), (140.0, 40.0), (200.0, 0.0));
+        p
+    };
+    let corner = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 80.0, 60.0)).to_bezpath();
+    for b in &lib.brushes {
+        let mut sanitized = b.clone();
+        sanitized.sanitize();
+        assert_eq!(&sanitized, b, "{} changes on load", b.name);
+        for tile in b.art() {
+            let pts = anchors(&[tile]);
+            assert!(!pts.is_empty() && pts.len() <= 100, "{}", b.name);
+            assert!(pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()));
+            tile.walk(&mut |n| {
+                if let Some(p) = n.path_data() {
+                    assert!(p.subpaths.iter().all(|s| s.closed));
+                }
+            });
+        }
+        if let BrushKind::Pattern(p) = &b.kind {
+            assert_eq!(p.colorization, vectorcraft_brush::Colorization::Tints);
+            assert_eq!(p.spacing, 0.0, "conductors join adjacent tiles");
+            if b.name == "Bus Lines" {
+                let lanes = p.side.children().unwrap();
+                assert_eq!(lanes.len(), 3);
+                let boxes: Vec<_> = lanes.iter().map(|n| n.path_data().unwrap().bounds().unwrap()).collect();
+                for r in &boxes {
+                    assert_eq!((r.x0, r.x1), (0.0, 24.0));
+                }
+                assert!(boxes.windows(2).all(|r| r[0].y1 < r[1].y0), "lanes stay separate");
+            }
+            if b.name == "Terminal Nodes" {
+                let mut rings = 0;
+                p.side.walk(&mut |n| {
+                    if matches!(n.kind, NodeKind::Compound { rule: vectorcraft_geom::FillRule::EvenOdd, .. }) {
+                        rings += 1;
+                    }
+                });
+                assert_eq!(rings, 1, "a hollow circular test point per tile");
+            }
+        }
+        for p in [line_to(200.0), line_to(2.0), curve.clone(), corner.clone()] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &p, &black_stroke());
+            let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        }
+        let before = undo_len(&s);
+        let r = run(&mut s, "brush.addFromLibrary", json!({"library": "tech-circuit", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&r["added"]), [b.name.as_str()]);
+        assert_eq!(r["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(brush(&s, &b.name), *b);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+        run(&mut s, "edit.undo", json!({}));
+        assert!(vectorcraft_brush::find(doc(&s), &b.name).is_none());
+        run(&mut s, "edit.redo", json!({}));
+        let before = undo_len(&s);
+        let again = run(&mut s, "brush.addFromLibrary", json!({"library": "tech-circuit", "name": b.name}));
+        assert!(strs(&again["added"]).is_empty());
+        assert_eq!(strs(&again["existing"]), [b.name.as_str()]);
+        assert_eq!(undo_len(&s), before);
+    }
+    let names: Vec<&str> = expected.iter().map(|(name, _)| *name).collect();
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+#[test]
+fn pressure_sensitive_brushes_widen_with_pen_pressure_and_survive_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Pressure Sensitive").unwrap();
+    let names = ["Flex Ribbon", "Pulse Stroke", "Round Flow", "Chisel Flow"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 40, "x2": 190, "y2": 40}))["id"].as_u64().unwrap();
+    let mut curve = line_to(20.0);
+    curve.curve_to((60.0, -25.0), (140.0, 25.0), (180.0, 0.0));
+    for b in &lib.brushes {
+        let width_at = |pressure| {
+            let stroke = vectorcraft_doc::StrokeLayer {
+                pressure: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, pressure), (1.0, pressure)] }),
+                ..black_stroke()
+            };
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &stroke);
+            let points = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{} at pressure {pressure}", b.name);
+            let min = points.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+            let max = points.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+            max - min
+        };
+        let light = width_at(0.0);
+        let heavy = width_at(1.0);
+        for width in [light, heavy] {
+            assert!(width.is_finite() && width > 0.0, "{}: light={light}, heavy={heavy}", b.name);
+        }
+        assert!(heavy > light * 1.3, "{}: light={light}, heavy={heavy}", b.name);
+        for line in [line_to(2.0), curve.clone()] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line, &black_stroke());
+            let points = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        }
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "pressure-sensitive", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+    }
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+/// Ink and Wash: a tapered ink art brush, a brush pen whose size follows the pen pressure and two
+/// translucent washes, with names of their own and a few paths of art each.
+#[test]
+fn the_ink_and_wash_library_has_tapered_ink_a_brush_pen_and_two_washes() {
+    let mut s = session();
+    let lib = run(&mut s, "brush.library", json!({"library": "ink-and-wash"}));
+    assert_eq!((lib["name"].as_str(), lib["category"].as_str()), (Some("Ink and Wash"), Some("builtIn")));
+    let listed: Vec<(&str, &str)> =
+        lib["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect();
+    assert_eq!(listed, [("Tapered Ink", "art"), ("Brush Pen", "calligraphic"), ("Soft Wash", "art"), ("Pooling Wash", "art")]);
+    assert_eq!(run(&mut s, "brush.library", json!({"library": "Ink and Wash"}))["id"], "ink-and-wash");
+    let inks = inks(&s);
+    // Names no other built-in library uses.
+    for b in cmd::brushlib::BUILTIN.iter().filter(|b| b.id != "ink-and-wash") {
+        let (_, other) = cmd::brushlib::library(&s, b.id).unwrap();
+        assert!(inks.brushes.iter().all(|x| other.brush(&x.name).is_none()), "{}", b.id);
+    }
+    // The art: within its 100 pt length, a few paths each, opaque ink and translucent washes.
+    let mut anchors = 0;
+    for name in ["Tapered Ink", "Soft Wash", "Pooling Wash"] {
+        let BrushKind::Art(a) = &inks.brush(name).unwrap().kind else { panic!("{name} is not an art brush") };
+        assert_eq!((a.scale, a.colorization), (vectorcraft_brush::ArtScale::Stretch, vectorcraft_brush::Colorization::Tints), "{name}");
+        let b = a.art.geometric_bounds().unwrap();
+        assert!([b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite()), "{name}");
+        assert!(b.x0 >= 0.0 && b.x1 <= 100.0 && b.x1 - b.x0 > 99.0, "{name}: {b:?}");
+        assert!(b.y0 >= -8.0 && b.y1 <= 8.0 && b.y1 - b.y0 > 5.0, "{name}: {b:?}");
+        let paths = art_paths(&a.art);
+        let count: usize = paths.iter().map(|p| p.0).sum();
+        assert!(paths.len() <= 80 && count <= 500, "{name}: {} paths, {count} anchors", paths.len());
+        anchors += count;
+        let opacities: Vec<f32> = paths.iter().map(|p| p.1).collect();
+        if name == "Tapered Ink" {
+            assert_eq!(opacities, [1.0], "opaque ink");
+        } else {
+            assert!(paths.len() >= 3, "{name}: a wash of several layers");
+            assert!(opacities.iter().all(|o| (0.15..=0.55).contains(o)), "{name}: {opacities:?}");
+        }
+    }
+    assert!(anchors <= 1200, "{anchors} anchors");
+    let BrushKind::Calligraphic(pen) = &inks.brush("Brush Pen").unwrap().kind else { panic!("Brush Pen is not calligraphic") };
+    use vectorcraft_brush::Variation::{Fixed, Pressure};
+    assert_eq!((pen.size, pen.modes(), pen.variation), (5.0, [Fixed, Fixed, Pressure], [0.0, 0.0, 2.5]), "no random variation");
+}
+
+/// Every Ink and Wash brush draws along straight, curved, short and tight paths within finite
+/// bounds, and Tapered Ink is broad near its start and fine at its end.
+#[test]
+fn ink_and_wash_brushes_draw_along_straight_curved_short_and_tight_paths() {
+    let inks = inks(&Session::new());
+    let mut curve = vectorcraft_geom::BezPath::new();
+    curve.move_to((0.0, 0.0));
+    curve.curve_to((60.0, -40.0), (140.0, 40.0), (200.0, 0.0));
+    let tight = vectorcraft_geom::shapes::ellipse(vectorcraft_geom::Rect::new(0.0, 0.0, 6.0, 6.0)).to_bezpath();
+    let paths = [line_to(200.0), line_to(3.0), curve, tight];
+    for b in &inks.brushes {
+        for line in &paths {
+            let pieces = vectorcraft_brush::stroke_pieces(&inks.doc, b, line, &black_stroke());
+            assert!(!pieces.is_empty(), "{} draws nothing", b.name);
+            let bounds: Vec<_> = pieces.iter().map(|p| p.geometric_bounds()).collect();
+            assert!(bounds.iter().all(|r| r.is_some_and(|r| [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()))), "{}", b.name);
+        }
+    }
+    let pieces = vectorcraft_brush::stroke_pieces(&inks.doc, inks.brush("Tapered Ink").unwrap(), &line_to(100.0), &black_stroke());
+    let widest = |from: f64, to: f64| {
+        pieces
+            .iter()
+            .filter_map(|n| n.path_data())
+            .flat_map(|p| p.anchors().map(|(_, _, a)| a.p).collect::<Vec<_>>())
+            .filter(|p| p.x >= from && p.x <= to)
+            .map(|p| p.y.abs())
+            .fold(0.0, f64::max)
+    };
+    assert!(widest(15.0, 30.0) > 4.0 * widest(95.0, 100.0), "broad start, fine tip");
+}
+
+/// Ink and Wash brushes are added and applied in one step, undone and redone, not added twice,
+/// and kept with the brushed stroke by a saved and reopened document.
+#[test]
+fn ink_and_wash_brushes_add_apply_undo_and_survive_a_saved_document() {
+    let mut s = session();
+    let inks = inks(&s);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 10, "x2": 150, "y2": 60}))["id"].as_u64().unwrap();
+    let (defaults, before) = (brushes(&s), undo_len(&s));
+    let names = ["Tapered Ink", "Brush Pen", "Soft Wash", "Pooling Wash"];
+    let r = run(&mut s, "brush.addFromLibrary", json!({"library": "ink-and-wash", "name": "Soft Wash", "apply": true, "ids": [path]}));
+    assert_eq!((strs(&r["added"]), r["applied"].clone(), undo_len(&s)), (vec!["Soft Wash"], json!([path]), before + 1));
+    let stroke_brush = |s: &Session| doc(s).node(NodeId(path)).unwrap().appearance.stroke().and_then(|st| st.brush.clone());
+    assert_eq!(stroke_brush(&s).as_deref(), Some("Soft Wash"));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!((brushes(&s), stroke_brush(&s)), (defaults.clone(), None));
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(stroke_brush(&s).as_deref(), Some("Soft Wash"));
+    let r = run(&mut s, "brush.addFromLibrary", json!({"library": "ink-and-wash"}));
+    assert_eq!(
+        (strs(&r["names"]), strs(&r["existing"]), strs(&r["added"])),
+        (names.to_vec(), vec!["Soft Wash"], vec!["Tapered Ink", "Brush Pen", "Pooling Wash"])
+    );
+    let before = undo_len(&s);
+    let r = run(&mut s, "brush.addFromLibrary", json!({"library": "ink-and-wash"}));
+    assert_eq!((strs(&r["existing"]), undo_len(&s)), (names.to_vec(), before));
+    assert_eq!(brushes(&s).len(), defaults.len() + 4);
+    for n in names {
+        assert_eq!(&brush(&s, n), inks.brush(n).unwrap(), "{n}");
+    }
+
+    // Saved and opened again, the document keeps the definitions and the brushed stroke.
+    let b64 = run(&mut s, "document.serialize", json!({}))["dataBase64"].as_str().unwrap().to_string();
+    let reopened = vectorcraft_format::load(&vectorcraft_format::base64_decode(&b64).unwrap()).unwrap();
+    for n in names {
+        assert_eq!(vectorcraft_brush::find(&reopened, n).as_ref(), inks.brush(n), "{n}");
+    }
+    let n = reopened.node(NodeId(path)).unwrap();
+    assert_eq!(n.appearance.stroke().and_then(|st| st.brush.clone()).as_deref(), Some("Soft Wash"));
+    assert_eq!(
+        vectorcraft_brush::node_pieces(&reopened, n).map(|p| p.len()),
+        vectorcraft_brush::node_pieces(doc(&s), doc(&s).node(NodeId(path)).unwrap()).map(|p| p.len())
+    );
 }
 
 /// Whether `p` lies inside the polygon through `pts` (even-odd ray cast).
@@ -560,4 +930,25 @@ fn other_documents_brushes_load_and_unreadable_files_are_errors() {
     let r = run(&mut s, "brush.saveLibrary", json!({"names": ["My Nib"]}));
     let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
     assert_eq!(vectorcraft_brush::library(&vectorcraft_format::load(&bytes).unwrap()).len(), 1);
+}
+
+/// A library file whose brushes repeat a name loads with the later brush numbered, and each one
+/// can be added to a document by its own name.
+#[test]
+fn a_library_file_that_repeats_a_brush_name_loads_with_the_later_one_numbered() {
+    use vectorcraft_brush::{Brush, Calligraphic};
+    let nib = |size: f64| Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+    let mut file = vectorcraft_doc::Document::new(100.0, 100.0);
+    vectorcraft_brush::store(&mut file, &[nib(1.0), nib(2.0)]);
+    let b64 = vectorcraft_format::base64_encode(&vectorcraft_format::save_file(&file));
+    let mut s = session();
+    let r = run(&mut s, "brush.loadLibrary", json!({"dataBase64": b64, "name": "Nibs.vectorcraft"}));
+    let library = r["library"].as_str().unwrap().to_string();
+    let listed = run(&mut s, "brush.library", json!({ "library": library }));
+    let names: Vec<&str> = listed["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Nib", "Nib 2"]);
+    let r = run(&mut s, "brush.addFromLibrary", json!({"library": library, "name": "Nib 2"}));
+    assert_eq!(strs(&r["added"]), ["Nib 2"]);
+    let size = |b: Brush| if let BrushKind::Calligraphic(c) = b.kind { c.size } else { 0.0 };
+    assert_eq!(size(brush(&s, "Nib 2")), 2.0);
 }

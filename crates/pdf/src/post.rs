@@ -84,8 +84,9 @@ pub(crate) fn user_units(pdf: Vec<u8>, units: &[f64]) -> Result<Vec<u8>, PdfErro
 /// `pdf` dated as modified at `modified` (Unix seconds, UTC), its creation dates kept: the
 /// document information's `/ModDate` (a PDF date, ISO 32000-1 §7.9.4) and every `xmp:ModifyDate`,
 /// `xmp:MetadataDate` and `stEvt:when` of the catalog's XMP metadata (ISO 8601 dates), in UTC as
-/// the PDF writer writes the creation date. The writer gives `/ModDate`, `xmp:ModifyDate` and
-/// `stEvt:when` the creation date.
+/// the PDF writer writes the creation date. The writer gives `/ModDate`, `xmp:ModifyDate`,
+/// `stEvt:when` and, in a PDF/X-4 file, `xmp:MetadataDate` ([`crate::pdfx::xmp`]) the creation
+/// date.
 pub(crate) fn modification_date(pdf: Vec<u8>, modified: i64) -> Result<Vec<u8>, PdfError> {
     let failed = |why: &str| PdfError::Write(format!("can't write the file's modification date: {why}"));
     let Parsed { xref, objects, trailer, root, .. } = linearize::parse(&pdf).map_err(failed)?;
@@ -180,7 +181,7 @@ fn rights_properties(info: &DocMetadata) -> String {
 
 /// `s` as XML character data: `&`, `<`, `>` and `"` escaped, a carriage return written as the
 /// character reference `&#xD;`, and the characters XML 1.0 doesn't allow left out.
-fn xml_text(s: &str) -> String {
+pub(crate) fn xml_text(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
@@ -204,13 +205,13 @@ fn linearised(pdf: &[u8], set: &PdfSettings) -> Result<Vec<u8>, PdfError> {
 }
 
 /// The file the export wrote (`pdf`), finished as `opts` say; `editing`: it carries the editing
-/// data, to seal once the pages are final. What can't be done comes back in `warnings`.
-pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
+/// data, to seal once the pages are final. The options it can't apply come back in `settings`.
+pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, settings: &mut Vec<String>) -> Result<Vec<u8>, PdfError> {
     let set = &opts.settings;
     let pdf = match (set.thumbnails, opts.thumbnails.is_empty()) {
         (true, false) => thumbnails(pdf, &opts.thumbnails, set.standard.is_pdfx())?,
         (true, true) => {
-            warnings.push("page thumbnails need the pages drawn, which weren't given: none are embedded".into());
+            settings.push("page thumbnails need the pages drawn, which weren't given: none are embedded".into());
             pdf
         }
         (false, _) => pdf,
@@ -229,7 +230,7 @@ pub(crate) fn finish(pdf: Vec<u8>, opts: &PdfOptions, editing: bool, warnings: &
     match linearised(&pdf, set) {
         Ok(out) => Ok(out),
         Err(e) => {
-            warnings.push(format!("the file isn't optimized for fast web view: {e}"));
+            settings.push(format!("the file isn't optimized for fast web view: {e}"));
             crate::encrypt::protect(pdf, set)
         }
     }

@@ -15,7 +15,41 @@ fn session() -> Session {
 
 fn png(img: image::DynamicImage) -> ImageBlob {
     let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img;
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     ImageBlob::png(out)
 }
 
@@ -460,6 +494,49 @@ fn a_colorized_missing_link_placeholder_is_not_flattened() {
     let pdf = s.execute("document.exportPdf", &json!({"compatibility": "1.3"})).unwrap();
     assert!(!flattened(&pdf), "{}", pdf["warnings"]);
     assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(255, 0, 0))), "the image keeps its paint");
+}
+
+/// A fill color on a colorized image that shows the missing-link placeholder recolors the image,
+/// as the Fill proxy shows its colorize paint, and adds no fill item.
+#[test]
+fn a_fill_color_recolors_a_colorized_missing_link_placeholder() {
+    let mut s = session();
+    let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    s.edit("Colorize", |d, _| {
+        d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb8(255, 0, 0))));
+        Ok(())
+    })
+    .unwrap();
+    let appearance = s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [id.0]})).unwrap();
+    assert_eq!(colorize(&s, id).and_then(|p| p.color()).map(|c| c.to_hex()), Some("#0000ff".into()));
+    assert_eq!(s.doc().unwrap().doc.node(id).unwrap().appearance, appearance, "no fill item");
+    assert_eq!(s.proxy_paints().0.color().map(|c| c.to_hex()), Some("#0000ff".into()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(colorize(&s, id), Some(Paint::solid(Color::rgb8(255, 0, 0))));
+}
+
+/// The pixels behind the placeholder may have an alpha channel, so a missing-link image colorized
+/// with a spot color takes another spot color, black or white, and refuses a process color.
+#[test]
+fn a_colorized_missing_link_placeholder_in_a_spot_color_refuses_a_process_color() {
+    let mut s = session();
+    let bytes = std::sync::Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+    let id = image(&mut s, "pic", ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) });
+    s.execute("swatch.new", &json!({"name": "Ink 2", "color": {"c": 100, "m": 0, "y": 0, "k": 0}, "spot": true})).unwrap();
+    s.edit("Colorize", |d, _| {
+        let ink = Paint::Solid { color: Color::rgb8(255, 0, 0), swatch: Some("Ink".into()), tint: 1.0 };
+        d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(ink));
+        Ok(())
+    })
+    .unwrap();
+    let before = colorize(&s, id);
+    let e = s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [id.0]})).unwrap_err().to_string();
+    assert!(e.contains("a process color can't colorize a grayscale image with transparency"), "{e}");
+    assert_eq!(colorize(&s, id), before);
+    s.execute("paint.setFill", &json!({"swatch": "Ink 2", "ids": [id.0]})).unwrap();
+    assert!(matches!(colorize(&s, id), Some(Paint::Solid { swatch: Some(w), .. }) if w == "Ink 2"), "{:?}", colorize(&s, id));
 }
 
 #[test]

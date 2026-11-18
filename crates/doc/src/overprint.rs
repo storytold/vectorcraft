@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientKind, Paint};
 
 use crate::{Document, Node, NodeId, NodeKind};
 
@@ -46,14 +46,21 @@ impl Default for OverprintBlack {
 }
 
 impl OverprintBlack {
-    /// Whether `p` is black: a solid colour (linked to one of the spot swatches `spots` only with
-    /// [`Self::spot`]), or a gradient whose every stop is.
+    /// Whether `p` is black: a solid color (linked to one of the spot swatches `spots` only with
+    /// [`Self::spot`]), a gradient whose every stop is, or a freeform gradient with color points
+    /// whose every point is (it draws from its points, not its stops).
     fn black(&self, p: &Paint, spots: &[String]) -> bool {
+        let ink = |color: &Color, swatch: &Option<String>| {
+            (self.spot || !swatch.as_ref().is_some_and(|s| spots.contains(s))) && is_black_ink(color, self.min_k, self.rich)
+        };
         match p {
-            Paint::Solid { color, swatch, .. } => {
-                (self.spot || !swatch.as_ref().is_some_and(|s| spots.contains(s))) && is_black_ink(color, self.min_k, self.rich)
-            }
-            Paint::Gradient(g) => !g.gradient.stops.is_empty() && g.gradient.stops.iter().all(|s| is_black_ink(&s.color, self.min_k, self.rich)),
+            Paint::Solid { color, swatch, .. } => ink(color, swatch),
+            // Only a freeform gradient draws its points; another kind draws its stops whatever it holds.
+            Paint::Gradient(g) => match g.freeform.as_ref().filter(|f| g.gradient.kind == GradientKind::Freeform && !f.points.is_empty()) {
+                Some(f) => f.points.iter().all(|pt| is_black_ink(&pt.color, self.min_k, self.rich)),
+                // Without points of its own a freeform gradient places them from its stops.
+                None => !g.gradient.stops.is_empty() && g.gradient.stops.iter().all(|s| ink(&s.color, &s.swatch)),
+            },
             _ => false,
         }
     }
@@ -84,6 +91,52 @@ impl OverprintBlack {
             }
         }
         changed
+    }
+
+    /// [`Self::apply`] to every node of `a`'s subtree, copying only the nodes on the way to those
+    /// that change. Returns whether anything changed.
+    pub fn apply_deep(&self, a: &mut Arc<Node>, spots: &[String]) -> bool {
+        match self.marked(a, spots) {
+            Some(n) => {
+                *a = n;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// `n`'s subtree with [`Self::apply`] done to each node, when that changes anything (`None`
+    /// otherwise). Each node is visited once, and only the nodes on the way to a change are copied.
+    fn marked(&self, n: &Arc<Node>, spots: &[String]) -> Option<Arc<Node>> {
+        let members: Vec<(usize, Arc<Node>)> =
+            n.children().into_iter().flatten().enumerate().filter_map(|(i, c)| Some((i, self.marked(c, spots)?))).collect();
+        if members.is_empty() && !self.changes(n, spots) {
+            return None;
+        }
+        let mut copy = Arc::clone(n);
+        let m = Arc::make_mut(&mut copy);
+        self.apply(m, spots);
+        if let Some(children) = m.children_mut() {
+            for (i, c) in members {
+                if let Some(slot) = children.get_mut(i) {
+                    *slot = c;
+                }
+            }
+        }
+        Some(copy)
+    }
+
+    /// Whether [`Self::apply`] changes a fill, stroke or character of `n` itself.
+    fn changes(&self, n: &Node, spots: &[String]) -> bool {
+        let on = !self.remove;
+        let item = |it: &crate::AppearanceItem| {
+            it.overprint() != on && (if it.is_fill() { self.fill } else { self.stroke }) && self.black(it.paint(), spots)
+        };
+        let run = |r: &crate::TextRun| {
+            (self.fill && r.style.overprint_fill != on && self.black(&r.style.fill, spots))
+                || (self.stroke && r.style.overprint_stroke != on && self.black(&r.style.stroke, spots))
+        };
+        n.appearance.items.iter().any(item) || matches!(&n.kind, NodeKind::Text(t) if t.runs.iter().any(run))
     }
 }
 
@@ -234,6 +287,65 @@ mod tests {
         OverprintBlack { spot: true, ..Default::default() }.apply(&mut t, &["Ink".to_string()]);
         let NodeKind::Text(tx) = &t.kind else { panic!("type") };
         assert!(tx.runs[0].style.overprint_fill);
+    }
+
+    #[test]
+    fn a_freeform_gradient_is_black_when_every_point_is() {
+        use vectorcraft_color::freeform::{Freeform, FreeformPoint};
+        let k = Color::cmyk(0.0, 0.0, 0.0, 1.0);
+        let mut g = vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient { kind: GradientKind::Freeform, ..Default::default() });
+        for s in &mut g.gradient.stops {
+            s.color = k;
+        }
+        let points = vec![FreeformPoint::new(Point::ZERO, k), FreeformPoint::new(Point::new(10.0, 0.0), Color::cmyk(1.0, 0.0, 0.0, 0.0))];
+        g.freeform = Some(Freeform { points, ..Default::default() });
+        let fill = |g: &vectorcraft_color::GradientPaint| Appearance::basic(Paint::Gradient(Box::new(g.clone())), Paint::None, 0.0);
+        let mut n = Node::path(NodeId(1), Default::default(), fill(&g));
+        assert!(!OverprintBlack::default().apply(&mut n, &[]), "a cyan point is drawn, whatever the stops");
+        // Another kind of gradient draws its black stops, not the points it still holds.
+        let mut linear = g.clone();
+        linear.gradient.kind = GradientKind::Linear;
+        let mut n = Node::path(NodeId(1), Default::default(), fill(&linear));
+        assert!(OverprintBlack::default().apply(&mut n, &[]), "a linear gradient is judged by its stops");
+        if let Some(f) = &mut g.freeform {
+            f.points[1].color = Color::gray(1.0);
+        }
+        let mut n = Node::path(NodeId(1), Default::default(), fill(&g));
+        assert!(OverprintBlack::default().apply(&mut n, &[]), "every point black");
+        g.freeform = Some(Freeform::default());
+        let mut n = Node::path(NodeId(1), Default::default(), fill(&g));
+        assert!(OverprintBlack::default().apply(&mut n, &[]), "no points: placed from the black stops");
+    }
+
+    #[test]
+    fn a_gradient_with_a_spot_linked_stop_is_black_only_with_spot() {
+        let mut g = vectorcraft_color::GradientPaint::new(Default::default());
+        for s in &mut g.gradient.stops {
+            s.color = Color::cmyk(0.0, 0.0, 0.0, 1.0);
+        }
+        g.gradient.stops[0].swatch = Some("Ink".into());
+        let k = Paint::Gradient(Box::new(g));
+        let mut n = Node::path(NodeId(1), Default::default(), Appearance::basic(k, Paint::None, 0.0));
+        let spots = ["Ink".to_string()];
+        assert!(!OverprintBlack::default().apply(&mut n, &spots), "a stop linked to a spot swatch is not process black");
+        assert!(OverprintBlack { spot: true, ..Default::default() }.apply(&mut n, &spots), "Include Spot Blacks takes it");
+    }
+
+    #[test]
+    fn apply_deep_copies_only_the_nodes_that_change() {
+        let k = cmyk(0.0, 0.0, 0.0, 1.0);
+        let black = Arc::new(Node::path(NodeId(2), Default::default(), Appearance::basic(k, Paint::None, 0.0)));
+        let cyan = Arc::new(Node::path(NodeId(3), Default::default(), Appearance::basic(cmyk(1.0, 0.0, 0.0, 0.0), Paint::None, 0.0)));
+        let mut group = Arc::new(Node::group(NodeId(1), vec![black.clone(), cyan.clone()]));
+        let before = group.clone();
+        assert!(OverprintBlack::default().apply_deep(&mut group, &[]));
+        let members = group.children().unwrap();
+        assert!(members[0].appearance.fill().unwrap().overprint && !black.has_overprint(), "the copy is marked, not the original");
+        assert!(Arc::ptr_eq(&members[1], &cyan), "the cyan member is shared, not copied");
+        assert!(!before.has_overprint());
+        let marked = group.clone();
+        assert!(!OverprintBlack::default().apply_deep(&mut group, &[]), "nothing left to change");
+        assert!(Arc::ptr_eq(&group, &marked), "and nothing is copied");
     }
 
     #[test]

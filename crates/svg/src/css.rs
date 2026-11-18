@@ -168,8 +168,8 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
     if spacing != 0.0 {
         p.push(("letter-spacing", len(spacing / 1000.0 * st.size * st.v_scale / 100.0)));
     }
-    if st.kerning.is_some() {
-        // Manual kerning replaces the font's pair kerning.
+    if st.kerning.is_some() || st.glyph_form.is_width() {
+        // Manual kerning replaces the font's pair kerning, and a monospaced width form turns it off.
         p.push(("font-kerning", "none".into()));
     }
     let mut v: Vec<String> = st
@@ -190,9 +190,14 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
         .filter(|(tag, _)| tag.len() == 4 && tag.bytes().all(|b| b.is_ascii_alphanumeric()))
         .map(|(tag, value)| format!("\"{tag}\" {value}"))
         .collect();
-    // Proportional Metrics: `palt` (SVG writes vertical type as outlines).
-    if st.proportional_metrics {
+    // Proportional Metrics: `palt` (SVG writes vertical type as outlines), not with a monospaced
+    // width form, which sets the characters on a fixed width.
+    if st.proportional_metrics && !st.glyph_form.is_width() {
         v.push("\"palt\" 1".into());
+    }
+    // The East Asian glyph form: its one feature.
+    if let Some(tag) = st.glyph_form.feature().and_then(|t| std::str::from_utf8(t).ok()) {
+        v.push(format!("\"{tag}\" 1"));
     }
     if !v.is_empty() {
         p.push(("font-feature-settings", v.join(", ")));
@@ -204,6 +209,14 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
         _ => {}
     }
     p
+}
+
+/// The decimals, at least `least` and at most 12, for numbers that place a period of length
+/// `period` repeated out to `reach` (in the same units): each period then rounds by at most
+/// 10^-decimals, and over the `reach / period` periods that adds up to at most a hundredth of one.
+fn period_decimals(period: f64, reach: f64, least: u8) -> u8 {
+    let d = (100.0 * reach / (period * period)).log10().ceil();
+    if d.is_nan() || d == f64::INFINITY { 12 } else { d.clamp(f64::from(least), 12.0) as u8 }
 }
 
 /// A colour at `opacity`: `#rrggbb` when opaque, else `rgba()`.
@@ -247,13 +260,22 @@ impl CssUnits {
 
     /// `points` in these units (`0` without a unit).
     fn len(self, points: f64) -> String {
-        let per_point = match self {
+        self.len_to(points, 3)
+    }
+
+    /// One point in these units.
+    fn per_point(self) -> f64 {
+        match self {
             CssUnits::Px | CssUnits::Pt => 1.0,
             CssUnits::Mm => 25.4 / 72.0,
             CssUnits::Cm => 2.54 / 72.0,
             CssUnits::In => 1.0 / 72.0,
-        };
-        match fmt_num(points * per_point, 3) {
+        }
+    }
+
+    /// [`Self::len`] with `decimals` decimals.
+    fn len_to(self, points: f64, decimals: u8) -> String {
+        match fmt_num(points * self.per_point(), decimals) {
             zero if zero == "0" => zero,
             v => format!("{v}{}", self.name()),
         }
@@ -582,9 +604,21 @@ impl Rules<'_> {
             }
             _ => (unrolled, geom, ""),
         };
-        let stops = |pos: &dyn Fn(f32) -> f64| {
+        // A repeating gradient's period is the span from its first stop to its last, repeated
+        // across the box (from 0% to `reach`%): its positions get at least four decimals, and more
+        // when the box holds so many periods that their rounding would add up to more than a
+        // hundredth of one ([`period_decimals`]).
+        let span = gradient.expanded().next().zip(gradient.expanded().last()).map(|(a, z)| (a.0, z.0));
+        let decimals = |pos: &dyn Fn(f32) -> f64, reach: f64| match span {
+            Some((a, z)) if !repeating.is_empty() => {
+                let (p0, p1) = (pos(a) * 100.0, pos(z) * 100.0);
+                period_decimals((p1 - p0).abs(), p0.abs().max((reach - p0).abs()), 4)
+            }
+            _ => 2,
+        };
+        let stops = |pos: &dyn Fn(f32) -> f64, decimals: u8| {
             let stops: Vec<String> =
-                gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, 2))).collect();
+                gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, decimals))).collect();
             stops.join(", ")
         };
         match g.gradient.kind {
@@ -601,7 +635,7 @@ impl Rules<'_> {
                 let line = (b.width() * dir.x).abs() + (b.height() * dir.y).abs();
                 let from = (geom.start - b.center()).dot(dir);
                 let pos = |t: f32| if line > 1e-9 { (from + t as f64 * length) / line + 0.5 } else { t as f64 };
-                Some(format!("{repeating}linear-gradient({}deg, {})", fmt_num(angle, 2), stops(&pos)))
+                Some(format!("{repeating}linear-gradient({}deg, {})", fmt_num(angle, 2), stops(&pos, decimals(&pos, 100.0))))
             }
             // CSS has no diamond gradient: the ellipse through the square's corners stands in.
             GradientKind::Radial | GradientKind::Diamond => {
@@ -611,13 +645,30 @@ impl Rules<'_> {
                 } else if geom.focal.is_some() {
                     self.warn("radial gradients start at their centre (an off-centre focal point is left out)");
                 }
+                // The positions are a share of the radius, and the box reaches out to its farthest
+                // corner. A repeating gradient's period scales with its radius, so the radius gets
+                // the decimals that keep the periods in place out to that corner too.
+                let units = self.opts.units;
+                let small = r * geom.aspect.abs().min(1.0);
+                let far = [(b.x0, b.y0), (b.x1, b.y0), (b.x0, b.y1), (b.x1, b.y1)]
+                    .into_iter()
+                    .map(|(x, y)| (Point::new(x, y) - geom.start).hypot())
+                    .fold(0.0, f64::max);
+                let reach = if small > 1e-12 { 100.0 * far / small } else { 0.0 };
+                let pos = |t: f32| t as f64;
+                let len = match span {
+                    Some((a, z)) if !repeating.is_empty() => {
+                        period_decimals(small * f64::from(z - a).abs() * units.per_point(), far * units.per_point(), 3)
+                    }
+                    _ => 3,
+                };
                 let shape = if (geom.aspect - 1.0).abs() < 1e-9 {
-                    format!("circle {}", self.len(r))
+                    format!("circle {}", units.len_to(r, len))
                 } else {
-                    format!("ellipse {} {}", self.len(r), self.len(r * geom.aspect))
+                    format!("ellipse {} {}", units.len_to(r, len), units.len_to(r * geom.aspect, len))
                 };
                 let at = format!("at {} {}", self.len(geom.start.x - b.x0), self.len(geom.start.y - b.y0));
-                Some(format!("{repeating}radial-gradient({shape} {at}, {})", stops(&|t| t as f64)))
+                Some(format!("{repeating}radial-gradient({shape} {at}, {})", stops(&pos, decimals(&pos, reach))))
             }
             GradientKind::Conic => {
                 // CSS sweeps clockwise from the `from` angle, 0deg straight up
@@ -825,5 +876,25 @@ mod tests {
         assert!(family("a\n} * {color:red").starts_with(r"'a\a } * {color:red'"), "{}", family("a\n} * {color:red"));
         assert_eq!(css_string("w\r\"</style>"), r#""w\d \"\3c /style\3e ""#);
         assert_eq!(css_string("wght"), "\"wght\"");
+    }
+
+    /// A monospaced width form sets the characters on a fixed width: Proportional Metrics' `palt`
+    /// is not written with it and the font's pair kerning is turned off, and with the other forms
+    /// `palt` is written and kerning stays.
+    #[test]
+    fn width_forms_leave_out_proportional_metrics() {
+        use vectorcraft_doc::GlyphForm;
+        let prop = |form, key: &str| {
+            let st = CharStyle { proportional_metrics: true, glyph_form: form, ..CharStyle::default() };
+            type_props(&st, &|v| format!("{v}px")).into_iter().find(|(k, _)| *k == key).map(|(_, v)| v)
+        };
+        assert_eq!(prop(GlyphForm::Default, "font-feature-settings").as_deref(), Some("\"palt\" 1"));
+        assert_eq!(prop(GlyphForm::Jis78, "font-feature-settings").as_deref(), Some("\"palt\" 1, \"jp78\" 1"));
+        assert_eq!(prop(GlyphForm::Jis78, "font-kerning"), None);
+        for form in [GlyphForm::FullWidth, GlyphForm::HalfWidth, GlyphForm::ThirdWidth, GlyphForm::QuarterWidth] {
+            let tag = std::str::from_utf8(form.feature().unwrap()).unwrap();
+            assert_eq!(prop(form, "font-feature-settings"), Some(format!("\"{tag}\" 1")), "{form:?}");
+            assert_eq!(prop(form, "font-kerning").as_deref(), Some("none"), "{form:?}");
+        }
     }
 }

@@ -1,5 +1,5 @@
 //! DXF export through the commands: options, artboards, selection, images, and the formats that
-//! can't be written (DWG, PICT).
+//! can't be written (DWG, PageMaker).
 
 use serde_json::{Value, json};
 
@@ -117,6 +117,24 @@ fn use_artboards_writes_one_drawing_per_artboard() {
 }
 
 #[test]
+fn each_artboard_s_drawing_is_the_drawing_of_that_artboard_alone() {
+    let mut s = two_boards();
+    // A second rectangle on the second artboard, so the two drawings differ.
+    let second = s.doc().unwrap().doc.artboards[1].rect.x0;
+    s.execute("shape.rectangle", &json!({"x": second + 50.0, "y": 50, "width": 20, "height": 20})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "dxf", "useArtboards": true, "unit": "pt"})).unwrap();
+    let files = r["files"].as_array().unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let o = dxf::options(&json!({"unit": "pt"})).unwrap();
+    assert_eq!(files.len(), doc.artboards.len());
+    assert_ne!(b64(&files[0]), b64(&files[1]));
+    for (f, board) in files.iter().zip(&doc.artboards) {
+        let alone = vectorcraft_cad::export(doc, &vectorcraft_cad::DxfOptions { region: board.rect, crop: true, ..o.clone() }).unwrap();
+        assert_eq!(b64(f), alone.bytes, "{}", f["name"]);
+    }
+}
+
+#[test]
 fn selected_only_exports_the_selection_in_its_layers() {
     let mut s = two_boards();
     s.execute("layer.new", &json!({"name": "Top"})).unwrap();
@@ -194,6 +212,21 @@ fn placed_images_and_fill_hatches_can_be_left_out() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The reply gives what the drawings lose before a note on the options, across the files: the
+/// first artboard's drawing notes the fill hatches that `includeHatches: false` leaves out, and
+/// the second's also has a see-through rectangle that DXF 2000 writes opaque.
+#[test]
+fn what_the_drawings_lose_comes_before_what_an_option_left_out() {
+    let mut s = two_boards();
+    s.execute("object.setProps", &json!({"opacity": 50})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "dxf", "version": "2000", "includeHatches": false, "useArtboards": true})).unwrap();
+    let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    let Some((option, losses)) = warnings.split_last() else { panic!("no notes") };
+    assert!(option.starts_with("fill hatches are left out"), "{warnings:?}");
+    assert!(losses.iter().any(|w| w.starts_with("transparency needs DXF 2004")), "{warnings:?}");
+    assert!(!losses.iter().any(|w| w.starts_with("fill hatches")), "each note once: {warnings:?}");
+}
+
 /// Two placed images whose pixel data can't be decoded are left out of the drawing and get no
 /// linked file, and `warnings` holds the note raster exports give, once, without naming either
 /// image's key.
@@ -260,23 +293,24 @@ fn formats_list_dxf_and_what_can_not_be_written() {
     }
     assert!(r["writable"].as_array().unwrap().contains(&json!("dxf")));
     let unsupported: Vec<&str> = r["unsupported"].as_array().unwrap().iter().map(|u| u["id"].as_str().unwrap()).collect();
-    assert_eq!(unsupported, ["dwg", "pict", "pmd"]);
+    assert_eq!(unsupported, ["dwg", "pmd"]);
 }
 
 #[test]
-fn dwg_and_pict_say_what_to_use_instead() {
+fn dwg_and_pagemaker_say_what_to_use_instead() {
     let mut s = two_boards();
     for p in [json!({"format": "dwg"}), json!({"path": "/tmp/plan.DWG"})] {
         let e = s.execute("document.export", &p).unwrap_err().to_string();
         assert!(e.contains("DWG is not available") && e.contains("DXF"), "{p}: {e}");
     }
+    // PICT opens; it isn't written.
     let e = s.execute("document.export", &json!({"format": "pict"})).unwrap_err().to_string();
-    assert!(e.contains("PICT is a retired format"), "{e}");
+    assert!(e.contains("PICT files can be opened but not written"), "{e}");
     let e = s
         .execute("document.open", &json!({"name": "old.pct", "dataBase64": vectorcraft_format::base64_encode(&[0u8; 600])}))
         .unwrap_err()
         .to_string();
-    assert!(e.contains("old.pct") && e.contains("PICT"), "{e}");
+    assert!(e.contains("not a PICT file"), "{e}");
     let e = s
         .execute("document.open", &json!({"name": "site.dwg", "dataBase64": vectorcraft_format::base64_encode(b"AC1032\0\0")}))
         .unwrap_err()

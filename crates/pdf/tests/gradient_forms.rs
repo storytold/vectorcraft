@@ -91,9 +91,7 @@ fn fixture(form: Form, kind: GradientKind, mode: ColorMode, origin: Point) -> (D
 /// Round trips preserve gradient placement for the form types the importer supports.
 #[test]
 fn gradients_in_forms_keep_their_position_when_read_back() {
-    // The importer has a pre-existing mismatch on the knockout's synthesized nested masks;
-    // Quartz below checks its actual PDF output, along with the other forms.
-    for form in FORMS.into_iter().filter(|f| !matches!(f, Form::Knockout)) {
+    for form in FORMS {
         for kind in [GradientKind::Linear, GradientKind::Radial] {
             for origin in [Point::ORIGIN, Point::new(125.0, -80.0)] {
                 let (d, opts) = fixture(form, kind, ColorMode::Rgb, origin);

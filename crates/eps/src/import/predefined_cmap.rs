@@ -279,6 +279,7 @@ fn code_space(cmap: &str) -> Option<CodeSpace> {
     const CNS_EUC: CodeSpace = &[(b"\x00", b"\x80"), (b"\xa1\xa1", b"\xfe\xfe"), (b"\x8e\xa1\xa1\xa1", b"\x8e\xa3\xfe\xfe")];
     const KSC_PC: CodeSpace = &[(b"\x00", b"\x84"), (b"\xfe", b"\xff"), (b"\xa1\x41", b"\xfd\xfe")];
     const UHC: CodeSpace = &[(b"\x00", b"\x80"), (b"\x81\x41", b"\xfe\xfe")];
+    const JOHAB: CodeSpace = &[(b"\x00", b"\x80"), (b"\x84\x41", b"\xd3\xfe"), (b"\xd8\x31", b"\xde\xfe"), (b"\xe0\x31", b"\xf9\xfe")];
     let stem = match cmap {
         "H" | "V" => "",
         _ => cmap.strip_suffix("-H").or_else(|| cmap.strip_suffix("-V"))?,
@@ -288,7 +289,7 @@ fn code_space(cmap: &str) -> Option<CodeSpace> {
         "83pv-RKSJ" | "90pv-RKSJ" => RKSJ_MAC,
         _ if stem.ends_with("RKSJ") => RKSJ,
         "EUC" | "78-EUC" => EUC_JP,
-        "" | "78" | "Add" | "Ext" | "NWP" => ROW_CELL,
+        "" | "78" | "Add" | "Ext" | "NWP" | "GBT" | "CNS2" => ROW_CELL,
         "GB-EUC" | "GBT-EUC" | "KSC-EUC" => EUC,
         "GBpc-EUC" | "GBTpc-EUC" => GB_PC,
         "GBK-EUC" | "GBKp-EUC" => GBK,
@@ -301,6 +302,7 @@ fn code_space(cmap: &str) -> Option<CodeSpace> {
         "CNS-EUC" => CNS_EUC,
         "KSCpc-EUC" => KSC_PC,
         "KSCms-UHC" => UHC,
+        "KSC-Johab" => JOHAB,
         _ => return None,
     })
 }
@@ -327,8 +329,9 @@ pub(super) fn known(cmap: &str) -> bool {
 
 /// The codes of string `bytes` in predefined CMap `cmap` when its mappings can't be read, each
 /// standing for no character: as long as the code space range it falls in ([`code_space`]; a byte
-/// that starts no code is a code of its own), or two bytes when the code space isn't listed (the
-/// row-and-cell codes of `GBT-H` and `CNS2-H`). A 0x0D or 0x09 byte is always a code of its own.
+/// that starts no code is a code of its own, as in the row-and-cell code space of `GBT-H` and
+/// `CNS2-H`), or two bytes when the code space isn't listed. A 0x0D or 0x09 byte is always a code
+/// of its own.
 pub(super) fn unread_codes(cmap: &str, bytes: &[u8]) -> Decoded {
     let space = code_space(cmap);
     let mut out = Decoded::default();

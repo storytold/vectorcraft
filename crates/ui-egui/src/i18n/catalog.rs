@@ -13,7 +13,8 @@ pub struct Catalog {
     ids: HashMap<String, String>,
     /// plural messages: `one|other` → forms
     plurals: HashMap<String, Vec<String>>,
-    /// status and error messages without placeholders (`@msg`): English → translation
+    /// status and error messages without placeholders (`@msg`): English, its `{{` and `}}` read as
+    /// `{` and `}` → translation, as written
     messages: HashMap<String, String>,
     /// status and error messages with `{name}` placeholders (`@msg`, and each English form of a
     /// `@msgplural` row), most specific first
@@ -47,23 +48,42 @@ const MAX_MESSAGE_LEN: usize = 2000;
 
 impl Template {
     /// `None` for a template that can't be matched reliably: no literal text, or two placeholders
-    /// in a row (where one ends and the next begins is unknowable).
+    /// in a row (where one ends and the next begins is unknowable). `{{` and `}}` are a literal `{`
+    /// and `}`, as in a Rust format string, and so is a `{` with no `}` after it.
     fn parse(source: &str, forms: Vec<String>, counted: bool) -> Option<Template> {
         let mut pieces = Vec::new();
+        let mut text = String::new();
         let mut rest = source;
-        while let Some(a) = rest.find('{') {
+        while let Some(a) = rest.find(['{', '}']) {
+            text.push_str(rest.get(..a)?);
             let after = rest.get(a + 1..)?;
-            let b = after.find('}')?;
-            if a > 0 {
-                pieces.push(Piece::Text(rest.get(..a)?.to_string()));
+            let brace = if rest.get(a..)?.starts_with('{') { '{' } else { '}' };
+            if let Some(escaped) = after.strip_prefix(brace) {
+                text.push(brace);
+                rest = escaped;
+                continue;
+            }
+            if brace == '}' {
+                text.push('}');
+                rest = after;
+                continue;
+            }
+            let Some(b) = after.find('}') else {
+                text.push('{');
+                rest = after;
+                continue;
+            };
+            if !text.is_empty() {
+                pieces.push(Piece::Text(std::mem::take(&mut text)));
             } else if matches!(pieces.last(), Some(Piece::Hole(_))) {
                 return None;
             }
             pieces.push(Piece::Hole(after.get(..b)?.to_string()));
             rest = after.get(b + 1..)?;
         }
-        if !rest.is_empty() {
-            pieces.push(Piece::Text(rest.to_string()));
+        text.push_str(rest);
+        if !text.is_empty() {
+            pieces.push(Piece::Text(text));
         }
         let literal = pieces.iter().map(|p| if let Piece::Text(t) = p { t.len() } else { 0 }).sum();
         (literal > 0).then_some(Template { pieces, literal, forms, counted })
@@ -72,18 +92,22 @@ impl Template {
     /// The placeholder values if `s` is an instance of this template.
     fn captures<'a>(&self, s: &'a str) -> Option<Vec<(&str, &'a str)>> {
         let mut out = Vec::new();
-        match_pieces(&self.pieces, s, self.counted, &mut out).then_some(out)
+        match_pieces(&self.pieces, s, self.counted, &mut out, None).then_some(out)
     }
 }
 
 /// Match `s` against `pieces`, a placeholder taking the shortest non-empty text that lets the
-/// rest match (the last one takes what remains). With `counted`, `{n}` takes only a count.
-fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mut Vec<(&'p str, &'a str)>) -> bool {
+/// rest match (the last one takes what remains). A placeholder between two of the same quote
+/// (`'{key}'`, `"{key}"` or `` `{key}` ``) may also take no text, as for a property named by the
+/// empty string. With `counted`, `{n}` takes only a count. A placeholder that occurs twice takes
+/// the same text both times. `before` is the last character of the text piece before `pieces`.
+fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mut Vec<(&'p str, &'a str)>, before: Option<char>) -> bool {
     let Some((first, rest)) = pieces.split_first() else { return s.is_empty() };
     match first {
-        Piece::Text(t) => s.strip_prefix(t.as_str()).is_some_and(|tail| match_pieces(rest, tail, counted, out)),
+        Piece::Text(t) => s.strip_prefix(t.as_str()).is_some_and(|tail| match_pieces(rest, tail, counted, out, t.chars().last())),
         Piece::Hole(name) => {
-            let fits = |value: &str| !(counted && name == "n") || value.parse::<u64>().is_ok();
+            let earlier = out.iter().find(|(n, _)| *n == name.as_str()).map(|&(_, v)| v);
+            let fits = |value: &str| (!(counted && name == "n") || value.parse::<u64>().is_ok()) && earlier.is_none_or(|e| e == value);
             let Some((next, after)) = rest.split_first() else {
                 if s.is_empty() || !fits(s) {
                     return false;
@@ -92,7 +116,19 @@ fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mu
                 return true;
             };
             let Piece::Text(next) = next else { return false };
-            // Every place the next literal occurs, nearest first (the hole is never empty).
+            let quoted = before.is_some_and(|q| matches!(q, '\'' | '"' | '`') && next.starts_with(q));
+            if quoted
+                && fits("")
+                && let Some(tail) = s.strip_prefix(next.as_str())
+            {
+                let mark = out.len();
+                out.push((name.as_str(), ""));
+                if match_pieces(after, tail, counted, out, next.chars().last()) {
+                    return true;
+                }
+                out.truncate(mark);
+            }
+            // Every other place the next literal occurs, nearest first.
             let mut from = s.chars().next().map_or(1, char::len_utf8);
             while let Some(at) = s.get(from..).and_then(|tail| tail.find(next.as_str())).map(|i| i + from) {
                 let (Some(value), Some(tail)) = (s.get(..at), s.get(at + next.len()..)) else { return false };
@@ -102,7 +138,7 @@ fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mu
                 }
                 let mark = out.len();
                 out.push((name.as_str(), value));
-                if match_pieces(after, tail, counted, out) {
+                if match_pieces(after, tail, counted, out, next.chars().last()) {
                     return true;
                 }
                 out.truncate(mark);
@@ -158,6 +194,26 @@ pub fn parse_entries(text: &str) -> (Vec<Entry>, Vec<String>) {
     (entries, errors)
 }
 
+/// Whether a message can be matched against the template `source`: it has literal text and no two
+/// placeholders in a row.
+#[cfg(test)]
+pub fn matchable(source: &str) -> bool {
+    Template::parse(source, Vec::new(), false).is_some()
+}
+
+/// The sources of the `@msg` and `@msgplural` rows of a catalog file that [`Catalog::parse`] leaves
+/// out, because no message can be matched against them. The interface shows the messages of such a
+/// row in English.
+#[cfg(test)]
+pub fn unmatchable_rows(text: &str) -> Vec<String> {
+    let left_out = |(ctx, src, _): &Entry| match ctx.as_str() {
+        "@msg" => src.contains(['{', '}']) && !matchable(src),
+        "@msgplural" => src.split('|').any(|english| !matchable(english)),
+        _ => false,
+    };
+    parse_entries(text).0.into_iter().filter(left_out).map(|(_, src, _)| src).collect()
+}
+
 impl Catalog {
     pub fn parse(text: &str) -> Catalog {
         let mut c = Catalog::default();
@@ -172,13 +228,20 @@ impl Catalog {
                 "@plural" => {
                     c.plurals.insert(src, tr.split('|').map(str::to_string).collect());
                 }
-                "@msg" => {
-                    if src.contains('{') {
-                        c.templates.extend(Template::parse(&src, vec![tr], false));
-                    } else {
-                        c.messages.insert(src, tr);
-                    }
+                "@msg" if !src.contains(['{', '}']) => {
+                    c.messages.insert(src, tr);
                 }
+                "@msg" => match Template::parse(&src, vec![tr], false) {
+                    // A row without placeholders is an exact message, under its text with `{{` and
+                    // `}}` read as literal braces.
+                    Some(Template { pieces, mut forms, .. }) if matches!(pieces.as_slice(), [Piece::Text(_)]) => {
+                        if let (Some(Piece::Text(text)), Some(tr)) = (pieces.into_iter().next(), forms.pop()) {
+                            c.messages.insert(text, tr);
+                        }
+                    }
+                    Some(template) => c.templates.push(template),
+                    None => {}
+                },
                 "@msgplural" => {
                     let forms: Vec<String> = tr.split('|').map(str::to_string).collect();
                     c.templates.extend(src.split('|').filter_map(|english| Template::parse(english, forms.clone(), true)));
@@ -188,8 +251,15 @@ impl Catalog {
                 }
             }
         }
-        // Most literal text first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
-        c.templates.sort_by_key(|t| std::cmp::Reverse(t.literal));
+        // Templates that start with text before those that start with a placeholder, so
+        // `plug-in manifest: {0}` wins over `{_1} is {_2} bytes (limit {_3})` for a message it
+        // wraps; then the longest text before the first placeholder, so `` `answers[{i}]` {e} `` wins
+        // over `` `{key}` must be true or false `` for a message it wraps; then most literal text
+        // first, so `Couldn't open {name}: {e}` wins over `{path}: {e}`.
+        c.templates.sort_by_key(|t| {
+            let lead = if let Some(Piece::Text(text)) = t.pieces.first() { text.len() } else { 0 };
+            (matches!(t.pieces.first(), Some(Piece::Hole(_))), std::cmp::Reverse(lead), std::cmp::Reverse(t.literal))
+        });
         c
     }
 
@@ -226,6 +296,34 @@ impl Catalog {
         self.templates.iter().find_map(|t| t.captures(s).map(|caps| (t.forms.as_slice(), caps)))
     }
 
+    /// [`Catalog::message_forms`] for a part of a message that starts with `[`, which may be a JSON
+    /// array: an exact `@msg` entry, else only a template that starts with a literal `[` and a
+    /// placeholder whose value is an index of ASCII digits, such as ``[{j}] `{_1}`: {why}``. An
+    /// array such as ``["] `x`: b"]`` fits that template's text, but not its index.
+    pub fn indexed_message_forms<'a>(&self, s: &'a str) -> Option<(&[String], Captures<'_, 'a>)> {
+        if let Some(tr) = self.messages.get(s) {
+            return Some((std::slice::from_ref(tr), Vec::new()));
+        }
+        if s.len() > MAX_MESSAGE_LEN {
+            return None;
+        }
+        self.templates.iter().find_map(|t| {
+            let [Piece::Text(open), Piece::Hole(index), ..] = t.pieces.as_slice() else { return None };
+            if open != "[" {
+                return None;
+            }
+            let caps = t.captures(s)?;
+            let digits = caps.iter().any(|(k, v)| k == index && v.bytes().all(|b| b.is_ascii_digit()));
+            digits.then_some((t.forms.as_slice(), caps))
+        })
+    }
+
+    /// The translation of a status or error message that has an exact `@msg` entry, as written in
+    /// the catalog (`{{` and `}}` for literal braces); templates are not tried.
+    pub fn exact_message(&self, s: &str) -> Option<&str> {
+        self.messages.get(s).map(String::as_str)
+    }
+
     /// The plural form `index` of the message whose English forms are `one|other`.
     pub fn plural(&self, one: &str, other: &str, index: usize) -> Option<&str> {
         let forms = self.plurals.get(&format!("{one}|{other}"))?;
@@ -233,13 +331,17 @@ impl Catalog {
     }
 }
 
-/// `{name}` placeholders of a template, in order of appearance.
+/// `{name}` placeholders of a template, in order of appearance; `{{` is a literal brace.
 #[cfg(test)]
 pub fn placeholders(s: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut rest = s;
     while let Some(a) = rest.find('{') {
         let after = &rest[a + 1..];
+        if let Some(escaped) = after.strip_prefix('{') {
+            rest = escaped;
+            continue;
+        }
         match after.find('}') {
             Some(b) => {
                 out.push(&after[..b]);

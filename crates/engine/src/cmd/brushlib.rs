@@ -12,7 +12,8 @@ use std::sync::{Arc, LazyLock};
 
 use serde_json::{Value, json};
 use vectorcraft_brush::{
-    self as brush, ArtBrush, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter, Variation,
+    self as brush, ArtBrush, ArtScale, Bristle, BristleShape, Brush, BrushKind, Calligraphic, Colorization, PatternBrush, PatternFit, Scatter,
+    Variation,
 };
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, PatternDef, Symbol};
@@ -170,13 +171,17 @@ pub struct BuiltinBrushLibrary {
 /// The built-in brush libraries, in menu order: original brushes generated in code.
 pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
+    BuiltinBrushLibrary { id: "ink-and-wash", name: "Ink and Wash", make: ink_and_wash },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
+    BuiltinBrushLibrary { id: "pressure-sensitive", name: "Pressure Sensitive", make: pressure_sensitive },
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
     BuiltinBrushLibrary { id: "game-trails", name: "Game Trails", make: game_trails },
     BuiltinBrushLibrary { id: "energy-beams", name: "Energy Beams", make: energy_beams },
     BuiltinBrushLibrary { id: "dry-media", name: "Dry Media", make: dry_media },
+    BuiltinBrushLibrary { id: "tech-circuit", name: "Tech Circuit", make: tech_circuit },
+    BuiltinBrushLibrary { id: "arrows", name: "Arrows", make: arrows },
 ];
 
 /// Built-in library `id`, made once.
@@ -230,6 +235,54 @@ fn art(name: &str, art: Node, colorization: Colorization) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Art(ArtBrush { art, colorization, ..Default::default() }) }
 }
 
+/// An Arrows brush whose art stretches only between `start` and `end` (fractions of its length).
+fn arrow_art(name: &str, art: Node, start: f64, end: f64) -> Brush {
+    Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush {
+            art,
+            scale: ArtScale::BetweenGuides { start, end },
+            colorization: Colorization::Tints,
+            ..Default::default()
+        }),
+    }
+}
+
+/// Arrows: original art brushes whose stems stretch while their heads keep their proportions.
+fn arrows() -> BrushLibrary {
+    let shaft = || black(shapes::rectangle(Rect::new(0.0, -1.0, 82.0, 1.0)));
+    let head = || black(polygon(&[(76.0, -7.0), (100.0, 0.0), (76.0, 7.0), (82.0, 0.0)]));
+    let solid = group(vec![shaft(), head()]);
+    let outline = group(vec![shaft(), black(polygon(&[(76.0, -7.0), (100.0, 0.0), (76.0, 7.0), (78.0, 4.0), (91.0, 0.0), (78.0, -4.0)]))]);
+    let double = group(vec![
+        black(shapes::rectangle(Rect::new(18.0, -1.0, 82.0, 1.0))),
+        head(),
+        black(polygon(&[(24.0, -7.0), (0.0, 0.0), (24.0, 7.0), (18.0, 0.0)])),
+    ]);
+    let chevrons = group(vec![shaft(), head(), black(polygon(&[(53.0, -5.0), (66.0, 0.0), (53.0, 5.0), (56.0, 0.0)]))]);
+    let dashed = group(
+        (0..5)
+            .map(|i| {
+                let x = f64::from(i) * 16.0;
+                black(shapes::rectangle(Rect::new(x, -1.0, x + 10.0, 1.0)))
+            })
+            .chain(std::iter::once(head()))
+            .collect(),
+    );
+    built(
+        "Arrows",
+        Document::new(100.0, 100.0),
+        vec![
+            arrow_art("Solid Arrow", solid, 0.0, 0.76),
+            arrow_art("Open Arrow", outline, 0.0, 0.76),
+            arrow_art("Double Arrow", double, 0.24, 0.76),
+            // The second chevron starts at 53 pt, so only the shaft before it stretches.
+            arrow_art("Chevron Arrow", chevrons, 0.0, 0.53),
+            arrow_art("Dashed Arrow", dashed, 0.0, 0.76),
+        ],
+    )
+}
+
 /// Art Ribbons: art brushes, 100 pt long, drawn here; Striped Ribbon is filled with the library's
 /// own pattern, Pinstripes.
 fn art_ribbons() -> BrushLibrary {
@@ -268,6 +321,78 @@ fn art_ribbons() -> BrushLibrary {
     built("Art Ribbons", doc, brushes)
 }
 
+/// A band between the edges y = `top(x)` and y = `bottom(x)` for x in `from`..`to`, in `n` steps.
+fn between(from: f64, to: f64, n: usize, top: impl Fn(f64) -> f64, bottom: impl Fn(f64) -> f64) -> PathData {
+    let xs: Vec<f64> = (0..=n).map(|i| from + (to - from) * i as f64 / n as f64).collect();
+    let mut pts: Vec<Point> = xs.iter().map(|&x| Point::new(x, top(x))).collect();
+    pts.extend(xs.iter().rev().map(|&x| Point::new(x, bottom(x))));
+    PathData::single(SubPath::polyline(&pts, true))
+}
+
+/// Path `p` filled with gray `hex` at `opacity`: one layer of a wash.
+fn wash(p: PathData, hex: &str, opacity: f32) -> Node {
+    let mut n = filled(p, Paint::solid(Color::from_hex(hex).unwrap_or(Color::BLACK)));
+    n.opacity = opacity;
+    n
+}
+
+/// How much of a wash's width is left at x: rounded ends, full width from 8 pt in.
+fn wash_ends(x: f64) -> f64 {
+    let ends = ((x / 8.0).min(1.0) * ((100.0 - x) / 8.0).min(1.0)).max(0.0);
+    0.4 + 0.6 * ends.sqrt()
+}
+
+/// Ink and Wash: Tapered Ink, broad near its start and thinning to a fine tip; Brush Pen, a
+/// rounded nib whose size follows the pen pressure; and two washes of translucent grays, Soft Wash
+/// with faint edges and Pooling Wash with a darker rim and two light breaks. Black and grays take
+/// the stroke color as tints of it.
+fn ink_and_wash() -> BrushLibrary {
+    let tapered = {
+        let half = |x: f64| 3.0 * (x / 22.0).min(1.0).powf(0.6) * ((100.0 - x) / 78.0).min(1.0).powf(1.4);
+        black(between(0.0, 100.0, 48, |x| -0.85 * half(x), |x| 1.15 * half(x)))
+    };
+    let pen = Brush {
+        name: "Brush Pen".into(),
+        kind: BrushKind::Calligraphic(Calligraphic {
+            angle: 40.0,
+            roundness: 75.0,
+            size: 5.0,
+            variation: [0.0, 0.0, 2.5],
+            modes: Some([Variation::Fixed, Variation::Fixed, Variation::Pressure]),
+        }),
+    };
+    let soft = {
+        let top = |x: f64| -(4.5 + 0.5 * (x * 0.21).sin() + 0.3 * (x * 0.57 + 1.3).sin()) * wash_ends(x);
+        let bottom = |x: f64| (4.5 + 0.45 * (x * 0.26 + 2.1).sin() + 0.3 * (x * 0.69 + 0.4).sin()) * wash_ends(x);
+        group(vec![
+            wash(between(0.0, 100.0, 40, top, bottom), "#404040", 0.4),
+            wash(between(2.0, 98.0, 32, |x| top(x) - 0.7 - 0.3 * (x * 0.43).sin().abs(), |x| top(x) + 0.5), "#404040", 0.2),
+            wash(between(3.0, 97.0, 32, |x| bottom(x) - 0.5, |x| bottom(x) + 0.6 + 0.35 * (x * 0.37 + 1.0).sin().abs()), "#404040", 0.18),
+            wash(shapes::ellipse(Rect::new(21.0, -2.4, 39.0, 0.8)), "#e6e6e6", 0.22),
+            wash(shapes::ellipse(Rect::new(61.0, -0.3, 75.0, 2.3)), "#e6e6e6", 0.18),
+        ])
+    };
+    let pooling = {
+        let top = |x: f64| -(4.0 + 0.4 * (x * 0.18 + 0.7).sin() + 0.2 * (x * 0.53).sin()) * wash_ends(x);
+        let bottom = |x: f64| (4.0 + 0.35 * (x * 0.23 + 1.9).sin() + 0.25 * (x * 0.61 + 0.2).sin()) * wash_ends(x);
+        let rim = |x: f64, k: f64, phase: f64| 0.35 + k * (0.5 + 0.5 * (x * 0.29 + phase).sin());
+        group(vec![
+            wash(between(0.0, 100.0, 40, top, bottom), "#4d4d4d", 0.35),
+            wash(between(1.0, 99.0, 40, top, |x| top(x) + rim(x, 0.45, 0.0)), "#262626", 0.55),
+            wash(between(1.0, 99.0, 40, |x| bottom(x) - rim(x, 0.5, 1.1), bottom), "#262626", 0.55),
+            wash(polygon(&[(34.0, -2.6), (39.0, -2.8), (36.0, 2.7), (31.0, 2.5)]), "#e6e6e6", 0.2),
+            wash(polygon(&[(70.0, -2.4), (74.0, -2.5), (72.0, 2.6), (68.0, 2.4)]), "#e6e6e6", 0.18),
+        ])
+    };
+    let brushes = vec![
+        art("Tapered Ink", tapered, Colorization::Tints),
+        pen,
+        art("Soft Wash", soft, Colorization::Tints),
+        art("Pooling Wash", pooling, Colorization::Tints),
+    ];
+    built("Ink and Wash", Document::new(100.0, 100.0), brushes)
+}
+
 fn nib(name: &str, angle: f64, roundness: f64, size: f64) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Calligraphic(Calligraphic { angle, roundness, size, ..Default::default() }) }
 }
@@ -300,6 +425,47 @@ fn bristle(name: &str, shape: BristleShape, [size, length, density, thickness, o
     Brush { name: name.into(), kind: BrushKind::Bristle(Bristle { shape, size, length, density, thickness, opacity, stiffness }) }
 }
 
+/// Pressure Sensitive: four original marks whose art width or nib size responds to recorded pen
+/// pressure. Mouse paths keep the engine's neutral middle-pressure rendering.
+fn pressure_sensitive() -> BrushLibrary {
+    let flex = black(band(100.0, 5.0, 48, |x| 0.5 * (x / 100.0 * std::f64::consts::TAU).sin()));
+    let pulse = group(vec![
+        black(band(100.0, 2.8, 64, |x| 1.4 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin())),
+        black(shapes::ellipse(Rect::new(46.0, -2.2, 54.0, 2.2))),
+    ]);
+    let art_pressure = |name: &str, art: Node, light: f64, heavy: f64| Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush {
+            art,
+            width: light,
+            width_mode: Some(Variation::Pressure),
+            width_max: Some(heavy),
+            colorization: Colorization::Tints,
+            ..Default::default()
+        }),
+    };
+    let nib_pressure = |name: &str, angle: f64, roundness: f64, size: f64, variation: f64| Brush {
+        name: name.into(),
+        kind: BrushKind::Calligraphic(Calligraphic {
+            angle,
+            roundness,
+            size,
+            variation: [0.0, 0.0, variation],
+            modes: Some([Variation::Fixed, Variation::Fixed, Variation::Pressure]),
+        }),
+    };
+    built(
+        "Pressure Sensitive",
+        Document::new(100.0, 100.0),
+        vec![
+            art_pressure("Flex Ribbon", flex, 35.0, 250.0),
+            art_pressure("Pulse Stroke", pulse, 45.0, 280.0),
+            nib_pressure("Round Flow", 0.0, 100.0, 7.0, 5.0),
+            nib_pressure("Chisel Flow", 35.0, 25.0, 9.0, 7.0),
+        ],
+    )
+}
+
 /// Bristle Brushes: one bristle brush for each tip shape, from a fine liner to wide fans for
 /// blending and texture.
 fn bristle_brushes() -> BrushLibrary {
@@ -322,6 +488,59 @@ fn bristle_brushes() -> BrushLibrary {
 fn border(name: &str, side: Node, corner: Option<Node>, fit: PatternFit) -> Brush {
     let kind = BrushKind::Pattern(PatternBrush { side, outer_corner: corner.clone(), inner_corner: corner, fit, ..Default::default() });
     Brush { name: name.into(), kind }
+}
+
+/// Tech Circuit: original conductor geometry, drawn as filled paths so widths and chamfers
+/// survive brush warping. Pattern tiles meet at x = 0 and 24 with identical lead cross-sections.
+fn tech_circuit() -> BrushLibrary {
+    let pad = |x: f64| {
+        black(polygon(&[
+            (x - 4.0, -2.0),
+            (x - 2.0, -4.0),
+            (x + 2.0, -4.0),
+            (x + 4.0, -2.0),
+            (x + 4.0, 2.0),
+            (x + 2.0, 4.0),
+            (x - 2.0, 4.0),
+            (x - 4.0, 2.0),
+        ]))
+    };
+    // 45-degree jogs lift the conductor to a parallel run and bring it back.
+    let trace = group(vec![
+        black(polygon(&[
+            (4.0, -1.0),
+            (23.0, -1.0),
+            (33.0, -11.0),
+            (61.0, -11.0),
+            (71.0, -1.0),
+            (96.0, -1.0),
+            (96.0, 1.0),
+            (70.0, 1.0),
+            (60.0, -9.0),
+            (34.0, -9.0),
+            (24.0, 1.0),
+            (4.0, 1.0),
+        ])),
+        pad(4.0),
+        pad(96.0),
+    ]);
+    let bus = group([-4.0, 0.0, 4.0].into_iter().map(|y| black(shapes::rectangle(Rect::new(0.0, y - 0.75, 24.0, y + 0.75)))).collect());
+    let terminals = group(vec![
+        // Overlap the ring's rim without filling the test point's hole.
+        black(shapes::rectangle(Rect::new(0.0, -0.6, 15.5, 0.6))),
+        black(shapes::rectangle(Rect::new(18.5, -0.6, 24.0, 0.6))),
+        pad(6.0),
+        ring(Point::new(17.0, 0.0), 3.0, 1.4),
+    ]);
+    built(
+        "Tech Circuit",
+        Document::new(100.0, 100.0),
+        vec![
+            art("Circuit Trace", trace, Colorization::Tints),
+            border("Bus Lines", bus, None, PatternFit::Stretch),
+            border("Terminal Nodes", terminals, None, PatternFit::Stretch),
+        ],
+    )
 }
 
 /// An invisible rectangle that fixes a tile's width.

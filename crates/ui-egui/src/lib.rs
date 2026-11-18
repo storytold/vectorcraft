@@ -1,8 +1,8 @@
-//! VectorCraft's egui frontend: an Illustrator-style UI over `vectorcraft-engine`.
+//! VectorCraft's egui frontend: menus, tools, panels and dialogs over `vectorcraft-engine`.
 //!
 //! The UI is thin: every action goes through [`VectorcraftApp::run`], which dispatches UI commands
 //! (view/window) here and everything else to the engine. The same entry point serves menus,
-//! shortcuts, the ⌘K palette and the control channel ([`control`]).
+//! shortcuts, the command palette ([`palette`], Help › Search Commands…) and the control channel ([`control`]).
 #![forbid(unsafe_code)]
 
 /// VectorCraft as craft-update knows it, with its 128 px icon and accent colour: the update
@@ -34,6 +34,7 @@ pub mod credits;
 pub mod cursors;
 mod custom_toolbars;
 pub mod dialogs;
+pub mod display_profile;
 pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
@@ -70,6 +71,7 @@ pub mod script_runs;
 pub mod scripts_menu;
 mod scrub;
 pub mod shortcut_editor;
+pub mod shortcut_sheet;
 pub mod shortcuts;
 pub mod state;
 pub mod stylus;
@@ -77,6 +79,7 @@ pub mod sysclip;
 pub mod theme;
 pub mod thumb_worker;
 pub mod titlebar;
+pub mod toasts;
 pub mod toolbar;
 mod tools_float;
 pub mod touch;
@@ -91,8 +94,8 @@ pub mod workspaces;
 mod document_drag;
 #[cfg(test)]
 use tests::{
-    background as tests_background, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors, svg as tests_svg,
-    synthetic as tests_synthetic, sysclip as tests_sysclip,
+    background as tests_background, folder as tests_folder, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors,
+    svg as tests_svg, synthetic as tests_synthetic, sysclip as tests_sysclip,
 };
 #[cfg(test)]
 mod tests;
@@ -108,7 +111,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse, Ticket as ControlTicket};
 pub use state::{UiState, View};
-pub use sysclip::{ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
+pub use sysclip::{CLIPBOARD_PROBE_STOP_WAIT, ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
 
 mod app;
 mod caches;
@@ -116,7 +119,7 @@ mod clock;
 mod services;
 
 pub use app::MAX_RECENT_FONTS;
-pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
+pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
 pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
@@ -127,6 +130,7 @@ pub use services::{
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
+pub use ui_fonts::on_missing_glyphs;
 
 pub struct VectorcraftApp {
     pub session: Session,
@@ -138,12 +142,16 @@ pub struct VectorcraftApp {
     pub(crate) view_uids: Vec<u64>,
     /// The thread that checks the system clipboard for `system_paste` instead
     /// ([`Services::clipboard_probe`]). It is declared before `services` so that it is dropped
-    /// first: on X11 the last clipboard handle alive hands what the app copied to the clipboard
-    /// manager, and that must be the app's own handle in `services`, dropped on the UI thread
-    /// before the process exits.
+    /// first, waiting up to [`CLIPBOARD_PROBE_STOP_WAIT`] for its thread to let go of its handle: on
+    /// X11 the last clipboard handle alive hands what the app copied to the clipboard manager, and
+    /// that should be the app's own handle in `services`, dropped on the UI thread before the
+    /// process exits.
     clipboard_probe: Option<clipboard_probe::Probe>,
     pub services: Services,
     pub canvas: CanvasCache,
+    /// The main window's display profile, which the canvas is drawn through
+    /// ([`display_profile`]); the desktop app reports what it reads into it.
+    pub display_profile: display_profile::DisplayProfile,
     pub perf: Perf,
     /// Docking state that lives for the session only.
     pub(crate) dock_rt: panel_docking::Runtime,
@@ -222,10 +230,20 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// Where the caption buttons go on the app bar while [`Self::custom_titlebar`] is on: the
+    /// desktop's window-button layout on Linux and the BSDs where the desktop leaves the frame to the
+    /// app, all three at the right otherwise.
+    pub caption_layout: titlebar::CaptionLayout,
     /// The window has the desktop's own title bar: the OS or the window manager draws its frame,
     /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
     /// without a window of their own.
     pub desktop_frame: bool,
+    /// Linux and the BSDs: `VECTORCRAFT_TITLEBAR` is unset and the desktop would draw the window's
+    /// frame on this session with Preferences › User Interface › System Title Bar on or off while
+    /// VectorCraft Title Bar on Every Desktop is off, so the dialog says so under System Title Bar.
+    /// It stays `true` while VectorCraft Title Bar on Every Desktop gives the app the frame. Set by
+    /// the desktop app when it opens the window; `false` elsewhere.
+    pub desktop_keeps_frame: bool,
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,
@@ -275,6 +293,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// The messages shown over the window ([`toasts`]).
+    pub toasts: toasts::Shown,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// Modifiers the keyboard holds (from the host's input), given back after synthetic input.
@@ -329,6 +349,11 @@ pub struct VectorcraftApp {
     /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
     /// `ui.dialog.set` writes.
     pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
+    /// The paths Choose… picked in a script's file dialog, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) script_picked: Vec<String>,
+    /// Choose… left out files past the most a script is given.
+    pub(crate) script_picked_left_out: bool,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,
@@ -338,6 +363,10 @@ pub struct VectorcraftApp {
     /// can be driven one simulated frame at a time (production always leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
+    /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),
+    /// so tests can drive a failed switch (production has no such field).
+    #[cfg(test)]
+    pub(crate) fail_next_tool_choice: Option<String>,
     /// The host iteration [`Self::tick`] ran in (`None`: never): once per iteration, never per pass.
     tick_iteration: Option<u64>,
     /// The context, viewport and frame whose UI-phase input was already taken in this host
@@ -349,6 +378,9 @@ pub struct VectorcraftApp {
     /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
     /// when it is let go ([`shortcuts::HeldTool`]).
     pub(crate) held_tool: Vec<shortcuts::HeldTool>,
+    /// A key with a hold shortcut that waits for its release, and the keys whose repeats are held
+    /// back until they are let go ([`shortcuts::HoldKeys`]).
+    pub(crate) hold_keys: shortcuts::HoldKeys,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

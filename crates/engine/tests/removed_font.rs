@@ -37,9 +37,7 @@ fn laid_out_in(s: &Session, id: u64) -> Vec<String> {
 
 #[test]
 fn type_in_a_removed_font_falls_back_after_a_rescan() {
-    let root = vectorcraft_testkit::temp_dir("removed-font");
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let root = vectorcraft_testkit::TempDir::new("removed-font");
     vectorcraft_text::set_user_font_dirs(vec![root.clone()]);
     let file = root.join("Gonefont.otf");
     std::fs::write(&file, vectorcraft_testkit::fonts::renamed(FAMILY)).unwrap();
@@ -72,5 +70,4 @@ fn type_in_a_removed_font_falls_back_after_a_rescan() {
     assert_eq!(status(&mut s), ("exact".into(), FAMILY.into()));
     assert!(listed(&mut s));
     assert_eq!(laid_out_in(&s, id), [FAMILY]);
-    let _ = std::fs::remove_dir_all(&root);
 }

@@ -13,6 +13,7 @@
 //! panel whose library can't be found shows the library as missing, with its file and Locate
 //! Library… (`ui.libraryPanel.locate`). The find text and the selection are panel state.
 
+use std::borrow::Cow;
 use std::sync::{Mutex, PoisonError};
 
 use egui::{Rect, Sense, Ui};
@@ -104,8 +105,13 @@ pub(crate) trait LibraryKind {
     fn find(app: &VectorcraftApp, key: &str) -> Found;
     /// The file library `id` was read from, if any.
     fn path(app: &VectorcraftApp, id: &str) -> Option<String>;
-    /// The rows matching the find field's `query` (lower case; empty: all).
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, Self::Item>>;
+    /// The rows of library `id` matching the find field's `query` (lower case; empty: all).
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, Self::Item>>;
+    /// Row `name` of library `id` as its list row and tooltips show it (by default as it is). The
+    /// row keeps `name` for its tile, selection, clicks, drags and the commands they run.
+    fn label<'a>(_id: &str, name: &'a str) -> Cow<'a, str> {
+        Cow::Borrowed(name)
+    }
     /// An item's thumbnail in `r`.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, item: &Self::Item, selected: bool, hovered: bool);
     /// The icons at the right of list row `r`.
@@ -571,7 +577,7 @@ fn set(app: &mut VectorcraftApp, panel: &str, mut params: Value) {
 /// (symbol and brush libraries: any document).
 pub(crate) fn library_pick_filters(kind: &str) -> Vec<(&'static str, &'static [&'static str])> {
     match kind {
-        super::swatches::SwatchLibraries::KIND => fileio::library_open_filters("Swatch libraries", swatchlib::LIBRARY_EXTS).collect(),
+        super::swatches::SwatchLibraries::KIND => fileio::library_open_filters("Swatch libraries", swatchlib::LIBRARY_PICK_EXTS).collect(),
         super::graphic_styles::GraphicStyleLibraries::KIND => fileio::library_open_filters("Graphic Style Libraries", &[STYLES_EXT]).collect(),
         _ => fileio::builtin_open_filters().collect(),
     }
@@ -626,7 +632,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let (view, hide_find) = settings(&app.ui, K::KIND, id).map_or((K::VIEW, false), |s| (s.view.unwrap_or(K::VIEW), s.hide_find));
     let query = if hide_find { String::new() } else { widgets::search_field(ui, egui::Id::unique(key(&panel, "find")), tl!("Find")) };
     ui.add_space(4.0);
-    let rows = K::rows(&lib, &query.trim().to_lowercase());
+    let rows = K::rows(&lib, id, &query.trim().to_lowercase());
     let selected = selection(ui.ctx(), &panel);
     let is_sel = |n: &str| selected.iter().any(|s| s == n);
     let mut clicked: Option<(String, bool, egui::Modifiers)> = None;
@@ -635,9 +641,17 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
             clicked = Some((row.name.to_string(), row.item.is_none(), ui.input(|i| i.modifiers)));
         }
     };
+    // In a sized panel the list fills the space above the footer (#2992), as the Artboards list
+    // does; elsewhere it keeps its 220 pt (280 pt for large thumbnails).
+    let fixed = widgets::panel_footer_bottom(ui).is_some();
+    let list_height = widgets::panel_list_height(ui, if view == View::LargeThumb { 280.0 } else { 220.0 }, 2.0 + ui.spacing().item_spacing.y);
     widgets::list_box(ui, |ui| {
-        let max_height = if view == View::LargeThumb { 280.0 } else { 220.0 };
-        egui::ScrollArea::vertical().id_salt(key(&panel, "scroll")).max_height(max_height).show(ui, |ui| {
+        let scroll = egui::ScrollArea::vertical()
+            .id_salt(key(&panel, "scroll"))
+            .max_height(list_height)
+            .min_scrolled_height(list_height.min(64.0))
+            .auto_shrink([false, !fixed]);
+        scroll.show(ui, |ui| {
             ui.set_width(ui.available_width());
             if rows.is_empty() {
                 widgets::dim_label(ui, if query.trim().is_empty() { tl!("This library is empty.") } else { tl!("No matches.") });
@@ -651,9 +665,10 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
                         }
                         None => super::swatches::draw_folder(ui, chip),
                     }
-                    list_row_name(ui, r, chip, row.name);
+                    let label = K::label(id, row.name);
+                    list_row_name(ui, r, chip, &label);
                     drag_out::<K>(ui, &resp, id, row);
-                    let tip = || row.item.map_or_else(|| row.name.to_string(), |i| format!("{} ({})", row.name, K::describe(i)));
+                    let tip = || row.item.map_or_else(|| label.to_string(), |i| format!("{label} ({})", K::describe(i)));
                     click(ui, resp, row, &tip);
                 }
             } else {
@@ -664,7 +679,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
                         None => folder_tile(ui, cell, is_sel(row.name)),
                     }
                     drag_out::<K>(ui, &resp, id, row);
-                    click(ui, resp, row, &|| row.name.to_string());
+                    click(ui, resp, row, &|| K::label(id, row.name).into_owned());
                 }
             }
         });
@@ -682,10 +697,11 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     bottom::<K>(app, ui, id);
 }
 
-/// An item of library `id` dragged out of its tile or row `resp` carries what `K` says it does.
+/// An item of library `id` dragged out of its tile or row `resp` with the primary button carries
+/// what `K` says it does.
 fn drag_out<K: LibraryKind>(ui: &Ui, resp: &egui::Response, id: &str, row: &Row<K::Item>) {
     if row.item.is_some()
-        && resp.drag_started()
+        && resp.drag_started_by(egui::PointerButton::Primary)
         && let Some(drag) = K::drag(id, row.name)
     {
         egui::DragAndDrop::set_payload(ui.ctx(), drag);

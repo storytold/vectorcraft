@@ -213,11 +213,11 @@ impl<'a> Scene<'a> {
                     self.node(&o, true);
                 }
             }
-            NodeKind::Image(im) => self.image(im),
+            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im)),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n)
+                    && let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n)
                     && let Some(art) =
                         if self.clips { self.doc.place_symbol_art(symbol, &art, *xf) } else { self.doc.place_symbol_art_unclipped(symbol, &art, *xf) }
                 {
@@ -490,8 +490,9 @@ impl<'a> Scene<'a> {
         }
         let blob = self.doc.image_blob(im).filter(|b| !b.bytes.is_empty());
         let img = blob
-            .and_then(|b| image::load_from_memory(&b.bytes).ok())
-            .map(|i| Rgba::fitted(i.to_rgba8()))
+            .and_then(|b| craft_image_codecs::decode(&b.bytes).ok())
+            .and_then(|i| image::RgbaImage::from_raw(i.width(), i.height(), i.to_rgba8()))
+            .map(Rgba::fitted)
             .filter(|i| i.width > 0 && i.height > 0)
             .map(Arc::new);
         if img.is_none() {

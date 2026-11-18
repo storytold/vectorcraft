@@ -116,6 +116,7 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> 
                 enc.warnings.push(w);
             }
         }
+        enc.add_setting_notes(out.setting_notes);
     }
     if enc.files.is_empty() {
         return Err(bad(C, "the document has no artboard"));

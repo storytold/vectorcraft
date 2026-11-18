@@ -177,6 +177,27 @@ fn convert_reports_import_warnings() {
     assert!(w.iter().any(|w| w.as_str().unwrap().contains("nowhere-to-be-found.png")), "{out}");
 }
 
+/// A conversion sends each format only the options it reads, so its warnings name an unused
+/// option only when the command line gave one: `--outline-text` for a format without it.
+#[test]
+fn convert_warns_about_an_unused_option_only_when_one_was_given() {
+    let svg = tmp("unused-option.svg");
+    std::fs::write(&svg, r#"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="20" height="10"/></svg>"#).unwrap();
+    let unused = |out: &Value| -> Vec<String> {
+        let w = out["warnings"].as_array().unwrap_or_else(|| panic!("{out}"));
+        w.iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).map(str::to_string).collect()
+    };
+    for ext in ["png", "jpg", "pdf", "ai", "eps", "psd", "dxf", "svg", "txt", "vectorcraft", "vctemplate"] {
+        let path = tmp(&format!("unused-option.{ext}"));
+        let out: Value = serde_json::from_str(ok(&["convert", &svg, &path]).trim()).unwrap();
+        assert!(unused(&out).is_empty(), "{ext}: {out}");
+    }
+    let out: Value = serde_json::from_str(ok(&["convert", &svg, &tmp("unused-option-outlined.svg"), "--outline-text"]).trim()).unwrap();
+    assert!(unused(&out).is_empty(), "{out}");
+    let out: Value = serde_json::from_str(ok(&["convert", &svg, &tmp("unused-option-outlined.png"), "--outline-text"]).trim()).unwrap();
+    assert_eq!(unused(&out), ["`outlineText` was not used: PNG files don't read it"], "{out}");
+}
+
 #[test]
 fn convert_writes_legacy_ai_with_its_options() {
     // Two artboards, a shown rectangle and a hidden one.

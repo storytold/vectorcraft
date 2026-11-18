@@ -83,7 +83,11 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::CornerRadius
         | Cursor::PathBracket
         | Cursor::TypeWidget
-        | Cursor::LoadedText => C::Default,
+        | Cursor::LoadedText
+        | Cursor::LoadedTextLink
+        | Cursor::LivePaintSelectFace
+        | Cursor::LivePaintSelectEdge
+        | Cursor::LivePaintSelectOutside => C::Default,
         Cursor::SelectionCopy => C::Copy,
         Cursor::Move => C::Move,
         Cursor::Crosshair => C::Crosshair,
@@ -123,6 +127,9 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         Cursor::TypeArea | Cursor::TypeOnPath => C::Text,
         // The system has no tip outline to go round: its crosshair aims as well.
         Cursor::BlobBrush | Cursor::Eraser => C::Crosshair,
+        Cursor::LivePaintBucket | Cursor::LivePaintBucketFace | Cursor::LivePaintBucketEdge => C::Crosshair,
+        // The system has no knife: its crosshair aims at the blade's point.
+        Cursor::Knife => C::Crosshair,
         // Not drawn yet: the cursor each borrows.
         Cursor::Lasso
         | Cursor::MagicWand
@@ -131,9 +138,7 @@ pub(super) fn cursor_icon(c: Cursor) -> egui::CursorIcon {
         | Cursor::Smooth
         | Cursor::PathEraser
         | Cursor::Join
-        | Cursor::Knife
         | Cursor::Shaper
-        | Cursor::LivePaintBucket
         | Cursor::Measure
         | Cursor::PrintTiling
         | Cursor::SymbolSprayer

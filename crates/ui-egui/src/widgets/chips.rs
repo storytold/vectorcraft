@@ -33,11 +33,7 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
     if !(rect.width() > 0.0 && rect.height() > 0.0) {
         return;
     }
-    // Freeform sampling is costly per spot, so it gets a coarse grid (the mesh interpolates).
-    let freeform = gradient.gradient.kind == vectorcraft_color::GradientKind::Freeform;
-    let max = if freeform { 16 } else { 64 };
-    let cols = ((rect.width() / 3.0).ceil() as usize).clamp(1, max);
-    let rows = ((rect.height() / 3.0).ceil() as usize).clamp(1, max);
+    let (cols, rows) = chip_grid(&gradient.gradient, rect.width(), rect.height());
     let colors = gradient_chip_colors(gradient, rect.width(), rect.height(), cols, rows);
     // Stops below full opacity show a checkerboard through them.
     if colors.iter().any(|c| c.a() < u8::MAX) {
@@ -57,6 +53,38 @@ pub fn gradient_chip(ui: &Ui, rect: Rect, gradient: &vectorcraft_color::Gradient
         }
     }
     ui.painter().add(egui::Shape::mesh(mesh));
+}
+
+/// Most grid cells across (and down) a chip of a gradient that repeats or reflects.
+const SPREAD_CHIP_CELLS: usize = 128;
+
+/// The grid (columns, rows) a `width` x `height` chip of gradient `g` is sampled on: a cell about
+/// every 3 points (at most 64 a side, 16 for a freeform gradient, whose sampling is costly per
+/// spot; the mesh interpolates between them), and for a gradient that repeats or reflects at
+/// least 4 cells a run along each side (at most one a point, and [`SPREAD_CHIP_CELLS`]), so the
+/// grid's points do not all fall at the same place in a run and paint the chip one color. For
+/// such a gradient a side gets a cell or two more when its points would fall at fewer than three
+/// places in a run.
+pub(super) fn chip_grid(g: &vectorcraft_color::Gradient, width: f32, height: f32) -> (usize, usize) {
+    let freeform = g.kind == vectorcraft_color::GradientKind::Freeform;
+    let max = if freeform { 16 } else { 64 };
+    let runs = if g.is_spread() { g.repeat_count() as usize } else { 1 };
+    let least = if runs > 1 { (4 * runs).min(SPREAD_CHIP_CELLS) } else { 1 };
+    let gcd = |mut a: usize, mut b: usize| {
+        while b != 0 {
+            (a, b) = (b, a % b);
+        }
+        a
+    };
+    let side = |len: f32| {
+        let mut cells = ((len / 3.0).ceil() as usize).clamp(1, max).max(least.min(len.ceil() as usize));
+        // Points `i / cells` of the way along fall at `cells / gcd(cells, runs)` places in a run.
+        while runs > 1 && cells / gcd(cells, runs) < 3 {
+            cells += 1;
+        }
+        cells
+    };
+    (side(width), side(height))
 }
 
 /// A white and light gray checkerboard filling `rect`, with cells a quarter of its shorter side

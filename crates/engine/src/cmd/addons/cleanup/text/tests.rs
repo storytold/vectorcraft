@@ -158,6 +158,62 @@ fn break_text_refuses_what_it_cannot_break() {
     assert!(matches!(r, Err(EngineError::BadParams { .. })), "{r:?}");
 }
 
+/// Two area frames threaded together, with `story` flowing through them → (first, second).
+fn threaded(s: &mut Session, story: &str) -> (NodeId, NodeId) {
+    let a = text(s, json!({"x": 10, "y": 300, "text": story, "size": 12, "area": {"width": 150, "height": 60}}));
+    let b = NodeId(s.execute("shape.rectangle", &json!({"x": 200, "y": 300, "width": 150, "height": 60})).unwrap()["id"].as_u64().unwrap());
+    select(s, &[a, b]);
+    s.execute("text.thread.create", &json!({})).unwrap();
+    (a, b)
+}
+
+fn thread_scans() -> usize {
+    super::THREAD_SCANS.with(|c| c.get())
+}
+
+/// Threaded frames in the selection stay as they are and are reported as skipped; the other type
+/// is broken. The document's threads are gone through once for the whole selection, not once
+/// per object.
+#[test]
+fn break_text_skips_threaded_frames_and_reads_the_threads_once() {
+    let mut s = session();
+    let (a, b) = threaded(&mut s, "Threaded story text");
+    let mut plain = vec![];
+    for i in 0..6 {
+        plain.push(text(&mut s, json!({"x": 20, "y": 30 + 30 * i, "text": "Two words", "size": 14})));
+    }
+    let was = glyphs(&s, &plain);
+    let frames = (obj(&s, a), obj(&s, b));
+    let before = doc_json(&s);
+    let steps = undo_steps(&s);
+    let mut all = vec![a, b];
+    all.extend(&plain);
+    select(&mut s, &all);
+    let scans = thread_scans();
+    let r = s.execute("addon.cleanup.breakText", &json!({"by": "words"})).unwrap();
+    assert_eq!(thread_scans() - scans, 1, "the threads are gone through once");
+    assert_eq!(ids(&json!({"ids": r["skipped"]})), [a, b]);
+    assert_eq!((obj(&s, a), obj(&s, b)), frames, "the threaded frames stay as they are");
+    let pieces = ids(&r);
+    assert_eq!(pieces.len(), 12);
+    assert_eq!(s.doc().unwrap().selection.objects.len(), 12, "the pieces are selected");
+    assert_same_places(&was, &glyphs(&s, &pieces));
+    assert_eq!(undo_steps(&s), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(doc_json(&s), before);
+}
+
+#[test]
+fn split_text_refuses_a_threaded_frame() {
+    let mut s = session();
+    let (a, _) = threaded(&mut s, "Threaded story text");
+    select(&mut s, &[a]);
+    edit_text(&mut s, a, 9, 9);
+    let before = doc_json(&s);
+    assert!(other(s.execute("addon.cleanup.splitText", &json!({}))).contains("point or area type"));
+    assert_eq!(doc_json(&s), before);
+}
+
 #[test]
 fn combine_puts_glyph_pieces_back_together_where_they_were() {
     let mut s = session();
@@ -300,6 +356,251 @@ fn remove_breaks_with_ids_null_in_the_characters_a_type_tool_selected() {
     assert_eq!(obj(&s, id).plain_text(), "a b\nc");
 }
 
+/// Remove Breaks reads a threaded story whose frames are all selected as one text and each other
+/// object on its own, going through the document's threads once for the whole selection.
+#[test]
+fn remove_breaks_reads_the_threads_once() {
+    let mut s = session();
+    let (a, b) = threaded(&mut s, "one\ntwo");
+    let mut plain = vec![];
+    for i in 0..6 {
+        plain.push(text(&mut s, json!({"x": 20, "y": 30 + 30 * i, "text": "a\nb", "size": 12})));
+    }
+    let mut all = vec![a, b];
+    all.extend(&plain);
+    select(&mut s, &all);
+    let scans = thread_scans();
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"})).unwrap();
+    assert_eq!(thread_scans() - scans, 1, "the threads are gone through once");
+    assert_eq!(r["removed"], 7);
+    assert_eq!(obj(&s, a).plain_text(), "one two");
+    for id in plain {
+        assert_eq!(obj(&s, id).plain_text(), "a b");
+    }
+}
+
+/// Remove Breaks reads each named frame of a story that is not all named on its own, in the order
+/// named and each once, as one undo step, and goes through that story's frames once for all of them.
+#[test]
+fn remove_breaks_goes_through_a_partly_named_story_once() {
+    for (kind, brk) in [("line", '\u{2028}'), ("paragraph", '\n')] {
+        let mut s = session();
+        let a = text(&mut s, json!({"x": 10, "y": 20, "text": "a\u{2028}b\n".repeat(40), "size": 12, "area": {"width": 150, "height": 60}}));
+        let mut roots = vec![a];
+        for i in 0..4 {
+            let r = s.execute("shape.rectangle", &json!({"x": 10, "y": 100 + 70 * i, "width": 150, "height": 60})).unwrap();
+            roots.push(NodeId(r["id"].as_u64().unwrap()));
+        }
+        select(&mut s, &roots);
+        s.execute("text.thread.create", &json!({})).unwrap();
+        let f = s.doc().unwrap().doc.text_threads[0].clone();
+        assert_eq!(f.len(), 5);
+        let named = [f[4], f[1], f[3]];
+        let breaks: Vec<usize> = named.iter().map(|id| obj(&s, *id).plain_text().matches(brk).count()).collect();
+        assert!(breaks.iter().all(|n| *n > 0), "{kind}: each named frame holds breaks: {breaks:?}");
+        let before = doc_json(&s);
+        let steps = undo_steps(&s);
+        let builds = crate::cmd::threads::story_builds();
+        let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": kind, "ids": [f[4].0, f[1].0, f[4].0, f[3].0]})).unwrap();
+        assert_eq!(crate::cmd::threads::story_builds() - builds, 1, "{kind}: the story's frames are gone through once");
+        assert_eq!(r["removed"].as_u64(), Some(breaks.iter().sum::<usize>() as u64), "{kind}");
+        assert_eq!(ids(&r), named, "{kind}");
+        assert_eq!(undo_steps(&s), steps + 1, "{kind}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(doc_json(&s), before, "{kind}");
+    }
+}
+
+/// Lock `id` (`locked`), else hide it, as an undo step of its own.
+fn lock_or_hide(s: &mut Session, id: NodeId, locked: bool) {
+    s.edit("Lock or Hide", |d, _| {
+        let n = d.node_mut(id).unwrap();
+        if locked {
+            n.locked = true;
+        } else {
+            n.visible = false;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// Remove Breaks takes the locked and hidden type that `ids` names, and the locked member of a
+/// group it names, as one undo step; from the selection it takes only type that can be edited, and
+/// nothing changed makes no undo step.
+#[test]
+fn remove_breaks_named_locked_and_hidden_type() {
+    let mut s = session();
+    let locked = text(&mut s, json!({"x": 40, "y": 60, "text": "a\nb", "size": 12}));
+    let hidden = text(&mut s, json!({"x": 40, "y": 120, "text": "c\nd", "size": 12}));
+    let grouped = text(&mut s, json!({"x": 40, "y": 180, "text": "e\nf", "size": 12}));
+    let free = text(&mut s, json!({"x": 40, "y": 240, "text": "g\nh", "size": 12}));
+    select(&mut s, &[grouped, free]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    lock_or_hide(&mut s, locked, true);
+    lock_or_hide(&mut s, hidden, false);
+    lock_or_hide(&mut s, grouped, true);
+    select(&mut s, &[locked, hidden]);
+    let steps = undo_steps(&s);
+    assert_eq!(other(s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph"}))), "No paragraph breaks to remove");
+    assert_eq!(undo_steps(&s), steps, "the selected locked and hidden type stays as it is");
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [locked.0, hidden.0, group.0]})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert_eq!(r["removed"], 4);
+    for (id, now) in [(locked, "a b"), (hidden, "c d"), (grouped, "e f"), (free, "g h")] {
+        assert_eq!(obj(&s, id).plain_text(), now);
+    }
+    assert_eq!(other(s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [locked.0]}))), "No paragraph breaks to remove");
+    assert_eq!(undo_steps(&s), steps + 1, "nothing changed, no undo step");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(obj(&s, locked).plain_text(), "a\nb");
+}
+
+/// A threaded story whose frames `ids` all names is read as one text even when a frame is locked.
+#[test]
+fn remove_breaks_named_story_with_a_locked_frame() {
+    let mut s = session();
+    let (a, b) = threaded(&mut s, "one\ntwo");
+    lock_or_hide(&mut s, a, true);
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [a.0, b.0]})).unwrap();
+    assert_eq!(r["removed"], 1);
+    assert_eq!(obj(&s, a).plain_text(), "one two");
+}
+
+/// Type on a locked artboard stays as it is even when `ids` names it, with no undo step.
+#[test]
+fn remove_breaks_named_type_on_a_locked_artboard() {
+    let mut s = session();
+    let on_board = text(&mut s, json!({"x": 40, "y": 60, "text": "a\nb", "size": 12}));
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [on_board.0]}));
+    assert_eq!(other(r), "No paragraph breaks to remove");
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(obj(&s, on_board).plain_text(), "a\nb");
+}
+
+/// Break Text, Combine and Join Point Text, Set Alignment, Keep Position and Reset Text Transform
+/// act on the locked and hidden type that `ids` names (type in a locked layer included), each as
+/// one undo step, and leave it as it is when it is only selected.
+#[test]
+fn named_locked_and_hidden_type() {
+    let mut s = session();
+    let words = text(&mut s, json!({"x": 40, "y": 100, "text": "Two words", "size": 14}));
+    lock_or_hide(&mut s, words, true);
+    select(&mut s, &[words]);
+    assert!(s.execute("addon.cleanup.breakText", &json!({"by": "words"})).is_err());
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.breakText", &json!({"by": "words", "ids": [words.0]})).unwrap();
+    assert_eq!((ids(&r).len(), undo_steps(&s)), (2, steps + 1));
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the locked pieces stay unselected");
+
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 110, "y": 100, "text": "Right", "size": 20}));
+    lock_or_hide(&mut s, a, false);
+    lock_or_hide(&mut s, b, false);
+    select(&mut s, &[a, b]);
+    assert!(s.execute("addon.cleanup.combineText", &json!({})).is_err());
+    let r = s.execute("addon.cleanup.combineText", &json!({"ids": [a.0, b.0]})).unwrap();
+    assert_eq!(ids(&r), [a]);
+    assert_eq!(obj(&s, a).plain_text(), "Left Right");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the hidden object stays unselected");
+
+    let mut s = session();
+    let first = text(&mut s, json!({"x": 50, "y": 100, "text": "First", "size": 20}));
+    let second = text(&mut s, json!({"x": 50, "y": 130, "text": "Second", "size": 20}));
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    lock_or_hide(&mut s, layer, true);
+    select(&mut s, &[first, second]);
+    assert!(s.execute("addon.cleanup.joinText", &json!({})).is_err());
+    let r = s.execute("addon.cleanup.joinText", &json!({"ids": [first.0, second.0]})).unwrap();
+    assert_eq!(r["id"].as_u64(), Some(first.0));
+    assert_eq!(obj(&s, first).plain_text(), "First\nSecond");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the object in the locked layer stays unselected");
+
+    let mut s = session();
+    let lines = text(&mut s, json!({"x": 50, "y": 100, "text": "a\nlonger line", "size": 20}));
+    lock_or_hide(&mut s, lines, false);
+    select(&mut s, &[lines]);
+    assert!(s.execute("addon.cleanup.alignInPlace", &json!({"align": "center"})).is_err());
+    s.execute("addon.cleanup.alignInPlace", &json!({"align": "center", "ids": [lines.0]})).unwrap();
+    assert!(obj(&s, lines).para_styles().all(|p| p.justify == Justify::Center));
+
+    let mut s = session();
+    let turned = text(&mut s, json!({"x": 300, "y": 200, "text": "Turned", "size": 18, "rotation": 30}));
+    lock_or_hide(&mut s, turned, true);
+    select(&mut s, &[turned]);
+    assert!(s.execute("addon.cleanup.resetTextTransform", &json!({})).is_err());
+    let steps = undo_steps(&s);
+    s.execute("addon.cleanup.resetTextTransform", &json!({"ids": [turned.0]})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    let [_, b, c, _, _, _] = obj(&s, turned).xf.as_coeffs();
+    assert!(b.abs() < 1e-9 && c.abs() < 1e-9, "the rotation is gone");
+}
+
+/// Combine Point Text joins named pieces only with pieces as visible and as locked, a group's lock
+/// included: a visible piece and a hidden one beside it, or a free piece and one in a locked group,
+/// stay as they are, with no undo step.
+#[test]
+fn combine_keeps_hidden_and_locked_pieces_apart() {
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 110, "y": 100, "text": "Right", "size": 20}));
+    lock_or_hide(&mut s, b, false);
+    let steps = undo_steps(&s);
+    assert!(s.execute("addon.cleanup.combineText", &json!({"ids": [a.0, b.0]})).is_err());
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("Left".into(), "Right".into()));
+    let d = &s.doc().unwrap().doc;
+    assert!(d.is_visible(a) && !d.is_visible(b), "the visible text stays shown and the hidden text stays hidden");
+
+    let mut s = session();
+    let a = text(&mut s, json!({"x": 50, "y": 100, "text": "Left", "size": 20}));
+    let b = text(&mut s, json!({"x": 110, "y": 100, "text": "Right", "size": 20}));
+    select(&mut s, &[b]);
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    lock_or_hide(&mut s, group, true);
+    let steps = undo_steps(&s);
+    assert!(s.execute("addon.cleanup.combineText", &json!({"ids": [a.0, group.0]})).is_err());
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!((obj(&s, a).plain_text(), obj(&s, b).plain_text()), ("Left".into(), "Right".into()));
+}
+
+/// Join Point Text joins only the named pieces as visible and as locked as the top-left one: a
+/// hidden piece between two visible lines stays as it is, hidden, and a hidden top-left piece
+/// with only a visible one below it joins nothing, with no undo step.
+#[test]
+fn join_keeps_a_hidden_piece_apart() {
+    let mut s = session();
+    let first = text(&mut s, json!({"x": 50, "y": 100, "text": "First", "size": 20}));
+    let hidden = text(&mut s, json!({"x": 50, "y": 130, "text": "Hidden", "size": 20}));
+    let third = text(&mut s, json!({"x": 50, "y": 160, "text": "Third", "size": 20}));
+    lock_or_hide(&mut s, hidden, false);
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.joinText", &json!({"ids": [first.0, hidden.0, third.0]})).unwrap();
+    assert_eq!((r["id"].as_u64(), r["joined"].as_u64(), undo_steps(&s)), (Some(first.0), Some(2), steps + 1));
+    assert_eq!(obj(&s, first).plain_text(), "First\nThird");
+    assert_eq!(obj(&s, hidden).plain_text(), "Hidden");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.is_visible(first) && !d.is_visible(hidden), "the visible text stays shown and the hidden text stays hidden");
+    assert!(d.node(third).is_none());
+
+    let mut s = session();
+    let top = text(&mut s, json!({"x": 50, "y": 100, "text": "Top", "size": 20}));
+    let below = text(&mut s, json!({"x": 50, "y": 130, "text": "Below", "size": 20}));
+    lock_or_hide(&mut s, top, false);
+    let steps = undo_steps(&s);
+    assert!(s.execute("addon.cleanup.joinText", &json!({"ids": [top.0, below.0]})).is_err());
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!((obj(&s, top).plain_text(), obj(&s, below).plain_text()), ("Top".into(), "Below".into()));
+    assert!(s.doc().unwrap().doc.is_visible(below));
+}
+
 #[test]
 fn split_at_the_cursor_and_around_a_selection() {
     for (anchor, caret, want) in [(6, 6, &["Split", "here please"][..]), (6, 10, &["Split", "here", "please"][..])] {
@@ -414,4 +715,54 @@ fn replace_missing_fonts_reaches_the_type_in_symbols() {
     assert_eq!(r["runs"].as_u64(), Some(1), "{r}");
     s.execute("symbol.exitEditing", &json!({})).unwrap();
     assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
+}
+
+/// Replace Missing Fonts reaches the type in opacity masks (of a hidden object, disabled, in a
+/// symbol's art) and in a pattern swatch nothing paints with, and the export warning, the missing
+/// fonts list and Find Font name that type's font until it is replaced.
+#[test]
+fn replace_missing_fonts_reaches_the_type_in_masks_and_patterns() {
+    let mut s = session();
+    let mask = |s: &mut Session, owner: NodeId, art: NodeId| {
+        s.edit("Mask", |d, _| {
+            let art = d.remove(art)?;
+            d.node_mut(owner).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+            Ok(())
+        })
+        .unwrap();
+    };
+    let lost = |s: &mut Session| text(s, json!({"x": 40, "y": 60, "text": "Lost", "size": 20, "font": "No Such Font Family"}));
+    let rect =
+        |s: &mut Session| NodeId(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    let (hidden, disabled, in_symbol) = (rect(&mut s), rect(&mut s), rect(&mut s));
+    for owner in [hidden, disabled, in_symbol] {
+        let t = lost(&mut s);
+        mask(&mut s, owner, t);
+    }
+    s.execute("select.set", &json!({"ids": [hidden.0]})).unwrap();
+    s.execute("object.hide", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [disabled.0]})).unwrap();
+    s.execute("transparency.disableOpacityMask", &json!({})).unwrap();
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+    let t = lost(&mut s);
+    s.execute("object.pattern.make", &json!({"ids": [t.0], "name": "Unused", "edit": false})).unwrap();
+    select(&mut s, &[t]);
+    s.execute("edit.clear", &json!({})).unwrap();
+    let mut on_layers = 0;
+    s.doc().unwrap().doc.walk(|n| on_layers += usize::from(matches!(n.kind, NodeKind::Text(_))));
+    assert_eq!(on_layers, 0, "the type is only in masks, a symbol and a pattern");
+    let missing = |s: &Session| crate::cmd::fontfiles::missing_fonts(&s.doc().unwrap().doc).into_iter().map(|f| f.family).collect::<Vec<_>>();
+    assert_eq!(missing(&s), ["No Such Font Family"]);
+    assert!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc).is_some_and(|w| w.contains("No Such Font Family")));
+    let listed = s.execute("text.fonts", &json!({})).unwrap();
+    assert_eq!((listed[0]["family"].as_str(), listed[0]["objects"].as_u64()), (Some("No Such Font Family"), Some(4)), "{listed}");
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    let r = s.execute("addon.cleanup.replaceFonts", &json!({})).unwrap();
+    assert_eq!(r["runs"].as_u64(), Some(4), "{r}");
+    assert_eq!(steps(&s), before + 1);
+    assert!(missing(&s).is_empty());
+    assert_eq!(crate::cmd::fonts::substitution_warning(&s.doc().unwrap().doc), None);
+    assert_eq!(other(s.execute("addon.cleanup.replaceFonts", &json!({}))), "No fonts are missing");
+    assert_eq!(steps(&s), before + 1);
 }

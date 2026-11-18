@@ -16,6 +16,8 @@ pub(super) struct HoverContext {
     pub(super) center: Point,
     pub(super) zoom: f64,
     pub(super) rotation: f64,
+    /// A pen turning in place changes a Bristle tip even when its pointer stays still.
+    pub(super) pen: Option<PenPose>,
     /// The active document's id and revision (which moves with every edit, undo and selection
     /// change).
     pub(super) doc: Option<(u64, u64)>,
@@ -27,6 +29,11 @@ pub(crate) fn end_document_drag(ctx: &egui::Context) {
         d.remove::<Drag>(drag_id());
         d.remove::<Pos2>(drag_pos_id());
     });
+}
+
+/// Whether a Selection tool move has left the canvas ([`drag_art_out`]) and still waits there.
+pub(crate) fn art_out(ctx: &egui::Context) -> bool {
+    matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art))
 }
 
 /// Temp-memory key for the active canvas drag state.
@@ -265,6 +272,12 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
+/// Whether Space, held with the modifiers `m`, lends the Hand, Rotate View or Zoom tool. While the
+/// Type tool edits text, Space types a space, and only Cmd+Space still lends the Zoom tool.
+pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, space: bool) -> bool {
+    space && (m.command || !app.session.tool_wants_text())
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {
@@ -306,7 +319,7 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     // The art the drag started with: the release rolls the move back to it, and an Alt-copy's
     // copies, selected while it previews, go with that.
     let ids = it.selection.objects.clone();
-    egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
+    widgets::drag_art(ui.ctx(), st.uid, ids);
     true
 }
 
@@ -314,6 +327,9 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
 /// panel that takes the art ([`widgets::PanelDrag::Art`]) takes it where it was, and no move is
 /// left open (#2826). The art stays where it last moved while the pointer is over the panel.
 pub(crate) fn release_over_panel(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    // A floating window's pane, or the main window's while the current window floats, takes the
+    // art first.
+    super::release_on_noted(app, ctx);
     crate::document_drag::cleanup(app, ctx);
     let art = matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Art));
     // Over a floating panel's own OS window the pointer is gone from this window, and the release
@@ -349,8 +365,9 @@ pub(crate) fn release_art_in_window(app: &mut VectorcraftApp, ctx: &egui::Contex
     }
 }
 
-/// Roll back the art move dragged off the canvas; a panel takes the art instead.
-fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
+/// Roll back the art move dragged off the canvas, and end the canvas's drag; a panel or another
+/// window's tiled pane takes the art instead.
+pub(crate) fn end_art_move(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // With no document open there is nothing to roll back; the tool still gets its mouse-up.
     let _ = app.session.cancel_interaction();
     let view = app.view_info();
@@ -399,13 +416,16 @@ fn pressed_with(app: &mut VectorcraftApp, index: Option<usize>, pos: Point, tool
     }
 }
 
-/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error.
+/// Act on what a tool event asked the UI for (dialogs, tool switches), or show its error. When an
+/// edit the tool committed or ran no longer fits in the action being recorded, the edit stays and
+/// the status bar names the limit ([`crate::panels::actions::after_journaled_edit`]).
 pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Vec<vectorcraft_engine::UiRequest>>) {
     match r {
         Ok(reqs) => {
             for r in reqs {
                 match r {
                     vectorcraft_engine::UiRequest::Dialog(kind, p) => crate::dialogs::open_tool_dialog(app, &kind, p),
+                    vectorcraft_engine::UiRequest::Panel(panel) => activate_panel(app, &panel),
                     vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
                     vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                     vectorcraft_engine::UiRequest::Place(p) => crate::place::place_from_cursor(app, &p),
@@ -420,7 +440,16 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
                     }
                 }
             }
+            crate::panels::actions::after_journaled_edit(app);
         }
         Err(e) => app.status(e.to_string()),
+    }
+}
+
+/// Show and select `panel` where it is (`window.panel.activate`): a panel already on show stays on
+/// show, and a dock hidden by Tab shows again.
+fn activate_panel(app: &mut VectorcraftApp, panel: &str) {
+    if let Err(e) = app.run("window.panel.activate", serde_json::json!({ "panel": panel })) {
+        app.status(e);
     }
 }
