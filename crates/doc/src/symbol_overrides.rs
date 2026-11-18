@@ -2,14 +2,15 @@
 //! symbol keeps appearance changes of its own to objects in the symbol's art, while the art stays
 //! the symbol's. Editing the symbol reshapes every instance and each keeps its changes; Reset drops
 //! them. The changes are stored on the instance ([`crate::node::NodeExtras::symbol_overrides`]) and
-//! applied wherever an instance is drawn or exported ([`dynamic_art`]).
+//! applied wherever an instance is drawn or exported ([`dynamic_art`]), and an instance's fill
+//! stains the art after them ([`instance_art`]).
 
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_color::{BlendMode, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
 
-use crate::{Node, NodeKind};
+use crate::{AppearanceItem, Node, NodeKind};
 
 /// Deepest object an override may name: groups nested this deep in the symbol's art.
 pub const MAX_PATH_DEPTH: usize = 64;
@@ -49,6 +50,10 @@ impl SymbolOverride {
                     r.style.fill = p.clone();
                 }
                 if let Some(p) = &self.stroke {
+                    // A painted stroke on characters without a weight gets 1 pt, as a path's does.
+                    if !p.is_none() && r.style.stroke_width == 0.0 {
+                        r.style.stroke_width = 1.0;
+                    }
                     r.style.stroke = p.clone();
                 }
             }
@@ -57,6 +62,14 @@ impl SymbolOverride {
                 n.appearance.set_fill(p.clone());
             }
             if let Some(p) = &self.stroke {
+                // A stroke without paint has no weight; painting it gives it 1 pt.
+                if !p.is_none()
+                    && let Some(s) = n.appearance.stroke_mut()
+                    && s.paint.is_none()
+                    && s.width == 0.0
+                {
+                    s.width = 1.0;
+                }
                 n.appearance.set_stroke(p.clone());
             }
         }
@@ -67,6 +80,13 @@ impl SymbolOverride {
             n.blend = b;
         }
     }
+}
+
+/// Can Direct Selection select `n`, an object of a dynamic symbol's art, and change its fill and
+/// stroke for one instance? Paths, compound paths and type can; groups, images and every other
+/// object cannot.
+pub fn takes_part_paint(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_))
 }
 
 /// An override's path read from a file: at most [`MAX_PATH_DEPTH`] indices, so a compressed file
@@ -131,6 +151,52 @@ pub fn dynamic_art(art: &Node, inst: &Node) -> Node {
     a
 }
 
+/// Mix every solid paint under `n` towards `color` by `amount` (0..1): the Symbol Stainer.
+pub fn tint_node(n: &mut Node, color: &Color, amount: f32) {
+    let amount = amount.clamp(0.0, 1.0);
+    for it in &mut n.appearance.items {
+        let p = match it {
+            AppearanceItem::Fill(f) => &mut f.paint,
+            AppearanceItem::Stroke(s) => &mut s.paint,
+        };
+        if let Paint::Solid { color: c, .. } = p {
+            *p = Paint::solid(c.lerp(color, amount));
+        }
+    }
+    if let NodeKind::Text(t) = &mut n.kind {
+        for r in &mut t.runs {
+            for p in [&mut r.style.fill, &mut r.style.stroke] {
+                if let Paint::Solid { color: c, .. } = p {
+                    *p = Paint::solid(c.lerp(color, amount));
+                }
+            }
+        }
+    }
+    if let Some(ch) = n.children_mut() {
+        for c in ch.iter_mut() {
+            tint_node(Arc::make_mut(c), color, amount);
+        }
+    }
+}
+
+/// The stain instance `inst` puts on its symbol's art: its visible fill color and that fill's
+/// opacity (how far the art mixes towards it). `None` for an unstained instance, including one
+/// whose fill has an opacity of 0, so its art keeps its paints and their swatch links.
+pub fn stain(inst: &Node) -> Option<(Color, f32)> {
+    let f = inst.appearance.fill().filter(|f| f.visible && f.opacity > 0.0)?;
+    Some((f.paint.color()?, f.opacity))
+}
+
+/// A symbol's art for instance `inst`, as the canvas draws it: with the instance's own appearance
+/// changes to it ([`dynamic_art`]), stained by the instance's fill ([`stain`]).
+pub fn instance_art(art: &Node, inst: &Node) -> Node {
+    let mut a = dynamic_art(art, inst);
+    if let Some((c, amount)) = stain(inst) {
+        tint_node(&mut a, &c, amount);
+    }
+    a
+}
+
 /// Keep the overrides that name an object of `art` (a symbol's new art), dropping the rest.
 pub fn retain_parts(overrides: &mut Vec<SymbolOverride>, art: &Node) {
     overrides.retain(|o| part(art, &o.path).is_some());
@@ -140,7 +206,6 @@ pub fn retain_parts(overrides: &mut Vec<SymbolOverride>, art: &Node) {
 mod tests {
     use super::*;
     use crate::{Appearance, NodeId};
-    use vectorcraft_color::Color;
     use vectorcraft_geom::{Rect, shapes};
 
     fn square(id: u64) -> Arc<Node> {
@@ -178,6 +243,27 @@ mod tests {
         let mut kept = o;
         retain_parts(&mut kept, &a);
         assert_eq!(kept.len(), 1);
+    }
+
+    #[test]
+    fn a_stroke_on_type_without_a_weight_gets_one_point() {
+        let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+        let style = crate::CharStyle { stroke: Paint::None, stroke_width: 0.0, ..crate::CharStyle::default() };
+        let text = Node::new(NodeId(2), NodeKind::Text(Box::new(crate::TextObject::point(vectorcraft_geom::Point::ZERO, "Hi", style))));
+        let mut a = Node::group(NodeId(1), vec![Arc::new(text)]);
+        apply(&mut a, &[SymbolOverride { path: vec![0], stroke: Some(red.clone()), ..Default::default() }]);
+        let Some(NodeKind::Text(t)) = part(&a, &[0]).map(|n| &n.kind) else { panic!("type") };
+        assert!(t.runs.iter().all(|r| r.style.stroke == red && r.style.stroke_width == 1.0), "the stroke draws at 1 pt");
+
+        // A path whose stroke has neither paint nor weight gets 1 pt too.
+        let mut ap = Appearance::default_art();
+        if let Some(s) = ap.stroke_mut() {
+            (s.paint, s.width) = (Paint::None, 0.0);
+        }
+        let path = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), ap);
+        let mut a = Node::group(NodeId(1), vec![Arc::new(path)]);
+        apply(&mut a, &[SymbolOverride { path: vec![0], stroke: Some(red.clone()), ..Default::default() }]);
+        assert_eq!(part(&a, &[0]).unwrap().appearance.stroke_width(), 1.0);
     }
 
     #[test]

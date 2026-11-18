@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use kurbo::Shape;
 use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
+use vectorcraft_doc::overprint::is_white;
 use vectorcraft_doc::{
     AppearanceItem, ColorMode, Document, Effect, ImageBlob, LineCap, LineJoin, Node, NodeKind, StrokeAlign, StrokeLayer, SymbolBoxes, TextObject,
 };
@@ -42,13 +43,126 @@ const SPOT_GRADIENTS_L2: &str =
     "gradients mixing a spot color with other inks are written in process colors at PostScript Level 2 (Level 3 keeps the spot inks)";
 const SPOT_GRADIENTS_SHARED: &str = "gradients whose spot inks can't share a DeviceN color space are written without the spot inks";
 const SPOT_GRADIENTS_PERCEPTUAL: &str = "Perceptual gradients of spot colors are written in process colors";
+const SPOT_GRADIENTS_HUE: &str = "gradients of spot colors mixed around the hue wheel are written in process colors";
+const CONIC_WEDGES: &str = "conic gradients are written as solid wedges (EPS has no conic shading)";
+const DIAMOND_QUADRANTS: &str = "diamond gradients are written as four linear gradients (EPS has no diamond shading)";
+const SPREAD_CAPPED: &str =
+    "gradients that repeat or reflect are written with at most 256 runs of their stops (at most 16384 stops); they pad past those";
+/// Wedges a conic gradient is written as: one a degree.
+const CONIC_WEDGE_COUNT: usize = 360;
+/// Decimals of a smooth shading's stitching function bounds (stop offsets, 0 to 1).
+const BOUNDS_PLACES: u32 = 7;
 /// The most colorants a DeviceN color space may have (PostScript's limit).
 const MAX_DEVICE_N: usize = 32;
 const MISSING_PATTERN: &str = "missing patterns are written as mid-grey";
 const TOO_LARGE: &str = "the artwork is too large for EPS: what follows 256 MB of PostScript was left out";
 /// The most PostScript the page body may grow to: symbols and patterns that hold one another
-/// expand into every instance, so nesting depth alone doesn't bound the output.
+/// expand into every instance, so nesting depth alone doesn't bound the output. An image placed
+/// more than once counts its data once.
 const MAX_BODY: usize = 256 << 20;
+/// Most compressed bytes in one string of an image's samples at Level 2 (under PostScript's
+/// 65,535-byte string limit).
+const IMAGE_CHUNK: usize = 48 << 10;
+/// The start of the procedure that reads an image's data from the lines after it.
+const INLINE_SOURCE: &str = "{ /VCsrc currentfile /ASCII85Decode filter def\n";
+
+/// An image as written: what sets up its color, its image dictionary and its compressed samples.
+/// Placed once, it is written where it is drawn, its data following the operators that read it.
+/// Placed more than once, its samples are written once in the setup as `VCim<i>` (a reusable
+/// stream at Level 3, an array of strings at Level 2) and each placement reads them from there.
+struct ImageCode {
+    /// The color space or ink operators, each line ending in a line break.
+    prelude: String,
+    /// `<< /ImageType … /ImageMatrix […]` with its mask colors: the dictionary up to its data source.
+    dict: String,
+    /// The decoding filter of the samples: `/FlateDecode` or `/RunLengthDecode`.
+    filter: &'static str,
+    /// `image` or `imagemask`.
+    op: &'static str,
+    /// The compressed samples in ASCII85, as lines with the end marker.
+    ascii: String,
+    /// The compressed samples, kept at Level 2, where a reused image's samples are written as
+    /// strings of at most [`IMAGE_CHUNK`] bytes.
+    data: Vec<u8>,
+    /// How many placements in the page draw it.
+    uses: usize,
+    /// The length of [`ImageCode::push_inline`]'s text.
+    inline_len: usize,
+    /// The length of [`ImageCode::reference`]'s text.
+    ref_len: usize,
+}
+
+impl ImageCode {
+    /// A hash of everything that is written for the image: equal images have equal keys.
+    fn content_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&self.prelude, &self.dict, self.filter, self.op, &self.ascii).hash(&mut h);
+        h.finish()
+    }
+
+    /// Is everything written for `other` the same as for this image?
+    fn same_image(&self, other: &ImageCode) -> bool {
+        self.prelude == other.prelude && self.dict == other.dict && self.filter == other.filter && self.op == other.op && self.ascii == other.ascii
+    }
+
+    /// The operators and data that draw the image where it is placed.
+    fn push_inline(&self, s: &mut String) {
+        s.push_str(&self.prelude);
+        s.push_str(INLINE_SOURCE);
+        s.push_str(&self.dict);
+        s.push_str(&self.inline_read());
+        s.push_str(&self.ascii);
+    }
+
+    /// The end of the procedure [`ImageCode::push_inline`] writes. The procedure is read whole
+    /// before it runs: the image data follows it, and flushing the ASCII85 filter afterwards reads
+    /// past its end marker.
+    fn inline_read(&self) -> String {
+        format!("\n/DataSource VCsrc {} filter >> {}\nVCsrc flushfile }} exec\n", self.filter, self.op)
+    }
+
+    /// The operators that draw the image `VCim<i>` holds, for an image placed more than once.
+    fn reference(&self, i: usize, level: Level) -> String {
+        match level {
+            // The stream is read again from its start.
+            Level::Three => {
+                format!("{}VCim{i} resetfile\n{}\n/DataSource VCim{i} {} filter >> {}\n", self.prelude, self.dict, self.filter, self.op)
+            }
+            // A procedure gives the strings in turn, then an empty string: the end of the data.
+            Level::Two => format!(
+                "{}/VCi 0 def\n{}\n/DataSource {{VCi VCim{i} length lt {{VCim{i} VCi get /VCi VCi 1 add def}} {{()}} ifelse}} {} filter >> {}\n",
+                self.prelude, self.dict, self.filter, self.op
+            ),
+        }
+    }
+
+    /// The setup's definition of `VCim<i>`: the image's compressed samples, once.
+    fn resource(&self, i: usize, level: Level) -> String {
+        let mut s = String::with_capacity(self.ascii.len() + 200);
+        match level {
+            Level::Three => {
+                // The stream reads all of its data when it is made, so the data follows the
+                // procedure that makes it.
+                let intent = if self.op == "imagemask" { 1 } else { 0 };
+                let _ = writeln!(
+                    s,
+                    "{{ /VCsrc currentfile /ASCII85Decode filter def\n/VCim{i} VCsrc << /Intent {intent} /AsyncRead false /CloseSource false >> /ReusableStreamDecode filter def\nVCsrc flushfile }} exec"
+                );
+                s.push_str(&self.ascii);
+            }
+            Level::Two => {
+                let _ = writeln!(s, "/VCim{i} [");
+                for chunk in self.data.chunks(IMAGE_CHUNK) {
+                    s.push_str("<~");
+                    s.push_str(&ps::ascii85(chunk));
+                }
+                s.push_str("] def\n");
+            }
+        }
+        s
+    }
+}
 
 /// What the walk wrote: definitions for the setup, the page, the spot colours it uses (name and
 /// CMYK equivalent) and the warnings.
@@ -100,6 +214,14 @@ impl GradientSpace {
             GradientSpace::Inks(_, n) => *n,
         }
     }
+
+    /// Whether components `c` in this space are paper white: no ink, or full light.
+    fn paper(&self, c: &[f32]) -> bool {
+        match self {
+            GradientSpace::Process(Space::Gray | Space::Rgb) => c.iter().all(|v| *v >= 1.0),
+            GradientSpace::Process(Space::Cmyk) | GradientSpace::Inks(..) => c.iter().all(|v| *v <= 0.0),
+        }
+    }
 }
 
 /// A gradient's stops as written: offsets from 0 to 1 and the components in its space.
@@ -149,12 +271,37 @@ pub(crate) struct Scene<'a> {
     device_n: Vec<String>,
     warnings: Vec<String>,
     brushes: Option<Vec<vectorcraft_brush::Brush>>,
-    /// Image keys → what draws them (`None`: left out).
-    images: HashMap<String, Option<Arc<String>>>,
+    /// Image keys → the index in `codes` of what draws them (`None`: left out).
+    images: HashMap<String, Option<usize>>,
     /// The source key and solid paint together identify a colorized encoding.
-    colorized_images: HashMap<(String, String), Option<Arc<String>>>,
+    colorized_images: HashMap<(String, String), Option<usize>>,
+    /// Image keys whose encoding didn't fit under the page limit → how much its first placement
+    /// adds to the body. The image is encoded again only once the page has room for that.
+    too_large_images: HashMap<String, usize>,
+    /// The same for colorized encodings, by `colorized_images`' keys.
+    too_large_colorized: HashMap<(String, String), usize>,
+    /// How many times an image or a colorized image was encoded.
+    #[cfg(test)]
+    encodes: usize,
+    /// Freeform gradients' images by [`ImageCode::content_key`] → their indices in `codes`: a field
+    /// encoded the same as one already kept draws from it.
+    fields: HashMap<u64, Vec<usize>>,
+    /// The encoded images.
+    codes: Vec<ImageCode>,
+    /// Where in `body` each placement of an encoded image goes (in order) and the index of its code.
+    placements: Vec<(usize, usize)>,
+    /// What the placements in `placements` add to `body`'s length when the page is finished.
+    pending: usize,
+    /// The most the page body may grow to ([`MAX_BODY`]).
+    max_body: usize,
     /// Symbols and brush art being written inside one another.
     nest: u32,
+    /// The document is a separation's plate: every color is the gray of one ink's coverage
+    /// ([`Self::on_plate`]).
+    plate: bool,
+    /// The gradient being painted overprints on a plate: where it is paper white it puts none of
+    /// the plate's ink down, and the plate below it is left as it is ([`Self::inked_spans`]).
+    keep_below: bool,
 }
 
 impl<'a> Scene<'a> {
@@ -173,8 +320,58 @@ impl<'a> Scene<'a> {
             brushes: None,
             images: HashMap::new(),
             colorized_images: HashMap::new(),
+            too_large_images: HashMap::new(),
+            too_large_colorized: HashMap::new(),
+            #[cfg(test)]
+            encodes: 0,
+            fields: HashMap::new(),
+            codes: vec![],
+            placements: vec![],
+            pending: 0,
+            max_body: MAX_BODY,
             nest: 0,
+            plate: false,
+            keep_below: false,
         }
+    }
+
+    /// This scene drawing a separation's plate when `plate` is true: an overprinting gradient
+    /// paints only where it puts the plate's ink down, as an overprinting solid color that puts
+    /// none down is drawn as nothing on it.
+    pub fn on_plate(mut self, plate: bool) -> Self {
+        self.plate = plate;
+        self
+    }
+
+    /// This scene with a page body of at most `max` bytes.
+    #[cfg(test)]
+    pub fn with_max_body(mut self, max: usize) -> Self {
+        self.max_body = max;
+        self
+    }
+
+    /// [`Self::run`], with how many placements draw each encoded image the scene kept, and the
+    /// indices in `codes` that its image, colorized-image and field caches name.
+    #[cfg(test)]
+    pub fn run_with_codes(mut self) -> (Page, Vec<usize>, Vec<usize>) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let uses = self.codes.iter().map(|c| c.uses).collect();
+        let cached = self.images.values().chain(self.colorized_images.values()).flatten().chain(self.fields.values().flatten()).copied().collect();
+        (self.page(), uses, cached)
+    }
+
+    /// [`Self::run`], with how many times the scene encoded an image or a colorized image.
+    #[cfg(test)]
+    pub fn run_counting_encodes(mut self) -> (Page, usize) {
+        let doc = self.doc;
+        for l in &doc.layers {
+            self.node(l, false);
+        }
+        let encodes = self.encodes;
+        (self.page(), encodes)
     }
 
     pub fn run(mut self) -> Page {
@@ -191,7 +388,27 @@ impl<'a> Scene<'a> {
         self.page()
     }
 
-    fn page(self) -> Page {
+    fn page(mut self) -> Page {
+        if !self.placements.is_empty() {
+            let level = self.o.level;
+            let mut body = String::with_capacity(self.body.len().saturating_add(self.pending));
+            let mut at = 0;
+            for &(offset, i) in &self.placements {
+                body.push_str(self.body.get(at..offset).unwrap_or_default());
+                at = offset;
+                let Some(code) = self.codes.get(i) else { continue };
+                if code.uses > 1 {
+                    body.push_str(&code.reference(i, level));
+                } else {
+                    code.push_inline(&mut body);
+                }
+            }
+            body.push_str(self.body.get(at..).unwrap_or_default());
+            self.body = body;
+            for (i, code) in self.codes.iter().enumerate().filter(|(_, c)| c.uses > 1) {
+                self.setup.push_str(&code.resource(i, level));
+            }
+        }
         let custom = self
             .spots
             .iter()
@@ -329,17 +546,20 @@ impl<'a> Scene<'a> {
         if let NodeKind::Layer { template: true, .. } = n.kind {
             return;
         }
-        if self.body.len() >= MAX_BODY {
+        if self.size() >= self.max_body {
             self.warn(TOO_LARGE);
             return;
         }
+        // Off the region, an object is still written when brush art painted along its brushed
+        // strokes, or those of the objects in it, can reach the region.
+        let off = |b: Rect, reach: f64| !overlaps(b.inflate(1.0 + reach, 1.0 + reach), self.o.region);
         match n.visual_bounds_with(&self.symbols) {
-            Some(b) if !force && !overlaps(b.inflate(1.0, 1.0), self.o.region) => return,
+            Some(b) if !force && off(b, 0.0) && off(b, vectorcraft_brush::reach_within(n)) => return,
             None if !n.is_container() => return,
             _ => {}
         }
         self.note_losses(n);
-        let was = self.body.len();
+        let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -359,6 +579,8 @@ impl<'a> Scene<'a> {
             }
             NodeKind::Text(t) => self.text(n, t),
             NodeKind::Image(im) => {
+                let shown = self.doc.shown_image(n, im);
+                let im = &*shown;
                 let blob = self.doc.image_blob(im);
                 match n.extras().colorize.as_deref() {
                     Some(p @ Paint::Solid { .. }) if blob.is_none_or(|b| b.gray_source().is_some()) => {
@@ -370,7 +592,7 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
+                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
                 {
                     self.nest += 1;
                     self.node(&art, true);
@@ -389,10 +611,30 @@ impl<'a> Scene<'a> {
                     self.node(c, false);
                 }
             }
+            // Ruler guides draw on screen only.
+            NodeKind::RulerGuide { .. } => {}
         }
-        if self.body.len() > MAX_BODY {
+        if self.size() > self.max_body {
             self.body.truncate(was);
+            self.unplace(placed);
+            self.forget_codes(codes);
             self.warn(TOO_LARGE);
+        }
+    }
+
+    /// How long the page body will be: what is written and what its image placements add.
+    fn size(&self) -> usize {
+        self.body.len().saturating_add(self.pending)
+    }
+
+    /// Take back the image placements after the first `n`, last first.
+    fn unplace(&mut self, n: usize) {
+        while self.placements.len() > n {
+            let Some((_, i)) = self.placements.pop() else { break };
+            let Some(code) = self.codes.get_mut(i) else { continue };
+            code.uses = code.uses.saturating_sub(1);
+            let cost = if code.uses == 0 { code.inline_len } else { code.ref_len };
+            self.pending = self.pending.saturating_sub(cost);
         }
     }
 
@@ -472,11 +714,18 @@ impl<'a> Scene<'a> {
                 self.line("q");
                 push_path(&mut self.body, bp);
                 self.body.push_str(clip_op(rule));
-                self.paint_area(p, bounds, bp.bounding_box());
+                self.paint_overprinting(overprint, p, bounds, bp.bounding_box());
                 self.line("Q");
             }
         }
         self.overprint_off(on);
+    }
+
+    /// [`Self::paint_area`] for a fill or stroke that overprints when `overprint` is true.
+    fn paint_overprinting(&mut self, overprint: bool, p: &Paint, bounds: Rect, area: Rect) {
+        let keep = std::mem::replace(&mut self.keep_below, self.plate && overprint);
+        self.paint_area(p, bounds, area);
+        self.keep_below = keep;
     }
 
     /// Paint all of `area` (inside the current clip) with gradient or pattern `p`, placed on
@@ -569,7 +818,7 @@ impl<'a> Scene<'a> {
                         self.line("q");
                         push_path(&mut self.body, bp);
                         self.line("strokepath W");
-                        self.paint_area(p, paint_bounds, w.reach(st, bounds));
+                        self.paint_overprinting(st.overprint, p, paint_bounds, w.reach(st, bounds));
                         self.line("Q");
                     }
                 }
@@ -753,18 +1002,21 @@ impl<'a> Scene<'a> {
     /// process inks the stops use, in CMYK order, and the spot inks, in the order the stops name
     /// them. Paper white adds no ink, a gray stop is black ink, and a spot stop's process plates
     /// print with its ink. An off-center midpoint is a stop
-    /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
-    /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method;
-    /// it is then written in process colors.
+    /// with the inks halfway between its two stops. Stop opacity is left out, so the stops that
+    /// color a stretch ([`vectorcraft_color::Gradient::reached_stops`]) name the inks, a spot ink
+    /// only above a tint of 0 or with process plates; the others are written with no ink. `None` for a gradient without a
+    /// spot ink, and, with a warning, for one whose inks can't be kept or that is mixed by the
+    /// Perceptual method or around the hue wheel; it is then written in process colors.
     fn ink_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<(GradientSpace, RawStops)> {
         let doc = self.doc;
         let spot_of = |s: &vectorcraft_color::GradientStop| -> Option<String> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot)).map(str::to_string)
         };
+        let reached = g.reached_stops();
         // The spot inks, collected up to one more than a DeviceN space can hold.
         let mut names: Vec<String> = vec![];
-        for s in &g.stops {
-            if let Some(n) = spot_of(s)
+        for (s, &r) in g.stops.iter().zip(&reached) {
+            if let Some(n) = spot_of(s).filter(|_| r && (s.tint > 0.0 || s.plates.is_some()))
                 && !names.contains(&n)
             {
                 names.push(n);
@@ -777,7 +1029,7 @@ impl<'a> Scene<'a> {
             return None;
         }
         if !g.method.is_classic() {
-            self.warn(SPOT_GRADIENTS_PERCEPTUAL);
+            self.warn(if g.method.is_hue() { SPOT_GRADIENTS_HUE } else { SPOT_GRADIENTS_PERCEPTUAL });
             return None;
         }
         if names.len() > MAX_DEVICE_N {
@@ -793,9 +1045,10 @@ impl<'a> Scene<'a> {
         };
         // Each stop's ink coverage: the four process inks, then one tint per spot ink.
         let mut inks: Vec<Vec<f32>> = Vec::with_capacity(g.stops.len());
-        for s in &g.stops {
+        for (s, &r) in g.stops.iter().zip(&reached) {
             let mut v = vec![0.0; 4 + names.len()];
             match spot_of(s) {
+                _ if !r => {}
                 Some(n) => {
                     if let Some(i) = names.iter().position(|m| *m == n) {
                         v[4 + i] = unit(s.tint);
@@ -929,13 +1182,43 @@ impl<'a> Scene<'a> {
         (space, out)
     }
 
-    /// Paint all of `area` (inside the current clip) with linear or radial gradient `g`, placed on
-    /// `bounds`: a smooth shading at Level 3, else stepped fills.
+    /// Paint all of `area` (inside the current clip) with linear, radial, conic or diamond gradient
+    /// `g`, placed on `bounds`: a smooth shading at Level 3, else stepped fills (a conic: wedges at
+    /// both levels; a diamond: four linear gradients, [`Self::diamond_quadrants`]). Overprinting
+    /// on a plate, it is clipped to the levels where it puts ink down ([`Self::inked_spans`]).
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
         let geom = g.resolve(bounds);
+        // One mixed around the hue wheel that reflects is repeated from its curve's stops, which
+        // keep no swatch links: the warning [`Self::ink_stops`] gives the others.
+        if g.gradient.method.is_hue() && g.gradient.is_spread() && g.gradient.spread == vectorcraft_color::GradientSpread::Reflect {
+            let doc = self.doc;
+            let spot = |s: &vectorcraft_color::GradientStop| {
+                (s.tint > 0.0 || s.plates.is_some()) && s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))
+            };
+            if g.gradient.stops.iter().zip(g.gradient.reached_stops()).any(|(s, r)| r && spot(s)) {
+                self.warn(SPOT_GRADIENTS_HUE);
+            }
+        }
+        // A linear, radial or diamond gradient that repeats or reflects: PostScript's shadings
+        // pad past their ends, so its stops are repeated as many times as the area needs.
+        if let Some(padded) = g.gradient.padded_over(&geom, area) {
+            if padded.capped {
+                self.warn(SPREAD_CAPPED);
+            }
+            let geom = padded.geom;
+            let paint = GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), ..g.clone() };
+            return self.gradient(&paint, bounds, area);
+        }
+        // One whose levels over the area are not finite (a vector of no length): its stops
+        // repeated along the vector, padding past it.
+        if g.gradient.is_spread() && g.gradient.kind != GradientKind::Conic {
+            self.warn(SPREAD_CAPPED);
+            let paint = GradientPaint { gradient: g.gradient.unrolled().into_owned(), ..g.clone() };
+            return self.gradient(&paint, bounds, area);
+        }
         let (space, stops) = self.gradient_stops(&g.gradient);
         if !stops.windows(2).any(|w| w[1].0 > w[0].0) {
-            if let Some((_, c)) = stops.first() {
+            if let Some((_, c)) = stops.first().filter(|(_, c)| !(self.keep_below && space.paper(c))) {
                 self.set_comps(&space, c);
                 self.rect_fill(area);
             }
@@ -943,18 +1226,47 @@ impl<'a> Scene<'a> {
         }
         let space = &space;
         let smooth = self.o.level == Level::Three && !self.o.compatible_gradients;
+        let spans = if g.gradient.kind == GradientKind::Conic { None } else { self.inked_spans(space, &stops, smooth) };
         match g.gradient.kind {
+            GradientKind::Conic => self.conic_steps(&geom, area, space, &stops, &g.gradient),
+            GradientKind::Diamond => {
+                // Its levels are diamonds about the center, the square's edge at 1.
+                let frame = geom.diamond_frame();
+                if let Some(spans) = &spans {
+                    let Some(frame) = frame else {
+                        // Without a frame it is its last stop everywhere.
+                        if stops.last().is_some_and(|(_, c)| !space.paper(c)) {
+                            self.diamond_quadrants(&geom, area, space, &stops, smooth);
+                        }
+                        return;
+                    };
+                    let level = |t: f64| (t > 0.0).then(|| frame * BezPath::from_vec(diamond(t)));
+                    self.line("q");
+                    let clipped = self.clip_rings(spans, area.inflate(1.0, 1.0), level);
+                    if clipped {
+                        self.diamond_quadrants(&geom, area, space, &stops, smooth);
+                    }
+                    self.line("Q");
+                    return;
+                }
+                self.diamond_quadrants(&geom, area, space, &stops, smooth);
+            }
             GradientKind::Radial => {
                 let r = geom.length().max(1e-6);
                 let squash = geom.radial_squash();
                 let inv = squash.inverse();
                 let (f, c) = (inv * geom.focal_point(), geom.start);
+                let local = inv.transform_rect_bbox(area);
                 self.line("q");
                 let _ = writeln!(self.body, "{} cm", ps::matrix(squash));
-                if smooth {
-                    self.shading(3, space, &[f.x, f.y, 0.0, c.x, c.y, r], &stops);
-                } else {
-                    self.radial_steps(f, c, r, inv.transform_rect_bbox(area), space, &stops);
+                // Its levels are circles from the focal point, at 1 the circle of radius `r`.
+                let level = |t: f64| (t > 0.0).then(|| kurbo::Circle::new(f + (c - f) * t, r * t).to_path(0.01));
+                if spans.as_ref().is_none_or(|spans| self.clip_rings(spans, local.inflate(1.0, 1.0), level)) {
+                    if smooth {
+                        self.shading(3, space, &[f.x, f.y, 0.0, c.x, c.y, r], &stops);
+                    } else {
+                        self.radial_steps(f, c, r, local, space, &stops);
+                    }
                 }
                 self.line("Q");
             }
@@ -963,12 +1275,205 @@ impl<'a> Scene<'a> {
                 if s.distance(e) < 1e-9 {
                     e = s + Vec2::new(1.0, 0.0);
                 }
-                if smooth {
-                    self.shading(2, space, &[s.x, s.y, e.x, e.y], &stops);
+                if let Some(spans) = &spans {
+                    self.line("q");
+                    if self.clip_strips(spans, s, e, area) {
+                        self.linear(s, e, area, space, &stops, smooth);
+                    }
+                    self.line("Q");
                 } else {
-                    self.linear_steps(s, e, area, space, &stops);
+                    self.linear(s, e, area, space, &stops, smooth);
                 }
             }
+        }
+    }
+
+    /// A linear gradient from `s` to `e` over `area`: a smooth shading, else stepped fills.
+    fn linear(&mut self, s: Point, e: Point, area: Rect, space: &GradientSpace, stops: &[(f64, Vec<f32>)], smooth: bool) {
+        if smooth {
+            self.shading(2, space, &[s.x, s.y, e.x, e.y], stops);
+        } else {
+            self.linear_steps(s, e, area, space, stops);
+        }
+    }
+
+    /// Where an overprinting gradient with `stops` in `space` puts ink on a plate
+    /// ([`Self::keep_below`]): the spans of its levels outside every stretch between two stops of
+    /// paper white and outside the padding past an end painted paper white, in order, an end
+    /// padding with ink unbounded. The padding takes the end stop's color when stepped and the
+    /// end stretch's color when `smooth` ([`Self::shading`]); the two differ when two stops share
+    /// the end's offset. `None` when the gradient puts ink everywhere or does not overprint on a
+    /// plate; empty when it puts none down.
+    fn inked_spans(&self, space: &GradientSpace, stops: &[(f64, Vec<f32>)], smooth: bool) -> Option<Vec<(f64, f64)>> {
+        if !self.keep_below {
+            return None;
+        }
+        let stretches: Vec<_> = stops.windows(2).filter(|w| w[1].0 > w[0].0).collect();
+        let (first, last) = (stretches.first()?, stretches.last()?);
+        let (start, end) = if smooth { (&first[0].1, &last[1].1) } else { (&stops.first()?.1, &stops.last()?.1) };
+        let (before, after) = (space.paper(start), space.paper(end));
+        let mut blank: Vec<(f64, f64)> = vec![];
+        let mut add = |a: f64, b: f64| match blank.last_mut() {
+            Some(l) if l.1 >= a => l.1 = l.1.max(b),
+            _ => blank.push((a, b)),
+        };
+        if before {
+            add(f64::NEG_INFINITY, first[0].0);
+        }
+        for w in &stretches {
+            if space.paper(&w[0].1) && space.paper(&w[1].1) {
+                add(w[0].0, w[1].0);
+            }
+        }
+        if after {
+            add(last[1].0, f64::INFINITY);
+        }
+        if blank.is_empty() {
+            return None;
+        }
+        let mut inked = vec![];
+        let mut from = f64::NEG_INFINITY;
+        for (a, b) in blank {
+            if a > from {
+                inked.push((from, a));
+            }
+            from = b;
+        }
+        if from < f64::INFINITY {
+            inked.push((from, f64::INFINITY));
+        }
+        Some(inked)
+    }
+
+    /// Clip to the parts of `area` where a linear gradient from `s` to `e` has a level in `spans`:
+    /// a strip across the gradient for each. False, with nothing written, when no span reaches
+    /// into `area`.
+    fn clip_strips(&mut self, spans: &[(f64, f64)], s: Point, e: Point, area: Rect) -> bool {
+        let d = e - s;
+        let len = d.hypot();
+        // Gradient space: x along the gradient (0 to 1), y across it in points.
+        let frame = Affine::new([d.x, d.y, -d.y / len, d.x / len, s.x, s.y]);
+        let local = frame.inverse().transform_rect_bbox(area.inflate(1.0, 1.0));
+        let mut bp = BezPath::new();
+        for &(a, b) in spans {
+            let (a, b) = (a.max(local.x0), b.min(local.x1));
+            if a < b {
+                bp.extend((frame * Rect::new(a, local.y0, b, local.y1).to_path(0.1)).iter());
+            }
+        }
+        self.clip_path(&bp, FillRule::NonZero)
+    }
+
+    /// Clip to the levels in `spans` of a gradient whose level `t` is bounded by `level(t)` (a
+    /// closed path holding every lower level; `None` for a level without area): for each span
+    /// the ring between its levels, an unbounded end at `outer`, even-odd. False, with nothing
+    /// written, when no span has area.
+    fn clip_rings(&mut self, spans: &[(f64, f64)], outer: Rect, level: impl Fn(f64) -> Option<BezPath>) -> bool {
+        let mut bp = BezPath::new();
+        for &(a, b) in spans {
+            let edge = if b.is_finite() { level(b) } else { Some(outer.to_path(0.1)) };
+            let Some(edge) = edge else { continue };
+            bp.extend(edge.iter());
+            if let Some(inner) = level(a).filter(|_| a.is_finite()) {
+                bp.extend(inner.iter());
+            }
+        }
+        self.clip_path(&bp, FillRule::EvenOdd)
+    }
+
+    /// Clip to `bp` by `rule`. False, with nothing written, when `bp` is empty.
+    fn clip_path(&mut self, bp: &BezPath, rule: FillRule) -> bool {
+        if bp.elements().is_empty() {
+            return false;
+        }
+        push_path(&mut self.body, bp);
+        self.body.push_str(clip_op(rule));
+        true
+    }
+
+    /// A conic gradient as [`CONIC_WEDGE_COUNT`] solid wedges about its center covering `area`
+    /// (PostScript has no conic shading), each running on to the seam under the next, so no
+    /// hairline shows between neighbors ([`vectorcraft_color::GradientGeom::conic_wedges`]).
+    /// Stops of `g` that repeat or reflect get that many wedges for each time they run around.
+    fn conic_steps(
+        &mut self,
+        geom: &vectorcraft_color::GradientGeom,
+        area: Rect,
+        space: &GradientSpace,
+        stops: &[(f64, Vec<f32>)],
+        g: &vectorcraft_color::Gradient,
+    ) {
+        self.warn(CONIC_WEDGES);
+        let spread = g.spreader();
+        let at = |t: f64| match stops.windows(2).find(|w| t <= w[1].0) {
+            Some(w) if w[1].0 > w[0].0 => mix(&w[0].1, &w[1].1, ((t - w[0].0) / (w[1].0 - w[0].0)).clamp(0.0, 1.0) as f32),
+            Some(w) => w[1].1.clone(),
+            None => stops.last().map_or_else(Vec::new, |s| s.1.clone()),
+        };
+        let count = g.conic_wedge_count(CONIC_WEDGE_COUNT);
+        // Overprinting on a plate: clipped to the wedges that put ink down, each up to the next.
+        let clipped = self.keep_below && {
+            let wedges = geom.conic_wedges(area, count, false);
+            let inked: Vec<_> = wedges.iter().filter(|(_, t)| !space.paper(&at(spread(*t)))).collect();
+            if inked.is_empty() {
+                return;
+            }
+            inked.len() < wedges.len() && {
+                let mut bp = BezPath::new();
+                for (pts, _) in inked {
+                    bp.extend(BezPath::from_vec(polygon(pts)).iter());
+                }
+                self.line("q");
+                self.clip_path(&bp, FillRule::NonZero)
+            }
+        };
+        for (pts, t) in geom.conic_wedges(area, count, true) {
+            self.set_comps(space, &at(spread(t)));
+            for (i, p) in pts.iter().enumerate() {
+                push_nums(&mut self.body, &[p.x, p.y]);
+                self.line(if i == 0 { "newpath moveto" } else { "lineto" });
+            }
+            self.line("closepath fill");
+        }
+        if clipped {
+            self.line("Q");
+        }
+    }
+
+    /// A diamond gradient over `area` as four linear gradients, each clipped to a quadrant of its
+    /// frame and equal to the diamond there (PostScript has no diamond shading;
+    /// [`vectorcraft_color::GradientGeom::diamond_quadrants`]): smooth axial shadings, else
+    /// stepped fills. Each quadrant but the last runs on under the next (stops are opaque here),
+    /// so no hairline shows between them. A diamond without an extent is its last stop.
+    fn diamond_quadrants(
+        &mut self,
+        geom: &vectorcraft_color::GradientGeom,
+        area: Rect,
+        space: &GradientSpace,
+        stops: &[(f64, Vec<f32>)],
+        smooth: bool,
+    ) {
+        let Some(quadrants) = geom.diamond_quadrants(area) else {
+            if let Some((_, c)) = stops.last() {
+                self.set_comps(space, c);
+                self.rect_fill(area);
+            }
+            return;
+        };
+        self.warn(DIAMOND_QUADRANTS);
+        for (pts, q) in quadrants {
+            self.line("q");
+            for (i, p) in pts.iter().enumerate() {
+                push_nums(&mut self.body, &[p.x, p.y]);
+                self.line(if i == 0 { "newpath moveto" } else { "lineto" });
+            }
+            self.line("closepath clip newpath");
+            if smooth {
+                self.shading(2, space, &[q.start.x, q.start.y, q.end.x, q.end.y], stops);
+            } else {
+                self.linear_steps(q.start, q.end, area, space, stops);
+            }
+            self.line("Q");
         }
     }
 
@@ -993,8 +1498,12 @@ impl<'a> Scene<'a> {
                     f.push('\n');
                 }
                 f.push_str("] /Bounds [");
-                let bounds: Vec<f64> = many.iter().skip(1).map(|w| w[0].0).collect();
-                push_nums(&mut f, &bounds);
+                // Seven decimals: a gradient's stops repeated hundreds or thousands of times
+                // (`Gradient::padded_over`) keep their places in each run.
+                for w in many.iter().skip(1) {
+                    ps::push_num_places(&mut f, w[0].0, BOUNDS_PLACES);
+                    f.push(' ');
+                }
                 f.push_str("] /Encode [");
                 f.push_str(&"0 1 ".repeat(many.len()));
                 f.push_str("] >>");
@@ -1098,6 +1607,7 @@ impl<'a> Scene<'a> {
     /// Paint all of `area` with an image of freeform gradient `g` placed on `bounds`, sampled at
     /// the document's raster effects resolution (at most [`MAX_FIELD_PX`] a side).
     fn field_image(&mut self, g: &GradientPaint, bounds: Rect, area: Rect) {
+        use vectorcraft_color::cms::Model;
         use vectorcraft_color::freeform::{painted_box, spread_scale};
         let Some(b) = painted_box(bounds) else { return };
         let area = area.abs();
@@ -1105,16 +1615,116 @@ impl<'a> Scene<'a> {
         if !(long > 1e-9 && long.is_finite()) {
             return;
         }
+        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
+        if !invertible(place) {
+            return;
+        }
+        if self.size().saturating_add(64) > self.max_body {
+            self.warn(TOO_LARGE);
+            return;
+        }
         let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
         let (cols, rows) = (along(area.width()), along(area.height()));
-        let field = g.freeform_on(b).field_with(spread_scale(b), &|c| c.to_rgb());
+        let field = g.freeform_on(b).model_field(spread_scale(b));
         let q = |v: f32| (unit(v) * 255.0).round() as u8;
-        let rgba: Vec<u8> = field.grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
-        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
-        if let Some(image) = self.encode_image(&rgba, u32::from(cols), u32::from(rows)) {
-            self.place_image(&image, place);
+        let (w, h) = (u32::from(cols), u32::from(rows));
+        // Overprinting on a plate: the cells of paper white put none of the ink down, so they are
+        // left out, as clear pixels at Level 3 and outside a clip of the other cells at Level 2.
+        let blank: Option<Vec<bool>> = self.keep_below.then(|| field.grid(area, cols, rows).map(|(c, _)| is_white(&Paint::solid(c))).collect());
+        let blank = blank.filter(|b| b.contains(&true));
+        if blank.as_ref().is_some_and(|b| !b.contains(&false)) {
+            return;
         }
+        let keyed = self.o.level == Level::Three;
+        let clear = |i: usize, a: u8| if keyed && blank.as_ref().is_some_and(|b| b[i]) { 0 } else { a };
+        let image = if field.model() == Some(Model::Cmyk) || (self.cmyk && field.model() == Some(Model::Gray)) {
+            let inks: Vec<u8> = field
+                .grid(area, cols, rows)
+                .enumerate()
+                .flat_map(|(i, (color, a))| {
+                    let [c, m, y, k] = color.to_cmyk();
+                    [q(c), q(m), q(y), q(k), clear(i, q(a))]
+                })
+                .collect();
+            self.encode_inks(&inks, w, h)
+        } else {
+            let rgba: Vec<u8> =
+                field.display_grid(area, cols, rows).enumerate().flat_map(|(i, (c, a))| [q(c[0]), q(c[1]), q(c[2]), clear(i, q(a))]).collect();
+            self.encode_image(&rgba, w, h)
+        };
+        let Some(image) = image else { return };
+        let cells = blank.filter(|_| !keyed).map(|b| {
+            let (cw, ch) = (area.width() / f64::from(cols), area.height() / f64::from(rows));
+            let mut bp = BezPath::new();
+            for (row, line) in b.chunks(usize::from(cols)).enumerate() {
+                let mut col = 0;
+                while col < line.len() {
+                    let start = col;
+                    while col < line.len() && !line[col] {
+                        col += 1;
+                    }
+                    if col > start {
+                        let (y0, y1) = (area.y0 + row as f64 * ch, area.y0 + (row + 1) as f64 * ch);
+                        bp.extend(Rect::new(area.x0 + start as f64 * cw, y0, area.x0 + col as f64 * cw, y1).to_path(0.1).iter());
+                    }
+                    col += 1;
+                }
+            }
+            bp
+        });
+        if let Some(bp) = &cells {
+            // Each row's run of cells is a rectangle of five path elements, about 60 bytes.
+            if self.size().saturating_add(bp.elements().len().saturating_mul(12)).saturating_add(image.inline_len) > self.max_body {
+                self.warn(TOO_LARGE);
+                return;
+            }
+            self.line("q");
+            self.clip_path(bp, FillRule::NonZero);
+        }
+        self.place_field(image, place);
+        if cells.is_some() {
+            self.line("Q");
+        }
+    }
+
+    /// Place freeform gradient image `image` on the unit square mapped by `place`, drawn from an
+    /// image already kept when one is encoded the same.
+    fn place_field(&mut self, image: ImageCode, place: Affine) {
+        let key = image.content_key();
+        let found =
+            self.fields.get(&key).and_then(|bucket| bucket.iter().copied().find(|&i| self.codes.get(i).is_some_and(|c| c.same_image(&image))));
+        let i = match found {
+            Some(i) => i,
+            None => {
+                // A field that can't be placed isn't kept.
+                if self.size().saturating_add(image.inline_len).saturating_add(64) > self.max_body {
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let i = self.add_code(image);
+                self.fields.entry(key).or_default().push(i);
+                i
+            }
+        };
+        self.place_image(i, place);
+    }
+
+    /// Forget the encoded images after the first `n` codes that no placement draws any longer, and
+    /// the cache entries that name them: placed images, colorized images and fields. A code that a
+    /// placement still draws keeps itself and every code before it.
+    fn forget_codes(&mut self, n: usize) {
+        let keep = self.codes.iter().rposition(|c| c.uses > 0).map_or(n, |last| n.max(last + 1));
+        if keep >= self.codes.len() {
+            return;
+        }
+        self.codes.truncate(keep);
+        self.images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.colorized_images.retain(|_, e| e.is_none_or(|i| i < keep));
+        self.fields.retain(|_, bucket| {
+            bucket.retain(|&i| i < keep);
+            !bucket.is_empty()
+        });
     }
 
     /// A placed image (`blob`, cached under `key`): its pixel grid of `width` × `height` placed
@@ -1125,16 +1735,48 @@ impl<'a> Scene<'a> {
             return;
         }
         let encoded = match self.images.get(key) {
-            Some(e) => e.clone(),
+            Some(e) => *e,
             None => {
-                let e = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height())).map(Arc::new);
-                self.images.insert(key.to_string(), e.clone());
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_images.get(key) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_images.remove(key);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
+                let code = self.decode_image(blob).and_then(|img| self.encode_image(img.as_raw(), img.width(), img.height()));
+                // An image that can't be placed isn't kept.
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_images.insert(key.to_string(), c.inline_len);
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
+                self.images.insert(key.to_string(), e);
                 e
             }
         };
-        if let Some(e) = encoded {
-            self.place_image(&e, place);
+        if let Some(i) = encoded {
+            self.place_image(i, place);
         }
+    }
+
+    /// Keep `code` for the placements that draw it: its index in `codes`.
+    fn add_code(&mut self, mut code: ImageCode) -> usize {
+        let i = self.codes.len();
+        if self.o.level == Level::Three {
+            code.data = vec![];
+        }
+        code.ref_len = code.reference(i, self.o.level).len();
+        self.codes.push(code);
+        i
     }
 
     /// Gray coverage in the selected process or Separation ink. Binary coverage is a stencil;
@@ -1146,19 +1788,40 @@ impl<'a> Scene<'a> {
         }
         let cache = (key.to_string(), format!("{paint:?}"));
         let encoded = match self.colorized_images.get(&cache) {
-            Some(e) => e.clone(),
+            Some(e) => *e,
             None => {
-                let e = self.encode_colorized(blob, paint).map(Arc::new);
-                self.colorized_images.insert(cache, e.clone());
+                // An image turned away at the page limit is encoded again only once it fits.
+                if let Some(&len) = self.too_large_colorized.get(&cache) {
+                    if self.size().saturating_add(len).saturating_add(64) > self.max_body {
+                        self.warn(TOO_LARGE);
+                        return;
+                    }
+                    self.too_large_colorized.remove(&cache);
+                }
+                #[cfg(test)]
+                {
+                    self.encodes += 1;
+                }
+                let code = self.encode_colorized(blob, paint);
+                // An image that can't be placed isn't kept.
+                if let Some(c) = &code
+                    && self.size().saturating_add(c.inline_len).saturating_add(64) > self.max_body
+                {
+                    self.too_large_colorized.insert(cache, c.inline_len);
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let e = code.map(|c| self.add_code(c));
+                self.colorized_images.insert(cache, e);
                 e
             }
         };
-        if let Some(e) = encoded {
-            self.place_image(&e, place);
+        if let Some(i) = encoded {
+            self.place_image(i, place);
         }
     }
 
-    fn encode_colorized(&mut self, blob: Option<&ImageBlob>, paint: &Paint) -> Option<String> {
+    fn encode_colorized(&mut self, blob: Option<&ImageBlob>, paint: &Paint) -> Option<ImageCode> {
         let Some((w, h, coverage)) = blob.and_then(ImageBlob::coverage) else {
             self.warn(UNDECODED);
             return None;
@@ -1239,17 +1902,17 @@ impl<'a> Scene<'a> {
                 ("/RunLengthDecode", rl)
             }
         };
-        let mut out = String::new();
+        let mut prelude = String::new();
         if binary {
             // imagemask takes its current ink from the graphics state.
-            out.push_str(&self.ink_code(ink));
+            prelude.push_str(&self.ink_code(ink));
         } else {
             match ink {
                 Ink::Spot { space, .. } => {
-                    let _ = writeln!(out, "VCsp{space} setcolorspace");
+                    let _ = writeln!(prelude, "VCsp{space} setcolorspace");
                 }
                 Ink::Process(space, ..) => {
-                    let _ = writeln!(out, "{} setcolorspace", space.name());
+                    let _ = writeln!(prelude, "{} setcolorspace", space.name());
                 }
             }
         }
@@ -1258,19 +1921,16 @@ impl<'a> Scene<'a> {
             Ink::Process(space, ..) => space.n(),
         };
         let decode = if binary { "1 0".to_string() } else { "0 1 ".repeat(n).trim_end().to_string() };
-        let _ = write!(
-            out,
-            "{{ /VCsrc currentfile /ASCII85Decode filter def\n<< /ImageType {} /Width {w} /Height {h} /BitsPerComponent {} /Decode [{decode}] /ImageMatrix [{w} 0 0 {h} 0 0]",
+        let mut dict = format!(
+            "<< /ImageType {} /Width {w} /Height {h} /BitsPerComponent {} /Decode [{decode}] /ImageMatrix [{w} 0 0 {h} 0 0]",
             if keyed { 4 } else { 1 },
             if binary { 1 } else { 8 },
         );
         if keyed {
             let mask: Vec<String> = key.iter().take(n).map(|v| format!("{v} {v}")).collect();
-            let _ = write!(out, " /MaskColor [{}]", mask.join(" "));
+            let _ = write!(dict, " /MaskColor [{}]", mask.join(" "));
         }
-        let _ = writeln!(out, "\n/DataSource VCsrc {filter} filter >> {}\nVCsrc flushfile }} exec", if binary { "imagemask" } else { "image" });
-        out.push_str(&ps::ascii85(&encoded));
-        Some(out)
+        Some(image_code(prelude, dict, filter, if binary { "imagemask" } else { "image" }, encoded))
     }
 
     /// Ink-setting operators in the cached stencil body, built with the same path as solid fills.
@@ -1282,29 +1942,43 @@ impl<'a> Scene<'a> {
 
     /// Image `blob` as RGBA pixels; `None` (with a warning) when it can't be written.
     fn decode_image(&mut self, blob: Option<&ImageBlob>) -> Option<image::RgbaImage> {
-        let Some(img) = blob.and_then(|blob| image::load_from_memory(&blob.bytes).ok()) else {
+        let too_large = |w: u32, h: u32| w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_IMAGE_PIXELS;
+        if blob.is_some_and(|b| vectorcraft_doc::header_size(&b.bytes).is_some_and(|(w, h)| too_large(w, h))) {
+            self.warn(LARGE_IMAGE);
+            return None;
+        }
+        let Some(img) = blob.and_then(|blob| {
+            vectorcraft_doc::decode::decode_within(&blob.bytes, MAX_IMAGE_PIXELS.saturating_mul(8)).ok().flatten().map(|(img, _)| img)
+        }) else {
             self.warn(UNDECODED);
             return None;
         };
-        if u64::from(img.width()) * u64::from(img.height()) > MAX_IMAGE_PIXELS {
+        if too_large(img.width(), img.height()) {
             self.warn(LARGE_IMAGE);
             return None;
         }
         Some(img.to_rgba8())
     }
 
-    /// Draw an image of [`Self::encode_image`] on the unit square mapped by `place`.
-    fn place_image(&mut self, encoded: &str, place: Affine) {
+    /// Draw the image of `codes[i]` on the unit square mapped by `place`. Its operators go in when
+    /// the page is finished ([`Self::page`]), once it is known how many placements draw it.
+    fn place_image(&mut self, i: usize, place: Affine) {
         if !invertible(place) {
             return;
         }
-        if self.body.len().saturating_add(encoded.len()).saturating_add(64) > MAX_BODY {
+        let Some(code) = self.codes.get(i) else { return };
+        let cost = if code.uses == 0 { code.inline_len } else { code.ref_len };
+        if self.size().saturating_add(cost).saturating_add(64) > self.max_body {
             self.warn(TOO_LARGE);
             return;
         }
         self.line("q");
         let _ = writeln!(self.body, "{} cm", ps::matrix(place));
-        self.body.push_str(encoded);
+        self.placements.push((self.body.len(), i));
+        self.pending = self.pending.saturating_add(cost);
+        if let Some(code) = self.codes.get_mut(i) {
+            code.uses += 1;
+        }
         self.line("Q");
     }
 
@@ -1312,42 +1986,66 @@ impl<'a> Scene<'a> {
     /// them on the unit square: in the process colour space, transparent pixels masked out at
     /// Level 3 (a key colour no opaque pixel has), white at Level 2; partly transparent ones over
     /// white. `None` for an empty image.
-    fn encode_image(&mut self, rgba: &[u8], w: u32, h: u32) -> Option<String> {
+    fn encode_image(&mut self, rgba: &[u8], w: u32, h: u32) -> Option<ImageCode> {
+        let space = if self.cmyk { Space::Cmyk } else { Space::Rgb };
+        let mut cache: HashMap<[u8; 3], [u8; 4]> = HashMap::new();
+        let cms = self.cms.clone();
+        let intent = cms.settings().intent;
+        self.encode_samples(rgba.as_chunks::<4>().0, w, h, space, |p: &[u8; 4], al| {
+            let rgb = [0, 1, 2].map(|i| ((u32::from(p[i]) * al + 255 * (255 - al) + 127) / 255) as u8);
+            match space {
+                Space::Cmyk => *cache
+                    .entry(rgb)
+                    .or_insert_with(|| cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent).map(|x| (unit(x) * 255.0).round() as u8)),
+                _ => [rgb[0], rgb[1], rgb[2], 0],
+            }
+        })
+    }
+
+    /// Straight CMYK pixels with opacity (five bytes a pixel, `w` × `h`, rows from the top), drawn
+    /// as [`Self::encode_image`] draws its pixels and keeping their ink amounts: partly
+    /// transparent pixels lay down that share of each ink.
+    fn encode_inks(&mut self, cmyka: &[u8], w: u32, h: u32) -> Option<ImageCode> {
+        self.encode_samples(cmyka.as_chunks::<5>().0, w, h, Space::Cmyk, |p: &[u8; 5], al| {
+            [0, 1, 2, 3].map(|i| ((u32::from(p[i]) * al + 127) / 255) as u8)
+        })
+    }
+
+    /// Pixels (`w` × `h`, rows from the top, each ending in its opacity) as the operators and data
+    /// that draw them in `space` on the unit square. `sample` gives the samples of a pixel that
+    /// isn't clear, from the pixel and its opacity.
+    fn encode_samples<const N: usize>(
+        &mut self,
+        px: &[[u8; N]],
+        w: u32,
+        h: u32,
+        space: Space,
+        mut sample: impl FnMut(&[u8; N], u32) -> [u8; 4],
+    ) -> Option<ImageCode> {
         if w == 0 || h == 0 {
             return None;
         }
-        let px = rgba.as_chunks::<4>().0;
-        let clear = px.iter().any(|p| p[3] == 0);
-        if px.iter().any(|p| p[3] > 0 && p[3] < 255) {
+        let opacity = |p: &[u8; N]| p[N - 1];
+        let clear = px.iter().any(|p| opacity(p) == 0);
+        if px.iter().any(|p| opacity(p) > 0 && opacity(p) < 255) {
             self.warn(IMAGE_PARTLY);
         }
         let keyed = clear && self.o.level == Level::Three;
         if clear && !keyed {
             self.warn(IMAGE_ALPHA_L2);
         }
-        let space = if self.cmyk { Space::Cmyk } else { Space::Rgb };
         let n = space.n();
         // The key colour, which opaque pixels that happen to have it are nudged off.
         let key: [u8; 4] = [255, 0, 255, 0];
         // White: no ink, or full light.
         let white: [u8; 4] = if space == Space::Cmyk { [0; 4] } else { [255; 4] };
-        let mut cache: HashMap<[u8; 3], [u8; 4]> = HashMap::new();
-        let cms = self.cms.clone();
-        let intent = cms.settings().intent;
         let mut data = Vec::with_capacity(px.len() * n);
         for p in px {
-            if p[3] == 0 {
+            if opacity(p) == 0 {
                 data.extend(if keyed { &key } else { &white }.iter().take(n));
                 continue;
             }
-            let al = u32::from(p[3]);
-            let rgb = [0, 1, 2].map(|i| ((u32::from(p[i]) * al + 255 * (255 - al) + 127) / 255) as u8);
-            let mut v = match space {
-                Space::Cmyk => *cache
-                    .entry(rgb)
-                    .or_insert_with(|| cms.srgb_to_cmyk(rgb.map(|x| f32::from(x) / 255.0), intent).map(|x| (unit(x) * 255.0).round() as u8)),
-                _ => [rgb[0], rgb[1], rgb[2], 0],
-            };
+            let mut v = sample(p, u32::from(opacity(p)));
             if keyed && v.iter().take(n).eq(key.iter().take(n)) {
                 v[1] = 1;
             }
@@ -1363,25 +2061,40 @@ impl<'a> Scene<'a> {
                 ("/RunLengthDecode", rl)
             }
         };
-        let mut out = String::with_capacity(encoded.len() * 5 / 4 + 400);
-        let _ = writeln!(out, "{} setcolorspace", space.name());
+        let prelude = format!("{} setcolorspace\n", space.name());
         let decode = "0 1 ".repeat(n);
-        let _ = write!(
-            out,
-            "{{ /VCsrc currentfile /ASCII85Decode filter def\n<< /ImageType {} /Width {w} /Height {h} /BitsPerComponent 8 /Decode [{}] /ImageMatrix [{w} 0 0 {h} 0 0]",
+        let mut dict = format!(
+            "<< /ImageType {} /Width {w} /Height {h} /BitsPerComponent 8 /Decode [{}] /ImageMatrix [{w} 0 0 {h} 0 0]",
             if keyed { 4 } else { 1 },
             decode.trim_end()
         );
         if keyed {
             let mask: Vec<String> = key.iter().take(n).map(|v| format!("{v} {v}")).collect();
-            let _ = write!(out, " /MaskColor [{}]", mask.join(" "));
+            let _ = write!(dict, " /MaskColor [{}]", mask.join(" "));
         }
-        // The procedure is read whole before it runs: the image data follows it, and flushing the
-        // ASCII85 filter afterwards reads past its end marker.
-        let _ = writeln!(out, "\n/DataSource VCsrc {filter} filter >> image\nVCsrc flushfile }} exec");
-        out.push_str(&ps::ascii85(&encoded));
-        Some(out)
+        Some(image_code(prelude, dict, filter, "image", encoded))
     }
+}
+
+/// An image of `prelude`, `dict`, `filter` and `op` (see [`ImageCode`]) with compressed samples
+/// `data`, not yet placed.
+fn image_code(prelude: String, dict: String, filter: &'static str, op: &'static str, data: Vec<u8>) -> ImageCode {
+    let mut code = ImageCode { prelude, dict, filter, op, ascii: ps::ascii85(&data), data, uses: 0, inline_len: 0, ref_len: 0 };
+    code.inline_len = code.prelude.len() + INLINE_SOURCE.len() + code.dict.len() + code.inline_read().len() + code.ascii.len();
+    code
+}
+
+/// The closed polygon through `pts`.
+fn polygon(pts: &[Point]) -> Vec<kurbo::PathEl> {
+    let mut els: Vec<kurbo::PathEl> =
+        pts.iter().enumerate().map(|(i, p)| if i == 0 { kurbo::PathEl::MoveTo(*p) } else { kurbo::PathEl::LineTo(*p) }).collect();
+    els.push(kurbo::PathEl::ClosePath);
+    els
+}
+
+/// The square with corners (±`t`, 0) and (0, ±`t`).
+fn diamond(t: f64) -> Vec<kurbo::PathEl> {
+    polygon(&[Point::new(t, 0.0), Point::new(0.0, t), Point::new(-t, 0.0), Point::new(0.0, -t)])
 }
 
 /// `a` to `b` at `t`.

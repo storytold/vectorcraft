@@ -1,14 +1,15 @@
 //! Arrowheads. A head of weight `hw` (stroke weight × scale) fits a box `4·hw` long and `4·hw`
-//! wide. Hollow kinds are rings (`hw/2` walls) or, for the open arrow, a chevron with `hw` arms.
+//! wide; the line arrow's arms reach twice as far out ([`Arrowhead::half_width`]). Hollow kinds are rings (`hw/2` walls) or, for the open arrow, a chevron with `hw` arms.
 //! The stroke ends under the head at the head's *inset* from the tip: halfway into solid heads,
 //! in the back wall of hollow ones (with the cap kept out of the hole) and at the chevron's inner
 //! corner. With [`ArrowAlign::Tip`] the tip sits on the end point and the stroke is shortened by
 //! the inset; with [`ArrowAlign::Extend`] the path keeps its length and the tip sits the inset
-//! past the end point. Heads added after the first ten are drawn in local units ([`local`]).
+//! past the end point. Heads added after the first ten are drawn in local units ([`local`]), as are
+//! custom heads, whose stroke ends halfway along their length.
 
 use std::borrow::Cow;
 
-use std::f64::consts::{FRAC_PI_2, PI};
+use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI};
 
 use kurbo::{Affine, BezPath, ParamCurve, ParamCurveArclen, PathSeg, Point, Shape, Vec2};
 use vectorcraft_doc::{ArrowAlign, Arrowhead, StrokeLayer};
@@ -37,8 +38,14 @@ pub(super) fn pieces<'a>(bp: &'a BezPath, st: &StrokeLayer) -> StrokePieces<'a> 
     let last = subs.last().filter(|s| !s.1).map(|s| s.0.clone());
     let cap = cap_extent(st.cap, st.width);
     let (hw0, hw1) = (st.arrow_weight(false), st.arrow_weight(true));
-    let start = st.start_arrow.zip(first).map(|(k, r)| (k, r, inset(k, hw0, cap)));
-    let end = st.end_arrow.zip(last).map(|(k, r)| (k, r, inset(k, hw1, cap)));
+    let start = st.start_arrow.clone().zip(first).map(|(k, r)| {
+        let i = inset(&k, hw0, cap);
+        (k, r, i)
+    });
+    let end = st.end_arrow.clone().zip(last).map(|(k, r)| {
+        let i = inset(&k, hw1, cap);
+        (k, r, i)
+    });
     if start.is_none() && end.is_none() {
         return StrokePieces { line: Cow::Borrowed(bp), heads: vec![] };
     }
@@ -56,7 +63,8 @@ pub(super) fn pieces<'a>(bp: &'a BezPath, st: &StrokeLayer) -> StrokePieces<'a> 
         } else {
             (end_pt + outward * inset, outward)
         };
-        heads.push(Arrow { kind, outline: shape(kind, tip, dir, hw), tip, dir, inset });
+        let outline = shape(&kind, tip, dir, hw);
+        heads.push(Arrow { kind, outline, tip, dir, inset });
     };
     if let Some((k, r, i)) = start {
         place(k, r, true, i, hw0);
@@ -173,8 +181,20 @@ fn bar(hw: f64) -> f64 {
 /// Where the notch of the (open) arrow sits, as a fraction of the length.
 const NOTCH: f64 = 0.7;
 
+/// How far [`super::stroke_pieces`] trims the line under each end's head: the head's inset from
+/// the tip, along the path. Both are 0 without a head at that end, and in [`ArrowAlign::Extend`],
+/// where the stroke keeps its full length.
+pub(super) fn trims(st: &StrokeLayer) -> (f64, f64) {
+    if st.arrow_align != ArrowAlign::Tip {
+        return (0.0, 0.0);
+    }
+    let cap = cap_extent(st.cap, st.width);
+    let inset_of = |kind: &Option<Arrowhead>, end: bool| kind.as_ref().map_or(0.0, |k| inset(k, st.arrow_weight(end), cap));
+    (inset_of(&st.start_arrow, false), inset_of(&st.end_arrow, true))
+}
+
 /// Distance from the tip where the stroke ends, for a stroke whose cap reaches `cap` past its end.
-fn inset(kind: Arrowhead, hw: f64, cap: f64) -> f64 {
+fn inset(kind: &Arrowhead, hw: f64, cap: f64) -> f64 {
     let l = len(hw);
     // Solid heads: halfway in, far enough that the cap stays behind the tip.
     let solid = |back: f64| (back / 2.0).max(cap);
@@ -187,6 +207,7 @@ fn inset(kind: Arrowhead, hw: f64, cap: f64) -> f64 {
         Arrowhead::TriangleOpen | Arrowhead::CircleOpen | Arrowhead::SquareOpen => hollow(l),
         // The inner corner of the chevron: arm / sin(half angle).
         Arrowhead::ArrowOpen => (arm(hw) * (l * l + l * l / 4.0).sqrt() / (l / 2.0)).max(cap),
+        Arrowhead::Custom(c) => (c.stop() * hw).max(cap),
         _ => match local_stop(kind) {
             Stop::At(u) => (u * hw).max(cap),
             Stop::Wall(back) => hollow(back * hw),
@@ -195,7 +216,7 @@ fn inset(kind: Arrowhead, hw: f64, cap: f64) -> f64 {
 }
 
 /// Outline of a `kind` head of weight `hw` with its tip at `tip`, pointing along `dir`.
-fn shape(kind: Arrowhead, tip: Point, dir: Vec2, hw: f64) -> BezPath {
+fn shape(kind: &Arrowhead, tip: Point, dir: Vec2, hw: f64) -> BezPath {
     let n = Vec2::new(-dir.y, dir.x);
     let l = len(hw);
     let half = l / 2.0;
@@ -252,7 +273,8 @@ const HEX: f64 = 2.0 * 1.732_050_807_568_877_2;
 /// Flattening tolerance of the curved local heads, in units.
 const LOCAL_TOL: f64 = 1e-3;
 
-fn local_stop(kind: Arrowhead) -> Stop {
+/// Where the stroke ends under a head drawn in local units ([`local`]), in those units.
+fn local_stop(kind: &Arrowhead) -> Stop {
     match kind {
         Arrowhead::Target | Arrowhead::TagOpen | Arrowhead::DiamondOpen => Stop::Wall(4.0),
         Arrowhead::HexagonOpen => Stop::Wall(HEX),
@@ -261,7 +283,7 @@ fn local_stop(kind: Arrowhead) -> Stop {
         Arrowhead::Fork => Stop::At(2.7),
         Arrowhead::HalfArrowLeft | Arrowhead::HalfArrowRight | Arrowhead::Feather => Stop::At(1.3),
         Arrowhead::Swallowtail => Stop::At(1.4),
-        Arrowhead::Chevron => Stop::At(1.0),
+        Arrowhead::Chevron | Arrowhead::LineArrow => Stop::At(1.0),
         Arrowhead::Slash => Stop::At(1.2),
         Arrowhead::DoubleSlash => Stop::At(1.05),
         Arrowhead::DoubleArrow => Stop::At(1.7),
@@ -273,9 +295,10 @@ fn local_stop(kind: Arrowhead) -> Stop {
 }
 
 /// The outline of a head added after the first ten, in local units: x from the tip (0) back
-/// along the line (to at most 4), y across it (−2 to 2, positive to the right of the direction
-/// the head points). Every shape is generated here.
-fn local(kind: Arrowhead) -> BezPath {
+/// along the line (to at most 4; the line arrow's square-cut arms 4.71), y across it (−2 to 2,
+/// the line arrow −4 to 4; positive to the right of the direction the head points). Every shape
+/// is generated here, and a custom head's outline is its own.
+fn local(kind: &Arrowhead) -> BezPath {
     let mut p = BezPath::new();
     let poly = |p: &mut BezPath, pts: &[(f64, f64)]| polygon(p, &pts.iter().map(|&q| Point::from(q)).collect::<Vec<_>>());
     let ring_poly = |p: &mut BezPath, pts: &[(f64, f64)]| ring_polygon(p, &pts.iter().map(|&q| Point::from(q)).collect::<Vec<_>>(), ring(1.0));
@@ -363,6 +386,15 @@ fn local(kind: Arrowhead) -> BezPath {
             poly(&mut p, &[(0.0, 2.0), (0.6, 2.0), (0.6, 0.25), (4.0, 1.8), (4.0, -1.8), (0.6, -0.25), (0.6, -2.0), (0.0, -2.0)])
         }
         Arrowhead::Oval => p.extend(kurbo::Ellipse::new((2.0, 0.0), (2.0, 1.2), 0.0).path_elements(LOCAL_TOL)),
+        Arrowhead::LineArrow => {
+            // Arms one unit thick (the head's weight: the line's at 100 % for lines of 0.25 pt or
+            // more) at right angles to each other, from a sharp tip to their outer corners at
+            // (4, ±4), cut square across: a unit across an arm at 45° is ½√2 along each axis, and
+            // the arms' inner edges meet √2 behind the tip.
+            let t = FRAC_1_SQRT_2;
+            poly(&mut p, &[(0.0, 0.0), (4.0, 4.0), (4.0 + t, 4.0 - t), (2.0 * t, 0.0), (4.0 + t, t - 4.0), (4.0, -4.0)]);
+        }
+        Arrowhead::Custom(c) => p = c.path.to_bezpath(),
         // The first ten are drawn by `shape`.
         Arrowhead::Triangle
         | Arrowhead::TriangleOpen

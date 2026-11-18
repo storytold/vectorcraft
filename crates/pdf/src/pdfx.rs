@@ -4,9 +4,11 @@
 //! - PDF/X-1a:2001: every colour is CMYK, grey or a spot ink with a CMYK alternate (colours and
 //!   images are converted to a CMYK destination and written untagged, see [`crate::output`]), no
 //!   transparency (the app flattens it before writing), no layers, PDF 1.3.
-//! - PDF/X-3:2002: colours are ICC-based (always tagged), no transparency, no layers, PDF 1.3.
-//! - PDF/X-4:2010: transparency and layers are kept, colours are tagged, PDF 1.6 at most, and the
-//!   XMP metadata names the standard too.
+//! - PDF/X-3:2002: colors are ICC-based (always tagged), except CMYK colors in the CMYK output
+//!   intent's profile, which are DeviceCMYK (with `profiles` `none`, all CMYK colors unless they
+//!   are converted to a CMYK destination of another profile), no transparency, no layers, PDF 1.3.
+//! - PDF/X-4:2010: transparency and layers are kept, colors are tagged as in PDF/X-3, PDF 1.6 at
+//!   most, and the XMP metadata names the standard too and carries `xmp:MetadataDate`.
 //! - All of them: a `/GTS_PDFX` output intent (blank, the CMYK profile in effect, embedded), a
 //!   TrimBox on every page (the artboard), `/Trapped` True or False, `/GTS_PDFXVersion` in the
 //!   document information, a title and dates, embedded fonts (or text as outlines), no editing
@@ -120,8 +122,9 @@ pub(crate) fn info_entries(standard: Standard) -> String {
 }
 
 /// Edit the XMP metadata of a PDF/X file (the catalog's `/Metadata` stream; `root` is the
-/// catalog dictionary's contents) into `patch`: PDF/X-4 adds the standard, Trapped and a version
-/// id (PDF 1.3 files say so in [`finish`]). Files without metadata are left as they are.
+/// catalog dictionary's contents) into `patch`: PDF/X-4 adds the standard, Trapped, a version id
+/// and the metadata date (PDF 1.3 files say so in [`finish`]). Files without metadata are left as
+/// they are.
 pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Patch, standard: Standard, trapped: bool) -> Result<(), PdfError> {
     if !standard.is_pdfx() {
         return Ok(());
@@ -145,6 +148,22 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
             "<pdfxid:GTS_PDFXVersion xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\">{version}</pdfxid:GTS_PDFXVersion><pdf:Trapped>{trapped}</pdf:Trapped><xmpMM:VersionID>1</xmpMM:VersionID>"
         );
         edits.push((close, close, props.into_bytes()));
+        // When the packet has no `<xmp:MetadataDate>` element, this adds one after the writer's
+        // `<xmp:ModifyDate>` element with the same value. The search expects the writer's form:
+        // properties written as elements with the `xmp` prefix, and `<` in text written as `&lt;`.
+        // The writer's description declares the `xmp` prefix there, and
+        // [`crate::post::modification_date`] keeps the two dates equal.
+        if find(xml, b"<xmp:MetadataDate>", 0).is_none()
+            && let Some(at) = find(xml, b"<xmp:ModifyDate>", 0).map(|i| i + b"<xmp:ModifyDate>".len())
+            && let Some(to) = find(xml, b"</xmp:ModifyDate>", at)
+        {
+            let date = xml.get(at..to).ok_or_else(bad)?;
+            let mut prop = b"<xmp:MetadataDate>".to_vec();
+            prop.extend_from_slice(date);
+            prop.extend_from_slice(b"</xmp:MetadataDate>");
+            let after = to + b"</xmp:ModifyDate>".len();
+            edits.push((after, after, prop));
+        }
     }
     // Every edit grows the stream (or keeps its length).
     let grown: usize = edits.iter().map(|(s, e, new)| new.len().saturating_sub(e - s)).sum();
@@ -211,23 +230,46 @@ pub(crate) fn verify(pdf: &[u8], standard: Standard) -> Result<(), PdfError> {
     Ok(())
 }
 
-/// `pdf` without its streams' data (dictionaries and the rest of the syntax), so that what is
-/// looked for there isn't found in image or font bytes.
+/// `pdf` without its streams' data, the text of its literal strings and its comments (dictionaries
+/// and the rest of the syntax), so that what is looked for there isn't found in image or font
+/// bytes, or in a string such as the file identifier, whose base64 hash can hold `/BM`.
 fn without_streams(pdf: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(pdf.len().min(1 << 20));
     let mut at = 0;
-    while let Some(s) = find(pdf, b"stream", at) {
-        let data = s + b"stream".len();
-        // `endstream` itself, or a stream keyword that isn't one (inside a name or string).
-        if (s >= 3 && pdf.get(s - 3..s) == Some(b"end")) || !pdf.get(data).is_some_and(|b| matches!(b, b'\r' | b'\n')) {
-            out.extend_from_slice(pdf.get(at..data).unwrap_or_default());
-            at = data;
-            continue;
+    while let Some(&b) = pdf.get(at) {
+        match b {
+            // A literal string: parentheses nest, and a backslash escapes the next byte.
+            b'(' => {
+                out.extend_from_slice(b"()");
+                let mut depth = 0usize;
+                at += 1;
+                while let Some(&c) = pdf.get(at) {
+                    at += 1;
+                    match c {
+                        b'\\' => at += 1,
+                        b'(' => depth += 1,
+                        b')' if depth == 0 => break,
+                        b')' => depth -= 1,
+                        _ => {}
+                    }
+                }
+            }
+            // A comment, to the end of its line.
+            b'%' => at += pdf.get(at..).unwrap_or_default().iter().take_while(|c| !matches!(c, b'\r' | b'\n')).count(),
+            // A stream keyword (not `endstream`, and followed by its end of line): its data is left out.
+            b's' if pdf.get(at..at + 6) == Some(b"stream")
+                && !(at >= 3 && pdf.get(at - 3..at) == Some(b"end"))
+                && pdf.get(at + 6).is_some_and(|c| matches!(c, b'\r' | b'\n')) =>
+            {
+                out.extend_from_slice(b"stream");
+                at = find(pdf, b"endstream", at + 6).unwrap_or(pdf.len());
+            }
+            _ => {
+                out.push(b);
+                at += 1;
+            }
         }
-        out.extend_from_slice(pdf.get(at..data).unwrap_or_default());
-        at = find(pdf, b"endstream", data).unwrap_or(pdf.len());
     }
-    out.extend_from_slice(pdf.get(at..).unwrap_or_default());
     out
 }
 

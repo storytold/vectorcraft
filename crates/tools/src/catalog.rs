@@ -24,7 +24,11 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("groupSelection", "Group Selection Tool", None, "tool-group-select"),
     ],
     &[t("magicWand", "Magic Wand Tool", Some("Y"), "tool-magic-wand")],
-    &[t("lasso", "Lasso Tool", Some("Q"), "tool-lasso")],
+    &[
+        t("lasso", "Lasso Tool", Some("Q"), "tool-lasso"),
+        // Enclosing Lasso's tool, kept out of `addons::GROUPS` so that `all_tools` lists it once.
+        t(crate::addons::enclosing_lasso::ID, "Enclosing Lasso Tool", None, "tool-lasso"),
+    ],
     &[
         t("pen", "Pen Tool", Some("P"), "tool-pen"),
         t("addAnchor", "Add Anchor Point Tool", Some("+"), "tool-pen-add"),
@@ -52,6 +56,7 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("rectangle", "Rectangle Tool", Some("M"), "tool-rect"),
         t("roundedRectangle", "Rounded Rectangle Tool", None, "tool-rounded-rect"),
         t("ellipse", "Ellipse Tool", Some("L"), "tool-ellipse"),
+        t(crate::circle::ID, "Circle Tool", None, "tool-circle"),
         t("polygon", "Polygon Tool", None, "tool-polygon"),
         t("star", "Star Tool", None, "tool-star"),
         t("flare", "Flare Tool", None, "tool-flare"),
@@ -68,6 +73,9 @@ pub const TOOL_GROUPS: &[&[ToolInfo]] = &[
         t("eraser", "Eraser Tool", Some("Shift+E"), "tool-eraser"),
         t("scissors", "Scissors Tool", Some("C"), "tool-scissors"),
         t("knife", "Knife", None, "tool-knife"),
+        // Path Precision Tools' Trim at Crossings Tool, kept out of `addons::PATH_TOOLS` so that
+        // `all_tools` lists it once.
+        t(crate::addons::trim::ID, "Trim at Crossings Tool", None, "dc-pf-trim"),
         t("mirrorCut", "Mirror & Cut Tool", None, "tool-mirror-cut"),
         t("lineCut", "Line Cut Tool", None, "tool-line-cut"),
         t("rectCut", "Rectangle Cut Tool", None, "tool-rect-cut"),

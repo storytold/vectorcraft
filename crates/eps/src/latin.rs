@@ -172,6 +172,11 @@ const OTHER_NAMES: &[(&str, char)] = &[
     ("grave", '`'),
 ];
 
+/// The Windows-1252 glyph name of code `code` (128–255), if it has one.
+pub(crate) fn high_name(code: u8) -> Option<&'static str> {
+    code.checked_sub(0x80).and_then(|i| HIGH.get(usize::from(i))).copied().filter(|n| *n != ".notdef")
+}
+
 /// Character `b` of Windows-1252.
 pub(crate) fn decode(b: u8) -> char {
     match b {

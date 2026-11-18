@@ -297,10 +297,10 @@ fn the_link_is_a_preference_agents_can_read_and_set() {
     assert_eq!(size(&app), (200.0, 100.0));
 }
 
-/// One Tab moves from a field to the next field: a field's label (its scrub zone) is not a tab
-/// stop of its own, and the W/H link between W and H, which is still focusable, comes after the
-/// fields. In the Transform panel and the Properties panel the fields run X, W, Y, H (a grid, two
-/// to a row); in the Control bar X, Y, W, H.
+/// One Tab moves from a field to the next field: a field's label (its scrub zone), spinner and
+/// preset chevron are not tab stops of their own, and the W/H link between W and H, which is
+/// still focusable, comes after the fields. In the Transform panel and the Properties panel the
+/// fields run X, W, Y, H (a grid, two to a row); in the Control bar X, Y, W, H.
 #[test]
 fn one_tab_moves_from_a_field_to_the_next() {
     // From X (the selection's centre, 60 pt) the next field is W in the panels and Y in the bar.
@@ -328,6 +328,12 @@ fn one_tab_moves_from_a_field_to_the_next() {
     tab_then_type(&mut app, crate::chrome::control_bar, "400 pt", "200");
     let r = app.session.doc().unwrap().doc.artboards[0].rect;
     assert_eq!((r.width().round(), r.height().round()), (400.0, 200.0), "Artboard Control bar: Tab went from W to H");
+    // The Transform panel's Rotate and Shear fields each have a spinner and presets: Tab goes from
+    // Rotate straight to Shear, past Rotate's preset chevron and Shear's spinner.
+    let mut app = rect_app();
+    tab_then_type(&mut app, transform::show, "0°", "30");
+    let shear = app.session.active().map(|st| st.doc.bounds_of(&st.selection.objects, false).map(|b| (b.width().round(), b.height().round())));
+    assert_eq!(shear, Some(Some((129.0, 50.0))), "Transform panel: Tab went from Rotate to Shear");
     // Shift+Tab goes back one field, one press too: from W to X in the panels.
     for (name, draw) in [("Transform panel", transform::show as Draw), ("Properties", properties::transform_section as Draw)] {
         let mut app = rect_app();
