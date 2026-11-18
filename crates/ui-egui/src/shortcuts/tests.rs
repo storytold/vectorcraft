@@ -1093,6 +1093,81 @@ fn cmd_shift_u_and_cmd_alt_shift_c_and_h_toggle_type_formats() {
     }
 }
 
+/// Cmd+Shift+= and Cmd+Alt+Shift+= do what the Character panel's Superscript and Subscript
+/// buttons do; with no type selected, Cmd+Shift+= still zooms in, as Cmd+= does.
+#[test]
+fn cmd_shift_equals_and_cmd_alt_shift_equals_toggle_superscript_and_subscript() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "One\nTwo"})).unwrap()["id"].as_u64().unwrap();
+    let positions = |app: &mut VectorcraftApp| {
+        let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+        // A superscript or subscript run reports its kind with its size and offset; a normal one
+        // reports no position.
+        let kind = |p: &serde_json::Value| if p.is_null() { json!("normal") } else { p.get("kind").unwrap_or(p).clone() };
+        r["runs"].as_array().unwrap().iter().map(|run| (run["text"].clone(), kind(&run["style"]["position"]))).collect::<Vec<_>>()
+    };
+    let zoom = |app: &mut VectorcraftApp| app.view_mut().unwrap().zoom;
+    let press =
+        |key, m: Modifiers| vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::COMMAND | m }];
+    let (shift, alt_shift) = (Modifiers::SHIFT, Modifiers::ALT | Modifiers::SHIFT);
+    let all = |p: &str| [(json!("One\nTwo"), json!(p))];
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let before = zoom(&mut app);
+    // Shift+`=` is reported as `=` or as `+`.
+    frame(&mut app, press(Key::Equals, shift));
+    assert_eq!(positions(&mut app), all("superscript"));
+    frame(&mut app, press(Key::Plus, shift));
+    assert_eq!(positions(&mut app), all("normal"), "a second press turns it off");
+    frame(&mut app, press(Key::Equals, alt_shift));
+    assert_eq!(positions(&mut app), all("subscript"));
+    frame(&mut app, press(Key::Equals, shift));
+    assert_eq!(positions(&mut app), all("superscript"), "superscript replaces subscript");
+    frame(&mut app, press(Key::Plus, alt_shift));
+    assert_eq!(positions(&mut app), all("subscript"));
+    frame(&mut app, press(Key::Equals, alt_shift));
+    assert_eq!(positions(&mut app), all("normal"));
+    assert_eq!(zoom(&mut app), before, "no press zoomed while type is selected");
+    frame(&mut app, press(Key::Equals, Modifiers::NONE));
+    assert!(zoom(&mut app) > before, "Cmd+= zooms in with type selected");
+    // While the Type tool edits: its selected text.
+    app.select_tool("type");
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 4, "end": 7}));
+    assert!(app.session.tool_wants_text());
+    frame(&mut app, press(Key::Equals, alt_shift));
+    assert_eq!(positions(&mut app), [(json!("One\n"), json!("normal")), (json!("Two"), json!("subscript"))]);
+    // A mixed selection takes the position on every character.
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    frame(&mut app, press(Key::Equals, alt_shift));
+    let subscript = |app: &mut VectorcraftApp| positions(app).iter().all(|(_, p)| *p == json!("subscript"));
+    assert!(subscript(&mut app), "{:?}", positions(&mut app));
+    // Nothing selected: Cmd+Shift+= zooms in, and Cmd+Alt+Shift+= changes nothing.
+    app.session.execute("select.none", &json!({})).unwrap();
+    for id in ["type.superscript", "type.subscript"] {
+        assert!(!crate::menus::enabled(&app, id), "{id}");
+    }
+    for key in [Key::Equals, Key::Plus] {
+        let before = zoom(&mut app);
+        frame(&mut app, press(key, alt_shift));
+        assert_eq!(zoom(&mut app), before, "{key:?} with Cmd+Alt+Shift");
+        frame(&mut app, press(key, shift));
+        assert!(zoom(&mut app) > before, "{key:?} with Cmd+Shift zooms in");
+    }
+    assert!(subscript(&mut app), "{:?}", positions(&mut app));
+    // Cmd+A and Cmd+Shift+= in one frame: Select All runs first, so Cmd+Shift+= applies
+    // Superscript to the text it selected instead of zooming in.
+    let before = zoom(&mut app);
+    frame(&mut app, [press(Key::A, Modifiers::NONE), press(Key::Equals, shift)].concat());
+    assert_eq!(zoom(&mut app), before, "no zoom once Select All selected the type");
+    // The earlier mixed selection left the text in two runs; check that both lines are still
+    // there and every run is superscript.
+    let runs = positions(&mut app);
+    assert_eq!(runs.iter().filter_map(|(t, _)| t.as_str()).collect::<String>(), "One\nTwo", "{runs:?}");
+    assert!(runs.iter().all(|(_, p)| *p == json!("superscript")), "{runs:?}");
+}
+
 /// Tab shows and hides the panels, and in the Type tool it types a tab, without moving the
 /// keyboard focus on to a field: the keys after it (a tool letter, the next letter typed) still
 /// work.
