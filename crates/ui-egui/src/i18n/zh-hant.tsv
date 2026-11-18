@@ -3493,6 +3493,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Scatter:	散佈：
 	Rotation:	旋轉：
 	Rotation relative to:	旋轉相對於：
+	Hue Jitter:	色相抖動：
 	Brush Scale Options	筆刷縮放選項
 	Scale Proportionately	等比例縮放
 	Stretch to Fit Stroke Length	延伸以符合筆畫長度

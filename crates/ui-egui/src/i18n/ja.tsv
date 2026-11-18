@@ -2501,6 +2501,7 @@ antiAlias	Sharp	シャープ
 	Scatter:	散布:
 	Rotation:	回転:
 	Rotation relative to:	回転の基準:
+	Hue Jitter:	色相のばらつき:
 	Brush Scale Options	ブラシ伸縮オプション
 	Scale Proportionately	縦横比を保持して拡大・縮小
 	Stretch to Fit Stroke Length	ストロークの長さに合わせて伸縮

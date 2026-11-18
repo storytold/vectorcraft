@@ -3816,7 +3816,21 @@ already walks Image Trace. Short agent entry points:
   `brush.new` or `brush.options` without a `key` takes the color that the art's fills and strokes use most (on a tie,
   the one found first), or black when they use no solid color. `brush.options` changes only the fields of
   `colorization` and of an art brush's `scale` that `params` gives, so `{colorization: {method: "hueShift"}}` keeps a
-  Hue Shift brush's key. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
+  Hue Shift brush's key. A scatter brush's `hue_jitter` (0 to 180 degrees, VectorCraft's own range; 0, the
+  default, leaves every copy's colors as the colorization gives them) turns the hue of each copy's solid fills and
+  strokes, its type's characters included, by that copy's own amount between minus and plus that many degrees. The
+  turn comes after the colorization: with None it turns the art's own colors, with Tints and Tints and Shades the
+  tints and shades of the stroke color, and with Hue Shift the shifted colors. Black, white and grays (equal RGB
+  values, a Gray color, CMYK without C, M or Y ink, Lab without a or b) have no hue and stay as they are, so a Tints
+  brush on a black or gray stroke draws its copies unturned. A color turns in its own model: RGB in the HSB of its
+  values, CMYK over its C, M and Y with its K kept, and Lab by turning its a and b, so its saturation and brightness
+  (Lab: lightness and chroma) stay. Gradients and patterns stay as they are, and a turned color loses its swatch
+  link. A symbol instance in the art turns only its own fill, the stain it draws its symbol's art with; the
+  symbol's own colors stay. The amounts depend only on the stroke's path
+  and the brush's name, so a stroke draws the same colors on every redraw, after Save and Open, and in export. Hue
+  jitter does not change where the copies go or their size and rotation. A value outside the range is clamped, as
+  the brush's other values are. A brush saves `hue_jitter` only when it is above 0, and a brush without the key
+  reads as 0; `brush.get` shows it for every scatter brush. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
   `brush.new` refuses a longer one, counting the number it adds to a taken name, and `brush.options` refuses a
   longer `newName`. `brush.duplicate` does not check the length. A bristle brush that already has a longer name
   keeps it, and `brush.options` without a new name, or with a `newName` that only trims the white space around the
