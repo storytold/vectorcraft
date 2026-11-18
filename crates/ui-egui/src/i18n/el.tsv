@@ -468,6 +468,9 @@ font-technology	Variable	Μεταβλητές
 	Choose…	Επιλογή…
 	Circle	Κύκλος
 	Circle Tool	Εργαλείο κύκλου
+	Curvature Circle Tool	Εργαλείο Κύκλος καμπυλότητας
+	Cusp	Ακίδα
+	Straight segment	Ευθύ τμήμα
 	Circle too large	Ο κύκλος είναι πολύ μεγάλος
 	Classic Defaults	Κλασικές προεπιλογές
 	Clean Up…	Εκκαθάριση…
@@ -5159,6 +5162,11 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no anchor points selected	δεν έχουν επιλεγεί σημεία αγκύρωσης
 @msg	`points` must be two or three [x, y] pairs of numbers	το `points` πρέπει να είναι δύο ή τρία ζεύγη αριθμών [x, y]
 @msg	direct-select two or three anchor points, or give `points`	επιλέξτε άμεσα δύο ή τρία σημεία αγκύρωσης ή δώστε `points`
+@msg	the path is straight there, so no circle matches its curvature	η διαδρομή είναι ευθεία εκεί, οπότε κανένας κύκλος δεν ταιριάζει με την καμπυλότητά της
+@msg	the path has a cusp there, so it has no single curvature	η διαδρομή έχει ακίδα εκεί, οπότε δεν έχει μία μόνο καμπυλότητα
+@msg	the path has a corner there, so it has no single curvature	η διαδρομή έχει γωνία εκεί, οπότε δεν έχει μία μόνο καμπυλότητα
+@msg	a guide has no curvature circle	ένας οδηγός δεν έχει κύκλο καμπυλότητας
+@msg	the circle that matches the path there would reach past the canvas	ο κύκλος που ταιριάζει με τη διαδρομή εκεί θα υπερέβαινε τον καμβά
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης

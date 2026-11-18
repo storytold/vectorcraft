@@ -494,6 +494,9 @@ font-technology	Variable	Варіативні
 	Choose…	Вибрати…
 	Circle	Коло
 	Circle Tool	Інструмент «Коло»
+	Curvature Circle Tool	Інструмент «Коло кривини»
+	Cusp	Точка звороту
+	Straight segment	Прямий сегмент
 	Circle too large	Коло завелике
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
@@ -5224,6 +5227,11 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no anchor points selected	опорні точки не виділені
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
 @msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
+@msg	the path is straight there, so no circle matches its curvature	контур у цьому місці прямий, тож його кривині не відповідає жодне коло
+@msg	the path has a cusp there, so it has no single curvature	контур у цьому місці має точку звороту, тож не має єдиної кривини
+@msg	the path has a corner there, so it has no single curvature	контур у цьому місці має кут, тож не має єдиної кривини
+@msg	a guide has no curvature circle	напрямна не має кола кривини
+@msg	the circle that matches the path there would reach past the canvas	коло, що відповідає контуру в цьому місці, вийшло б за межі полотна
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
