@@ -992,6 +992,8 @@ mod tests {
         assert_eq!(app.ui.status, "a new document won't read these variables back with their kind: `#Tag`");
         let warning = app.ui.status.clone();
         app.run("variable.define", json!({"name": "%Rate", "kind": "text"})).unwrap();
+        // A new document reads a `%` header's values as paths of graph data files.
+        app.run("dataset.new", json!({"name": "Rates", "values": {"%Rate": "5"}})).unwrap();
         app.run("dataset.export", json!({"path": path})).unwrap();
         assert_eq!(app.ui.status, "a new document refuses this file because of these variables: `%Rate`");
         let refuses = app.ui.status.clone();
