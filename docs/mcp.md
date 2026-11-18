@@ -6134,7 +6134,9 @@ arrowheads in a separate arrowheads file.
 A dimension's options (`dimension.create`, `dimension.update` and the Dimension tool's `style`) take `arrowStyle`
 (`filled`, `open`, `tick` or `none`: `Triangle`, `TriangleOpen`, `Slash` or no head) and `arrowHead`, `null` or one of
 the built-in head names `stroke.set` takes, drawn at both ends in place of the arrow style's head. The Arrow Style menu
-sets `arrowStyle` to `filled` when it sets `arrowHead`. A custom arrowhead and an unknown name are refused.
+sets `arrowStyle` to `filled` when it sets `arrowHead`. A custom arrowhead and an unknown name are refused. Versions
+that have the stroke arrowhead but do not read `arrowHead` keep the saved arrows until they draw the dimension again,
+and then draw `arrowStyle`. Versions without the stroke arrowhead do not open the file.
 
 ## Stroke bounds and clicks
 

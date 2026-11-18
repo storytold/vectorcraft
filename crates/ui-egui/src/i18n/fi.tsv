@@ -6185,6 +6185,7 @@ variable-list-end	{0}, {1}	{0} ja {1}
 	Arrow	Nuoli
 	Arrow (open)	Nuoli (avoin)
 	Barbed	Väkänen
+arrowhead	Feather	Sulka
 	Half Arrow (left)	Puolinuoli (vasen)
 	Half Arrow (right)	Puolinuoli (oikea)
 	Concave	Kovera

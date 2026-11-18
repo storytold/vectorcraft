@@ -2036,7 +2036,6 @@ font-technology	Variable	Variables
 	Limit to Library:	Limiter à la bibliothèque :
 	Limit:	Limite :
 	Line	Ligne
-	Line Arrow	Flèche filaire
 	Line Art and Text Resolution:	Résolution des dessins au trait et du texte :
 	Line Breaks	Sauts de ligne
 	Line Color	Couleur de ligne
@@ -6261,6 +6260,7 @@ lighting	Light	Lumière
 	B5	B5
 	Bar	Barre
 	Barbed	Barbelée
+arrowhead	Feather	Empennage
 	Baseline (Standard)	De base (standard)
 	Baseline Optimized	De base optimisé
 	Basic	De base
@@ -6389,6 +6389,7 @@ lighting	Light	Lumière
 	Letterhead A4	Papier à en-tête A4
 	Letterhead Letter	Papier à en-tête Lettre US
 	Line Art	Dessin au trait
+	Line Arrow	Flèche filaire
 	Linear	Linéaire
 	Logo 1000×1000	Logo 1000×1000
 	Low Fidelity Photo	Photo basse fidélité

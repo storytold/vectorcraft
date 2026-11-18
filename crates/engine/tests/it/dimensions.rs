@@ -120,8 +120,9 @@ fn each_arrow_style_draws_its_stroke_arrowhead_at_both_ends() {
 
 /// `arrowHead` draws any built-in stroke arrowhead at both ends of the dimension line, and the
 /// native file keeps it. The saved `arrowStyle` stays one of the four values versions without
-/// `arrowHead` read, and a dimension saved without `arrowHead` draws its arrow style. A custom
-/// arrowhead and an unknown name are refused.
+/// `arrowHead` read, and a dimension saved without `arrowHead` draws its arrow style. Options
+/// without a stroke head are saved without `arrowHead`. A custom arrowhead, an unknown name and an
+/// overlong name are refused.
 #[test]
 fn every_stroke_arrowhead_draws_as_a_dimension_arrowhead() {
     use vectorcraft_doc::{Arrowhead, dimension::ArrowStyle};
@@ -166,8 +167,13 @@ fn every_stroke_arrowhead_draws_as_a_dimension_arrowhead() {
     older.add_document(vectorcraft_format::load(&serde_json::to_vec(&file).unwrap()).unwrap(), None);
     let o = recipe(&older, id).options;
     assert_eq!((o.arrow_style, o.arrow_head.clone(), o.arrowhead()), (ArrowStyle::Open, None, Some(Arrowhead::TriangleOpen)));
+    // Without a stroke head, the saved and recorded options carry no `arrowHead`, and a null one
+    // is still taken.
+    let saved = serde_json::to_value(&recipe(&s, id).options).unwrap();
+    assert!(saved.get("arrowHead").is_none(), "{saved}");
+    assert!(s.execute("dimension.create", &json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":null}})).is_ok());
     let custom = json!({"Custom":{"name":"Dot","path":{"subpaths":[]}}});
-    for bad in [json!("Custom"), json!("Arrowhead"), json!("barbed"), json!(3), custom] {
+    for bad in [json!("Custom"), json!("Arrowhead"), json!("barbed"), json!(3), json!("Barbed".repeat(20)), custom] {
         let p = json!({"a":[0,0],"b":[72,0],"options":{"arrowHead":bad}});
         assert!(s.execute("dimension.create", &p).is_err(), "{bad}");
     }

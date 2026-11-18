@@ -15,6 +15,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     ok: Some("Save"),
     min_width: 520.0,
     max_width: Some(560.0),
+    // The saved options leave `arrowHead` out when it is null.
+    inputs: |_| &["arrowHead"],
     ..DialogSpec::FORM
 };
 
@@ -48,7 +50,8 @@ impl ArrowChoice {
     }
 }
 /// The Arrow Style entries: Filled, Open, Tick and None, then the other built-in stroke arrowheads
-/// in the Stroke panel's order. A stroke arrowhead keeps `filled` as its `arrowStyle`.
+/// in the Stroke panel's order. A stroke arrowhead keeps `filled` as its `arrowStyle`, the head that
+/// versions which do not read `arrowHead` draw when they draw the dimension again.
 fn arrow_choices() -> Vec<ArrowChoice> {
     let named = [(ArrowStyle::Filled, "Filled"), (ArrowStyle::Open, "Open"), (ArrowStyle::Tick, "Tick"), (ArrowStyle::None, "None")];
     let heads = Arrowhead::ALL.into_iter().filter(|h| !named.iter().any(|(s, _)| s.arrowhead().as_ref() == Some(h)));
@@ -71,6 +74,32 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fields = serde_json::to_value(o).map_err(|e| e.to_string())?.as_object().cloned().unwrap_or_default();
     app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     Ok(json!({"dialog":KIND}))
+}
+
+/// For `ui.dialog.set`, as the Arrow Style menu sets them: an `arrowStyle` set alone draws that
+/// style's own head, and a built-in head set as `arrowHead` takes the arrow style of its Arrow
+/// Style entry (`tick` for `Slash`, `filled` for `Barbed`).
+pub(super) fn note_set(d: &mut Dialog, field: &str, value: &Value) {
+    match field {
+        "arrowStyle" => {
+            d.fields.insert("arrowHead".into(), Value::Null);
+        }
+        "arrowHead" => {
+            let head = built_in_head(value);
+            if let Some(ch) = arrow_choices().into_iter().find(|ch| head.is_some() && ch.drawn() == head)
+                && let Ok(style) = serde_json::to_value(ch.style)
+            {
+                d.fields.insert("arrowStyle".into(), style);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The built-in stroke arrowhead `value` names. Only a short name is read: a draft may hold anything.
+fn built_in_head(value: &Value) -> Option<Arrowhead> {
+    let name = value.as_str().filter(|name| name.len() <= 64)?;
+    serde_json::from_value::<Arrowhead>(Value::String(name.into())).ok().filter(|h| !matches!(h, Arrowhead::Custom(_)))
 }
 
 fn read(fields: &serde_json::Map<String, Value>) -> Result<DimensionOptions, String> {
@@ -105,10 +134,10 @@ fn arrow_style(ui: &mut Ui, fields: &mut serde_json::Map<String, Value>, id: &st
     widgets::label_row(ui, tl!("Arrow Style:"), 96.0, |ui| {
         let choices = arrow_choices();
         let style = fields.get(STYLE).cloned().and_then(|v| serde_json::from_value::<ArrowStyle>(v).ok());
-        let head = fields.get(HEAD).cloned().and_then(|v| serde_json::from_value::<Option<Arrowhead>>(v).ok()).flatten();
+        let head = fields.get(HEAD).and_then(built_in_head);
         let current = style.map(|s| head.or_else(|| s.arrowhead()));
         let shown = current.and_then(|c| choices.iter().position(|ch| ch.drawn() == c));
-        let names: Vec<&str> = choices.iter().map(|ch| tl!(ch.name)).collect();
+        let names: Vec<&str> = choices.iter().map(|ch| crate::panels::stroke::builtin_arrow_name(ch.name)).collect();
         let icon = |ui: &Ui, rect: egui::Rect, i: usize, ink: egui::Color32, _: bool| {
             // Only the rows in view render their previews.
             if ui.is_rect_visible(rect)
@@ -413,9 +442,13 @@ mod tests {
             assert!(text.contains(label), "{label}: {text}");
         }
         let d = app.ui.dialog.as_mut().unwrap();
+        // The default style has no `arrowHead`, and the dialog still takes one.
+        assert!(!d.fields.contains_key("arrowHead") && super::super::accepts_field(d, "arrowHead"));
         d.fields.insert("scale".into(), json!("1:10"));
         d.fields.insert("units".into(), json!("pc"));
+        d.fields.insert("arrowHead".into(), json!("Barbed"));
         super::super::confirm(&mut app).unwrap();
+        assert_eq!(app.session.tool_options_of("dimension")["style"]["arrowHead"], "Barbed");
         assert_eq!(app.session.tool_options_of("dimension")["style"]["scale"], "1:10");
         assert_eq!(app.session.tool_options_of("dimension")["style"]["units"], "pc");
         open(&mut app).unwrap();
@@ -423,6 +456,28 @@ mod tests {
         assert!(super::super::confirm(&mut app).is_err());
         app.ui.dialog = None;
         assert_eq!(app.session.tool_options_of("dimension")["style"]["scale"], "1:10");
+        // An arrow style set by `ui.dialog.set` replaces the Barbed head, as the menu does.
+        open(&mut app).unwrap();
+        super::super::set_field(app.ui.dialog.as_mut().unwrap(), "arrowStyle".into(), json!("none"));
+        super::super::confirm(&mut app).unwrap();
+        let style = serde_json::from_value::<DimensionOptions>(app.session.tool_options_of("dimension")["style"].clone()).unwrap();
+        assert_eq!((style.arrow_style, style.arrowhead()), (ArrowStyle::None, None));
+        // A stroke head set by `ui.dialog.set` keeps Filled as the arrow style, as the menu does; an
+        // unknown name leaves the arrow style as it was.
+        open(&mut app).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        super::super::set_field(d, "arrowStyle".into(), json!("tick"));
+        super::super::set_field(d, "arrowHead".into(), json!("Nope"));
+        assert_eq!(d.fields["arrowStyle"], "tick");
+        super::super::set_field(d, "arrowHead".into(), json!("Barbed"));
+        super::super::confirm(&mut app).unwrap();
+        let style = serde_json::from_value::<DimensionOptions>(app.session.tool_options_of("dimension")["style"].clone()).unwrap();
+        assert_eq!((style.arrow_style, style.arrowhead()), (ArrowStyle::Filled, Some(Arrowhead::Barbed)));
+        // The head of an older style takes that style, as its menu entry does.
+        open(&mut app).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        super::super::set_field(d, "arrowHead".into(), json!("Slash"));
+        assert_eq!(d.fields["arrowStyle"], "tick");
     }
 
     /// A selected dimension shows its style in Properties, with Apply to All and Set as Default.
