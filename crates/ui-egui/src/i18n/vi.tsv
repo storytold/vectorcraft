@@ -1473,6 +1473,8 @@ digits	Malayalam	Malayalam
 	Files	Tệp
 	Files of a PDF standard can't be password-protected.	Tệp theo tiêu chuẩn PDF không thể bảo vệ bằng mật khẩu.
 	Files of this standard tag their colours with ICC profiles.	Tệp theo tiêu chuẩn này gắn thẻ màu bằng hồ sơ ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Tệp theo tiêu chuẩn này gắn thẻ màu bằng hồ sơ ICC, trừ các màu CMYK trong hồ sơ mục đích đầu ra, được ghi dưới dạng DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Với “Không bao gồm hồ sơ” và mục đích đầu ra CMYK, mọi màu CMYK được ghi dưới dạng DeviceCMYK, trừ khi được chuyển đổi sang đích CMYK của hồ sơ khác.
 	Fill	Tô
 	Fill & Stroke	Tô & Nét
 	Fill (X), double-click for the Color Picker	Tô (X), bấm đúp để mở Bộ chọn màu

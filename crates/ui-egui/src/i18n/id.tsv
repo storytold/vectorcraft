@@ -2925,6 +2925,8 @@ antiAlias	Sharp	Tajam
 	Every option matches {base}.	Setiap opsi cocok dengan {base}.
 	Files of a PDF standard can't be password-protected.	File standar PDF tidak dapat dilindungi kata sandi.
 	Files of this standard tag their colours with ICC profiles.	File standar ini menandai warnanya dengan profil ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	File standar ini menandai warnanya dengan profil ICC, kecuali warna CMYK dalam profil output intent, yang ditulis sebagai DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Dengan “Jangan sertakan profil” dan output intent CMYK, setiap warna CMYK ditulis sebagai DeviceCMYK, kecuali dikonversi ke tujuan CMYK dengan profil lain.
 	Flattener preset:	Preset flattener:
 	General › Thumbnails	Umum › Miniatur
 	Grayscale images	Gambar skala abu-abu

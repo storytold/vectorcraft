@@ -1239,6 +1239,8 @@ font-technology	Variable	Değişken
 	Files	Dosyalar
 	Files of a PDF standard can't be password-protected.	PDF standardının dosyaları parola korumalı olamaz.
 	Files of this standard tag their colours with ICC profiles.	Bu standardın dosyaları renklerini ICC profilleriyle etiketler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Bu standardın dosyaları renklerini ICC profilleriyle etiketler, ancak çıkış amacı profilindeki CMYK renkleri DeviceCMYK olarak yazılır.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“Profilleri ekleme” ve bir CMYK çıkış amacıyla, başka bir profilin CMYK hedefine dönüştürülmedikçe her CMYK rengi DeviceCMYK olarak yazılır.
 	Fill	Dolgu
 	Fill & Stroke	Doldur ve Konturla
 	Fill (X), double-click for the Color Picker	Doldur (X), Renk Seçici için çift tıklayın

@@ -1372,7 +1372,7 @@ the image at, and all paint that one image.
 A 16-bit PNG that is not resampled, recompressed or converted keeps its 16 bits a sample in PDF 1.5 and later files,
 and is written at 8 bits in PDF 1.3 and 1.4 files.
 CMYK images stay CMYK (DeviceCMYK, or ICC-based with the CMYK profile when colours are tagged, as in PDF/X-3 and
-PDF/X-4): a CMYK JPEG neither resampled nor recompressed is written unchanged, and the others' ink amounts are
+PDF/X-4, where an image in the output intent's profile is DeviceCMYK): a CMYK JPEG neither resampled nor recompressed is written unchanged except that its `ICC_PROFILE` segments are removed when `output.profiles` is `none` (except in PDF/A, and in PDF/X-3 and PDF/X-4 files that do not write CMYK colors as DeviceCMYK) and in PDF/X-3 and PDF/X-4 when they are the CMYK output intent's profile and CMYK colors are DeviceCMYK, and the others' ink amounts are
 resampled and compressed again (CMYK JPEG or ZIP). `output.conversion` converts them like CMYK colours: `destination`
 to another CMYK profile or to RGB, `preserveNumbers` (and PDF/X-1a) keeps their numbers in a CMYK destination.
 `document.pdfSettings` lists the options that differ from the preset and the warnings without writing a file.
@@ -1487,8 +1487,9 @@ Imported colours keep their model:
 DeviceCMYK and CMYK ICC colours stay CMYK (a file painted mostly in CMYK opens as a CMYK document), DeviceGray is Gray,
 and Separation and DeviceN inks become spot swatches the art links to at its tint (gradient stops too). CMYK images
 (DeviceCMYK, or ICC-based with four components) keep their ink amounts: a CMYK JPEG as it is, any other as a CMYK TIFF
-(masked CMYK images, and ones with 1, 2 or 4 bits per sample, open in RGB with a warning). Placing a CMYK TIFF keeps it
-CMYK too.
+(masked CMYK images keep their inks, the mask coming in as an opacity mask; ones with 1, 2 or 4 bits per sample open in RGB with a warning). In a file with a CMYK
+`/GTS_PDFX` output intent, a DeviceCMYK image carries the output intent's profile, except where it is drawn with a
+`/DefaultCMYK` in the resources in scope. Placing a CMYK TIFF keeps it CMYK too.
 `colorMode: "rgb" | "cmyk"` opens any file in that mode instead, its colours converted as `file.documentColorMode` does
 (`grays` too):
 
@@ -6564,13 +6565,18 @@ The destination is any profile `edit.colorSettings` lists (default: the document
 for its colour mode). `profiles` (`all`, `destination`, or `taggedSource` for a document assigned profiles with
 `edit.assignProfile`) writes colours in ICC-based spaces with their profiles embedded: CMYK with the destination's or
 the document's CMYK profile, RGB as sRGB, grey with the sRGB tone curve (PDF/A, PDF/X-3 and PDF/X-4 files are
-always tagged, whatever `profiles` says). A CMYK image that keeps its numbers carries the CMYK profile it embeds
-with `all` and `taggedSource`, and in PDF/A, PDF/X-3 and PDF/X-4 unless `profiles` is `destination`; PDF/X-1a
+always tagged, whatever `profiles` says). In PDF/X-3 and PDF/X-4 files, CMYK colors whose profile is the profile of a
+CMYK output intent are written as DeviceCMYK, and the profile is embedded once, as the output intent's. With `none` and a CMYK output intent, PDF/X-3 and PDF/X-4 files write every CMYK color as DeviceCMYK
+(unless colors are converted to a CMYK `destination` of another profile, which then tags them), and RGB and gray
+colors stay tagged. A CMYK image that keeps its numbers carries the CMYK profile it embeds
+with `all` and `taggedSource`, and in PDF/A, PDF/X-3 and PDF/X-4 unless `profiles` is `destination`, but not when
+CMYK colors are DeviceCMYK and either its profile is the output intent's or `profiles` is `none` (a CMYK JPEG
+then loses its `ICC_PROFILE` segments); PDF/X-1a
 images are always untagged CMYK. Left unset (the default; `"default"` unsets it over a preset, while `null` keeps the
 preset's value), `profiles` writes device colours and gray and RGB images keep the profiles they carry (not in
 PDF/X-1a). Set to `none`, it also writes every image without the profile it carries, and a JPEG kept as it is without
 its `ICC_PROFILE` segments, its other segments and compressed samples unchanged; PDF/A, PDF/X-3 and PDF/X-4 files keep
-the profiles they tag images with. The Save PDF dialog lists the unset value as Default. `outputIntent` embeds a profile as the file's
+the profiles they tag images with, except CMYK images when CMYK colors are DeviceCMYK. The Save PDF dialog lists the unset value as Default. `outputIntent` embeds a profile as the file's
 `/GTS_PDFX` output intent with `outputCondition`, `outputConditionId` and `registry`, and `trapped` sets `/Trapped`
 (PDF/A files keep their own output intent). Type is written as selectable, searchable text in embedded subset fonts
 with a ToUnicode map (fonts whose licence forbids embedding stay outlines, with a warning); `advanced: {outlineText:
@@ -9786,9 +9792,10 @@ layers are refused.
 - **pdfX1a** (PDF/X-1a:2001, written as PDF 1.3): CMYK, grey and spot colours only. Every colour and image is converted
   to `output.destination` (blank: the output intent's CMYK profile, else the working CMYK profile), untagged; an RGB
   destination or output intent is refused. Transparency is flattened before writing.
-- **pdfX3** (PDF/X-3:2002, written as PDF 1.3): colours are tagged with ICC profiles; transparency is flattened.
-- **pdfX4** (PDF/X-4:2010, PDF 1.6 at most): transparency and layers are kept, colours are tagged, and the XMP metadata
-  names the standard and has an `xmp:MetadataDate` equal to its `xmp:ModifyDate`.
+- **pdfX3** (PDF/X-3:2002, written as PDF 1.3): colours are tagged with ICC profiles, except CMYK colors in the CMYK
+  output intent's profile, which are DeviceCMYK (see `output.profiles`); transparency is flattened.
+- **pdfX4** (PDF/X-4:2010, PDF 1.6 at most): transparency and layers are kept, colours are tagged as in pdfX3, and the
+  XMP metadata names the standard and has an `xmp:MetadataDate` equal to its `xmp:ModifyDate`.
 
 Flattening uses `flattenerPreset` (default High Resolution, see PDF 1.3 above) on a copy (the document is untouched; a
 warning says so), and images with see-through pixels count as transparency. The written file is checked against

@@ -3568,6 +3568,8 @@ antiAlias	Sharp	Scherp
 	Every option matches {base}.	Elke optie komt overeen met {base}.
 	Files of a PDF standard can't be password-protected.	Bestanden volgens een PDF-standaard kunnen niet met een wachtwoord worden beveiligd.
 	Files of this standard tag their colours with ICC profiles.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen, behalve CMYK-kleuren in het profiel voor uitvoerintentie, die als DeviceCMYK worden geschreven.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Met ‘Geen profielen opnemen’ en een CMYK-uitvoerintentie wordt elke CMYK-kleur als DeviceCMYK geschreven, tenzij deze wordt omgezet naar een CMYK-bestemming met een ander profiel.
 	Flattener preset:	Voorinstelling voor afvlakking:
 	General › Thumbnails	Algemeen › Miniaturen
 	Grayscale images	Grijswaardenafbeeldingen
