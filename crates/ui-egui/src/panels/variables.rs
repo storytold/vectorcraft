@@ -8,18 +8,124 @@
 //! the document then no longer matches the active dataset, and "Update Data Set" writes the
 //! art back into it.
 
-use egui::Ui;
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::rc::Rc;
+use std::sync::{Arc, Weak};
+
+use egui::{Rect, Response, Sense, Ui, pos2, vec2};
 use serde_json::json;
-use vectorcraft_doc::{NodeId, NodeKind, VariableKind};
+use vectorcraft_doc::{Document, NodeId, NodeKind, VariableKind};
 use vectorcraft_engine::DocState;
+use vectorcraft_engine::cmd::{VariableSort, VariableSortKey, variable_order};
 
 use crate::VectorcraftApp;
+use crate::theme::Tokens;
 use crate::widgets;
 
 /// The panel id, as the dock, the Window menu and `window.panel` name it.
 pub const ID: &str = "variables";
 
+/// The width of the variable list's type column, which holds each row's kind icon.
+const TYPE_COLUMN: f32 = 22.0;
+
+/// The width of the Variables column in a list `width` wide; the Objects column takes the rest.
+fn name_column(width: f32) -> f32 {
+    ((width - TYPE_COLUMN) / 2.0).max(0.0)
+}
+
+/// The sort a click on `key`'s header asks for: that column in ascending order, or the reverse
+/// of the order the list has when it is already sorted by that column.
+fn clicked_sort(sort: VariableSort, key: VariableSortKey) -> VariableSort {
+    VariableSort { by: key, descending: sort.by == key && !sort.descending }
+}
+
+/// The arrow a header shows while the list is sorted by its column.
+fn sort_arrow(sort: VariableSort, key: VariableSortKey) -> Option<&'static str> {
+    (sort.by == key).then_some(if sort.descending { "▼" } else { "▲" })
+}
+
+/// Draw the list's three column headers (type, Variables, Objects); a click on one returns the
+/// sort it asks for.
+fn headers(ui: &mut Ui, sort: VariableSort) -> Option<VariableSort> {
+    let t = Tokens::get(ui.ctx());
+    let h = ui.spacing().interact_size.y;
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::hover());
+    let name_w = name_column(rect.width());
+    let name_left = rect.left() + TYPE_COLUMN;
+    let cells = [
+        (VariableSortKey::Type, tl!("Type"), Rect::from_min_max(rect.min, pos2(name_left, rect.bottom()))),
+        (VariableSortKey::Name, tl!("Variables"), Rect::from_min_max(pos2(name_left, rect.top()), pos2(name_left + name_w, rect.bottom()))),
+        (VariableSortKey::Object, tl!("Objects"), Rect::from_min_max(pos2(name_left + name_w, rect.top()), rect.max)),
+    ];
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let mut clicked = None;
+    for (key, label, cell) in cells {
+        let r = ui.interact(cell, ui.scope_id().with(("variables-sort", key.id())), Sense::click());
+        if r.hovered() {
+            ui.painter().rect_filled(cell, 0.0, t.hover);
+        }
+        let arrow = sort_arrow(sort, key);
+        let p = ui.painter().with_clip_rect(cell);
+        if key == VariableSortKey::Type {
+            // The type column is too narrow for a word: its icon, or the arrow once it sorts.
+            match arrow {
+                Some(a) => {
+                    p.text(cell.center(), egui::Align2::CENTER_CENTER, a, font.clone(), t.text_dim);
+                }
+                None => crate::icons::paint(ui, "arrow-up-down", Rect::from_center_size(cell.center(), vec2(14.0, 14.0)), t.icon),
+            }
+        } else {
+            p.text(cell.left_center() + vec2(4.0, 0.0), egui::Align2::LEFT_CENTER, label, font.clone(), t.text_strong);
+            if let Some(a) = arrow {
+                p.text(cell.right_center() - vec2(4.0, 0.0), egui::Align2::RIGHT_CENTER, a, font.clone(), t.text_dim);
+            }
+        }
+        r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, arrow.is_some(), label));
+        if r.on_hover_text(label).clicked() {
+            clicked = Some(clicked_sort(sort, key));
+        }
+    }
+    clicked
+}
+
+/// Draw one variable row across the three columns: its kind's icon, its name and the object it
+/// drives. Each column clips its text to its own width.
+fn variable_row(ui: &mut Ui, row: &VarRow, selected: bool) -> Response {
+    let t = Tokens::get(ui.ctx());
+    let h = ui.spacing().interact_size.y;
+    let (rect, r) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    if selected {
+        ui.painter().rect_filled(rect, 0.0, t.row_selected);
+    } else if r.hovered() {
+        ui.painter().rect_filled(rect, 0.0, t.hover);
+    }
+    // The kind's own icon, so a text variable and a visibility one read apart.
+    let icon = match row.kind {
+        VariableKind::Text => "type",
+        VariableKind::Visibility => "eye",
+        VariableKind::Image => "image",
+        VariableKind::Graph => "chart-column",
+        VariableKind::Unknown => "square-dashed",
+    };
+    let icon_rect = Rect::from_center_size(pos2(rect.left() + TYPE_COLUMN / 2.0, rect.center().y), vec2(14.0, 14.0));
+    crate::icons::paint(ui, icon, icon_rect, t.icon);
+    let name_left = rect.left() + TYPE_COLUMN;
+    let name_right = name_left + name_column(rect.width());
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let (pad, left) = (vec2(4.0, 0.0), egui::Align2::LEFT_CENTER);
+    let name_cell = Rect::from_min_max(pos2(name_left, rect.top()), pos2(name_right - 4.0, rect.bottom()));
+    ui.painter().with_clip_rect(name_cell).text(name_cell.left_center() + pad, left, &row.name, font.clone(), t.text);
+    let object_cell = Rect::from_min_max(pos2(name_right, rect.top()), rect.max);
+    ui.painter().with_clip_rect(object_cell).text(object_cell.left_center() + pad, left, &row.object, font, t.text_dim);
+    let full = if row.object.is_empty() { row.name.clone() } else { format!("{} · {}", row.name, row.object) };
+    widgets::list_item_info(&r, selected, || full.clone());
+    // A column clips a long name, so the whole of it shows on hover.
+    r.on_hover_text(full)
+}
+
 /// One variable row: its kind's icon, its name, and the object it drives.
+#[derive(Debug, PartialEq)]
 struct VarRow {
     name: String,
     kind: VariableKind,
@@ -29,12 +135,114 @@ struct VarRow {
 }
 
 /// One dataset row: its name and how many values it carries.
+#[derive(Debug, PartialEq)]
 struct SetRow {
     name: String,
     values: usize,
     active: bool,
     /// False once an edit has moved the art away from what this row says.
     matches: bool,
+}
+
+/// The panel's two lists: the variables in the order `variable.sort` set, and the data sets.
+#[derive(Debug, PartialEq)]
+struct Rows {
+    vars: Vec<VarRow>,
+    sets: Vec<SetRow>,
+}
+
+/// Build the panel's rows. `xml_id` names a variable's one object by its XML id, as Identify
+/// Objects By › XML ID does.
+fn build_rows(st: &DocState, xml_id: bool) -> Rows {
+    #[cfg(test)]
+    BUILT.with(|n| n.set(n.get() + 1));
+    // In the order `variable.sort` set, which `variable.list` reports too.
+    let all = &st.doc.variables.variables;
+    let vars: Vec<VarRow> = variable_order(st, xml_id)
+        .into_iter()
+        .filter_map(|i| all.get(i))
+        .map(|v| {
+            let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
+            let object = match bound.as_slice() {
+                [] => String::new(),
+                [one] => st.doc.node(NodeId(*one)).map(|n| n.identify_label(xml_id)).unwrap_or_default(),
+                _ => tl!("Multiple objects").to_string(),
+            };
+            VarRow { name: v.name.clone(), kind: v.kind, bound, object }
+        })
+        .collect();
+    // What the art holds now, read once for every row's drift check.
+    let current = st.doc.captured_values();
+    let sets: Vec<SetRow> = st
+        .doc
+        .variables
+        .datasets
+        .iter()
+        .map(|d| SetRow {
+            name: d.name.clone(),
+            values: d.values.len(),
+            active: st.doc.variables.active_dataset.as_deref() == Some(d.name.as_str()),
+            matches: d.matches(&current),
+        })
+        .collect();
+    Rows { vars, sets }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times [`build_rows`] has run on this thread.
+    static BUILT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Everything the rows are built from: the document version (its address, which the held
+/// [`Weak`] keeps from being reused, and its revision), the list's order, Identify Objects By, the
+/// interface language that "Multiple objects" is written in, and the document's new art. New art
+/// on a locked artboard is read by a data set's drift check, and selecting or deselecting it
+/// changes the set in place without a new revision.
+struct RowsKey {
+    doc: Weak<Document>,
+    revision: u64,
+    sort: VariableSort,
+    xml_id: bool,
+    lang: crate::i18n::Lang,
+    new_art: Arc<HashSet<NodeId>>,
+}
+
+impl RowsKey {
+    fn of(st: &DocState, xml_id: bool) -> Self {
+        RowsKey {
+            doc: Arc::downgrade(&st.doc),
+            revision: st.revision,
+            sort: st.variables_sort,
+            xml_id,
+            lang: crate::i18n::current(),
+            new_art: st.doc.new_art.get(),
+        }
+    }
+
+    fn same(&self, other: &RowsKey) -> bool {
+        self.doc.ptr_eq(&other.doc)
+            && self.revision == other.revision
+            && self.sort == other.sort
+            && self.xml_id == other.xml_id
+            && self.lang == other.lang
+            && Arc::ptr_eq(&self.new_art, &other.new_art)
+    }
+}
+
+/// The panel's rows for `st`, built again only when one of the inputs in [`RowsKey`] changes.
+/// The selection and the highlighted row are not among them: the panel reads those every frame.
+fn cached_rows(st: &DocState, xml_id: bool) -> Rc<Rows> {
+    thread_local! {
+        static ROWS: RefCell<Option<(RowsKey, Rc<Rows>)>> = const { RefCell::new(None) };
+    }
+    let key = RowsKey::of(st, xml_id);
+    if let Some(rows) = ROWS.with(|c| c.borrow().as_ref().filter(|(k, _)| k.same(&key)).map(|(_, rows)| rows.clone())) {
+        return rows;
+    }
+    let rows = Rc::new(build_rows(st, xml_id));
+    ROWS.with(|c| *c.borrow_mut() = Some((key, rows.clone())));
+    rows
 }
 
 /// The row the panel acts on: Delete, Options… and Select Bound Object all mean it. A name
@@ -97,6 +305,18 @@ pub(crate) fn delete_active_dataset(app: &mut VectorcraftApp) {
     app.run("dataset.delete", json!({})).ok();
 }
 
+/// The Data Set box: a new name typed over the current data set's renames it with
+/// `dataset.rename`, in one undo step. The same name runs nothing, so no undo step is added; an
+/// empty or taken name is refused, and the status bar says why.
+pub(crate) fn rename_active_dataset(app: &mut VectorcraftApp, from: &str, to: &str) {
+    if from.is_empty() || to.trim() == from {
+        return;
+    }
+    if let Err(e) = app.run("dataset.rename", json!({"name": from, "newName": to})) {
+        app.status(e);
+    }
+}
+
 /// Draw document variables, data sets and their two-row footer of capture and binding controls.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(st) = app.session.active() else {
@@ -105,47 +325,36 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     // Owned snapshots: the rows below run commands, which borrow the app mutably.
     let xml_id = app.session.prefs.identify_objects_by == "xmlId";
-    let vars: Vec<VarRow> = st
-        .doc
-        .variables
-        .variables
-        .iter()
-        .map(|v| {
-            let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
-            let object = match bound.as_slice() {
-                [] => String::new(),
-                [one] => st.doc.node(NodeId(*one)).map(|n| n.identify_label(xml_id)).unwrap_or_default(),
-                _ => tl!("Multiple objects").to_string(),
-            };
-            VarRow { name: v.name.clone(), kind: v.kind, bound, object }
-        })
-        .collect();
-    // What the art holds now, read once for every row's drift check.
-    let current = st.doc.captured_values();
-    let sets: Vec<SetRow> = st
-        .doc
-        .variables
-        .datasets
-        .iter()
-        .map(|d| SetRow {
-            name: d.name.clone(),
-            values: d.values.len(),
-            active: st.doc.variables.active_dataset.as_deref() == Some(d.name.as_str()),
-            matches: d.matches(&current),
-        })
-        .collect();
+    let rows = cached_rows(st, xml_id);
+    let (vars, sets) = (&rows.vars, &rows.sets);
     let active = sets.iter().find(|s| s.active);
     let Picked { selected, has_selection, selection_bound, single_type, single_image, selection_graph } = picked(st);
     let highlighted = highlighted_row(st);
     // Lock Variables: no variable is defined, deleted or renamed until they are unlocked.
     let locked = st.doc.variables.locked;
+    let sort = st.variables_sort;
 
-    // The current data set across the top: its name, and the arrows that step through them.
+    // The current data set across the top: its name in a box that renames it, the list that
+    // chooses another, and the arrows that step through them.
     ui.horizontal(|ui| {
         widgets::field_label(ui, tl!("Data Set"));
         let names: Vec<&str> = sets.iter().map(|s| s.name.as_str()).collect();
         let current = active.map(|s| s.name.as_str()).unwrap_or("");
-        let picked = widgets::dropdown_names(ui, "variables-active", current, &names, 160.0);
+        let typed = ui.add_enabled_ui(active.is_some(), |ui| widgets::text_field(ui, "variables-active-name", Some(current), 134.0, 1)).inner;
+        if let Some(to) = typed {
+            rename_active_dataset(app, current, &to);
+        }
+        // The closed list button is too narrow for a name and shows none; the open list marks the
+        // current data set.
+        let picked = widgets::combo_named(ui, "variables-active", Some(tl!("Data Sets")), "", 26.0, |ui| {
+            let mut chosen = None;
+            for (i, name) in names.iter().enumerate() {
+                if ui.add(egui::Button::selectable(*name == current, *name)).clicked() {
+                    chosen = Some(i);
+                }
+            }
+            chosen
+        });
         if let Some(name) = picked.and_then(|i| names.get(i))
             && *name != current
         {
@@ -162,40 +371,31 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
 
-    widgets::subheader(ui, tl!("Variables"));
+    // The list's column headers: a click sorts the list by that column, and a second click
+    // reverses the order.
+    if let Some(next) = headers(ui, sort) {
+        app.run("variable.sort", json!({"by": next.by.id(), "descending": next.descending})).ok();
+    }
     if vars.is_empty() {
         widgets::dim_label(ui, tl!("None"));
     }
-    for row in &vars {
-        ui.horizontal(|ui| {
-            // The kind's own icon, so a text variable and a visibility one read apart.
-            let icon = match row.kind {
-                VariableKind::Text => "type",
-                VariableKind::Visibility => "eye",
-                VariableKind::Image => "image",
-                VariableKind::Graph => "chart-column",
-                VariableKind::Unknown => "square-dashed",
-            };
-            ui.add(egui::Image::new(crate::icons::source(icon)).fit_to_exact_size(egui::vec2(14.0, 14.0)));
-            // The object a variable drives is named beside it, as the reference panel does.
-            let text = if row.object.is_empty() { row.name.clone() } else { format!("{} · {}", row.name, row.object) };
-            let r = ui.selectable_label(highlighted.as_deref() == Some(row.name.as_str()), text);
-            // A click highlights the row and selects what it drives; a double click opens
-            // Variable Options for it.
-            if r.clicked() {
-                click_row(app, &row.name, &row.bound);
-            }
-            if r.double_clicked() && !locked {
-                crate::dialogs::variables::open(app, "variable.rename", Some(&row.name));
-            }
-        });
+    for row in vars {
+        let r = variable_row(ui, row, highlighted.as_deref() == Some(row.name.as_str()));
+        // A click highlights the row and selects what it drives; a double click opens
+        // Variable Options for it.
+        if r.clicked() {
+            click_row(app, &row.name, &row.bound);
+        }
+        if r.double_clicked() && !locked {
+            crate::dialogs::variables::open(app, "variable.rename", Some(&row.name));
+        }
     }
 
     widgets::subheader(ui, tl!("Data Sets"));
     if sets.is_empty() {
         widgets::dim_label(ui, tl!("None"));
     }
-    for row in &sets {
+    for row in sets {
         // The active row is ticked and selected; a row the art has drifted from is in
         // italics, so an edit that left the document not matching it is visible.
         let label = format!("{}{} · {}", if row.active { "● " } else { "" }, row.name, row.values);
@@ -272,7 +472,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if widgets::menu_item(ui, tl!("New Variable…"), !locked, false) {
         crate::menus::invoke(app, "variable.define", json!({}));
     }
-    // Variable Options renames the highlighted variable, else the first.
+    // Variable Options edits the name and kind of the highlighted variable, else the first.
     if widgets::menu_item(ui, tl!("Variable Options…"), !vars.is_empty() && !locked, false) {
         let name = highlighted.clone().or_else(|| vars.first().cloned()).unwrap_or_default();
         crate::dialogs::variables::open(app, "variable.rename", Some(&name));
@@ -321,6 +521,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
         delete_active_dataset(app);
     }
     ui.separator();
+    // One file dialog for either kind of data source; the extension picks the reader.
+    if widgets::menu_item(ui, tl!("Import…"), true, false) {
+        crate::picks::button(app, import_data_source);
+    }
     if widgets::menu_item(ui, tl!("Import Data Sets…"), true, false) {
         crate::picks::button(app, import_datasets);
     }
@@ -341,6 +545,23 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if widgets::menu_item(ui, tl!("Select All Bound Objects"), !bound.is_empty(), false) {
         app.run("select.set", json!({"ids": bound})).ok();
+    }
+}
+
+/// Variables panel: Import… opens one file dialog for a CSV, TSV, TXT or XML file and runs
+/// `variable.import` on the chosen file, which reads it by its extension.
+fn import_data_source(app: &mut VectorcraftApp) {
+    let pick = crate::FilePick {
+        filters: vec![
+            crate::FilePick::filter("Data sources", &["csv", "tsv", "txt", "xml"]),
+            crate::FilePick::filter("CSV", &["csv", "tsv", "txt"]),
+            crate::FilePick::filter("XML", &["xml"]),
+        ],
+        ..Default::default()
+    };
+    let Some(path) = crate::picks::open(app, &pick) else { return };
+    if let Err(e) = app.run("variable.import", json!({"path": path})) {
+        app.status(e);
     }
 }
 
@@ -406,6 +627,247 @@ mod tests {
         assert!(text.contains("Name") && text.contains("Data Sets") && text.contains("Data Set 1"), "{text}");
     }
 
+    /// Frames of the panel with input events, for typing into its Data Set box.
+    struct Driver {
+        ctx: egui::Context,
+        time: f64,
+    }
+
+    impl Driver {
+        fn new() -> Self {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            crate::theme::install_fonts(&ctx);
+            Self { ctx, time: 0.0 }
+        }
+
+        fn frame(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
+            self.time += 0.1;
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 600.0));
+            let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
+            let mut out = self.ctx.run_ui(input, |ui| show(app, ui));
+            out.textures_delta.clear();
+            out
+        }
+
+        /// The center of the panel's one text box, the Data Set box.
+        fn data_set_box(&mut self, app: &mut VectorcraftApp) -> egui::Pos2 {
+            use egui::accesskit::Role;
+            self.frame(app, vec![]);
+            let out = self.frame(app, vec![]);
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            let (_, node) = nodes.iter().find(|(_, n)| matches!(n.role(), Role::TextInput | Role::MultilineTextInput)).expect("the Data Set box");
+            let b = node.bounds().expect("bounds");
+            egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5)
+        }
+
+        /// Clicks the Data Set box, replaces its text with `text` and presses Enter.
+        fn type_name(&mut self, app: &mut VectorcraftApp, text: &str) {
+            use egui::{Event, Key, Modifiers, PointerButton};
+            let pos = self.data_set_box(app);
+            let (button, none) = (PointerButton::Primary, Modifiers::default());
+            self.frame(app, vec![Event::PointerMoved(pos), Event::PointerButton { pos, button, pressed: true, modifiers: none }]);
+            self.frame(app, vec![Event::PointerButton { pos, button, pressed: false, modifiers: none }]);
+            let all = Modifiers { ctrl: true, command: true, ..Default::default() };
+            let select_all = Event::Key { key: Key::A, physical_key: None, pressed: true, repeat: false, modifiers: all };
+            self.frame(app, vec![select_all, Event::Text(text.into())]);
+            self.frame(app, vec![Event::Key { key: Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: none }]);
+            self.frame(app, vec![]);
+        }
+
+        /// The panel's accessibility nodes after two frames without input.
+        fn nodes(&mut self, app: &mut VectorcraftApp) -> Vec<(egui::accesskit::NodeId, egui::accesskit::Node)> {
+            self.frame(app, vec![]);
+            let out = self.frame(app, vec![]);
+            out.platform_output.accesskit_update.expect("an accessibility tree").nodes
+        }
+
+        /// Clicks the center of `node`.
+        fn click(&mut self, app: &mut VectorcraftApp, node: &egui::accesskit::Node) {
+            use egui::{Event, Modifiers, PointerButton};
+            let b = node.bounds().expect("bounds");
+            let pos = egui::pos2((b.x0 + b.x1) as f32 * 0.5, (b.y0 + b.y1) as f32 * 0.5);
+            let (button, none) = (PointerButton::Primary, Modifiers::default());
+            self.frame(app, vec![Event::PointerMoved(pos), Event::PointerButton { pos, button, pressed: true, modifiers: none }]);
+            self.frame(app, vec![Event::PointerButton { pos, button, pressed: false, modifiers: none }]);
+            self.frame(app, vec![]);
+        }
+
+        /// Clicks the Data Set list button and returns the rows of the open list: the buttons that
+        /// were not in the panel before it opened.
+        fn open_data_set_list(&mut self, app: &mut VectorcraftApp) -> Vec<egui::accesskit::Node> {
+            use egui::accesskit::Role;
+            let before = self.nodes(app);
+            let (_, list) =
+                before.iter().find(|(_, n)| n.role() == Role::ComboBox && n.label() == Some("Data Sets")).expect("the Data Set list button");
+            let list = list.clone();
+            self.click(app, &list);
+            let after = self.nodes(app);
+            after.into_iter().filter(|(id, n)| n.role() == Role::Button && !before.iter().any(|(b, _)| b == id)).map(|(_, n)| n).collect()
+        }
+    }
+
+    fn set_names(app: &mut VectorcraftApp) -> Vec<String> {
+        let sets = app.run("dataset.list", json!({})).unwrap();
+        sets["datasets"].as_array().unwrap().iter().map(|d| d["name"].as_str().unwrap_or_default().to_string()).collect()
+    }
+
+    fn undo_steps(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// A name typed in the Data Set box and entered renames the current data set in one undo step;
+    /// the open list then marks the renamed data set as the current one, and a click on another
+    /// row chooses that data set.
+    #[test]
+    fn the_data_set_box_renames_the_current_data_set() {
+        let mut app = app_with_data();
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        app.session.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        d.type_name(&mut app, "Spring");
+        assert_eq!(set_names(&mut app), ["Spring", "Data Set 2"]);
+        assert_eq!(app.session.active().unwrap().doc.variables.active_dataset.as_deref(), Some("Spring"));
+        assert_eq!(undo_steps(&app), before + 1);
+        assert_eq!(app.session.active().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Rename Data Set"));
+        // The new name is what the box shows, and what the list offers, marked, with the other row.
+        let text = crate::tests_labels::painted_text(&mut app, show);
+        assert!(text.contains("Spring"), "{text}");
+        let rows = d.open_data_set_list(&mut app);
+        // The accessibility update lists nodes in hash-map order, so the rows are compared by name.
+        let mut marked: Vec<(Option<&str>, bool)> = rows.iter().map(|n| (n.label(), n.toggled() == Some(egui::accesskit::Toggled::True))).collect();
+        marked.sort();
+        assert_eq!(marked, [(Some("Data Set 2"), false), (Some("Spring"), true)]);
+        let other = rows.iter().find(|n| n.label() == Some("Data Set 2")).expect("the Data Set 2 row").clone();
+        d.click(&mut app, &other);
+        assert_eq!(app.session.active().unwrap().doc.variables.active_dataset.as_deref(), Some("Data Set 2"));
+    }
+
+    /// The same name adds no undo step; an empty name or another data set's name is refused with a
+    /// status message, and the names stay as they were.
+    #[test]
+    fn the_data_set_box_refuses_an_empty_or_taken_name() {
+        let mut app = app_with_data();
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        app.session.execute("dataset.select", &json!({"name": "Data Set 1"})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        d.type_name(&mut app, "Data Set 1");
+        assert_eq!(undo_steps(&app), before, "the same name runs nothing");
+        assert_eq!(app.ui.status, "");
+        for name in ["Data Set 2", "   "] {
+            app.ui.status.clear();
+            d.type_name(&mut app, name);
+            assert_eq!(set_names(&mut app), ["Data Set 1", "Data Set 2"], "{name:?}");
+            assert_eq!(undo_steps(&app), before, "{name:?}");
+            assert!(!app.ui.status.is_empty(), "{name:?} gives no status message");
+        }
+        assert!(app.ui.status.contains("newName"), "{}", app.ui.status);
+        // Through the helper too: an unchanged or padded name runs nothing.
+        rename_active_dataset(&mut app, "Data Set 1", " Data Set 1 ");
+        assert_eq!(undo_steps(&app), before);
+    }
+
+    /// With no data set the box is disabled, so typing in it renames nothing.
+    #[test]
+    fn the_data_set_box_is_disabled_without_a_data_set() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        let before = undo_steps(&app);
+        let mut d = Driver::new();
+        let nodes = d.nodes(&mut app);
+        let (_, field) = nodes
+            .iter()
+            .find(|(_, n)| matches!(n.role(), egui::accesskit::Role::TextInput | egui::accesskit::Role::MultilineTextInput))
+            .expect("the Data Set box");
+        assert!(field.is_disabled(), "the Data Set box is enabled without a data set");
+        d.type_name(&mut app, "Spring");
+        assert!(set_names(&mut app).is_empty());
+        assert_eq!(undo_steps(&app), before);
+        assert_eq!(app.ui.status, "");
+    }
+
+    /// Each variable row is a list item, and only the highlighted one is selected.
+    #[test]
+    fn the_rows_report_the_highlight_as_the_selected_state() {
+        use egui::accesskit::Role;
+        let mut app = app_with_data();
+        app.session.execute("variable.define", &json!({"name": "age", "kind": "visibility"})).unwrap();
+        app.session.execute("variable.highlight", &json!({"variable": "Name"})).unwrap();
+        let nodes = Driver::new().nodes(&mut app);
+        let mut rows: Vec<_> = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == Role::ListItem)
+            .map(|(_, n)| (n.label().map(str::to_string), n.is_selected(), n.toggled()))
+            .collect();
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(rows, [(Some("Name · Alice".to_string()), Some(true), None), (Some("age".to_string()), Some(false), None)]);
+    }
+
+    /// A click on a column header sorts the list by that column, and a second click on it
+    /// reverses the order; the rows are drawn in the order `variable.list` reports.
+    #[test]
+    fn a_header_click_sorts_the_list_and_a_second_click_reverses_it() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = app_with_data();
+        let t = app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Bob"})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("layer.setProps", &json!({"id": t, "name": "Aaron"})).unwrap();
+        let alice = app.session.doc().unwrap().doc.variables.objects_of("Name")[0];
+        app.session.execute("layer.setProps", &json!({"id": alice.0, "name": "Bella"})).unwrap();
+        app.session.execute("variable.define", &json!({"name": "age", "kind": "visibility"})).unwrap();
+        app.session.execute("variable.bind", &json!({"variable": "age", "ids": [t]})).unwrap();
+        let ctx = egui::Context::default();
+        let drawn = |ctx: &egui::Context, app: &mut VectorcraftApp| -> Vec<String> {
+            let texts = frame_events(ctx, app, vec![], show);
+            let mut rows: Vec<(f32, String)> = ["Name", "age"].iter().map(|n| (text_rect(&texts, n).center().y, n.to_string())).collect();
+            rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+            rows.into_iter().map(|(_, n)| n).collect()
+        };
+        let listed = |app: &mut VectorcraftApp| -> Vec<String> {
+            let list = app.run("variable.list", json!({})).unwrap();
+            list["variables"].as_array().unwrap().iter().map(|v| v["name"].as_str().unwrap().to_string()).collect()
+        };
+        let sort = |app: &VectorcraftApp| {
+            let s = app.session.doc().unwrap().variables_sort;
+            (s.by, s.descending)
+        };
+        assert_eq!(drawn(&ctx, &mut app), ["Name", "age"], "the order they were defined in");
+        let steps = app.session.doc().unwrap().history.undo.len();
+
+        let header = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| text_rect(&frame_events(ctx, app, vec![], show), label).center();
+        let at = header(&ctx, &mut app, "Variables");
+        click(&ctx, &mut app, at, show);
+        assert_eq!(sort(&app), (VariableSortKey::Name, false));
+        assert_eq!(drawn(&ctx, &mut app), ["age", "Name"]);
+        assert_eq!(listed(&mut app), ["age", "Name"]);
+        let at = header(&ctx, &mut app, "Variables");
+        click(&ctx, &mut app, at, show);
+        assert_eq!(sort(&app), (VariableSortKey::Name, true));
+        assert_eq!(drawn(&ctx, &mut app), ["Name", "age"]);
+
+        // Objects: Aaron (age's type) before Bella (Name's), then the reverse.
+        let at = header(&ctx, &mut app, "Objects");
+        click(&ctx, &mut app, at, show);
+        assert_eq!(sort(&app), (VariableSortKey::Object, false));
+        assert_eq!(drawn(&ctx, &mut app), ["age", "Name"]);
+        let at = header(&ctx, &mut app, "Objects");
+        click(&ctx, &mut app, at, show);
+        assert_eq!(drawn(&ctx, &mut app), ["Name", "age"]);
+
+        // The type column's header sits left of the Variables header: text before visibility.
+        let left = text_rect(&frame_events(&ctx, &mut app, vec![], show), "Variables").left() - 4.0 - TYPE_COLUMN / 2.0;
+        let y = header(&ctx, &mut app, "Variables").y;
+        click(&ctx, &mut app, egui::pos2(left, y), show);
+        assert_eq!(sort(&app), (VariableSortKey::Type, false));
+        assert_eq!(drawn(&ctx, &mut app), ["Name", "age"]);
+        click(&ctx, &mut app, egui::pos2(left, y), show);
+        assert_eq!(sort(&app), (VariableSortKey::Type, true));
+        assert_eq!(drawn(&ctx, &mut app), ["age", "Name"]);
+        // Sorting is not an edit.
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), steps, "no undo step");
+    }
+
     #[test]
     fn a_row_the_art_left_behind_is_in_italics() {
         let mut app = app_with_data();
@@ -469,6 +931,8 @@ mod tests {
             "Update Data Set",
             "Rename Data Set…",
             "Delete Data Set",
+            "Import…",
+            "Import Data Sets…",
             "Load Variable Library…",
             "Save Variable Library…",
             "Select Bound Object",
@@ -657,6 +1121,231 @@ mod tests {
             .expect("the Variables panel is listed");
         assert_eq!((panel.path.clone(), panel.label.as_str()), (vec!["Window".to_string()], "Variables"));
         assert!(!entries.iter().any(|e| e.path == ["Window", "Variables"]), "no Variables submenu");
+    }
+
+    /// The rows as the panel built them on every frame before [`cached_rows`] kept them: the
+    /// identity checks and the timing compare against it.
+    fn old_rows(st: &DocState, xml_id: bool) -> Rows {
+        let all = &st.doc.variables.variables;
+        let vars: Vec<VarRow> = variable_order(st, xml_id)
+            .into_iter()
+            .filter_map(|i| all.get(i))
+            .map(|v| {
+                let bound: Vec<u64> = st.doc.variables.objects_of(&v.name).iter().map(|i| i.0).collect();
+                let object = match bound.as_slice() {
+                    [] => String::new(),
+                    [one] => st.doc.node(NodeId(*one)).map(|n| n.identify_label(xml_id)).unwrap_or_default(),
+                    _ => tl!("Multiple objects").to_string(),
+                };
+                VarRow { name: v.name.clone(), kind: v.kind, bound, object }
+            })
+            .collect();
+        let current = st.doc.captured_values();
+        let sets: Vec<SetRow> = st
+            .doc
+            .variables
+            .datasets
+            .iter()
+            .map(|d| SetRow {
+                name: d.name.clone(),
+                values: d.values.len(),
+                active: st.doc.variables.active_dataset.as_deref() == Some(d.name.as_str()),
+                matches: d.matches(&current),
+            })
+            .collect();
+        Rows { vars, sets }
+    }
+
+    fn built() -> u64 {
+        BUILT.with(|n| n.get())
+    }
+
+    /// Frames drawn while nothing changes build the rows once and draw the same rows after that.
+    #[test]
+    fn frames_without_a_change_build_the_rows_once() {
+        let mut app = app_with_data();
+        let mut d = Driver::new();
+        d.frame(&mut app, vec![]);
+        let before = built();
+        for _ in 0..5 {
+            d.frame(&mut app, vec![]);
+        }
+        assert_eq!(built(), before, "frames of an unchanged document built the rows again");
+        let st = app.session.active().unwrap();
+        assert!(Rc::ptr_eq(&cached_rows(st, false), &cached_rows(st, false)));
+        assert_eq!(*cached_rows(st, false), old_rows(st, false));
+    }
+
+    /// Draws a frame after `what` changed one of the rows' inputs, checks that the frame built the
+    /// rows again and that they equal the rows the old per-frame build gives, and returns them.
+    fn rebuilt(d: &mut Driver, app: &mut VectorcraftApp, what: &str) -> Rc<Rows> {
+        let before = built();
+        d.frame(app, vec![]);
+        assert!(built() > before, "{what}: the frame drew the rows it kept");
+        let xml_id = app.session.prefs.identify_objects_by == "xmlId";
+        let st = app.session.active().unwrap();
+        let rows = cached_rows(st, xml_id);
+        assert_eq!(*rows, old_rows(st, xml_id), "{what}");
+        rows
+    }
+
+    fn matches(rows: &Rows, set: &str) -> bool {
+        rows.sets.iter().find(|s| s.name == set).unwrap_or_else(|| panic!("no data set {set}")).matches
+    }
+
+    /// Each input of the rows builds them again: an edit, the list's order, Identify Objects By,
+    /// the interface language, new art on a locked artboard selected or deselected without a new
+    /// revision, Undo, Redo and another document.
+    #[test]
+    fn each_input_of_the_rows_builds_them_again() {
+        let mut app = app_with_data();
+        let mut d = Driver::new();
+        d.frame(&mut app, vec![]);
+        let t = app.session.active().unwrap().doc.variables.objects_of("Name")[0].0;
+
+        app.session.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "variable.define").vars.len(), 2);
+        let r = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.session.execute("variable.bind", &json!({"variable": "Shown", "ids": [r]})).unwrap();
+        let rows = rebuilt(&mut d, &mut app, "variable.bind");
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.bound.clone()), Some(vec![r]));
+        app.session.execute("dataset.capture", &json!({})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "dataset.capture").sets.len(), 2);
+        app.session.execute("text.editRange", &json!({"id": t, "insert": "Bob"})).unwrap();
+        assert!(!matches(&rebuilt(&mut d, &mut app, "an edit of bound text"), "Data Set 1"));
+
+        // On a locked artboard the text is not read, so the data set no longer differs from it.
+        app.session.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+        assert!(matches(&rebuilt(&mut d, &mut app, "artboard lock"), "Data Set 1"));
+        // New art there is read again; selecting or deselecting it keeps the revision.
+        let revision = app.session.active().unwrap().revision;
+        app.session.active().unwrap().doc.new_art.set(Arc::new(HashSet::from([NodeId(t)])));
+        assert!(!matches(&rebuilt(&mut d, &mut app, "new art selected"), "Data Set 1"));
+        app.session.active().unwrap().doc.new_art.set(Arc::default());
+        assert!(matches(&rebuilt(&mut d, &mut app, "new art deselected"), "Data Set 1"));
+        assert_eq!(app.session.active().unwrap().revision, revision, "new art moved the revision");
+        app.session.execute("artboard.setProps", &json!({"index": 0, "locked": false})).unwrap();
+        assert!(!matches(&rebuilt(&mut d, &mut app, "artboard unlock"), "Data Set 1"));
+
+        app.session.execute("variable.sort", &json!({"by": "name", "descending": true})).unwrap();
+        let names: Vec<String> = rebuilt(&mut d, &mut app, "variable.sort").vars.iter().map(|v| v.name.clone()).collect();
+        assert_eq!(names, ["Shown", "Name"]);
+
+        // Identify Objects By names the one object by its XML id; the preference is not an edit.
+        app.session.execute("layer.setProps", &json!({"id": r, "name": "My Rect #2"})).unwrap();
+        rebuilt(&mut d, &mut app, "layer.setProps");
+        app.session.prefs.identify_objects_by = "xmlId".into();
+        let rows = rebuilt(&mut d, &mut app, "Identify Objects By");
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.object.as_str()), Some("My_Rect__x23_2"));
+        app.session.prefs.identify_objects_by = "objectName".into();
+        rebuilt(&mut d, &mut app, "Identify Objects By back");
+
+        // A variable bound to more than one object says so in the interface language.
+        app.session.execute("variable.bind", &json!({"variable": "Shown", "ids": [t]})).unwrap();
+        rebuilt(&mut d, &mut app, "a second binding");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("de").expect("de registered"));
+        let rows = rebuilt(&mut d, &mut app, "the language");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.object.as_str()), Some("Mehrere Objekte"));
+        let rows = rebuilt(&mut d, &mut app, "the language back");
+        assert_eq!(rows.vars.iter().find(|v| v.name == "Shown").map(|v| v.object.as_str()), Some("Multiple objects"));
+
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "edit.undo").vars.iter().find(|v| v.name == "Shown").map(|v| v.bound.len()), Some(1));
+        app.session.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(rebuilt(&mut d, &mut app, "edit.redo").vars.iter().find(|v| v.name == "Shown").map(|v| v.bound.len()), Some(2));
+
+        // Another document, and back.
+        app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+        assert!(rebuilt(&mut d, &mut app, "another document").vars.is_empty());
+        assert!(app.session.set_active(0));
+        assert_eq!(rebuilt(&mut d, &mut app, "the first document again").vars.len(), 2);
+    }
+
+    /// A document for the timing: `threads` stories of four threaded frames with a text variable
+    /// on each frame, `rects` rectangles with a visibility variable on each but the last tenth
+    /// (those go to the first visibility variable as well), `graphs` graphs with a graph variable
+    /// each, and `sets` captured data sets, listed by object.
+    fn timing_document(threads: usize, rects: usize, graphs: usize, sets: usize) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let s = &mut app.session;
+        s.execute("file.new", &json!({"width": 2000, "height": 2000})).unwrap();
+        let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+        let bind = |s: &mut vectorcraft_engine::Session, name: String, kind: &str, ids: &[u64]| {
+            s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+            s.execute("variable.bind", &json!({"variable": name, "ids": ids})).unwrap();
+        };
+        for i in 0..threads {
+            let (x, y) = ((i % 10) as f64 * 150.0, (i / 10) as f64 * 300.0);
+            let text = format!("Story {i} with a few words in it that flow from frame to frame");
+            let mut frame = id(s.execute("text.create", &json!({"x": x, "y": y, "text": text, "area": {"width": 120, "height": 40}})).unwrap());
+            bind(s, format!("t{i}a"), "text", &[frame]);
+            for f in ["b", "c", "d"] {
+                frame = id(s.execute("text.thread.add", &json!({"from": frame, "rect": [x, y + 60.0, 120, 40]})).unwrap());
+                bind(s, format!("t{i}{f}"), "text", &[frame]);
+            }
+        }
+        let rects: Vec<u64> = (0..rects)
+            .map(|i| id(s.execute("shape.rectangle", &json!({"x": (i % 20) * 90, "y": 1500 + (i / 20) * 40, "width": 30, "height": 30})).unwrap()))
+            .collect();
+        let own = rects.len() - rects.len() / 10;
+        for (i, r) in rects[..own].iter().enumerate() {
+            bind(s, format!("v{i}"), "visibility", &[*r]);
+        }
+        if own > 0 && own < rects.len() {
+            s.execute("variable.bind", &json!({"variable": "v0", "ids": &rects[own..]})).unwrap();
+        }
+        let csv: String =
+            std::iter::once(",2024,2025".to_string()).chain((0..20).map(|r| format!("Row {r},{r},{}", r * 2))).collect::<Vec<_>>().join("\n");
+        for i in 0..graphs {
+            let g =
+                id(s.execute("graph.create", &json!({"type": "column", "x": i * 150, "y": 1800, "width": 120, "height": 80, "csv": csv})).unwrap());
+            bind(s, format!("g{i}"), "graph", &[g]);
+        }
+        for _ in 0..sets {
+            s.execute("dataset.capture", &json!({})).unwrap();
+        }
+        s.execute("variable.sort", &json!({"by": "object"})).unwrap();
+        app
+    }
+
+    /// Per-frame time of the old row build against the kept rows on an unchanged document: seven
+    /// runs of 600 frames each, the two alternating, on a 30-variable and a 300-variable document.
+    #[test]
+    #[ignore = "timing: cargo test --release -p vectorcraft-ui-egui --lib variables::tests::rows_timing -- --ignored --nocapture"]
+    fn rows_timing() {
+        fn median(mut v: Vec<f64>) -> f64 {
+            v.sort_by(f64::total_cmp);
+            v[v.len() / 2]
+        }
+        for app in [timing_document(5, 10, 1, 5), timing_document(50, 100, 10, 50)] {
+            let st = app.session.active().unwrap();
+            let rows = cached_rows(st, false);
+            assert_eq!(*rows, old_rows(st, false));
+            let (mut old, mut kept) = (vec![], vec![]);
+            for _ in 0..7 {
+                let t = std::time::Instant::now();
+                for _ in 0..600 {
+                    std::hint::black_box(old_rows(std::hint::black_box(st), false));
+                }
+                old.push(t.elapsed().as_secs_f64() * 1e6 / 600.0);
+                let t = std::time::Instant::now();
+                for _ in 0..600 {
+                    std::hint::black_box(cached_rows(std::hint::black_box(st), false));
+                }
+                kept.push(t.elapsed().as_secs_f64() * 1e6 / 600.0);
+            }
+            let runs = |v: &[f64]| v.iter().map(|x| format!("{x:.3}")).collect::<Vec<_>>().join(" ");
+            println!(
+                "{} variables, {} data sets: old {:.3} us/frame (runs {}), kept {:.3} us/frame (runs {})",
+                rows.vars.len(),
+                rows.sets.len(),
+                median(old.clone()),
+                runs(&old),
+                median(kept.clone()),
+                runs(&kept)
+            );
+        }
     }
 
     /// A menu item that needs a name opens the dialog rather than running the command with

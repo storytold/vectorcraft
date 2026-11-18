@@ -20,7 +20,7 @@ use super::target_overlays;
 use crate::bbox::rotate_for_drag;
 use crate::guides::{PointSnap, Targets, snap_pick};
 use crate::select::{matrix_json, selection_bounds, selection_box};
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Readout, Tool, ToolContext, ToolKey};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransformKind {
@@ -98,6 +98,8 @@ pub struct TransformTool {
     origin: Option<(Point, Vec<NodeId>)>,
     drag: Option<Drag>,
     measure: Option<(Point, String)>,
+    /// What the Info panel shows for the drag in progress.
+    readout: Option<Readout>,
     /// Snap feedback while hovering ("anchor" / "center" label), and for the dragged pointer.
     hover: Vec<Overlay>,
     /// What the dragged pointer snaps to, gathered when the drag begins.
@@ -126,7 +128,7 @@ pub fn reflect_matrix(o: Point, theta: f64) -> Affine {
 
 impl TransformTool {
     pub fn new(kind: TransformKind) -> Self {
-        Self { kind, origin: None, drag: None, measure: None, hover: vec![], snap: None }
+        Self { kind, origin: None, drag: None, measure: None, readout: None, hover: vec![], snap: None }
     }
 
     /// The effective reference point: the custom one if it belongs to the current selection,
@@ -154,12 +156,44 @@ impl TransformTool {
     /// and Shift's 45° steps start from the box's axes. A Reflect axis drawn by the drag is the
     /// line the pointer draws on the page.
     pub fn matrix_in(&self, angle: f64, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, String) {
+        let (m, a, b) = self.solve(angle, o, start, p, shift, bounds);
+        (m, self.label(a, b))
+    }
+
+    /// The canvas label for the two values [`Self::solve`] gives.
+    fn label(&self, a: f64, b: f64) -> String {
+        match self.kind {
+            TransformKind::Rotate => format!("{:.1}°", -a),
+            TransformKind::Reflect => format!("{a:.1}°"),
+            TransformKind::Scale => format!("W: {:.1}%\nH: {:.1}%", a * 100.0, b * 100.0),
+            TransformKind::Shear => format!("{:.1}°", if a == 0.0 { b } else { -b }),
+        }
+    }
+
+    /// What the Info panel shows for the transform `m` of a selection with `bounds`, with the two
+    /// values [`Self::solve`] gives.
+    fn readout_of(&self, m: Affine, a: f64, b: f64, bounds: Rect) -> Readout {
+        let center = m * bounds.center();
+        match self.kind {
+            TransformKind::Rotate => Readout::Rotate { center, angle: a },
+            TransformKind::Reflect => Readout::Reflect { center, angle: a },
+            TransformKind::Scale => Readout::Scale { sx: a, sy: b },
+            TransformKind::Shear => Readout::Shear { center, axis: a, angle: b },
+        }
+    }
+
+    /// [`TransformTool::matrix_in`]'s transform, with the two values of its readout: the angle
+    /// turned, in degrees counter-clockwise as `object.rotate` takes it (Rotate), the angle of the
+    /// axis in degrees counter-clockwise (Reflect), the scale along the box's width and height
+    /// (Scale), or the angle of the shear axis (0 horizontal, 90 vertical) and the shear angle as
+    /// `object.shear` takes it (Shear).
+    fn solve(&self, angle: f64, o: Point, start: Point, p: Point, shift: bool, bounds: Rect) -> (Affine, f64, f64) {
         let frame = OrientedBox { angle, rect: Rect::ZERO };
         let local = |v: Vec2| frame.to_doc().inverse() * v.to_point();
         match self.kind {
             TransformKind::Rotate => {
                 let (a, deg) = rotate_for_drag(o, start, p, shift);
-                (a, format!("{:.1}°", -deg))
+                (a, deg, 0.0)
             }
             TransformKind::Reflect => {
                 let mut v = p - o;
@@ -169,7 +203,7 @@ impl TransformTool {
                     v = (frame.to_doc() * vectorcraft_geom::constrain_angle(local(v).to_vec2(), 45.0).to_point()).to_vec2();
                 }
                 let theta = v.y.atan2(v.x);
-                (reflect_matrix(o, theta), format!("{:.1}°", vectorcraft_geom::normalize_deg(-theta.to_degrees())))
+                (reflect_matrix(o, theta), vectorcraft_geom::normalize_deg(-theta.to_degrees()), 0.0)
             }
             TransformKind::Scale => {
                 let d0 = local(start - o).to_vec2();
@@ -184,7 +218,7 @@ impl TransformTool {
                 }
                 let clamp = |s: f64| if s.abs() < 1e-4 { 1e-4f64.copysign(s) } else { s };
                 let (sx, sy) = (clamp(sx), clamp(sy));
-                (about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), format!("W: {:.1}%\nH: {:.1}%", sx * 100.0, sy * 100.0))
+                (about(o, frame.conjugate(Affine::scale_non_uniform(sx, sy))), sx, sy)
             }
             TransformKind::Shear => {
                 // The shear axis follows the dominant drag direction. Shift keeps the drag on that
@@ -223,7 +257,7 @@ impl TransformTool {
                         };
                     }
                 }
-                (m, format!("{:.1}°", (-k.atan()).to_degrees()))
+                if horizontal { (m, 0.0, (-k.atan()).to_degrees()) } else { (m, 90.0, k.atan().to_degrees()) }
             }
         }
     }
@@ -231,6 +265,7 @@ impl TransformTool {
     /// Ends the drag, its snapping and readouts with it.
     fn end_drag(&mut self) -> Option<Drag> {
         self.measure = None;
+        self.readout = None;
         self.snap = None;
         self.hover.clear();
         self.drag.take()
@@ -248,6 +283,10 @@ impl Tool for TransformTool {
 
     fn busy(&self) -> bool {
         self.drag.is_some_and(|d| d.began)
+    }
+
+    fn readout(&self, _cx: &ToolContext) -> Option<Readout> {
+        self.readout.clone()
     }
 
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
@@ -294,10 +333,11 @@ impl Tool for TransformTool {
                 }
                 let (p, guides) = self.snap.as_ref().map_or((p, vec![]), |s| s.snap(cx, p));
                 self.hover = guides;
-                let (m, text) = self.matrix_in(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, p, ev.mods.shift, d.bounds);
+                let (m, a, b) = self.solve(d.angle_for(ev.mods.alt, ev.backquote), d.origin, d.pick, p, ev.mods.shift, d.bounds);
                 (d.last, d.pointer, d.shift) = (m, p, ev.mods.shift);
                 self.drag = Some(d);
-                self.measure = Some((p, text));
+                self.measure = Some((p, self.label(a, b)));
+                self.readout = Some(self.readout_of(m, a, b, d.bounds));
                 out.push(preview(m, ev.mods.alt, ev.backquote));
                 out
             }

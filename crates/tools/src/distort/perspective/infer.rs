@@ -131,17 +131,32 @@ impl PerspectiveGrid {
         for plane in self.shown_planes() {
             let depth = self.offset(plane);
             let Some(h) = self.homography_at(plane, depth) else { continue };
-            let Some(q) = h.inverse().and_then(|hi| hi.apply(p)) else { continue };
+            let Some(hi) = h.inverse() else { continue };
             let Some(((su, nu), (sv, nv))) = self.line_steps(plane) else { continue };
-            // The drawn lines nearest the pointer along each axis, and their neighbors: the
-            // projection skews and shrinks the cells, so the intersection nearest on the page can be
-            // one over from the nearest in the plane.
-            let near = |v: f64, step: f64, last: usize| {
-                let i = (v / step).round().clamp(0.0, last as f64) as i64;
-                (i - 2..=i + 2).filter(move |k| (0..=last as i64).contains(k)).map(move |k| k as f64 * step)
+            // On each drawn line, the intersections either side of the point of the line nearest
+            // the pointer on the page. The projection keeps the order of points along a line, so
+            // the nearest intersection on that line is one of those two, however skewed the cells.
+            let mut candidates = Vec::with_capacity(2 * (nu + nv + 2));
+            let mut along = |line: &dyn Fn(f64) -> Point, step: f64, last: usize, coord: fn(Point) -> f64| {
+                let (Some(a), Some(b)) = (h.apply(line(0.0)), h.apply(line(last as f64 * step))) else { return };
+                let ab = b - a;
+                let len2 = ab.x * ab.x + ab.y * ab.y;
+                let t = if len2 > 0.0 { (((p - a).x * ab.x + (p - a).y * ab.y) / len2).clamp(0.0, 1.0) } else { 0.0 };
+                let Some(at) = hi.apply(a + ab * t).map(coord).filter(|v| v.is_finite()) else { return };
+                let k = (at / step).floor().clamp(0.0, last as f64);
+                for k in [k, (k + 1.0).min(last as f64)] {
+                    candidates.push(line(k * step));
+                }
             };
-            for (u, v) in near(q.x, su, nu).flat_map(|u| near(q.y, sv, nv).map(move |v| (u, v))) {
-                let q = Point::new(u, v);
+            for i in 0..=nu {
+                let u = i as f64 * su;
+                along(&|v| Point::new(u, v), sv, nv, |q| q.y);
+            }
+            for i in 0..=nv {
+                let v = i as f64 * sv;
+                along(&|u| Point::new(u, v), su, nu, |q| q.x);
+            }
+            for q in candidates {
                 let Some(d) = h.apply(q).map(|at| at.distance(p)) else { continue };
                 if d <= tol
                     && best.is_none_or(|b| d < b.0)
@@ -266,6 +281,33 @@ mod tests {
         // Beyond the plane's last line there is no intersection.
         let past = g.to_page(Plane::Right, Point::new(g.right_extent() + 5.0 * cell, cell)).unwrap();
         assert!(g.infer_at(&d, past, 3.0, PlaneTargets::ALL).is_none());
+    }
+
+    #[test]
+    fn a_held_plane_still_checks_its_own_place() {
+        // Held at x = 0, the left wall's own place must stay in front of the viewer too: it goes
+        // back there once positioning ends.
+        let g = PerspectiveGrid { plane: Plane::Left, inferred: Some([0.0; 3]), ..grid() };
+        assert!(g.merged(&json!({"leftOffset": -800})).is_err());
+        assert!(PerspectiveGrid { inferred: None, ..g.clone() }.merged(&json!({"leftOffset": -800})).is_err());
+        let moved = g.merged(&json!({"leftOffset": 40})).unwrap();
+        assert_eq!((moved.placed_offset(Plane::Left), moved.offset(Plane::Left), moved.inferred), (40.0, 0.0, Some([0.0; 3])));
+    }
+
+    #[test]
+    fn the_nearest_intersection_on_the_page_is_found_on_a_skewed_plane() {
+        // The left vanishing point next to the origin skews the left wall's cells hard: the
+        // intersection nearest on the page lies many cells from the pointer's inverse.
+        let g = PerspectiveGrid { vp_left: 399.0, plane: Plane::Left, inferred: Some([0.0; 3]), ..grid() };
+        let d = Document::new(800.0, 600.0);
+        let gridlines = PlaneTargets { anchors: false, gridlines: true };
+        let p = Point::new(400.0, 219.761194);
+        let want = Point::new(10.0 * g.cell, 10.0 * g.cell);
+        assert!((g.to_page(Plane::Left, want).unwrap() - p).hypot() < 0.5);
+        let (_, at) = g.infer_at(&d, p, 6.0, gridlines).unwrap();
+        for (got, want) in at.iter().zip([0.0, want.y, want.x]) {
+            assert!((got - want).abs() < 1e-6, "{at:?}");
+        }
     }
 
     #[test]

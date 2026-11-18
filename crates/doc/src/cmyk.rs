@@ -9,10 +9,6 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use zune_jpeg::zune_core::bytestream::ZCursor;
-use zune_jpeg::zune_core::colorspace::ColorSpace;
-use zune_jpeg::zune_core::options::DecoderOptions;
-
 use crate::ImageBlob;
 
 /// Most pixels a CMYK image is decoded with (256 MB of samples): larger ones decode as RGB.
@@ -44,12 +40,7 @@ fn pixels(width: u32, height: u32) -> Option<u64> {
 /// The number of colour components of JPEG `bytes` (its frame header); `None` when they aren't a
 /// JPEG.
 pub fn jpeg_components(bytes: &[u8]) -> Option<usize> {
-    if !bytes.starts_with(&[0xFF, 0xD8]) {
-        return None;
-    }
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    Some(d.info()?.components as usize)
+    craft_image_codecs::jpeg_inks::jpeg_components(bytes)
 }
 
 fn is_tiff(bytes: &[u8]) -> bool {
@@ -525,8 +516,8 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 }
 
 /// The samples of the `n` pixels of the TIFF `d` reads, `per` to a pixel (the number its color
-/// type has), pixel by pixel and 8 bits each (16-bit samples to their high byte), whether the file
-/// stores each pixel's samples together or one plane per channel. `None` when they don't decode to
+/// type has), pixel by pixel and 8 bits each (16-bit samples rounded to the nearest), whether the
+/// file stores each pixel's samples together or one plane per channel. `None` when they don't decode to
 /// that many samples, which includes images whose planes together need more than the decoder's
 /// limit (256 MiB of samples), and, before any decoding, files with more than
 /// [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel, files whose samples aren't unsigned integers (a
@@ -535,7 +526,7 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 pub(crate) fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
     Some(match read_samples_at_depth(d, n, per)? {
         Samples::Eight(v) => v,
-        Samples::Sixteen(v) => v.iter().map(|s| (s >> 8) as u8).collect(),
+        Samples::Sixteen(v) => v.iter().map(|&s| u8::try_from((u32::from(s) + 128) / 257).unwrap_or(u8::MAX)).collect(),
     })
 }
 
@@ -618,13 +609,25 @@ pub fn icc_color_space(icc: &[u8]) -> Option<[u8; 4]> {
     icc.get(16..20)?.try_into().ok()
 }
 
-/// The ICC profile of TIFF tag 34675 (ICCProfile) of the image `d` reads; `None` without one.
+/// The most bytes of an ICC profile a TIFF's tag 34675 is read with (16 MiB).
+const MAX_TIFF_ICC: u64 = 16 << 20;
+
+/// The ICC profile of TIFF tag 34675 (ICCProfile, of type UNDEFINED or BYTE) of the image `d`
+/// reads, as its bytes; `None` without one and for one over [`MAX_TIFF_ICC`] bytes.
 fn tiff_icc(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> Option<Vec<u8>> {
-    d.get_tag_u8_vec(tiff::tags::Tag::IccProfile).ok().filter(|icc| !icc.is_empty())
+    use tiff::tags::{Tag, Type, ValueBuffer};
+    let mut ifd = d.image_ifd();
+    let entry = ifd.find_entry(Tag::IccProfile)?;
+    if !matches!(entry.field_type(), Type::UNDEFINED | Type::BYTE) || entry.count() == 0 || entry.count() > MAX_TIFF_ICC {
+        return None;
+    }
+    let mut buf = ValueBuffer::empty(Type::UNDEFINED);
+    ifd.find_tag_buf(Tag::IccProfile, &mut buf).ok()??;
+    Some(buf.as_bytes().to_vec())
 }
 
-/// The ICC profile of TIFF `bytes`' first image (tag 34675), read with the `tiff` decoder's own
-/// limits, whatever the size of the image; `None` for other images and TIFFs without one.
+/// The ICC profile of TIFF `bytes`' first image (tag 34675), up to [`MAX_TIFF_ICC`] bytes whatever
+/// the size of the image; `None` for other images, TIFFs without one and a longer one.
 pub fn tiff_icc_profile(bytes: &[u8]) -> Option<Vec<u8>> {
     let (_, mut d) = tiff(bytes)?;
     tiff_icc(&mut d)
@@ -633,9 +636,76 @@ pub fn tiff_icc_profile(bytes: &[u8]) -> Option<Vec<u8>> {
 /// The ICC profile of a JPEG, put together from all its numbered `ICC_PROFILE` APP2 segments;
 /// `None` without one.
 fn jpeg_icc(bytes: &[u8]) -> Option<Vec<u8>> {
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    d.icc_profile().filter(|icc| !icc.is_empty())
+    craft_image_codecs::jpeg_inks::jpeg_icc_profile(bytes)
+}
+
+/// The bytes after an `ICC_PROFILE` APP2 segment's length: its name, then the segment's number and
+/// the count of segments.
+const ICC_SEGMENT: &[u8; 12] = b"ICC_PROFILE\0";
+
+/// JPEG `bytes` carrying `icc` in place of the ICC profile they carry, if any: every
+/// `ICC_PROFILE` APP2 segment before the scan taken out, `icc` written as numbered APP2 segments
+/// after the leading application segments, and the other segments and the scan as they are. `None`
+/// for bytes whose segments before the scan can't be read, an empty `icc`, and one longer than 255
+/// segments hold.
+pub fn jpeg_with_icc(bytes: &[u8], icc: &[u8]) -> Option<Vec<u8>> {
+    // A segment's length counts itself (2 bytes) and the name, number and count (14).
+    const CHUNK: usize = 0xFFFF - 2 - ICC_SEGMENT.len() - 2;
+    let chunks: Vec<&[u8]> = icc.chunks(CHUNK).collect();
+    let count = u8::try_from(chunks.len()).ok().filter(|n| *n > 0)?;
+    let mut segments = Vec::with_capacity(icc.len() + 18 * chunks.len());
+    for (i, chunk) in chunks.iter().enumerate() {
+        let len = u16::try_from(chunk.len() + 2 + ICC_SEGMENT.len() + 2).ok()?;
+        segments.extend_from_slice(&[0xFF, 0xE2]);
+        segments.extend_from_slice(&len.to_be_bytes());
+        segments.extend_from_slice(ICC_SEGMENT);
+        segments.extend_from_slice(&[u8::try_from(i + 1).ok()?, count]);
+        segments.extend_from_slice(chunk);
+    }
+    with_icc_segments(bytes, segments)
+}
+
+/// JPEG `bytes` without the ICC profile they carry: every `ICC_PROFILE` APP2 segment before the
+/// scan taken out, and the other segments and the scan as they are. `None` for bytes whose
+/// segments before the scan can't be read.
+pub fn jpeg_without_icc(bytes: &[u8]) -> Option<Vec<u8>> {
+    with_icc_segments(bytes, vec![])
+}
+
+/// JPEG `bytes` with every `ICC_PROFILE` APP2 segment before the scan taken out and `segments`
+/// written after the leading application segments; `None` when the bytes don't start a JPEG or
+/// their segments before the scan can't be read.
+fn with_icc_segments(bytes: &[u8], segments: Vec<u8>) -> Option<Vec<u8>> {
+    if !bytes.starts_with(&[0xFF, 0xD8]) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(bytes.len() + segments.len());
+    out.extend_from_slice(&[0xFF, 0xD8]);
+    let mut icc_segments = Some(segments);
+    let mut at = 2;
+    // The segments before the scan (SOS), each with its length; a marker without one ends them.
+    // Fill bytes (0xFF) before a marker are left out.
+    loop {
+        while bytes.get(at..at + 2) == Some(&[0xFF, 0xFF]) {
+            at += 1;
+        }
+        let (Some(&0xFF), Some(&marker)) = (bytes.get(at), bytes.get(at + 1)) else { return None };
+        let app = (0xE0..=0xEF).contains(&marker);
+        if !app && let Some(s) = icc_segments.take() {
+            out.extend_from_slice(&s);
+        }
+        if matches!(marker, 0xDA | 0xD8 | 0xD9 | 0x01 | 0xD0..=0xD7) {
+            break;
+        }
+        let len = usize::from(u16::from_be_bytes(bytes.get(at + 2..at + 4)?.try_into().ok()?));
+        let segment = bytes.get(at..(at + 2).checked_add(len)?).filter(|_| len >= 2)?;
+        if !(marker == 0xE2 && segment.get(4..16) == Some(ICC_SEGMENT.as_slice())) {
+            out.extend_from_slice(segment);
+        }
+        at += segment.len();
+    }
+    out.extend_from_slice(bytes.get(at..)?);
+    Some(out)
 }
 
 /// `icc` when it is a profile of CMYK colors, which the samples of a CMYK image are in.
@@ -746,6 +816,14 @@ impl ImageBlob {
         Some(Self::new("image/tiff", tiff))
     }
 
+    /// [`ImageBlob::cmyk_tiff`], carrying `icc` as tag 34675 (ICCProfile) when it is a profile of
+    /// CMYK colors; any other profile is left out. The caller checks the rest of the profile.
+    pub fn cmyk_tiff_with_icc(inks: &Inks, icc: Option<&[u8]>) -> Option<Self> {
+        let icc = icc.filter(|icc| icc_color_space(icc) == Some(*b"CMYK"));
+        let tiff = write_cmyk_tiff(inks.width, inks.height, SampleSlice::Eight(&inks.data), None, icc)?;
+        Some(Self::new("image/tiff", tiff))
+    }
+
     /// Does the image hold CMYK samples (a four-component JPEG or a CMYK TIFF)? Reads only its
     /// header.
     pub fn is_cmyk(&self) -> bool {
@@ -762,10 +840,7 @@ impl ImageBlob {
     pub fn header_size(&self) -> Option<(u32, u32)> {
         let bytes = self.bytes.as_slice();
         if bytes.starts_with(&[0xFF, 0xD8]) {
-            let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-            d.decode_headers().ok()?;
-            let (w, h) = d.dimensions()?;
-            return Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?));
+            return craft_image_codecs::jpeg_inks::jpeg_dimensions(bytes);
         }
         tiff(bytes).and_then(|(_, mut d)| d.dimensions().ok())
     }
@@ -843,30 +918,10 @@ fn sample_inks(inks: &Inks, x: f64, y: f64, size: u32) -> Option<[u8; 4]> {
 /// The ink amounts of a four-component JPEG (its samples inverted back; YCCK converted to CMYK
 /// first, as JPEG readers do).
 fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
-    let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
-    d.decode_headers().ok()?;
-    let space = d.input_colorspace()?;
-    if d.info()?.components != 4 || !matches!(space, ColorSpace::CMYK | ColorSpace::YCCK) {
-        return None;
-    }
-    let (w, h) = d.dimensions()?;
-    let (w, h) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
-    pixels(w, h)?;
-    d.set_options(DecoderOptions::default().jpeg_set_out_colorspace(space));
-    let mut data = d.decode().ok()?;
-    for p in data.as_chunks_mut::<4>().0 {
-        if space == ColorSpace::YCCK {
-            let [y, cb, cr] = [p[0], p[1], p[2]].map(f32::from);
-            // libjpeg's YCCK → CMYK: the complement of the YCbCr colour's RGB.
-            p[0] = (434.456 - y - 1.402 * cr).clamp(0.0, 255.0) as u8;
-            p[1] = (119.541 - y + 0.344 * cb + 0.714 * cr).clamp(0.0, 255.0) as u8;
-            p[2] = (481.816 - y - 1.772 * cb).clamp(0.0, 255.0) as u8;
-        }
-        for v in p.iter_mut() {
-            *v = 255 - *v;
-        }
-    }
-    Inks::new(w, h, data)
+    let limits = craft_image_codecs::Limits { max_pixels: MAX_CMYK_PIXELS, ..craft_image_codecs::Limits::default() };
+    let image = craft_image_codecs::jpeg_inks::decode_jpeg_inks(bytes, &limits).ok()?;
+    let (w, h) = image.dimensions();
+    Inks::new(w, h, image.into_data())
 }
 
 /// The ink amounts of a CMYK TIFF (16-bit samples to 8 bits), its inks stored together or one plane
@@ -1018,9 +1073,20 @@ pub enum Group3Error {
     TooLarge { w: u32, h: u32 },
     /// A strip or tile ends before its last row or can't be decoded (it holds a code the decoder
     /// doesn't read, such as T.4's uncompressed mode, or a row of the wrong width), or a tile is
-    /// larger than [`crate::MAX_RASTER_ALLOC`] allows as RGBA.
-    #[error("could not decode image: {0}")]
-    Damaged(hayro_ccitt::DecodeError),
+    /// larger than [`crate::MAX_RASTER_ALLOC`] allows as RGBA, or is wider than
+    /// [`craft_stream_codecs::MAX_CCITT_COLUMNS`].
+    #[error("could not decode image: {}", damage(*.0))]
+    Damaged(craft_stream_codecs::CcittErrorKind),
+}
+
+/// What went wrong in a Group 3 strip or tile, as [`Group3Error::Damaged`] says it.
+fn damage(kind: craft_stream_codecs::CcittErrorKind) -> &'static str {
+    use craft_stream_codecs::CcittErrorKind as K;
+    match kind {
+        K::UnexpectedEof => "unexpected end of input",
+        K::Overflow => "arithmetic overflow in position calculation",
+        K::InvalidData => "invalid CCITT code sequence",
+    }
 }
 
 /// The pixels of a 1-bit TIFF compressed with CCITT Group 3, which the image decoder doesn't read,
@@ -1035,7 +1101,7 @@ pub enum Group3Error {
 /// an error when the pixels would take more than [`crate::MAX_RASTER_ALLOC`] as RGBA, a tile is
 /// larger than that allowance, or a strip or tile can't be decoded or ends before its last row.
 pub fn group3_tiff_rgba(bytes: &[u8]) -> Option<Result<image::RgbaImage, Group3Error>> {
-    use hayro_ccitt::{DecodeError, DecodeSettings, DecoderContext, EncodingMode};
+    use craft_stream_codecs::{CcittErrorKind as DecodeError, CcittParams, decode_ccitt_raw};
     use tiff::tags::Tag;
     let (kind, mut d) = tiff(bytes)?;
     let compression = d.find_tag_unsigned::<u16>(Tag::Compression).ok().flatten()?;
@@ -1054,12 +1120,8 @@ pub fn group3_tiff_rgba(bytes: &[u8]) -> Option<Result<image::RgbaImage, Group3E
     }
     let t4_options = d.find_tag_unsigned::<u32>(Tag::Unknown(292)).ok().flatten().unwrap_or(0);
     let lsb_first = d.find_tag_unsigned::<u16>(Tag::FillOrder).ok().flatten() == Some(2);
-    let encoding = if compression == 3 && t4_options & 1 != 0 {
-        // Each row's tag bit says how it is coded.
-        EncodingMode::Group3_2D { k: 2 }
-    } else {
-        EncodingMode::Group3_1D
-    };
+    // Each row's tag bit says how it is coded (K above 0), or every row is one-dimensional (K 0).
+    let k = if compression == 3 && t4_options & 1 != 0 { 2 } else { 0 };
     // The width and height of each strip or tile, and the tags of their offsets and byte counts.
     let tiled = d.get_chunk_type() == tiff::decoder::ChunkType::Tile;
     let (cw, ch, offsets, counts) = if tiled {
@@ -1093,76 +1155,54 @@ pub fn group3_tiff_rgba(bytes: &[u8]) -> Option<Result<image::RgbaImage, Group3E
         budget -= len;
         let data = bytes.get(start..start + len)?;
         let data: std::borrow::Cow<[u8]> = if lsb_first { data.iter().map(|b| b.reverse_bits()).collect() } else { data.into() };
-        let settings = DecodeSettings {
-            columns: cw,
-            // A tile is coded whole; the last strip only has the image's remaining rows.
-            rows: if tiled { ch } else { ch.min(h - y0) },
-            end_of_block: compression == 3,
+        // A tile is coded whole; the last strip only has the image's remaining rows.
+        let rows = if tiled { ch } else { ch.min(h - y0) };
+        let params = CcittParams {
+            k,
+            columns: i64::from(cw),
+            rows: i64::from(rows),
             end_of_line: compression == 3,
-            rows_are_byte_aligned: compression == 2,
-            encoding,
-            invert_black: false,
+            encoded_byte_align: compression == 2,
+            end_of_block: compression == 3,
+            // 1 bits are black runs, 0 bits white ones.
+            black_is_1: true,
         };
-        let mut rows = Rows { out: &mut gray, width: w, height: h, x0, y0, x: 0, y: 0, zero };
-        if let Err(e) = hayro_ccitt::decode(&data, &mut rows, &mut DecoderContext::new(settings)) {
+        let Ok(out) = decode_ccitt_raw(&data, &params, rows) else {
+            // Wider than the decoder reads.
+            return damaged(DecodeError::Overflow);
+        };
+        if let Some(e) = out.error {
             return damaged(e);
         }
         // The data ended, or six EOL codes came, before the strip's or tile's last row.
-        if rows.y < settings.rows {
+        if out.rows_decoded < rows {
             return damaged(DecodeError::UnexpectedEof);
         }
+        put_rows(&mut gray, (w, h), (x0, y0), cw, &out.data, zero);
     }
     let gray = image::GrayImage::from_raw(w, h, gray)?;
     Some(Ok(image::DynamicImage::ImageLuma8(gray).to_rgba8()))
 }
 
-/// Where a strip or tile of a Group 3 TIFF ([`group3_tiff_rgba`]) puts its decoded pixels: `out`
-/// holds the image's levels row by row, `width` × `height`, and the strip or tile starts at (`x0`,
-/// `y0`). Pixels past the image's right or bottom edge (a tile's padding) are dropped.
-struct Rows<'a> {
-    out: &'a mut [u8],
-    width: u32,
-    height: u32,
-    x0: u32,
-    y0: u32,
-    /// The next pixel in the strip or tile.
-    x: u64,
-    y: u32,
-    /// The level of a white run.
-    zero: u8,
-}
-
-impl Rows<'_> {
-    /// The next `n` pixels of the row, a white run's or a black run's.
-    fn run(&mut self, white: bool, n: u64) {
-        let level = if white { self.zero } else { u8::MAX - self.zero };
-        let row = u64::from(self.y0) + u64::from(self.y);
-        let left = u64::from(self.x0) + self.x;
-        let right = left.saturating_add(n).min(u64::from(self.width));
-        if row < u64::from(self.height) && left < right {
-            let at = row * u64::from(self.width);
-            if let (Ok(a), Ok(b)) = (usize::try_from(at + left), usize::try_from(at + right))
-                && let Some(px) = self.out.get_mut(a..b)
-            {
-                px.fill(level);
-            }
+/// The decoded rows `packed` of a strip or tile of a Group 3 TIFF ([`group3_tiff_rgba`]), `columns`
+/// wide, one bit a pixel (1 a black run's), put into `out`, the image's levels row by row, `size`
+/// (width, height), from (`x0`, `y0`): a 0 bit as `zero` (the level of a white run), a 1 bit as the
+/// other level. Pixels past the image's right or bottom edge (a tile's padding) are dropped.
+fn put_rows(out: &mut [u8], size: (u32, u32), (x0, y0): (u32, u32), columns: u32, packed: &[u8], zero: u8) {
+    let (width, height) = (size.0 as usize, size.1 as usize);
+    let (x0, y0, columns) = (x0 as usize, y0 as usize, columns as usize);
+    let stride = columns.div_ceil(8);
+    if stride == 0 {
+        return;
+    }
+    let across = columns.min(width.saturating_sub(x0));
+    for (y, row) in packed.chunks(stride).enumerate() {
+        let Some(at) = (y0 + y < height).then(|| (y0 + y) * width + x0) else { break };
+        let Some(px) = out.get_mut(at..at + across) else { break };
+        for (x, p) in px.iter_mut().enumerate() {
+            let black = row.get(x / 8).is_some_and(|b| b & (0x80 >> (x % 8)) != 0);
+            *p = if black { u8::MAX - zero } else { zero };
         }
-        self.x = self.x.saturating_add(n);
-    }
-}
-
-impl hayro_ccitt::Decoder for Rows<'_> {
-    fn push_pixel(&mut self, white: bool) {
-        self.run(white, 1);
-    }
-
-    fn push_pixel_chunk(&mut self, white: bool, chunk_count: u32) {
-        self.run(white, u64::from(chunk_count) * 8);
-    }
-
-    fn next_line(&mut self) {
-        self.y = self.y.saturating_add(1);
-        self.x = 0;
     }
 }
 
@@ -1968,6 +2008,35 @@ mod tests {
         assert_eq!(rgb.get_pixel(1, 0).0, [0, 255, 255]);
     }
 
+    /// A CMYK TIFF written with a CMYK profile carries it byte for byte as tag 34675; a profile of
+    /// other colors, and none, leave the TIFF untagged. The inks are the same either way.
+    #[test]
+    fn a_cmyk_tiff_carries_the_cmyk_profile_it_is_given() {
+        let profile = |space: &[u8; 4]| {
+            let mut icc = vec![0u8; 128];
+            icc[0..4].copy_from_slice(&128u32.to_be_bytes());
+            icc[16..20].copy_from_slice(space);
+            icc[36..40].copy_from_slice(b"acsp");
+            icc
+        };
+        let cmyk = profile(b"CMYK");
+        let b = ImageBlob::cmyk_tiff_with_icc(&inks(), Some(&cmyk)).unwrap();
+        assert_eq!(b.cmyk_icc_profile(), Some(cmyk), "the profile, byte for byte");
+        assert_eq!(b.cmyk(), Some(inks()));
+        // Read back up to 16 MiB; a longer one isn't read.
+        for (len, read) in [(16 << 20, true), ((16 << 20) + 1, false)] {
+            let mut big = profile(b"CMYK");
+            big.resize(len, 0);
+            let b = ImageBlob::cmyk_tiff_with_icc(&inks(), Some(&big)).unwrap();
+            assert_eq!(b.cmyk_icc_profile().is_some_and(|p| p == big), read, "{len} bytes");
+        }
+        for icc in [Some(profile(b"RGB ")), None] {
+            let b = ImageBlob::cmyk_tiff_with_icc(&inks(), icc.as_deref()).unwrap();
+            assert_eq!(tiff_icc_profile(&b.bytes), None, "{icc:?}");
+            assert_eq!(b.cmyk(), Some(inks()));
+        }
+    }
+
     #[test]
     fn a_header_gives_the_size_without_the_samples() {
         assert_eq!(ImageBlob::cmyk_tiff(&inks()).unwrap().header_size(), Some((3, 2)));
@@ -2031,6 +2100,53 @@ mod tests {
         }
     }
 
+    /// A CMYK JPEG given a profile carries it in place of its own, its samples as they were; a
+    /// profile longer than 255 segments hold, an empty one and bytes that aren't a JPEG give none.
+    #[test]
+    fn a_cmyk_jpeg_carries_the_profile_it_is_given() {
+        let profile = |len: usize, mark: u8| {
+            let mut icc = vec![mark; len];
+            icc[16..20].copy_from_slice(b"CMYK");
+            icc
+        };
+        let px: Vec<u8> = (0..16 * 16).flat_map(|_| [10u8, 40, 100, 20]).collect();
+        let mut jpg = Vec::new();
+        let mut e = jpeg_encoder::Encoder::new(&mut jpg, 100);
+        e.add_icc_profile(&profile(300_000, 1)).unwrap();
+        e.encode(&px, 16, 16, jpeg_encoder::ColorType::Cmyk).unwrap();
+        let inks = ImageBlob::new("image/jpeg", jpg.clone()).cmyk().unwrap();
+        // One segment holds 65,519 bytes of a profile.
+        for len in [128, 65_519, 65_520, 300_000, 1 << 20] {
+            let icc = profile(len, 2);
+            let b = ImageBlob::new("image/jpeg", jpeg_with_icc(&jpg, &icc).unwrap());
+            assert!(b.cmyk_icc_profile() == Some(icc), "{len} bytes");
+            assert!(b.cmyk() == Some(inks.clone()), "{len} bytes: the samples as they were");
+        }
+        // A profile segment after the quantization table is taken out too.
+        let dqt = jpg.windows(2).position(|w| w == [0xFF, 0xDB]).unwrap();
+        let after = dqt + 2 + usize::from(u16::from_be_bytes([jpg[dqt + 2], jpg[dqt + 3]]));
+        let mut late = jpg.clone();
+        let stale = profile(128, 3);
+        let segment = [&[0xFF, 0xE2, 0, 144][..], ICC_SEGMENT, &[1, 1], &stale].concat();
+        late.splice(after..after, segment);
+        let icc = profile(128, 2);
+        let b = jpeg_with_icc(&late, &icc).unwrap();
+        assert_eq!(b.windows(ICC_SEGMENT.len()).filter(|w| *w == ICC_SEGMENT).count(), 1, "one profile segment");
+        assert!(ImageBlob::new("image/jpeg", b).cmyk_icc_profile() == Some(icc));
+        // Fill bytes before the quantization table's marker are passed over.
+        let mut filled = jpg.clone();
+        filled.splice(dqt..dqt, [0xFF; 3]);
+        assert!(ImageBlob::new("image/jpeg", filled.clone()).cmyk() == Some(inks.clone()), "the decoder reads it");
+        let icc = profile(128, 2);
+        let b = ImageBlob::new("image/jpeg", jpeg_with_icc(&filled, &icc).unwrap());
+        assert!(b.cmyk_icc_profile() == Some(icc), "fill bytes");
+        assert!(b.cmyk() == Some(inks.clone()), "fill bytes: the samples as they were");
+        assert!(jpeg_with_icc(&jpg, &profile(255 * 65_519, 2)).is_some(), "255 segments");
+        assert!(jpeg_with_icc(&jpg, &profile(255 * 65_519 + 1, 2)).is_none(), "256 segments");
+        assert!(jpeg_with_icc(&jpg, &[]).is_none(), "empty");
+        assert!(jpeg_with_icc(&ImageBlob::cmyk_tiff(&inks).unwrap().bytes, &profile(128, 2)).is_none(), "a TIFF");
+    }
+
     #[test]
     fn other_images_are_not_cmyk() {
         let mut png = Vec::new();
@@ -2043,5 +2159,94 @@ mod tests {
         assert_eq!(Inks::new(2, 2, vec![0; 15]), None, "too few samples");
         assert_eq!(Inks::new(0, 2, vec![]), None, "empty");
         assert_eq!(Inks::new(1 << 14, 1 << 13, vec![]), None, "too large");
+    }
+
+    /// The CMYK JPEG reader before craft-image-codecs read the inks (zune-jpeg, every sample
+    /// inverted, libjpeg's truncating YCCK conversion), the reference [`jpeg_inks`] matches.
+    fn zune_inks(bytes: &[u8]) -> Option<Inks> {
+        use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
+        let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
+        d.decode_headers().ok()?;
+        let space = d.input_colorspace()?;
+        if d.info()?.components != 4 || !matches!(space, ColorSpace::CMYK | ColorSpace::YCCK) {
+            return None;
+        }
+        let (w, h) = d.dimensions()?;
+        let (w, h) = (u32::try_from(w).ok()?, u32::try_from(h).ok()?);
+        pixels(w, h)?;
+        d.set_options(DecoderOptions::default().jpeg_set_out_colorspace(space));
+        let mut data = d.decode().ok()?;
+        for p in data.as_chunks_mut::<4>().0 {
+            if space == ColorSpace::YCCK {
+                let [y, cb, cr] = [p[0], p[1], p[2]].map(f32::from);
+                p[0] = (434.456 - y - 1.402 * cr).clamp(0.0, 255.0) as u8;
+                p[1] = (119.541 - y + 0.344 * cb + 0.714 * cr).clamp(0.0, 255.0) as u8;
+                p[2] = (481.816 - y - 1.772 * cb).clamp(0.0, 255.0) as u8;
+            }
+            for v in p.iter_mut() {
+                *v = 255 - *v;
+            }
+        }
+        Inks::new(w, h, data)
+    }
+
+    /// CMYK and YCCK JPEGs of many sizes, samplings and qualities, baseline and progressive, with
+    /// and without Adobe's marker and an ICC profile, read the inks, size, component count and
+    /// profile the zune-jpeg reader read; so do gray and RGB JPEGs (no inks) and cut-off files.
+    /// The frames it panicked on (progressive 4:2:0 CMYK, whose C, M and Y `jpeg-encoder` writes at
+    /// 1×1 and K at 2×2) read as no inks.
+    #[test]
+    fn cmyk_jpegs_read_as_the_zune_reader_read_them() {
+        use jpeg_encoder::{ColorType, Encoder, SamplingFactor};
+        let reference_size = |bytes: &[u8]| {
+            use zune_jpeg::zune_core::{bytestream::ZCursor, options::DecoderOptions};
+            let mut d = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), DecoderOptions::default());
+            d.decode_headers().ok()?;
+            let (w, h) = d.dimensions()?;
+            Some((u32::try_from(w).ok()?, u32::try_from(h).ok()?, usize::from(d.info()?.components), d.icc_profile().filter(|i| !i.is_empty())))
+        };
+        let (mut files, mut read, mut panicked) = (0, 0, 0);
+        for (i, (w, h)) in [(1u16, 1u16), (7, 3), (16, 16), (33, 31), (100, 77)].into_iter().enumerate() {
+            let n = usize::from(w) * usize::from(h);
+            let px: Vec<u8> = (0..n * 4).map(|k| ((k * 2_654_435_761 + i * 97) >> 7) as u8).collect();
+            for ty in [ColorType::Cmyk, ColorType::CmykAsYcck, ColorType::Rgba, ColorType::Luma] {
+                for (q, sampling, progressive, icc) in [
+                    (100, SamplingFactor::R_4_4_4, false, false),
+                    (70, SamplingFactor::R_4_2_0, true, true),
+                    (40, SamplingFactor::R_4_2_2, false, false),
+                ] {
+                    let mut out = Vec::new();
+                    let mut e = Encoder::new(&mut out, q);
+                    e.set_sampling_factor(sampling);
+                    e.set_progressive(progressive);
+                    if icc {
+                        let mut icc = vec![4; 70_000];
+                        icc[16..20].copy_from_slice(b"CMYK");
+                        e.add_icc_profile(&icc).unwrap();
+                    }
+                    let samples = if ty == ColorType::Luma { &px[..n] } else { &px[..] };
+                    e.encode(samples, w, h, ty).unwrap();
+                    let cut = out[..out.len() * 2 / 3].to_vec();
+                    for file in [out, cut] {
+                        let b = ImageBlob::new("image/jpeg", file.clone());
+                        // The zune-jpeg reader panicked on some subsampled CMYK frames; those
+                        // read as no inks now.
+                        let inks = std::panic::catch_unwind(|| zune_inks(&file)).unwrap_or_else(|_| {
+                            panicked += 1;
+                            None
+                        });
+                        read += usize::from(inks.is_some());
+                        assert_eq!(b.cmyk(), inks, "{w}x{h} {ty:?} q{q}");
+                        let r = reference_size(&file);
+                        assert_eq!(b.header_size(), r.as_ref().map(|r| (r.0, r.1)));
+                        assert_eq!(jpeg_components(&file), r.as_ref().map(|r| r.2));
+                        assert_eq!(jpeg_icc(&file), r.and_then(|r| r.3));
+                        files += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(files, 5 * 4 * 3 * 2);
+        assert!(read > 20 && panicked > 0, "{read} read as inks, {panicked} panicked");
     }
 }

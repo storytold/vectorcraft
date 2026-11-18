@@ -172,7 +172,7 @@ fn live_curve_fitting_off_shows_the_points_until_the_release_fits_them() {
         let pointer = |kind, (x, y)| vectorcraft_tools::PointerEvent::new(kind, x, y);
         let newest = |app: &VectorcraftApp| {
             let doc = &app.session.doc().unwrap().doc;
-            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.clone()
+            doc.layers[0].children().unwrap().last().unwrap().path_data().unwrap().subpaths[0].anchors.to_vec()
         };
         crate::canvas::dispatch(app, &pointer(vectorcraft_tools::PointerKind::Down, pts[0]), view);
         for p in &pts[1..] {

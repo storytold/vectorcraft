@@ -229,6 +229,7 @@
 	Align to Artboard	Igazítás a rajztáblához
 	Align to Glyph Bounds	Igazítás a glifák határaihoz
 	Align to Key Object	Igazítás a kulcsobjektumhoz
+	Align to Key Anchor	Igazítás a kulcs-horgonyponthoz
 	Align to Page	Igazítás az oldalhoz
 	Align to Path	Igazítás az útvonalhoz
 	Align to Selection	Igazítás a kijelöléshez
@@ -685,6 +686,7 @@ font-technology	Variable	Változó
 	Close Library	Könyvtár bezárása
 	Close Panel	Panel bezárása
 	Collapse Panel Group	Panelcsoport összecsukása
+	Cycle Display Sizes	Megjelenítési méretek váltása
 	Close Path	Útvonal lezárása
 	Close paths when ends are within:	Útvonalak lezárása, ha a végek távolsága legfeljebb:
 	Clumped	Csomós
@@ -695,6 +697,11 @@ font-technology	Variable	Változó
 	CMYK Equivalents	CMYK-megfelelők
 	CMYK profile in effect	Érvényes CMYK-profil
 	CMYK:	CMYK:
+	RGB Policy:	RGB-házirend:
+	CMYK Policy:	CMYK-házirend:
+	Preserve Embedded Profiles	Beágyazott profilok megtartása
+	Convert to Working Space	Konvertálás a munkaszíntérbe
+	Preserve Numbers	Számértékek megtartása
 	Coarse Dots	Durva pontok
 	Collapse Panels to Icons	Panelek ikonná csukása
 	Collapse to Icons	Ikonná csukás
@@ -794,6 +801,7 @@ font-technology	Variable	Változó
 	Constrain	Korlátozás
 	Constrain Angle	Korlátozási szög
 	Constrain Width and Height Proportions	Szélesség és magasság arányának megtartása
+	Copy Width to Height	Szélesség másolása a magasságba
 	Construction Guides	Szerkesztési segédvonalak
 	Contextual Alternates	Környezetfüggő változatok
 	Contextual Task Bar	Helyzetérzékeny műveletsáv
@@ -803,6 +811,8 @@ font-technology	Variable	Változó
 	Control	Vezérlősáv
 	Convert	Átalakítás
 	Convert All Spot Colors to Process	Minden direktszín átalakítása skálaszínné
+	Convert {name} to process	{name} átalakítása skálaszínné
+	Keep {name} as spot	{name} megtartása direktszínként
 	Convert All Strokes to Outlines	Minden körvonal útvonallá alakítása
 	Convert All Text to Outlines	Minden szöveg útvonallá alakítása
 	Convert Anchor Point	Horgonypont átalakítása
@@ -847,6 +857,18 @@ font-technology	Variable	Változó
 	Copyright	Szerzői jog
 	Copyright and Contact Info	Szerzői jogi és kapcsolati adatok
 	Copyright Info URL:	Szerzői jogi információ URL-je:
+	Save Metadata Template…	Metaadatsablon mentése…
+	Import Options	Importálási beállítások
+	Clear existing fields and use the template's	Meglévő mezők törlése és a sablon mezőinek használata
+	Keep existing fields, but replace those the template has	Meglévő mezők megtartása, de a sablonban szereplők cseréje
+	Keep existing fields, but append those the template has	Meglévő mezők megtartása, de a sablonban szereplők hozzáfűzése
+@msg	the template name can't be empty	a sablon neve nem lehet üres
+@msg	the template name isn't usable as a file name	a sablon neve nem használható fájlnévként
+@msg	no metadata templates folder here	itt nincs metaadatsablon-mappa
+@msg	give `name` or `path`, not both	adja meg a `name` vagy a `path` paramétert, de ne mindkettőt
+@msg	give one of `path`, `name` and `data`	adja meg a `path`, a `name` és a `data` paraméterek egyikét
+@msg	mode must be replace, keep or append	a mód értéke replace, keep vagy append lehet
+@msg	the file is not an XMP metadata template	a fájl nem XMP-metaadatsablon
 	Copyright Notice:	Szerzői jogi közlemény:
 	Copyright Status:	Szerzői jogi állapot:
 	Copyright Symbol	Szerzői jogi jel
@@ -873,6 +895,9 @@ font-technology	Variable	Változó
 	Create from Selection	Létrehozás a kijelölésből
 	Create From:	Létrehozás ebből:
 	Create Gradient Mesh…	Színátmenetes háló létrehozása…
+	Flat	Sík
+	To Center	A közép felé
+	To Edge	Az él felé
 	Create Graph	Diagram létrehozása
 	Create New Fields by	Új félképek létrehozása
 	Create New Layer	Új réteg létrehozása
@@ -1202,6 +1227,8 @@ font-technology	Variable	Változó
 	Drag art, colors and text styles here to reuse them across documents. Libraries are stored on this machine — no account required.	Húzz ide grafikát, színeket és szövegstílusokat, hogy más dokumentumokban is használhasd őket. A könyvtárak ezen a gépen tárolódnak, fiók nem kell hozzájuk.
 	Drag onto art to apply this appearance	Grafikára húzva alkalmazza ezt a megjelenést
 	Drag rings to rotate. Shift snaps to 15°.	Forgatáshoz húzd a gyűrűket. Shift: illesztés 15°-onként.
+	Track cube	Forgatókocka
+	Drag a face, an edge or the ring to rotate. Shift turns about one screen axis.	Forgatáshoz húzz egy lapot, egy élt vagy a gyűrűt. Shift: forgatás egy képernyőtengely körül.
 	Drag the art to move it on the paper	Húzd a grafikát a papíron való áthelyezéshez
 	Drag the light, or its rings. Shift snaps to 15°.	Húzd a fényt vagy a gyűrűit. Shift: illesztés 15°-onként.
 	Drag to float as a toolbar	Húzd el, hogy önálló eszköztárként lebegjen
@@ -1362,7 +1389,10 @@ font-technology	Variable	Változó
 	Every (minutes)	Gyakoriság (perc)
 	Every option is at its default.	Minden beállítás az alapértéken áll.
 	Every option matches {base}.	Minden beállítás egyezik: {base}.
-	Every-line Composer	Többsoros tördelő
+	Middle Eastern & South Asian Single-line Composer	Egysoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Middle Eastern & South Asian Every-line Composer	Többsoros tördelő (Közel-Kelet és Dél-Ázsia)
+	Standard Single-line Composer	Normál egysoros tördelő
+	Standard Every-line Composer	Normál többsoros tördelő
 	Exact	Pontos
 	Exact dash lengths	Pontos vonalhosszak
 	Exceptions (comma separated)	Kivételek (vesszővel elválasztva)
@@ -1479,12 +1509,14 @@ font-technology	Variable	Változó
 	Rotate (Classic)…	Elforgatás (klasszikus)…
 	Surface	Felület
 	Wireframe	Drótváz
+	Render Settings	Renderelési beállítások
 	No Shading	Nincs árnyékolás
 	Plastic	Műanyag
 	Highlight Intensity	Csillanás erőssége
 	Highlight Size	Csillanás mérete
 	Blend Steps	Átmenetlépések
 	Shading Color	Árnyékolás színe
+	Black Overprint	Felülnyomó fekete
 	Draw Hidden Faces	Rejtett lapok rajzolása
 	Eyedropper	Pipetta
 	Sample Color from Screen	Szín mintavétele a képernyőről
@@ -1652,6 +1684,12 @@ file-filter	Templates	Sablonok
 	Font Family & Style	Betűcsalád és stílus
 	Font Family, Style & Size	Betűcsalád, stílus és méret
 	Font List	Betűtípuslista
+	Show Similar Fonts	Hasonló betűtípusok megjelenítése
+	Clear Similar Fonts	Hasonló betűtípusok törlése
+	Fonts used in this document	A dokumentumban használt betűtípusok
+	This document uses no available fonts	A dokumentum nem használ elérhető betűtípust
+	Recently Added	Nemrég hozzáadott
+	Fonts added in the last 30 days	Az elmúlt 30 napban hozzáadott betűtípusok
 	Font Preview Size	Betűtípus-előnézet mérete
 	Font Size	Betűméret
 	Variable Font	Változó betűtípus
@@ -1737,6 +1775,14 @@ file-filter	Templates	Sablonok
 	Previous Artboard	Előző rajztábla
 	Next Artboard	Következő rajztábla
 	Last Artboard	Utolsó rajztábla
+	Status Bar Show	Megjelenítés az állapotsorban
+	Artboard Name	Rajztábla neve
+	Current Tool	Aktuális eszköz
+	Date and Time	Dátum és idő
+	Number of Undos	Visszavonások száma
+	Document Color Profile	Dokumentum színprofilja
+	Undos	Visszavonások
+	Redos	Újra
 	Go to Conflict	Ugrás az ütközésre
 	Go To Link	Ugrás a csatoláshoz
 	Good	Jó
@@ -1764,6 +1810,43 @@ file-filter	Templates	Sablonok
 	Graph	Diagram
 	Graph Data	Diagramadatok
 	Graph Type	Diagramtípus
+	Graph Type…	Diagramtípus…
+	Graph Data…	Diagramadatok…
+	Graph Options	Diagrambeállítások
+	Left Axis	Bal tengely
+	Right Axis	Jobb tengely
+	Category Axis	Kategóriatengely
+	Separate Scales	Külön skálák
+	Add Drop Shadow	Vetett árnyék hozzáadása
+	Add Legend Across Top	Jelmagyarázat felül
+	First Row in Front	Első sor elöl
+	First Column in Front	Első oszlop elöl
+	Legend	Jelmagyarázat
+	Column Width	Oszlopszélesség
+	Bar Width	Sávszélesség
+	Cluster Width	Csoportszélesség
+	Mark Data Points	Adatpontok jelölése
+	Connect Data Points	Adatpontok összekötése
+	Edge-to-Edge Lines	Széltől szélig érő vonalak
+	Draw Filled Lines	Kitöltött vonalak rajzolása
+	Line Width	Vonalvastagság
+	Tick Values	Osztásértékek
+	Override Calculated Values	Számított értékek felülírása
+	Divisions	Osztások
+	Tick Marks	Osztásjelek
+	Tick Marks per Division	Osztásjelek osztásonként
+	Draw Tick Marks Between Labels	Osztásjelek a címkék között
+	Add Labels	Címkék hozzáadása
+	Maximum must be more than Minimum.	A maximumnak nagyobbnak kell lennie a minimumnál.
+	Column Graph	Oszlopdiagram
+	Stacked Column Graph	Halmozott oszlopdiagram
+	Bar Graph	Sávdiagram
+	Stacked Bar Graph	Halmozott sávdiagram
+	Line Graph	Vonaldiagram
+	Area Graph	Területdiagram
+	Scatter Graph	Pontdiagram
+	Pie Graph	Kördiagram
+	Radar Graph	Sugárdiagram
 	Select Segments	Szakaszok kijelölése
 	Artistic	Művészi
 	Film Grain…	Filmszemcse…
@@ -1899,6 +1982,12 @@ file-filter	Templates	Sablonok
 	Show smooth color wheel	Folytonos színkör megjelenítése
 	Show segmented color wheel	Szegmentált színkör megjelenítése
 	Show color bars	Színsávok megjelenítése
+	Show brightness and hue on wheel	Fényesség és színárnyalat megjelenítése a színkörön
+	Show saturation and hue on wheel	Telítettség és színárnyalat megjelenítése a színkörön
+	Add Color Tool	Szín hozzáadása eszköz
+	Remove Color Tool	Szín eltávolítása eszköz
+	Remove Color	Szín eltávolítása
+	Find the selected colors in the artwork	A kijelölt színek keresése a grafikában
 	Harmony Sets	Harmóniakészletek
 	HDTV 1080p	HDTV 1080p
 	HDTV 720p	HDTV 720p
@@ -1950,6 +2039,7 @@ file-filter	Templates	Sablonok
 	Highlight Substituted Fonts	Helyettesített betűtípusok kiemelése
 	Highlight Substituted Glyphs	Helyettesített glifák kiemelése
 	Highlight Variable	Változó kiemelése
+	Sort Variables	Változók rendezése
 	Hindi	Hindi
 	History	Előzmények
 	History Options…	Előzmények beállításai…
@@ -2083,6 +2173,10 @@ file-filter	Templates	Sablonok
 	Em Box	Kvirtmező
 	x-Height	x-magasság
 	ICF Box	ICF-mező
+	Show Sample	Minta megjelenítése
+	Hide Sample	Minta elrejtése
+	Max Ascent/Descent	Max. magasság/mélység
+	Max Ascender	Max. felnyúló szár
 	ICF Top/Right	ICF teteje/jobb oldala
 	Identify Objects By	Objektumok azonosítása
 	Ignore	Kihagy
@@ -2184,6 +2278,7 @@ file-filter	Templates	Sablonok
 	Isolate Blending	Keverés elkülönítése
 	Isolate Group	Csoport elkülönítése
 	Isolate Selected Group	Kijelölt csoport elkülönítése
+	Isolate Selected Path	Kijelölt útvonal elkülönítése
 	Isolate Selected Object	Kijelölt objektum elkülönítése
 	Italian	Olasz
 	Italic	Dőlt
@@ -2293,6 +2388,8 @@ file-filter	Templates	Sablonok
 	Lasso Tool	Lasszó
 	Enclosing Lasso Tool	Körülzáró lasszó
 	Enclosing Lasso	Körülzáró lasszó
+	Polygonal Lasso Tool	Sokszöglasszó
+	Polygonal Lasso	Sokszöglasszó
 	Last	Utolsó
 	Last commit	Utolsó commit
 	Last Effect: {name}	Legutóbbi effektus: {name}
@@ -2452,7 +2549,8 @@ file-filter	Templates	Sablonok
 	Long Lines	Hosszú vonalak
 	Long Strokes	Hosszú vonások
 	Longest:	Leghosszabb:
-	Lossless (lossy WebP isn't available yet)	Veszteségmentes (a veszteséges WebP még nem érhető el)
+	Lossless	Veszteségmentes
+	Lossy	Veszteséges
 	Lossy:	Veszteség:
 	Low	Alacsony
 	Low Fidelity Photo	Kis pontosságú fotó
@@ -2528,6 +2626,7 @@ file-filter	Templates	Sablonok
 	Menu Dialog	Menü párbeszédablaka
 	Merge	Összeolvasztás
 	Merge colors into one row	Színek egyesítése egy sorba
+	New Row	Új sor
 	Merge Graphic Styles	Grafikai stílusok egyesítése
 	Merge Graphic Styles…	Grafikai stílusok egyesítése…
 	Merge Layers	Rétegek egyesítése
@@ -3121,6 +3220,10 @@ diagnostics	ui	felület
 	Play Current Selection	Kijelölt művelet lejátszása
 	Save Actions…	Műveletek mentése…
 	Load Actions…	Műveletek betöltése…
+	Reset Actions	Műveletek visszaállítása
+	Replace the current actions with the default set?	Lecseréled az aktuális műveleteket az alapértelmezett készletre?
+	Append adds the default set after the current sets instead.	A Hozzáfűzés ehelyett az aktuális készletek után adja hozzá az alapértelmezett készletet.
+	Append	Hozzáfűzés
 	Plug-in Info	Bővítmény adatai
 	Plug-ins	Bővítmények
 	Plug-in…	Bővítmény…
@@ -3184,6 +3287,18 @@ diagnostics	ui	felület
 	Preview:	Előnézet:
 	Preview All Layers	Összes réteg előnézetben
 	Preview in Browser	Előnézet böngészőben
+	Optimize to File Size…	Optimalizálás fájlméretre…
+	Optimize to File Size	Optimalizálás fájlméretre
+	Desired File Size:	Kívánt fájlméret:
+	Start With:	Kiindulás:
+	Use:	Használat:
+	Current Settings	Jelenlegi beállítások
+	Auto Select GIF/JPEG	GIF/JPEG automatikus kiválasztása
+	Total of All Slices	Az összes szelet együtt
+	Each Slice	Minden szelet
+	Current Slice	Aktuális szelet
+	{size}, within {target}	{size}, belefér ebbe: {target}
+	No setting tried fits in {target}; the smallest is {size}	Egyik kipróbált beállítás sem fér bele ebbe: {target}; a legkisebb {size}
 	Preview in Browser needs the desktop app (the web downloads files instead)	Az Előnézet böngészőben az asztali alkalmazásban érhető el (a webes változat helyette letölti a fájlokat)
 	Preview Mode	Előnézeti mód
 	Preview the document as it is now	A dokumentum jelenlegi állapotának előnézete
@@ -3233,6 +3348,8 @@ mark-style	Japanese	Japán
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
 	Tsume	Tsume
+	Adjust Horizontal Diacritic Position	Mellékjelek vízszintes helyzetének igazítása
+	Adjust Vertical Diacritic Position	Mellékjelek függőleges helyzetének igazítása
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -3547,6 +3664,85 @@ mark-style	Japanese	Japán
 	Responsive	Reszponzív
 	Restore	Visszaállít
 	Restore every preference to its default (applied on OK)	Minden beállítás visszaállítása az alapértékre (az OK gombbal lép életbe)
+	Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode.	Parancssávot jelenít meg a vásznon a kijelöléshez vagy az eszközhöz; húzás közben és bemutató módban elrejtőzik.
+	How far an arrow key moves the selection; with Shift, it moves ten times as far.	Ennyivel mozgatja egy nyílbillentyű a kijelölést; a Shift billentyűvel tízszer ennyivel.
+	The angle of the axes that arrow keys move along and that Shift holds drawing and moving to.	Azoknak a tengelyeknek a szöge, amelyek mentén a nyílbillentyűk mozgatnak, és amelyekhez a Shift köti a rajzolást és a mozgatást.
+	The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too.	A sarokkerekítés sugara, amellyel a Lekerekített téglalap eszköz rajzol; ha rajzolás közben módosítja a sugarat, ez az érték is módosul.
+	How far right and down Paste moves the copy when it is given no position, as from a script; Paste in the app centers it in the view.	Ennyivel tolja el a Beillesztés a másolatot jobbra és lefelé, ha nincs megadott pozíció, például parancsfájlból; az alkalmazásban a Beillesztés a nézet közepére teszi.
+	Stops the Pen tool from deleting the anchor you click on a selected path, or adding one where you click its segment.	Megakadályozza, hogy a Toll eszköz törölje a kijelölt útvonalon rákattintott horgonypontot, vagy újat adjon hozzá ott, ahol a szakaszára kattint.
+	Drawing tools show a crosshair pointer instead of their icon; Caps Lock does the same while it is on.	A rajzeszközök az ikonjuk helyett célkeresztes mutatót jelenítenek meg; a Caps Lock bekapcsolva ugyanezt teszi.
+	Shows a tip when the pointer rests on a button or field that has one.	Tippet jelenít meg, ha a mutató olyan gombon vagy mezőn áll meg, amelyhez tartozik tipp.
+	Shows a warning before a script you choose runs.	Figyelmeztetést jelenít meg egy kiválasztott parancsfájl futása előtt.
+	Smooths the edges of artwork on the canvas.	Kisimítja a grafika széleit a vásznon.
+	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	A Kijelölés › Azonos › Kitöltőszín, Körvonalszín és Kitöltés és körvonal csak egy globális vagy direkt színminta azonos árnyalatát találja meg, nem bármely árnyalatát.
+	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Megjeleníti a kezdőképernyőt, ha nincs megnyitott dokumentum; kikapcsolva az ablak üres marad, amíg a Kezdőképernyő gombra nem kattint.
+	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Az objektumokat körvonalaikkal és alakmódosító effektusaikkal együtt méri a mérethez, a pozícióhoz és az igazításhoz; az árnyékokat, ragyogásokat és elmosásokat nem méri.
+	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100%-os nagyításnál a dokumentum egy hüvelyke 72 helyett 96 képernyőpontot foglal el.
+	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ha a Kijelölés eszközzel duplán kattint egy csoportra, útvonalra vagy képre, az elkülönítő módban nyílik meg.
+	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	A mintázatos kitöltések és körvonalak a grafikával együtt alakulnak át, hacsak egy átalakítás vagy az Átalakítás panel menüje mást nem választ.
+	Live corner radii scale with the art, unless the scale chooses otherwise.	Az élő sarkok sugara a grafikával együtt méreteződik, hacsak a méretezés mást nem választ.
+	Stroke weights, dashes and effect distances scale with the art, unless the scale chooses otherwise.	A körvonalvastagságok, a szaggatások és az effektustávolságok a grafikával együtt méreteződnek, hacsak a méretezés mást nem választ.
+	The mouse wheel zooms the canvas instead of scrolling it.	Az egérgörgő görgetés helyett nagyítja vagy kicsinyíti a vásznat.
+	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Az egérgörgő lenyomott Cmd/Ctrl billentyűvel oldalirányban görgeti a vásznat.
+	Dragging sideways on a numeric field's label changes the field's value.	Egy számmező címkéjén oldalirányban húzva módosul a mező értéke.
+	A two-finger rotate gesture on a trackpad rotates the canvas view.	Az érintőpadon végzett kétujjas forgató kézmozdulat elforgatja a vászon nézetét.
+	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Egy eszköz billentyűparancsát lenyomva tartva az eszköz a felengedésig ki van választva, utána ismét az előző eszköz lesz kiválasztva.
+	Shows the bounding box while you move the selection or draw a shape.	Megjeleníti a befoglaló keretet, miközben a kijelölést mozgatja vagy alakzatot rajzol.
+	Create Trim Marks draws Japanese-style marks instead of Roman ones.	A Vágójelek létrehozása római helyett japán stílusú jeleket rajzol.
+	New art takes only the fill and stroke of the selection; off, it takes the selected object's whole appearance.	Az új grafika csak a kijelölés kitöltését és körvonalát veszi át; kikapcsolva a kijelölt objektum teljes megjelenését átveszi.
+	Changing the width or height in the Transform panel, the Properties panel or the Control bar changes the other in proportion.	Ha az Átalakítás panelen, a Tulajdonságok panelen vagy a Vezérlősávon módosítja a szélességet vagy a magasságot, a másik arányosan módosul.
+	A live rectangle's properties show one Corner Radius field for all four corners; off, each corner has its own field.	Egy élő téglalap tulajdonságai egyetlen Sarokkerekítés sugara mezőt mutatnak mind a négy sarokhoz; kikapcsolva minden saroknak saját mezője van.
+	What edits in the Transform panel transform: the object, its pattern tiles or both; Default follows Transform Pattern Tiles.	Mit alakítanak át az Átalakítás panel módosításai: az objektumot, a mintázatcsempéit vagy mindkettőt; az Alapértelmezett a Mintázatcsempék átalakítása beállítást követi.
+	With one symbol instance selected, the Transform panel uses the symbol's registration point as its reference point.	Ha egy szimbólumpéldány van kijelölve, az Átalakítás panel a szimbólum regisztrációs pontját használja referenciapontként.
+	Darkens the canvas outside the artboards while the Artboard tool is active.	Elsötétíti a vásznat a rajztáblákon kívül, amíg a Rajztábla eszköz aktív.
+	With Fade Region Outside Artboard on, the area outside the artboards stays dark while you drag with the Artboard tool.	Ha A rajztáblán kívüli terület elhalványítása be van kapcsolva, a rajztáblákon kívüli terület sötét marad, miközben a Rajztábla eszközzel húz.
+	How near, in pixels, the pointer must be to an object, anchor or handle for a click to select it.	Hány pixelnyire kell a mutatónak egy objektumhoz, horgonyponthoz vagy fogantyúhoz lennie, hogy egy kattintás kijelölje.
+	Whether the Selection tool's box selects objects it touches or only those fully inside; Drag Direction selects those inside on a drag to the right. E reverses it mid-drag.	A Kijelölés eszköz kerete az érintett objektumokat jelöli ki, vagy csak a teljesen benne lévőket; a Húzás iránya jobbra húzáskor a benne lévőket jelöli ki. Az E húzás közben megfordítja a szabályt.
+	A click selects a filled object only on its path, not inside its fill.	Egy kattintás a kitöltött objektumot csak az útvonalán jelöli ki, a kitöltésén belül nem.
+	How near, in pixels, a point must come to an anchor or ruler guide for Snap to Point to snap it; with Smart Guides on, Smart Guides' Snapping Tolerance applies instead.	Hány pixelnyire kell egy pontnak egy horgonyponthoz vagy vonalzó-segédvonalhoz kerülnie, hogy az Illesztés pontra odaillessze; bekapcsolt intelligens segédvonalaknál azok illesztési tűrése érvényes.
+	With the Selection tool, Cmd/Ctrl-click selects the object under the selected one at the pointer; each further click goes one object deeper.	A Kijelölés eszközzel a Cmd/Ctrl+kattintás a mutatónál a kijelölt alatti objektumot jelöli ki; minden további kattintás egy objektummal mélyebbre megy.
+	Zoom In and Zoom Out bring the center of the selection to the middle of the view.	A Nagyítás és a Kicsinyítés a kijelölés közepét a nézet közepére hozza.
+	Locked and hidden artwork inside an artboard moves, scales and is copied with the artboard, as the other artwork does.	A rajztáblán belüli zárolt és rejtett grafika a többi grafikához hasonlóan a rajztáblával együtt mozog, méreteződik és másolódik.
+	The size of anchor points and direction handle ends on the canvas; larger anchors can also be picked from farther away.	A horgonypontok és az irányfogantyúk végeinek mérete a vásznon; a nagyobb horgonypontok távolabbról is megfoghatók.
+	Draws the ends of direction handles as solid dots, hollow dots or larger solid dots.	Az irányfogantyúk végeit teli pöttyökként, üres pöttyökként vagy nagyobb teli pöttyökként rajzolja.
+	With the Direct Selection tool, the anchor under the pointer is highlighted.	A Közvetlen kijelölés eszközzel a mutató alatti horgonypont kiemelve látszik.
+	Shows direction handles when more than one anchor is selected; off, they show only while a single anchor is selected.	Megjeleníti az irányfogantyúkat, ha egynél több horgonypont van kijelölve; kikapcsolva csak egyetlen kijelölt horgonypontnál látszanak.
+	Corner widgets hide on corners whose angle is greater than this many degrees.	A sarokfogantyúk elrejtőznek azokon a sarkokon, amelyek szöge nagyobb ennyi foknál.
+	The Pen tool previews the next segment from the last anchor to the pointer before you click.	A Toll eszköz kattintás előtt mutatja a következő szakaszt az utolsó horgonyponttól a mutatóig.
+	The Curvature tool previews the curve to the pointer before you place the next point.	A Görbület eszköz a következő pont elhelyezése előtt mutatja a görbét a mutatóig.
+	The unit for new documents from built-in sizes other than pixel sizes and for opened files that record no unit; choosing one here and clicking OK also sets the active document's units.	A beépített, nem pixelben megadott méretű új dokumentumok és a mértékegységet nem rögzítő megnyitott fájlok mértékegysége; ha itt kiválasztja, és az OK gombra kattint, az aktív dokumentum mértékegysége is ez lesz.
+	Stroke weights, dashes and gaps show in this unit, and numbers typed for them are read in it.	A körvonalvastagságok, a vonalak és a hézagok ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	Type sizes, leading and baseline shift show in this unit, and numbers typed for them are read in it.	A betűméretek, a sorköz és az alapvonal-eltolás ebben a mértékegységben jelennek meg, és a hozzájuk beírt számokat is ebben értelmezi a program.
+	The unit for East Asian type measurements, which no field uses yet.	A kelet-ázsiai szöveg méreteinek mértékegysége, amelyet egyelőre egyetlen mező sem használ.
+	When on, a number typed without a unit into a field in picas is read in points.	Bekapcsolva egy pica mértékegységű mezőbe mértékegység nélkül beírt számot pontként értelmez a program.
+	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML-azonosító esetén az objektumnevek XML-azonosítóként jelennek meg a Rétegek, a Változók és a Rétegbeállítások ablakban.
+	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	A rajzolást, mozgatást és méretezést a rács osztásaihoz illeszti, akkor is, ha a rács rejtve van; amíg be van kapcsolva, az Illesztés pixelhez nem érvényes.
+	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	A nem kijelölt segédvonalak színe; a Segédvonalak címkéjével rendelkező rajztábla a saját segédvonalait a címke színével rajzolja.
+	Draws guides as solid lines or as dots, including the guides already in the document.	A segédvonalakat folytonos vonalként vagy pontokként rajzolja, a dokumentumban már meglévőket is.
+	With this on, guides are locked when VectorCraft starts; changing this option locks or unlocks them at once, and View › Guides › Lock Guides still changes the lock.	Bekapcsolva a segédvonalak a VectorCraft indulásakor zárolva vannak; a beállítás módosítása azonnal zárolja vagy feloldja őket, és a Nézet › Segédvonalak › Segédvonalak zárolása továbbra is módosítja a zárolást.
+	With this on, holding Cmd/Ctrl as you start dragging from a ruler makes a guide on the active artboard only, or a canvas guide with the Artboard tool.	Bekapcsolva a vonalzóból való húzás kezdetén lenyomva tartott Cmd/Ctrl csak az aktív rajztáblán hoz létre segédvonalat, a Rajztábla eszközzel pedig a teljes vászonra kiterjedőt.
+	The color of the grid; the lines between major gridlines are drawn in a fainter shade of it.	A rács színe; a fő rácsvonalak közötti vonalak ennek halványabb árnyalatával jelennek meg.
+	Draws the grid as lines, or as dots along the major gridlines at each subdivision.	A rácsot vonalakként, vagy a fő rácsvonalak mentén minden osztásnál pontokként rajzolja.
+	The distance between major gridlines, in every open document and in new ones; a VectorCraft document opens with the grid it was saved with.	A fő rácsvonalak távolsága minden megnyitott dokumentumban és az újakban; a VectorCraft-dokumentum azzal a ráccsal nyílik meg, amellyel mentették.
+	How many parts each major grid square is divided into; Snap to Grid snaps to these parts, even when the zoom hides their lines.	Hány részre oszlik a rács minden fő négyzete; az Illesztés a rácshoz ezekhez a részekhez illeszt, akkor is, ha a nagyítás elrejti a vonalaikat.
+	Draws the grid behind the artwork; off, the grid is drawn over it.	A rácsot a grafika mögé rajzolja; kikapcsolva a rács a grafika fölé kerül.
+	In Pixel Preview at 600% zoom or more, the active view shows a line at the edge of every document pixel over the artwork.	Pixeles előnézetben 600% vagy nagyobb nagyításnál az aktív nézet a grafika fölött vonalat mutat a dokumentum minden pixelének szélén.
+	The color of the tile edge and the dashed swatch bounds shown while you edit a pattern.	A csempeszél és a szaggatott színmintahatárok színe, amelyek a mintázat szerkesztése közben látszanak.
+	Snaps drawing, moving and transforming to nearby art and shows guides and labels; Pixel Preview turns them off, and Snap to Grid snaps to the grid instead.	A rajzolást, mozgatást és átalakítást a közeli grafikához illeszti, és segédvonalakat és címkéket mutat; a pixeles előnézet kikapcsolja őket, az Illesztés a rácshoz pedig helyettük a rácshoz illeszt.
+	The color of Smart Guide lines and labels.	Az intelligens segédvonalak vonalainak és címkéinek színe.
+	Shows a line along the edge or center that art lines up with; off, art still lines up without the line, and Snap to Glyph does not apply.	Vonalat mutat azon a szélen vagy középen, amelyhez a grafika igazodik; kikapcsolva a grafika vonal nélkül is igazodik, és az Illesztés glifához nem érvényes.
+	With a selection tool, outlines the unselected object under the pointer in its layer color while you are not dragging.	Kijelölőeszközzel a mutató alatti, ki nem jelölt objektumot a rétege színével körvonalazza, amíg nem húz.
+	Shows the size or angle next to the pointer while you scale, rotate, shear or reflect art.	A mutató mellett mutatja a méretet vagy a szöget, miközben a grafikát méretezi, forgatja, nyírja vagy tükrözi.
+	While you draw, points snap to lines at the chosen Angles through the point the segment or shape starts from.	Rajzolás közben a pontok a kiválasztott szögű vonalakhoz illeszkednek, amelyek a szakasz vagy alakzat kezdőpontján haladnak át.
+	The set of angles the construction guides follow while Construction Guides is on.	A szögek készlete, amelyeket a szerkesztési segédvonalak követnek, amíg a Szerkesztési segédvonalak be van kapcsolva.
+	Names what a point snaps to, such as an anchor, a path or an alignment; off, points snap the same way without the names.	Megnevezi, mihez illeszkedik egy pont, például horgonyponthoz, útvonalhoz vagy igazításhoz; kikapcsolva a pontok ugyanúgy illeszkednek, csak a nevek nélkül.
+	Shows distances, angles and how far art has moved next to the pointer while you draw or move it.	A mutató mellett mutatja a távolságokat, a szögeket és a grafika elmozdulását rajzolás vagy mozgatás közben.
+	Snaps moved or resized art to the same gap as between nearby objects, and marks the equal gaps.	A mozgatott vagy átméretezett grafikát a közeli objektumok közötti térközzel azonos térközhöz illeszti, és megjelöli az egyenlő térközöket.
+	With something selected, holding Alt/Option over another object or an artboard shows the distances between it and the selection.	Ha valami ki van jelölve, az Alt/Option nyomva tartása egy másik objektum vagy rajztábla fölött megmutatja a távolságokat közte és a kijelölés között.
+	A selection dragged back to within the Snapping Tolerance of where the drag began goes back to exactly that place; a copy does not.	Az a kijelölés, amelyet a húzás kezdőhelyétől az illesztési tűrésen belülre húznak vissza, pontosan oda tér vissza; a másolat nem.
+	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Milyen közel kell a mutatónak vagy egy húzott pontnak a képernyőn a grafikához érnie, hogy az intelligens segédvonalak illesszenek; a távolság minden nagyításnál azonos.
+	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Egy szakasz végét vagy a középpontjából rajzolt kört úgy illeszti, hogy érintse a közeli görbét.
+	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Egy szakasz végét úgy illeszti, hogy derékszögben találkozzon egy közeli egyenes szakasszal.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Az alapértékek akkor lépnek életbe, amikor a Beállításokban az OK gombra kattint. Az ottani Mégse megtartja a jelenlegi beállításokat.
 	Restore Recovered Documents	Helyreállított dokumentumok visszaállítása
@@ -3591,6 +3787,7 @@ mark-style	Japanese	Japán
 	Roman Hanging Punctuation	Latin függő írásjelek
 	Korean Line Break Anywhere	Koreai sortörés bárhol
 	Bunri-Kinshi	Bunri-Kinshi
+	Kurikaeshi Moji Shori	Kurikaeshi Moji Shori
 	East Asian Composition Settings	Kelet-ázsiai szedési beállítások
 	Korean Composition Settings	Koreai szedési beállítások
 	Rotate	Elforgatás
@@ -3810,8 +4007,15 @@ mark-style	Japanese	Japán
 	Filter Layers Panel Rows	Rétegek panel sorainak szűrése
 @msg	`Custom` stands for changed settings: save the preset under another name	a `Custom` a módosított beállításokat jelöli: mentsd az előbeállítást más néven
 @msg	`{key}` must be an array of these names: {_1}	`{key}`: ezen nevek tömbje kell: {_1}
-	Search commands and tools	Parancsok és eszközök keresése
-	Search commands and tools…	Parancsok és eszközök keresése…
+	Search commands, tools, panels and effects	Parancsok, eszközök, panelek és effektusok keresése
+	Search commands, tools, panels and effects…	Parancsok, eszközök, panelek és effektusok keresése…
+	No commands match	Nincs egyező parancs
+	{pos} of {total}: {name}	{pos}/{total}: {name}
+@plural	{n} result|{n} results	{n} találat
+@plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} találatból {shown} látható. Gépeljen tovább a szűkítéshez.
+	Recent Commands	Legutóbbi parancsok
+	No recent commands	Nincsenek legutóbbi parancsok
+	Search commands	Parancsok keresése
 	Search Commands…	Parancsok keresése…
 	Search Fonts Folder	Keresés betűtípusmappában
 	Searching…	Keresés…
@@ -4064,7 +4268,6 @@ mark-style	Japanese	Japán
 	Single Left Quotation Mark	Bal oldali szimpla idézőjel
 	Single Quotes:	Szimpla idézőjelek:
 	Single Right Quotation Mark	Jobb oldali szimpla idézőjel
-	Single-line Composer	Egysoros tördelő
 	Toggle Line Composer	Sortördelő váltása
 	Sixth Space	Hatodkvirt-szóköz
 	Size	Méret
@@ -4303,6 +4506,9 @@ mark-style	Japanese	Japán
 	Show Import Options	Importálási beállítások megjelenítése
 	Ask for each PDF, DXF or text file's import options before placing it; off, use the options chosen last	Elhelyezés előtt rákérdez minden PDF-, DXF- vagy szövegfájl importálási beállításaira; kikapcsolva a legutóbb választott beállításokat használja
 	Stylistic Alternates	Stilisztikai változatok
+	Ligatures	Ligatúrák
+	Ornaments	Díszek
+	Figures	Számjegyek
 	Swash	Cifra változatok
 	Swatch Conflict	Színminta-ütközés
 	Swatch Conflicts	Színminta-ütközések
@@ -4371,11 +4577,55 @@ mark-style	Japanese	Japán
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
 	Import Composite Fonts	Összetett betűtípusok importálása
+@msg	each font must be {name, parts}	minden betűtípusnak {name, parts} alakúnak kell lennie
+@msg	unknown key `{k}`; a font takes name and parts	ismeretlen kulcs: `{k}`; egy betűtípus name és parts kulcsot fogad
+@msg	each font needs a name	minden betűtípusnak kell egy név
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nem lehet összetett betűtípus neve (1–{COMPOSITE_NAME_MAX} karakter, vezérlőkarakterek nélkül)
+@msg	`{name}`: parts must be an object	`{name}`: a parts értékének objektumnak kell lennie
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: ismeretlen osztály: `{k}`; az osztályok: kanji, kana, punctuation, symbols, roman és numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: a(z) {_1} értékének objektumnak kell lennie
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: ismeretlen kulcs: `{k}` itt: {_1}
+@msg	`{name}`: give the kanji part	`{name}`: adja meg a kanji részt
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	egy dokumentum legfeljebb {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmazhat
+@msg	two composite fonts are named `{_1}`	két összetett betűtípus neve is `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` egy telepített betűtípus neve
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: a(z) {_2} a(z) `{font}` összetett betűtípust használja
+@msg	give fonts: [{name, parts}…]	adja meg: fonts: [{name, parts}…]
+@msg	path is empty	a path üres
+@msg	fonts must be a list of composite fonts	a fonts értékének összetett betűtípusok listájának kell lennie
+@msg	names must be strings	a names elemeinek karakterláncoknak kell lenniük
+@msg	no composite font named `{n}`	nincs `{n}` nevű összetett betűtípus
+@msg	names must be a list of names	a names értékének nevek listájának kell lennie
+@msg	no composite fonts to export	nincs exportálható összetett betűtípus
+@msg	not a composite fonts file: {e}	nem összetettbetűtípus-fájl: {e}
+@msg	not a composite fonts file: no compositeFonts list	nem összetettbetűtípus-fájl: nincs compositeFonts lista
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	a fájl több mint {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmaz
+@msg	the file is larger than 4 MB	a fájl nagyobb 4 MB-nál
+@msg	dataBase64 is not base64	a dataBase64 nem base64
+@msg	give one of path, data or dataBase64	adja meg a path, data vagy dataBase64 egyikét
+@msg	the file holds no composite fonts	a fájl nem tartalmaz összetett betűtípust
+@msg	the file holds two composite fonts named `{_1}`	a fájl két `{_1}` nevű összetett betűtípust tartalmaz
+@msg	`{_1}` can't name a composite font	`{_1}` nem lehet összetett betűtípus neve
+@msg	{k}: give a font	{k}: adjon meg egy betűtípust
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: adjon meg egy betűtípust
+@msg	{k}: size must be {_1} to {_2}%	{k}: a size értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: a size értéke {_1}–{_2}% lehet
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: a baseline értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: a baseline értéke {_1}–{_2}% lehet
+@msg	{k}: scale must be {_1} to {_2}%	{k}: a méretezés {_1}–{_2}% lehet
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: a méretezés {_1}–{_2}% lehet
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: csak a kana, roman és numerals méretezhető
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: csak a kana, roman és numerals méretezhető
+@msg	{k}: only kana can be scaled at the center	{k}: csak a kana méretezhető a középpontból
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: csak a kana méretezhető a középpontból
+@msg	no composite font	nincs összetett betűtípus
 	Delete Font	Betűtípus törlése
 	Kanji	Kandzsi
 	Kana	Kana
 	Numerals	Számjegyek
 	Scale at Center	Méretezés középről
+	Delete Set	Készlet törlése
+	Direct Entry	Közvetlen bevitel
 	Up/Down:	Fel/le:
 	Left/Right:	Balra/jobbra:
 	Tate-chu-yoko Up/Down	Tate-chu-yoko fel/le
@@ -5159,6 +5409,31 @@ imageTrace	Outline	Körvonal
 @msg	$.evalFile requires a file path	A $.evalFile fájlútvonalat igényel
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: az időkorlátnak véges számú ezredmásodpercnek kell lennie, 0 vagy több
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: egy fájlútvonalat és egy időkorlátot vár
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} nincs definiálva
+@msg	cannot read property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem olvasható
+@msg	cannot set property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem állítható be
+@msg	cannot read a property of {base}	a(z) {base} tulajdonsága nem olvasható
+@msg	cannot set a property of {base}	a(z) {base} tulajdonsága nem állítható be
+@msg	cannot define property '{key}': {why}	a(z) '{key}' tulajdonság nem definiálható: {why}
+@msg	cannot assign to property '{key}': {why}	a(z) '{key}' tulajdonságnak nem adható érték: {why}
+@msg	cannot delete property '{key}'	a(z) '{key}' tulajdonság nem törölhető
+@msg	cannot declare function {ident}	a(z) {ident} függvény nem deklarálható
+@msg	invalid assignment target	érvénytelen értékadási cél
+@msg	the array's length is read-only	a tömb hossza csak olvasható
+@msg	the property cannot be redefined	a tulajdonság nem definiálható újra
+@msg	the object is not extensible	az objektum nem bővíthető
+@msg	the length cannot be redefined	a hossz nem definiálható újra
+@msg	it is read-only	csak olvasható
+@msg	an element cannot be deleted	elem nem törölhető
+@msg	it has only a getter	csak gettere van
+@msg	the value is a primitive	az érték primitív
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: {file}, {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: {line}. sor, {column}. oszlop: {e} (kivétel)
 @msg	{name}: {e} (thrown)	{name}: {e} (kivétel)
@@ -5199,6 +5474,27 @@ imageTrace	Outline	Körvonal
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: párbeszédpanel nem nyílhat meg beépített függvény visszahívásában, getterben, átalakításban vagy a $.evalFile által futtatott fájlban; hívja a parancsfájl saját kódjából
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: a következő válasz az `answers` listában ehhez tartozik: {_1}, nem ehhez: {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: az `answers` listában nem maradt válasz ehhez a párbeszédpanelhez
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	Az `answers` listában {n} válasz maradt, amelyet a parancsfájl nem használt fel
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1}: az ecset alatt {n} objektum változatlan maradt ({_2}); csak útvonalakat alakít át
+liquify-tool	Warp	Hajlítás
+liquify-tool	Twirl	Örvénylés
+liquify-tool	Pucker	Összehúzás
+liquify-tool	Bloat	Felfújás
+liquify-tool	Scallop	Csipkézés
+liquify-tool	Crystallize	Kristályosítás
+liquify-tool	Wrinkle	Gyűrés
+liquify-kind	graphs	grafikonok
+liquify-kind	type	szöveg
+liquify-kind	symbols	szimbólumok
+liquify-kind	images	képek
+liquify-kind	meshes	rácsok
+liquify-kind	envelopes	burkolók
+liquify-kind	repeats	ismétlések
+liquify-kind	placed documents	elhelyezett dokumentumok
+liquify-kind	blends	összemosások
+liquify-list-two	{0}, {1}	{0} és {1}
+liquify-list-middle	{0}, {1}	{0}, {1}
+liquify-list-end	{0}, {1}	{0} és {1}
 @msg	vc.document{place} is too large for a script	a vc.document{place} túl nagy egy parancsfájlhoz
 @msg	vc.log: the log of this run is full	vc.log: ennek a futásnak a naplója megtelt
 @msg	this function's script run has ended	ennek a függvénynek a parancsfájl-futása véget ért
@@ -5213,6 +5509,8 @@ imageTrace	Outline	Körvonal
 @msg	`name` must be the name of a script engine	a `name` értékének egy parancsfájlmotor nevének kell lennie
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	a fő parancsfájlmotor minden futáshoz új, és sosem marad meg, ezért nem dobható el
 @msg	there is no script engine named {name}	nincs {name} nevű parancsfájlmotor
+@msg	`answers[{i}]` {e}	`answers[{i}]`: {e}
+@msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	az `answers` csak olyan futtatáshoz való, ahol nincs kit megkérdezni: az alkalmazásban minden párbeszédpanelre a felhasználó válaszol
 @msg	Running a script	Parancsfájl futtatása
 @msg	Copied the script report	Szkriptjelentés másolva
 @msg	Copied the link info	Csatolás adatai másolva
@@ -5262,6 +5560,7 @@ imageTrace	Outline	Körvonal
 @msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	egy diagram adatsorában a diagramminta grafikája a mintából rajzolódik újra: a módosításához szerkeszd a mintát
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
+@msg	some raster effects were not made into images: they would take more than 1,024 images or 256 megapixels in all	néhány raszteres effektus nem lett képpé alakítva: több mint 1024 képet vagy összesen 256 megapixelt foglalnának
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
 @msg	Expand: no gradient fills	Kibontás: nincs színátmenetes kitöltés
 @msg	Expand: nothing to expand	Kibontás: nincs mit kibontani
@@ -5383,6 +5682,9 @@ imageTrace	Outline	Körvonal
 @msg	no active document	nincs aktív dokumentum
 @msg	no active perspective plane	nincs aktív perspektivikus sík
 @msg	no anchor points selected	nincs kijelölt horgonypont
+@msg	`points` must be three [x, y] pairs of numbers	a `points` három [x, y] számpár legyen
+@msg	direct-select three anchor points, or give `points`	jelölj ki közvetlen kijelöléssel három horgonypontot, vagy add meg a `points` értéket
+@msg	no circle passes through these points: two are the same or all three lie on one line	ezeken a pontokon nem halad át kör: kettő egybeesik, vagy mindhárom egy egyenesen van
 @msg	no app to open files here	itt nincs fájlmegnyitó alkalmazás
 @msg	no artboard	nincs rajztábla
 @msg	no artboard {i} (0-based; the document has {_1})	nincs ilyen sorszámú rajztábla: {i} (0-tól számozva; a dokumentumban ennyi van: {_1})
@@ -5586,6 +5888,11 @@ imageTrace	Outline	Körvonal
 @msg	plug-in parameters: {0}	bővítmény paraméterei: {0}
 @msg	plug-in trapped: {0}	a bővítmény futása megszakadt: {0}
 @msg	Preview in Browser needs the desktop app (the web downloads files instead)	Az Előnézet böngészőben az asztali alkalmazásban érhető el (a webes változat helyette letölti a fájlokat)
+@msg	give `desiredK`, the desired file size in K (1024 bytes): a number above 0 and at most 1048576	adja meg a `desiredK` értéket, a kívánt fájlméretet K-ban (1024 bájt): 0-nál nagyobb, legfeljebb 1048576 szám
+@msg	`startWith` is `current` or `auto`	a `startWith` értéke `current` vagy `auto`
+@msg	`use` is `allSlices`, `eachSlice` or `currentSlice`	a `use` értéke `allSlices`, `eachSlice` vagy `currentSlice`
+@msg	`slice` is a slice number from `slice.list`, with `use: currentSlice`	a `slice` egy szeletszám a `slice.list` listából, `use: currentSlice` mellett
+@msg	Optimize to File Size: there is no image to measure	Optimalizálás fájlméretre: nincs mérhető kép
 @msg	print settings are not an object	a nyomtatási beállítások nem objektumot alkotnak
 @msg	printing isn't available here	itt nem lehet nyomtatni
 @msg	range `{s}` is empty	a tartomány üres: `{s}`
@@ -5850,6 +6157,8 @@ imageTrace	Outline	Körvonal
 @msg	unknown option `{path}.{k}`	ismeretlen beállítás: `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	ismeretlen felülnyomás-kezelés: `{o}` (preserve, simulate vagy discard)
 @msg	unknown panel `{raw}`	ismeretlen panel: `{raw}`
+@msg	`{panel}` has no display sizes to cycle	a(z) `{panel}` panelnek nincsenek váltható megjelenítési méretei
+@msg	the panels are not shown	a panelek nem láthatók
 @msg	panels can't be shown in Presentation Mode	bemutató módban a panelek nem jeleníthetők meg
 @msg	unknown preference `{key}`	ismeretlen beállítás: `{key}`
 @msg	Preferences imported.	A beállítások importálva.
@@ -6008,7 +6317,26 @@ imageTrace	Outline	Körvonal
 @msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	the <filter> element needs an id, the filter's name	a <filter> elemnek id kell, a szűrő neve
+@msg	an SVG filter's id is at most {MAX_NAME} characters	egy SVG-szűrő id-je legfeljebb {MAX_NAME} karakter
+@msg	<{_1}> isn't an element of an SVG filter	a(z) <{_1}> nem SVG-szűrő eleme
+@msg	an SVG filter has no event attributes such as {_1}	egy SVG-szűrőnek nincsenek eseményattribútumai, például {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	egy SVG-szűrő képei PNG, JPEG, GIF vagy WebP formátumú data: URL-ek
+@msg	the SVG filter isn't valid XML: {e}	az SVG-szűrő nem érvényes XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	a feTurbulence numOctaves értéke legfeljebb {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} legfeljebb {max}
+@msg	feConvolveMatrix's order	a feConvolveMatrix order értéke
+@msg	feMorphology's radius	a feMorphology radius értéke
+@msg	a blur's stdDeviation	egy elmosás stdDeviation értéke
+@msg	the SVG filter has no primitives	az SVG-szűrőnek nincsenek primitívjei
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	egy SVG-szűrőnek legfeljebb {MAX_PRIMITIVES} primitívje van
+@msg	the SVG filter is too large once its attributes are written out	az SVG-szűrő túl nagy, miután az attribútumai ki vannak írva
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	egy SVG-szűrő képei összesen legfeljebb {MAX_IMAGE_PIXELS} képpontosak
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	az SVG-szűrő nem rajzolható meg: ellenőrizze a primitívjeit és azok bemeneteit
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	egy SVG-szűrő elemei legfeljebb {MAX_DEPTH} szint mélyen ágyazhatók egymásba
+@msg	an SVG filter is at most {_1} KB	egy SVG-szűrő legfeljebb {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
+@msg	`render` must be an object holding only `mode`, set to shaded or wireframe	a `render` csak `mode` mezőt tartalmazó objektum lehet, shaded vagy wireframe értékkel
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
 @msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ebből a rajzból nem hozható létre test: a szimbólumpéldányai, összemosásai és vágócsoportjai túl sok objektumot tartalmaznak
@@ -6054,6 +6382,19 @@ imageTrace	Outline	Körvonal
 	Transform Objects	Objektumok transzformálása
 @msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	ismeretlen paraméter: `{key}`; a parancsnak nincs paramétere
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	ismeretlen paraméter: `{key}`; a(z) `{object}` ezeket fogadja el: {keys}
+@msg	unknown parameter `{key}`; {why_not}	ismeretlen paraméter: `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	egyik formátum sem fogadja el (lásd: document.formats)
+@msg	no save format takes it (see file.formatOptions)	egyik mentési formátum sem fogadja el (lásd: file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	a PDF nem fogadja el (lásd: document.formats)
+@msg	EPS doesn't take it (see document.formats)	az EPS nem fogadja el (lásd: document.formats)
+@msg	DXF doesn't take it (see document.formats)	a DXF nem fogadja el (lásd: document.formats)
+@msg	{name} must be {range} (got {v})	a(z) {name} értéke {range} lehet (kapott érték: {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Az először kipróbált grafikus processzor nem tudta megjeleníteni az ablakot, ezért a VectorCraft újraindult ezen: {summary} (Beállítások › Teljesítmény › Grafikus processzor › Automatikus: azt használja, amelyik a kijelzőt hajtja)
+@msg	Sent “{title}” to {to}	“{title}” elküldve ide: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” elküldve ide: {to}. A nyomtatási sor válasza: {note}
+@msg	the default printer	alapértelmezett nyomtató
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	raszteres effektusok a(z) {object} objektumon: kért felbontás {requested} ppi, elért felbontás {achieved} ppi a 64 millió képpontos korlát miatt
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 @msg	the params must be an object, not {got}	a paramétereknek objektumnak kell lenniük, nem ez: {got}
 @msg	unknown parameter `{path}`; the object takes no keys	ismeretlen paraméter: `{path}`; az objektum nem fogad el kulcsokat
@@ -6158,7 +6499,7 @@ imageTrace	Outline	Körvonal
 @msg	Unknown dimension style	Ismeretlen méretezési stílus
 @msg	Unknown unit	Ismeretlen mértékegység
 # Revolve cap description
-	Close the circular ends of open profiles. Partial sweeps keep their cut sides open.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak nyitva maradnak.
+	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Nyitott profilok kör alakú végeinek lezárása. Részleges körforgatás esetén a vágott oldalak is lezáródnak.
 	Distance	Távolság
 @msg	span must be "object" or "selection", got {v}	a span értéke "object" vagy "selection" lehet, nem {v}
 @msg	span: "selection" places a `gradient`, not a swatch	span: "selection" egy `gradient` értéket helyez el, nem színmintát
@@ -6170,8 +6511,11 @@ imageTrace	Outline	Körvonal
 	Export Data Sets…	Adatkészletek exportálása…
 	Load Variable Library…	Változókönyvtár betöltése…
 	Save Variable Library…	Változókönyvtár mentése…
+@msg	Import reads a data source file ending in .csv, .tsv, .txt or .xml	Az „Importálás” .csv, .tsv, .txt vagy .xml kiterjesztésű adatforrásfájlt olvas be
 @msg	a variable library holds text variables, and the document has none	a változókönyvtár szöveges változókat tartalmaz, a dokumentumban pedig nincs ilyen
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	a(z) `{name}` változó nem menthető változókönyvtárba: nevezze át úgy, hogy betűvel vagy `_` jellel kezdődjön, szóközök és a `-`, `_` és `.` jeltől eltérő szimbólumok nélkül
+@msg	{k} has control characters	{k} vezérlőkaraktereket tartalmaz
+@msg	{k} has control characters or line breaks	{k} vezérlőkaraktereket vagy sortöréseket tartalmaz
 @msg	data set `{name}` holds a control character, which a variable library can't hold	a(z) `{name}` adatkészlet vezérlőkaraktert tartalmaz, amelyet a változókönyvtár nem tartalmazhat
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	a(z) `{name}` adatkészlet szóközzel kezdődik vagy végződik, amelyet a változókönyvtár nem tartalmazhat
 	Make Graph Dynamic	Diagram dinamikussá tétele
@@ -6308,6 +6652,7 @@ imageTrace	Outline	Körvonal
 	Single Word Justification:	Egyetlen szó igazítása:
 	Full Justify	Teljes sorkizárás
 	Minimum must not exceed Desired, nor Desired Maximum.	A minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: a minimum nem haladhatja meg a kívánt értéket, sem a kívánt érték a maximumot
 	Justification	Sorkizárás
 	Add filters from the list above	Adjon hozzá szűrőket a fenti listából
 	Add to Stack	Hozzáadás a veremhez
@@ -6497,6 +6842,7 @@ axis	Y Axis	Y tengely
 @msg	stops must be in order of `offset`	a színátmenet-pontok `offset` szerint rendezve legyenek
 @msg	the document has no pattern {pattern}	a dokumentumban nincs {pattern} mintázat
 @msg	the document has no swatch {n}	a dokumentumban nincs {n} színminta
+@msg	`plates` requires a stop linked to a spot swatch	a `plates` direktszín-színmintához kapcsolt színátmenet-pontot igényel
 @msg	the output	a kimenet
 @msg	the path has no anchor points	az útvonalnak nincsenek horgonypontjai
 @msg	too many anchor points (limit {MAX_ANCHORS})	túl sok horgonypont (korlát: {MAX_ANCHORS})
@@ -6890,6 +7236,7 @@ anchor	Points:	Pontok:
 	Open a document to check it for issues.	Nyisson meg egy dokumentumot a problémák ellenőrzéséhez.
 	Empty Text	Üres szöveg
 	Unpainted Objects	Festetlen objektumok
+	Empty Text Paths	Üres szövegútvonalak
 	Zero-Opacity Objects	Nulla átlátszatlanságú objektumok
 	Duplicate Objects	Ismétlődő objektumok
 	Off-Artboard Art	Rajztáblákon kívüli grafika
@@ -7242,9 +7589,43 @@ breakText	Glyphs	Glifák
 	Remove Gaps	Hézagok eltávolítása
 @msg	that makes too many pieces (at most 100000): make the dashes longer	ez túl sok darabot adna (legfeljebb 100000): hosszabbítsa meg a szaggatásokat
 @msg	select paths, or segments, to divide	jelöljön ki felosztandó útvonalakat vagy szakaszokat
+# Path Precision Tools add-on: Common Tangents.
+	Common Tangents…	Közös érintők…
+	Common Tangents	Közös érintők
+	Tangents	Érintők
+	Centerline	Középvonal
+	External	Külső
+	Internal	Belső
+@msg	select two closed paths	jelöljön ki két zárt útvonalat
+@msg	a selected path is open	egy kijelölt útvonal nyitott
+@msg	a selected path is not convex	egy kijelölt útvonal nem konvex
+@msg	a selected path has no area	egy kijelölt útvonalnak nincs területe
+@msg	a selected path has more than 10000 segments	egy kijelölt útvonalnak több mint 10000 szakasza van
+@msg	the two paths have the same outline	a két útvonal körvonala azonos
+@msg	One path lies inside the other, so they have no common tangents	Az egyik útvonal a másikon belül van, így nincsenek közös érintőik
+@msg	The paths overlap, so they have no internal tangents	Az útvonalak átfedik egymást, így nincsenek belső érintőik
+@msg	One path lies inside the other, so they have no internal tangents	Az egyik útvonal a másikon belül van, így nincsenek belső érintőik
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Szaggatások kibontása útvonalakká
 @msg	select paths with dashed strokes to expand	jelöljön ki szaggatott körvonalú útvonalakat a kibontáshoz
+# Path Precision Tools add-on: Tangent Circle.
+	Tangent Circle…	Érintőkör…
+	Tangent Circle	Érintőkör
+	Circle:	Kör:
+@msg	`ids` names an object twice	`ids`: egy objektumot kétszer nevez meg
+@msg	select two or three paths or compound paths	jelölj ki két vagy három útvonalat vagy összetett útvonalat
+@msg	`radius` must be from 0.01 to 1000000 pt	a `radius` értéke 0.01 és 1000000 pt között lehet
+@msg	two shapes need a `radius`	két alakzathoz `radius` kell
+@msg	three shapes set the radius themselves: leave `radius` out	három alakzat maga határozza meg a sugarat: hagyd el a `radius` értéket
+@msg	`circle` must be from 0 to 64	a `circle` értéke 0 és 64 között lehet
+@msg	a shape has no outline	egy alakzatnak nincs körvonala
+@msg	the shapes are too complex: at most 2000 segments in all	az alakzatok túl összetettek: összesen legfeljebb 2000 szakasz
+@msg	these shapes take too long to search	ezeknek az alakzatoknak a keresése túl sokáig tart
+@msg	more than 64 circles touch these shapes: they may touch along a whole curve	több mint 64 kör érinti ezeket az alakzatokat: lehet, hogy egy teljes görbe mentén érintik őket
+@msg	no circle touches these shapes	egyetlen kör sem érinti ezeket az alakzatokat
+@msg	`circle` is past the last circle found ({found})	a `circle` az utolsó talált kör után van ({found})
+@msg	object {value} is not a path or compound path	a(z) {value} objektum nem útvonal és nem összetett útvonal
+@msg	these shapes are too small to measure	ezek az alakzatok túl kicsik a méréshez
 # Document Tools add-on (Object › Plug-ins › Document Tools): Save a Timestamped Copy.
 	Document Tools	Dokumentumeszközök
 	Save a Timestamped Copy	Másolat mentése időbélyeggel
@@ -7266,6 +7647,11 @@ breakText	Glyphs	Glifák
 	Malayalam	Malajálam
 	Odia	Odia
 	Urdu	Urdu
+	Sanskrit	Szanszkrit
+	Nepali	Nepáli
+	Assamese	Asszámi
+	Konkani	Konkani
+	Sindhi	Szindhi
 	VectorCraft {release} and later (version {n})	VectorCraft {release} és újabb (verzió: {n})
 # Document Tools add-on: Export All Open Documents (#4920).
 	Export All Open Documents as PDF	Az összes megnyitott dokumentum exportálása PDF-ként
@@ -7299,7 +7685,7 @@ breakText	Glyphs	Glifák
 @msg	stroke cannot be set on a symbol instance	a stroke nem állítható be szimbólumpéldányon
 @msg	fill on a symbol instance must be a solid color or none	a szimbólumpéldány fill értéke csak egyszínű szín vagy none lehet
 @msg	{key} cannot be set on an image without a Convert to Shape or Outline Object effect on it	a {key} nem állítható be olyan képen, amelyen nincs Átalakítás alakzattá vagy Objektum útvonallá alakítása effektus
-@msg	pass newName, registration, exportType, nineSlice and/or type	adja meg a newName, registration, exportType, nineSlice és/vagy type értékét
+@msg	pass newName, registration, exportType, nineSlice, type and/or alignToPixelGrid	adja meg a newName, registration, exportType, nineSlice, type és/vagy alignToPixelGrid értékét
 	Text Flow	Szövegfolyás
 	By Rows	Soronként
 	By Columns	Oszloponként
@@ -7525,6 +7911,13 @@ breakText	Glyphs	Glifák
 @msg	No bridge of this width fits across the selected art	Ilyen széles híd nem fér el a kijelölt grafikán
 @msg	Some islands could not be joined to the area around the art	Egyes szigeteket nem sikerült összekötni a grafikát körülvevő területtel
 @msg	`width` must be from {lo} to {hi} pt	A `width` értéke {lo} és {hi} pt között lehet
+@msg	`angle` must be from -180 to 180 degrees	Az `angle` értéke -180 és 180 fok között lehet
+@msg	`roundness` must be from 0 to 100%	A `roundness` értéke 0 és 100% között lehet
+@msg	`fidelity` must be from 0.01 to 100 pt	A `fidelity` értéke 0.01 és 100 pt között lehet
+@msg	style must be "pencil" or "brush"	A style értéke "pencil" vagy "brush" lehet
+@msg	extend end must be "start" or "end"	Az extend vége "start" vagy "end" lehet
+@msg	connect end must be "start" or "end"	A connect vége "start" vagy "end" lehet
+@msg	`roundness` must be from 1 to 100%	A `roundness` értéke 1 és 100% között lehet
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count`: 1 és {MAX_BRIDGES_PER_ISLAND} közötti egész szám kell
 	Weed Box and Lines…	Gyomláló keret és vonalak…
 	Weed Box and Lines	Gyomláló keret és vonalak
@@ -7583,6 +7976,7 @@ breakText	Glyphs	Glifák
 @msg	Image Trace failed: {e}	A képvektorizálás nem sikerült: {e}
 @msg	Image Trace finished, but its document was closed	A képvektorizálás elkészült, de a dokumentumát bezárták
 @msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	A képvektorizálás elkészült, de a kép vagy a beállításai közben megváltoztak: vektorizáld újra
+@msg	Image Trace finished, but its document was reverted: trace it again	A képvektorizálás elkészült, de a dokumentumát visszaállították a mentett változatra: vektorizáld újra
 @msg	Import SVG Filter reads SVG files, not SVGZ	Az SVG-szűrő importálása SVG-fájlokat olvas, SVGZ-fájlokat nem
 @msg	Invalid dimension offset	Érvénytelen méretvonal-eltolás
 @msg	Invalid point	Érvénytelen pont
@@ -7756,6 +8150,7 @@ breakText	Glyphs	Glifák
 @msg	`names` must be an array of style names	`names`: stílusnevek tömbje kell
 @msg	`new` is a design name, or true	`new`: diagramminta neve vagy true
 @msg	`origin` must be [x, y] in points	`origin`: [x, y] kell pontban megadva
+@msg	`axes` must be [a, b, c, d], each from -1000 to 1000, with a·d - b·c at least 0.001 from 0	`axes`: [a, b, c, d] kell, mindegyik -1000 és 1000 között, és a·d - b·c legalább 0.001-gyel térjen el 0-tól
 @msg	`path` must be a folder	`path`: mappa kell
 @msg	`path` must be a path object	`path`: útvonalobjektum kell
 @msg	`picks` must be an array (got {v})	`picks`: tömb kell (kapott érték: {v})
@@ -8045,7 +8440,6 @@ breakText	Glyphs	Glifák
 @msg	anchor `smooth` must be true or false	horgonypont, `smooth`: true vagy false kell
 @msg	anchor `{key}` must be [x, y]	horgonypont, `{key}`: [x, y] kell
 @msg	anchor `{key}` must be a number	horgonypont, `{key}`: szám kell
-@msg	angle and roundness must be finite	angle és roundness: véges érték kell
 @msg	angles must be a list as long as pins (degrees or null)	angles: a pins listával azonos hosszúságú lista kell (fok vagy null)
 @msg	appearance must be flat|center|edge	appearance: flat|center|edge kell
 @msg	apply is "fill" or "stroke", not `{other}`	apply: "fill" vagy "stroke", ez nem az: `{other}`
@@ -8161,7 +8555,7 @@ breakText	Glyphs	Glifák
 @msg	column: true floats the whole column and takes no onto, above or below	column: true az egész oszlopot lebegővé teszi, és nem adható meg mellette onto, above vagy below
 @msg	command must be a shape.* command	command: shape.* parancs kell
 @msg	commands[{i}]: missing `command`	commands[{i}]: hiányzik: `command`
-@msg	composer must be "singleLine" or "everyLine"	composer: "singleLine" vagy "everyLine" kell
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer értéke "singleLine", "everyLine", "standardSingleLine" vagy "standardEveryLine" lehet
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	összetett alakzatba útvonalak, összetett útvonalak, csoportok, összetett alakzatok, szöveg, összemosások és burkolók kerülhetnek
 @msg	compound {_1} must contain exactly one open path to join	az összetett objektumnak ({_1}) pontosan egy összekapcsolható nyitott útvonalat kell tartalmaznia
 @msg	connect needs a path other than the one extended	connect: a meghosszabbított útvonaltól különböző útvonal kell
@@ -8778,7 +9172,9 @@ breakText	Glyphs	Glifák
 @msg	position must be normal, superscript or subscript	position: normal, superscript vagy subscript kell
 @msg	position must be topLeft, topRight, bottomLeft or bottomRight	position: topLeft, topRight, bottomLeft vagy bottomRight kell
 @msg	positions must be between 0 and 100000 pt	positions: 0 és 100000 pt közötti értékek kellenek
+@msg	ppi can't be more than {max} for this image	ppi: ennél a képnél legfeljebb {max} lehet
 @msg	ppi must be a positive number, not {ppi}	ppi: pozitív szám kell, ez nem az: {ppi}
+@msg	trim keeps the image's pixels as they are: leave out ppi	a trim változatlanul hagyja a kép képpontjait: hagyja el a ppi értéket
 @msg	ppi must be between 1 and 2400	ppi: 1 és 2400 közötti érték kell
 @msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`: nem transforms|bounds|fileDimensions|fit|fill
 @msg	preserveShape must be clippingMask|transparency	preserveShape: clippingMask|transparency kell
@@ -9198,8 +9594,6 @@ breakText	Glyphs	Glifák
 @msg	unknown panel	ismeretlen panel
 @msg	unknown panel `{panel}`	ismeretlen panel: `{panel}`
 @msg	unknown parameter `{key}`	ismeretlen paraméter: `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	ismeretlen paraméter: `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	ismeretlen paraméter: `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	ismeretlen pieLegend: `{v}` (none, standard vagy wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	ismeretlen piePosition: `{v}` (even, ratio vagy stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	ismeretlen pieSort: `{v}` (none, all vagy first)
@@ -9327,7 +9721,6 @@ breakText	Glyphs	Glifák
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name}: beépített elem, nem törölhető
 @msg	{name} must be a number	{name}: szám kell
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name}: {lo}–{hi}{unit} kell (kapott érték: {v})
 @msg	{name}: CRC or size mismatch	{name}: a CRC vagy a méret nem egyezik
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: ennek az Affinity-fájlnak csak a beágyazott előnézete volt olvasható; a Fájl › Megnyitás paranccsal megnézheted a figyelmeztetésével együtt, vagy az elhelyezés előtt exportálj SVG-t vagy PDF-et az Affinityből
 @msg	{name}: {e}	{name}: {e}
@@ -9402,6 +9795,7 @@ breakText	Glyphs	Glifák
 @msg	Too many Revolve faces for visibility evaluation	Túl sok lap a láthatóság kiértékeléséhez (Forgatás tengely körül)
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	A VectorCraft legfeljebb {ASE_MAX_ENTRIES} színt és csoportot olvas be egy színmintacsere-fájlból, ebben a könyvtárban pedig ennyi van: {entries}
 @msg	WebP encoding failed: {e}	A WebP-kódolás sikertelen: {e}
+@msg	WebP encoding failed: the image is too large for lossy WebP: lower the resolution or choose Lossless	A WebP-kódolás sikertelen: a kép túl nagy a veszteséges WebP-hez: csökkentse a felbontást, vagy válassza a Veszteségmentes lehetőséget
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`index` must be a whole number	`index`: egész szám kell
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`: smallThumb, mediumThumb, largeThumb, smallList vagy largeList lehet
@@ -9474,3 +9868,40 @@ breakText	Glyphs	Glifák
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a JPEG formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a Targa formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixel túl nagy a PSD formátumhoz (oldalanként legfeljebb {MAX_SIDE} pixel): csökkentsd a felbontást
+	Packaging Tools	Csomagolóeszközök
+	Fold Lines	Hajtásvonalak
+	Make Cut Line	Vágóvonallá alakítás
+	Make Crease Line	Bigvonallá alakítás
+	Make Partial Cut Line	Részleges vágóvonallá alakítás
+	Make Perforation Line	Perforációs vonallá alakítás
+	Make Fold Line	Hajtásvonallá alakítás
+	Role Swatches…	Vonaltípusok színmintái…
+	Role Swatches	Vonaltípusok színmintái
+	Role	Vonaltípus
+	Cut Line	Vágóvonal
+	Crease Line	Bigvonal
+	Partial Cut Line	Részleges vágóvonal
+	Perforation Line	Perforációs vonal
+	No objects are selected.	Nincs kijelölt objektum.
+	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
+	Remove Fold Line Role	Vonaltípus eltávolítása
+	Check	Ellenőrzés
+	Check Fold Lines	Hajtásvonalak ellenőrzése
+@msg	No cut lines are in the selection.	A kijelölésben nincs vágóvonal.
+@msg	No cut lines are in the document.	A dokumentumban nincs vágóvonal.
+@msg	The cut lines do not enclose an area.	A vágóvonalak nem zárnak közre területet.
+@msg	A cut line ends without meeting another cut line.	Egy vágóvonal úgy ér véget, hogy nem találkozik másik vágóvonallal.
+@msg	A gap between cut lines was closed.	A vágóvonalak közötti rés le lett zárva.
+@msg	The fold lines are too complex to check.	A hajtásvonalak túl összetettek az ellenőrzéshez.
+@msg	A cut line and a crease lie on top of each other.	Egy vágóvonal és egy bigvonal egymáson fekszik.
+@msg	No cut lines are among the given objects.	A megadott objektumok között nincs vágóvonal.
+@msg	Two fold lines lie on top of each other.	Két hajtásvonal egymáson fekszik.
+@msg	A crease ends inside a panel.	Egy bigvonal egy panelen belül ér véget.
+@msg	A crease does not divide two panels.	Egy bigvonal nem választ el két panelt.
+@msg	A crease lies outside the cut outline, wholly or in part.	Egy bigvonal teljesen vagy részben a vágási körvonalon kívül van.
+@msg	The pieces of a hinge are not on one straight line.	Egy zsanér részei nem egy egyenesen vannak.
+@msg	A gap between cut lines is too narrow to tell apart.	A vágóvonalak közötti rés túl keskeny a megkülönböztetéshez.
+@msg	A cut-out area holds other fold lines or another blank.	Egy kivágott terület további hajtásvonalakat vagy egy másik kiterítéket tartalmaz.
+@msg	A panel is not joined to the rest by a crease.	Egy panelt egyetlen bigvonal sem köt a többihez.
+@msg	A fold line is on a non-printing layer.	Egy hajtásvonal nem nyomtatható rétegen van.
+@msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelek: {panels}, zsanérok: {hinges}, hibák: {errors}, figyelmeztetések: {warnings}

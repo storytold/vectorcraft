@@ -49,7 +49,7 @@ mod tiff;
 pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
 pub use import::{
     AiLayers, Imported, NameEncoding, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard,
-    family_style, import, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
+    family_style, import, import_ai, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
 };
 pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
 pub use print::{PrintJob, PrintPage, print};
@@ -232,8 +232,8 @@ pub fn export(doc: &Document, opts: &EpsOptions, preview: Option<&Raster>, thumb
     }
     // Type in the document's composite fonts is drawn in them, whether or not an app has the document open.
     let _lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&doc.composite_fonts);
-    let baked =
-        vectorcraft_effects::bake_document_placing_symbols(doc, true, vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true });
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true, layers);
     let doc = baked.as_ref().unwrap_or(doc);
     let page = scene::Scene::new(doc, opts).run();
     let mut setting_notes = vec![];

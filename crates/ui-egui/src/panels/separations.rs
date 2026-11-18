@@ -1,11 +1,12 @@
 //! Separations Preview panel: process plates C/M/Y/K plus spot plates with eye toggles (one visible
 //! plate renders as greyscale ink coverage; Alt-click an eye to show only that plate), and the
 //! colour-management controls behind Edit → Color Settings… / Assign Profile… and View → Proof
-//! Setup (working spaces, intent, black-point compensation, proof target, gamut check).
+//! Setup (working spaces, color management policies, intent, black-point compensation, proof
+//! target, gamut check).
 
 use egui::{Sense, Ui, vec2};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Intent, ProfileKind};
+use vectorcraft_color::cms::{self, Intent, Policy, ProfileKind};
 use vectorcraft_render::proof;
 
 use crate::VectorcraftApp;
@@ -100,8 +101,9 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, Load
-/// Profile… and Gamut Check, and the profile the active document is assigned.
+/// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, the RGB
+/// and CMYK color management policies, Load Profile… and Gamut Check, and the profile the active
+/// document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let st = cms::working_settings();
     widgets::section_header(ui, tl!("Color Settings"));
@@ -126,6 +128,21 @@ fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if widgets::check(ui, tl!("Use Black Point Compensation"), st.bpc, true) {
         run(app, "edit.colorSettings", json!({"bpc": !st.bpc}));
+    }
+    // Color management policies: what opening a document does with a profile it is tagged with
+    // that is not the working space.
+    let policies: [(&str, &str, Policy, &[Policy]); 2] =
+        [("rgbPolicy", tl!("RGB Policy:"), st.rgb_policy, &Policy::RGB), ("cmykPolicy", tl!("CMYK Policy:"), st.cmyk_policy, &Policy::CMYK)];
+    for (key, label, current, choices) in policies {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            let labels: Vec<&str> = choices.iter().map(|p| policy_label(*p)).collect();
+            if let Some(i) = widgets::dropdown_names(ui, key, policy_label(current), &labels, 210.0)
+                && let Some(p) = choices.get(i)
+            {
+                run(app, "edit.colorSettings", json!({ key: p.id() }));
+            }
+        });
     }
     ui.horizontal(|ui| {
         if widgets::flat_button(ui, tl!("Load Profile…"), 110.0).clicked() {
@@ -240,6 +257,16 @@ fn assign_rows(app: &mut VectorcraftApp, ui: &mut Ui, row: &AssignRow) {
     });
     if let Some(p) = pick {
         run(app, "edit.assignProfile", p);
+    }
+}
+
+/// The name of color management policy `p` in the UI language.
+fn policy_label(p: Policy) -> &'static str {
+    match p {
+        Policy::Off => tl!("Off"),
+        Policy::PreserveEmbedded => tl!("Preserve Embedded Profiles"),
+        Policy::Convert => tl!("Convert to Working Space"),
+        Policy::PreserveNumbers => tl!("Preserve Numbers"),
     }
 }
 

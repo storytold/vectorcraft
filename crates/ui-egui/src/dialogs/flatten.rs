@@ -335,10 +335,15 @@ mod tests {
     fn ok_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
         const WARNING: &str = "an image couldn't be decoded and is missing from the picture";
         // A PNG whose header reads but whose pixel data is cut short.
-        let mut png = Vec::new();
-        image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-            .unwrap();
+        let img = craft_image_codecs::Image::from_raw(
+            64,
+            32,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [200u8, 30, 30, 255].repeat(64 * 32),
+        )
+        .unwrap();
+        let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
         for preview in [true, false] {
             let mut app = scene();
             let placed = vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
