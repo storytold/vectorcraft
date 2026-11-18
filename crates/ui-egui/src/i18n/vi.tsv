@@ -5736,6 +5736,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	nothing selected	chưa chọn gì
 @msg	`{key}` must be a color or {_1}	`{key}` phải là một màu hoặc {_1}
 @msg	the selected objects' colors differ: give `color`	màu của các đối tượng đã chọn khác nhau: hãy cung cấp `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	màu của các đối tượng đã chọn khác nhau: hãy cung cấp `opacity` hoặc `color`
 @msg	the active fill or stroke has no color: give `color`	phần tô hoặc nét đang hoạt động không có màu: hãy cung cấp `color`
 @msg	the active fill or stroke is hidden: give `color`	phần tô hoặc nét đang hoạt động bị ẩn: hãy cung cấp `color`
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	phần tô hoặc nét đang hoạt động được vẽ qua mặt nạ độ mờ: hãy cung cấp `color`

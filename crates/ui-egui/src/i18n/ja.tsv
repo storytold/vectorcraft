@@ -5837,6 +5837,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	nothing selected	何も選択されていません
 @msg	`{key}` must be a color or {_1}	`{key}` はカラーまたは {_1} である必要があります
 @msg	the selected objects' colors differ: give `color`	選択したオブジェクトのカラーが異なります：`color` を指定してください
+@msg	the selected objects' colors differ: give `opacity` or `color`	選択したオブジェクトのカラーが異なります：`opacity` または `color` を指定してください
 @msg	the active fill or stroke has no color: give `color`	アクティブな塗りまたは線にカラーがありません：`color` を指定してください
 @msg	the active fill or stroke is hidden: give `color`	アクティブな塗りまたは線が非表示です：`color` を指定してください
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	アクティブな塗りまたは線は不透明マスクを通して描画されます：`color` を指定してください

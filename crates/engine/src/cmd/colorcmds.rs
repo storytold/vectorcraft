@@ -1094,7 +1094,9 @@ fn contrast(s: &mut Session, p: &Value) -> Result<Value> {
         } else {
             (std::array::from_fn(|i| ((x.0[i] * x.1 - (1.0 - alone) * backdrop.0[i] * backdrop.1) / alone).clamp(0.0, 1.0)), alone)
         };
-        let drawn = alone * step.opacity.clamp(0.0, 1.0);
+        // A level that isolates its blending carries out the alpha of what it holds composited on
+        // its own.
+        let drawn = if step.isolate { x.1 } else { alone } * step.opacity.clamp(0.0, 1.0);
         x = composite(step.blend, source, step.opacity, backdrop);
         alone = drawn + inner * (1.0 - drawn);
     }
@@ -1157,11 +1159,13 @@ struct Drawn {
     blend: BlendMode,
     isolate: bool,
     around: Vec<Level>,
+    /// The object's shown fill and stroke rows with paint below the row, which the row draws over.
+    lower: Vec<vectorcraft_doc::AppearanceItem>,
 }
 
 impl Default for Drawn {
     fn default() -> Self {
-        Self { opacity: 1.0, row: None, blend: BlendMode::Normal, isolate: false, around: vec![] }
+        Self { opacity: 1.0, row: None, blend: BlendMode::Normal, isolate: false, around: vec![], lower: vec![] }
     }
 }
 
@@ -1194,7 +1198,8 @@ fn composite(mode: BlendMode, x: ([f32; 3], f32), opacity: f32, backdrop: ([f32;
 /// `given_opacity` (which takes the place of their opacities) the same opacities. With `below`, the
 /// levels that change what they draw must be the same objects too, since the art below each one is
 /// read with that object hidden, and the object's opacity must be the same apart from its row's,
-/// since the row draws over the object's rows below it and the object over the art behind it.
+/// since the row draws over the object's rows below it and the object over the art behind it, and a
+/// row that blends or is translucent must lie over the same shown rows.
 fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
     let counts = |l: &&Level| l.blend != BlendMode::Normal || l.isolate || (!given_opacity && l.opacity < 1.0);
     let level = |x: &Level, y: &Level| {
@@ -1208,7 +1213,10 @@ fn draws_alike(a: &Drawn, b: &Drawn, given_opacity: bool, below: bool) -> bool {
     // changes a row's blending.
     let row = |d: &Drawn| d.row.map(|r| r.0).filter(|m| *m != BlendMode::Normal);
     let total = |d: &Drawn| d.opacity * d.row.map_or(1.0, |r| r.1);
+    // A row that blends or lets art through draws over the rows below it, read at one point.
+    let over_rows = |d: &Drawn| d.row.is_some_and(|(m, o)| m != BlendMode::Normal || o < 1.0);
     row(a) == row(b)
+        && (given_opacity || !below || !(over_rows(a) || over_rows(b)) || a.lower == b.lower)
         && a.blend == b.blend
         && (row(a).is_none() || a.isolate == b.isolate)
         && (given_opacity || (total(a) - total(b)).abs() < 1e-6)
@@ -1268,6 +1276,11 @@ fn proxy_color(s: &Session, given_opacity: bool, below: bool) -> std::result::Re
             None => source()?.unwrap_or_default(),
         };
         if !drawn.iter().all(|d| draws_alike(d, &drawing, given_opacity, below)) {
+            // With `opacity` given, the opacities are not compared and the background stands for the
+            // art below.
+            if !given_opacity && drawn.iter().all(|d| draws_alike(d, &drawing, true, below)) {
+                return Err("the selected objects' colors differ: give `opacity` or `color`".into());
+            }
             return Err("the selected objects' colors differ: give `color`".into());
         }
     } else {
@@ -1341,7 +1354,14 @@ fn drawn_settings(s: &Session, n: &Node, item: Option<usize>, stroke: bool) -> s
     if masked(n) || around.iter().any(|l| l.masked) {
         return Err("the active fill or stroke is drawn through an opacity mask: give `color`".to_string());
     }
-    Ok(Drawn { opacity: n.opacity, row: own.map(|o| (o.1, o.0)), blend: n.blend, isolate: n.isolate, around })
+    // The rows below the row that draw, as `hide_rows` leaves them shown.
+    let rows = &n.appearance.items;
+    let at_row = item.or_else(|| rows.iter().rposition(|r| r.is_fill() != stroke));
+    let lower = match (own, at_row) {
+        (Some(_), Some(i)) => rows.iter().take(i).filter(|r| r.visible() && !r.paint().is_none()).cloned().collect(),
+        _ => vec![],
+    };
+    Ok(Drawn { opacity: n.opacity, row: own.map(|o| (o.1, o.0)), blend: n.blend, isolate: n.isolate, around, lower })
 }
 
 /// `color` as the canvas draws the picked object of a dynamic symbol instance that a fill stains

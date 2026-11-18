@@ -5319,6 +5319,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	nothing encoded	rien n’a été encodé
 @msg	nothing selected	aucune sélection
 @msg	`{key}` must be a color or {_1}	`{key}` doit être une couleur ou {_1}
+@msg	the selected objects' colors differ: give `opacity` or `color`	les couleurs des objets sélectionnés diffèrent : indiquez `opacity` ou `color`
 @msg	the selected objects' colors differ: give `color`	les couleurs des objets sélectionnés diffèrent : indiquez `color`
 @msg	the active fill or stroke has no color: give `color`	le fond ou le contour actif n’a pas de couleur : indiquez `color`
 @msg	the active fill or stroke is hidden: give `color`	le fond ou le contour actif est masqué : indiquez `color`

@@ -5382,6 +5382,7 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	nothing selected	ничего не выделено
 @msg	`{key}` must be a color or {_1}	`{key}` должен быть цветом или {_1}
 @msg	the selected objects' colors differ: give `color`	цвета выделенных объектов различаются: укажите `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	цвета выделенных объектов различаются: укажите `opacity` или `color`
 @msg	the active fill or stroke has no color: give `color`	у активной заливки или обводки нет цвета: укажите `color`
 @msg	the active fill or stroke is hidden: give `color`	активная заливка или обводка скрыта: укажите `color`
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	активная заливка или обводка рисуется через непрозрачную маску: укажите `color`

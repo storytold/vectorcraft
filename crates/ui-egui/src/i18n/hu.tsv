@@ -6036,6 +6036,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	nothing selected	nincs kijelölés
 @msg	`{key}` must be a color or {_1}	a(z) `{key}` értéke csak szín vagy {_1} lehet
 @msg	the selected objects' colors differ: give `color`	a kijelölt objektumok színei eltérnek: adja meg a `color` értékét
+@msg	the selected objects' colors differ: give `opacity` or `color`	a kijelölt objektumok színei eltérnek: adja meg az `opacity` vagy a `color` értékét
 @msg	the active fill or stroke has no color: give `color`	az aktív kitöltésnek vagy körvonalnak nincs színe: adja meg a `color` értékét
 @msg	the active fill or stroke is hidden: give `color`	az aktív kitöltés vagy körvonal rejtett: adja meg a `color` értékét
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	az aktív kitöltés vagy körvonal átlátszósági maszkon keresztül rajzolódik: adja meg a `color` értékét

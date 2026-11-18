@@ -239,7 +239,7 @@ as `ui.color_guide` (`variation`, `steps`, `amount`). Save Colors as Swatches ru
 
 Color Wheel contrast: `color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio of the active
 proxy's color against the color drawn behind the selection (`against: "below"`, the default) or against a given color,
-with the AA and AAA results for normal text, large text and graphics (docs/mcp.md). The Color Wheel panel's Show
+with the AA and AAA results for normal text and large text and the AA result for graphics (docs/mcp.md). The Color Wheel panel's Show
 Contrast row shows the same answer for the category picked under Contrast For; `ui.colorWheel {contrast?, contrastFor?,
 contrastBackground?}` sets the row, its category and a pinned background, and `ui.inspect` reports them as
 `ui.color_wheel`.

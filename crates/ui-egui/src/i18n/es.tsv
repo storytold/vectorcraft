@@ -5363,6 +5363,7 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	nothing selected	no hay nada seleccionado
 @msg	`{key}` must be a color or {_1}	`{key}` debe ser un color o {_1}
 @msg	the selected objects' colors differ: give `color`	los colores de los objetos seleccionados difieren: indique `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	los colores de los objetos seleccionados difieren: indique `opacity` o `color`
 @msg	the active fill or stroke has no color: give `color`	el relleno o trazo activo no tiene color: indique `color`
 @msg	the active fill or stroke is hidden: give `color`	el relleno o trazo activo está oculto: indique `color`
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	el relleno o trazo activo se dibuja a través de una máscara de opacidad: indique `color`

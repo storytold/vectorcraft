@@ -8417,6 +8417,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	nothing selected	कुछ भी नहीं चुना
 @msg	`{key}` must be a color or {_1}	`{key}` कोई रंग या {_1} होना चाहिए
 @msg	the selected objects' colors differ: give `color`	चुने गए ऑब्जेक्ट्स के रंग अलग-अलग हैं: `color` दें
+@msg	the selected objects' colors differ: give `opacity` or `color`	चुने गए ऑब्जेक्ट्स के रंग अलग-अलग हैं: `opacity` या `color` दें
 @msg	the active fill or stroke has no color: give `color`	सक्रिय फ़िल या स्ट्रोक में कोई रंग नहीं है: `color` दें
 @msg	the active fill or stroke is hidden: give `color`	सक्रिय फ़िल या स्ट्रोक छिपा हुआ है: `color` दें
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	सक्रिय फ़िल या स्ट्रोक ओपेसिटी मास्क से होकर बनाया जाता है: `color` दें

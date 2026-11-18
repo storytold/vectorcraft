@@ -5688,6 +5688,7 @@ imageTrace	Outline	Contour
 @msg	nothing selected	niets geselecteerd
 @msg	`{key}` must be a color or {_1}	`{key}` moet een kleur of {_1} zijn
 @msg	the selected objects' colors differ: give `color`	de kleuren van de geselecteerde objecten verschillen: geef `color` op
+@msg	the selected objects' colors differ: give `opacity` or `color`	de kleuren van de geselecteerde objecten verschillen: geef `opacity` of `color` op
 @msg	the active fill or stroke has no color: give `color`	de actieve vulling of lijn heeft geen kleur: geef `color` op
 @msg	the active fill or stroke is hidden: give `color`	de actieve vulling of lijn is verborgen: geef `color` op
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	de actieve vulling of lijn wordt door een dekkingmasker getekend: geef `color` op

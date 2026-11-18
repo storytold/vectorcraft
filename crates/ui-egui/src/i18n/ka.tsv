@@ -7105,6 +7105,7 @@ font-technology	Variable	ცვლადი
 @msg	nothing selected	არაფერია მონიშნული
 @msg	`{key}` must be a color or {_1}	`{key}` უნდა იყოს ფერი ან {_1}
 @msg	the selected objects' colors differ: give `color`	მონიშნული ობიექტების ფერები განსხვავდება: მიუთითეთ `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	მონიშნული ობიექტების ფერები განსხვავდება: მიუთითეთ `opacity` ან `color`
 @msg	the active fill or stroke has no color: give `color`	აქტიურ შევსებას ან კონტურს ფერი არ აქვს: მიუთითეთ `color`
 @msg	the active fill or stroke is hidden: give `color`	აქტიური შევსება ან კონტური დამალულია: მიუთითეთ `color`
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	აქტიური შევსება ან კონტური იხატება გაუმჭვირვალობის ნიღბით: მიუთითეთ `color`

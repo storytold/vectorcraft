@@ -5502,6 +5502,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	nothing selected	未选择任何对象
 @msg	`{key}` must be a color or {_1}	`{key}` 必须是颜色或 {_1}
 @msg	the selected objects' colors differ: give `color`	所选对象的颜色不同：请提供 `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	所选对象的颜色不同：请提供 `opacity` 或 `color`
 @msg	the active fill or stroke has no color: give `color`	现用填色或描边没有颜色：请提供 `color`
 @msg	the active fill or stroke is hidden: give `color`	现用填色或描边已隐藏：请提供 `color`
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	现用填色或描边通过不透明度蒙版绘制：请提供 `color`

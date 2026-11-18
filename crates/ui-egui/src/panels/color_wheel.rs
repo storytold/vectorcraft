@@ -329,25 +329,30 @@ const CHIP: f32 = 16.0;
 /// objects, the picked object of a dynamic symbol instance, the on-screen Appearance of Black and
 /// the color settings ([`under`]).
 type BehindKey = (u64, u64, Vec<NodeId>, Option<Vec<u32>>, String, Under);
-/// What the contrast row's answer depends on: the background, the active proxy's paint (with nothing
-/// selected it is the default for new art, which no revision counts), the document, its revision,
-/// the selection and its picked symbol object, the proxy, the appearance item, the selected
-/// gradient stop and freeform point, the on-screen Appearance of Black, the color settings and the
-/// picked gradient mesh points, which the active tool keeps without a revision.
-pub(super) type RatioKey = (
-    String,
-    String,
-    Option<(u64, u64)>,
-    Vec<NodeId>,
-    Option<Vec<u32>>,
-    bool,
-    Option<usize>,
-    Option<usize>,
-    Option<usize>,
-    String,
-    Under,
-    Vec<(NodeId, Vec<usize>)>,
-);
+/// What the contrast row's answer depends on.
+#[derive(Clone, PartialEq)]
+pub(super) struct RatioKey {
+    /// The pinned background, or `below` for the color behind the selection.
+    pub(super) background: String,
+    /// The active proxy's paint; with nothing selected it is the default for new art, which no
+    /// revision counts.
+    pub(super) paint: String,
+    /// The document and its revision.
+    pub(super) doc: Option<(u64, u64)>,
+    pub(super) selection: Vec<NodeId>,
+    /// The picked object of a dynamic symbol instance.
+    pub(super) symbol_part: Option<Vec<u32>>,
+    /// Whether the Fill proxy is active.
+    pub(super) fill_active: bool,
+    pub(super) appearance_item: Option<usize>,
+    pub(super) stop: Option<usize>,
+    pub(super) freeform_point: Option<usize>,
+    /// The on-screen Appearance of Black.
+    pub(super) black_on_screen: String,
+    pub(super) under: Under,
+    /// The picked gradient mesh points, which the active tool keeps without a revision.
+    pub(super) mesh_points: Vec<(NodeId, Vec<usize>)>,
+}
 
 /// The active color settings and profiles generation, which change how a color displays without
 /// a document revision (Edit › Color Settings, a document's assigned profiles).
@@ -363,20 +368,16 @@ fn picked_part(st: &vectorcraft_engine::DocState) -> Option<Vec<u32>> {
 }
 
 /// The background the contrast row measures against: the pinned color, else the color
-/// `color.contrast` reads behind the selection, kept per document revision and selection, and kept
-/// as it is while an interaction is in progress (the selection being dragged is hidden from it).
-/// None with nothing selected.
+/// `color.contrast` reads behind the selection, kept per document revision and selection, so a
+/// drag that moves the selection reads it again. None with nothing selected.
 fn background(app: &mut VectorcraftApp, ui: &Ui) -> Option<Color> {
     if let Some(c) = app.ui.color_wheel.contrast_background {
         return Some(c);
     }
     let st = app.session.active()?;
     let key: BehindKey = (st.uid, st.revision, st.selection.objects.clone(), picked_part(st), app.session.prefs.black_on_screen.clone(), under());
-    // During an interaction only the revision may differ: another document, selection or setting is
-    // read again.
-    let same_but_revision = |k: &BehindKey| k.0 == key.0 && k.2 == key.2 && k.3 == key.3 && k.4 == key.4 && k.5 == key.5;
     let hex = match pstate::<Option<(BehindKey, Option<String>)>>(ui.ctx(), BEHIND) {
-        Some((k, hex)) if k == key || (app.session.in_interaction() && same_but_revision(&k)) => hex,
+        Some((k, hex)) if k == key => hex,
         _ => {
             // Any opaque color reads the background; only `against` is used.
             let r = app.session.execute("color.contrast", &json!({ "color": "#000000" })).ok();
@@ -393,20 +394,20 @@ fn background(app: &mut VectorcraftApp, ui: &Ui) -> Option<Color> {
 /// (`against: "below"`), kept per [`RatioKey`].
 fn ratio_answer(app: &mut VectorcraftApp, ui: &Ui, pinned: Option<Color>) -> Option<Value> {
     let st = app.session.active();
-    let key: RatioKey = (
-        pinned.map_or_else(|| "below".to_string(), |bg| format!("{bg:?}")),
-        format!("{:?}", super::active_paint(app)),
-        st.map(|d| (d.uid, d.revision)),
-        st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
-        st.and_then(picked_part),
-        app.session.fill_active,
-        app.session.appearance_item(),
-        app.session.selected_stop(),
-        app.session.selected_freeform_point(),
-        app.session.prefs.black_on_screen.clone(),
-        under(),
-        app.session.fill_mesh_points(),
-    );
+    let key = RatioKey {
+        background: pinned.map_or_else(|| "below".to_string(), |bg| format!("{bg:?}")),
+        paint: format!("{:?}", super::active_paint(app)),
+        doc: st.map(|d| (d.uid, d.revision)),
+        selection: st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
+        symbol_part: st.and_then(picked_part),
+        fill_active: app.session.fill_active,
+        appearance_item: app.session.appearance_item(),
+        stop: app.session.selected_stop(),
+        freeform_point: app.session.selected_freeform_point(),
+        black_on_screen: app.session.prefs.black_on_screen.clone(),
+        under: under(),
+        mesh_points: app.session.fill_mesh_points(),
+    };
     match pstate::<Option<(RatioKey, Option<Value>)>>(ui.ctx(), RATIO) {
         Some((k, r)) if k == key => r,
         _ => {

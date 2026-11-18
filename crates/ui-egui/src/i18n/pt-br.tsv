@@ -4616,6 +4616,7 @@ axis	Both	Ambos
 @msg	nothing selected	nada selecionado
 @msg	`{key}` must be a color or {_1}	`{key}` deve ser uma cor ou {_1}
 @msg	the selected objects' colors differ: give `color`	as cores dos objetos selecionados são diferentes: informe `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	as cores dos objetos selecionados são diferentes: informe `opacity` ou `color`
 @msg	the active fill or stroke has no color: give `color`	o preenchimento ou traçado ativo não tem cor: informe `color`
 @msg	the active fill or stroke is hidden: give `color`	o preenchimento ou traçado ativo está oculto: informe `color`
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	o preenchimento ou traçado ativo é desenhado através de uma máscara de opacidade: informe `color`

@@ -5095,6 +5095,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	nothing selected	hiçbir şey seçilmedi
 @msg	`{key}` must be a color or {_1}	`{key}` bir renk veya {_1} olmalıdır
 @msg	the selected objects' colors differ: give `color`	seçili nesnelerin renkleri farklı: `color` belirtin
+@msg	the selected objects' colors differ: give `opacity` or `color`	seçili nesnelerin renkleri farklı: `opacity` veya `color` belirtin
 @msg	the active fill or stroke has no color: give `color`	etkin dolgu veya konturun rengi yok: `color` belirtin
 @msg	the active fill or stroke is hidden: give `color`	etkin dolgu veya kontur gizli: `color` belirtin
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	etkin dolgu veya kontur bir opaklık maskesi üzerinden çiziliyor: `color` belirtin

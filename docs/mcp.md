@@ -685,7 +685,7 @@ and answers true when the fields show in percent.
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
 shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
 the list return an error and change nothing. `{"contrast": true}` shows Show Contrast's row under the wheel or the
-box, `contrastFor` (`normalText`, `largeText` or `graphics`) picks the category its AA and AAA results are for, and
+box, `contrastFor` (`normalText`, `largeText` or `graphics`, which has AA only) picks the category its results are for, and
 `contrastBackground` (a color, or `null` for the color behind the selection) pins the background it measures against,
 as `color.contrast` below answers it. The command returns `{view, channel, contrast, contrastFor,
 contrastBackground, vision}`, and the settings are kept with the preferences.
@@ -1155,8 +1155,9 @@ images included; template layers and guides left out, as exports leave them out;
 is drawn); a picked object of a dynamic symbol instance hides only itself, and the color is read at its own center.
 These are errors: `"below"` with nothing selected; a "?" proxy (hidden objects count there, as in the Color panel);
 selected objects that draw one color with different blend modes, or at different opacities without `opacity` (with
-`"below"`, also in different groups or layers that are translucent, have a blend mode or isolate their blending),
-where hidden objects do not count; a proxy of None, a pattern or a hidden row without `color`; and without `color`, a
+`"below"`, also in different groups or layers that are translucent, have a blend mode or isolate their blending, or
+with a translucent or blending row over different shown rows below it), where hidden objects do not count, and the
+error names `opacity` when giving it settles the difference; a proxy of None, a pattern or a hidden row without `color`; and without `color`, a
 proxy's object drawn through an opacity mask that is not disabled, its own or that of a group, layer or instance
 around it, since the mask sets how much of the color shows at each point. `against` in the
 answer is the background as a working RGB `#rrggbb`, the form `against` takes; the sampled background is rounded to 8

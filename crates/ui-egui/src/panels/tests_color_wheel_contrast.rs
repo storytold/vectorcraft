@@ -69,7 +69,7 @@ fn an_answer_kept_under_other_color_settings_is_asked_again() {
     let (mut key, answer) = pstate::<Kept>(&h.ctx, "color-wheel-ratio").expect("the row keeps its answer");
     let mut stale = answer.expect("an answer");
     stale["ratio"] = json!(1.0);
-    key.10.1 = u64::MAX;
+    key.under.1 = u64::MAX;
     super::set_pstate(&h.ctx, "color-wheel-ratio", Some((key, Some(stale))));
     h.run_steps(2);
     assert!(shows(&h, "21.00:1"), "the answer is asked again under the current settings");
@@ -183,7 +183,7 @@ fn a_drag_on_the_wheel_reads_the_background_only_with_the_ratio() {
 }
 
 /// With no color to measure the row has no ratio, and the chip still shows the background, read on
-/// its own; during an interaction that is kept only for the same document and selection.
+/// its own, and read again for another selection during an interaction.
 #[test]
 fn a_paint_with_no_color_still_shows_the_background() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -205,6 +205,29 @@ fn a_paint_with_no_color_still_shows_the_background() {
     h.state_mut().session.begin_interaction("test").unwrap();
     h.run_steps(2);
     assert_eq!(hex(&h).as_deref(), Some("#ffffff"), "the other selection's background is read during the interaction");
+}
+
+/// With no color to measure, a move during an interaction reads the background again at the
+/// selection's new place.
+#[test]
+fn a_move_during_an_interaction_reads_the_background_again() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 200})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ffff00"})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"none": true})).unwrap();
+    app.run("ui.colorWheel", json!({"contrast": true})).unwrap();
+    let mut h = harness(app);
+    let hex = |h: &Harness<'static, VectorcraftApp>| behind(h).and_then(|(_, hex)| hex);
+    h.state_mut().session.begin_interaction("test").unwrap();
+    h.run_steps(2);
+    assert_eq!(hex(&h).as_deref(), Some("#ffff00"));
+    h.state_mut().run("object.move", json!({"dx": 110, "dy": 0})).unwrap();
+    assert!(h.state().session.in_interaction(), "the move is part of the interaction");
+    h.run_steps(2);
+    assert_eq!(hex(&h).as_deref(), Some("#ffffff"), "the background at the new place");
 }
 
 /// An interaction keeps no answer for another selection: the row asks again, and the chip shows

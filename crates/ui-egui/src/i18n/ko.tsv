@@ -5766,6 +5766,7 @@ liquify-list-end	{0}, {1}	{0} 및 {1}
 @msg	nothing selected	선택된 항목이 없습니다
 @msg	`{key}` must be a color or {_1}	`{key}`은(는) 색상 또는 {_1}이어야 합니다
 @msg	the selected objects' colors differ: give `color`	선택한 개체의 색상이 서로 다릅니다: `color`를 지정하세요
+@msg	the selected objects' colors differ: give `opacity` or `color`	선택한 개체의 색상이 서로 다릅니다: `opacity` 또는 `color`를 지정하세요
 @msg	the active fill or stroke has no color: give `color`	활성 칠 또는 획에 색상이 없습니다: `color`를 지정하세요
 @msg	the active fill or stroke is hidden: give `color`	활성 칠 또는 획이 숨겨져 있습니다: `color`를 지정하세요
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	활성 칠 또는 획이 불투명 마스크를 통해 그려집니다: `color`를 지정하세요

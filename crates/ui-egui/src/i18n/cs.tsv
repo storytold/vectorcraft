@@ -5653,6 +5653,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	nothing selected	nic není vybráno
 @msg	`{key}` must be a color or {_1}	`{key}` musí být barva nebo {_1}
 @msg	the selected objects' colors differ: give `color`	barvy vybraných objektů se liší: zadejte `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	barvy vybraných objektů se liší: zadejte `opacity` nebo `color`
 @msg	the active fill or stroke has no color: give `color`	aktivní výplň nebo tah nemá barvu: zadejte `color`
 @msg	the active fill or stroke is hidden: give `color`	aktivní výplň nebo tah je skrytý: zadejte `color`
 @msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktivní výplň nebo tah je kreslen přes masku krytí: zadejte `color`
