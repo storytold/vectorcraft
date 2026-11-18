@@ -170,6 +170,8 @@ impl VectorcraftApp {
             forwarded_modifiers: None,
             forwarded_modifiers_held: false,
             forwarded_frame: false,
+            forwarded_clipboard: false,
+            forwarded_presses: vec![],
             synthetic_modifiers: false,
             ime_marked: None,
             ime_context: Default::default(),

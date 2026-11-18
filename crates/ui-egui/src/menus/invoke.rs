@@ -111,10 +111,24 @@ pub(super) fn field_event(app: &mut VectorcraftApp, id: &str) -> Option<egui::Ev
 /// key presses, see [`crate::native_menu`]). While a text field has the keyboard, Select All, Cut,
 /// Copy and Paste act on the field's text, as their keys do. While its keys select every artboard
 /// ([`crate::panels::artboards::selects_all`]), Select All does too. Everything else (and those
-/// commands with no field focused) goes to [`invoke`].
+/// commands with no field focused) goes to [`invoke`]. With text selected in a label (a Document
+/// Info value), Copy and Cut copy that text, as their keys do ([`crate::shortcuts::leave_to_labels`]).
 pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str, p: Value) {
+    let label_event = match id {
+        "edit.copy" => Some(("edit.copy", egui::Event::Copy)),
+        "edit.cut" => Some(("edit.cut", egui::Event::Cut)),
+        _ => None,
+    };
     match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
         Some((field, e)) => to_field(ctx, field, e),
+        None if label_event.as_ref().is_some_and(|(id, _)| crate::shortcuts::leave_to_labels(ctx, id)) => {
+            if let Some((_, e)) = label_event {
+                ctx.input_mut(|i| i.events.push(e));
+            }
+            // The labels' text replaces the formats of an earlier Copy or Cut not written yet, even
+            // in a frame whose keys are not this window's.
+            app.drop_unwritten_formats();
+        }
         None if id == "select.all" && crate::panels::artboards::selects_all(app, ctx) => crate::panels::artboards::select_all(app),
         None => invoke(app, id, p),
     }
