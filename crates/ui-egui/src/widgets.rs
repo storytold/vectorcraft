@@ -56,7 +56,7 @@ pub use dropdowns::{
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
 pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_label, section_header, section_toggle, section_toggle_name, subheader};
-pub(crate) use labels::{dim_label_width, label_field, take_previous_label, text_width};
+pub(crate) use labels::{dim_label_width, field_panel_label, label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
     SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
@@ -211,7 +211,7 @@ pub(crate) mod accessibility_tests {
         let tree = tree(|ui| {
             icon_button(ui, "link", "Constrain Proportions", true, 24.0);
             toggle_icon(ui, "eye", true, 18.0, "Show all plates");
-            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate)");
+            toggle_icon(ui, "eye", false, 18.0, "Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
             orientation_button(ui, false, true, "Portrait");
             orientation_button(ui, true, false, "Landscape");
             layout_button(ui, &[(0, 0), (1, 0)], true, "Grid by Row");
@@ -221,7 +221,7 @@ pub(crate) mod accessibility_tests {
         let off = |label| assert_eq!(role_and_state(&tree, label), (Role::Button, Some(Toggled::False)), "{label}");
         on("Constrain Proportions");
         on("Show all plates");
-        off("Show/hide plate (Alt-click: only this plate)");
+        off("Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)");
         on("Portrait");
         off("Landscape");
         on("Grid by Row");

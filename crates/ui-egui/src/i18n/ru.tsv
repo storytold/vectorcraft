@@ -141,6 +141,9 @@
 	Additional Plug-ins Folder	Папка дополнительных модулей
 	Additional Fonts Folder	Папка дополнительных шрифтов
 	Adjust Adjoining Width Points	Настроить смежные точки ширины
+	Incoming	Входящая
+	Outgoing	Исходящая
+	Single Width Only	Только одна ширина
 	Adjust Color Balance…	Настроить цветовой баланс…
 	Adjust Colors	Настроить цвета
 	Adjust Options:	Параметры настройки:
@@ -423,6 +426,12 @@ font-technology	Variable	Вариативные
 	Character Alignment	Выравнивание символов
 	Character / Paragraph	Символ / Абзац
 	Character Rotation	Поворот символов
+	Chinese Big 5	Китайская Big 5
+	Cyrillic	Кириллица
+	Greek	Греческая
+	Turkish	Турецкая
+	Baltic	Балтийская
+	Central European	Центральноевропейская
 	Character Set:	Набор символов:
 	Character Style	Стиль символа
 	Character Style Options	Параметры стиля символа
@@ -485,6 +494,8 @@ font-technology	Variable	Вариативные
 	Choose a folder	Выберите папку
 	Choose…	Выбрать…
 	Circle	Круг
+	Circle Tool	Инструмент «Круг»
+	Circle too large	Круг слишком большой
 	Classic Defaults	Классические значения по умолчанию
 	Clean Up…	Очистить…
 	Clear	Очистить
@@ -1272,6 +1283,8 @@ font-technology	Variable	Вариативные
 	Files	Файлы
 	Files of a PDF standard can't be password-protected.	Файлы стандарта PDF не могут быть защищены паролем.
 	Files of this standard tag their colours with ICC profiles.	Файлы этого стандарта помечают свои цвета профилями ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файлы этого стандарта помечают свои цвета профилями ICC, кроме цветов CMYK в профиле назначения вывода, которые записываются как DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	При «Не включать профили» и назначении вывода CMYK каждый цвет CMYK записывается как DeviceCMYK, если он не преобразуется в назначение CMYK с другим профилем.
 	Fill	Заливка
 	Fill & Stroke	Заливка и обводка
 	Fill (X), double-click for the Color Picker	Заливка (X), дважды щёлкните для палитры цветов
@@ -2077,6 +2090,7 @@ file-filter	Templates	Шаблоны
 	Load SVG into Clipboard	Загрузить SVG в буфер обмена
 	Load Text into Clipboard	Загрузить текст в буфер обмена
 	Local Libraries	Локальные библиотеки
+	Locate Layer	Найти слой
 	Locate Object	Найти объект
 	Locate Selected Objects	Находить выделенные объекты
 	Location	Расположение
@@ -2744,6 +2758,9 @@ diagnostics	ui	интерфейс
 	Polar Grid Tool	Инструмент «Полярная сетка»
 	Polygon	Многоугольник
 	Polygon Properties:	Свойства многоугольника:
+	Line Properties:	Свойства линии:
+	Line Length:	Длина линии:
+	Line Angle:	Угол линии:
 	Polygon Tool	Инструмент «Многоугольник»
 	Portrait	Книжная
 	Power Saving (integrated)	Энергосбережение (встроенная)
@@ -3558,6 +3575,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Задать прямоугольник фрагмента
 	Set Tab Stops	Задать табуляции
 	Set Text	Задать текст
+	Set the current fill or stroke to the selected color	Назначить выбранный цвет текущей заливке или обводке
 	Set the selected color to the current color	Назначить текущий цвет выбранному цвету
 	Set Zoom	Задать масштаб
 	Settings…	Параметры…
@@ -3681,7 +3699,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показать яркие/приглушённые
 	Show Warm/Cool	Показать тёплые/холодные
 	Show {kind} Brushes	Показать кисти {kind}
-	Show/hide plate (Alt-click: only this plate)	Показать/скрыть пластину (Alt+щелчок: только эту пластину)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показать/скрыть пластину (Alt+щелчок: только эту пластину; повторный Alt+щелчок: все пластины)
 	Show:	Показать:
 	Shown with the optimised preview.	Показано с оптимизированным просмотром.
 	Side 1:	Сторона 1:
@@ -4285,6 +4303,8 @@ digits	Malayalam	Малаялам
 	V Spacing:	Интервал по вертикали:
 	V:	В:
 	Variable Width Profile	Профиль переменной ширины
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Кисть обводки сохраняет собственный размер, поэтому профиль ширины её не меняет. Чтобы использовать профиль, уберите кисть.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Кисть обводки сохраняет собственный размер, поэтому профиль ширины её не меняет. Чтобы использовать профиль, уберите кисть.
 	Variables	Переменные
 	New Variable	Новая переменная
 	Delete Variable	Удалить переменную
@@ -5138,8 +5158,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no active document	нет активного документа
 @msg	no active perspective plane	нет активной плоскости перспективы
 @msg	no anchor points selected	опорные точки не выделены
-@msg	`points` must be three [x, y] pairs of numbers	`points` должен содержать три пары чисел [x, y]
-@msg	direct-select three anchor points, or give `points`	выделите прямым выделением три опорные точки или задайте `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` должен содержать две или три пары чисел [x, y]
+@msg	direct-select two or three anchor points, or give `points`	выделите прямым выделением две или три опорные точки или задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через эти точки не проходит ни одна окружность: две точки совпадают или все три лежат на одной прямой
 @msg	no app to open files here	здесь нет приложения для открытия файлов
 @msg	no artboard	нет монтажной области
@@ -5241,6 +5261,9 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	no such user library	такой пользовательской библиотеки нет
 @msg	no such view	такого вида нет
 @msg	no such width point	такой точки ширины нет
+@msg	`single` must be `incoming` or `outgoing`	`single` должен быть `incoming` или `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` и `outIndex` должны быть двумя половинами одной разрывной точки ширины
+@msg	a discontinuous width point keeps its place	разрывная точка ширины сохраняет своё место
 @msg	no swatch `{name}`	нет образца `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	нет библиотеки образцов `{l}` (см. swatch.library.list)
 @msg	no symbol instances selected	экземпляры символов не выделены
@@ -8797,6 +8820,7 @@ shape	Open	Открытый
 @msg	compound {_1} must contain exactly one open path to join	составной объект {_1} должен содержать ровно один открытый контур для соединения
 @msg	connect end must be "start" or "end"	end для connect должно быть "start" или "end"
 @msg	connect needs a path other than the one extended	для connect нужен контур, отличный от продлеваемого
+@msg	connect needs extend	для connect нужен extend
 @msg	connect needs id	для connect нужен id
 @msg	connect path has no open end	у контура для connect нет открытого конца
 @msg	continuation must be an array of path chunks	continuation должно быть массивом фрагментов контура
@@ -10130,5 +10154,15 @@ shape	Open	Открытый
 @msg	A panel is not joined to the rest by a crease.	Панель не соединена с остальными ни одной линией биговки.
 @msg	A fold line is on a non-printing layer.	Линия сгиба находится на непечатаемом слое.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панели: {panels}, шарниры: {hinges}, ошибки: {errors}, предупреждения: {warnings}
+	Fold Preview	Предпросмотр сгиба
+	Fold	Сгиб
+	Show Fold Lines	Показать линии сгиба
+	Three-Quarter	Три четверти
+	Open a document to preview its folded shape.	Откройте документ, чтобы просмотреть его в сложенном виде.
+@msg	Check the fold lines first.	Сначала проверьте линии сгиба.
+@msg	Panels: {panels}, hinges: {hinges}	Панели: {panels}, шарниры: {hinges}
+@msg	Other blanks not shown: {count}	Другие развёртки не показаны: {count}
+@msg	A joint does not close by {gap} pt.	Стык не смыкается на {gap} pt.
+@msg	Two panels pass through each other.	Две панели проходят друг сквозь друга.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

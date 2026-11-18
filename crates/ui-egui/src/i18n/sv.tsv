@@ -131,6 +131,9 @@
 	Additional Plug-ins Folder	Mapp för ytterligare plugins
 	Additional Fonts Folder	Mapp för ytterligare typsnitt
 	Adjust Adjoining Width Points	Justera angränsande breddpunkter
+	Incoming	Inkommande
+	Outgoing	Utgående
+	Single Width Only	Endast en bredd
 	Adjust Color Balance…	Justera färgbalans…
 	Adjust Colors	Justera färger
 	Adjust Options:	Justeringsalternativ:
@@ -415,6 +418,11 @@ font-technology	Variable	Variabla
 	Character Alignment	Teckenjustering
 	Character / Paragraph	Tecken / stycke
 	Character Rotation	Teckenrotation
+	Chinese Big 5	Kinesisk Big 5
+	Cyrillic	Kyrillisk
+	Greek	Grekisk
+	Baltic	Baltisk
+	Central European	Centraleuropeisk
 	Character Set:	Teckenuppsättning:
 	Character Style	Teckenstil
 	Character Style Options	Alternativ för teckenstil
@@ -477,6 +485,8 @@ font-technology	Variable	Variabla
 	Choose a folder	Välj en mapp
 	Choose…	Välj…
 	Circle	Cirkel
+	Circle Tool	Cirkelverktyg
+	Circle too large	Cirkeln är för stor
 	Classic Defaults	Klassiska standardvärden
 	Clean Up…	Rensa upp…
 	Clear	Rensa
@@ -1246,6 +1256,8 @@ font-technology	Variable	Variabla
 	Files	Filer
 	Files of a PDF standard can't be password-protected.	Filer enligt en PDF-standard kan inte lösenordsskyddas.
 	Files of this standard tag their colours with ICC profiles.	Filer enligt den här standarden märker sina färger med ICC-profiler.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Filer enligt den här standarden märker sina färger med ICC-profiler, utom CMYK-färger i profilen för utgångsavsikt, som skrivs som DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Med ”Inkludera inte profiler” och en CMYK-utgångsavsikt skrivs varje CMYK-färg som DeviceCMYK, om den inte konverteras till ett CMYK-mål med en annan profil.
 	Fill	Fyllning
 	Fill & Stroke	Fyllning och kontur
 	Fill (X), double-click for the Color Picker	Fyllning (X), dubbelklicka för färgväljaren
@@ -1985,6 +1997,7 @@ font-technology	Variable	Variabla
 	Load SVG into Clipboard	Läs in SVG till urklipp
 	Load Text into Clipboard	Läs in text till urklipp
 	Local Libraries	Lokala bibliotek
+	Locate Layer	Hitta lager
 	Locate Object	Hitta objekt
 	Locate Selected Objects	Hitta markerade objekt
 	Location	Plats
@@ -2643,6 +2656,9 @@ font-technology	Variable	Variabla
 	Polar Grid Tool	Verktyg för polärt rutnät
 	Polygon	Polygon
 	Polygon Properties:	Polygonegenskaper:
+	Line Properties:	Linjeegenskaper:
+	Line Length:	Linjelängd:
+	Line Angle:	Linjevinkel:
 	Polygon Tool	Polygonverktyg
 	Portrait	Stående
 	Power Saving (integrated)	Energisparläge (integrerad)
@@ -3439,6 +3455,7 @@ digits	Malayalam	Malayalam
 	Set Slice Rectangle	Ange skivrektangel
 	Set Tab Stops	Ange tabbstopp
 	Set Text	Ange text
+	Set the current fill or stroke to the selected color	Ersätt den aktuella fyllningen eller konturen med den markerade färgen
 	Set the selected color to the current color	Ersätt den markerade färgen med den aktuella färgen
 	Set Zoom	Ange zoom
 	Settings…	Inställningar…
@@ -3560,7 +3577,7 @@ digits	Malayalam	Malayalam
 	Show Vivid/Muted	Visa livfull/dämpad
 	Show Warm/Cool	Visa varm/kall
 	Show {kind} Brushes	Visa {kind}-penslar
-	Show/hide plate (Alt-click: only this plate)	Visa/dölj plåt (Alt-klick: endast den här plåten)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Visa/dölj plåt (Alt-klick: endast den här plåten; Alt-klick igen: alla plåtar)
 	Show:	Visa:
 	Shown with the optimised preview.	Visas med den optimerade förhandsgranskningen.
 	Side 1:	Sida 1:
@@ -4169,6 +4186,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	V-avstånd:
 	V:	V:
 	Variable Width Profile	Profil för variabel bredd
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Konturens pensel behåller sin egen storlek, så en breddprofil ändrar inte konturen. Ta bort penseln för att använda en profil.
 	Variables	Variabler
 	New Variable	Ny variabel
 	Delete Variable	Radera variabel
@@ -5008,8 +5027,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no active document	inget aktivt dokument
 @msg	no active perspective plane	inget aktivt perspektivplan
 @msg	no anchor points selected	inga ankarpunkter är markerade
-@msg	`points` must be three [x, y] pairs of numbers	`points` måste vara tre talpar [x, y]
-@msg	direct-select three anchor points, or give `points`	direktmarkera tre ankarpunkter eller ange `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` måste vara två eller tre talpar [x, y]
+@msg	direct-select two or three anchor points, or give `points`	direktmarkera två eller tre ankarpunkter eller ange `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	ingen cirkel går genom de här punkterna: två är samma punkt eller så ligger alla tre på en linje
 @msg	no app to open files here	det finns ingen app för att öppna filer här
 @msg	no artboard	ingen rityta
@@ -5111,6 +5130,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no such user library	användarbiblioteket finns inte
 @msg	no such view	vyn finns inte
 @msg	no such width point	breddpunkten finns inte
+@msg	`single` must be `incoming` or `outgoing`	`single` måste vara `incoming` eller `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` och `outIndex` måste vara de två halvorna av en och samma diskontinuerliga breddpunkt
+@msg	a discontinuous width point keeps its place	en diskontinuerlig breddpunkt behåller sin plats
 @msg	no swatch `{name}`	ingen färgruta `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	inget färgrutebibliotek `{l}` (se swatch.library.list)
 @msg	no symbol instances selected	inga symbolinstanser är markerade
@@ -8465,6 +8487,7 @@ digits	Hindi	Hindi
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammansatta former tar banor, sammansatta banor, grupper, sammansatta former, text, övergångar och kuvert
 @msg	connect end must be "start" or "end"	connect end måste vara "start" eller "end"
 @msg	connect needs a path other than the one extended	connect behöver en annan bana än den som förlängs
+@msg	connect needs extend	connect behöver extend
 @msg	connect needs id	connect behöver id
 @msg	connect path has no open end	connect-banan har ingen öppen ände
 @msg	Contour: select paths or shapes	Kontur: markera banor eller former
@@ -9734,4 +9757,14 @@ digits	Hindi	Hindi
 @msg	A panel is not joined to the rest by a crease.	En panel är inte förbunden med resten av någon biglinje.
 @msg	A fold line is on a non-printing layer.	En falslinje ligger på ett lager som inte skrivs ut.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Paneler: {panels}, gångjärn: {hinges}, fel: {errors}, varningar: {warnings}
+	Fold Preview	Förhandsgranskning av falsning
+	Fold	Falsning
+	Show Fold Lines	Visa falslinjer
+	Three-Quarter	Trekvarts
+	Open a document to preview its folded shape.	Öppna ett dokument för att förhandsgranska dess falsade form.
+@msg	Check the fold lines first.	Kontrollera falslinjerna först.
+@msg	Panels: {panels}, hinges: {hinges}	Paneler: {panels}, gångjärn: {hinges}
+@msg	Other blanks not shown: {count}	Andra ämnen visas inte: {count}
+@msg	A joint does not close by {gap} pt.	En fog sluter inte med {gap} pt.
+@msg	Two panels pass through each other.	Två paneler går igenom varandra.
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
