@@ -152,12 +152,23 @@ pub fn sync(ui: &UiState) {
     crate::custom_toolbars::sync(ui);
 }
 
-/// Registry default shortcut of a command (engine or UI command).
+/// Registry default shortcut of a command (engine or UI command) on [`crate::keymap::platform`].
 pub fn default_command_shortcut(id: &str) -> Option<&'static str> {
+    default_command_shortcut_on(id, crate::keymap::platform())
+}
+
+/// Registry default shortcut of a command on platform `p`.
+fn default_command_shortcut_on(id: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(c) = vectorcraft_engine::find_command(id) {
         return c.shortcut;
     }
-    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| c.2).filter(|s| !s.is_empty())
+    menus::UI_COMMANDS.iter().find(|c| c.0 == id).map(|c| ui_command_default(c.0, c.2, p)).filter(|s| !s.is_empty())
+}
+
+/// The default shortcut `sc` of UI command `id` on platform `p` (empty for none). Select Last
+/// Selection Tool has none on macOS, which takes Cmd+` to switch between an app's windows.
+pub(crate) fn ui_command_default(id: &str, sc: &'static str, p: craft_keymap::Platform) -> &'static str {
+    if id == "tool.selectLastSelection" && p.is_mac() { "" } else { sc }
 }
 
 /// Window menu items that show a panel (`window.panel {panel}`) with a default shortcut: (panel
@@ -184,15 +195,21 @@ pub const PANEL_SHORTCUTS: &[(&str, &str)] = &[
     ("openType", "Cmd+Alt+Shift+T"),
 ];
 
-/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id).
+/// Default shortcut of an entry key (`tool:<id>`, `panel:<id>` or a command id) on
+/// [`crate::keymap::platform`].
 pub fn default_of(key: &str) -> Option<&'static str> {
+    default_on(key, crate::keymap::platform())
+}
+
+/// Default shortcut of an entry key on platform `p`.
+pub(crate) fn default_on(key: &str, p: craft_keymap::Platform) -> Option<&'static str> {
     if let Some(t) = key.strip_prefix("tool:") {
         return vectorcraft_tools::tool_info(t).and_then(|t| t.shortcut);
     }
-    if let Some(p) = key.strip_prefix("panel:") {
-        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == p).map(|(_, sc)| *sc);
+    if let Some(panel) = key.strip_prefix("panel:") {
+        return PANEL_SHORTCUTS.iter().find(|(id, _)| *id == panel).map(|(_, sc)| *sc);
     }
-    default_command_shortcut(key)
+    default_command_shortcut_on(key, p)
 }
 
 /// Effective shortcut of an entry key, honouring the user's overrides.
@@ -753,7 +770,7 @@ fn menu_bar_paths() -> &'static HashMap<&'static str, Vec<(String, Value)>> {
 /// The menu path of the item of the menu bar that runs command `id` as a key press runs it
 /// ([`a_menu_bar_item_runs`]): the first item that runs it with no params, or else the first item,
 /// whose params all its items give.
-fn menu_bar_path(id: &str) -> Option<&'static str> {
+pub(crate) fn menu_bar_path(id: &str) -> Option<&'static str> {
     let (_, params) = command_doc(id)?;
     let items = menu_bar_paths().get(id).filter(|_| a_menu_bar_item_runs(id, params))?;
     chosen_path(items)
@@ -924,7 +941,7 @@ pub(crate) fn menu_target_now(app: &VectorcraftApp, id: &str) -> Option<Result<(
 /// What [`menu_target_now`] gives for command `id` while its menu bar item is dimmed: the status
 /// line, with the engine's reason when it gives one. The app's own rules ([`menus::enabled`]) dim
 /// UI commands, and some commands the engine would run, without giving a reason.
-fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
+pub(crate) fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
     let Some(why) = vectorcraft_engine::find_command(id).and_then(|c| (c.enabled)(&app.session).err()) else {
         return Err(format!("command `{id}` is not available right now"));
     };
@@ -936,7 +953,7 @@ fn dimmed(app: &VectorcraftApp, id: &str) -> Result<(String, Value), String> {
 /// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
 /// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
 /// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
-fn needs_a_value(key: &str) -> bool {
+pub(crate) fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
         vectorcraft_engine::command_specs()
@@ -3094,6 +3111,8 @@ mod tests {
         assert_eq!(shown("file.new"), Some(("File".into(), "New…".into(), true)));
         assert_eq!(shown("text.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), false)));
         assert_eq!(shown("type.fitHeadline"), Some(("Type".into(), "Fit Headline".into(), true)));
+        assert_eq!(shown("text.convertListToText"), Some(("Type".into(), "Convert to Text".into(), false)));
+        assert_eq!(shown("type.convertListToText"), Some(("Type › Bullets and Numbering".into(), "Convert to Text".into(), false)));
         for id in ["file.exportInBackground", "file.openInBackground"] {
             assert_eq!(shown(id), Some(("File".into(), "Continue in Background".into(), true)), "{id}");
         }
@@ -3116,6 +3135,26 @@ mod tests {
         record(&mut d, &mut km, "type.fitHeadline", "Cmd+Alt+Shift+F10");
         record(&mut d, &mut km, "text.fitHeadline", "Cmd+Alt+Shift+F10");
         assert!(d.str("__message").contains("was already used by Type › Fit Headline (type.fitHeadline) "), "{}", d.str("__message"));
+    }
+
+    /// No two entries of Keyboard Shortcuts have the same name in any UI language: each catalog
+    /// translates two different English names two different ways.
+    #[test]
+    fn no_two_entries_have_the_same_name_in_any_language() {
+        let all = entries();
+        let mut shared = vec![];
+        let previous = crate::i18n::current();
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            let mut by_name: HashMap<String, Vec<&str>> = HashMap::new();
+            for e in all.iter() {
+                by_name.entry(shown_name(e)).or_default().push(e.key.as_str());
+            }
+            shared.extend(by_name.into_iter().filter(|(_, keys)| keys.len() > 1).map(|(name, keys)| (lang.code(), name, keys)));
+        }
+        crate::i18n::set_current(previous);
+        shared.sort();
+        assert!(shared.is_empty(), "{} names: {shared:#?}", shared.len());
     }
 
     /// Two filter plug-ins with the same name in the same menu show their ids, and a third whose
@@ -3190,5 +3229,17 @@ mod tests {
         let r = app.run("shortcuts.set", json!({"id": "object.isolate", "shortcut": "Cmd+Alt+Shift+F11", "force": null})).unwrap();
         assert_eq!(r["shortcut"], "Cmd+Alt+Shift+F11");
         assert!(app.run("shortcuts.preset", json!({"name": null})).unwrap_err().starts_with("unknown preset"));
+    }
+
+    /// A command that needs a value is listed in the editor once the user gives it a key, but the
+    /// command search still leaves it out: a pick gives it no value.
+    #[test]
+    fn a_command_given_a_key_that_needs_a_value_is_no_pick() {
+        let mut overrides = Overrides::default();
+        crate::keymap::set_override(&mut overrides, "document.setUnits", "Cmd+Alt+Shift+F12");
+        let entry = entries().iter().find(|e| e.key == "document.setUnits").cloned().expect("the editor has a row for it");
+        assert!(!listed(&Overrides::default(), &entry) && listed(&overrides, &entry));
+        assert!(needs_a_value("document.setUnits"));
+        assert!(crate::palette::items().iter().all(|(_, id, _)| id != "document.setUnits"));
     }
 }
