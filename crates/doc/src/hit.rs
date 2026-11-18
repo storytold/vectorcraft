@@ -82,8 +82,9 @@ impl Default for HitOptions {
     }
 }
 
-/// The shapes that an image's own fills and strokes paint, each with its fill rule and the fill or
-/// stroke that paints it (none for fills and strokes that paint nothing). Effects are evaluated
+/// The shapes that an image's own fills and strokes paint, or the fills and strokes of the art of a
+/// symbol instance whose own fill or stroke has a geometry effect, each with its fill rule and the
+/// fill or stroke that paints it (none for fills and strokes that paint nothing). Effects are evaluated
 /// above this crate, so the engine registers one with [`set_image_paint`]. It looks up swatches and
 /// patterns in the document it is given.
 pub type ImagePaint = fn(Option<&Document>, &Node) -> Vec<(BezPath, FillRule, AppearanceItem)>;
@@ -97,10 +98,58 @@ pub fn set_image_paint(f: ImagePaint) {
     let _ = IMAGE_PAINT.set(f);
 }
 
-/// The shapes that the image `n`'s own fills and strokes paint ([`set_image_paint`]), none while
-/// nothing is registered.
-pub(crate) fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
-    IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(doc, n))
+/// The shapes that [`ImagePaint`] gives for one object.
+type Painted = Vec<(BezPath, FillRule, AppearanceItem)>;
+
+/// The shapes that the image or symbol instance `n` paints with its geometry effects
+/// ([`set_image_paint`]), none while nothing is registered. The shapes of a symbol instance of
+/// `doc` with an effect on a fill or stroke are kept on this thread ([`PAINT_KEPT`]) and measured
+/// again when `n`, a symbol of `doc` or its 9-slice guides or natural size, a pattern of `doc`,
+/// its swatches or color groups, or the
+/// [`LiveInputs`] have changed since, and on every call while `n` or the document's symbols or
+/// patterns hold a placed document or the symbols hold an image ([`symbols_hold_images`]).
+pub(crate) fn image_paint(doc: Option<&Document>, n: &Node) -> Rc<Painted> {
+    let Some(f) = IMAGE_PAINT.get() else { return Rc::default() };
+    let row_effects = || n.appearance.items.iter().any(|i| !i.effects().is_empty());
+    let Some(d) = doc.filter(|_| matches!(n.kind, NodeKind::SymbolInstance { .. }) && row_effects()) else {
+        return Rc::new(f(doc, n));
+    };
+    let inputs = live_inputs();
+    if let Some(painted) = kept(&PAINTED, d, n, inputs) {
+        return painted;
+    }
+    #[cfg(test)]
+    PAINT_EVALUATED.with(|c| c.set(c.get() + 1));
+    let painted = Rc::new(f(doc, n));
+    if !symbols_hold_images(d) {
+        let size = painted.iter().fold(0usize, |s, (bp, _, _)| s.saturating_add(1 + bp.elements().len()));
+        keep(&PAINTED, d, n, inputs, &painted, size, PAINT_KEPT);
+    }
+    painted
+}
+
+/// Does the art of a symbol of `doc` hold an image? The shapes its fills and strokes paint can
+/// follow its pixels, which change when its file is read again, so [`image_paint`] does not keep
+/// the shapes of an instance then.
+fn symbols_hold_images(doc: &Document) -> bool {
+    let mut image = false;
+    doc.symbols.iter().for_each(|s| s.art.walk(&mut |c| image |= matches!(c.kind, NodeKind::Image(_))));
+    image
+}
+
+/// How many symbol instances' shapes [`image_paint`] keeps on each thread: every click and every
+/// hover measures each instance whose fill or stroke has a geometry effect.
+const PAINT_KEPT: usize = 64;
+
+thread_local! {
+    /// The shapes [`image_paint`] keeps, the latest first.
+    static PAINTED: RefCell<Vec<Evaluated<Painted>>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many symbol instances [`image_paint`] measured on this thread.
+    static PAINT_EVALUATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// One level of evaluation of a live object in a document, as the canvas draws it: type in an
@@ -127,21 +176,72 @@ fn live_inputs() -> u64 {
     LIVE_ART.get().map_or(0, |(_, inputs)| inputs())
 }
 
-/// A live object evaluated by [`live_art`] on this thread: the object, its document's symbols (by
-/// name and art), patterns, swatches and color groups and the [`LiveInputs`] as they were, the art
-/// and its [`art_size`].
-struct EvaluatedLive {
+/// An object evaluated by [`live_art`] or [`image_paint`] on this thread: the object, its
+/// document's symbols (by name and art), patterns, swatches and color groups, the document data
+/// that symbols' 9-slice guides and natural sizes are kept in, and the [`LiveInputs`] as they
+/// were, the result and its size.
+struct Evaluated<T> {
     node: Node,
     symbols: Vec<(String, Arc<Node>)>,
     patterns: Vec<crate::PatternDef>,
     swatches: crate::Shared<Vec<vectorcraft_color::Swatch>>,
     swatch_groups: crate::Shared<Vec<vectorcraft_color::SwatchGroup>>,
+    unknown: crate::Shared<serde_json::Map<String, serde_json::Value>>,
     inputs: u64,
-    art: Rc<Vec<Node>>,
+    art: Rc<T>,
     size: usize,
 }
 
-impl EvaluatedLive {
+/// The evaluations kept on this thread in one store, the latest first.
+type Store<T> = std::thread::LocalKey<RefCell<Vec<Evaluated<T>>>>;
+
+/// The evaluation of `n` in `doc` with inputs `inputs` that `store` keeps, moved to the front.
+fn kept<T>(store: &'static Store<T>, doc: &Document, n: &Node, inputs: u64) -> Option<Rc<T>> {
+    store.with_borrow_mut(|kept| {
+        let i = kept.iter().position(|e| e.is_of(doc, n, inputs))?;
+        let e = kept.remove(i);
+        let art = e.art.clone();
+        kept.insert(0, e);
+        Some(art)
+    })
+}
+
+/// Keep `art`, of size `size`, the evaluation of `n` in `doc` with inputs `inputs`, at the front
+/// of `store`, which keeps `most` evaluations whose sizes add up to [`LIVE_KEPT_SIZE`] at most.
+/// Nothing is kept when `art` alone is larger, or when `n` or the document's symbols or patterns
+/// hold a placed document ([`holds_placed`]).
+fn keep<T>(store: &'static Store<T>, doc: &Document, n: &Node, inputs: u64, art: &Rc<T>, size: usize, most: usize) {
+    if size > LIVE_KEPT_SIZE || holds_placed(doc, n) {
+        return;
+    }
+    let e = Evaluated::new(doc, n, inputs, art, size);
+    store.with_borrow_mut(|kept| {
+        kept.insert(0, e);
+        kept.truncate(most);
+        let mut total = 0usize;
+        kept.retain(|e| {
+            total = total.saturating_add(e.size);
+            total <= LIVE_KEPT_SIZE
+        });
+    });
+}
+
+impl<T> Evaluated<T> {
+    /// `art`, of size `size`, the evaluation of `n` in `doc` with inputs `inputs`, as they are now.
+    fn new(doc: &Document, n: &Node, inputs: u64, art: &Rc<T>, size: usize) -> Self {
+        Self {
+            node: n.clone(),
+            symbols: doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect(),
+            patterns: doc.patterns.clone(),
+            swatches: doc.swatches.clone(),
+            swatch_groups: doc.swatch_groups.clone(),
+            unknown: doc.unknown.clone(),
+            inputs,
+            art: art.clone(),
+            size,
+        }
+    }
+
     /// Is this the evaluation of `n` in `doc`, with inputs `inputs`, as they are now?
     fn is_of(&self, doc: &Document, n: &Node, inputs: u64) -> bool {
         self.inputs == inputs
@@ -151,6 +251,7 @@ impl EvaluatedLive {
             && self.patterns == doc.patterns
             && self.swatches == doc.swatches
             && self.swatch_groups == doc.swatch_groups
+            && self.unknown == doc.unknown
     }
 }
 
@@ -158,8 +259,9 @@ impl EvaluatedLive {
 /// envelope's stroke band hits it again and again, and an envelope can hold a blend.
 const LIVE_KEPT: usize = 4;
 
-/// Most [`art_size`] the evaluations [`live_art`] keeps on one thread add up to. Art larger than
-/// this is not kept.
+/// Most size the evaluations [`live_art`] keeps on one thread add up to ([`art_size`]), and the
+/// shapes [`image_paint`] keeps (each shape and its path elements). Art larger than this is not
+/// kept.
 const LIVE_KEPT_SIZE: usize = 250_000;
 
 /// The size of `art` for [`LIVE_KEPT_SIZE`]: its objects and the anchors of their paths.
@@ -184,52 +286,23 @@ fn holds_placed(doc: &Document, n: &Node) -> bool {
 
 thread_local! {
     /// The evaluations [`live_art`] keeps, the latest first.
-    static EVALUATED: RefCell<Vec<EvaluatedLive>> = const { RefCell::new(Vec::new()) };
+    static EVALUATED: RefCell<Vec<Evaluated<Vec<Node>>>> = const { RefCell::new(Vec::new()) };
 }
 
 /// The art live object `n` of `doc` draws ([`set_live_art`]); [`crate::live::expand_live`] while
-/// nothing is registered. The art is evaluated again when `n`, a symbol of `doc`, a pattern of
-/// `doc`, its swatches or color groups, or the [`LiveInputs`] have changed since, and on every
+/// nothing is registered. The art is evaluated again when `n`, a symbol of `doc` or its 9-slice
+/// guides or natural size, a pattern of `doc`, its swatches or color groups, or the
+/// [`LiveInputs`] have changed since, and on every
 /// click while it or the document's symbols or patterns hold a placed document ([`holds_placed`]).
 fn live_art(doc: &Document, n: &Node) -> Rc<Vec<Node>> {
     let inputs = live_inputs();
-    let kept = EVALUATED.with_borrow_mut(|kept| {
-        let i = kept.iter().position(|e| e.is_of(doc, n, inputs))?;
-        let e = kept.remove(i);
-        let art = e.art.clone();
-        kept.insert(0, e);
-        Some(art)
-    });
-    if let Some(art) = kept {
+    if let Some(art) = kept(&EVALUATED, doc, n, inputs) {
         return art;
     }
     #[cfg(test)]
     LIVE_EVALUATED.with(|c| c.set(c.get() + 1));
     let art = Rc::new(LIVE_ART.get().map_or_else(|| crate::live::expand_live(n), |(f, _)| f(Some(doc), n)));
-    let size = art_size(&art);
-    if size > LIVE_KEPT_SIZE || holds_placed(doc, n) {
-        return art;
-    }
-    let symbols = doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect();
-    let e = EvaluatedLive {
-        node: n.clone(),
-        symbols,
-        patterns: doc.patterns.clone(),
-        swatches: doc.swatches.clone(),
-        swatch_groups: doc.swatch_groups.clone(),
-        inputs,
-        art: art.clone(),
-        size,
-    };
-    EVALUATED.with_borrow_mut(|kept| {
-        kept.insert(0, e);
-        kept.truncate(LIVE_KEPT);
-        let mut total = 0usize;
-        kept.retain(|e| {
-            total = total.saturating_add(e.size);
-            total <= LIVE_KEPT_SIZE
-        });
-    });
+    keep(&EVALUATED, doc, n, inputs, &art, art_size(&art), LIVE_KEPT);
     art
 }
 
@@ -257,7 +330,7 @@ pub fn set_drawn_art(f: DrawnArt) {
 /// The art of an object found by [`drawn`] (none, or one object), with what it was found from, and
 /// the box round everything that art can paint.
 struct EvaluatedDrawn {
-    of: EvaluatedLive,
+    of: Evaluated<Vec<Node>>,
     reach: Option<Rect>,
 }
 
@@ -310,7 +383,8 @@ fn plain<T>(mask: bool, f: impl FnOnce() -> T) -> T {
 /// nothing is registered, while a [`DrawnOff`] guard lives, for objects whose art is not evaluated
 /// ([`evaluates`]), and when nothing in `n`, nor the art of a symbol an instance in it shows, has a
 /// visible effect ([`draws_effects`]). The art is evaluated again when `n`, a symbol of the
-/// document, its patterns, swatches or color groups, or the [`LiveInputs`] have changed since, and
+/// document or its 9-slice guides or natural size, its patterns, swatches or color groups, or the
+/// [`LiveInputs`] have changed since, and
 /// on every call while it holds a placed document ([`holds_placed`]). When the art kept is full, new
 /// art replaces as much other art as it needs room for, and art larger than [`LIVE_KEPT_SIZE`] is
 /// kept alone.
@@ -332,16 +406,7 @@ fn drawn(symbols: &SymbolBoxes, n: &Node) -> Option<(Rc<Vec<Node>>, Option<Rect>
     let art = Rc::new(art.into_iter().collect::<Vec<_>>());
     let size = art_size(&art).saturating_add(art_size(std::slice::from_ref(n)));
     if !holds_placed(doc, n) {
-        let of = EvaluatedLive {
-            node: n.clone(),
-            symbols: doc.symbols.iter().map(|s| (s.name.clone(), s.art.clone())).collect(),
-            patterns: doc.patterns.clone(),
-            swatches: doc.swatches.clone(),
-            swatch_groups: doc.swatch_groups.clone(),
-            inputs,
-            art: art.clone(),
-            size,
-        };
+        let of = Evaluated::new(doc, n, inputs, &art, size);
         DRAWN.with_borrow_mut(|(kept, total)| {
             if let Some(old) = kept.remove(&n.id) {
                 *total = total.saturating_sub(old.of.size);
@@ -607,9 +672,11 @@ fn objects_at_repeated(doc: &Document, p: Point, opt: HitOptions, scope: Option<
 
 /// [`objects_at_repeated`] after `tops`, the topmost objects under `p` already found.
 fn objects_at_repeated_after(doc: &Document, p: Point, opt: HitOptions, scope: Option<NodeId>, mut tops: Vec<NodeId>) -> Vec<NodeId> {
-    // Each round leaves out the objects found so far (and everything inside them).
-    while let Some(top) = hit_test_skipping(doc, p, opt, &|id| tops.contains(&id), true).map(|h| h.top_object(scope)) {
-        if tops.contains(&top) {
+    // Each round leaves out the objects found so far (and everything inside them). `found` holds
+    // the same ids as `tops`, which keeps their order.
+    let mut found: HashSet<NodeId> = tops.iter().copied().collect();
+    while let Some(top) = hit_test_skipping(doc, p, opt, &|id| found.contains(&id), true).map(|h| h.top_object(scope)) {
+        if !found.insert(top) {
             break;
         }
         tops.push(top);
@@ -1290,8 +1357,9 @@ fn hit_stroke(n: &Node, bp: &vectorcraft_geom::BezPath, rule: vectorcraft_geom::
     stroke_contains(bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
 }
 
-/// Check the body without assembling a `BezPath`. A miss near a joint or cap may still hit a
-/// miter or square cap, so the caller falls back to the full stroke check there.
+/// Check the body without assembling a `BezPath`. Near an end or joint, the caller uses the
+/// full stroke check for non-round caps or joins: Butt and Bevel can reject a radial body hit,
+/// while Miter and Square can extend beyond it.
 fn near_path_body(path: &PathData, p: Point, radius: f64, decoration_reach: f64) -> Option<(bool, bool)> {
     if !radius.is_finite() || radius < 0.0 || !decoration_reach.is_finite() || decoration_reach < 0.0 {
         return None;
@@ -1349,6 +1417,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
     }
     match &n.kind {
         NodeKind::Path { path, rule, .. } => {
+            let has_fill = n.appearance.has_visible_fill();
             if opt.outline
                 && let Some((hit, needs_full_check)) = near_path_body(path, p, opt.tol, 0.0)
             {
@@ -1361,7 +1430,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             }
             let mut strokes = n.appearance.painted_strokes();
             if !opt.outline
-                && n.appearance.fill().is_none_or(|f| f.paint.is_none())
+                && !has_fill
                 && let Some(s) = strokes.next()
                 && strokes.next().is_none()
                 && s.align == StrokeAlign::Center
@@ -1376,10 +1445,10 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
                     path,
                     p,
                     s.width / 2.0 + opt.tol,
-                    if s.join == crate::LineJoin::Miter || s.cap == crate::LineCap::Square { s.reach() + opt.tol } else { 0.0 },
+                    if s.join != crate::LineJoin::Round || s.cap != crate::LineCap::Round { s.reach() + opt.tol } else { 0.0 },
                 )
             {
-                if hit {
+                if hit && !near_decoration {
                     return Some(HitKind::Stroke);
                 }
                 if !near_decoration {
@@ -1390,8 +1459,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if let Some(k) = hit_stroke(n, &bp, *rule, p, opt) {
                 return Some(k);
             }
-            let filled = !n.appearance.fill_paint().is_none();
-            if !opt.outline && !opt.path_only && filled && fill_contains(&bp, *rule, p) {
+            if !opt.outline && !opt.path_only && has_fill && fill_contains(&bp, *rule, p) {
                 return Some(HitKind::Fill);
             }
             None
@@ -1412,7 +1480,7 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if vectorcraft_geom::hit::distance_to_outline(&near, p) <= opt.tol {
                 return Some(HitKind::Outline);
             }
-            (!opt.outline && !opt.path_only && fill_contains(&near, *rule, p)).then_some(HitKind::Fill)
+            (!opt.outline && !opt.path_only && n.appearance.has_visible_fill() && fill_contains(&near, *rule, p)).then_some(HitKind::Fill)
         }
         // The type path lies within the bounds: they rule out the rest before it is measured.
         NodeKind::Text(t) if opt.type_path_only => {
@@ -1436,22 +1504,21 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if opt.outline {
                 return None;
             }
-            image_paint(Some(symbols.document()), n).iter().rev().find_map(|(bp, rule, item)| match item {
-                AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
-                AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
-            })
+            hit_painted(n, p, opt, symbols)
         }
         NodeKind::Text(_) | NodeKind::PlacedDocument(_) => {
             n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
         }
         // A symbol instance is hit within its bounds, and outside them where its art paints
-        // ([`instance_art_hit`]). In the art of another instance walked outside that instance's
-        // bounds, it is hit only where its own art paints ([`ArtOnly`]).
+        // ([`instance_art_hit`]) or where the geometry effects of its active fill or stroke reshape
+        // the art it draws ([`image_paint`]) except in outline mode. In the art of another instance
+        // walked outside that instance's bounds, it is hit only where its own art paints
+        // ([`ArtOnly`]).
         NodeKind::SymbolInstance { .. } => {
             if !ArtOnly::on() && n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
                 return Some(HitKind::Bounds);
             }
-            instance_art_hit(n, p, opt, symbols)
+            instance_art_hit(n, p, opt, symbols).or_else(|| if opt.outline { None } else { hit_painted(n, p, opt, symbols) })
         }
         // A blend or an envelope is hit within its bounds, and outside them where its evaluated
         // art paints: a blend's keys and steps on a spine can reach past the keys and the spine,
@@ -1476,6 +1543,16 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
         }
         _ => None,
     }
+}
+
+/// What a click at `p` hits among the shapes that the fills and strokes of `n` (an image or a
+/// symbol instance) paint with their geometry effects ([`image_paint`]), the frontmost first: a
+/// stroke along its shape, a fill inside it except with Selection by Path Only.
+fn hit_painted(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
+    image_paint(Some(symbols.document()), n).iter().rev().find_map(|(bp, rule, item)| match item {
+        AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
+        AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
+    })
 }
 
 /// Is `p` within `tol` of the type path of `t` (in `n`), what "Type Object Selection by Path
@@ -2019,7 +2096,9 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// Objects (children of layers, or of `scope` in isolation mode) touched by a marquee rect, leaving
 /// out those on a locked artboard ([`crate::LockedArtboards::holds_id`]). Symbol instances are measured
 /// by their art ([`Node::geometric_bounds_with`]), and outside that box, except in outline, they are
-/// touched where the live geometry effects of a clipping path in their art show it. The art of a clip group or of a layer with a
+/// touched where the live geometry effects of a clipping path in their art show it, or where the
+/// geometry effects of their active fill or stroke reshape the art. Images are also touched, except
+/// in outline, where their own fills and strokes paint outside their box. The art of a clip group or of a layer with a
 /// clipping mask counts only when the marquee meets the region its clipping path clips to, and then
 /// only within that region's bounds. In isolation mode the clipping mask of the isolated container,
 /// or of the parent of the single object isolated, does not limit the marquee, as it does not limit
@@ -2027,20 +2106,39 @@ pub fn compound_part_at(n: &Node, p: Point, tol: f64) -> Option<NodeId> {
 /// the members of a group or layer with geometry effects of its own, are touched where the art those
 /// effects draw lies ([`set_drawn_art`]), as clicks hit them.
 pub fn marquee(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, leaves, false, false)
+    marquee_with(doc, r, scope, leaves, false, false, false)
 }
 
 /// [`marquee`] in the view the canvas shows: with `outline` (Outline view), and below a layer
 /// whose Preview is off, a clipping path counts by its plain shapes, without its live effects, as
-/// the clicks of [`HitOptions::outline`] do.
-pub fn marquee_in_view(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, outline: bool) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, leaves, false, outline)
+/// the clicks of [`HitOptions::outline`] do. With `skip_guides` (Lock Guides is on or the guides
+/// are hidden, as [`HitOptions::skip_guides`]), the paths made into guides are not touched, at the
+/// top or inside a group, so a group is not taken for a guide in it (#8538).
+pub fn marquee_in_view(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, outline: bool, skip_guides: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, leaves, false, outline, skip_guides)
 }
 
 /// Candidates for whole-object enclosure by a loop bounded by `r`. Eligibility and group
 /// traversal follow [`marquee_in_view`]; compounds contribute the complete path they paint.
-pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>, outline: bool) -> Vec<NodeId> {
-    marquee_with(doc, r, scope, true, true, outline)
+pub fn enclosure_candidates(doc: &Document, r: Rect, scope: Option<NodeId>, outline: bool, skip_guides: bool) -> Vec<NodeId> {
+    marquee_with(doc, r, scope, true, true, outline, skip_guides)
+}
+
+/// What a marquee ([`marquee_with`]) takes, besides where it is: whether a compound path is
+/// touched by every path it paints (`whole_compounds`, for an enclosing loop's candidates), and
+/// whether the paths made into guides are left out (`skip_guides`: Lock Guides is on or the
+/// guides are hidden, [`HitOptions::skip_guides`] for the marquee).
+#[derive(Clone, Copy)]
+struct Rules {
+    whole_compounds: bool,
+    skip_guides: bool,
+}
+
+impl Rules {
+    /// Is `n` a path made into a guide that the marquee leaves out?
+    fn skips(self, n: &Node) -> bool {
+        self.skip_guides && matches!(n.kind, NodeKind::Path { guide: true, .. })
+    }
 }
 
 /// Is `n` a layer whose Preview is off (its art is drawn and clicked in outline)?
@@ -2048,8 +2146,17 @@ fn previews_off(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Layer { preview: false, .. })
 }
 
-fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, whole_compounds: bool, outline: bool) -> Vec<NodeId> {
+fn marquee_with(
+    doc: &Document,
+    r: Rect,
+    scope: Option<NodeId>,
+    leaves: bool,
+    whole_compounds: bool,
+    outline: bool,
+    skip_guides: bool,
+) -> Vec<NodeId> {
     let _walk = ArtWalk::open();
+    let rules = Rules { whole_compounds, skip_guides };
     let mut out = Vec::new();
     // The locks first: they copy the kept art boxes that `symbols` takes, and `symbols` keeps theirs.
     let locks = doc.locked_artboards_kept();
@@ -2063,7 +2170,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             Some(c) => {
                 // In an isolated clip group, its members by their own geometry, as clicks take
                 // them ([`edits_inside`]).
-                let drawn = if s.clips() { None } else { touched_in_art(s, &symbols, r, whole_compounds, outline || previews_off(s)) };
+                let drawn = if s.clips() { None } else { touched_in_art(s, &symbols, r, rules, outline || previews_off(s)) };
                 c.iter()
                     .enumerate()
                     .filter(|(i, c)| !c.is_ruler_guide() && !shaper_hides(s, *i, scope))
@@ -2085,7 +2192,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
             .layers
             .iter()
             .filter(|l| l.visible && !l.locked && !l.is_template() && doc.pattern_edit.as_ref().is_none_or(|e| e.layer == l.id))
-            .flat_map(|l| layer_objects(l, &symbols, r, outline, whole_compounds, None))
+            .flat_map(|l| layer_objects(l, &symbols, r, outline, rules, None))
             .collect(),
     };
     /// The objects of layer `l`, each with the part of `r` that the clipping masks of `l` and of
@@ -2094,17 +2201,10 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     /// shapes ([`mask_marquee`]). In a layer whose own geometry effects reshape its art, each object
     /// comes with the objects that art touches ([`touched_in_art`]), `drawn` when a layer around
     /// `l` has such effects.
-    fn layer_objects<'a>(
-        l: &'a Node,
-        s: &SymbolBoxes,
-        r: Rect,
-        outline: bool,
-        whole_compounds: bool,
-        drawn: Option<Rc<HashSet<NodeId>>>,
-    ) -> Vec<Top<'a>> {
+    fn layer_objects<'a>(l: &'a Node, s: &SymbolBoxes, r: Rect, outline: bool, rules: Rules, drawn: Option<Rc<HashSet<NodeId>>>) -> Vec<Top<'a>> {
         let mut out = vec![];
         let outline = outline || previews_off(l);
-        let drawn = drawn.or_else(|| touched_in_art(l, s, r, whole_compounds, outline));
+        let drawn = drawn.or_else(|| touched_in_art(l, s, r, rules, outline));
         let inner = marquee_in_parent(l, r, outline);
         for (i, c) in l.children().into_iter().flatten().enumerate() {
             if c.is_layer() {
@@ -2113,7 +2213,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
                     && !c.locked
                     && !c.is_template()
                 {
-                    out.extend(layer_objects(c, s, inner, outline, whole_compounds, drawn.clone()));
+                    out.extend(layer_objects(c, s, inner, outline, rules, drawn.clone()));
                 }
             } else if !c.is_ruler_guide() {
                 if drawn.is_some() {
@@ -2130,12 +2230,12 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     /// The ids of the objects of the art that group or layer `n` draws with its own geometry
     /// effects ([`drawn_art`]) that the marquee `r` touches, as [`collect_leaves`] collects them.
     /// `None` in outline and when it has no such effects.
-    fn touched_in_art(n: &Node, s: &SymbolBoxes, r: Rect, whole_compounds: bool, outline: bool) -> Option<Rc<HashSet<NodeId>>> {
+    fn touched_in_art(n: &Node, s: &SymbolBoxes, r: Rect, rules: Rules, outline: bool) -> Option<Rc<HashSet<NodeId>>> {
         let art = drawn_art(s, n, outline)?;
         let _off = DrawnOff::set();
         let mut ids = vec![];
         for a in art.iter().filter(|a| a.visible) {
-            collect_leaves(a, s, r, None, whole_compounds, false, &mut ids);
+            collect_leaves(a, s, r, None, rules, false, &mut ids);
         }
         Some(Rc::new(ids.into_iter().collect()))
     }
@@ -2188,14 +2288,20 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     /// Does the marquee `r` touch `n`? It skips the children of a Shaper Group that clicks skip
     /// ([`shaper_hides`]). An Intertwine group is touched by its members, and a repeat is touched
     /// by the copies it draws, as clicks hit them. Objects of every other kind except paths,
-    /// compound paths, layers and groups are touched by their box. A clipping path is touched by
-    /// its own geometry ([`mask_marquee`]) and on the edge of its region ([`clip_edge_touches`]).
-    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool) -> bool {
+    /// compound paths, layers and groups are touched by their box, and an image or a symbol
+    /// instance also where its fills and strokes paint outside it ([`painted_touches`]). A clipping
+    /// path is touched by its own geometry ([`mask_marquee`]) and on the edge of its region
+    /// ([`clip_edge_touches`]).
+    fn touches(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, rules: Rules, outline: bool) -> bool {
+        // Locked or hidden guides are not touched ([`Rules::skips`]).
+        if rules.skips(n) {
+            return false;
+        }
         // A path or compound path whose geometry effects reshape it, or a group or layer whose own
         // geometry effects reshape its members, is touched where that art is drawn ([`drawn_art`]).
         if let Some(art) = drawn_art(s, n, outline || previews_off(n)) {
             let _off = DrawnOff::set();
-            return art.iter().any(|a| a.visible && touches(a, s, r, None, whole_compounds, false));
+            return art.iter().any(|a| a.visible && touches(a, s, r, None, rules, false));
         }
         match &n.kind {
             NodeKind::Path { path, .. } => vectorcraft_geom::hit::intersects_rect(path, r),
@@ -2206,24 +2312,40 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
                     c.visible
                         && !shaper_hides(n, i, scope)
                         && if i == 0 && n.clips() {
-                            plain(true, || mask_marquee(n, r).is_some_and(|r| touches(c, s, r, scope, whole_compounds, outline)))
+                            plain(true, || mask_marquee(n, r).is_some_and(|r| touches(c, s, r, scope, rules, outline)))
                                 || clip_edge_touches(c, r, outline)
                         } else {
-                            inner.is_some_and(|r| touches(c, s, r, scope, whole_compounds, outline))
+                            inner.is_some_and(|r| touches(c, s, r, scope, rules, outline))
                         }
                 })
             }
-            NodeKind::Compound { children, .. } if whole_compounds => {
-                children.iter().filter_map(|c| c.path_data()).any(|path| vectorcraft_geom::hit::intersects_rect(path, r))
+            NodeKind::Compound { children, .. } if rules.whole_compounds => {
+                // Guide contours left out ([`Rules::skips`]) don't make the compound a candidate.
+                children.iter().filter(|c| !rules.skips(c)).filter_map(|c| c.path_data()).any(|path| vectorcraft_geom::hit::intersects_rect(path, r))
             }
-            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, whole_compounds, outline)),
-            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, whole_compounds, outline)),
+            NodeKind::Compound { children, .. } => children.iter().any(|c| c.visible && touches(c, s, r, scope, rules, outline)),
+            NodeKind::Repeat(spec) => spec.expand(Some(s.document())).iter().any(|copy| touches(copy, s, r, scope, rules, outline)),
             // A symbol instance is touched by its box, and outside it where the live geometry
-            // effects of a clipping path in its art show the art. In the art of another instance
-            // walked outside that instance's box, it is touched only by its own art ([`ArtOnly`]).
-            NodeKind::SymbolInstance { .. } => !ArtOnly::on() && box_touches(n, s, r) || !outline && instance_art_touches(n, s, r, whole_compounds),
+            // effects of a clipping path in its art show the art, or where the geometry effects of
+            // its active fill or stroke reshape the art ([`painted_touches`]). In the art of another
+            // instance walked outside that instance's box, it is touched only by its own art
+            // ([`ArtOnly`]) and those shapes.
+            NodeKind::SymbolInstance { .. } => {
+                !ArtOnly::on() && box_touches(n, s, r) || !outline && (instance_art_touches(n, s, r, rules) || painted_touches(n, s, r))
+            }
+            // An image is touched by its box, and outside it where its own fills and strokes paint.
+            NodeKind::Image(_) => box_touches(n, s, r) || !outline && painted_touches(n, s, r),
             _ => box_touches(n, s, r),
         }
+    }
+    /// Does the marquee `r` touch the shapes that the fills and strokes of image or symbol
+    /// instance `n` paint ([`image_paint`]), where clicks hit them ([`hit_painted`])? Each shape is
+    /// touched by its path, as a path is ([`vectorcraft_geom::hit::intersects_rect`]). Only when
+    /// `r` meets the reach of `n` ([`Node::reach_bounds_with`]).
+    fn painted_touches(n: &Node, s: &SymbolBoxes, r: Rect) -> bool {
+        let meets = |b: Rect| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
+        n.reach_bounds_with(s).is_some_and(meets)
+            && image_paint(Some(s.document()), n).iter().any(|(bp, _, _)| vectorcraft_geom::hit::intersects_rect(&PathData::from_bezpath(bp), r))
     }
     /// Does the marquee `r` touch the box of `n`? A box with no width or no height (an instance of
     /// a symbol that draws a straight line) is touched where the marquee crosses it.
@@ -2238,7 +2360,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
     /// ([`SymbolBoxes::art`]), or for any art while [`ArtOnly`] is on, and only when `r` meets the
     /// instance's reach ([`Node::reach_bounds_with`]): elsewhere the art lies within the instance's
     /// box. Not once the marquee has placed as many objects of symbol art as [`ArtWalk`] allows.
-    fn instance_art_touches(n: &Node, s: &SymbolBoxes, r: Rect, whole_compounds: bool) -> bool {
+    fn instance_art_touches(n: &Node, s: &SymbolBoxes, r: Rect, rules: Rules) -> bool {
         let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return false };
         let meets = |b: Rect| b.x0 <= r.x1 && r.x0 <= b.x1 && b.y0 <= r.y1 && r.y0 <= b.y1;
         if s.art(symbol).is_none_or(|a| a.reshaped.is_none() && !ArtOnly::on()) || !n.reach_bounds_with(s).is_some_and(meets) {
@@ -2255,15 +2377,15 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
         #[cfg(test)]
         ARTS_WALKED.with(|c| c.set(c.get() + 1));
         let _art_only = ArtOnly::set();
-        art.place(&art.art, None).is_some_and(|placed| placed.visible && touches(&placed, s, r, None, whole_compounds, false))
+        art.place(&art.art, None).is_some_and(|placed| placed.visible && touches(&placed, s, r, None, rules, false))
     }
-    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, whole_compounds: bool, outline: bool, out: &mut Vec<NodeId>) {
+    fn collect_leaves(n: &Node, s: &SymbolBoxes, r: Rect, scope: Option<NodeId>, rules: Rules, outline: bool, out: &mut Vec<NodeId>) {
         match &n.kind {
             NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Intertwine { children } => {
                 let outline = outline || previews_off(n);
                 // The members that the art its own geometry effects draw touches, and a group whose
                 // own fills and strokes that art paints, as clicks hit it ([`member_chain`]).
-                if let Some(drawn) = touched_in_art(n, s, r, whole_compounds, outline) {
+                if let Some(drawn) = touched_in_art(n, s, r, rules, outline) {
                     if drawn.contains(&n.id) && !n.is_layer() {
                         out.push(n.id);
                     }
@@ -2278,18 +2400,18 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
                     if i == 0 && n.clips() {
                         let before = out.len();
                         if let Some(r) = mask_marquee(n, r) {
-                            plain(true, || collect_leaves(c, s, r, scope, whole_compounds, outline, out));
+                            plain(true, || collect_leaves(c, s, r, scope, rules, outline, out));
                         }
                         if out.len() == before && is_leaf(c) && clip_edge_touches(c, r, outline) {
                             out.push(c.id);
                         }
                     } else if let Some(r) = inner {
-                        collect_leaves(c, s, r, scope, whole_compounds, outline, out);
+                        collect_leaves(c, s, r, scope, rules, outline, out);
                     }
                 }
             }
             _ => {
-                if touches(n, s, r, scope, whole_compounds, outline) {
+                if touches(n, s, r, scope, rules, outline) {
                     out.push(n.id);
                 }
             }
@@ -2324,14 +2446,12 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
         if leaves {
             let before = out.len();
             if let Some(r) = r {
-                collect_leaves(t, &symbols, r, scope, whole_compounds, outline, &mut out);
+                collect_leaves(t, &symbols, r, scope, rules, outline, &mut out);
             }
             if edge.is_some_and(|e| out.len() == before && is_leaf(t) && clip_edge_touches(t, e, outline)) {
                 out.push(t.id);
             }
-        } else if r.is_some_and(|r| touches(t, &symbols, r, scope, whole_compounds, outline))
-            || edge.is_some_and(|e| clip_edge_touches(t, e, outline))
-        {
+        } else if r.is_some_and(|r| touches(t, &symbols, r, scope, rules, outline)) || edge.is_some_and(|e| clip_edge_touches(t, e, outline)) {
             out.push(t.id);
         }
     }

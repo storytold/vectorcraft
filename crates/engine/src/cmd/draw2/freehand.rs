@@ -174,9 +174,13 @@ fn no_stroke(name: &str) -> EngineError {
     bad("brush.freehand", format!("cannot apply brush `{name}`: path has no stroke"))
 }
 
-/// Sets brush `name` on the stroke of object `id` of `d`.
+/// Sets brush `name` on the stroke of object `id` of `d`. The stroke's own settings for another
+/// brush (Options of Selected Object) are cleared.
 fn set_brush(d: &mut Document, id: NodeId, name: &str) {
     if let Some(st) = d.node_mut(id).and_then(|n| n.appearance.stroke_mut()) {
+        if st.brush.as_deref() != Some(name) {
+            st.brush_options.clear();
+        }
         st.brush = Some(name.to_string());
     }
 }
@@ -209,7 +213,11 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
     let label = if brush || brush_name.is_some() { "Paintbrush" } else { "Pencil" };
     let keep_selected = switch_or(p, "keepSelected", true, C)?;
     let filled = switch_or(p, "fill", false, C)?;
-    if let Some(ext) = p.get("extend").filter(|v| !v.is_null()) {
+    let extend = p.get("extend").filter(|v| !v.is_null());
+    if extend.is_none() && p.get("connect").is_some_and(|v| !v.is_null()) {
+        return Err(bad(C, "connect needs extend"));
+    }
+    if let Some(ext) = extend {
         let id = object_param(ext, "id", C)?.ok_or_else(|| bad(C, "extend needs id"))?;
         let at_start = match ext.get("end").filter(|v| !v.is_null()).map(Value::as_str) {
             None | Some(Some("end")) => false,
@@ -234,26 +242,9 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
         };
         let Some(p0) = pts.first_mut() else { return Err(bad(C, "needs points")) };
         *p0 = end;
-        if pts.len() < 2 {
-            // No stroke to add: the brush alone changes, when it is not the path's already, and the
-            // path is selected or deselected as a longer continuation leaves it.
-            if let Some(name) = brush_name
-                && s.doc()?.doc.node(target).and_then(|n| n.appearance.stroke()).is_some_and(|st| st.brush.as_deref() != Some(name))
-            {
-                s.edit("Paintbrush", |d, sel| {
-                    set_brush(d, target, name);
-                    if keep_selected {
-                        sel.set([id]);
-                    } else {
-                        sel.remove(id);
-                    }
-                    Ok(())
-                })?;
-            }
-            return Ok(json!({ "id": id.0 }));
-        }
         // A stroke that ends on an open end of another path connects the two: (that path, its last
         // open subpath, that subpath starting at the end the stroke ends on, it ends at its end).
+        // It is checked before a stroke of one point returns, so a bad `connect` is refused there too.
         let connect = match p.get("connect").filter(|v| !v.is_null()) {
             Some(cn) => {
                 let other = object_param(cn, "id", C)?.ok_or_else(|| bad(C, "connect needs id"))?;
@@ -276,6 +267,24 @@ pub(crate) fn freehand_brushed(s: &mut Session, p: &Value, brush_name: Option<&s
             }
             None => None,
         };
+        if pts.len() < 2 {
+            // No stroke to add: the brush alone changes, when it is not the path's already, and the
+            // path is selected or deselected as a longer continuation leaves it.
+            if let Some(name) = brush_name
+                && s.doc()?.doc.node(target).and_then(|n| n.appearance.stroke()).is_some_and(|st| st.brush.as_deref() != Some(name))
+            {
+                s.edit("Paintbrush", |d, sel| {
+                    set_brush(d, target, name);
+                    if keep_selected {
+                        sel.set([id]);
+                    } else {
+                        sel.remove(id);
+                    }
+                    Ok(())
+                })?;
+            }
+            return Ok(json!({ "id": id.0 }));
+        }
         // `closed`, when given, says whether the stroke closes the path: the Pencil and the
         // Paintbrush send it, by their Close Paths When Ends Are Within and Alt at the release.
         // Left out, an extending stroke that ends within four Fidelities of the path's other end
