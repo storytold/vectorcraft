@@ -4312,7 +4312,8 @@ already walks Image Trace. Short agent entry points:
   content stays as it is. It is an error when the job was canceled or dropped, when its document is not the active
   one, when the object, its pixels or its placement changed, when the object is now locked or hidden, or when it is
   on a layer with a clipping mask, an opacity mask or effects of its own. Jobs are not saved, so an insert played
-  from recorded steps (an action, or a journal played again) is an error too. Example:
+  from recorded steps (an action, or a journal played again) is an error too. Example, where insert takes the `job`
+  that generate returned (job numbers count up through the session, so 1 only for its first job):
 
   ```json
   {"command": "conceptVector.generate", "params": {"provider": "offline.traceStyles", "styles": ["outline", "flatColor"], "detail": 60}}
