@@ -343,7 +343,11 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
         crate::ime::controls_without_editor(app, ctx);
         return;
     }
-    ctx.input_mut(unclip_chords);
+    // The Copy or Cut the menu bar left to the labels came from no key: unclipped, the menu's Cut
+    // would become a plain X press (Toggle Fill/Stroke Focus).
+    if left_to_labels(ctx).is_none() {
+        ctx.input_mut(unclip_chords);
+    }
     // Tab is ours when no field has the keyboard (it shows and hides the panels, or goes to the
     // Type tool): left to egui, it would also move the focus on to a field, and every key after it
     // would count as typing.
@@ -806,7 +810,8 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
     // Clipboard keys arrive as events, not key presses; the chord held says which paste. Copy and
     // Cut with text selected in a label copy that text ([`leave_to_labels`]), unless another window
     // sent them on (a floating document's): those copy the art. The menu bar's Copy and Cut have
-    // left theirs to the labels already.
+    // left theirs to the labels already and dropped the unwritten formats; dropping them again
+    // here does nothing more.
     let mut clip = vec![];
     let forwarded = app.forwarded_clipboard && ctx.viewport_id() == egui::ViewportId::ROOT;
     let to_labels =
@@ -843,6 +848,33 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
         crate::menus::invoke(app, id, json!({}));
     }
     labels_copy || labels_cut
+}
+
+/// Copy or Cut (`id`) on a key that egui does not send as a Copy or Cut event (F3 and F2 off
+/// macOS, a key of the user's own): with text selected in a label, the labels copy it, as they do
+/// for Cmd/Ctrl+C and X ([`leave_to_labels`]) (→ true). When a key another window sent on in this
+/// frame (a floating document's) runs `id`, the art is copied.
+fn clipboard_key_to_labels(app: &mut VectorcraftApp, ctx: &egui::Context, id: &str) -> bool {
+    let (command, event) = match id {
+        "edit.copy" => ("edit.copy", egui::Event::Copy),
+        "edit.cut" => ("edit.cut", egui::Event::Cut),
+        _ => return false,
+    };
+    if ctx.viewport_id() == egui::ViewportId::ROOT && forwarded_key_runs(app, command) || !leave_to_labels(ctx, command) {
+        return false;
+    }
+    ctx.input_mut(|i| i.events.push(event));
+    app.drop_unwritten_formats();
+    true
+}
+
+/// Does a key press another window sent on in this frame run command `id`?
+fn forwarded_key_runs(app: &VectorcraftApp, id: &str) -> bool {
+    let mirror = crate::shortcut_editor::current();
+    let platform = crate::keymap::platform();
+    app.forwarded_presses.iter().filter_map(|e| craft_keymap::KeyInput::from_egui(e, platform)).any(|input| {
+        app.dispatcher.layout().candidates(&input).iter().any(|chord| crate::keymap::lookup(&mirror.keymap, chord).is_some_and(|c| c.id == id))
+    })
 }
 
 /// Route arrows, digits and letters to a tool while a gesture is active.
@@ -1110,6 +1142,8 @@ fn run_hit(app: &mut VectorcraftApp, ctx: &egui::Context, c: &CommandRef) {
         // With the Artboard tool, Select All's keys after a click on an Artboards panel row select
         // every artboard instead of the art.
         crate::panels::artboards::select_all(app);
+    } else if clipboard_key_to_labels(app, ctx, &c.id) {
+        // The labels copy their selected text at the end of the pass.
     } else {
         match menu_target(app, c) {
             Some(Ok((id, p))) => crate::menus::invoke(app, &id, p),

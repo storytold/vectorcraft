@@ -37,13 +37,19 @@ impl App {
     /// host dispatches it before the app's logic.
     fn frame_with(&mut self, events: Vec<Event>, menu: Option<&str>) -> egui::FullOutput {
         self.time += 0.1;
-        let raw = egui::RawInput {
+        let mut raw = egui::RawInput {
             events,
             time: Some(self.time),
             focused: self.focused,
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
+        // As the hosts do: the keys another window sent on join this frame's input, and the frame
+        // after them goes back to the keyboard's modifiers.
+        let app = &self.app;
+        if !app.forwarded.is_empty() || app.forwarded_frame || app.forwarded_modifiers_held {
+            self.app.raw_input_hook(&self.ctx, &mut raw);
+        }
         let app = &mut self.app;
         let mut out = self.ctx.run_ui(raw, |ui| {
             if let Some(id) = menu {
@@ -90,6 +96,10 @@ impl App {
 
 fn press(key: Key, modifiers: Modifiers) -> Event {
     Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+}
+
+fn release(key: Key) -> Event {
+    Event::Key { key, physical_key: None, pressed: false, repeat: false, modifiers: Modifiers::NONE }
 }
 
 fn click(at: Pos2, pressed: bool) -> Event {
@@ -306,9 +316,9 @@ fn clipboard_chord(a: &mut App, e: Event) -> (egui::FullOutput, egui::FullOutput
     (out, a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]))
 }
 
-/// #8432: with a Document Info value's text selected, Copy and Cut (the keys or the menu bar's
-/// items) copy that text and leave the art. With nothing selected in the labels, or when the
-/// selected label is not drawn, Copy copies the art.
+/// #8432: with a Document Info value's text selected, Copy and Cut (Cmd+C and Cmd+X, F3 and F2,
+/// or the menu bar's items) copy that text and leave the art. When the selected label is not
+/// drawn, Copy copies the art.
 #[test]
 fn copy_and_cut_copy_the_text_selected_in_a_panel_label() {
     let mut a = App::new();
@@ -336,45 +346,27 @@ fn copy_and_cut_copy_the_text_selected_in_a_panel_label() {
     assert_eq!(copied(&cut), [length], "Cut on the user's chord copies the selected value");
     assert_eq!(a.selected(), 1, "and leaves the art");
     assert!(a.app.session.clipboard.is_empty(), "no art cut");
+    // Copy and Cut on keys egui sends as key presses (F3 and F2, their keys off macOS).
+    crate::keymap::set_override(&mut a.app.ui.shortcut_overrides, "edit.copy", "F3");
+    crate::keymap::set_override(&mut a.app.ui.shortcut_overrides, "edit.cut", "F2");
+    for (key, what) in [(Key::F3, "Copy"), (Key::F2, "Cut")] {
+        let out = a.frame(vec![press(key, Modifiers::NONE)]);
+        let after = a.frame(vec![release(key)]);
+        assert_eq!(copied(&out), [length], "{what} on {key:?} copies the selected value");
+        assert!(copied(&after).is_empty(), "and nothing after it");
+        assert_eq!(a.selected(), 1, "{what} on {key:?} leaves the art");
+        assert!(a.app.session.clipboard.is_empty(), "no art copied or cut");
+    }
+    // The menu bar's Edit › Copy and Edit › Cut (macOS).
+    for (id, what) in [("edit.copy", "Copy"), ("edit.cut", "Cut")] {
+        let menu = a.menu(id);
+        let after = a.frame(vec![]);
+        assert_eq!(copied(&menu), [length], "the menu's {what} copies the selected value");
+        assert!(copied(&after).is_empty(), "and nothing after it");
+        assert_eq!(a.selected(), 1, "the menu's {what} leaves the art");
+        assert!(a.app.session.clipboard.is_empty(), "no art copied or cut");
+    }
     a.app.ui.shortcut_overrides = overrides;
-    // The menu bar's Edit › Copy (macOS).
-    let menu = a.menu("edit.copy");
-    a.frame(vec![]);
-    assert_eq!(copied(&menu), [length], "the menu's Copy copies the selected value");
-    assert!(a.app.session.clipboard.is_empty(), "no art copied");
-    // The same in a frame that also runs a Copy another window sent on.
-    (a.app.forwarded_frame, a.app.forwarded_clipboard) = (true, true);
-    let menu = a.menu("edit.copy");
-    (a.app.forwarded_frame, a.app.forwarded_clipboard) = (false, false);
-    a.frame(vec![]);
-    assert_eq!(copied(&menu), [length], "the menu's Copy copies the selected value with a Copy sent on");
-    assert!(a.app.session.clipboard.is_empty(), "no art copied");
-    // Cmd+C in a frame that also runs other keys another window sent on (a key let go there).
-    a.app.forwarded_frame = true;
-    let copy = a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), Event::Copy]);
-    a.app.forwarded_frame = false;
-    a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
-    assert_eq!(copied(&copy), [length], "Cmd+C copies the selected value with other keys sent on");
-    assert!(a.app.session.clipboard.is_empty(), "no art copied");
-    // A Copy another window sends on: a floating panel's window whose label copied its text copies
-    // nothing more. From any other window (a floating document's), the art is copied, not the text
-    // still selected in this window's panel.
-    let forward = |a: &mut App| {
-        crate::panel_docking::forward_keys(&mut a.app, &a.ctx, vec![Event::Copy], Some(Modifiers::COMMAND));
-        a.app.forwarded_frame = !a.app.forwarded.is_empty();
-        a.app.forwarded_clipboard = a.app.forwarded_frame;
-        let events = std::iter::once(Event::ModifiersChanged(Modifiers::COMMAND)).chain(std::mem::take(&mut a.app.forwarded)).collect();
-        let out = a.frame(events);
-        (a.app.forwarded_frame, a.app.forwarded_clipboard) = (false, false);
-        (out, a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]))
-    };
-    crate::shortcuts::note_copied_in_window(&a.ctx);
-    let (copy, after) = forward(&mut a);
-    assert!(copied(&copy).is_empty() && copied(&after).is_empty(), "the window copied its own text");
-    assert!(a.app.session.clipboard.is_empty(), "no art copied");
-    let (copy, _) = forward(&mut a);
-    assert!(copied(&copy).iter().all(|t| t != length), "{length} was copied from the other window");
-    assert!(!a.app.session.clipboard.is_empty(), "Copy from the other window copied the art");
     // Tab hides the panels: the selected value is not drawn, so Copy copies the art, a frame later,
     // even when the window has lost the keyboard by then.
     select(&mut a, &out);
@@ -387,14 +379,63 @@ fn copy_and_cut_copy_the_text_selected_in_a_panel_label() {
     assert!(copied(&after).iter().any(|t| t.starts_with("<?xml")), "Copy copied the art");
 }
 
-/// #8432: Copy with a Document Info value's text selected, by its keys or the menu bar's item, drops
-/// the formats an earlier Copy of the art has not written to the system clipboard yet, so they do
-/// not replace the copied value.
+/// #8432: with a Document Info value's text selected, the keys another window sends on (through
+/// the host's raw input hook) copy that text only when they are a Copy of the main window's own or
+/// that window's labels copied it; Copy and F3 from a floating document's window copy the art.
+#[test]
+fn copy_sent_on_from_another_window_copies_the_text_only_when_it_is_this_windows() {
+    let mut a = App::new();
+    let out = show_document_info(&mut a);
+    let length = "234 pt";
+    select_label_text(&mut a, &out, length);
+    crate::keymap::set_override(&mut a.app.ui.shortcut_overrides, "edit.copy", "F3");
+    // The menu bar's Copy in a frame that also runs a Copy another window sent on.
+    crate::panel_docking::forward_keys(&mut a.app, &a.ctx, vec![Event::Copy], Some(Modifiers::COMMAND));
+    let menu = a.menu("edit.copy");
+    a.frame(vec![]);
+    assert_eq!(copied(&menu), [length], "the menu's Copy copies the selected value with a Copy sent on");
+    assert!(a.app.session.clipboard.is_empty(), "no art copied");
+    // Cmd+C in a frame that also runs other keys another window sent on (a key let go there).
+    crate::panel_docking::forward_keys(&mut a.app, &a.ctx, vec![release(Key::A)], None);
+    let copy = a.frame(vec![Event::ModifiersChanged(Modifiers::COMMAND), Event::Copy]);
+    a.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(copied(&copy), [length], "Cmd+C copies the selected value with other keys sent on");
+    assert!(a.app.session.clipboard.is_empty(), "no art copied");
+    // F3 in a frame that also runs another key pressed in another window.
+    crate::panel_docking::forward_keys(&mut a.app, &a.ctx, vec![press(Key::F13, Modifiers::NONE), release(Key::F13)], None);
+    let copy = a.frame(vec![press(Key::F3, Modifiers::NONE)]);
+    a.frame(vec![release(Key::F3)]);
+    assert_eq!(copied(&copy), [length], "F3 copies the selected value with another key sent on");
+    assert!(a.app.session.clipboard.is_empty(), "no art copied");
+    // A Copy another window sends on: a floating panel's window whose label copied its text copies
+    // nothing more. From any other window (a floating document's), the art is copied, not the text
+    // still selected in this window's panel.
+    let forward = |a: &mut App, keys: Vec<Event>, modifiers: Modifiers| {
+        crate::panel_docking::forward_keys(&mut a.app, &a.ctx, keys, Some(modifiers));
+        (a.frame(vec![]), a.frame(vec![]))
+    };
+    crate::shortcuts::note_copied_in_window(&a.ctx);
+    let (copy, after) = forward(&mut a, vec![Event::Copy], Modifiers::COMMAND);
+    assert!(copied(&copy).is_empty() && copied(&after).is_empty(), "the window copied its own text");
+    assert!(a.app.session.clipboard.is_empty(), "no art copied");
+    let (copy, _) = forward(&mut a, vec![Event::Copy], Modifiers::COMMAND);
+    assert!(copied(&copy).iter().all(|t| t != length), "{length} was copied from the other window");
+    assert!(!a.app.session.clipboard.is_empty(), "Copy from the other window copied the art");
+    // F3 sent on from another window copies the art too.
+    let (copy, after) = forward(&mut a, vec![press(Key::F3, Modifiers::NONE), release(Key::F3)], Modifiers::NONE);
+    assert!(copied(&copy).iter().chain(&copied(&after)).all(|t| t != length), "{length} was copied by F3 from the other window");
+    assert!(copied(&copy).iter().chain(&copied(&after)).any(|t| t.starts_with("<?xml")), "F3 from the other window copied the art");
+}
+
+/// #8432: Copy or Cut with a Document Info value's text selected, by its keys or the menu bar's
+/// item, drops the formats an earlier Copy of the art has not written to the system clipboard yet,
+/// so they do not replace the copied value.
 #[test]
 fn panel_text_copied_before_the_art_formats_are_written_stays_on_the_clipboard() {
-    // `menu`: the menu bar's Edit › Copy (macOS) while the window does not have the keyboard,
-    // else Cmd+C.
-    for menu in [false, true] {
+    // `menu`: the menu bar's item (macOS) while the window does not have the keyboard, else the
+    // keys (Cmd+C, Cmd+X).
+    for (menu, cut) in [(false, false), (false, true), (true, false), (true, true)] {
+        let (id, event) = if cut { ("edit.cut", Event::Cut) } else { ("edit.copy", Event::Copy) };
         let (app, board, hold) = super::sysclip::app_with_busy_worker("");
         let mut a = App { app, ctx: egui::Context::default(), time: 0.0, focused: true };
         super::sysclip::copy_rect(&mut a.app);
@@ -404,16 +445,17 @@ fn panel_text_copied_before_the_art_formats_are_written_stays_on_the_clipboard()
         select_label_text(&mut a, &out, length);
         let copy = if menu {
             a.focused = false;
-            let copy = a.menu("edit.copy");
+            let copy = a.menu(id);
             a.focused = true;
             copy
         } else {
-            clipboard_chord(&mut a, Event::Copy).0
+            clipboard_chord(&mut a, event).0
         };
-        assert_eq!(copied(&copy), [length], "Copy copies the selected value (menu: {menu})");
+        assert_eq!(copied(&copy), [length], "{id} copies the selected value (menu: {menu})");
+        assert_eq!(a.selected(), 1, "{id} leaves the art (menu: {menu})");
         drop(hold);
         crate::background::wait_all(&mut a.app);
-        assert_eq!(super::sysclip::writes(&board), 0, "the art's formats were not written over it (menu: {menu})");
+        assert_eq!(super::sysclip::writes(&board), 0, "the art's formats were not written over it ({id}, menu: {menu})");
     }
 }
 
