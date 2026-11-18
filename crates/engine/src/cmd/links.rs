@@ -33,7 +33,7 @@ use vectorcraft_doc::{
     Appearance, DataValue, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions,
     StoredPlace, StoredRoot,
 };
-use vectorcraft_geom::{Affine, FillRule, PathData, Rect, shapes};
+use vectorcraft_geom::{Affine, FillRule, Homography, PathData, Rect, shapes};
 
 use super::fileio::{self, RasterImage, absolute_path, file_created, file_stamp, read_file, write_file};
 use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, ids_param, object_param, str_param, switch_or, text_param};
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs, patterns and the art of stored brushes) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs, patterns and the art of stored brushes) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. An image changed by Perspective Distort or Free Distort keeps its corners, with the new file's pixels between them, whatever preserve or its Placement Options say; the clipping path its file names is drawn through the corners. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's)}",
             has_doc,
             relink
         ),
@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Embed Image",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected linked ones)} break the links (the Links panel's Break Link): images keep the linked files' pixels in the document; a placed document becomes an editable copy of its art, as placing its file without link gives (its symbols, patterns, swatches and images joining the document). An image whose file can't be found and that shows the saved preview, or a placed document whose file can't be read or changed, stays linked: relink or update it first. An image placed from a DCS file can't be embedded (an error, and nothing changes). One undo step → {embedded: [ids], missing: [ids]}",
+            "{ids?: [image or placed document ids] (default: the selected linked ones)} break the links (the Links panel's Break Link): images keep the linked files' pixels in the document; a placed document becomes an editable copy of its art, as placing its file without link gives (its symbols, patterns, swatches and images joining the document). An image whose file can't be found and that shows the saved preview, or a placed document whose file can't be read or changed, stays linked: relink or update it first. An image placed from a DCS file can't be embedded (an error, and nothing changes). An image changed by Perspective Distort or Free Distort keeps its corners. One undo step → {embedded: [ids], missing: [ids]}",
             has_doc,
             embed
         ),
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unembed",
             [],
             None,
-            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds. One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
+            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds (an image changed by Perspective Distort or Free Distort keeps its corners); written as stored, an image from a PSD or PSB file keeps the clip group of the clipping path that file names, and the file written keeps the path for later reads. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds (a distorted image its corners). One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
             has_doc,
             unembed
         ),
@@ -634,7 +634,8 @@ pub(crate) fn readable_and_kept(blob: ImageBlob, unread: bool, linked: bool) -> 
 
 /// The linked image file `bytes` (read from `path`, when there is one), read with its preview: a
 /// DCS file's plates, else its image ([`super::place::dcs::raster`]); an error when its pixels
-/// can't be read ([`readable`]).
+/// can't be read ([`readable`]). A PNG or TIFF written from a PSD or PSB file's image (by Unembed)
+/// comes with the clipping path it keeps ([`fileio::raster_image`]).
 fn linked_image(bytes: &[u8], path: Option<&str>) -> Result<RasterImage> {
     let mut img = super::place::dcs::raster(bytes, path)?;
     img.blob = readable(img.blob, kept_unread(bytes), true)?;
@@ -791,13 +792,20 @@ fn clip_to(
     new_xf: Affine,
     held: Option<(&PathData, FillRule)>,
 ) -> ClipTo {
+    let old = old_clip.filter(|_| held.is_some()).map(|(path, rule)| (path.transformed(old_xf), *rule));
+    let file = img.clip.as_ref().map(|(path, rule)| (path.transformed(new_xf), *rule));
+    placed_clip_to(old.as_ref(), clip, file, held)
+}
+
+/// [`clip_to`] with the clipping paths of the old file (`old`) and of the new file (`file`) already
+/// on the page.
+fn placed_clip_to(old: Option<&FileClip>, clip: Option<Clip>, file: Option<FileClip>, held: Option<(&PathData, FillRule)>) -> ClipTo {
     // Whether the clip group holding just the image is the old file's: a clipping path whose fill
     // rule was changed in the document is not.
-    let file_held = match (old_clip, held) {
-        (Some((old, old_rule)), Some((held, rule))) => rule == *old_rule && same_path(&old.transformed(old_xf), held),
+    let file_held = match (old, held) {
+        (Some((old, old_rule)), Some((held, rule))) => rule == *old_rule && same_path(old, held),
         _ => false,
     };
-    let file = img.clip.as_ref().map(|(path, rule)| (path.transformed(new_xf), *rule));
     if let Some(clip) = clip {
         let placement = clip_shape(clip);
         return match file {
@@ -1210,14 +1218,43 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
     install(d, &[id], read, Some(Preserve::Bounds), None)
 }
 
-/// Distorted image `im` shows the file read for `link` (`img`) and keeps its corners and its
-/// clipping: the new pixels fill them. Its transform is scaled to the new pixel size, so a reader
-/// that places it by the transform still gives it its old size.
-fn refill_distorted(im: &mut ImageObject, link: &LinkInfo, img: &RasterImage) {
-    if (img.width, img.height) != (im.width, im.height) && img.width > 0 && img.height > 0 {
-        im.xf *= Affine::scale_non_uniform(f64::from(im.width) / f64::from(img.width), f64::from(im.height) / f64::from(img.height));
+/// Distorted image `n` shows the file read for `link` (`img`) and keeps its corners: the new pixels
+/// fill them. Its transform is scaled to the new pixel size, so a reader that places it by the
+/// transform still gives it its old size. Its Placement Options do not apply. The result is what
+/// happens to its clip, as [`clip_to`] decides from the clipping path of the clip group holding
+/// just it (`held`): the clipping paths of its old file (`old_clip`, in its old pixels) and of the
+/// new file are mapped to the page through its corners, anchors and handles alike, as a distort
+/// maps a path's.
+fn refill_distorted(n: &mut Node, old_clip: Option<&FileClip>, link: &LinkInfo, img: &RasterImage, held: Option<(&PathData, FillRule)>) -> ClipTo {
+    let old = old_clip.filter(|_| held.is_some()).and_then(|(path, rule)| Some((warped(path, &n.image_map()?)?, *rule)));
+    if let NodeKind::Image(im) = &mut n.kind {
+        if (img.width, img.height) != (im.width, im.height) && img.width > 0 && img.height > 0 {
+            im.xf *= Affine::scale_non_uniform(f64::from(im.width) / f64::from(img.width), f64::from(im.height) / f64::from(img.height));
+        }
+        (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
     }
-    (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
+    let file = img.clip.as_ref().and_then(|(path, rule)| Some((warped(path, &n.image_map()?)?, *rule)));
+    placed_clip_to(old.as_ref(), None, file, held)
+}
+
+/// `path` with its anchors and handles mapped through `map` as a distort maps a path's points
+/// (`xform::Projective::apply`): a point on the map's horizon is mapped as if a billionth in front
+/// of it, and one past it to the far side. `None` when a point maps to no finite page point.
+fn warped(path: &PathData, map: &Homography) -> Option<PathData> {
+    let [[a, b, c], [d, e, f], [g, h, i]] = map.0;
+    let apply = |p: vectorcraft_geom::Point| {
+        let w = g * p.x + h * p.y + i;
+        let w = if w.abs() < 1e-9 { 1e-9_f64.copysign(w) } else { w };
+        let q = vectorcraft_geom::Point::new((a * p.x + b * p.y + c) / w, (d * p.x + e * p.y + f) / w);
+        q.is_finite().then_some(q)
+    };
+    let mut out = path.clone();
+    for sp in &mut out.subpaths {
+        for anchor in &mut sp.anchors {
+            (anchor.p, anchor.h_in, anchor.h_out) = (apply(anchor.p)?, apply(anchor.h_in)?, apply(anchor.h_out)?);
+        }
+    }
+    Some(out)
 }
 
 /// Image objects `ids` (in the layers or outside them) show the file read for `link` (`img`), each
@@ -1244,12 +1281,15 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
         let mut make = |n: &Node, held: Option<(&PathData, FillRule)>| {
             let mut n = n.clone();
             let mut clip = ClipTo::Keep;
-            let distorted = n.is_distorted_image();
+            if n.is_distorted_image() {
+                let old_clip = match &n.kind {
+                    NodeKind::Image(im) => old.get(&im.key).and_then(|(_, clip)| clip.clone()),
+                    _ => None,
+                };
+                let clip = refill_distorted(&mut n, old_clip.as_ref(), &link, &img, held);
+                return (n, clip);
+            }
             if let NodeKind::Image(im) = &mut n.kind {
-                if distorted {
-                    refill_distorted(im, &link, &img);
-                    return (n, clip);
-                }
                 let o = PlacementOptions { preserve: force.unwrap_or(im.placement.preserve), ..im.placement };
                 let size = |w: u32, h: u32| (w as f64, h as f64);
                 let (old_pt, old_clip) = match old.get(&im.key) {
@@ -1266,10 +1306,13 @@ fn install(d: &mut Document, ids: &[NodeId], (link, img): FileRead, force: Optio
     }
     for id in ids {
         if d.node(*id).is_some_and(Node::is_distorted_image) {
-            if let Some(n) = d.node_mut(*id)
-                && let NodeKind::Image(im) = &mut n.kind
-            {
-                refill_distorted(im, &link, &img);
+            let old_clip = match d.node(*id).map(|n| &n.kind) {
+                Some(NodeKind::Image(im)) => d.images.get(&im.key).and_then(file_clip),
+                _ => None,
+            };
+            let held = clip_path_of(d, *id).map(|(path, rule)| (path.clone(), rule));
+            if let Some(n) = d.node_mut(*id) {
+                clips.push((*id, refill_distorted(n, old_clip.as_ref(), &link, &img, held.as_ref().map(|(path, rule)| (path, *rule)))));
             }
             continue;
         }
@@ -2153,11 +2196,6 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         }
         (None, None, None) => return Err(bad(C, "give path (a file) or folder")),
     }
-    // A new file's placement options place a plain image: a distorted one is left as it is.
-    let distorted = files.iter().flat_map(|(ids, _)| ids).find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image));
-    if let Some(id) = distorted {
-        return Err(super::xform::distorted_image_error(C, *id));
-    }
     // Every file is read and checked before any is copied.
     let mut checked = vec![];
     for (ids, path) in files {
@@ -2620,9 +2658,6 @@ fn embed(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select the linked images or placed documents, or pass ids"));
     }
-    if let Some(id) = ids.iter().find(|id| stored(&doc, **id).is_some_and(Node::is_distorted_image)) {
-        return Err(super::xform::distorted_image_error(C, *id));
-    }
     // A DCS file's plates print from its file.
     let separated = |id: &NodeId| match kind(id) {
         Some(NodeKind::Image(im)) => st.doc.images.get(&im.key).is_some_and(ImageBlob::is_separated),
@@ -2750,9 +2785,6 @@ fn unembed(s: &mut Session, p: &Value) -> Result<Value> {
     let im = image_of(&doc, id).ok_or_else(|| bad(C, format!("object {} is not an image", id.0)))?;
     if im.link.is_some() {
         return Err(bad(C, format!("image {} is linked already", id.0)));
-    }
-    if n.is_distorted_image() {
-        return Err(super::xform::distorted_image_error(C, id));
     }
     let blob = st.doc.images.get(&im.key).filter(|b| !b.is_proxy()).ok_or_else(|| bad(C, "the image's pixels aren't in the document"))?;
     // As stored (PNG, JPEG, GIF, WebP), unless the path names another format.
@@ -3123,5 +3155,24 @@ mod tests {
         }
         let long = unembed_stem(&"é".repeat(200));
         assert!(long.len() <= 150 && long.chars().all(|c| c == 'é'), "{}", long.len());
+    }
+
+    /// A clipping path mapped through a distorted image's corners keeps the points that lie on or
+    /// past the map's horizon, each mapped as a distort maps a path's point.
+    #[test]
+    fn points_past_the_horizon_are_mapped_as_a_distort_maps_them() {
+        use vectorcraft_geom::{Anchor, Point, SubPath};
+        // w = 1 + x / 100: the horizon is the line x = -100.
+        let map = Homography([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.01, 0.0, 1.0]]);
+        let (at, handle, on) = (Point::new(0.0, 0.0), Point::new(-200.0, 0.0), Point::new(-100.0, 5.0));
+        assert!(map.apply(handle).is_none() && map.apply(on).is_none());
+        let path = PathData::new(vec![SubPath::new(vec![Anchor::smooth(at, handle), Anchor::corner(on)], false)]);
+        let out = warped(&path, &map).expect("a path");
+        let (first, second) = (out.subpaths[0].anchors[0], out.subpaths[0].anchors[1]);
+        assert_eq!((first.p, first.h_in), (at, Point::new(200.0 / 3.0, 0.0)));
+        // w = -1: the handle maps to the far side.
+        assert_eq!(first.h_out, Point::new(200.0, 0.0));
+        // w = 0 is taken as a billionth.
+        assert!(second.p.is_finite() && (second.p.x.abs() - 1e11).abs() < 1.0 && (second.p.y.abs() - 5e9).abs() < 1.0, "{:?}", second.p);
     }
 }

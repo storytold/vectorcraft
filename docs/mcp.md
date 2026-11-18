@@ -6662,12 +6662,14 @@ rules opens with the image placed by its transform. A drag is one undo step, and
 where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
 Info (`links.info`) gives its scale and rotation there.
 
-Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Relink (`links.relink`),
-Embed (`links.embed`), Unembed (`links.unembed`), Create Object Mosaic (`object.createObjectMosaic`), Create
-Gradient Mesh (`object.mesh.create`) and Place with Replace (`file.place` with `replace`) refuse a distorted image with
-an error that names the distortion. Update Links (`links.update`) puts a changed file's pixels between a distorted
-image's corners, without applying its Placement Options. Mask (`object.maskImage`) draws its clipping path through the
-image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the
+Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Create Object Mosaic
+(`object.createObjectMosaic`), Create Gradient Mesh (`object.mesh.create`) and Place with Replace (`file.place` with
+`replace`) refuse a distorted image with an error that names the distortion. Update Links (`links.update`) and Relink
+(`links.relink`) put the file's pixels between a distorted image's corners, without applying its Placement Options or
+Relink's `preserve`. The clipping path a PSD, PSB or DCS file names is drawn through the corners: a clip group of the
+old file's clipping path takes the new file's, or becomes a plain group when the new file names none. Embed
+(`links.embed`) and Unembed (`links.unembed`) keep the corners, each in one undo step. Mask (`object.maskImage`) draws
+its clipping path through the image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the
 result. These rules are VectorCraft's own.
 
 ```json
@@ -8773,7 +8775,9 @@ every object in the layers each time the list is read. A `dcsTransparency` that 
 `links.goTo {id}` selects an image (`onCanvas: true`); for an object outside the layer tree it clears the selection and
 returns `{id, onCanvas: false, owner}`, and the panel says the link has no place on the canvas. `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
-(another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
+(another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`. An image from a PSD
+or PSB file written as stored (PNG, or TIFF for a CMYK file) keeps the clip group of the clipping path that file
+names, and the file written keeps the path for Place, Relink and Update Links.
 `ids` of one image works as `id` does. `links.unembed {ids?, folder}` writes each embedded image of `ids` (or of
 `id`; default: the selected embedded images) to a new
 file in `folder`, in the format it is stored in (as PNG when that format is not one of VectorCraft's raster file formats), and links each image to its file, keeping its bounds, in one undo

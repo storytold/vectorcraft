@@ -723,9 +723,6 @@ fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
     for (cmd, params) in [
         ("object.cropImage", json!({})),
         ("imageTrace.make", json!({})),
-        ("links.relink", json!({"path": "/nowhere/pic.png"})),
-        ("links.embed", json!({"ids": [img.0]})),
-        ("links.unembed", json!({})),
         ("object.createObjectMosaic", json!({})),
         ("object.mesh.create", json!({})),
         (
