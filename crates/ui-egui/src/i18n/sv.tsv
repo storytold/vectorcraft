@@ -6623,6 +6623,11 @@ theme	Appearance	Utseende
 	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Stäng de cirkulära ändarna på öppna profiler. Partiella svep stänger även sina snittsidor.
 	Color Panel Options	Alternativ för panelen Färg
 	Color blindness – Tritanopia-type	Färgblindhet – tritanopi
+	Show Color Vision Preview	Visa förhandsvisning av färgseende
+	Protanopia	Protanopi
+	Deuteranopia	Deuteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Create Dimension	Skapa mått
 	Darkness	Mörkhet
 	Destination Folder:	Målmapp:
