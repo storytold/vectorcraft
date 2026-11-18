@@ -411,6 +411,14 @@ impl Tool for TangentCircleTool {
             self.radius = r;
         }
     }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "radius" => c::number(key, v, RADIUS_RANGE.0, RADIUS_RANGE.1),
+            _ => Err(c::unknown(key)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -516,11 +524,17 @@ mod tests {
         let mut t = TangentCircleTool::default();
         t.set_option("radius", &json!(10));
         assert_eq!(t.options()["radius"], json!(10.0));
-        // A value outside 0.01 to 1000000, or not a number, leaves the radius as it is.
+        // `tool.setOption` refuses a value outside 0.01 to 1000000, or one that is not a number,
+        // and any other option; set anyway, such a value leaves the radius as it is.
+        for good in [json!(0.01), json!(36), json!(1e6)] {
+            assert_eq!(t.check_option("radius", &good), Ok(()), "{good}");
+        }
         for bad in [json!(0), json!(0.005), json!(2e6), json!(-5), json!("12"), Value::Null] {
+            assert_eq!(t.check_option("radius", &bad), Err("`radius` must be a number from 0.01 to 1000000".into()), "{bad}");
             t.set_option("radius", &bad);
             assert_eq!(t.options()["radius"], json!(10.0), "{bad}");
         }
+        assert!(t.check_option("size", &json!(10)).is_err());
         // The L's two segments: the circle of radius 10 in its corner.
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 300.0));
         t.pointer(&cx, &ev(PointerKind::Up, 150.0, 300.0));

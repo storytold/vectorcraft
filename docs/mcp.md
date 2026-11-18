@@ -13212,8 +13212,8 @@ Tools:
   nothing and the first segment stays picked; it also stays when drawing the circle fails or the press on the second
   segment is canceled (a canceled touch). Escape, an edit, Undo or Redo outside the tool, or another document forgets
   the first segment.
-  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). The value is not
-  checked yet: one outside that range, or not a number, leaves the radius as it is.
+  Option (`tool.setOption`, or a double-click on the tool): `radius` (pt, 0.01 to 1000000, 36). `tool.setOption`
+  gives an error for a value outside that range or one that is not a number, and for any other option.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
