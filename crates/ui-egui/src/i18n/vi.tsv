@@ -963,6 +963,7 @@ font-technology	Variable	Biến thiên
 	Duplicate Action or Action Set	Nhân bản hành động hoặc bộ hành động
 	Delete the action set “{name}” and its actions?	Xóa bộ hành động “{name}” và các hành động của nó?
 	Delete the selected action sets and their actions?	Xóa các bộ hành động đã chọn và các hành động của chúng?
+	Delete all action sets and their actions?	Xóa tất cả các bộ hành động và các hành động của chúng?
 	Delete the library “{name}”?	Xóa thư viện “{name}”?
 	Delete Theme	Xóa bộ màu
 	Delete theme	Xóa bộ màu
@@ -3028,6 +3029,7 @@ diagnostics	ui	giao diện
 	Save Actions…	Lưu hành động…
 	Load Actions…	Tải hành động…
 	Replace Actions…	Thay thế hành động…
+	Clear Actions	Xóa hết hành động
 	Reset Actions	Đặt lại hành động
 	Replace the current actions with the default set?	Thay thế các hành động hiện tại bằng bộ mặc định?
 	Append adds the default set after the current sets instead.	Nối thêm sẽ thêm bộ mặc định vào sau các bộ hiện tại.

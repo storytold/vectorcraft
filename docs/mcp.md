@@ -4147,6 +4147,16 @@ already walks Image Trace. Short agent entry points:
   records or plays (also while it waits at a stop) is an error and changes nothing. Reset records no undo step. The panel menu's Reset
   Actions is disabled while an action records or plays; it opens a `resetActions` question (fields `message`,
   `detail`, `append`): OK runs this with `replace`, Append with `append`, and `ui.dialog.cancel` changes nothing.
+  `ui.actionSet.clear {ids?: [id]}` is Clear Actions, and returns `{cleared}`, the number of sets deleted. It deletes
+  every set in the panel with its actions, the built-in Default Actions set included, so no set is current or
+  selected; the panel's selected action and step and its expanded actions are cleared, and an open Set Options, New
+  Action, Batch or step dialog that names a set closes. `ids` holds the panel's own set ids in panel order, which the
+  menu's question passes: when the sets are no longer exactly those, the command returns an error and deletes no set.
+  With no sets, nothing changes and `cleared` is 0. Omitted params count as `{}`. Params of another type, another key,
+  `ids` that is not a list of ids, or a clear while an action records or plays (also while it waits at a stop) is an
+  error and changes nothing. Clear records no undo step, and an empty panel stays empty after a restart. The panel
+  menu's Clear Actions is disabled with no sets and while an action records or plays; it opens a `confirm` question,
+  OK runs this, and `ui.dialog.cancel` changes nothing. These are VectorCraft's own rules.
 - Image Trace: `imageTrace.presets`, `imageTrace.make {id?, preset?, params?, view?}` (or `imageTrace.makeAndExpand`),
   `imageTrace.setView`, `imageTrace.expand`, `imageTrace.release`. A key inside `params` that is not one of the trace
   settings, such as `colours`, is an error that names it and the nearest setting (`colors`), as for a command's own keys.

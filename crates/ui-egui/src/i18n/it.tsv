@@ -834,6 +834,7 @@ font-technology	Variable	Variabili
 	Duplicate Action or Action Set	Duplica azione o set di azioni
 	Delete the action set “{name}” and its actions?	Eliminare il set di azioni “{name}” e le sue azioni?
 	Delete the selected action sets and their actions?	Eliminare i set di azioni selezionati e le loro azioni?
+	Delete all action sets and their actions?	Eliminare tutti i set di azioni e le loro azioni?
 	Delete Theme	Elimina tema
 	Delete theme	Elimina tema
 	Delete these {n} graphic styles?	Eliminare questi {n} stili grafici?
@@ -2718,6 +2719,7 @@ diagnostics	ui	interfaccia
 	Save Actions…	Salva azioni…
 	Load Actions…	Carica azioni…
 	Replace Actions…	Sostituisci azioni…
+	Clear Actions	Cancella azioni
 	Reset Actions	Ripristina azioni
 	Replace the current actions with the default set?	Sostituire le azioni correnti con il set predefinito?
 	Append adds the default set after the current sets instead.	Aggiungi aggiunge invece il set predefinito dopo i set correnti.

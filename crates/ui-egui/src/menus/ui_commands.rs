@@ -1665,6 +1665,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{mode?: \"replace\" | \"append\"} Reset Actions. replace (the default) replaces every set in the Actions panel with a new copy of the built-in Default Actions set, makes it current and selected, clears the panel's selected action and step and its expanded actions, and closes an open Set Options, New Action, Batch or step dialog that names a set; when the panel already shows only the built-in set as it comes in that state, nothing changes, the sets keep their ids and changed is false. append adds a new copy of the built-in set after the sets there are, with the next free number when its name is in use (Default Actions 2), and keeps the current set and the selection. Omitted params count as {}. Params of another type, another key, another mode, or a reset while an action records or plays (also while it waits at a stop) is an error and changes nothing. No undo step is recorded. The panel menu's Reset Actions asks first (dialog `resetActions`): OK runs this with replace, Append with append → {changed, mode, set: the first built-in set's index}",
     ),
+    (
+        crate::panels::actions::CLEAR,
+        "Clear Actions",
+        "",
+        "{ids?: [id]} Clear Actions: delete every set in the Actions panel with its actions, the built-in Default Actions set included, so no set is current or selected; the panel's selected action and step and its expanded actions are cleared, and an open Set Options, New Action, Batch or step dialog that names a set closes. ids holds the panel's own set ids in panel order, which the menu's question passes: when the sets are no longer exactly those, nothing is deleted. With no sets, nothing changes and cleared is 0. Omitted params count as {}. Params of another type, another key, ids that is not a list of ids, or a clear while an action records or plays (also while it waits at a stop) is an error and changes nothing. No undo step is recorded. The panel menu's Clear Actions (disabled with no sets and while an action records or plays) asks first, and OK runs this → {cleared: the number of sets deleted}",
+    ),
     ("file.showPackage", "Show Package", "", "{folder} show a package folder (file.package's folder) in the file manager → {folder}"),
     (
         "docInfo.save",

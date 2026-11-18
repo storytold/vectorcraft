@@ -813,6 +813,7 @@ font-technology	Variable	Variabel
 	Duplicate Action or Action Set	Aktion oder Aktionssatz duplizieren
 	Delete the action set “{name}” and its actions?	Aktionssatz „{name}“ und seine Aktionen löschen?
 	Delete the selected action sets and their actions?	Ausgewählte Aktionssätze und ihre Aktionen löschen?
+	Delete all action sets and their actions?	Alle Aktionssätze und ihre Aktionen löschen?
 	Delete Theme	Thema löschen
 	Delete theme	Thema löschen
 	Delete these {n} graphic styles?	Diese {n} Grafikstile löschen?
@@ -2637,6 +2638,7 @@ diagnostics	ui	Oberfläche
 	Save Actions…	Aktionen speichern…
 	Load Actions…	Aktionen laden…
 	Replace Actions…	Aktionen ersetzen…
+	Clear Actions	Aktionen löschen
 	Reset Actions	Aktionen zurücksetzen
 	Replace the current actions with the default set?	Aktuelle Aktionen durch den Standardsatz ersetzen?
 	Append adds the default set after the current sets instead.	Mit „Anhängen“ wird der Standardsatz stattdessen nach den aktuellen Sätzen hinzugefügt.

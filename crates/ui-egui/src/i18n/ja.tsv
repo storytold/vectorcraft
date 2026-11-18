@@ -1527,6 +1527,7 @@ antiAlias	Sharp	シャープ
 	Duplicate Action or Action Set	アクションまたはアクションセットを複製
 	Delete the action set “{name}” and its actions?	アクションセット「{name}」とそのアクションを削除しますか？
 	Delete the selected action sets and their actions?	選択したアクションセットとそのアクションを削除しますか？
+	Delete all action sets and their actions?	すべてのアクションセットとそのアクションを削除しますか？
 	Delete theme	テーマを削除
 	Delete this saved preset	この保存済みプリセットを削除
 	Delete {kind} Style	{kind}スタイルを削除
@@ -2807,6 +2808,7 @@ diagnostics	ui	UI
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
 	Replace Actions…	アクションを置き換え…
+	Clear Actions	アクションを消去
 	Reset Actions	アクションをリセット
 	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
 	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。

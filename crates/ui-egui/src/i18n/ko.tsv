@@ -1517,6 +1517,7 @@ antiAlias	Sharp	날카롭게
 	Duplicate Action or Action Set	액션 또는 액션 세트 복제
 	Delete the action set “{name}” and its actions?	액션 세트 “{name}”과(와) 해당 액션을 삭제하시겠습니까?
 	Delete the selected action sets and their actions?	선택한 액션 세트와 해당 액션을 삭제하시겠습니까?
+	Delete all action sets and their actions?	모든 액션 세트와 해당 액션을 삭제하시겠습니까?
 	Delete theme	테마 삭제
 	Delete this saved preset	저장된 이 프리셋 삭제
 	Delete {kind} Style	{kind} 스타일 삭제
@@ -2797,6 +2798,7 @@ diagnostics	ui	UI
 	Save Actions…	액션 저장…
 	Load Actions…	액션 불러오기…
 	Replace Actions…	액션 바꾸기…
+	Clear Actions	액션 지우기
 	Reset Actions	액션 재설정
 	Replace the current actions with the default set?	현재 액션을 기본 세트로 바꾸시겠습니까?
 	Append adds the default set after the current sets instead.	추가를 누르면 대신 기본 세트를 현재 세트 뒤에 추가합니다.

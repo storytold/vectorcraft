@@ -796,6 +796,7 @@ font-technology	Variable	可變
 	Duplicate Action or Action Set	製作動作或動作組複本
 	Delete the action set “{name}” and its actions?	要刪除動作組「{name}」及其中的動作嗎？
 	Delete the selected action sets and their actions?	要刪除所選動作組及其中的動作嗎？
+	Delete all action sets and their actions?	要刪除所有動作組及其中的動作嗎？
 	Delete Theme	刪除主題
 	Delete theme	刪除主題
 	Delete these {n} graphic styles?	要刪除這 {n} 個繪圖樣式嗎？
@@ -3857,6 +3858,7 @@ diagnostics	ui	介面
 	Save Actions…	儲存動作…
 	Load Actions…	載入動作…
 	Replace Actions…	取代動作…
+	Clear Actions	清除動作
 	Reset Actions	重設動作
 	Replace the current actions with the default set?	要用預設動作組取代目前的動作嗎？
 	Append adds the default set after the current sets instead.	「附加」會改為將預設動作組加到目前動作組之後。

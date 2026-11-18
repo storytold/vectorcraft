@@ -749,6 +749,7 @@ antiAlias	Sharp	Nítido
 	Duplicate Action or Action Set	Duplicar Ação ou Conjunto de Ações
 	Delete the action set “{name}” and its actions?	Excluir o conjunto de ações “{name}” e suas ações?
 	Delete the selected action sets and their actions?	Excluir os conjuntos de ações selecionados e suas ações?
+	Delete all action sets and their actions?	Excluir todos os conjuntos de ações e suas ações?
 	Delete theme	Excluir tema
 	Delete this saved preset	Excluir este predefinido salvo
 	Delete {kind} Style	Excluir Estilo de {kind}
@@ -2213,6 +2214,7 @@ antiAlias	Sharp	Nítido
 	Save Actions…	Salvar Ações…
 	Load Actions…	Carregar Ações…
 	Replace Actions…	Substituir Ações…
+	Clear Actions	Limpar Ações
 	Reset Actions	Redefinir Ações
 	Replace the current actions with the default set?	Substituir as ações atuais pelo conjunto padrão?
 	Append adds the default set after the current sets instead.	Anexar adiciona o conjunto padrão depois dos conjuntos atuais.

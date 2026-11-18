@@ -818,6 +818,7 @@ font-technology	Variable	Variables
 	Duplicate Action or Action Set	Dupliquer le script ou le jeu de scripts
 	Delete the action set “{name}” and its actions?	Supprimer le jeu de scripts « {name} » et ses scripts ?
 	Delete the selected action sets and their actions?	Supprimer les jeux de scripts sélectionnés et leurs scripts ?
+	Delete all action sets and their actions?	Supprimer tous les jeux de scripts et leurs scripts ?
 	Delete Slices	Supprimer les tranches
 	Delete Spine Point	Supprimer le point de la dorsale
 	Delete Stop	Supprimer l’étape de dégradé
@@ -2666,6 +2667,7 @@ font-technology	Variable	Variables
 	Save Actions…	Enregistrer les scripts…
 	Load Actions…	Charger des scripts…
 	Replace Actions…	Remplacer les scripts…
+	Clear Actions	Effacer les scripts
 	Reset Actions	Réinitialiser les scripts
 	Replace the current actions with the default set?	Remplacer les scripts actuels par le jeu par défaut ?
 	Append adds the default set after the current sets instead.	Le bouton Ajouter ajoute plutôt le jeu par défaut après les jeux actuels.
