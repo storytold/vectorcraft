@@ -1260,6 +1260,191 @@ fn a_style_pattern_fill_is_placed_as_a_direct_one() {
     }
 }
 
+/// An art style `Stacked` whose stack holds `filters` (basic filters, top first).
+fn stacked_style(filters: &[String]) -> String {
+    format!(
+        "%AI9_BeginArtStyles\n/KnownStyle :\n(Stacked) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+         /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{}\
+         /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n",
+        filters.concat()
+    )
+}
+
+/// A fill filter painting with `paint` (operators).
+fn fill_filter(paint: &str) -> String {
+    format!(
+        "/BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n{paint}\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n"
+    )
+}
+
+/// A black stroke filter `width` wide.
+fn stroke_filter(width: f64) -> String {
+    format!(
+        "/BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n\
+         /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j {width} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n"
+    )
+}
+
+/// The layers of a file whose object (`own`, on `%_` lines) has the style `Stacked` and the drawn
+/// look `look`.
+fn stacked_object(look: &str, own: &str) -> String {
+    let own: String = own.lines().map(|l| format!("%_{l}\n")).collect();
+    layer(&format!("0 Ae\nu\n{look}U\n{own}1 (Stacked) XW\n"))
+}
+
+/// The pattern placement of `n`'s fill painting with a pattern.
+fn pattern_xf(n: &Node) -> [f64; 6] {
+    n.appearance
+        .items
+        .iter()
+        .find_map(|i| match i.paint() {
+            Paint::Pattern { xf, .. } => Some(xf.as_coeffs()),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no pattern fill: {:?}", n.appearance.items))
+}
+
+/// A path or compound path whose art style fills it with a pattern (as a stack of fills and strokes
+/// can) comes in as itself with that fill, the pattern placed where the drawn look places it (not
+/// where the style's own operands would), among the style's other fills and strokes in their order.
+#[test]
+fn a_path_with_a_style_pattern_fill_comes_in_as_the_path_with_it() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let hole = rect_path(30.0, 40.0, 50.0, 60.0);
+    // The style's operands and the look's differ: the look's placement is taken.
+    let (style_ops, look_ops) = ("0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]", "25 30 1.5 .75 30 1 45 10 0 [.8 .1 -.2 1.1 4 -6]");
+    let pattern = fill_filter(&format!("(Dots) {style_ops} p"));
+    let look_xf = |shape: &str| {
+        let direct = read_ok(&format!("{DOTS}{}", layer(&format!("(Dots) {look_ops} p\n{shape}f\n"))));
+        pattern_xf(&art(&direct.doc)[0])
+    };
+    let close = |a: [f64; 6], b: [f64; 6]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-9);
+    // The style's operands alone would place it elsewhere.
+    let style_xf = pattern_xf(&art(&read_ok(&format!("{DOTS}{}", layer(&format!("(Dots) {style_ops} p\n{rect}f\n")))).doc)[0]);
+    assert!(!close(style_xf, look_xf(&rect)), "{style_xf:?}");
+    // A path filled with the pattern alone.
+    let look = format!("(Dots) {look_ops} p\n{rect}f\n");
+    let r = read_ok(&format!("{}{DOTS}{}", stacked_style(std::slice::from_ref(&pattern)), stacked_object(&look, &format!("{rect}n"))));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Path { .. })), "the path: {a:#?} {:?}", r.warnings);
+    assert!(close(pattern_xf(&a[0]), look_xf(&rect)), "{:?} {:?}", pattern_xf(&a[0]), look_xf(&rect));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A compound path, the pattern over a solid fill and under a 3 unit stroke.
+    let style = stacked_style(&[stroke_filter(3.0), pattern.clone(), fill_filter("0 1 1 0 1 0 0 Xa")]);
+    let look = format!("{RED}*u\n{rect}f\n{hole}f\n*U\n(Dots) {look_ops} p\n*u\n{rect}f\n{hole}f\n*U\n");
+    let own = format!("*u\n{rect}n\n{hole}n\n*U");
+    let r = read_ok(&format!("{style}{DOTS}{}", stacked_object(&look, &own)));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Compound { .. })), "the compound path: {a:#?} {:?}", r.warnings);
+    let items: Vec<String> = a[0]
+        .appearance
+        .items
+        .iter()
+        .map(|i| match (i, i.paint()) {
+            (AppearanceItem::Fill(_), Paint::Pattern { .. }) => "pattern fill".into(),
+            (AppearanceItem::Fill(_), p) => format!("fill {:?}", p.color()),
+            (AppearanceItem::Stroke(s), _) => format!("stroke {}", s.width),
+        })
+        .collect();
+    assert_eq!(items, [format!("fill {:?}", Some(Color::rgb(1.0, 0.0, 0.0))), "pattern fill".into(), "stroke 3".into()]);
+    assert!(close(pattern_xf(&a[0]), look_xf(&format!("*u\n{rect}f\n{hole}f\n*U\n"))));
+}
+
+/// A stack's pattern fill keeps the drawn look where the look doesn't fill with that pattern: its
+/// placement isn't known. A look that only strokes with it doesn't place the fill either.
+#[test]
+fn a_style_pattern_fill_the_look_doesnt_paint_keeps_the_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let pattern = fill_filter(&format!("(Dots) {ops} p"));
+    for (why, look) in
+        [("a look without the pattern", format!("{RED}{rect}f\n")), ("a look that strokes with it", format!("(Dots) {ops} P\n{rect}S\n"))]
+    {
+        let r = read_ok(&format!("{}{DOTS}{}", stacked_style(std::slice::from_ref(&pattern)), stacked_object(&look, &format!("{rect}n"))));
+        let a = art(&r.doc);
+        assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "{why}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
+    }
+}
+
+/// A stack that fills with one pattern twice keeps the drawn look: which of the look's placements is
+/// whose isn't known.
+#[test]
+fn a_stack_with_one_pattern_twice_keeps_the_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let pattern = fill_filter(&format!("(Dots) {ops} p"));
+    let look = format!("(Dots) {ops} p\n{rect}f\n(Dots) {ops} p\n{rect}f\n");
+    let r = read_ok(&format!("{}{DOTS}{}", stacked_style(&[pattern.clone(), pattern]), stacked_object(&look, &format!("{rect}n"))));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// A stack that fills with a pattern once, whose drawn look fills with it twice at different
+/// placements, keeps the drawn look: which placement is the style's isn't known. A look filling with
+/// it twice at the same placement still comes in as the path with that fill.
+#[test]
+fn a_look_placing_a_stacks_pattern_twice_keeps_the_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let other = "25 30 1.5 .75 30 1 45 10 0 [.8 .1 -.2 1.1 4 -6]";
+    let pattern = fill_filter(&format!("(Dots) {ops} p"));
+    let read = |second: &str| {
+        let look = format!("(Dots) {ops} p\n{rect}f\n(Dots) {second} p\n{rect}f\n");
+        read_ok(&format!("{}{DOTS}{}", stacked_style(std::slice::from_ref(&pattern)), stacked_object(&look, &format!("{rect}n"))))
+    };
+    let r = read(other);
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let r = read(ops);
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Path { .. })), "the path: {a:#?} {:?}", r.warnings);
+}
+
+/// A style's pattern fill under an effect on the object keeps the drawn look, a conservative rule
+/// (in one file a Scribble over a pattern fill drew unlike its look; why isn't established).
+#[test]
+fn a_path_with_a_style_pattern_fill_under_an_effect_keeps_its_drawn_look() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let hidden = rect.replace('\n', "\n%_");
+    let ops = "0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]";
+    let shadow = "/BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n2 /Int (blnd) ,\n0.43 /Real (opac) ,\n\
+        37 /Real (dark) ,\n-13 /Real (vert) ,\n11 /Real (horz) ,\n17 /Real (blur) ,\n\
+        /FillStyle : 0 O\n0 0 0 0 0 1 0 Xa\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Def ;\n (sclr) ,\n0 /Int (csrc) ,\n; /Dict ;\n /Part ,\n";
+    let style = tiled_style("Dots", ops);
+    // After the stack, in the object's chain.
+    let end = ";\n /Part ,\n;\n%AI9_EndArtStyles";
+    assert!(style.contains(end));
+    let style = style.replace(end, &format!(";\n /Part ,\n{shadow};\n%AI9_EndArtStyles"));
+    // The style reads, with its pattern fill and the shadow: what keeps the look is the rule.
+    let st = crate::import::ai::style::art_styles(style.as_bytes());
+    let tiled = &st["Tiled"];
+    assert!(tiled.plain && tiled.effects.len() == 1, "{tiled:?}");
+    let look = format!("0 Ae\nu\n(Dots) {ops} p\n{rect}f\nU\n");
+    let r = read_ok(&format!("{style}{DOTS}{}", layer(&format!("{look}%_{hidden}n\n1 (Tiled) XW\n"))));
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+}
+
+/// Type whose style fills it with a pattern takes the placement from its drawn look wherever the look
+/// paints with that pattern, a stroke of it too (as before paths took such styles): the look's
+/// fills-only rule is the path stack's.
+#[test]
+fn type_with_a_style_pattern_fill_takes_a_stroke_only_looks_placement() {
+    let rect = rect_path(10.0, 20.0, 70.0, 80.0);
+    let (style_ops, look_ops) = ("0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]", "25 30 1.5 .75 30 1 45 10 0 [.8 .1 -.2 1.1 4 -6]");
+    let look = format!("0 Ae\nu\n/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n(Dots) {look_ops} P\n{rect}S\nU\n");
+    let own = "%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_0 /StoryIndex ,\n%_;\n";
+    let styled = read_ok(&format!("{}{DOTS}{}", tiled_style("Dots", style_ops), layer(&format!("{look}{own}1 (Tiled) XW\n"))));
+    let stroked = read_ok(&format!("{DOTS}{}", layer(&format!("(Dots) {look_ops} P\n{rect}S\n"))));
+    let Paint::Pattern { xf: got, .. } = fill(&art(&styled.doc)[0]) else { panic!("{:?} {:?}", art(&styled.doc), styled.warnings) };
+    let want = pattern_xf(&art(&stroked.doc)[0]);
+    assert!(got.as_coeffs().iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-9), "{got:?} {want:?}");
+}
+
 /// An art style's pattern fill paints with the pattern under the name it is shown with.
 #[test]
 fn a_style_pattern_fill_paints_with_the_shown_name() {
@@ -1547,6 +1732,42 @@ fn a_clipping_path_alone_in_a_group_clips_its_clipping_group() {
     assert_eq!(children.len(), 2, "{children:?}");
     assert!(matches!(children[0].kind, NodeKind::Path { clipping: true, .. }));
     assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)));
+}
+
+/// Clipping paths grouped in a compound path (`*u u <path> W n … U *U`, possibly nested in other groups) are
+/// the compound path's subpaths, as its other grouped paths are: the compound clipping path, their union, clips its
+/// clipping group, however many there are and wherever in the group it is written.
+#[test]
+fn clipping_paths_grouped_in_a_compound_path_are_its_subpaths() {
+    let square = rect_path(0.0, 0.0, 80.0, 80.0);
+    let (a, b, c) = (rect_path(0.0, 0.0, 10.0, 10.0), rect_path(30.0, 0.0, 40.0, 10.0), rect_path(60.0, 0.0, 70.0, 10.0));
+    let clip = |p: &str| format!("{p}h\nW\nn\n");
+    let bodies = [
+        // One group of them, after the art.
+        format!("0 Ae\nq\n{RED}{square}f\n*u\n0 Ae\nu\n{}{}{}U\n*U\nQ\n", clip(&a), clip(&b), clip(&c)),
+        // Groups in a group, and one path straight in the compound path, before the art.
+        format!("0 Ae\nq\n*u\n0 Ae\nu\n0 Ae\nu\n{}{}U\n0 Ae\nu\n{}U\nU\n*U\n{RED}{square}f\nQ\n", clip(&a), clip(&b), clip(&c)),
+        format!("0 Ae\nq\n*u\n0 Ae\nu\n{}{}U\n{}*U\n{RED}{square}f\nQ\n", clip(&a), clip(&b), clip(&c)),
+    ];
+    for body in &bodies {
+        let doc = read_ok(&layer(body)).doc;
+        let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{body}: {:?}", art(&doc)[0].kind) };
+        assert_eq!(children.len(), 2, "{body}: {children:?}");
+        let NodeKind::Compound { children: subpaths, .. } = &children[0].kind else { panic!("{body}: {:?}", children[0].kind) };
+        assert_eq!(subpaths.len(), 3, "{body}: {subpaths:?}");
+        assert!(subpaths.iter().all(|p| matches!(p.kind, NodeKind::Path { clipping: true, .. })), "{body}: {subpaths:?}");
+        assert_eq!(fill(&children[1]).color(), Some(Color::rgb(1.0, 0.0, 0.0)), "{body}");
+    }
+    // Hundreds of them, one union: not clipping groups nested past the document's depth limit.
+    let many = format!("0 Ae\nq\n{RED}{square}f\n*u\n0 Ae\nu\n{}U\n*U\nQ\n", clip(&a).repeat(300));
+    let doc = read_ok(&layer(&many)).doc;
+    let NodeKind::Group { children, clip: true } = &art(&doc)[0].kind else { panic!("{:?}", art(&doc)[0].kind) };
+    let NodeKind::Compound { children: subpaths, .. } = &children[0].kind else { panic!("{:?}", children[0].kind) };
+    assert_eq!(subpaths.len(), 300);
+    // A group of clipping paths outside a compound path or a clipping group is read as before: a clipping group.
+    let alone = format!("0 Ae\nu\n{}{}U\n{RED}{square}f\n", clip(&a), clip(&b));
+    let doc = read_ok(&layer(&alone)).doc;
+    assert!(matches!(art(&doc)[0].kind, NodeKind::Group { clip: true, .. }), "{:?}", art(&doc)[0].kind);
 }
 
 /// #1410: a compound path shows its last path's paint, and paths grouped in it stay its paths.
@@ -2505,6 +2726,37 @@ fn ai_variable_library_edge_cases() {
     let two_sets = xml_element("variableSets", &[], &[xml_element("variableSet", &[], &[]), xml_element("variableSet", &[], &[])]);
     let (_, notes) = read_library(&two_sets);
     assert_eq!(notes, ["the file's variable library couldn't be read: the Variables panel doesn't list it"]);
+}
+
+/// The empty library a file can keep, its nodes named and nothing else (no value, no type, empty
+/// attributes), has nothing to list: it comes in without a note. A node that has a value or a type
+/// isn't empty, so the same skeleton with a value, or with a type, still gets the note.
+#[test]
+fn an_empty_variable_library_gives_no_note() {
+    // A node with a name and nothing else: its children, then its attributes, as `%_` lines.
+    fn bare(name: &str, attributes: &[&str], children: &[String]) -> String {
+        let close = |n: &str, key: &str| format!("{}%_; {key},\n", n.strip_suffix("%_;\n").unwrap_or(n));
+        let attributes: String = attributes.iter().map(|a| close(&bare(a, &[], &[]), &format!("({a}) "))).collect();
+        let children: String = children.iter().map(|c| close(c, "")).collect();
+        format!(
+            "%_/XMLNode :\n%_/Dictionary :\n{attributes}%_; (xmlnode-attributes) ,\n%_/Array :\n{children}%_; (xmlnode-children) ,\n%_({name}) /String (xmlnode-nodename) ,\n%_;\n"
+        )
+    }
+    let data_sets = bare("v:sampleDataSets", &["xmlns:v", "xmlns"], &[]);
+    let skeleton = bare("variableSets", &[], &[bare("variableSet", &["varSetName"], std::slice::from_ref(&data_sets))]);
+    let (vars, notes) = read_library(&skeleton);
+    assert_eq!(vars, vectorcraft_doc::Variables::default());
+    assert!(notes.is_empty(), "{notes:?}");
+    let unread = ["the file's variable library couldn't be read: the Variables panel doesn't list it"];
+    // The same skeleton but for one entry of the data sets node: a value, then a type.
+    let with = |entry: &str| {
+        let data_sets = data_sets.replace("(xmlnode-nodename) ,\n", &format!("(xmlnode-nodename) ,\n{entry}"));
+        bare("variableSets", &[], &[bare("variableSet", &["varSetName"], &[data_sets])])
+    };
+    for entry in ["%_(x) /String (xmlnode-nodevalue) ,\n", "%_1 /Int (xmlnode-nodetype) ,\n"] {
+        let (_, notes) = read_library(&with(entry));
+        assert_eq!(notes, unread, "{entry}");
+    }
 }
 
 /// When the layers can't be read, or reading stops before the library, [`variables`] still reads
@@ -3739,6 +3991,70 @@ fn placed_files_are_linked_images_showing_their_preview() {
     assert!(r.hidden_unread.contains("placed files") && art(&r.doc).is_empty());
     // `~` ends nothing else.
     assert!(read(stream(&layer("~\n")).as_bytes()).unwrap_err().contains("`~`"));
+}
+
+/// Type made a clipping mask: a clipping group (`q` … `Q`) with no clipping path, whose last object
+/// is a text object, is clipped by that type once its slot holds it, the type first as its
+/// clipping path. Anything else stays as it was read.
+#[test]
+fn type_that_ends_a_clipping_group_without_a_clipping_path_clips_it() {
+    let text = |story: u32| format!("/AI11Text :\n0 /FreeUndo ,\n0 /FrameIndex ,\n{story} /StoryIndex ,\n;\n");
+    let square = format!("{RED}{}f\n", rect_path(0.0, 0.0, 10.0, 10.0));
+    let clipper = format!("{RED}{}h W n\n", rect_path(2.0, 2.0, 8.0, 8.0));
+    let r = read_ok(&layer(&format!("q\n{square}{}Q\n", text(4))));
+    let a = art(&r.doc);
+    let [group] = a.as_slice() else { panic!("{a:#?}") };
+    let slot = group.children().and_then(|c| c.last()).map(|n| n.id).unwrap();
+    assert!(matches!(group.kind, NodeKind::Group { clip: false, .. }), "read as it is, until the slot holds its type");
+    assert_eq!(r.type_clips.get(&group.id), Some(&slot));
+    assert_eq!(r.warped_type.type_clips, r.type_clips, "envelopes' contents are clipped by their type too");
+    // Filled with one text object, the slot's type clips the group.
+    let typed = |doc: &Document, one: bool| {
+        let mut layer = (*doc.layers[0]).clone();
+        let mut n = 0;
+        let put = |n: &mut Node| {
+            if let NodeKind::Group { children, .. } = &mut n.kind
+                && let Some(last) = children.last_mut()
+                && last.id == slot
+            {
+                let t = Node::new(
+                    vectorcraft_doc::NodeId(9_000),
+                    NodeKind::Text(Box::new(vectorcraft_doc::TextObject::point(kurbo::Point::ZERO, "M", Default::default()))),
+                );
+                if one {
+                    *last = Arc::new(t);
+                } else {
+                    let mut stroke = t.clone();
+                    stroke.id = vectorcraft_doc::NodeId(9_001);
+                    *last = Arc::new(t);
+                    children.push(Arc::new(stroke));
+                }
+            }
+        };
+        layer.children_mut().unwrap().iter_mut().for_each(|c| put(Arc::make_mut(c)));
+        let clipped = clip_by_type(&mut layer, &r.type_clips, &|s| (s == slot).then_some(vectorcraft_doc::NodeId(9_000)), &mut |_| n += 1);
+        (layer, clipped, n)
+    };
+    let (layer_one, clipped, called) = typed(&r.doc, true);
+    assert_eq!((clipped, called), (1, 1));
+    let g = &layer_one.children().unwrap()[0];
+    let NodeKind::Group { children, clip: true } = &g.kind else { panic!("{g:#?}") };
+    assert!(matches!(children[0].kind, NodeKind::Text(_)) && matches!(children[1].kind, NodeKind::Path { .. }), "{children:#?}");
+    // Several objects in its place (the type and strokes round it): the group stays unclipped.
+    let (layer_two, clipped, _) = typed(&r.doc, false);
+    assert_eq!(clipped, 0);
+    assert!(matches!(layer_two.children().unwrap()[0].kind, NodeKind::Group { clip: false, .. }));
+    // A clipping path in the group clips it, not the type; type that isn't last doesn't; nor does a
+    // group (`u` … `U`) or the type a look draws.
+    for body in [
+        format!("q\n{square}{clipper}{}Q\n", text(4)),
+        format!("q\n{}{square}Q\n", text(4)),
+        format!("u\n{square}{}U\n", text(4)),
+        format!("q\n{square}/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\nQ\n"),
+    ] {
+        let r = read_ok(&layer(&body));
+        assert!(r.type_clips.is_empty(), "{body}: {:?}", r.type_clips);
+    }
 }
 
 #[test]
@@ -6272,27 +6588,39 @@ fn a_stroke_offset_filter_keeps_its_strokes_style() {
 }
 
 /// A Stroke Offset stroke this doesn't read as a stroke keeps the object's drawn look: a switch
-/// written as another kind, dashes aligned to corners and path ends, a gradient.
+/// written as another kind, a gradient.
 #[test]
 fn a_stroke_offset_filter_with_a_stroke_this_does_not_read_keeps_the_drawn_look() {
     let outside = "0 /Bool (StrokeOffsetInside) ,\n";
     let gradient = "0 R\nBb\n0 0 0 0 Bh\n2 (Red ramp) 0 0 90 1 1 0 0 1 0 0 1 Bg\n0 BB\n0 J 0 j 2 w 10 M []0 d\n0 XR\n1 0 Xd";
     let cases = [
         ("a switch written as a number", offset_stroke_style_with("Edge", "1 /Int (StrokeOffsetInside) ,\n", OFFSET_STROKE)),
-        (
-            "dashes aligned to corners",
-            offset_stroke_style_with(
-                "Edge",
-                &format!("{outside}/Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n"),
-                &OFFSET_STROKE.replace("[]0 d", "[5 10 ]0 d"),
-            ),
-        ),
         ("a gradient", offset_stroke_style_with("Edge", outside, gradient)),
     ];
     for (why, style) in cases {
         let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
         assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{why}: {:?}", r.warnings);
     }
+}
+
+/// A Stroke Offset stroke with dashes aligned to corners and path ends reads as such a stroke,
+/// outside the path; the object takes it only where it draws as its drawn look. Here the look (a
+/// filled square) draws otherwise, so the look check keeps the drawn look.
+#[test]
+fn a_stroke_offset_with_dashes_aligned_to_corners_unlike_its_look_keeps_the_look() {
+    use crate::import::ai::style::StyleItem;
+    use vectorcraft_doc::StrokeAlign;
+    let keys = "0 /Bool (StrokeOffsetInside) ,\n/Dictionary : /NotRecorded ,\n1 /Bool (BSDashAdj) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n";
+    let style = offset_stroke_style_with("Edge", keys, &OFFSET_STROKE.replace("[]0 d", "[5 10 ]0 d"));
+    let styles = crate::import::ai::style::art_styles(style.as_bytes());
+    let Some(StyleItem::Stroke { dash: Some(dash), align, .. }) = styles["Edge"].items.iter().find(|i| matches!(i, StyleItem::Stroke { .. })) else {
+        panic!("{:?}", styles["Edge"])
+    };
+    assert_eq!((dash.pattern.as_slice(), dash.align_corners, *align), ([5.0, 10.0].as_slice(), true, StrokeAlign::Outside));
+    let r = read_ok(&format!("%AI9_BeginArtStyles\n{style}%AI9_EndArtStyles\n{}", layer(&styled_square("Edge"))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert!(matches!(a.as_slice(), [n] if matches!(n.kind, NodeKind::Group { .. })), "the drawn look: {a:#?}");
 }
 
 /// A listed `[Default]` style whose stroke is aligned outside comes in as the default graphic
@@ -7336,6 +7664,96 @@ fn an_object_with_a_distort_effect_drawn_another_way_keeps_its_drawn_look() {
         assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{name}: the drawn look: {a:#?}");
         assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{name}: {:?}", r.warnings);
     }
+}
+
+#[test]
+fn a_path_with_zig_zag_comes_in_as_itself_where_its_look_has_that_outline() {
+    // GUARDS: Zig Zag on a path came in as its drawn look even where the live effect draws the same outline.
+    let keys = "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n2 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let zig = vectorcraft_doc::Effect {
+        id: "distort.zigZag".into(),
+        params: serde_json::json!({"size": 3.0, "relative": false, "ridges": 2, "points": "corner"}),
+        visible: true,
+    };
+    // The square as the document has it (y up in the file, down in the document).
+    let plain = read_ok(&layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 60.0, 50.0))));
+    let square = art(&plain.doc)[0].path_data().unwrap().clone();
+    let to_file = |p: Point| {
+        let start = square.subpaths[0].anchors[0].p;
+        Point::new(p.x - start.x + 20.0, start.y - p.y + 20.0)
+    };
+    let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &square, square.bounds().unwrap());
+    // The look: the outline the effect draws, as straight segments.
+    let ops = |shift: f64| -> String {
+        let mut out = String::new();
+        for sp in &outline.subpaths {
+            for (i, a) in sp.anchors.iter().enumerate() {
+                let p = to_file(a.p);
+                out.push_str(&format!("{:.4} {:.4} {}\n", p.x + shift, p.y, if i == 0 { "m" } else { "L" }));
+            }
+        }
+        out
+    };
+    let hidden_rect = rect_path(20.0, 20.0, 60.0, 50.0).replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}f\nU\n%_{hidden_rect}f\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(0.0)))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Path { .. }), "the object, not its look: {a:#?}");
+    let e = &a[0].appearance.effects;
+    assert_eq!(e.len(), 1, "{e:?}");
+    assert_eq!(
+        (e[0].id.as_str(), &e[0].params),
+        ("distort.zigZag", &serde_json::json!({"size": 3.0, "relative": false, "ridges": 2, "points": "corner"}))
+    );
+    // A look whose ridges lie elsewhere (here 1 pt to the right) keeps the drawn look.
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(1.0)))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    assert!(matches!(art(&r.doc)[0].kind, NodeKind::Group { .. }));
+    // An open path (filled without closing it, `F`): its look's outline matches, and a look whose
+    // last point lies 3 pt away from where the effect ends it keeps the drawn look.
+    let open_path = "20 20 m\n60 20 L\n60 50 L\n";
+    let plain = read_ok(&layer(&format!("{RED}{open_path}F\n")));
+    let open = art(&plain.doc)[0].path_data().unwrap().clone();
+    assert!(!open.subpaths[0].closed);
+    let start = open.subpaths[0].anchors[0].p;
+    let outline = vectorcraft_effects::apply_geometry(std::slice::from_ref(&zig), &open, open.bounds().unwrap());
+    let ops = |last_shift: f64| -> String {
+        let mut out = String::new();
+        for sp in &outline.subpaths {
+            for (i, a) in sp.anchors.iter().enumerate() {
+                let shift = if i + 1 == sp.anchors.len() { last_shift } else { 0.0 };
+                let p = Point::new(a.p.x - start.x + 20.0 + shift, start.y - a.p.y + 20.0);
+                out.push_str(&format!("{:.4} {:.4} {}\n", p.x, p.y, if i == 0 { "m" } else { "L" }));
+            }
+        }
+        out
+    };
+    let hidden_open = open_path.replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}F\nU\n%_{hidden_open}F\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(0.0)))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", keys, BLUE_FILL), layer(&object(&ops(3.0)))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A Zig Zag of no size on an open path through the corners of its look's square, joined
+    // across it: the vertices match, the segments between them don't, so the drawn look stays.
+    let flat = "0 /Real (amount) ,\n1 /Real (absoluteness) ,\n0 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let bowtie = "%_20 20 m\n%_60 50 L\n%_60 20 L\n%_20 50 L\n%_F\n";
+    let crossed = format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{}f\nU\n{bowtie}1 (Bent) XW\n", rect_path(20.0, 20.0, 60.0, 50.0));
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", flat, BLUE_FILL), layer(&crossed)));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    // A look worked out by hand rather than by the effect: Zig Zag of 3 pt with one ridge per
+    // segment and corner points, on a line from (20, 20) to (60, 20), puts the line's ends 3 pt up
+    // the page and its middle 3 pt down. The same look mirrored keeps the drawn look.
+    let one = "3 /Real (amount) ,\n1 /Real (absoluteness) ,\n1 /Real (ridges) ,\n0 /Real (roundness) ,\n";
+    let line = "20 20 m\n60 20 L\n".replace('\n', "\n%_");
+    let object = |look: &str| format!("0 Ae\nu\n0 0 0 0 0 0 1 Xa\n{look}F\nU\n%_{line}F\n1 (Bent) XW\n");
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", one, BLUE_FILL), layer(&object("20 23 m\n40 17 L\n60 23 L\n"))));
+    assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
+    assert!(matches!(art(&r.doc)[0].kind, NodeKind::Path { .. }), "{:#?}", art(&r.doc));
+    let r = read_ok(&format!("{}{}", distort_styles("Adobe Zigzag", one, BLUE_FILL), layer(&object("20 17 m\n40 23 L\n60 17 L\n"))));
+    assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{:?}", r.warnings);
 }
 
 /// The gradient `G`, white to black, defined for a document.
@@ -8746,7 +9164,7 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
     let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], envelopes: vec![], checks: 1, spent, page, alone: None };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page, ..Default::default() };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
     let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
@@ -9516,6 +9934,22 @@ fn a_blend_comes_in_as_a_live_blend() {
     let Paint::Solid { color, .. } = fill(middle) else { panic!("solid") };
     let [r, _, b] = color.to_rgb();
     assert!((r - 0.5).abs() < 0.02 && (b - 0.5).abs() < 0.02, "{r} {b}");
+    assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
+}
+
+/// A blend in an opacity mask's art is written on `%_` lines, its record's hex digits on `%_%`
+/// lines: it comes in live there too.
+#[test]
+fn a_blend_in_an_opacity_mask_comes_in_live() {
+    let body = blend_file("%_10 50 m\n%_110 50 L\n", [Some("A"), Some("B")], &blend_record(&['A', 'B']));
+    let mask_art: String = body.lines().map(|l| if l.starts_with("%_") { format!("{l}\n") } else { format!("%_{l}\n") }).collect();
+    assert!(mask_art.contains("\n%_%44434241"), "{mask_art}");
+    let mask = format!("%_/ArtDictionary :\n%_/Mask :\n%_X=\n%_u\n{mask_art}%_U\n%_X+\n%_(Art) ,\n%_; (AI9_Mask) ,\n%_;\n");
+    let s = read_ok(&layer(&format!("{RED}0 0 m\n0 80 L\n80 80 L\n80 0 L\nf\n{mask}")));
+    let m = art(&s.doc)[0].extras().mask.clone().expect("a mask");
+    let blend = m.art.children().and_then(|c| c.first()).cloned().unwrap_or(m.art.clone());
+    let NodeKind::Blend { children, spec } = &blend.kind else { panic!("a live blend: {:?} {:?}", blend.kind, s.warnings) };
+    assert_eq!((children.len(), spec.spacing), (2, vectorcraft_doc::live::BlendSpacing::Steps(3)));
     assert!(!s.warnings.iter().any(|w| w == super::blend::DRAWN), "{:?}", s.warnings);
 }
 
