@@ -796,10 +796,17 @@ fn run_ui_part7(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Ok(edit) => edit.unwrap_or(false),
                 Err(e) => return Some(Err(e)),
             };
+            let keep_art = match opt_bool(p, "keepArt") {
+                Ok(keep) => keep.unwrap_or(false),
+                Err(e) => return Some(Err(e)),
+            };
             if edit || name.is_some() {
+                if keep_art {
+                    return Some(Err("`keepArt` applies only to a new symbol".into()));
+                }
                 crate::dialogs::symbol_options::open_edit(app, name.as_deref())
             } else {
-                crate::dialogs::symbol_options::open(app)
+                crate::dialogs::symbol_options::open(app, keep_art)
             }
         }
         "ui.newBrush" => crate::dialogs::new_brush::open(app, p.get("ids").cloned()),

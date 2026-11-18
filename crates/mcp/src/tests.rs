@@ -1638,6 +1638,64 @@ fn doc_json(s: &mut Server) -> Value {
 }
 
 #[test]
+fn transform_refused_by_a_later_operation_changes_nothing() {
+    let mut s = server();
+    let count = |s: &mut Server| -> u64 {
+        let r = call(s, 90, "inspect_document", json!({}));
+        serde_json::from_str::<Value>(&text_of(&r)).unwrap()["objects"].as_u64().unwrap()
+    };
+    let base = count(&mut s);
+    let r = id_of(&call(&mut s, 1, "draw_shape", json!({"shape": "rectangle", "x": 100, "y": 100, "width": 100, "height": 50})));
+    let before = doc_json(&mut s);
+    for (id, args, says) in [
+        (2, json!({"ids": [r], "scale": 50, "shear": 90}), "object.shear"),
+        (3, json!({"ids": [r], "dx": 10, "rotate": 30, "shear": -270}), "object.shear"),
+        (4, json!({"ids": [r], "scale": 50, "shear": 400}), "object.shear"),
+        (5, json!({"ids": [r], "scale": 50, "reflect": "diagonal"}), "object.reflect"),
+        (6, json!({"ids": [r], "dx": 10, "rotate": 30, "scaleX": 0}), "object.scale"),
+    ] {
+        let t = call(&mut s, id, "transform", args.clone());
+        assert_eq!(t["isError"], true, "{args}: {t}");
+        assert!(text_of(&t).contains(says), "{args}: {t}");
+        assert_eq!(doc_json(&mut s), before, "{args}");
+    }
+    // No undo step was recorded: one undo removes the rectangle.
+    assert_eq!(call(&mut s, 7, "undo", json!({}))["isError"], false);
+    assert_eq!(count(&mut s), base, "one undo removes the rectangle");
+}
+
+#[test]
+fn transform_rejects_a_mistyped_reflect_copy_or_origin_before_editing() {
+    let inspect = |s: &mut Server, id| serde_json::from_str::<Value>(&text_of(&call(s, id, "doc_inspect", json!({})))).unwrap();
+    let mut s = server();
+    let first = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M10 10 L30 10 L30 25 Z"})));
+    let second = id_of(&call(&mut s, 2, "draw_path", json!({"d": "M40 40 L60 40 L60 55 Z"})));
+    let before = inspect(&mut s, 3);
+    let cases = [
+        ("object.reflect", json!({"dx": 10, "reflect": 42, "copy": true})),
+        ("object.reflect", json!({"dx": 10, "reflect": true})),
+        ("copy", json!({"dx": 10, "copy": "yes"})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": "center", "copy": true})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": [5]})),
+        ("origin", json!({"dx": 10, "rotate": 30, "origin": [5, "a"]})),
+    ];
+    for (index, (says, mut args)) in cases.into_iter().enumerate() {
+        args["ids"] = json!([first]);
+        let request_id = 4 + index as u64 * 2;
+        let rejected = call(&mut s, request_id, "transform", args.clone());
+        assert_eq!(rejected["isError"], true, "{args}: {rejected}");
+        assert!(text_of(&rejected).contains(says), "{args}: {rejected}");
+        // The document, the selection and the undo history are as they were.
+        assert_eq!(inspect(&mut s, request_id + 1), before, "{args}");
+    }
+    // A null `reflect`, `copy` or `origin` is left out.
+    let applied = call(&mut s, 20, "transform", json!({"ids": [second], "dx": 10, "reflect": null, "copy": null, "origin": null}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move"]));
+}
+
+#[test]
 fn add_text_rejects_invalid_path_effects_before_editing() {
     let mut s = server();
     let path = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M40 400 C150 300 250 500 360 400 Z"})));

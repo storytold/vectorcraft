@@ -223,6 +223,7 @@
 	Add Used Colors	Afegeix els colors utilitzats
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
+	Plug-in Instruction Budget	Pressupost d’instruccions dels complements
 	Adjust Adjoining Width Points	Ajusta els punts d’amplada contigus
 	Incoming	Entrant
 	Outgoing	Sortint
@@ -1155,6 +1156,7 @@ antiAlias	Sharp	Nítid
 	Delete Brush	Suprimeix el pinzell
 	Delete Color	Suprimeix el color
 	Restore Generated Table	Restaura la taula generada
+	Unshift All Colors	Desfés el desplaçament de tots els colors
 	Delete Character Style	Suprimeix l’estil de caràcter
 	Delete Data Set	Suprimeix el conjunt de dades
 	Delete Data Sets	Suprimeix els conjunts de dades
@@ -3983,6 +3985,8 @@ digits	Malayalam	Malaiàlam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Com d’a prop a la pantalla han d’arribar el punter o un punt arrossegat a l’art perquè les guies intel·ligents s’hi ajustin; la distància és la mateixa a qualsevol zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta l’extrem d’un segment de línia, o un cercle dibuixat des del centre, perquè toqui una corba propera.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta l’extrem d’un segment de línia perquè trobi un segment recte proper en angle recte.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra al llenç el número de cada tall en un requadre a la seva cantonada superior esquerra; si està desactivat, els contorns dels talls continuen visibles.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color dels contorns dels talls d’usuari i d’objecte i dels requadres amb el seu número; els talls automàtics fan servir un to més apagat d’aquest color.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats
@@ -4301,6 +4305,12 @@ digits	Malayalam	Malaiàlam
 	Search commands, tools, panels and effects…	Cerca ordres, eines, panells i efectes…
 	No commands match	Cap ordre coincideix
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Cap element de menú
+	Toolbar	Barra d’eines
+	{toolbar}, in the {tool} group	{toolbar}, al grup {tool}
+	In the menu bar: {path}	A la barra de menús: {path}
+	In the {group} group: press and hold to open it	Al grup {group}: manteniu premut per obrir-lo
+	{home}, not shown now	{home}, ara no es mostra
 @plural	{n} result|{n} results	{n} resultat|{n} resultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
@@ -5804,6 +5814,7 @@ digits	Malayalam	Malaiàlam
 @msg	a linked JavaScript file is outside the read roots	un fitxer JavaScript enllaçat és fora de les arrels de lectura
 @msg	a linked image file is outside the read roots	un fitxer d’imatge enllaçat és fora de les arrels de lectura
 @msg	a linked file's export folder is outside the read roots	la carpeta d’exportació d’un fitxer enllaçat és fora de les arrels de lectura
+@msg	a linked file's editing data can't be read to check it against the read roots	no es poden llegir les dades d’edició d’un fitxer enllaçat per comprovar-les amb les arrels de lectura
 @msg	the library's file is outside the read roots	el fitxer de la biblioteca és fora de les arrels de lectura
 @msg	{file} names more than one linked JavaScript file	{file} correspon a més d’un fitxer JavaScript enllaçat
 @msg	automation path rejected: outside the write root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel d’escriptura {root}: {path}
@@ -5858,6 +5869,7 @@ digits	Malayalam	Malaiàlam
 @msg	clipboard is empty	el porta-retalls és buit
 @msg	closing needs three anchors	el tancament necessita tres punts d’ancoratge
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: almenys un color ha de quedar a la taula de colors
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` indica un color que també indica una altra clau
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no és un color com "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: com a màxim {MAX_TABLE} colors
 @msg	column docks a set as a dock column, with no anchor or icon	column acobla un conjunt com a columna d’acoblament, sense àncora ni icona
@@ -7813,6 +7825,7 @@ breakText	Glyphs	Glifs
 @msg	One path lies inside the other, so they have no common tangents	Un camí és dins de l’altre, per tant no tenen tangents comunes
 @msg	The paths overlap, so they have no internal tangents	Els camins se superposen, per tant no tenen tangents internes
 @msg	One path lies inside the other, so they have no internal tangents	Un camí és dins de l’altre, per tant no tenen tangents internes
+@msg	The point lies inside the path, so it has no tangents	El punt és dins del camí, per tant no té tangents
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
@@ -8319,4 +8332,9 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Pressure Sensitive	Sensible a la pressió
+	Flex Ribbon	Cinta flexible
+	Pulse Stroke	Traç pulsant
+	Round Flow	Flux rodó
+	Chisel Flow	Flux bisellat
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"
