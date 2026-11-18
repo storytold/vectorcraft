@@ -773,13 +773,14 @@ fn flattener(d: &Dialog, saved: &[FlattenerPreset]) -> Result<FlattenOptions, St
 }
 
 /// The switches the PDF 1.3 writer sets itself, which Custom Transparency Flattener Options show
-/// but can't change: rasterized areas are always clipped to their regions, overprints are kept
-/// only with Overprint set to Preserve, and alpha stays as the preset has it.
+/// but can't change: rasterized areas are always clipped to their regions and keep no alpha, and
+/// overprints are kept only with Overprint set to Preserve.
 const FIXED: [&str; 3] = ["clipComplexRegions", "preserveAlpha", "preserveOverprints"];
 
 /// `o` as the PDF 1.3 writer flattens with it (see [`FIXED`]), for Save PDF `parent`.
 fn as_written(o: &mut FlattenOptions, parent: &Dialog) {
     o.clip_complex_regions = true;
+    o.preserve_alpha = false;
     o.preserve_overprints &= choice::<Overprint>(parent, "advanced.overprint") != Some(Overprint::Discard);
 }
 

@@ -827,6 +827,20 @@ fn custom_options_equal_to_the_preset_leave_its_name() {
 }
 
 #[test]
+fn custom_shows_alpha_as_the_pdf_1_3_writer_drops_it() {
+    let (mut app, written, _) = app();
+    transparent_overlap(&mut app);
+    open_advanced(&mut app, json!({"compatibility": "1.3", "flattener": {"balance": 0, "preserveAlpha": true}}));
+    Reader::new().click_custom(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().bool("preserveAlpha"), "shown as written");
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(kind(&app), Some(KIND));
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["flattener"]["preserveAlpha"].as_bool(), Some(false));
+    super::super::confirm(&mut app).unwrap();
+    assert!(written.borrow()[0].1.starts_with(b"%PDF-1.3") && images(&written.borrow()[0].1) > 0);
+}
+
+#[test]
 fn bad_custom_options_keep_the_dialog_open() {
     let (mut app, _, _) = app();
     open_advanced(&mut app, json!({"compatibility": "1.3"}));

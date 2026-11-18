@@ -1359,7 +1359,8 @@ page with hint tables saying where every other page's objects are), which stays 
 `compatibility: "1.3"` writes a PDF 1.3 file, which has no transparency: a copy of the document is flattened first
 with `flattenerPreset` (empty: High Resolution; `high`, `medium`, `low` or a saved preset, `flattener.presets.list`)
 and `flattener` options over it (as `object.flattenTransparency` takes them); images with see-through pixels count as
-transparency and rasterized areas are clipped to their regions. Layers the file leaves out (non-printing ones, unless
+transparency and rasterized areas are clipped to their regions, with no alpha (`clipComplexRegions` and `preserveAlpha`
+given in `flattener` are not used). Layers the file leaves out (non-printing ones, unless
 `includeNonPrinting` or `createLayers` is set) are left out of the flattening. A file that would still have transparency fails the
 export. PDF/X-1a and PDF/X-3 files are PDF 1.3 files too. In the Save PDF dialog, the Custom… button beside Flattener
 preset sets `flattener` (`ui.savePdfDialog` keeps a `flattener` it is given, and refuses one it can't read). PDF
