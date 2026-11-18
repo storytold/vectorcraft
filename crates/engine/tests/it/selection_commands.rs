@@ -62,6 +62,20 @@ fn selection_commands_report_the_resulting_selection() {
 }
 
 #[test]
+fn toggle_and_add_handle_each_listed_id_in_order() {
+    let (mut s, a, b) = session();
+    let c = NodeId(s.execute("shape.rectangle", &json!({"x": 40, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    // `a` goes off and back on at the end, `b` goes off, and `c` comes on.
+    assert_eq!(s.execute("select.toggle", &json!({"ids": [a.0, b.0, c.0, a.0]})).unwrap(), json!({"count": 2, "ids": [c.0, a.0]}));
+    assert_eq!(s.execute("select.add", &json!({"ids": [b.0, a.0, b.0]})).unwrap(), json!({"count": 3, "ids": [c.0, a.0, b.0]}));
+    // Inverse selects the objects that were not selected, in document order.
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("select.inverse", &json!({})).unwrap();
+    assert_eq!(s.active().unwrap().selection.objects, [a, c]);
+}
+
+#[test]
 fn single_id_toggle_validates_before_mutating() {
     let (mut s, a, _) = session();
     for invalid in [json!(999), json!(-1), json!(2.5), json!("2"), Value::Null, json!(true)] {
