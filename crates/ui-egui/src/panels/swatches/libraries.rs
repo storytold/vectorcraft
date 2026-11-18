@@ -142,7 +142,7 @@ impl LibraryKind for SwatchLibraries {
             app.status(e);
         }
         if menu_item(ui, tl!("Save Swatch Library…"), app.session.active().is_some(), false) {
-            let names = deletable(&selection(app, ui));
+            let names = deletable(app, &selection(app, ui));
             app.run("ui.saveSwatchLibrary", json!({ "names": names })).ok();
         }
     }

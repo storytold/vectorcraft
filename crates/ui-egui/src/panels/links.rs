@@ -54,7 +54,7 @@ impl Default for Options {
 
 /// `links.list` and the first selected image's `links.info`, with what they were fetched for.
 #[derive(Clone, Default)]
-struct Cache {
+pub(super) struct Cache {
     /// (document uid, revision, show, sort, Show DCS Transparency Interactions).
     key: Option<(u64, u64, &'static str, Option<&'static str>, bool)>,
     at: f64,
@@ -113,23 +113,23 @@ pub(crate) fn show_selected_image(app: &mut VectorcraftApp, ctx: &egui::Context)
 }
 
 /// The rows to show (cached per document revision, the files looked at again every [`RECHECK`]
-/// seconds) and the Link Info of the first selected image when the section is open.
-fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<Cache> {
+/// seconds) and the Link Info of the first selected image when the section is open. A frame that
+/// fetches nothing returns the stored cache without copying it and stores nothing.
+fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<std::sync::Arc<Cache>> {
     let st = app.session.active()?;
     let key = Some((st.uid, st.revision, o.show, o.sort, o.dcs));
     let first = selected_links(app, ctx).first().copied();
     let now = ctx.input(|i| i.time);
-    let mut c: Cache = pstate(ctx, "links-cache");
+    let mut c: std::sync::Arc<Cache> = pstate(ctx, "links-cache");
     let stale = c.key != key || now - c.at > RECHECK;
     if stale {
         let same_doc = c.key == key;
-        c.list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
-        (c.key, c.at) = (key, now);
+        let list = app.session.execute("links.list", &json!({ "show": o.show, "sort": o.sort, "dcsTransparency": o.dcs })).ok()?;
         // One pass over the stored art for the rows outside the layer tree and the objects whose
         // opacity masks hold them, not one per frame. An object in the layer tree is looked up by
         // its index when drawn.
         let doc = app.session.active().map(|st| &st.doc);
-        let want: std::collections::HashSet<u64> = c.list["links"]
+        let want: std::collections::HashSet<u64> = list["links"]
             .as_array()
             .into_iter()
             .flatten()
@@ -140,18 +140,22 @@ fn cached(app: &mut VectorcraftApp, ctx: &egui::Context, o: &Options) -> Option<
             .collect();
         // The same revision keeps the objects collected for it, so their thumbnails are not drawn
         // again each time the files are looked at.
-        if !(same_doc && want.iter().all(|id| c.nested_node(*id).is_some())) {
-            c.nested = match doc {
+        let nested = if same_doc && want.iter().all(|id| c.nested_node(*id).is_some()) {
+            c.nested.clone()
+        } else {
+            match doc {
                 Some(d) if !want.is_empty() => stored_objects(d, want),
                 _ => vec![],
-            };
-        }
+            }
+        };
+        c = std::sync::Arc::new(Cache { key, at: now, list, info: None, nested });
     }
     let want = first.filter(|_| o.info);
     if stale || c.info.as_ref().map(|(id, _)| *id) != want {
-        c.info = want.and_then(|id| Some((id, app.session.execute("links.info", &json!({ "id": id })).ok()?)));
+        let info = want.and_then(|id| Some((id, app.session.execute("links.info", &json!({ "id": id })).ok()?)));
+        std::sync::Arc::make_mut(&mut c).info = info;
+        set_pstate(ctx, "links-cache", c.clone());
     }
-    set_pstate(ctx, "links-cache", c.clone());
     // Files change on disk without a frame of ours: look again later.
     ctx.request_repaint_after(std::time::Duration::from_secs_f64(RECHECK));
     Some(c)
@@ -857,9 +861,10 @@ fn link_info(ui: &mut Ui, info: Option<&Value>, units: vectorcraft_doc::Unit) {
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let o = options(ui.ctx());
     // The rows the panel shows (the menu opens from it).
-    let list = pstate::<Cache>(ui.ctx(), "links-cache").list;
+    let cache = pstate::<std::sync::Arc<Cache>>(ui.ctx(), "links-cache");
+    let list = &cache.list;
     let selected = selected_links(app, ui.ctx());
-    let sel = selected_rows(&list, &selected);
+    let sel = selected_rows(list, &selected);
     let linked = ids(&sel, |r| r["linked"] == true);
     let embedded: Vec<&Value> = sel.iter().copied().filter(|r| status_is(r, "embedded")).collect();
     let any = !sel.is_empty();

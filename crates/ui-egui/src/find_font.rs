@@ -4,10 +4,13 @@
 //! missing fonts' files, in the Missing Fonts dialog: `ui.findFontsInFolder`). Find In limits Find
 //! to the active artboard or the selected layers.
 
+use std::sync::Arc;
+
 use egui::Ui;
 use serde_json::{Value, json};
 
 use crate::VectorcraftApp;
+use crate::caches::{FindFontCache, FontsKey};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::widgets;
@@ -20,7 +23,7 @@ pub fn open(app: &mut VectorcraftApp) {
 /// Open the dialog on the first font the document misses, to replace it (Missing Fonts' Find
 /// Fonts).
 pub fn open_on_missing(app: &mut VectorcraftApp) {
-    let first = fonts(app).iter().position(|f| matches!(f["status"].as_str(), Some("missing" | "substitute")));
+    let first = document_fonts(app, false).0.iter().position(|f| matches!(f["status"].as_str(), Some("missing" | "substitute")));
     open_at(app, first.unwrap_or(0));
 }
 
@@ -28,7 +31,7 @@ pub fn open_on_missing(app: &mut VectorcraftApp) {
 /// System's font ([`system_family`]) to change to, and the last Find In choice (Document at first).
 fn open_at(app: &mut VectorcraftApp, selected: usize) {
     let find_in = FIND_IN.iter().find(|f| **f == app.ui.find_font_in).copied().unwrap_or("document");
-    let used = fonts(app);
+    let (used, _) = document_fonts(app, false);
     let source = "system";
     let rows = replacement_rows(app, source, &used);
     let family = system_family();
@@ -252,6 +255,30 @@ fn fonts(app: &mut VectorcraftApp) -> Vec<Value> {
     app.session.execute("text.fonts", &json!({})).ok().and_then(|v| v.as_array().cloned()).unwrap_or_default()
 }
 
+/// The active document's fonts ([`fonts`]) and, when `missing` is asked for, whether it misses a
+/// font ([`vectorcraft_engine::cmd::fontfiles::missing_fonts`]; `false` when it is not asked
+/// for). Both are kept in [`crate::CanvasCache::find_font`] and worked out again only for another
+/// document, another version of its content or another font generation. No document: no fonts.
+fn document_fonts(app: &mut VectorcraftApp, missing: bool) -> (Arc<Vec<Value>>, bool) {
+    let Some(st) = app.session.active() else { return (Arc::default(), false) };
+    // The generation is read first: fonts loaded while the answers are worked out leave the entry
+    // under the older generation, so the next frame works them out again.
+    let key = FontsKey { uid: st.uid, doc: Arc::downgrade(&st.doc), generation: vectorcraft_text::FontDb::global().generation() };
+    if app.canvas.find_font.as_ref().is_none_or(|c| c.key != key) {
+        let fonts = Arc::new(fonts(app));
+        app.canvas.find_font = Some(FindFontCache { key, fonts, missing: None });
+    }
+    if missing
+        && let Some(c) = app.canvas.find_font.as_mut()
+        && c.missing.is_none()
+        && let Some(st) = app.session.active()
+    {
+        c.missing = Some(!vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).is_empty());
+    }
+    let c = app.canvas.find_font.as_ref();
+    (c.map(|c| c.fonts.clone()).unwrap_or_default(), missing && c.and_then(|c| c.missing).unwrap_or(false))
+}
+
 pub fn confirm(app: &mut VectorcraftApp) -> Result<Value, String> {
     if let Some(ctx) = app.ui_ctx.clone() {
         clear_search(&ctx);
@@ -279,10 +306,9 @@ fn change(app: &mut VectorcraftApp, d: &Dialog, from: &Value, all: bool) -> Resu
 pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.dialog.clone() else { return };
     let t = Tokens::get(ctx);
-    let list = fonts(app);
     // Find in Folder… shows when the document misses fonts, fonts used only in its symbols included.
-    let offer_folder = crate::picks::can(app, &crate::picks::PickRequest::Folder)
-        && app.session.active().is_some_and(|st| !vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).is_empty());
+    let can_pick = crate::picks::can(app, &crate::picks::PickRequest::Folder);
+    let (list, offer_folder) = document_fonts(app, can_pick);
     let mut close = false;
     let mut find_in_folder = false;
     let mut act: Option<&str> = None;
@@ -416,7 +442,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         match run_button(app, &d, a, from) {
             // The rows are a snapshot: the document's fonts and the recent fonts have moved on.
             Ok(_) if a != "find" => {
-                let used = fonts(app);
+                let (used, _) = document_fonts(app, false);
                 d.fields.insert("rows".into(), rows_json(&replacement_rows(app, &d.str("replaceFrom"), &used)));
             }
             Ok(_) => {}
@@ -1420,5 +1446,232 @@ mod tests {
         assert!(font_note(&row("substitute", 0)).0.contains("substituted by W4"));
         let (note, color) = font_note(&row("exact", 2));
         assert!(note.contains("2 characters") && color.is_some());
+    }
+
+    /// The font list the dialog keeps for the active document.
+    fn kept_list(app: &VectorcraftApp) -> Arc<Vec<Value>> {
+        app.canvas.find_font.as_ref().expect("the dialog kept the document's fonts").fonts.clone()
+    }
+
+    /// The kept list and Find in Folder… are what `text.fonts` and `missing_fonts` give now.
+    fn assert_current(app: &mut VectorcraftApp, shown: &str, why: &str) {
+        let listed = fonts(app);
+        assert_eq!(*kept_list(app), listed, "{why}: the list");
+        let missing = app.session.active().is_some_and(|st| !vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).is_empty());
+        let picks = crate::picks::can(app, &crate::picks::PickRequest::Folder);
+        assert_eq!(shown.contains("Find in Folder…"), picks && missing, "{why}: Find in Folder… {shown}");
+    }
+
+    /// A document set in a missing family and in Inter, with a folder picker.
+    fn missing_font_document() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        for (y, font) in [(20, "Missing Family"), (40, "Inter")] {
+            app.session.execute("text.create", &json!({"x": 10, "y": y, "text": "Hi", "font": font})).unwrap();
+        }
+        app.services.pick_folder = Some(Box::new(|| None));
+        app
+    }
+
+    /// Frames that change nothing in the document, a new selection included, keep the font list
+    /// and the missing-font answer worked out on the first; the answer is worked out only once a
+    /// folder picker is there.
+    #[test]
+    fn the_font_list_is_worked_out_once_per_document_version() {
+        let mut app = missing_font_document();
+        let picker = app.services.pick_folder.take();
+        open(&mut app);
+        assert!(kept_over_frames(&mut app, "no folder picker"), "frames of one document version keep its list");
+        assert_eq!(app.canvas.find_font.as_ref().and_then(|c| c.missing), None, "no picker: the document is not searched for missing fonts");
+        app.services.pick_folder = picker;
+        assert!(kept_over_frames(&mut app, "a folder picker"), "a picker alone keeps the list");
+        assert_eq!(app.canvas.find_font.as_ref().and_then(|c| c.missing), Some(true));
+        app.run("select.all", json!({})).unwrap();
+        assert!(kept_over_frames(&mut app, "a new selection"), "a new selection keeps the list");
+    }
+
+    /// Draws frames of the dialog and tells whether they kept the list kept before them. Another
+    /// test thread that changes the available fonts meanwhile makes the dialog work the list out
+    /// again, so the frames are drawn again until the fonts stay as they are.
+    fn kept_over_frames(app: &mut VectorcraftApp, why: &str) -> bool {
+        for _ in 0..20 {
+            // The generation the kept list was worked out under: the database's generation only
+            // counts up, so the same one after the frames means no fonts changed in between.
+            let before = kept_list(app);
+            let generation = app.canvas.find_font.as_ref().map(|c| c.key.generation);
+            let shown = crate::tests_labels::painted_text(app, |app, ui| show(app, ui.ctx()));
+            assert_current(app, &shown, why);
+            if Some(vectorcraft_text::FontDb::global().generation()) == generation {
+                return Arc::ptr_eq(&before, &kept_list(app));
+            }
+        }
+        panic!("{why}: the available fonts kept changing")
+    }
+
+    /// An edit, its undo and a Change All each give the list of the document as it is then.
+    #[test]
+    fn an_edit_works_the_font_list_out_again() {
+        let mut app = missing_font_document();
+        open(&mut app);
+        crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        let first = kept_list(&app);
+        app.run("text.replaceFont", json!({"from": {"family": "Missing Family"}, "to": {"family": "Inter"}})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "after the replacement");
+        assert!(!shown.contains("Find in Folder…"), "nothing is missing: {shown}");
+        assert_eq!(kept_list(&app).len(), 1, "{:?}", kept_list(&app));
+        app.run("edit.undo", json!({})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "after the undo");
+        assert_eq!(*kept_list(&app), *first, "the undo brings back the first list");
+        let mut d = app.ui.dialog.clone().unwrap();
+        d.fields.insert("family".into(), json!("Source Serif 4"));
+        d.fields.insert("style".into(), json!(""));
+        let from = first.iter().find(|f| f["family"] == "Inter").unwrap().clone();
+        change(&mut app, &d, &from, true).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "after Change All");
+        assert!(kept_list(&app).iter().any(|f| f["family"] == "Source Serif 4"), "{:?}", kept_list(&app));
+    }
+
+    /// Fonts that become available, a composite font defined among them, give the list and the
+    /// missing-font answer as they are with those fonts.
+    #[test]
+    fn other_available_fonts_work_the_font_list_out_again() {
+        const FAMILY: &str = "Find Font Kept List CF";
+        let mut app = missing_font_document();
+        app.session.execute("text.create", &json!({"x": 10, "y": 60, "text": "Ab12", "font": FAMILY})).unwrap();
+        open(&mut app);
+        crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        // The same document under another generation of the font database: what is kept for it no
+        // longer counts.
+        let entry = app.canvas.find_font.as_mut().unwrap();
+        entry.key.generation = u64::MAX;
+        entry.fonts = Arc::default();
+        entry.missing = Some(false);
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "another font generation");
+        let row = |app: &VectorcraftApp| kept_list(app).iter().find(|f| f["family"] == FAMILY).cloned().unwrap();
+        assert_eq!(row(&app)["status"], "missing");
+        let generation = vectorcraft_text::FontDb::global().generation();
+        let parts = json!({"name": FAMILY, "parts": {"kanji": {"font": "Source Sans 3"}, "roman": {"font": "JetBrains Mono"}, "numerals": {"font": "Inter"}}});
+        app.run("type.compositeFonts.set", json!({"fonts": [parts]})).unwrap();
+        assert_ne!(vectorcraft_text::FontDb::global().generation(), generation, "defining a composite font is a new generation");
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "the composite font defined");
+        assert_eq!(row(&app)["status"], "exact");
+        app.run("type.compositeFonts.set", json!({"fonts": []})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "the composite font taken out");
+        assert_eq!(row(&app)["status"], "missing");
+    }
+
+    /// Another document in front, and pattern editing entered and canceled, each give the list of
+    /// the document in front as it is then.
+    #[test]
+    fn the_font_list_follows_the_document_in_front() {
+        let mut app = missing_font_document();
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Source Serif 4"})).unwrap()["id"].clone();
+        app.services.pick_folder = Some(Box::new(|| None));
+        open(&mut app);
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "the second document");
+        app.session.set_active(0);
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "the first document");
+        assert!(shown.contains("Find in Folder…"), "{shown}");
+        app.session.set_active(1);
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("object.pattern.make", json!({"name": "Kept List"})).unwrap();
+        assert!(app.session.active().unwrap().doc.pattern_edit.is_some(), "pattern editing");
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "pattern editing");
+        app.run("object.pattern.cancel", json!({})).unwrap();
+        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+        assert_current(&mut app, &shown, "pattern editing canceled");
+    }
+
+    /// CPU time of this thread in nanoseconds where the system reports it (Linux), else `None`.
+    fn thread_cpu_ns() -> Option<u128> {
+        std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+    }
+
+    /// Time the font list and the missing-font answer a Find Font frame reads, for a document of
+    /// 2,000 point-type objects of 50 characters each and one of 20, set in five installed faces
+    /// and a missing family, with a folder picker: worked out on every frame as `text.fonts` and
+    /// `missing_fonts` (each frame before they were kept), on the first frame of a document version
+    /// ([`document_fonts`] with nothing kept) and on later frames. Per run, the large document
+    /// draws 120 frames and the small one 12,000 (so the thread's CPU clock, which advances in
+    /// steps of a few milliseconds, sees them), and later frames number 1,000,000; the sides
+    /// alternate, and the median time per frame of 7 runs is printed.
+    /// Run with `cargo test --release -p vectorcraft-ui-egui --lib find_font_list_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "manual timing probe; performance depends on machine load"]
+    fn find_font_list_timing() {
+        const KEPT: u32 = 1_000_000;
+        const FACES: [(&str, &str); 6] = [
+            ("Inter", "Regular"),
+            ("Inter", "Medium"),
+            ("Source Sans 3", "Bold"),
+            ("Source Serif 4", "Regular"),
+            ("JetBrains Mono", "Regular"),
+            ("Missing Family", "Regular"),
+        ];
+        for (objects, frames) in [(2_000, 120), (20, 12_000)] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.execute("file.new", &json!({"width": 2000, "height": 2000})).unwrap();
+            for i in 0..objects {
+                let (family, style) = FACES[i % FACES.len()];
+                let text: String = (0..50).map(|c| char::from(b'a' + ((i + c) % 26) as u8)).collect();
+                let (x, y) = ((i % 20 * 90) as f64, (i / 20 * 18) as f64 + 20.0);
+                app.session.execute("text.create", &json!({"x": x, "y": y, "text": text, "font": family, "style": style})).unwrap();
+            }
+            app.services.pick_folder = Some(Box::new(|| None));
+            let every_frame = |app: &mut VectorcraftApp| {
+                let list = fonts(app);
+                let offer = crate::picks::can(app, &crate::picks::PickRequest::Folder)
+                    && app.session.active().is_some_and(|st| !vectorcraft_engine::cmd::fontfiles::missing_fonts(&st.doc).is_empty());
+                (list, offer)
+            };
+            let expected = every_frame(&mut app);
+            assert!(expected.1 && expected.0.len() == FACES.len(), "{expected:?}");
+            let kept = document_fonts(&mut app, true);
+            assert_eq!((kept.0.to_vec(), kept.1), expected, "the kept answers are the ones worked out every frame");
+            // Each side's answers for one frame: the number of fonts listed and Find in Folder….
+            let time = |app: &mut VectorcraftApp, frames: u32, f: &mut dyn FnMut(&mut VectorcraftApp) -> (usize, bool)| {
+                let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
+                for _ in 0..frames {
+                    assert_eq!(f(app), (FACES.len(), true));
+                }
+                let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
+                ns as f64 / f64::from(frames) / 1000.0
+            };
+            let (mut full, mut first, mut later) = (vec![], vec![], vec![]);
+            for _ in 0..7 {
+                full.push(time(&mut app, frames, &mut |app| {
+                    let (list, offer) = every_frame(app);
+                    (list.len(), offer)
+                }));
+                first.push(time(&mut app, frames, &mut |app| {
+                    app.canvas.find_font = None;
+                    let (list, offer) = document_fonts(app, true);
+                    (list.len(), offer)
+                }));
+                later.push(time(&mut app, KEPT, &mut |app| {
+                    let (list, offer) = document_fonts(app, true);
+                    (list.len(), offer)
+                }));
+            }
+            let median = |v: &mut Vec<f64>| {
+                v.sort_by(f64::total_cmp);
+                v[v.len() / 2]
+            };
+            let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
+            eprintln!("{objects} text objects of 50 characters; {clock} per frame, median of 7 runs");
+            eprintln!("worked out every frame ({frames} frames a run):    {:>12.3} us  {full:.3?}", median(&mut full));
+            eprintln!("first frame of a version ({frames} a run):         {:>12.3} us  {first:.3?}", median(&mut first));
+            eprintln!("later frames of the version ({KEPT} a run): {:>12.4} us  {later:.4?}", median(&mut later));
+        }
     }
 }

@@ -242,6 +242,36 @@ fn opening_the_panel_on_the_selected_image_reads_the_list_again() {
     assert_eq!(drawn(&mut app, 2.1), 2, "the missing image's row and its Link Info are drawn");
 }
 
+/// A frame that fetches nothing keeps the stored rows and Link Info as they are, without a copy; the
+/// two-second recheck, another first selected image and an edit each store a new cache.
+#[test]
+fn frames_that_fetch_nothing_reuse_the_cached_rows() {
+    let dir = Folder::new("cache");
+    let (mut app, linked, _) = app(&dir);
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, time: f64| {
+        let raw = egui::RawInput { time: Some(time), ..Default::default() };
+        let text: Vec<String> = super::tests_appearance::frame_raw(&ctx, app, raw, super::links::show).into_iter().map(|(t, _)| t).collect();
+        (super::pstate::<std::sync::Arc<super::links::Cache>>(&ctx, "links-cache"), text)
+    };
+    let (first, text) = frame(&mut app, 1.0);
+    assert!(text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "40 × 20 px"), "{text:?}");
+    let (same, text) = frame(&mut app, 1.5);
+    assert!(std::sync::Arc::ptr_eq(&first, &same), "a frame that fetches nothing stores no new cache");
+    assert!(text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "40 × 20 px"), "{text:?}");
+    let (rechecked, _) = frame(&mut app, 3.6);
+    assert!(!std::sync::Arc::ptr_eq(&same, &rechecked), "the files are looked at again after two seconds");
+    app.run("select.set", json!({"ids": [linked]})).unwrap();
+    let (picked, text) = frame(&mut app, 3.7);
+    assert!(!std::sync::Arc::ptr_eq(&rechecked, &picked), "Link Info follows the first selected image");
+    assert!(text.iter().any(|t| t == "300 × 200 px"), "{text:?}");
+    app.run("edit.clear", json!({"ids": [linked]})).unwrap();
+    let (edited, text) = frame(&mut app, 3.8);
+    assert!(!std::sync::Arc::ptr_eq(&picked, &edited), "an edit lists the rows again");
+    assert!(!text.iter().any(|t| t == "linked.png") && text.iter().any(|t| t == "embedded.png"), "{text:?}");
+}
+
 /// Copy Info copies the file names of the selected links, or of `ids` in the order given, one per
 /// line; it is off with nothing selected, and a bad `ids` leaves the clipboard as it was.
 #[test]
