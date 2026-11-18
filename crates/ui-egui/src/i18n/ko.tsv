@@ -2863,6 +2863,7 @@ diagnostics	ui	UI
 	Line Properties:	선 속성:
 	Line Length:	선 길이:
 	Line Angle:	선 각도:
+	Constrain Pie Angle	파이 각도 고정
 	Polygon Tool	다각형 도구
 	Portrait	세로
 	Portuguese	Português

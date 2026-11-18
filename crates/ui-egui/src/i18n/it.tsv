@@ -2780,6 +2780,7 @@ diagnostics	ui	interfaccia
 	Line Properties:	Proprietà linea:
 	Line Length:	Lunghezza linea:
 	Line Angle:	Angolo linea:
+	Constrain Pie Angle	Vincola angolo del settore
 	Polygon Tool	Strumento Poligono
 	Portrait	Verticale
 	Power Saving (integrated)	Risparmio energetico (integrata)

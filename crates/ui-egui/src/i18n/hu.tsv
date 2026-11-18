@@ -3284,6 +3284,7 @@ diagnostics	ui	felület
 	Line Properties:	Vonal tulajdonságai:
 	Line Length:	Vonal hossza:
 	Line Angle:	Vonal szöge:
+	Constrain Pie Angle	Körcikk szögének megtartása
 	Polygon Tool	Sokszög
 	Portrait	Álló
 	Portrait (flipped)	Álló (megfordítva)

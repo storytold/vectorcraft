@@ -6833,8 +6833,11 @@ polygon (Polygon Properties): `sides` (3–1000), `polygonAngle` (degrees counte
 at 0), `polygonRadius` (pt, centre to vertex), `sideLength` (pt, which sets the radius) and `makeSidesEqual: true`,
 which drops an uneven scale or shear (its sides then differ) and keeps its centre, angle and mean radius; a radius or
 length that isn't a number above 0 is an error. An ellipse (Ellipse Properties): `pieStart` and `pieEnd` (degrees
-counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them. A line drawn
-with the Line Segment tool (Line Properties): `lineLength` (pt, above 0; the line's first end stays in place) and
+counterclockwise from 3 o'clock; 0 to 360 is the whole ellipse) and `invertPie: true`, which swaps them.
+`constrainPie: true` with one of `pieStart` and `pieEnd` (the panels' Constrain Pie Angle link) moves the other angle
+by as much, so each selected ellipse keeps its own span, counterclockwise from its start to its end; a whole ellipse
+stays whole. `constrainPie: true` with both angles, with neither, or with `invertPie: true` is a parameter error. A
+line drawn with the Line Segment tool (Line Properties): `lineLength` (pt, above 0; the line's first end stays in place) and
 `lineAngle` (degrees counterclockwise from 3 o'clock, from the first end to the second; the line turns about its
 midpoint; any finite value is brought into 0 to 360). With both, the length applies first. A line whose ends meet reads
 0° and keeps its place under `lineAngle`; `lineLength` points it to the right. A length that isn't a number above 0,
@@ -6851,6 +6854,7 @@ below 3 or above 1000 counts as 3 or 1000, and a fractional or negative `sides` 
 ```json
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"sides":8,"polygonAngle":22.5,"sideLength":40}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"makeSidesEqual":true}}}
+{"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"pieStart":350,"constrainPie":true}}}
 {"name":"run_command","arguments":{"command":"object.setLiveShape","params":{"lineLength":72,"lineAngle":90}}}
 ```
 
