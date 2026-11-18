@@ -123,36 +123,40 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
+    // (name, count) of the listed library with this id, so a new library anywhere in the list
+    // leaves these checks alone.
+    let entry = |id: &str| libs.iter().find(|l| l["id"] == id).map(|l| (l["name"].as_str().unwrap(), l["count"].as_u64().unwrap()));
     let lib = run(&mut s, "brush.library", json!({"library": "art ribbons"}));
     assert_eq!(
         lib["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Notched Ribbon", "Double Line", "Wave", "Teardrop", "Striped Ribbon"]
     );
-    assert_eq!(libs[0]["count"].as_u64(), Some(5));
+    assert_eq!(entry("art-ribbons"), Some(("Art Ribbons", 5)));
+    assert_eq!(entry("decorative"), Some(("Decorative", 4)));
     let trails = run(&mut s, "brush.library", json!({"library": "game-trails"}));
     assert_eq!(
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
-    assert_eq!(libs[7]["count"].as_u64(), Some(4));
+    assert_eq!(entry("game-trails"), Some(("Game Trails", 4)));
     let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
     assert_eq!(
         beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
     );
-    assert_eq!(libs[8]["count"].as_u64(), Some(4));
+    assert_eq!(entry("energy-beams"), Some(("Energy Beams", 4)));
     let dry = run(&mut s, "brush.library", json!({"library": "Dry Media"}));
     assert_eq!(
         dry["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
-    assert_eq!((libs[9]["name"].as_str(), libs[9]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    assert_eq!(entry("dry-media"), Some(("Dry Media", 4)));
     let arrows = run(&mut s, "brush.library", json!({"library": "Arrows"}));
     assert_eq!(
         arrows["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Solid Arrow", "art"), ("Open Arrow", "art"), ("Double Arrow", "art"), ("Chevron Arrow", "art"), ("Dashed Arrow", "art")]
     );
-    assert_eq!((libs[11]["name"].as_str(), libs[11]["count"].as_u64()), (Some("Arrows"), Some(5)));
+    assert_eq!(entry("arrows"), Some(("Arrows", 5)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
@@ -394,10 +398,17 @@ fn decorative_brushes_repeat_distinct_art_and_survive_a_saved_library() {
     for b in &lib.brushes {
         let BrushKind::Pattern(pattern) = &b.kind else { panic!("{} is not a pattern brush", b.name) };
         assert_eq!(pattern.colorization, vectorcraft_brush::Colorization::Tints);
-        let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &black_stroke());
-        let points = anchors(&pieces.iter().collect::<Vec<_>>());
-        assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
-        signatures.insert(points.len());
+        let points = |len: f64| anchors(&vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(len), &black_stroke()).iter().collect::<Vec<_>>());
+        let (one, four) = (points(48.0), points(192.0));
+        assert!(!one.is_empty() && four.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        // A path four tiles long places the motif four times, each copy one tile further along.
+        assert_eq!(four.len(), 4 * one.len(), "{} repeats its motif", b.name);
+        for (i, p) in four.iter().enumerate() {
+            let q = one[i % one.len()];
+            let shift = 48.0 * (i / one.len()) as f64;
+            assert!((p.x - q.x - shift).abs() < 1e-3 && (p.y - q.y).abs() < 1e-3, "{} copy {} at {p:?}, not {q:?}", b.name, i / one.len());
+        }
+        signatures.insert(one.iter().map(|p| ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)).collect::<Vec<_>>());
         let before = undo_len(&s);
         let applied = run(&mut s, "brush.addFromLibrary", json!({"library": "decorative", "name": b.name, "apply": true, "ids": [path]}));
         assert_eq!((strs(&applied["added"]), &applied["applied"]), (vec![b.name.as_str()], &json!([path])));
