@@ -89,6 +89,8 @@ fn with_status(mut ui: Vec<UiRequest>, warnings: Vec<String>) -> Vec<UiRequest> 
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiRequest {
     Dialog(String, Value),
+    /// Show and select the panel with this id where it is (Window › Transform for `transform`).
+    Panel(String),
     SwitchTool(String),
     /// A message for the status bar: the `warning` of a command the tool ran (Liquify skipping
     /// type under the brush).
@@ -120,6 +122,12 @@ impl Session {
         self.tool.id()
     }
 
+    /// The selection tool chosen last (Selection, Direct Selection or Group Selection), which
+    /// `tool.selectLastSelection` chooses: the Selection tool until one is chosen.
+    pub fn last_selection_tool(&self) -> &'static str {
+        self.last_selection_tool.unwrap_or("selection")
+    }
+
     /// How many times switching or closing documents, or replacing the active one (File › Revert),
     /// has started the tool afresh, also inside a `command.batch` or `action.batch`. A frontend
     /// compares it before and after a command.
@@ -145,7 +153,8 @@ impl Session {
             crate::cmd::distortcmds::silent(self, |g| g.visible = true)?;
         }
         // When the tool already active, or the tool lent a selection tool for a drag, is chosen again,
-        // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend).
+        // `select_tool` calls its [`Tool::chosen_again`] (the Blend tool finishes its blend, the Pen
+        // ends its path).
         let again = self.lender.as_ref().unwrap_or(&self.tool).id() == id;
         self.switch_tool(id, view)?;
         // `switch_tool` returns early for the tool already active.
@@ -1554,7 +1563,9 @@ impl Session {
                     }
                 }
                 Action::Dialog(k, p) => ui.push(UiRequest::Dialog(k, p)),
+                Action::Panel(panel) => ui.push(UiRequest::Panel(panel)),
                 Action::SwitchTool(t) => ui.push(UiRequest::SwitchTool(t)),
+                Action::Status(msg) => ui.push(UiRequest::Status(msg)),
                 Action::Notify(what) => {
                     let view = self.last_view;
                     self.with_tool_cx(view, |t, cx| t.notify(cx, &what));

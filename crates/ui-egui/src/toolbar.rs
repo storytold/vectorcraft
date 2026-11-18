@@ -127,21 +127,20 @@ pub(crate) fn docked_width(ui: &crate::state::UiState) -> f32 {
     }
 }
 
-/// With `UiState::tools_beside_canvas` on, the canvas-edge redocking target, registered even
-/// while Tools floats, and the docked panel, which follows the canvas's left edge as dock columns
-/// resize, collapse or hide. With it off, `app.rs` draws Tools before the docking layout.
+/// The canvas-edge redocking targets, registered even while Tools floats, whichever way
+/// `UiState::tools_beside_canvas` is (a drop on the left one turns it on), and, with it on, the
+/// docked panel, which follows the canvas's left edge as dock columns resize, collapse or hide.
+/// With it off, `app.rs` draws Tools before the docking layout.
 ///
-/// The canvas's right edge, left of the panels, is a redocking target too, and Tools docked there
-/// (`UiState::toolbar_right`) is drawn at it whichever way the setting is.
+/// Tools docked on the canvas's right edge, left of the panels (`UiState::toolbar_right`), is
+/// drawn there whichever way the setting is.
 pub(crate) fn show_beside_canvas(app: &mut VectorcraftApp, ui: &mut Ui) {
     if !app.ui.toolbar || app.ui.screen_mode >= 3 {
         return;
     }
     let canvas = ui.available_rect_before_wrap();
     crate::tools_float::set_right_dock_zone(ui.ctx(), canvas, WIDTH);
-    if app.ui.tools_beside_canvas {
-        crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
-    }
+    crate::tools_float::set_dock_zones(ui.ctx(), canvas, WIDTH);
     if app.ui.toolbar_pos.is_none() && (app.ui.tools_beside_canvas || app.ui.toolbar_right) {
         show(app, ui);
     }
