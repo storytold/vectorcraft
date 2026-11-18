@@ -117,6 +117,24 @@ fn use_artboards_writes_one_drawing_per_artboard() {
 }
 
 #[test]
+fn each_artboard_s_drawing_is_the_drawing_of_that_artboard_alone() {
+    let mut s = two_boards();
+    // A second rectangle on the second artboard, so the two drawings differ.
+    let second = s.doc().unwrap().doc.artboards[1].rect.x0;
+    s.execute("shape.rectangle", &json!({"x": second + 50.0, "y": 50, "width": 20, "height": 20})).unwrap();
+    let r = s.execute("document.export", &json!({"format": "dxf", "useArtboards": true, "unit": "pt"})).unwrap();
+    let files = r["files"].as_array().unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let o = dxf::options(&json!({"unit": "pt"})).unwrap();
+    assert_eq!(files.len(), doc.artboards.len());
+    assert_ne!(b64(&files[0]), b64(&files[1]));
+    for (f, board) in files.iter().zip(&doc.artboards) {
+        let alone = vectorcraft_cad::export(doc, &vectorcraft_cad::DxfOptions { region: board.rect, crop: true, ..o.clone() }).unwrap();
+        assert_eq!(b64(f), alone.bytes, "{}", f["name"]);
+    }
+}
+
+#[test]
 fn selected_only_exports_the_selection_in_its_layers() {
     let mut s = two_boards();
     s.execute("layer.new", &json!({"name": "Top"})).unwrap();

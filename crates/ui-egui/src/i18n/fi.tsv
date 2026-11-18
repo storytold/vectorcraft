@@ -1755,6 +1755,7 @@ digits	Malayalam	Malajalam
 	Underline	Alleviivaus
 	Vertical Scale %	Pystyskaalaus %
 	Axis	Akseli
+	Axis Angle	Akselin kulma
 	ICF Top/Right	ICF ylä/oikea
 	ICF Bottom/Left	ICF ala/vasen
 	Show Font Height Options	Näytä fontin korkeuden asetukset
@@ -1797,6 +1798,7 @@ digits	Malayalam	Malajalam
 	Rule:	Sääntö:
 	Save changes to {name}	Tallenna muutokset kohteeseen {name}
 	Save theme to My Themes	Tallenna teema Omiin teemoihin
+	Set the current fill or stroke to the selected color	Aseta nykyiseksi täytöksi tai viivaksi valittu väri
 	Set the selected color to the current color	Aseta valituksi väriksi nykyinen väri
 	Copy All Styles	Kopioi kaikki tyylit
 	Exported {path}	Viety: {path}
@@ -2249,7 +2251,7 @@ digits	Malayalam	Malajalam
 	Overprint Preview (separations)	Päällepainatuksen esikatselu (erottelut)
 	Show All Plates	Näytä kaikki painolevyt
 	Show all plates	Näytä kaikki painolevyt
-	Show/hide plate (Alt-click: only this plate)	Näytä/piilota painolevy (Alt-napsautus: vain tämä painolevy)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Näytä/piilota painolevy (Alt-napsautus: vain tämä painolevy; uusi Alt-napsautus: kaikki painolevyt)
 	Simulate Paper	Simuloi paperia
 	Use Black Point Compensation	Käytä mustan pisteen kompensointia
 	Working CMYK (don't tag)	Työ-CMYK (ei tunnistetta)
@@ -2289,6 +2291,8 @@ digits	Malayalam	Malajalam
 	Tip extends past the end point	Kärki ulottuu päätepisteen yli
 	Tip on the end point	Kärki päätepisteessä
 	Variable Width Profile	Muuttuvan leveyden profiili
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Viivan sivellin säilyttää oman kokonsa, joten leveysprofiili ei muuta sitä. Poista sivellin, jos haluat käyttää profiilia.
 	Weight:	Paksuus:
 	Art using a deleted global swatch keeps its colour.	Poistettua globaalia värimallia käyttävä kuvitus säilyttää värinsä.
 	Color Group: {name}	Väriryhmä: {name}
@@ -2398,6 +2402,10 @@ digits	Malayalam	Malajalam
 	Flip Horizontal	Käännä vaakasuunnassa
 	Flip Vertical	Käännä pystysuunnassa
 	Polygon Properties:	Monikulmion ominaisuudet:
+	Line Properties:	Viivan ominaisuudet:
+	Line Length:	Viivan pituus:
+	Line Angle:	Viivan kulma:
+	Constrain Pie Angle	Säilytä sektorin kulma
 	Rectangle Properties:	Suorakulmion ominaisuudet:
 	Shape Properties:	Muodon ominaisuudet:
 	Shape Properties	Muodon ominaisuudet
@@ -2439,6 +2447,7 @@ digits	Malayalam	Malajalam
 	Scatter:	Sirottelu:
 	Rotation:	Kierto:
 	Rotation relative to:	Kierto suhteessa:
+	Hue Jitter:	Sävyn vaihtelu:
 	Brush Scale Options	Siveltimen skaalausasetukset
 	Scale Proportionately	Skaalaa suhteellisesti
 	Stretch to Fit Stroke Length	Venytä viivan pituuteen
@@ -2477,6 +2486,7 @@ digits	Malayalam	Malajalam
 	Size:	Koko:
 	Calligraphic Brush Options	Kalligrafisen siveltimen asetukset
 	Bristle Brush Options	Harjassiveltimen asetukset
+	Roundness	Pyöreys
 	Roundness:	Pyöreys:
 	Shape:	Muoto:
 	Bristle Length:	Harjasten pituus:
@@ -3142,6 +3152,8 @@ antiAlias	Sharp	Terävä
 	Every option matches {base}.	Kaikki asetukset vastaavat kohdetta {base}.
 	Files of a PDF standard can't be password-protected.	PDF-standardin mukaisia tiedostoja ei voi suojata salasanalla.
 	Files of this standard tag their colours with ICC profiles.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Tämän standardin tiedostot merkitsevät värinsä ICC-profiileilla, paitsi tulostustavoitteen profiilin CMYK-värit, jotka kirjoitetaan DeviceCMYK-muodossa.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Kun valintana on ”Älä sisällytä profiileja” ja tulostustavoite on CMYK, jokainen CMYK-väri kirjoitetaan DeviceCMYK-muodossa, ellei sitä muunneta toisen profiilin CMYK-kohteeseen.
 	Flattener preset:	Litistyksen esiasetus:
 	General › Thumbnails	Yleiset › Pikkukuvat
 	Grayscale images	Harmaasävykuvat
@@ -3396,6 +3408,9 @@ antiAlias	Sharp	Terävä
 	Variable Options	Muuttujan asetukset
 	Define a variable first	Määritä ensin muuttuja
 	Adjust Adjoining Width Points	Säädä viereisiä leveyspisteitä
+	Incoming	Saapuva
+	Outgoing	Lähtevä
+	Single Width Only	Vain yksi leveys
 	Keep both sides the same width	Pidä molemmat puolet samanlevyisinä
 	Side 1:	Puoli 1:
 	Side 2:	Puoli 2:
@@ -3513,6 +3528,8 @@ theme	Appearance	Ulkoasu
 	Current Brush	Nykyinen sivellin
 	Current Symbol	Nykyinen symboli
 	Delete Brush	Poista sivellin
+	Delete Color	Poista väri
+	Restore Generated Table	Palauta luotu taulukko
 	Delete Symbol	Poista symboli
 	Delete the selected symbol?	Poistetaanko valittu symboli?
 	Delete the selected symbols?	Poistetaanko valitut symbolit?
@@ -3790,6 +3807,7 @@ theme	Appearance	Ulkoasu
 	Select Art	Valitse kuvitus
 	Set Current Layer	Aseta nykyinen taso
 	Flatten Artwork	Litistä kuvitus
+	Locate Layer	Paikanna taso
 	Locate Object	Paikanna objekti
 	Lock Others	Lukitse muut
 	Merge Selected	Yhdistä valitut
@@ -3992,6 +4010,7 @@ theme	Appearance	Ulkoasu
 	Data Recovery	Tietojen palautus
 	Default Language	Oletuskieli
 	Disable Auto Add/Delete	Poista automaattinen lisäys/poisto käytöstä
+	Interpolate Control Points When Moving Anchors	Interpoloi suuntakahvat siirrettäessä ankkuripisteitä
 	Display All Blacks Accurately	Näytä kaikki mustat tarkasti
 	Display All Blacks as Rich Black	Näytä kaikki mustat syvämustina
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Näytä bittikartat reunanpehmennettyinä kuvina pikseliesikatselussa
@@ -4080,6 +4099,9 @@ theme	Appearance	Ulkoasu
 	Printing / Exporting	Tulostus / vienti
 	Real-time Drawing and Editing	Reaaliaikainen piirto ja muokkaus
 	Use Monitor Profile for Canvas	Käytä näytön profiilia kankaalle
+	Refresh Monitor Profile	Päivitä näytön profiili
+@msg	turn on Use Monitor Profile for Canvas first	ota ensin käyttöön ”Käytä näytön profiilia kankaalle”
+@msg	this build doesn't read display profiles	tämä versio ei lue näyttöjen profiileja
 	The canvas is drawn in sRGB.	Kangas piirretään sRGB-tilassa.
 	Canvas display profile:	Kankaan näyttöprofiili:
 	The system matches the window to the display's colors.	Järjestelmä sovittaa ikkunan näytön väreihin.
@@ -4516,6 +4538,7 @@ font-technology	Variable	Muuttuvat
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Hiiren rulla vierittää piirtopintaa sivuttain, kun Cmd/Ctrl on painettuna.
 	Dragging sideways on a numeric field's label changes the field's value.	Numerokentän nimiön vetäminen sivuttain muuttaa kentän arvoa.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Kahden sormen kiertoele kosketuslevyllä kiertää piirtopinnan näkymää.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kun siirrät ankkuripisteitä, jokainen käyrä, jonka toinen pää siirtyy, säilyttää muotonsa suhteessa päihinsä.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Työkalun pikanäppäimen pitäminen painettuna valitsee työkalun, kunnes päästät irti, ja sitten edellinen työkalu valitaan uudelleen.
 	Shows the bounding box while you move the selection or draw a shape.	Näyttää rajausruudun, kun siirrät valintaa tai piirrät muotoa.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Luo leikkuumerkit piirtää japanilaistyyliset merkit roomalaisten sijaan.
@@ -4612,6 +4635,8 @@ font-technology	Variable	Muuttuvat
 	Couldn't paste from the clipboard: {e}	Leikepöydältä ei voitu liittää: {e}
 	Channel	Kanava
 	Circle	Ympyrä
+	Circle Tool	Ympyrätyökalu
+	Circle too large	Ympyrä on liian suuri
 	Clip to Art	Rajaa kuvitukseen
 	Colorize	Väritä
 	Gamma	Gamma
@@ -5016,6 +5041,14 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	on prompt-vastaus, joten sen `value`-arvon on oltava merkkijono tai null
 @msg	must have `kind` alert, confirm or prompt	`kind`-arvon on oltava alert, confirm tai prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` on vain ajolle, jossa ei ole ketään kysyttävää: sovelluksessa henkilö vastaa jokaiseen valintaikkunaan
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` on oltava kokonaisluku väliltä 1–{_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` on sisäkkäin yli 64 tason syvyydellä
+@msg	`args` must be an object	`args` on oltava objekti
+@msg	`args` is larger than 1 MiB	`args` on suurempi kuin 1 MiB
+@msg	`path` is empty	`path` on tyhjä
+@msg	`installed` takes a `path`, not a `source`	`installed` ottaa `path`-arvon, ei `source`-arvoa
+@msg	`path` must name a .js or .jsx file	`path` on oltava .js- tai .jsx-tiedosto
+@msg	give exactly one of `path` and `source`	anna tasan yksi arvoista `path` ja `source`
 @msg	Running a script	Suoritetaan komentosarjaa
 @msg	Copied the script report	Komentosarjan raportti kopioitiin
 @msg	Script file access denied: {path}	Komentosarjan tiedostojen käyttö estettiin: {path}
@@ -5269,6 +5302,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	choose a folder to export to	valitse kansio, johon viedään
 @msg	choose a location for the package	valitse paketin sijainti
 @msg	clipboard is empty	leikepöytä on tyhjä
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: väritaulukkoon on jäätävä vähintään yksi väri
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ei ole väri, kuten "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: enintään {MAX_TABLE} väriä
 @msg	command `{0}` is not available right now: {1}	komento `{0}` ei ole nyt käytettävissä: {1}
@@ -5336,9 +5370,15 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no PNG encoder	ei PNG-kooderia
 @msg	no active document	ei aktiivista asiakirjaa
 @msg	no active perspective plane	ei aktiivista perspektiivitasoa
+@msg	the perspective grid is hidden	perspektiiviruudukko on piilotettu
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Tason automaattinen sijoittaminen on pois päältä: ota käyttöön anchorPoint tai gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint-arvon on oltava true tai false
+@msg	gridlineIntersection must be true or false	gridlineIntersection-arvon on oltava true tai false
+@msg	tolerance must be 0 or more	tolerance-arvon on oltava 0 tai enemmän
+@msg	give `at` or `clear`, not both	anna `at` tai `clear`, ei molempia
 @msg	no anchor points selected	ankkuripisteitä ei ole valittu
-@msg	`points` must be three [x, y] pairs of numbers	`points` on annettava kolmena lukuparina [x, y]
-@msg	direct-select three anchor points, or give `points`	valitse suoraan kolme ankkuripistettä tai anna `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` on annettava kahtena tai kolmena lukuparina [x, y]
+@msg	direct-select two or three anchor points, or give `points`	valitse suoraan kaksi tai kolme ankkuripistettä tai anna `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	näiden pisteiden kautta ei kulje ympyrää: kaksi pisteistä on samoja tai kaikki kolme ovat samalla suoralla
 @msg	no app to open files here	täällä ei ole sovellusta tiedostojen avaamiseen
 @msg	no artboard	ei piirtoalustaa
@@ -5440,6 +5480,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no such user library	käyttäjäkirjastoa ei ole
 @msg	no such view	näkymää ei ole
 @msg	no such width point	leveyspistettä ei ole
+@msg	`single` must be `incoming` or `outgoing`	`single` on oltava `incoming` tai `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` ja `outIndex` on oltava saman epäjatkuvan leveyspisteen kaksi puolikasta
+@msg	a discontinuous width point keeps its place	epäjatkuva leveyspiste pysyy paikallaan
 @msg	no swatch `{name}`	ei värimallia `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	ei värimallikirjastoa `{l}` (ks. swatch.library.list)
 @msg	no symbol instances selected	symboli-ilmentymiä ei ole valittu
@@ -5801,6 +5844,8 @@ variable-list-end	{0}, {1}	{0} ja {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Lataa sivu uudelleen jatkaaksesi (tallentamattomat muutokset voivat kadota).
 @msg	tool (a tool id) is required	tool (työkalun tunnus) vaaditaan
 @msg	{tool} isn't in a toolbar group of several tools	{tool} ei ole usean työkalun työkaluriviryhmässä
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Esitystila piilottaa työkalurivit: tuo ne näkyviin vaihtamalla näyttötilaa
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab on piilottanut työkalurivit: tuo ne näkyviin painamalla Tab-näppäintä
 @msg	onto must name a panel floating in another group	onto-arvon on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	below and above must name a panel floating in another group	below- ja above-arvojen on nimettävä toisessa ryhmässä kelluva paneeli
 @msg	give only one of onto, below and above	anna vain yksi arvoista onto, below ja above
@@ -6304,6 +6349,7 @@ mark-style	Japanese	Japanilainen
 	Cove	Kouru
 	Depth	Syvyys
 	Front	Edestä
+	Side	Sivulta
 	Isometric Bottom	Isometrinen ala
 	Isometric Left	Isometrinen vasen
 	Isometric Right	Isometrinen oikea
@@ -6399,7 +6445,7 @@ mark-style	Japanese	Japanilainen
 @msg	each of `{GRAPHICS}` must be an object	jokaisen `{GRAPHICS}`-kohteen on oltava objekti
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}`-kohteet hyväksyvät arvot symbol, face, x, y, scale ja rotation, eivät arvoa `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	jokainen `{GRAPHICS}`-kohde tarvitsee arvon `symbol`, symbolin nimen
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`-kohteen face-arvon on oltava front tai back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}`-kohteen face-arvon on oltava front, back tai side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`-kohteen {key}-arvon on oltava luku, joka on vähintään {lo} ja enintään {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` on oltava taulukko
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiikat sijoitetaan objektityypeille Taso, Pursota ja Pyöräytä
@@ -7791,6 +7837,14 @@ breakText	Glyphs	Merkit
 	Remove Gaps	Poista välit
 @msg	that makes too many pieces (at most 100000): make the dashes longer	siitä tulee liian monta osaa (enintään 100000): pidennä viivoja
 @msg	select paths, or segments, to divide	valitse jaettavat polut tai segmentit
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pehmeä silta…
+	Smooth Bridge	Pehmeä silta
+	Keep Originals	Säilytä alkuperäiset
+@msg	select two circles to bridge	valitse kaksi yhdistettävää ympyrää
+@msg	one circle is inside the other	toinen ympyrä on toisen sisällä
+@msg	the circles are too far apart for this radius: raise the radius	ympyrät ovat liian kaukana toisistaan tälle säteelle: suurenna sädettä
+@msg	the circles are too far apart for this radius	ympyrät ovat liian kaukana toisistaan tälle säteelle
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Yhteiset tangentit…
 	Common Tangents	Yhteiset tangentit

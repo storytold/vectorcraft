@@ -2890,6 +2890,61 @@ fn the_blob_brush_tip_preview_is_a_named_slider_with_arrow_keys() {
     assert_eq!(angle(&app), -44.0, "the drag gives the preview the focus");
 }
 
+/// A drag that starts on a black dot of the Blob Brush tip preview sets the Roundness from the
+/// pointer's distance from the center along the tip's short axis, leaves the Angle as it is, goes
+/// on past the square's edge (stopping at 100%), and gives the Roundness slider the focus, whose
+/// keys step the Roundness by 1% (10% with Shift) within 0% to 100%. A drag that starts anywhere
+/// else sets only the Angle, and Tab goes from the Angle slider to the Roundness slider.
+#[test]
+fn a_drag_on_a_blob_brush_tip_dot_sets_the_roundness() {
+    use egui::Key::{ArrowDown, ArrowRight, ArrowUp, End, Home, Tab};
+    use egui::Modifiers as M;
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let values = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().expect("Blob Brush Tool Options is open");
+        (d.f64("angle", f64::NAN), d.f64("roundness", f64::NAN))
+    };
+    let mut f = Frames::new();
+    f.run(&mut app, vec![]);
+    let out = f.run(&mut app, vec![]);
+    let (_, value, text) = slider_node(&out, "Roundness");
+    assert_eq!((value, text.as_deref()), (Some(100.0), Some("100%")));
+    let center = f.control(&mut app, "Roundness", egui::accesskit::Role::Slider);
+    // At 0° the dots are straight above and below the center, 18 pt from it at 100%. A click
+    // pressed 6 pt from the upper dot and released 11 pt from it in the same frame takes the dot.
+    let (down, up) = (center + egui::vec2(0.0, -12.0), center + egui::vec2(0.0, -7.0));
+    let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: M::NONE };
+    f.run(&mut app, vec![egui::Event::PointerMoved(down), button(down, true), egui::Event::PointerMoved(up), button(up, false)]);
+    assert_eq!(values(&app), (0.0, 39.0), "a click that starts on the upper dot");
+    f.drag(&mut app, center + egui::vec2(0.0, -7.0), egui::vec2(1.0, -11.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the upper dot dragged out to the tip's length");
+    f.drag(&mut app, center + egui::vec2(0.0, -18.0), egui::vec2(1.0, 9.0));
+    assert_eq!(values(&app), (0.0, 50.0), "the upper dot dragged half way to the center");
+    f.drag(&mut app, center + egui::vec2(0.0, 9.0), egui::vec2(3.0, 60.0));
+    assert_eq!(values(&app), (0.0, 100.0), "the lower dot dragged out of the square");
+    f.drag(&mut app, center + egui::vec2(0.0, 18.0), egui::vec2(0.0, -18.0));
+    assert_eq!(values(&app), (0.0, 0.0), "the lower dot dragged to the center");
+    let mut seen = vec![];
+    for (key, mods, want) in
+        [(ArrowUp, M::NONE, 1.0), (ArrowRight, M::SHIFT, 11.0), (ArrowDown, M::NONE, 10.0), (End, M::NONE, 100.0), (Home, M::NONE, 0.0)]
+    {
+        f.key(&mut app, key, mods);
+        seen.push((key, mods.shift, values(&app)));
+        assert_eq!(values(&app), (0.0, want), "{seen:?}");
+    }
+    let out = f.run(&mut app, vec![]);
+    assert_eq!(slider_node(&out, "Roundness").2.as_deref(), Some("0%"));
+    // With a 0% tip the dots are at the center; a drag that starts away from them sets the Angle.
+    f.drag(&mut app, center + egui::vec2(20.0, 0.0), egui::vec2(0.0, -20.0));
+    assert_eq!(values(&app), (45.0, 0.0), "the drag ends up to the right");
+    f.key(&mut app, ArrowRight, M::NONE);
+    assert_eq!(values(&app), (46.0, 0.0), "the drag gives the Angle slider the focus");
+    f.key(&mut app, Tab, M::NONE);
+    f.key(&mut app, ArrowUp, M::NONE);
+    assert_eq!(values(&app), (46.0, 1.0), "Tab goes on to the Roundness slider");
+}
+
 /// Screen readers can set the Blob Brush tip preview's Angle to a number: the slider offers the
 /// set-value action, a fraction rounds to the whole degrees the field shows, a number past -180° to
 /// 180° sets the nearer end, the last request in a frame wins, and a value that is not a finite
