@@ -305,6 +305,13 @@ pub struct VectorcraftApp {
     /// This host iteration's input carries forwarded keys: they are the main window's although
     /// its OS window doesn't have the keyboard (see `shortcuts::handle`).
     pub(crate) forwarded_frame: bool,
+    /// The forwarded keys of this host iteration hold a Copy or Cut: it copies the art, not text
+    /// selected in this window's labels (see `shortcuts::handle_clipboard`).
+    pub(crate) forwarded_clipboard: bool,
+    /// The key presses among this host iteration's forwarded keys: a Copy or Cut one of them runs
+    /// (F3 and F2 off macOS) copies the art, not text selected in this window's labels (see
+    /// `shortcuts::clipboard_key_to_labels`).
+    pub(crate) forwarded_presses: Vec<egui::Event>,
     /// Synthetic input set the modifiers egui holds (see [`Self::raw_input_hook`]).
     synthetic_modifiers: bool,
     /// The marked text the system IME last sent (`None` once it commits or clears). When the Type
