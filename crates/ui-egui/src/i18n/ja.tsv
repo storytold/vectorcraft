@@ -3278,8 +3278,8 @@ mark-style	Japanese	日本式
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	ドキュメント設定の言語が英語 (米国) の間は、新しいテキストにこの言語が設定されます。ドキュメント内の既存のテキストは自身の言語を保ちます。
-	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみ分割され、ハイフンがなければ分割されません。言語や大文字小文字は問いません。
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	ドキュメント設定の言語が英語 (米国) で、[標準文字スタイル] が言語を設定していない間は、新しいテキストにこの言語が設定されます。ドキュメント内の既存のテキストは自身の言語を保ちます。
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	ハイフネーションがオンの段落では、リストの単語は入力したハイフンの位置でのみ分割され、ハイフンがなければ分割されません。大文字小文字は問いません。韓国語の単語にはハイフンが付かず、インドの言語の単語は文字のまとまりの途中では分割されません。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。

@@ -3267,8 +3267,8 @@ mark-style	Japanese	일본식
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국인 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
-	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 언어나 대소문자는 상관없습니다.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국이고 [기본 문자 스타일]이 언어를 지정하지 않는 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 대소문자는 상관없습니다. 한국어 단어에는 하이픈이 붙지 않으며, 인도 언어의 단어는 문자 묶음 안에서 나뉘지 않습니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	기본값은 환경 설정에서 확인을 클릭하면 적용됩니다. 그곳에서 취소를 누르면 현재 환경 설정이 유지됩니다.
 	Restored documents open unsaved: save them to keep them.	복원된 문서는 저장되지 않은 상태로 열립니다. 보존하려면 저장하세요.
