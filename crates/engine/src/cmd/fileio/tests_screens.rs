@@ -610,6 +610,35 @@ fn include_bleed_pdfx_rows_do_not_warn_about_the_bleed() {
     assert!(warned(&export(&mut s, json!({"includeBleed": true, "selection": "one", "formats": row}))));
 }
 
+/// A PDF row with a bleed warns about art that reaches an artboard's edge and stops short of the
+/// bleed, with or without Include Bleed: the page's trim is the artboard either way. It doesn't
+/// warn about art that reaches the bleed, or on a page of a selection's bounds.
+#[test]
+fn pdf_rows_warn_about_art_short_of_the_bleed_on_artboard_pages_only() {
+    let warned = |r: &Value| r["warnings"].as_array().unwrap().iter().any(|w| super::pdf::is_short_of_bleed(w.as_str().unwrap()));
+    let row = json!([{"format": "pdf", "bleed": {"useDocument": true}}]);
+    let mut s = session(1);
+    s.execute("document.setup", &json!({"bleed": 6})).unwrap();
+    // Against the artboard's top edge.
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 10})).unwrap();
+    assert!(warned(&export(&mut s, json!({"formats": row}))));
+    assert!(warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+    assert!(warned(&export(&mut s, json!({"includeBleed": true, "formats": [{"format": "pdf"}]}))), "the row takes the document's bleed");
+    assert!(!warned(&export(&mut s, json!({"selection": "one", "formats": row}))));
+    assert!(!warned(&export(&mut s, json!({"includeBleed": true, "selection": "one", "formats": row}))));
+    // Out to the bleed edge on the top, left and right.
+    let mut s = session(1);
+    s.execute("document.setup", &json!({"bleed": 6})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": -6, "y": -6, "width": 52, "height": 16})).unwrap();
+    assert!(!warned(&export(&mut s, json!({"formats": row}))));
+    assert!(!warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+    // Without a document bleed, a row's own bleed warns.
+    let mut s = session(1);
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 10})).unwrap();
+    let row = json!([{"format": "pdf", "bleed": {"top": 6, "bottom": 6, "left": 6, "right": 6}}]);
+    assert!(warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+}
+
 /// Each `[x0 y0 x1 y1]` that follows `key` in a PDF's bytes, in the order the file has them, read
 /// as text without VectorCraft's PDF reader (PDF 32000-1:2008, 14.11.2, Page Boundaries).
 fn raw_boxes(pdf: &[u8], key: &str) -> Vec<[f64; 4]> {

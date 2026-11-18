@@ -1349,10 +1349,14 @@ fn encode_and_write(export: ScreenExport, writer: &mut dyn FnMut(&str, &[u8]) ->
     }
     // The document a PDF row writes: with Include Bleed, the artboards as they are.
     let pdf_doc = ungrown.as_deref();
+    // A PDF page of an artboard has the artboard as its trim, with or without Include Bleed. A
+    // page of its art's bounds has every object at its edge: it doesn't say whether art stops
+    // short of the bleed.
+    let artboard_page = o.assets.is_none() && o.layers.is_none() && o.selection.is_none();
     let mut write = |doc: &Document, format: &str, options: &Value| -> Result<Vec<u8>> {
         // The steps are the files: an encoder's own steps (artboards, pages) are not reported.
         let (bytes, given) = vectorcraft_doc::cancel::quiet(|| encode_with_notes(doc, format, options))?;
-        for n in given {
+        for n in given.into_iter().filter(|n| artboard_page || !super::pdf::is_short_of_bleed(&n.text)) {
             add_note(&mut notes, n);
         }
         Ok(bytes)
