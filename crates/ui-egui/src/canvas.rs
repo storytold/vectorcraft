@@ -497,14 +497,8 @@ fn reset_ignore_sampler_clicks(ui: &Ui, id: egui::Id) {
 /// Other widgets' clicks count too, as they do in egui; its pointer state stays untouched.
 fn ignore_sampler_clicks(ui: &Ui, id: egui::Id, consumed: bool) {
     let (delay, distance) = ui.ctx().options(|o| (o.input_options.max_double_click_delay, o.input_options.max_click_dist));
-    let (clicked, primary, at, time) = ui.input(|i| {
-        (
-            i.pointer.any_click(),
-            i.pointer.button_clicked(egui::PointerButton::Primary),
-            i.pointer.interact_pos(),
-            i.time,
-        )
-    });
+    let (clicked, primary, at, time) =
+        ui.input(|i| (i.pointer.any_click(), i.pointer.button_clicked(egui::PointerButton::Primary), i.pointer.interact_pos(), i.time));
     ui.data_mut(|data| data.remove::<u8>(id.with("image-trace-click-count")));
     if !clicked {
         return;
@@ -533,8 +527,15 @@ fn primary_click_count(ui: &Ui, resp: &egui::Response) -> u8 {
     if !resp.clicked_by(egui::PointerButton::Primary) {
         return 0;
     }
-    ui.data(|data| data.get_temp::<u8>(resp.id.with("image-trace-click-count")))
-        .unwrap_or_else(|| if resp.triple_clicked() { 3 } else if resp.double_clicked() { 2 } else { 1 })
+    ui.data(|data| data.get_temp::<u8>(resp.id.with("image-trace-click-count"))).unwrap_or_else(|| {
+        if resp.triple_clicked() {
+            3
+        } else if resp.double_clicked() {
+            2
+        } else {
+            1
+        }
+    })
 }
 
 /// Remove only the pointer sequence acquired by this sampler, never a view or tool drag.
