@@ -497,10 +497,13 @@ fn fill_area_tool_hovers_a_large_document_on_another_thread() {
     s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
     s.tool_poll(v, true).unwrap();
     assert_eq!(s.overlays(v).len(), 1);
-    // A click while a search runs waits for it.
-    s.pointer(&PointerEvent::new(PointerKind::Move, 310.0, 300.0), v).unwrap();
+    // A click while a search runs waits for it: the pointer leaves the area, which starts a
+    // search, and the press inside the area comes before any poll.
+    s.pointer(&PointerEvent::new(PointerKind::Move, 500.0, 500.0), v).unwrap();
+    assert!(s.tool_waiting());
     let undo = undo_len(&s);
     s.pointer(&PointerEvent::new(PointerKind::Down, 310.0, 300.0), v).unwrap();
+    assert!(!s.tool_waiting(), "the press waited for the search");
     s.pointer(&PointerEvent::new(PointerKind::Up, 310.0, 300.0), v).unwrap();
     assert_eq!(undo_len(&s), undo + 1);
 }
