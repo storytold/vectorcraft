@@ -94,6 +94,72 @@ pub fn fit_source_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
     false
 }
 
+/// Area type whose source lays out `lines` lines in its frame, where fewer of them fit here even
+/// after [`fit_source_lines`] (#2769). Each line here can be a little taller than the source's (a
+/// font shown in a fallback, CJK line heights), so a paragraph's lines push the last one more than
+/// a descent past the frame's bottom, and a line that doesn't fit isn't drawn: it went missing
+/// without a sign. For importers: the frame is made taller, from its bottom, by the least that lays
+/// the source's lines out (or all of the text, when it has fewer), plus 0.05 pt for the rounding of
+/// the layout. Horizontal type only. Whether it was.
+pub fn fit_lines(db: &FontDb, t: &mut TextObject, lines: usize) -> bool {
+    if t.vertical || lines == 0 {
+        return false;
+    }
+    let TextKind::Area { frame } = &t.kind else { return false };
+    let frame = frame.clone();
+    let Some(b) = frame.bounds().filter(|b| b.height() > 1e-6 && b.height().is_finite()) else { return false };
+    // Lines the source has but this layout doesn't, with text left over for them.
+    let fits = |t: &TextObject| {
+        let l = layout(db, t);
+        l.lines.len() >= lines || !l.overflow
+    };
+    if fits(t) {
+        return false;
+    }
+    let at = |height: f64| {
+        let by = height / b.height();
+        frame.transformed(Affine::translate((0.0, b.y0)) * Affine::scale_non_uniform(1.0, by) * Affine::translate((0.0, -b.y0)))
+    };
+    let mut probe = t.clone();
+    let mut fits_at = |height: f64| {
+        probe.kind = TextKind::Area { frame: at(height) };
+        fits(&probe)
+    };
+    // The line pitch a frame of `lines` lines would have, to start from.
+    let shown = layout(db, t).lines.len().max(1);
+    let pitch = (b.height() / shown as f64).max(t.runs.iter().map(|r| r.style.size).fold(0.0, f64::max)).max(1.0);
+    let (mut lo, mut hi) = (b.height(), b.height() + pitch * (lines - shown.min(lines) + 1) as f64);
+    // Doubling what is added, a few times at most: a frame narrower than a letter never fits.
+    let mut tries = 0;
+    while !fits_at(hi) {
+        tries += 1;
+        if tries > 6 || !hi.is_finite() {
+            return false;
+        }
+        lo = hi;
+        hi = b.height() + (hi - b.height()) * 2.0;
+    }
+    // The least height that fits, to a hundredth of a point.
+    for _ in 0..32 {
+        if hi - lo < 0.01 {
+            break;
+        }
+        let mid = (lo + hi) / 2.0;
+        if fits_at(mid) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    let taller = TextKind::Area { frame: at(hi + 0.05) };
+    let short = std::mem::replace(&mut t.kind, taller);
+    if !fits(t) {
+        t.kind = short;
+        return false;
+    }
+    true
+}
+
 /// The underline and strikethrough bars of `t` laid out as `layout` (#847): per run and line, a
 /// bar from the stretch's first glyph to its last one's advance, placed and sized by the font's
 /// own underline and strikeout metrics through the glyph's transform (so the size, baseline shift
