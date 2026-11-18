@@ -71,6 +71,12 @@ pub struct DimensionTool {
     /// Whether the last Linear pick worked out landed on the end of a line of a dimension already
     /// drawn, or on a corner of a path's preview bounds (shown as an anchor).
     on_end: bool,
+    /// The path that holds the last Linear pick worked out, when it landed on a corner of that
+    /// path's preview bounds.
+    corner: Option<NodeId>,
+    /// The path that holds the first Linear point, when it was picked on a corner of that path's
+    /// preview bounds.
+    first_corner: Option<NodeId>,
     /// Whether the press under way began on an anchor a Linear click picks.
     press_on_anchor: bool,
     /// The second point clicked for the Linear dimension being placed, and where the pointer was
@@ -226,8 +232,9 @@ struct PreviewCorner {
     at: Point,
     /// The path the point is held against.
     holder: NodeId,
-    /// The path or compound path whose preview bounds have the corner.
-    object: NodeId,
+    /// The same corner of the object's geometric bounds: an anchor of `holder` there is the
+    /// anchor the corner stands in for.
+    stands_for: Point,
 }
 
 /// With Use Preview Bounds on, the corner of a path's or compound path's preview bounds (its
@@ -285,17 +292,20 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
                         continue;
                     }
                     // The path whose own box reaches furthest towards the corner holds it: in a
-                    // compound path, the member that puts that corner where it is.
-                    let mut holder = None;
+                    // compound path, the member that puts that corner where it is. A hidden or
+                    // locked member gives no corner.
+                    let mut holder: Option<(f64, NodeId, bool)> = None;
                     for m in members() {
                         let Some(b) = *w.cache.geometric.entry(m.id).or_insert_with(|| m.geometric_bounds()) else { continue };
                         let gap = corners(b).get(k).map_or(f64::INFINITY, |c| c.distance(q));
-                        if holder.is_none_or(|(near, _)| gap < near) {
-                            holder = Some((gap, m.id));
+                        let editable = m.visible && !m.locked;
+                        if holder.is_none_or(|(near, _, was)| gap < near || (gap == near && editable && !was)) {
+                            holder = Some((gap, m.id, editable));
                         }
                     }
-                    if let Some((_, holder)) = holder {
-                        w.best = Some((d, PreviewCorner { at: q, holder, object: n.id }));
+                    let holder = holder.filter(|(.., editable)| *editable).map(|(gap, id, _)| (gap, id));
+                    if let Some(((_, holder), stands_for)) = holder.zip(corners(geometric).get(k).copied()) {
+                        w.best = Some((d, PreviewCorner { at: q, holder, stands_for }));
                     }
                 }
             }
@@ -321,16 +331,34 @@ fn preview_corner(cx: &ToolContext, p: Point, cache: &mut PreviewBoxes) -> Optio
 }
 
 /// The anchor a pick at `p` lands on instead of `corner`, given `anchor`, the nearest anchor
-/// within reach; `None` when the corner takes it. The corner takes the pick from the anchors of
-/// the object whose preview bounds have it, which sit on the stroke's centerline. An anchor right
-/// on the corner takes it, and so does the nearest anchor of other art when that anchor is nearer
-/// the pointer than the corner.
+/// within reach; `None` when the corner takes it (VectorCraft's own rule). The corner takes the
+/// pick from the anchors of the path holding it at the same corner of the object's geometric
+/// bounds, which sit on the stroke's centerline. An anchor right on the corner takes it, and so
+/// does the nearest other anchor, of this object or of other art, when it is nearer the pointer
+/// than the corner. The holder's anchors and the other art are searched with a budget each, and
+/// `anchor` wins a tie, as the topmost.
 fn anchor_over_corner(cx: &ToolContext, p: Point, corner: &PreviewCorner, anchor: Option<(Point, PointRef)>) -> Option<(Point, PointRef)> {
-    let (at, _) = anchor.as_ref()?;
-    if at.distance(corner.at) <= 1e-9 {
+    if anchor.as_ref().is_some_and(|(at, _)| at.distance(corner.at) <= 1e-9) {
         return anchor;
     }
-    anchor_under_where(cx, p, |id| id != corner.object).filter(|(other, _)| other.distance(p) < corner.at.distance(p))
+    let stands_in = |(at, nearest): &(Point, PointRef)| nearest.node == corner.holder && at.distance(corner.stands_for) <= 1e-9;
+    let first = anchor.filter(|a| !stands_in(a));
+    let reach = cx.tol(ANCHOR_REACH);
+    let own = cx.doc.node(corner.holder).and_then(|n| n.path_data()).and_then(|path| {
+        let anchors = path.subpaths.iter().enumerate().flat_map(|(subpath, sp)| sp.anchors.iter().enumerate().map(move |(i, a)| (subpath, i, a.p)));
+        anchors
+            .take(20_000)
+            .filter(|(.., q)| q.distance(p) <= reach && q.distance(corner.stands_for) > 1e-9)
+            .min_by(|(.., a), (.., b)| a.distance(p).total_cmp(&b.distance(p)))
+            .map(|(subpath, anchor, q)| (q, PointRef { node: corner.holder, subpath, anchor }))
+    });
+    let other = anchor_under_where(cx, p, |id| id != corner.holder);
+    first
+        .into_iter()
+        .chain(other)
+        .chain(own)
+        .filter(|(q, _)| q.distance(p) < corner.at.distance(p))
+        .min_by(|(a, _), (b, _)| a.distance(p).total_cmp(&b.distance(p)))
 }
 
 /// Where a pick at `p` lands on the artwork of the visible, unlocked dimensions already drawn,
@@ -434,18 +462,17 @@ fn nearest_on(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<Point> {
 /// A point on a segment keeps its place along the segment. Any other point is held
 /// against the anchors of the path under it, or, with no path under it, the path of the other
 /// point, so that it moves with that path. None when neither point has a path to link to.
+/// `held_a` and `held_b` name the path holding a point picked on a corner of that path's
+/// preview bounds: such a point is held against that path, however far its strokes or effects
+/// put the corner from the path and whatever other segment lies there.
 fn points_source(
     cx: &ToolContext,
-    boxes: &mut PreviewBoxes,
-    (a, ra): (Point, &Option<PointRef>),
-    (b, rb): (Point, &Option<PointRef>),
+    (a, ra, held_a): (Point, &Option<PointRef>, Option<NodeId>),
+    (b, rb, held_b): (Point, &Option<PointRef>, Option<NodeId>),
 ) -> Option<DimensionSource> {
-    // A point on a corner of a path's preview bounds is held against that path, however far its
-    // strokes or effects put the corner from the path and whatever other segment lies there.
-    let mut corner_of = |p: Point, r: &Option<PointRef>| {
-        r.is_none().then(|| preview_corner(cx, p, boxes)).flatten().filter(|c| c.at.distance(p) <= 1e-9).map(|c| c.holder)
-    };
-    let (corner_a, corner_b) = (corner_of(a, ra), corner_of(b, rb));
+    // A path deleted since the pick holds nothing.
+    let holder = |held: Option<NodeId>| held.filter(|node| cx.doc.node(*node).is_some());
+    let (corner_a, corner_b) = (holder(held_a), holder(held_b));
     let edge = |p: Point, corner: Option<NodeId>| if corner.is_some() { None } else { pick(cx, p) };
     let (edge_a, edge_b) = (edge(a, corner_a), edge(b, corner_b));
     let node = |r: &Option<PointRef>, corner: Option<NodeId>, e: &Option<SegmentRef>| {
@@ -470,8 +497,8 @@ fn points_source(
 
 impl DimensionTool {
     /// Where a Linear pick at `p` lands: with Use Preview Bounds on, on the nearest corner of a
-    /// path's preview bounds within reach, where they differ from its anchors, unless an anchor of
-    /// other art is nearer (held against the path, labeled "anchor"; [`anchor_over_corner`]); else on the
+    /// path's preview bounds within reach, where they differ from its anchors, unless another
+    /// anchor is nearer (held against the path, labeled "anchor"; [`anchor_over_corner`]); else on the
     /// nearest anchor of any path, within reach (kept as
     /// a link to its path), labeled "anchor"; else on the nearest end of a line of a dimension
     /// already drawn, within the same reach (no link), also labeled "anchor"; else where Smart Guides put it (another object's anchor or centre, in
@@ -489,11 +516,13 @@ impl DimensionTool {
         });
         let guided = self.snap.hover(cx, p, &[], leave.as_ref());
         self.on_end = false;
+        self.corner = None;
         let mut anchor = anchor_under(cx, p);
         if let Some(corner) = preview_corner(cx, p, &mut self.preview_boxes) {
             anchor = anchor_over_corner(cx, p, &corner, anchor);
             if anchor.is_none() {
                 self.on_end = true;
+                self.corner = Some(corner.holder);
                 self.snap.label(corner.at, "anchor");
                 return (corner.at, None);
             }
@@ -645,6 +674,8 @@ impl DimensionTool {
         self.press = None;
         self.press_on_anchor = false;
         self.on_end = false;
+        self.corner = None;
+        self.first_corner = None;
         self.points.clear();
         self.lines.clear();
         self.dragging = false;
@@ -658,15 +689,22 @@ impl DimensionTool {
         match self.kind {
             Kind::Linear => {
                 let (mut at, mut reference) = self.snap_linear(cx, p);
+                let mut corner = self.corner;
                 if mods.shift
                     && let Some((last, _)) = self.points.last()
                 {
+                    let snapped = at;
                     at = constrained(cx, *last, at);
                     reference = reference.filter(|r| r.position(cx.doc) == Some(at));
+                    corner = corner.filter(|_| at.distance(snapped) <= 1e-9);
                 }
                 self.points.push((at, reference));
+                if self.points.len() == 1 {
+                    self.first_corner = corner;
+                }
                 if let [(a, ra), (b, rb)] = self.points.as_slice() {
-                    let source = points_source(cx, &mut self.preview_boxes, (*a, ra), (*b, rb));
+                    let source = points_source(cx, (*a, ra, self.first_corner), (*b, rb, corner));
+                    self.first_corner = None;
                     let mut d = self.recipe(DimensionMode::Linear, *a, *b, Point::ZERO, source);
                     if d.resolve(cx.doc).is_ok() {
                         self.second = Some((*b, p));
@@ -1222,6 +1260,12 @@ mod tests {
                 .into_iter()
                 .any(|o| matches!(o, Overlay::Anchor { p, filled: false, size, .. } if p.distance(Point::new(99.5, 99.5)) < 1e-9 && size == 10.0));
             assert!(ring, "({x}, {y})");
+            let label = t
+                .snap
+                .guides()
+                .iter()
+                .any(|o| matches!(o, Overlay::Label { p, text, .. } if text == "anchor" && p.distance(Point::new(99.5, 99.5)) < 1e-9));
+            assert!(label, "({x}, {y}): {:?}", t.snap.guides());
         }
     }
 
@@ -1279,6 +1323,108 @@ mod tests {
         wide.stroke_mut().expect("a stroke").width = 40.0;
         wider.node_mut(id).expect("the rectangle").appearance = wide.into();
         assert!(free.position(&wider).is_some_and(|q| near(q, Point::new(99.5, 99.5))), "{:?}", free.position(&wider));
+        // Scaled 200% with Scale Strokes off, the point moves with the anchors and no longer sits
+        // on the corner of the preview bounds, which the 1 point stroke puts at (199.5, 199.5).
+        let mut scaled = d.clone();
+        scaled.node_mut(id).expect("the rectangle").transform(vectorcraft_geom::Affine::scale(2.0), false);
+        assert!(free.position(&scaled).is_some_and(|q| near(q, Point::new(199.0, 199.0))), "{:?}", free.position(&scaled));
+    }
+
+    /// With Use Preview Bounds on, a corner takes the pick only from the anchors at the same corner
+    /// of its object's geometric bounds. The other anchors of a small stroked circle stay
+    /// pickable, so does the end of another line lying on the anchor the corner stands in for, and
+    /// of two stroked rectangles sharing an edge, each corner of the shared anchors is held against
+    /// its own rectangle.
+    #[test]
+    fn a_corner_takes_only_the_anchor_it_stands_for() {
+        let (s, p) = (Selection::default(), paint());
+        let near = |a: Point, b: Point| a.distance(b) < 1e-9;
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, circle) = (d.layers[0].id, d.alloc_id());
+        let path = vectorcraft_geom::shapes::ellipse(Rect::new(296.0, 296.0, 304.0, 304.0));
+        d.insert(Some(l), 0, Node::path(circle, path, vectorcraft_doc::Appearance::default_art())).expect("the circle");
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        let (q, reference) = t.snap_linear(&c, Point::new(300.0, 296.0));
+        assert!(near(q, Point::new(300.0, 296.0)) && reference.is_some_and(|r| r.node == circle), "{q:?}");
+        let (q, reference) = t.snap_linear(&c, Point::new(296.5, 296.5));
+        assert!(near(q, Point::new(295.5, 295.5)) && reference.is_none() && t.corner == Some(circle), "{q:?}");
+        // An unstroked line ending right on the rectangle's anchor: a click there picks the line's
+        // end, and a click nearer the corner picks the corner.
+        let (mut d, id) = doc_with_rect();
+        let (l, line) = (d.layers[0].id, d.alloc_id());
+        let path =
+            vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 100.0), Point::new(50.0, 20.0)], false));
+        d.insert(Some(l), 1, Node::path(line, path, Default::default())).expect("the line");
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        let (q, reference) = t.snap_linear(&c, Point::new(100.0, 100.0));
+        assert!(near(q, Point::new(100.0, 100.0)) && reference.is_some_and(|r| r.node == line), "{q:?}");
+        let (q, reference) = t.snap_linear(&c, Point::new(99.6, 99.6));
+        assert!(near(q, Point::new(99.5, 99.5)) && reference.is_none() && t.corner == Some(id), "{q:?}");
+        // Two stroked rectangles sharing the edge x = 200; the right one is on top.
+        let (mut d, left) = doc_with_rect();
+        let (l, right) = (d.layers[0].id, d.alloc_id());
+        let path = vectorcraft_geom::shapes::rectangle(Rect::new(200.0, 100.0, 300.0, 200.0));
+        d.insert(Some(l), 1, Node::path(right, path, vectorcraft_doc::Appearance::default_art())).expect("the right rectangle");
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        for (pointer, corner, holder) in [((200.4, 99.6), (200.5, 99.5), left), ((199.6, 99.6), (199.5, 99.5), right)] {
+            let mut t = DimensionTool::default();
+            for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+                t.pointer(&c, &PointerEvent::new(kind, pointer.0, pointer.1));
+            }
+            for kind in [PointerKind::Move, PointerKind::Down, PointerKind::Up] {
+                t.pointer(&c, &PointerEvent::new(kind, 250.0, 300.0));
+            }
+            let pending = t.pending.expect("both points were picked");
+            assert!(near(pending.a, Point::new(corner.0, corner.1)), "{pointer:?}: {:?}", pending.a);
+            let Some(DimensionSource::Points { a: None, free_a: Some(free), .. }) = &pending.source else { panic!("{:?}", pending.source) };
+            assert!(matches!(free, FreePoint::Anchors { node, .. } if *node == holder), "{pointer:?}: {free:?}");
+        }
+    }
+
+    /// A point is held against a path for a corner of its preview bounds only when it was picked
+    /// there: the same position picked another way links to the segment under it.
+    #[test]
+    fn a_point_is_held_for_a_corner_only_when_picked_on_it() {
+        let (mut d, id) = doc_with_rect();
+        let (l, line) = (d.layers[0].id, d.alloc_id());
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(0.0, 99.5), Point::new(300.0, 99.5)], false));
+        d.insert(Some(l), 1, Node::path(line, path, Default::default())).expect("the line");
+        let (s, p) = (Selection::default(), paint());
+        let c = ToolContext { preview_bounds: true, ..cx(&d, &s, &p) };
+        let (corner, b) = (Point::new(99.5, 99.5), Point::new(250.0, 99.5));
+        for (held, node) in [(Some(id), id), (None, line)] {
+            let source = points_source(&c, (corner, &None, held), (b, &None, None));
+            let Some(DimensionSource::Points { free_a: Some(free), .. }) = &source else { panic!("{source:?}") };
+            let linked = match free {
+                FreePoint::Anchors { node, .. } => *node,
+                FreePoint::OnSegment { edge, .. } => edge.node,
+            };
+            assert_eq!(linked, node, "{held:?}: {free:?}");
+        }
+    }
+
+    /// Hovering right on the end of a dimension's line shows the anchor ring there.
+    #[test]
+    fn hovering_right_on_a_dimension_lines_end_shows_the_anchor_ring() {
+        let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let path =
+            vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[Point::new(300.0, 300.0), Point::new(400.0, 300.0)], false));
+        let mut n = Node::path(id, path, Default::default());
+        let recipe = DimensionTool::default().recipe(DimensionMode::Linear, Point::new(0.0, 0.0), Point::new(50.0, 0.0), Point::ZERO, None);
+        n.extras_mut().dimension = Some(Box::new(recipe));
+        d.insert(Some(l), 0, n).expect("the dimension's line");
+        let (s, p) = (Selection::default(), paint());
+        let c = ToolContext { smart_guides: true, snap_to_point: true, ..cx(&d, &s, &p) };
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 300.0, 300.0));
+        let ring = t
+            .overlays(&c)
+            .into_iter()
+            .any(|o| matches!(o, Overlay::Anchor { p, filled: false, size, .. } if p.distance(Point::new(300.0, 300.0)) < 1e-9 && size == 10.0));
+        assert!(ring, "{:?}", t.overlays(&c));
     }
 
     /// The anchors of a live rectangle are picked the same way.
