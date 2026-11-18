@@ -1979,7 +1979,7 @@
 @msg	each font must be {{name, parts}}	თითოეული შრიფტი უნდა იყოს {{name, parts}}
 @msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence-ის numOctaves მაქსიმუმ {MAX_OCTAVES}-ია
 @msg	give fonts: [{{name, parts}}…]	მიუთითეთ fonts: [{{name, parts}}…]
-@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups:  their translucent elements knock out what they cover fully	ჩაკვეთილი ჯგუფები, რომლებშიც ზედმეტად ბევრი ნახევრად გამჭვირვალე ელემენტი ერთმანეთს ფარავს, PDF-ის ჩაკვეთილ ჯგუფებად იწერება: მათი ნახევრად გამჭვირვალე ელემენტები სრულად ჩაკვეთს იმას, რასაც ფარავს
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	ჩაკვეთილი ჯგუფები, რომლებშიც ზედმეტად ბევრი ნახევრად გამჭვირვალე ელემენტი ერთმანეთს ფარავს, PDF-ის ჩაკვეთილ ჯგუფებად იწერება: მათი ნახევრად გამჭვირვალე ელემენტები სრულად ჩაკვეთს იმას, რასაც ფარავს
 @msg	no pattern `{pat}`	პატერნი `{pat}` არ არის
 @msg	numbers out of order in {{}} quantifier	{{}} კვანტიფიკატორში რიცხვები არასწორი რიგითაა
 @msg	plugin.remove: {_1}: {e}: nothing was removed	plugin.remove: {_1}: {e}: არაფერი წაშლილა
