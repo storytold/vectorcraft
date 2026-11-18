@@ -318,13 +318,17 @@ fn pressure_sensitive_brushes_widen_with_pen_pressure_and_survive_a_saved_librar
             };
             let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &stroke);
             let points = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{} at pressure {pressure}", b.name);
             let min = points.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
             let max = points.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
             max - min
         };
         let light = width_at(0.0);
         let heavy = width_at(1.0);
-        assert!(light.is_finite() && heavy > light * 1.3, "{}: light={light}, heavy={heavy}", b.name);
+        for width in [light, heavy] {
+            assert!(width.is_finite() && width > 0.0, "{}: light={light}, heavy={heavy}", b.name);
+        }
+        assert!(heavy > light * 1.3, "{}: light={light}, heavy={heavy}", b.name);
         for line in [line_to(2.0), curve.clone()] {
             let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line, &black_stroke());
             let points = anchors(&pieces.iter().collect::<Vec<_>>());
