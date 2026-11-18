@@ -253,6 +253,16 @@ impl CircleTool {
         }
         self.draw(&[a, b, at])
     }
+
+    /// Is the press a drag at `ev`: dragged already, or `ev` is [`DRAG_PX`] or more from the press?
+    fn drags(&self, cx: &ToolContext, ev: &PointerEvent) -> bool {
+        match self.press {
+            Some(Press::First { from, dragged, .. } | Press::Second { from, dragged, .. } | Press::Third { from, dragged, .. }) => {
+                dragged || ev.pos.distance(from) >= cx.tol(DRAG_PX)
+            }
+            None => false,
+        }
+    }
 }
 
 impl Tool for CircleTool {
@@ -263,6 +273,11 @@ impl Tool for CircleTool {
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         if !ev.pos.is_finite() {
             return vec![];
+        }
+        // A drag ends where it is let go: the release moves the points as a drag to it would. A
+        // click, or a release within DRAG_PX of the press, keeps the points of the press.
+        if ev.kind == PointerKind::Up && self.drags(cx, ev) {
+            self.pointer(cx, &PointerEvent { kind: PointerKind::Drag, ..*ev });
         }
         match ev.kind {
             PointerKind::Move => {
