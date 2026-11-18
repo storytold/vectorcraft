@@ -49,6 +49,9 @@ font-technology	Variable	バリアブル
 	Cap Height	キャップハイト
 	x-Height	x ハイト
 	ICF Box	平均字面
+	Ascent	アセント
+	x Height	x ハイト
+	Em Box Height	仮想ボディの高さ
 	Show Sample	サンプルを表示
 	Hide Sample	サンプルを隠す
 	Max Ascent/Descent	最大アセント/ディセント
@@ -217,6 +220,8 @@ digits	Malayalam	マラヤーラム数字
 	Shear…	シアー…
 	Transform Each…	個別に変形…
 	Reset Bounding Box	バウンディングボックスのリセット
+	Rotate Bounding Box	バウンディングボックスの回転
+	Rotate Bounding Box…	バウンディングボックスの回転…
 	Arrange	重ね順
 	Bring to Front	最前面へ
 	Bring Forward	前面へ
@@ -464,6 +469,8 @@ digits	Malayalam	マラヤーラム数字
 	Reset Tracking and Kerning	トラッキングとカーニングをリセット
 	Reset Horizontal Scale	水平比率をリセット
 	Highlight Font Name	フォント名をハイライト
+	Highlight Font Size	フォントサイズをハイライト
+	Other…	その他…
 	Highlight Kerning	カーニングをハイライト
 	Highlight Tracking	トラッキングをハイライト
 	Step Type	文字を段階的に調整
@@ -750,6 +757,13 @@ digits	Malayalam	マラヤーラム数字
 	Previous Document	前のドキュメント
 	Cascade	重ねて表示
 	Tile	並べて表示
+	Tile All Vertically	すべてを左右に並べて表示
+	Tile All Horizontally	すべてを上下に並べて表示
+	2-Up Layout	2 分割レイアウト
+	3-Up Layout	3 分割レイアウト
+	4-Up Layout	4 分割レイアウト
+	6-Up Layout	6 分割レイアウト
+	Arrange Documents	ドキュメントの配置
 	Float in Window	ウィンドウを分離
 	Float All in Windows	すべてをウィンドウに分離
 	Consolidate All Windows	すべてのウィンドウを統合
@@ -788,6 +802,11 @@ digits	Malayalam	マラヤーラム数字
 	Saturation and brightness	彩度と明るさ
 	Color field	カラーフィールド
 	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
+	Wheel View	ホイール表示
+	Box View	ボックス表示
+	Box Channel	ボックスのチャンネル
+	Color box	カラーボックス
+	Color Wheel Options	カラーホイールオプション
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
@@ -1053,6 +1072,7 @@ digits	Malayalam	マラヤーラム数字
 	Add Anchor (Pen)	アンカーポイントを追加 (ペン)
 	Add Anchor Point	アンカーポイントを追加
 	Add Anchor Point Tool	アンカーポイントの追加ツール
+	Add Around	オブジェクトの周囲に追加
 	Add Effect	効果を追加
 	Add Freeform Line	フリーフォームラインを追加
 	Add Freeform Point	フリーフォームポイントを追加
@@ -1073,8 +1093,12 @@ digits	Malayalam	マラヤーラム数字
 	Add to Selection	選択範囲に追加
 	Add to Swatches	スウォッチに追加
 	Additional Plug-ins Folder	追加プラグインフォルダー
+	Plug-in Instruction Budget	プラグインの命令予算
 	Additional Fonts Folder	追加フォントフォルダー
 	Adjust Adjoining Width Points	隣接する幅ポイントを調整
+	Incoming	入り側
+	Outgoing	出側
+	Single Width Only	1 つの幅のみ
 	Adjust Colors	カラーを調整
 	Adjust Options:	調整オプション:
 	Advanced Options	詳細オプション
@@ -1114,6 +1138,7 @@ digits	Malayalam	マラヤーラム数字
 	Angle:	角度:
 	Angles	角度
 	Animated Zoom	アニメーションズーム
+	Anti Alias	アンチエイリアス
 	Anti-Alias	アンチエイリアス
 	Anti-alias	アンチエイリアス
 	Anti-alias Rasters	ラスターをアンチエイリアス
@@ -1215,6 +1240,12 @@ antiAlias	Sharp	シャープ
 	Brush Affects:	ブラシの影響:
 	Brush Definition	ブラシの定義
 	Brush Options…	ブラシオプション…
+	Options of Selected Object…	選択中のオブジェクトのオプション…
+	Options of Selected Object	選択中のオブジェクトのオプション
+@msg	no path painted with a brush is selected	ブラシで描かれたパスが選択されていません
+@msg	the selected paths are painted with brushes of different types	選択したパスは種類の異なるブラシで描かれています
+@msg	give `params` or `reset`, not both	`params` と `reset` は同時に指定できません
+@msg	a bristle brush has no options of its own on a path	剛毛ブラシにはパスごとのオプションがありません
 	Built-in presets are read-only: New… starts an editable copy.	組み込みのプリセットは読み取り専用です。「新規…」で編集可能なコピーを作成できます。
 	Built-in presets don't change: New makes a copy you can edit.	組み込みのプリセットは変更できません。「新規」で編集可能なコピーを作成します。
 	Built-in presets don't change: New… starts an editable copy.	組み込みのプリセットは変更できません。「新規…」で編集できる複製を作成します。
@@ -1238,6 +1269,12 @@ antiAlias	Sharp	シャープ
 	Channel	チャンネル
 	Character / Paragraph	文字／段落
 	Character Rotation	文字回転
+	Chinese Big 5	中国語 Big 5
+	Cyrillic	キリル文字
+	Greek	ギリシャ語
+	Turkish	トルコ語
+	Baltic	バルト言語
+	Central European	中央ヨーロッパ言語
 	Character Set:	文字セット:
 	Character Style Options	文字スタイルオプション
 	Check Links	リンクを確認
@@ -1297,6 +1334,8 @@ antiAlias	Sharp	シャープ
 	Choose a folder	フォルダーを選択
 	Choose…	選択…
 	Circle	円
+	Circle Tool	円ツール
+	Circle too large	円が大きすぎます
 	Clear All Tabs	すべてのタブを消去
 	Above Text	テキストの上
 	Position Panel Above Text	テキストの上にパネルを配置
@@ -1338,6 +1377,7 @@ antiAlias	Sharp	シャープ
 	Color Guide Options…	カラーガイドオプション…
 	Color Mode	カラーモード
 	Color Mode:	カラーモード:
+	Color Model	カラーモデル
 	Color Model:	カラーモデル:
 	Color Models	カラーモデル
 	Color Picker	カラーピッカー
@@ -1356,6 +1396,7 @@ antiAlias	Sharp	シャープ
 	Colors	カラー
 	Colors:	カラー数:
 	Column Graph Tool	集合縦棒グラフツール
+	Columns	列数
 	Columns:	列数:
 	Coming soon — tracked in the parity plan	近日対応予定
 	Command Click to Select Objects Behind	Command+クリックで背面のオブジェクトを選択
@@ -1479,6 +1520,9 @@ antiAlias	Sharp	シャープ
 	Delete Artboard	アートボードを削除
 	Delete Artboards	アートボードを削除
 	Delete Brush	ブラシを削除
+	Delete Color	カラーを削除
+	Restore Generated Table	生成されたテーブルを復元
+	Unshift All Colors	すべてのカラーのシフトを戻す
 	Delete Character Style	文字スタイルを削除
 	Delete Empty Artboards	空のアートボードを削除
 	Delete Freeform Point	フリーフォームポイントを削除
@@ -1541,6 +1585,7 @@ antiAlias	Sharp	シャープ
 	Dimensions	寸法
 	Direct Selection Tool	ダイレクト選択ツール
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
+	Interpolate Control Points When Moving Anchors	アンカーポイントの移動時に方向線ハンドルを補間
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
 	Preserve	保持
@@ -1694,6 +1739,7 @@ antiAlias	Sharp	シャープ
 	Enable Rubber Band for	ラバーバンドを有効にする対象
 	Enable Touch Gestures	タッチジェスチャーを有効にする
 	Switch Selection and Drawing Modes	選択モードと描画モードを切り替え
+	Select Last Selection Tool	最後に使用した選択ツールに切り替え
 	Enable Touch Workspace	タッチワークスペースを有効にする
 	Enable copying of text, images and other content	テキスト、イメージ、その他のコンテンツのコピーを許可
 	Enable in-menu font previews	メニュー内でフォントプレビューを有効にする
@@ -1829,6 +1875,8 @@ antiAlias	Sharp	シャープ
 	Files	ファイル
 	Files of a PDF standard can't be password-protected.	PDF 規格のファイルにはパスワードを設定できません。
 	Files of this standard tag their colours with ICC profiles.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	この規格のファイルでは、カラーに ICC プロファイルが付けられます。ただし、出力インテントのプロファイルの CMYK カラーは DeviceCMYK として書き出されます。
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	「プロファイルを含めない」と CMYK の出力インテントでは、別のプロファイルの CMYK 変換先に変換されない限り、すべての CMYK カラーが DeviceCMYK として書き出されます。
 	Fill	塗り
 	Fill New Type Objects With Placeholder Text	新規テキストオブジェクトをダミーテキストで埋める
 	Start Lists From Typed Markers	入力した記号からリストを開始
@@ -2333,6 +2381,7 @@ antiAlias	Sharp	シャープ
 	Load SVG into Clipboard	SVG をクリップボードに読み込む
 	Load Text into Clipboard	テキストをクリップボードに読み込む
 	Local Libraries	ローカルライブラリ
+	Locate Layer	レイヤーを検索
 	Locate Object	オブジェクトを検索
 	Locate Selected Objects	選択したオブジェクトを検索
 	Location	場所
@@ -2454,6 +2503,7 @@ antiAlias	Sharp	シャープ
 	Scatter:	散布:
 	Rotation:	回転:
 	Rotation relative to:	回転の基準:
+	Hue Jitter:	色相のばらつき:
 	Brush Scale Options	ブラシ伸縮オプション
 	Scale Proportionately	縦横比を保持して拡大・縮小
 	Stretch to Fit Stroke Length	ストロークの長さに合わせて伸縮
@@ -2490,6 +2540,7 @@ antiAlias	Sharp	シャープ
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	黒は線のカラーになり、白は白のままです。その他のカラーは線のカラーの淡彩になり、明るいカラーほど明るい淡彩になります。
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	黒は黒のまま、白は白のままです。その他のカラーは、暗い場合は線のカラーの陰影に、明るい場合は淡彩になります。
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	キーカラーが線のカラーになります。その他のカラーはキーカラーと同じだけカラーホイール上を移動し、彩度と明るさは保たれます。
+	Roundness	真円率
 	Roundness:	真円率:
 	Fixed	固定
 	Pressure	筆圧
@@ -2726,6 +2777,9 @@ antiAlias	Sharp	シャープ
 	Overprint Stroke	線をオーバープリント
 	Overprint and Transparency Flattener	オーバープリントと透明の分割・統合
 	Overprint and Transparency Flattener Options	オーバープリントと透明の分割・統合オプション
+	Custom…	カスタム…
+	Custom Transparency Flattener Options	カスタムの透明の分割・統合オプション
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS にはアルファ透明がなく、オーバープリントを保持するかどうかは「オーバープリント」で決まります。
 	Overprint:	オーバープリント:
 	Overprints:	オーバープリント:
 	Override Character Color	文字カラーを上書き
@@ -2763,6 +2817,13 @@ antiAlias	Sharp	シャープ
 	Pathfinders:	パスファインダー:
 	Paths	パス
 	Path Length	パスの長さ
+	Grid Size	グリッドのサイズ
+	Grid Colors	グリッドのカラー
+	Flattener Preset	分割・統合プリセット
+	X	X
+	Y	Y
+	Orange	オレンジ
+	Purple	パープル
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	パス：{paths}    アンカー：{anchors}    カラー：{colors}
 	Pattern Editing	パターン編集
 	Pattern options are available in pattern editing mode.	パターンオプションはパターン編集モードで使用できます。
@@ -2800,6 +2861,7 @@ diagnostics	ui	UI
 	Play Current Selection	選択項目を再生
 	Save Actions…	アクションを保存…
 	Load Actions…	アクションを読み込み…
+	Replace Actions…	アクションを置き換え…
 	Reset Actions	アクションをリセット
 	Replace the current actions with the default set?	現在のアクションを初期設定のセットで置き換えますか？
 	Append adds the default set after the current sets instead.	「追加」を選ぶと、初期設定のセットを現在のセットの後に追加します。
@@ -2812,6 +2874,10 @@ diagnostics	ui	UI
 	Polar Grid Tool	同心円グリッドツール
 	Polygon	多角形
 	Polygon Properties:	多角形のプロパティ:
+	Line Properties:	線のプロパティ:
+	Line Length:	線の長さ:
+	Line Angle:	線の角度:
+	Constrain Pie Angle	扇形の角度を固定
 	Polygon Tool	多角形ツール
 	Portrait	縦置き
 	Portuguese	ポルトガル語
@@ -2913,6 +2979,9 @@ mark-style	Japanese	日本式
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
 	Use Monitor Profile for Canvas	キャンバスにモニタープロファイルを使用
+	Refresh Monitor Profile	モニタープロファイルを更新
+@msg	turn on Use Monitor Profile for Canvas first	先に「キャンバスにモニタープロファイルを使用」をオンにしてください
+@msg	this build doesn't read display profiles	このビルドはディスプレイプロファイルを読み込みません
 	The canvas is drawn in sRGB.	キャンバスは sRGB で描画されます。
 	Canvas display profile:	キャンバスのディスプレイプロファイル:
 	The system matches the window to the display's colors.	システムがウィンドウをディスプレイのカラーに合わせます。
@@ -3098,6 +3167,7 @@ mark-style	Japanese	日本式
 	Reshape Segment	セグメントをシェイプ変形
 	Reshape Tool	リシェイプツール
 	Reshape Type Area	テキストエリアの形を変更
+	Resolution	解像度
 	Resolution:	解像度:
 	Responsive	レスポンシブ
 	Restore	復元
@@ -3125,6 +3195,7 @@ mark-style	Japanese	日本式
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl キーを押しながらマウスホイールを回すとカンバスを横にスクロールします。
 	Dragging sideways on a numeric field's label changes the field's value.	数値フィールドのラベルを横にドラッグすると、フィールドの値が変わります。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	アンカーポイントを移動すると、一方の端が移動した各曲線は、両端に対する形状を保ちます。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
 	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	トリムマークを作成で、西洋式ではなく日本式のトンボを描きます。
@@ -3155,6 +3226,29 @@ mark-style	Japanese	日本式
 	The unit for East Asian type measurements, which no field uses yet.	東アジア言語の文字の測定に使う単位で、まだどのフィールドも使っていません。
 	When on, a number typed without a unit into a field in picas is read in points.	オンのとき、パイカのフィールドに単位なしで入力した数値はポイントとして読み取られます。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	XML ID を選ぶと、レイヤー、変数、レイヤーオプションでオブジェクト名が XML ID として表示されます。
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	文字サイズと行送りの増減値です。Cmd/Ctrl+Shift+. と Cmd/Ctrl+Shift+, で文字サイズを 1 段階、Alt も押すと 5 段階変えます。横組みの文字では Alt と上下の矢印キーで行送りを 1 段階、Cmd/Ctrl も押すと 5 段階変えます。
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	トラッキングとカーニングの増減値で、単位は 1/1000 em です。横組みの文字では Alt と左右の矢印キーで、キャレット位置のカーニングまたは選択したテキストのトラッキングを 1 段階、Cmd/Ctrl も押すと 5 段階変えます。
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	ベースラインシフトの増減値です。横組みの文字では Alt と Shift と上下の矢印キーでベースラインを 1 段階、Cmd/Ctrl も押すと 5 段階移動します。
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	文字、段落、OpenType、字形の各パネルに日本語などの東アジアの文字のオプションを表示し、合成フォントのコマンドも表示します。
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	文字パネルと段落パネルに、段落の方向、カシーダ、数字など、アラビア語、ヘブライ語、インド系文字のオプションを表示します。
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	選択ツールは文字をベースライン、エリア内文字の枠、またはパス上でのみ選択し、ボックス内の任意の場所では選択しません。
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	フォントメニューに各フォントを英語名で表示します。オフにすると、自国語の名前も持つフォントはその名前で表示されます。
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	新しいエリア内文字は自動サイズ調整がオンの状態で作成され、横組みの長方形の枠は文字に合わせて高さが伸び縮みします。
+	Font lists and the Type › Font menu show a sample of each font beside its name.	フォントリストとフォントメニューに、各フォントの名前の横にそのフォントのサンプルを表示します。
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	フォントのサンプルを、インターフェイスの明るさにかかわらず白地に濃い色の文字で描きます。メニュー内のフォントプレビューがオンのときだけ有効です。
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	文字パネルなどのフォント欄のリストで各行をどれだけ高くするか、つまり各サンプルの大きさです。
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	最近使用したフォントとフォントリストに、最後に使ったフォントを新しい順にいくつ表示するかです (1～15)。
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	文字のフォントまたはフォントスタイルを変えたとき、新しいフォントに字形がない文字は元のフォントのままになります。
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	OpenType 機能で置き換えられた合字などの字形を、カンバス上でピンクのハイライトで示します。プリントや書き出しには含まれません。
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	文字ツールで 1 文字を選択すると、カンバス上のその横に、選べる異体字の列が表示されます。
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	フォントが見つからず代替フォントで描かれた文字を、カンバス上でピンクのハイライトで示します。プリントや書き出しには含まれません。
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	文字ツールで作成した新しい文字は、選択されたサンプルテキストで始まり、入力するとそれが置き換わります。
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	段落の先頭で 1. や * などのリスト記号とスペースを入力すると、その段落がリストになります。
+	Fonts in this folder show in the font menus and can be used without being installed.	このフォルダーのフォントはフォントメニューに表示され、インストールせずに使えます。
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	文字にグラフィックスタイルを適用すると、スタイルに塗りや線があればその文字自体の塗りや線が取り除かれ、スタイルのペイントが見えるようになります。
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	整列と分布は、ポイント文字を仮想ボディではなく字形のインクで測ります。
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	整列と分布は、エリア内文字を枠ではなく字形のインクで測ります。
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	バウンディングボックスと変形パネルは、ポイント文字を仮想ボディではなく字形のインクで測ります。
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	グリッドが非表示でも、描画、移動、拡大・縮小をグリッドの分割位置にスナップします。オンの間は「ピクセルにスナップ」は働きません。
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	選択されていないガイドの色です。ガイドのラベルを設定したアートボードは、自身のガイドをラベルの色で描きます。
 	Draws guides as solid lines or as dots, including the guides already in the document.	ドキュメントにすでにあるガイドも含め、ガイドを実線または点線で描きます。
@@ -3182,6 +3276,8 @@ mark-style	Japanese	日本式
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	スマートガイドがスナップするために、ポインターやドラッグしたポイントが画面上でアートにどこまで近づく必要があるかです。この距離はどのズームでも同じです。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	直線セグメントの端、または中心から描いた円を、近くの曲線に接するようにスナップします。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	初期値は環境設定で OK をクリックすると適用されます。そこでキャンセルすると現在の環境設定が保たれます。
 	Restored documents open unsaved: save them to keep them.	復元したドキュメントは未保存の状態で開きます。保存して残してください。
@@ -3217,6 +3313,7 @@ mark-style	Japanese	日本式
 	Rounded Rectangle	角丸長方形
 	Rounded Rectangle Tool	角丸長方形ツール
 	Row Size:	行のサイズ:
+	Rows	行数
 	Rows:	行数:
 	Rule:	ルール:
 	Rulers & Grids	定規とグリッド
@@ -3313,6 +3410,12 @@ mark-style	Japanese	日本式
 	Search commands, tools, panels and effects…	コマンド、ツール、パネル、効果を検索…
 	No commands match	一致するコマンドはありません
 	{pos} of {total}: {name}	{total} 件中 {pos} 件目: {name}
+	No menu item	メニュー項目なし
+	Toolbar	ツールバー
+	{toolbar}, in the {tool} group	{toolbar}、{tool} のグループ内
+	In the menu bar: {path}	メニューバー: {path}
+	In the {group} group: press and hold to open it	{group} のグループ内: 長押しで開きます
+	{home}, not shown now	{home}、現在は表示されていません
 @plural	{n} result|{n} results	{n} 件
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} 件中 {shown} 件。続けて入力すると絞り込めます。
 	Recent Commands	最近使ったコマンド
@@ -3370,6 +3473,7 @@ mark-style	Japanese	日本式
 	Set Text	テキストを設定
 	Set Zoom	ズーム率を設定
 	Set base color to the current color	基本カラーを現在のカラーに設定
+	Set the current fill or stroke to the selected color	現在の塗りまたは線を選択したカラーに設定
 	Set the selected color to the current color	選択したカラーを現在のカラーに設定
 	Setup…	設定…
 	Shape Builder	シェイプ形成ツール
@@ -3428,7 +3532,7 @@ mark-style	Japanese	日本式
 	Show all plates	すべての版を表示
 	Show handles when multiple anchors are selected	複数のアンカーを選択したときにハンドルを表示
 	Show {kind} Brushes	{kind}ブラシを表示
-	Show/hide plate (Alt-click: only this plate)	版の表示／非表示 (Alt+クリック: この版のみ)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	版の表示／非表示 (Alt+クリック: この版のみ、もう一度 Alt+クリック: すべての版)
 	Show:	表示:
 	Shown with the optimised preview.	最適化プレビューで表示されます。
 	Side 1:	辺 1:
@@ -3783,6 +3887,8 @@ mark-style	Japanese	日本式
 	User Swatch Library 9	ユーザースウォッチライブラリ 9
 	V Spacing:	垂直方向の間隔:
 	Variable Width Profile	可変幅プロファイル
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	線のブラシは独自のサイズを保つため、幅プロファイルでは変わりません。プロファイルを使うにはブラシを削除してください。
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	線のブラシは独自のサイズを保つため、幅プロファイルでは変わりません。プロファイルを使うにはブラシを削除してください。
 	Variation:	バリエーション:
 	Vector Halftone	ベクトルハーフトーン
 	Vector illustration — fast, open, scriptable.	ベクターイラスト — 高速・オープン・スクリプト対応
@@ -3796,7 +3902,7 @@ mark-style	Japanese	日本式
 	Vertical Type Tool	縦書き文字ツール
 	Vertical Type on a Path Tool	縦書きパス上文字ツール
 	Vertical:	垂直方向:
-	View Artboard Only	アートボードのみ表示
+	View Artboard Contents Only	アートボードの内容のみ表示
 	View Opacity Mask	不透明マスクを表示
 	View PDF after saving	保存後に PDF を表示
 	Viewing Angle:	視角:
@@ -4277,7 +4383,7 @@ file-filter	Templates	テンプレート
 	Composite Fonts	合成フォント
 	Export Composite Fonts	合成フォントを書き出し
 	Import Composite Fonts	合成フォントを読み込み
-@msg	each font must be {name, parts}	各フォントは {name, parts} の形にしてください
+@msg	each font must be {{name, parts}}	各フォントは {{name, parts}} の形にしてください
 @msg	unknown key `{k}`; a font takes name and parts	`{k}` は不明なキーです。フォントに使えるのは name と parts です
 @msg	each font needs a name	各フォントには名前が必要です
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` は合成フォントの名前にできません (1～{COMPOSITE_NAME_MAX} 文字、制御文字なし)
@@ -4290,7 +4396,7 @@ file-filter	Templates	テンプレート
 @msg	two composite fonts are named `{_1}`	`{_1}` という名前の合成フォントが 2 つあります
 @msg	`{_1}` is the name of an installed font	`{_1}` はインストール済みのフォントの名前です
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} に合成フォントの `{font}` が設定されています
-@msg	give fonts: [{name, parts}…]	fonts を指定してください: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	fonts を指定してください: [{{name, parts}}…]
 @msg	path is empty	path が空です
 @msg	fonts must be a list of composite fonts	fonts は合成フォントのリストにしてください
 @msg	names must be strings	names は文字列にしてください
@@ -4463,6 +4569,7 @@ imageTrace	Outline	アウトライン
 	Bevel	ベベル
 	Offset	オフセット
 	Axis	軸
+	Axis Angle	軸の角度
 axis	Horizontal	水平方向
 axis	Vertical	垂直方向
 axis	Both	両方
@@ -4516,7 +4623,7 @@ theme	Appearance	外観
 	Free Transform	自由変形
 	Perspective Distort	遠近変形
 
-# Photoshop-style raster effects (Effect menu, their dialogs).
+# Raster effects (Effect menu, their dialogs).
 	Radial Blur…	ぼかし (放射状)…
 	Blur Center	ぼかしの中心
 	Smart Blur…	ぼかし (詳細)…
@@ -4680,6 +4787,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません
 @msg	Shape Builder: no region under the pointer	シェイプ形成ツール: ポインターの下に領域がありません
+@msg	Shape Builder: select all paths you want to merge	シェイプ形成ツール: 結合するパスをすべて選択してください
 @msg	Shape Builder: select paths or compound paths	シェイプ形成ツール: パスまたは複合パスを選択してください
 @msg	image data `{_1}` is missing	画像データ `{_1}` が見つかりません
 @msg	no Live Paint edge near that point	その位置の近くにライブペイントのエッジがありません
@@ -4715,6 +4823,13 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	データセットが {MAX_CSV_ROWS} 個を超えています: 「データセットを読み込み」が読み込めるのは {MAX_CSV_ROWS} 個までです
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	変数が {MAX_CSV_COLS} 個を超えています: 「データセットを読み込み」が読み込めるのは {MAX_CSV_COLS} 個までです
 @msg	variables that aren't text were left out: {kinds}	テキスト以外の変数は除外されました: {kinds}
+variable-kind	Visibility	表示状態
+variable-kind	Linked File	リンクファイル
+variable-kind	Graph Data	グラフデータ
+variable-kind	Unknown	不明
+variable-list-two	{0}, {1}	{0}、{1}
+variable-list-middle	{0}, {1}	{0}、{1}
+variable-list-end	{0}, {1}	{0}、{1}
 @msg	a new document won't read these variables back with their kind: {names}	新しいドキュメントでは、これらの変数は元の種類で読み込まれません: {names}
 @msg	a new document refuses this file because of these variables: {names}	新しいドキュメントは、これらの変数のためにこのファイルを拒否します: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` の見出し `{header}` は変数 `{other}` として読み込まれます: どちらかの名前を変更してください
@@ -4747,6 +4862,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Expand: no gradient fills	拡張: グラデーションの塗りがありません
 @msg	Expand: nothing to expand	拡張: 拡張するものがありません
 @msg	batch step {_1} (`{id}`) failed: {e}	バッチのステップ {_1} (`{id}`) が失敗しました: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	アクションのステップ {_1} (`{id}`) が失敗しました: {reason}
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ファイルが対応するのは RGB とグレースケールのみです: colorModel には rgb または gray を指定してください
 @msg	Targa files are RGB: colorModel rgb	Targa ファイルが対応するのは RGB のみです: colorModel には rgb を指定してください
 @msg	antiAlias `{id}`: none, art or type	antiAlias に `{id}` は指定できません: none、art、type のいずれかを指定してください
@@ -4843,8 +4959,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	image would be too large; lower the resolution	画像が大きくなりすぎるため、解像度を下げてください
 @msg	clipboard is empty	クリップボードが空です
 @msg	no anchor points selected	アンカーポイントが選択されていません
-@msg	`points` must be three [x, y] pairs of numbers	`points` は 3 組の数値 [x, y] にしてください
-@msg	direct-select three anchor points, or give `points`	アンカーポイントを 3 つダイレクト選択するか、`points` を指定してください
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` は 2 組または 3 組の数値 [x, y] にしてください
+@msg	direct-select two or three anchor points, or give `points`	アンカーポイントを 2 つまたは 3 つダイレクト選択するか、`points` を指定してください
 @msg	no circle passes through these points: two are the same or all three lie on one line	これらの点を通る円はありません: 2 つの点が同じか、3 点すべてが一直線上にあります
 @msg	select at least two objects	オブジェクトを 2 つ以上選択してください
 @msg	exit isolation mode first	先に分離モードを終了してください
@@ -4886,6 +5002,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{label}: lost track of a shape's style	{label}: シェイプのスタイル情報が失われました
 @msg	{label}: select paths	{label}: パスを選択してください
 @msg	{label}: select paths, compound paths, groups or text	{label}: パス、複合パス、グループ、テキストのいずれかを選択してください
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	領域を囲まない直線などのオープンパスは、結果の形を変えません。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} の結果が空になりました。領域を囲まない直線などのオープンパスがあります。含めるには、先にそのパスに「オブジェクト › パス › パスのアウトライン」を適用してください
 @msg	already editing a pattern	すでにパターンを編集中です
 @msg	no pattern `{name}`	パターン `{name}` が見つかりません
 @msg	not in pattern editing mode	パターン編集モードではありません
@@ -4967,6 +5085,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Create Outlines: select text objects	アウトラインを作成: テキストオブジェクトを選択してください
 @msg	paste unavailable	貼り付けを使用できません
 @msg	Save for Web: the image is empty	Web 用に保存: 画像が空です
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: カラーテーブルには少なくとも 1 つのカラーを残す必要があります
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` は別のキーと同じカラーを指しています
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` は「#ff8800」のような形式のカラーではありません
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: 指定できるカラーは {MAX_TABLE} 色までです
 @msg	no artboard {i} (0-based; the document has {_1})	アートボード {i} はありません (番号は 0 始まり、このドキュメントには {_1} 個あります)
@@ -5214,6 +5334,12 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no preset editor	プリセットの編集ダイアログが開いていません
 @msg	no perspective grid preset named `{name}`	`{name}` という名前の遠近グリッドプリセットが見つかりません
 @msg	no active perspective plane	アクティブな遠近面がありません
+@msg	the perspective grid is hidden	遠近グリッドが非表示になっています
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	遠近面の自動配置がオフになっています: anchorPoint または gridlineIntersection をオンにしてください (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint には true または false を指定してください
+@msg	gridlineIntersection must be true or false	gridlineIntersection には true または false を指定してください
+@msg	tolerance must be 0 or more	tolerance には 0 以上の値を指定してください
+@msg	give `at` or `clear`, not both	`at` または `clear` のどちらか一方を指定してください
 @msg	plane must be left, right or ground	plane には left、right、ground のいずれかを指定してください
 @msg	missing `id` (see plugin.list)	`id` が指定されていません (plugin.list を参照)
 @msg	no plug-in {id} is installed	プラグイン {id} はインストールされていません
@@ -5264,6 +5390,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` はカラーではありません (#rrggbb またはプリセット名で指定してください)
 @msg	give the path `id` and the width point `index`	パスの `id` と幅ポイントの `index` を指定してください
 @msg	no such width point	指定された幅ポイントが見つかりません
+@msg	`single` must be `incoming` or `outgoing`	`single` は `incoming` または `outgoing` にしてください
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` と `outIndex` は 1 つの不連続な幅ポイントの 2 つの半分である必要があります
+@msg	a discontinuous width point keeps its place	不連続な幅ポイントの位置は変わりません
 @msg	onto must name a panel floating in another group	onto には、別のグループでフローティングしているパネルを指定してください
 @msg	below and above must name a panel floating in another group	below と above には別のグループでフローティングしているパネルを指定してください
 @msg	give only one of onto, below and above	onto、below、above のうち 1 つだけを指定してください
@@ -5293,6 +5422,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	No saved views (View → New View…)	保存した表示はありません (表示 → 新規表示…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` には、メニュー項目がダイアログを開くコマンドを指定してください (ui.menuDialog を参照)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
+@msg	`view` must be wheel or box	`view` には wheel、box のいずれかを指定してください
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` には hue、saturation、brightness、red、green、blue のいずれかを指定してください
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	`top` and `below` can't both be true	`top` と `below` を同時に true にすることはできません
 @msg	`select` must be true or false	`select` には true または false を指定してください
@@ -5374,6 +5505,13 @@ swatch	Bright Violet	ビビッドバイオレット
 	Show External Script Warning	外部スクリプトの警告を表示
 	A Script Is Running	スクリプトの実行中
 	Script Alert	スクリプトの通知
+	Script File Access	スクリプトのファイルアクセス
+	The script asks to read a file you choose.	スクリプトが、選択したファイルの読み取りを求めています。
+	The script asks to read and write a file you choose.	スクリプトが、選択したファイルの読み書きを求めています。
+	The script asks to read and write a folder you choose, with everything in it.	スクリプトが、選択したフォルダーとその中身すべての読み書きを求めています。
+	Allow Once	今回のみ許可
+	Always Allow This Script	このスクリプトを常に許可
+	Deny	拒否
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
 	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
@@ -5390,6 +5528,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the script is no longer in the Scripts folder	スクリプトは Scripts フォルダーにもうありません
 	Some scripts were not listed	一部のスクリプトは一覧に表示されていません
 	The Scripts folder cannot be read	Scripts フォルダーを読み込めません
+	Loading scripts…	スクリプトを読み込み中…
+	The Scripts folder is still being read	Scripts フォルダーをまだ読み込んでいます
 @msg	the script's run is no longer available	スクリプトの実行は利用できなくなりました
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失敗したコマンドが元に戻せない取り消し手順を変更したため、スクリプトを停止しました
 @msg	a recovery copy could not be written, so the script was not run	復元用のコピーを書き込めなかったため、スクリプトは実行されませんでした
@@ -5402,8 +5542,6 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Script file could not be read	スクリプトファイルを読み込めませんでした
 @msg	Script folder has more than 2,048 entries	スクリプトフォルダーの項目が 2,048 を超えています
 @msg	Script file open mode must be r, w, e or a	スクリプトファイルを開くモードは r、w、e、a のいずれかにしてください
-@msg	Script file writing is not available	スクリプトファイルの書き込みは利用できません
-@msg	Script file dialogs are not available	スクリプトファイルのダイアログは利用できません
 @msg	Script files cannot be opened in another application	スクリプトファイルを別のアプリケーションで開くことはできません
 @msg	Script file access is unavailable on the web	Web ではスクリプトファイルにアクセスできません
 @msg	Script has 256 files open	スクリプトが 256 個のファイルを開いています
@@ -5519,8 +5657,37 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	メインのスクリプトエンジンは実行ごとに新しく作られ、保持されないため、破棄できません
 @msg	there is no script engine named {name}	{name} という名前のスクリプトエンジンはありません
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` は尋ねる相手がいない実行専用です。アプリでは、各ダイアログに本人が回答します
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` には 1 から {_1} までの整数を指定してください
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` の入れ子が 64 階層を超えています
+@msg	`args` must be an object	`args` はオブジェクトである必要があります
+@msg	`args` is larger than 1 MiB	`args` が 1 MiB を超えています
+@msg	`path` is empty	`path` が空です
+@msg	`installed` takes a `path`, not a `source`	`installed` には `source` ではなく `path` を指定してください
+@msg	`path` must name a .js or .jsx file	`path` には .js または .jsx ファイルを指定してください
+@msg	give exactly one of `path` and `source`	`path` と `source` のうち 1 つだけを指定してください
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
+@msg	Script file access denied: {path}	スクリプトのファイルアクセスが拒否されました: {path}
+@msg	Script file access to the app's own folders is not allowed	スクリプトからアプリ自身のフォルダーへのアクセスは許可されていません
+@msg	Script file cannot encode the text	スクリプトのファイルでテキストをエンコードできません
+@msg	Script file could not be written	スクリプトのファイルを書き込めませんでした
+@msg	Script file dialogs need a person to answer them	スクリプトのファイルダイアログには応答する人が必要です
+@msg	Script file is not open for writing	スクリプトのファイルが書き込み用に開かれていません
+@msg	Script file name is already in use	スクリプトのファイル名はすでに使用されています
+@msg	Script file name must be a name without a folder	スクリプトのファイル名はフォルダーを含まない名前にしてください
+@msg	Script file permission can be kept only for a script run from a file	ファイルの許可を保持できるのは、ファイルから実行したスクリプトだけです
+@msg	Script file permission could not be saved	スクリプトのファイルの許可を保存できませんでした
+@msg	Script folder is not empty	スクリプトのフォルダーが空ではありません
+@msg	Script files cannot make aliases	スクリプトのファイルではエイリアスを作成できません
+@msg	Script file hidden setting cannot be changed	スクリプトのファイルの非表示設定は変更できません
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 組み込み関数、ゲッター、変換、または $.evalFile が実行するファイルのコールバック内ではファイルダイアログを開けません。スクリプト自身のコードから呼び出してください
+@msg	the script wrote more file data than one run may write (32 MiB)	スクリプトが 1 回の実行で書き込める量を超えるファイルデータを書き込みました (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	スクリプトのファイルダイアログの `answer` は once、always、deny、stop のいずれかにしてください
+@msg	choose a file or folder first, or deny	先にファイルまたはフォルダーを選択するか、拒否してください
+@msg	the script file permissions could not be saved: {e}	スクリプトのファイル許可を保存できませんでした: {e}
+@msg	this script's file access can be allowed only once	このスクリプトのファイルアクセスは 1 回だけ許可できます
+@msg	Only the person at the keyboard can allow a script's file access	スクリプトのファイルアクセスを許可できるのはキーボードの前にいる人だけです
+@msg	A script is given at most 2,048 files: the files picked after them were left out	スクリプトに渡せるファイルは 2,048 個までのため、それ以降に選んだファイルは除外されました
 @msg	Copied the link info	リンク情報をコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
@@ -5557,6 +5724,8 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	All colors are within the CMYK gamut	すべてのカラーが CMYK の色域内です
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} 個のカラーが CMYK の色域外です
 @msg	Unembedded to {_1}	埋め込みを解除して {_1} に保存しました
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	{n} 枚の画像の埋め込みを解除して {folder} に保存しました
+@msg	every numbered name for {name} is taken in that folder	そのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	no swatch library `{l}` (see swatch.library.list)	スウォッチライブラリ `{l}` が見つかりません (swatch.library.list を参照)
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
@@ -5582,6 +5751,9 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	復帰用データのドキュメントを {n} 件破棄しました
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	復帰用データからドキュメントを {n} 件復元しました: 残すには保存してください
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	ドキュメントを開きました (注意 {n} 件): {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	コピーしましたが、注意事項が {n} 件あります: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	切り取りましたが、注意事項が {n} 件あります: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	画像をトレースしましたが、注意事項が {n} 件あります: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。ドキュメントを開きました (注意 {n} 件): {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} を保存しましたが、注意事項が {n} 件あります: {first}
 @msg	Saving recovery data for {_1}	{_1} の復帰用データを保存中
@@ -5610,6 +5782,8 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	the {tool} tool has no options	{tool} ツールにはオプションがありません
 @msg	unknown tool `{tool}`	`{tool}` は不明なツールです
 @msg	{tool} isn't in a toolbar group of several tools	{tool} は複数のツールからなるツールグループに含まれていません
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	プレゼンテーションモードではツールバーが表示されません: 表示するにはスクリーンモードを変更してください
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab でツールバーが非表示になっています: 表示するには Tab キーを押してください
 @msg	no such document	指定されたドキュメントが見つかりません
 @msg	{_1}: not saved, so not closed	{_1}: 保存されていないため、閉じませんでした
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` は組み込みのワークスペースなので、別の名前を指定してください
@@ -5659,6 +5833,9 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	automation path rejected: outside the read root {root}: {path}	自動化のパスを拒否しました: 読み込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	自動化のパスを拒否しました: 読み込みルート {roots} のいずれの中でもありません: {path}
 @msg	a linked JavaScript file is outside the read roots	リンクされた JavaScript ファイルが読み込みルートの外にあります
+@msg	a linked image file is outside the read roots	リンクされた画像ファイルが読み込みルートの外にあります
+@msg	a linked file's export folder is outside the read roots	リンクされたファイルの書き出しフォルダーが読み込みルートの外にあります
+@msg	a linked file's editing data can't be read to check it against the read roots	リンクされたファイルの編集データを読み込めないため、読み込みルートと照合できません
 @msg	automation path rejected: outside the write root {root}: {path}	自動化のパスを拒否しました: 書き込みルート {root} の外です: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	自動化のパスを拒否しました: 書き込みルート {roots} のいずれの中でもありません: {path}
 @msg	automation path rejected: path is empty	自動化のパスを拒否しました: パスが空です
@@ -5889,6 +6066,7 @@ lighting	Light	ライト
 @msg	missing panel layout	パネル配置がありません
 @msg	unsupported native docking operation	ネイティブドッキング操作は未対応です
 	Linux Display Server	Linux ディスプレイサーバー
+	Low-Latency Drawing	低遅延描画
 	X11 (XWayland) When a Pen Is Attached	ペン接続時は X11 (XWayland)
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	ペンタブレットのペンで描画できない場合は、X11 (XWayland) のいずれかを選択してください。
 	X11 (XWayland)	X11 (XWayland)
@@ -5943,6 +6121,7 @@ lighting	Light	ライト
 	Cove	凹面
 	Depth	奥行き
 	Front	正面
+	Side	側面
 	Isometric Bottom	等角図（底面）
 	Isometric Left	等角図（左）
 	Isometric Right	等角図（右）
@@ -6037,7 +6216,7 @@ lighting	Light	ライト
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` の各項目はオブジェクトにしてください
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` の項目に指定できるのは symbol、face、x、y、scale、rotation で、`{k}` は指定できません
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` の各項目にはシンボルの名前 `symbol` が必要です
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` の face には front、back、side のいずれかを指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
@@ -6799,7 +6978,7 @@ axis	Y Axis	Y 軸
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` には数値または null のリストを指定してください ({r} は指定できません)
 @msg	`scale` must be a number from 0.001 to 1000	`scale` には 0.001 から 1000 までの数値を指定してください
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` には空でない配列を指定してください
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` には "document"、{artboards}、{layers} のいずれかを指定してください
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` には "document"、{{artboards: [index, …]}}、{{layers: [id, …]}} のいずれかを指定してください
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` には "left"、"right"、"top"、"bottom" のいずれかを指定してください
 @msg	`side` places the artboard: leave out x, y, width and height	`side` でアートボードを配置します: x、y、width、height は省略してください
 @msg	`source` is the only path in series group `target`	`source` は系列グループ `target` の唯一のパスです
@@ -6984,7 +7163,7 @@ axis	Y Axis	Y 軸
 @msg	not a regular expression	正規表現ではありません
 @msg	not an action set: the text doesn't start with /version and a number	アクションセットではありません: テキストが /version と数値で始まっていません
 @msg	nothing to repeat	繰り返す対象がありません
-@msg	numbers out of order in {_1} quantifier	{_1} 量指定子の数値の順序が正しくありません
+@msg	numbers out of order in {{}} quantifier	{{}} 量指定子の数値の順序が正しくありません
 @msg	object {_1} needs a 3D effect	オブジェクト {_1} には 3D 効果が必要です
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	オブジェクト {_1}: 中空の「押し出しとベベル」にはキャップがありません: グラフィックをマッピングするには「キャップ」をオンにしてください
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	オブジェクト {_1}: 奥行きが 0 のオブジェクトは面が 1 つです: グラフィックは前面にマッピングしてください
@@ -7053,7 +7232,7 @@ axis	Y Axis	Y 軸
 @msg	the library's file is outside the read roots	ライブラリのファイルが読み取りルートの外にあります
 @msg	the line is too long, or the paths it passes too many, to check	線が長すぎるか、通過するパスが多すぎるため、確認できません
 @msg	the method needs an XML value	このメソッドには XML の値が必要です
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	ペイントがフリーフォームグラデーションではありません (paint.editGradient {kind} で適用してください)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	ペイントがフリーフォームグラデーションではありません (paint.editGradient {{kind: "freeform"}} で適用してください)
 @msg	the parameters or body do not form one function	パラメーターまたは本体が 1 つの関数になっていません
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	ペーストした SVG フィルター {name} は、ドキュメントにある同名のフィルターと描画結果が異なり、使用できる空き名もありません
 @msg	the paths are too many or too tangled to find where they cross	パスが多すぎるか複雑に絡み合っているため、交差する位置を見つけられません
@@ -7340,6 +7519,8 @@ axis	Y Axis	Y 軸
 @msg	`{f}` is the copy of a document open now	`{f}` は現在開いているドキュメントのコピーです
 @msg	`{id}` is no writable format (see document.formats)	`{id}` は書き出せる形式ではありません (document.formats を参照)
 @msg	`{id}` isn't a loaded library	`{id}` は読み込まれているライブラリではありません
+@msg	`{file}` has no swatches of its own	`{file}` には独自のスウォッチがありません
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` にはパターンスウォッチがあり、.vcswatches ファイルには保存できません
 @msg	`{key}` has no colours	`{key}` にカラーがありません
 @msg	`{key}` is a design name	`{key}` にはデザイン名を指定してください
 @msg	`{key}` is a design name or a list of them	`{key}` にはデザイン名またはそのリストを指定してください
@@ -7562,7 +7743,13 @@ axis	Y Axis	Y 軸
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel には {own} (ドキュメントのモード)、grayscale、bitmap のいずれかを指定してください
 @msg	colour groups can't go into colour groups	カラーグループをカラーグループに入れることはできません
 @msg	colour, mode and spot apply to solid-colour swatches only	colour、mode、spot を適用できるのは単色のスウォッチだけです
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	列 {column}: `{cell}` はグラフデータファイルの `%` 列で、読み込まれません
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	{line} 行目、列 {column}: `{var}` のグラフデータファイル `{path}` は相対パスです: `base` か絶対パスを指定してください
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	{line} 行目、列 {column}: `{var}` のグラフデータファイルを読み込めません: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	{line} 行目、列 {column}: `{var}` のグラフデータファイル `{path}` は参照しません: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	{line} 行目、列 {column}: `{var}` のグラフデータファイル `{path}` が {MAX_GRAPH_DATA_FILE} バイトを超えています
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	{line} 行目、列 {column}: `{var}` のグラフデータファイル `{path}` から得られるグラフの値が {MAX_GRAPH_CSV} バイトを超えています
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	{line} 行目、列 {column}: グラフデータファイルが合計で {MAX_GRAPH_FILES_TOTAL} バイトを超えています
+@msg	`base` is empty	`base` が空です
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	列 {column}: `{cell}` が指定している `{name}` は {_1} 変数です
 @msg	column {column}: `{cell}` names no variable	列 {column}: `{cell}` に該当する変数はありません
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	列 {column}: 変数名が {MAX_NAME} 文字を超えています
@@ -7574,6 +7761,7 @@ axis	Y Axis	Y 軸
 @msg	compound {_1} must contain exactly one open path to join	連結するには、複合パス {_1} にオープンパスがちょうど 1 つ含まれている必要があります
 @msg	connect end must be "start" or "end"	connect の end には "start" または "end" を指定してください
 @msg	connect needs a path other than the one extended	connect には、延長したパスとは別のパスが必要です
+@msg	connect needs extend	connect には extend が必要です
 @msg	connect needs id	connect には id が必要です
 @msg	connect path has no open end	connect のパスに開いた端点がありません
 @msg	copy needs path: the file to copy into the document's folder	copy には path が必要です: ドキュメントのフォルダーにコピーするファイルを指定してください
@@ -8883,6 +9071,12 @@ anchor	Points:	ポイント:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` には "free"、"keepAngles" または "symmetric" を指定してください
 @msg	`{key}` must be [x, y]	`{key}` には [x, y] を指定してください
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	単位換算
+	Unit Converter Panel	単位換算パネル
+	Copy with Units	単位付きでコピー
+	From Selection	選択範囲から
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	カラーの種類で選択
 	Objects with Spot Colors	特色を使用したオブジェクト
@@ -9108,6 +9302,14 @@ breakText	Glyphs	字形
 	Remove Gaps	間隔を削除
 @msg	that makes too many pieces (at most 100000): make the dashes longer	分割数が多すぎます（最大 100000）：ダッシュを長くしてください
 @msg	select paths, or segments, to divide	分割するパスまたはセグメントを選択してください
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	スムーズブリッジ…
+	Smooth Bridge	スムーズブリッジ
+	Keep Originals	オリジナルを保持
+@msg	select two circles to bridge	ブリッジでつなぐ円を 2 つ選択してください
+@msg	one circle is inside the other	一方の円がもう一方の円の内側にあります
+@msg	the circles are too far apart for this radius: raise the radius	この半径では円が離れすぎています：半径を大きくしてください
+@msg	the circles are too far apart for this radius	この半径では円が離れすぎています
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	共通接線…
 	Common Tangents	共通接線
@@ -9124,6 +9326,7 @@ breakText	Glyphs	字形
 @msg	One path lies inside the other, so they have no common tangents	一方のパスがもう一方の内側にあるため、共通接線はありません
 @msg	The paths overlap, so they have no internal tangents	パスが重なっているため、内側の接線はありません
 @msg	One path lies inside the other, so they have no internal tangents	一方のパスがもう一方の内側にあるため、内側の接線はありません
+@msg	The point lies inside the path, so it has no tangents	点がパスの内側にあるため、接線はありません
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	破線をパスに拡張
 @msg	select paths with dashed strokes to expand	拡張する破線のパスを選択してください
@@ -9617,3 +9820,18 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	パネルがどの筋入れ線でも他とつながっていません。
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
+	Pressure Sensitive	筆圧対応
+	Flex Ribbon	しなやかなリボン
+	Pulse Stroke	脈打つ線
+	Round Flow	丸筆の流れ
+	Chisel Flow	平筆の流れ
+	Fold Preview	折りプレビュー
+	Fold	折り
+	Show Fold Lines	折り線を表示
+	Three-Quarter	斜め
+	Open a document to preview its folded shape.	ドキュメントを開くと折った形をプレビューできます。
+@msg	Check the fold lines first.	先に折り線をチェックしてください。
+@msg	Panels: {panels}, hinges: {hinges}	パネル: {panels}、ヒンジ: {hinges}
+@msg	Other blanks not shown: {count}	表示されていない他の展開図: {count}
+@msg	A joint does not close by {gap} pt.	継ぎ目が {gap} pt 閉じていません。
+@msg	Two panels pass through each other.	2 つのパネルが互いを貫通しています。
