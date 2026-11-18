@@ -714,8 +714,10 @@ pub(crate) fn rank(entries: &[Entry], index: &Index, query: &str, recent: &[u32]
         typos.push(near);
     }
     // The index reads only the start of a longer query, so such a query matches by the substring
-    // rule, which reads all of it.
-    let fits = query.chars().count() <= INDEX_CHARS;
+    // rule, which reads all of it. With an empty index (a catalog too large for one,
+    // [`Index::build`]), a query matches by the substring rule alone, so words that are text in a
+    // result one by one don't match it.
+    let fits = query.chars().count() <= INDEX_CHARS && (entries.is_empty() || !index.initials.is_empty());
     let packed: String = query.chars().filter(|c| !c.is_whitespace()).collect();
     let packed = Some(packed).filter(|p| (2..=6).contains(&p.chars().count()) && p.chars().all(char::is_alphabetic));
     let mut ranked: Vec<(RankKey, u32)> = vec![];
@@ -1333,6 +1335,21 @@ mod tests {
         assert_eq!(ranked(&c, "transparent kgrou"), ["a.one"], "the description");
         assert_eq!(ranked(&c, "emov backgruond"), ["a.one"], "a typo after a word inside a word");
         assert!(ranked(&c, "bg qxq").is_empty());
+    }
+
+    /// With an empty index (a catalog too large for one), a query matches by the substring rule
+    /// alone: words that are text in a result one by one don't match it.
+    #[test]
+    fn without_an_index_a_query_matches_as_one_text() {
+        let entries = || vec![entry("Zz Xabx Ycdy", "a.one"), entry("Zz Ab.cd", "b.two")];
+        let (list, empty) = (entries(), Index::default());
+        let found = |q: &str| -> Vec<String> {
+            rank(&list, &empty, q, &[], &[]).iter().filter_map(|&i| list.get(i as usize)).map(|e| e.id.clone()).collect()
+        };
+        assert_eq!(found("ab.cd"), ["b.two"]);
+        assert_eq!(found("xabx ycdy"), ["a.one"]);
+        // With the index, each word may be text in a word of the result.
+        assert_eq!(ranked(&synthetic(entries()), "ab.cd"), ["b.two", "a.one"]);
     }
 
     /// A catalog row adds words in the UI language to a group, and a word that is not a single word
