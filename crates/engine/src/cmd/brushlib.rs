@@ -172,6 +172,7 @@ pub const BUILTIN: &[BuiltinBrushLibrary] = &[
     BuiltinBrushLibrary { id: "art-ribbons", name: "Art Ribbons", make: art_ribbons },
     BuiltinBrushLibrary { id: "ink-and-wash", name: "Ink and Wash", make: ink_and_wash },
     BuiltinBrushLibrary { id: "calligraphic-nibs", name: "Calligraphic Nibs", make: calligraphic_nibs },
+    BuiltinBrushLibrary { id: "pressure-sensitive", name: "Pressure Sensitive", make: pressure_sensitive },
     BuiltinBrushLibrary { id: "bristle-brushes", name: "Bristle Brushes", make: bristle_brushes },
     BuiltinBrushLibrary { id: "pattern-borders", name: "Pattern Borders", make: pattern_borders },
     BuiltinBrushLibrary { id: "scatter-shapes", name: "Scatter Shapes", make: scatter_shapes },
@@ -372,6 +373,47 @@ fn calligraphic_nibs() -> BrushLibrary {
 /// and stiffness (%).
 fn bristle(name: &str, shape: BristleShape, [size, length, density, thickness, opacity, stiffness]: [f64; 6]) -> Brush {
     Brush { name: name.into(), kind: BrushKind::Bristle(Bristle { shape, size, length, density, thickness, opacity, stiffness }) }
+}
+
+/// Pressure Sensitive: four original marks whose art width or nib size responds to recorded pen
+/// pressure. Mouse paths keep the engine's neutral middle-pressure rendering.
+fn pressure_sensitive() -> BrushLibrary {
+    let flex = black(band(100.0, 5.0, 48, |x| 0.5 * (x / 100.0 * std::f64::consts::TAU).sin()));
+    let pulse = group(vec![
+        black(band(100.0, 2.8, 64, |x| 1.4 * (x / 100.0 * 2.0 * std::f64::consts::TAU).sin())),
+        black(shapes::ellipse(Rect::new(46.0, -2.2, 54.0, 2.2))),
+    ]);
+    let art_pressure = |name: &str, art: Node, light: f64, heavy: f64| Brush {
+        name: name.into(),
+        kind: BrushKind::Art(ArtBrush {
+            art,
+            width: light,
+            width_mode: Some(Variation::Pressure),
+            width_max: Some(heavy),
+            colorization: Colorization::Tints,
+            ..Default::default()
+        }),
+    };
+    let nib_pressure = |name: &str, angle: f64, roundness: f64, size: f64, variation: f64| Brush {
+        name: name.into(),
+        kind: BrushKind::Calligraphic(Calligraphic {
+            angle,
+            roundness,
+            size,
+            variation: [0.0, 0.0, variation],
+            modes: Some([Variation::Fixed, Variation::Fixed, Variation::Pressure]),
+        }),
+    };
+    built(
+        "Pressure Sensitive",
+        Document::new(100.0, 100.0),
+        vec![
+            art_pressure("Flex Ribbon", flex, 35.0, 250.0),
+            art_pressure("Pulse Stroke", pulse, 45.0, 280.0),
+            nib_pressure("Round Flow", 0.0, 100.0, 7.0, 5.0),
+            nib_pressure("Chisel Flow", 35.0, 25.0, 9.0, 7.0),
+        ],
+    )
 }
 
 /// Bristle Brushes: one bristle brush for each tip shape, from a fine liner to wide fans for
