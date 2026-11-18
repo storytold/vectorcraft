@@ -10,6 +10,26 @@ pub enum DrawMode {
     Inside,
 }
 
+/// Plug-ins & Scratch Disks › Plug-in Instruction Budget: the instructions an object filter's run
+/// may use ([`vectorcraft_plugins::Plugin::large_limits`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginBudget {
+    /// The plug-in's own limits.
+    #[default]
+    Normal,
+    /// At least [`vectorcraft_plugins::LARGE_FUEL`] instructions besides those for each byte of
+    /// input; the time budget is unchanged.
+    Large,
+}
+
+/// A saved Plug-in Instruction Budget: any value but `large`, of any type, reads as Normal, and the
+/// other preferences are read as they are.
+fn plugin_budget<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<PluginBudget, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(if saved.as_str() == Some("large") { PluginBudget::Large } else { PluginBudget::Normal })
+}
+
 /// A saved Default Language as its tag: older preferences hold the language's name, and one the list
 /// no longer has reads as the default.
 fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
@@ -29,6 +49,12 @@ pub struct Prefs {
     pub constrain_angle: f64,
     pub corner_radius: f64,
     pub disable_auto_add_delete: bool,
+    /// General › Interpolate Control Points When Moving Anchors: the default of the `interpolate`
+    /// param of the commands that move direct-selected anchors (a Direct Selection drag, the arrow
+    /// keys, Move, Transform Again). On, the handles of each segment with one moved end are
+    /// re-mapped by the turn, scale and move that take its old ends to its new ends. Off (the
+    /// default), the handles of a moved anchor move with it and the other handles stay.
+    pub interpolate_control_points: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
     /// Other Script… warns before it runs a chosen script.
@@ -173,6 +199,11 @@ pub struct Prefs {
     pub fonts_folder: String,
     // Plug-ins & Scratch Disks
     pub plugins_folder: String,
+    /// Plug-in Instruction Budget: the instructions each object filter run gets, from
+    /// `plugin.run`, a plug-in command and the app alike. Live effects, exporters and importers
+    /// keep their own budgets.
+    #[serde(deserialize_with = "plugin_budget")]
+    pub plugin_instruction_budget: PluginBudget,
     pub scratch_primary: String,
     pub scratch_secondary: String,
     // User Interface
@@ -214,6 +245,10 @@ pub struct Prefs {
     /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
     /// machines are unaffected.
     pub gpu_preference: String,
+    /// The desktop app's window presents without vsync, with frames capped at 240 a second (#6013).
+    /// Read at startup (it takes effect after a restart); `--present-mode` and
+    /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
+    pub low_latency_drawing: bool,
     pub history_states: u32,
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
@@ -393,6 +428,7 @@ impl Default for Prefs {
             constrain_angle: 0.0,
             corner_radius: 12.0,
             disable_auto_add_delete: false,
+            interpolate_control_points: false,
             use_precise_cursors: false,
             show_tool_tips: true,
             show_external_script_warning: true,
@@ -485,6 +521,7 @@ impl Default for Prefs {
             hyphenation_exceptions: String::new(),
             fonts_folder: String::new(),
             plugins_folder: String::new(),
+            plugin_instruction_budget: PluginBudget::Normal,
             scratch_primary: s("Startup"),
             scratch_secondary: s("None"),
             ui_brightness: s("mediumDark"),
@@ -503,6 +540,7 @@ impl Default for Prefs {
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),
+            low_latency_drawing: false,
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,
