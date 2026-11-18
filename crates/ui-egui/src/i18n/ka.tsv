@@ -1920,7 +1920,6 @@
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} ფაილებს გამჭვირვალობა არ აქვს, ფაილს კი ექნებოდა: {what}: ჯერ გააბრტყელეთ (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} გამოსახულებების გახსნა შეუძლებელია (იხ. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` შემოთავაზებულ ვარიანტებში არ არის
-@msg	{k} has control characters{_1}	{k} შეიცავს მმართველ სიმბოლოებს{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ზედმეტად გრძელია (მაქსიმუმ {MAX_TEXT} სიმბოლო)
 @msg	{k} must be > 0	{k} უნდა იყოს > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} უნდა იყოს რიცხვი (pt) ან სიგრძე, მაგალითად "210 mm"

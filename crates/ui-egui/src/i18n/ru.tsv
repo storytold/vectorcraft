@@ -10286,7 +10286,6 @@ shape	Open	Открытый
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	в файлах {kind} нет прозрачности, а в файле оказалось бы {what}: сначала объедините прозрачность (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	изображения {kind} невозможно открыть (см. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` не входит в число допустимых вариантов
-@msg	{k} has control characters{_1}	{k} содержит управляющие символы{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} слишком длинно (не более {MAX_TEXT} символов)
 @msg	{k} must be > 0	{k} должно быть > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} должно быть числом (pt) или длиной, например "210 mm"

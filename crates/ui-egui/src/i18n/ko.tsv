@@ -9924,7 +9924,6 @@ breakText	Glyphs	글리프
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 파일에는 투명도가 없는데 이 파일에는 {what}이(가) 있게 됩니다: 먼저 병합하세요(object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind} 이미지는 열 수 없습니다(document.formats 참조)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}`은(는) 선택 항목 중 하나가 아닙니다
-@msg	{k} has control characters{_1}	{k}에 제어 문자가 있습니다{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k}이(가) 너무 깁니다(최대 {MAX_TEXT}자)
 @msg	{k} must be > 0	{k}은(는) 0보다 커야 합니다
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k}은(는) 숫자(pt) 또는 "210 mm" 같은 길이여야 합니다

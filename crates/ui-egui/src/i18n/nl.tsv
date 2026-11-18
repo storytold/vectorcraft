@@ -7876,7 +7876,6 @@ imageTrace	Outline	Contour
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-bestanden hebben geen transparantie, en het bestand zou {what} bevatten: vlak het eerst af (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-afbeeldingen kunnen niet worden geopend (zie document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` is geen van de keuzes
-@msg	{k} has control characters{_1}	{k} bevat besturingstekens{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} is te lang (maximaal {MAX_TEXT} tekens)
 @msg	{k} must be > 0	{k} moet > 0 zijn
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} moet een getal (pt) of een lengte zoals "210 mm" zijn
