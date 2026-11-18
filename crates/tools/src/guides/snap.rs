@@ -29,7 +29,9 @@ pub(super) fn seg_direction(seg: &PathSeg, t: f64) -> Vec2 {
 }
 
 /// The parameters in (0, 1) where the line from `at` to `seg` is square to it (`perpendicular`)
-/// or grazes it, found by sampling the curve for a change of sign and bisecting.
+/// or grazes it, found by sampling the curve for a change of sign and bisecting. A sample where
+/// the line is exactly square or grazing, and its neighbors are not, is one of them too: no sign
+/// changes on either side of it.
 pub(super) fn touch_params(seg: &PathSeg, at: Point, perpendicular: bool) -> Vec<f64> {
     const STEPS: usize = 24;
     let f = |t: f64| {
@@ -41,7 +43,17 @@ pub(super) fn touch_params(seg: &PathSeg, at: Point, perpendicular: bool) -> Vec
     for i in 1..=STEPS {
         let t = i as f64 / STEPS as f64;
         let cur = (t, f(t));
-        if prev.1.is_finite() && cur.1.is_finite() && prev.1 * cur.1 < 0.0 {
+        if cur.1 == 0.0 {
+            // Not at the end (t = 1), not where `at` lies on the curve or the direction is zero
+            // (a cusp), and not along a stretch that is zero throughout, such as a straight
+            // curve seen from its own line. The sign need not change: the tangent at an
+            // inflection touches zero without crossing it.
+            let isolated = |n: f64| n.is_finite() && n != 0.0;
+            let (v, d) = (seg.eval(t) - at, seg_direction(seg, t));
+            if i < STEPS && isolated(prev.1) && isolated(f((i + 1) as f64 / STEPS as f64)) && v.hypot() * d.hypot() > 1e-12 {
+                out.push(t);
+            }
+        } else if prev.1.is_finite() && cur.1.is_finite() && prev.1 * cur.1 < 0.0 {
             let (mut lo, mut hi) = (prev, cur);
             for _ in 0..40 {
                 let mid = 0.5 * (lo.0 + hi.0);
@@ -483,6 +495,17 @@ impl DrawSnap {
     /// Hide the guides (the gesture ended).
     pub fn clear(&mut self) {
         self.guides.clear();
+    }
+
+    /// Replace the guides with one label `text` at `p`, for a point a tool placed by a rule of its
+    /// own (an anchor or a path it found itself). The label uses the style of the targets the last
+    /// snap gathered. No label shows when Smart Guides or Anchor/Path Labels are off (Snap to Point
+    /// alone gathers targets without labels), or when the last snap gathered no targets.
+    pub(crate) fn label(&mut self, p: Point, text: &str) {
+        self.guides = match &self.targets {
+            Some((_, PointSnap { targets: Some((t, _)), .. })) => t.label(p, text).into_iter().collect(),
+            _ => vec![],
+        };
     }
 
     fn gather(&mut self, cx: &ToolContext, key: SnapKey) {

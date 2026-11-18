@@ -129,9 +129,10 @@ fn rasterize_before_a_transform_keeps_its_options() {
     assert_eq!(crate::rasterize_stage(&effects), Some(vec![1]));
 }
 
-/// The Transform effects after the last Rasterize effect move its image when, from the first of
-/// them on, every visible effect is a Transform effect that moves the art once. Hidden ones, and
-/// ones with Transform Objects off, leave the image where it is.
+/// The Transform effects after the last Rasterize effect move or copy its image when, from the
+/// first of them on, every visible effect is a Transform effect that does not move at random and at
+/// most one of them makes copies. Hidden ones, and ones with Transform Objects off, leave the image
+/// where it is.
 #[test]
 fn rasterize_following_ignores_hidden_and_objects_off() {
     let rasterize = || fx(crate::RASTERIZE, json!({}));
@@ -150,9 +151,16 @@ fn rasterize_following_ignores_hidden_and_objects_off() {
         // the image back.
         (vec![rasterize(), roughen.clone(), shadow.clone(), scale()], Some(vec![3])),
         (vec![rasterize(), scale(), roughen], None),
-        (vec![rasterize(), scale(), shadow], None),
-        (vec![rasterize(), transform(json!({"scaleH": 200, "copies": 2}))], None),
+        (vec![rasterize(), scale(), shadow.clone()], None),
+        // Each copy carries the image, even of a Transform effect that only copies in place.
+        (vec![rasterize(), transform(json!({"scaleH": 200, "copies": 2}))], Some(vec![1])),
+        (vec![rasterize(), transform(json!({"copies": 2}))], Some(vec![1])),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2})), scale()], Some(vec![1, 2])),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2, "objects": false}))], None),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2})), transform(json!({"moveV": 10, "copies": 3}))], None),
+        (vec![rasterize(), transform(json!({"moveH": 10, "copies": 2})), shadow], None),
         (vec![rasterize(), transform(json!({"scaleH": 200, "random": true}))], None),
+        (vec![rasterize(), transform(json!({"scaleH": 200, "copies": 2, "random": true}))], None),
         // The Transform effect before the Rasterize effect moves the art.
         (vec![scale(), rasterize()], None),
         (vec![scale(), rasterize(), rasterize(), scale()], Some(vec![3])),
@@ -173,16 +181,62 @@ fn rasterize_following_ignores_hidden_and_objects_off() {
 fn the_image_moves_by_each_transform_about_the_art_it_takes() {
     let staged = shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0));
     let effects = [fx(crate::RASTERIZE, json!({})), transform(json!({"scaleH": 200, "scaleV": 200})), transform(json!({"moveH": 5}))];
-    let map = crate::stage_map(&effects, &[1, 2], &staged).unwrap();
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    assert_eq!(maps.len(), 1);
     // Twice the size about the center (20, 20), then 5 pt to the right.
     let want = Affine::translate((5.0, 0.0)) * Affine::translate((20.0, 20.0)) * Affine::scale(2.0) * Affine::translate((-20.0, -20.0));
-    assert!(map.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "{map:?}");
+    assert!(same_map(maps[0], want), "{maps:?}");
     // The second Transform effect turns about the center of what the first one made.
     let effects = [fx(crate::RASTERIZE, json!({})), transform(json!({"moveH": 100})), transform(json!({"rotate": 90}))];
-    let map = crate::stage_map(&effects, &[1, 2], &staged).unwrap();
-    let c = map * Point::new(20.0, 20.0);
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    let c = maps[0] * Point::new(20.0, 20.0);
     assert!((c.x - 120.0).abs() < 1e-9 && (c.y - 20.0).abs() < 1e-9, "{c:?}");
-    assert_eq!(crate::stage_map(&effects, &[1, 2], &PathData::default()), None);
+    assert_eq!(crate::stage_maps(&effects, &[1, 2], &PathData::default()), None);
+}
+
+/// Is `a` `b`, each coefficient within 1e-9?
+fn same_map(a: Affine, b: Affine) -> bool {
+    a.as_coeffs().iter().zip(b.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9)
+}
+
+/// Are `maps` `want`, in order?
+fn same_maps(maps: &[Affine], want: &[Affine]) -> bool {
+    maps.len() == want.len() && maps.iter().zip(want).all(|(m, w)| same_map(*m, *w))
+}
+
+/// A Transform effect with copies places the image once for the original and once for each copy,
+/// copy `k` through its map `k` times about the art before it, the last copy lowest and the
+/// original on top. A Transform effect after it moves every placement, about the bounds of all the
+/// copies.
+#[test]
+fn each_copy_carries_the_image() {
+    let staged = shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0));
+    let rasterize = fx(crate::RASTERIZE, json!({}));
+    let effects = [rasterize.clone(), transform(json!({"moveH": 100, "copies": 2}))];
+    let maps = crate::stage_maps(&effects, &[1], &staged).unwrap();
+    let want = [Affine::translate((200.0, 0.0)), Affine::translate((100.0, 0.0)), Affine::IDENTITY];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // Turned 90° about the center (20, 20) each time: copy 2 turns 180°.
+    let effects = [rasterize.clone(), transform(json!({"rotate": 90, "copies": 2}))];
+    let maps = crate::stage_maps(&effects, &[1], &staged).unwrap();
+    let turn = |deg: f64| Affine::translate((20.0, 20.0)) * Affine::rotate(-deg.to_radians()) * Affine::translate((-20.0, -20.0));
+    let want = [turn(180.0), turn(90.0), Affine::IDENTITY];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // A scale after the copies doubles every placement about the center of all three, (120, 20).
+    let effects = [rasterize.clone(), transform(json!({"moveH": 100, "copies": 2})), transform(json!({"scaleH": 200, "scaleV": 200}))];
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    let scale = Affine::translate((120.0, 20.0)) * Affine::scale(2.0) * Affine::translate((-120.0, -20.0));
+    let want = [scale * Affine::translate((200.0, 0.0)), scale * Affine::translate((100.0, 0.0)), scale];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // A move before the copies moves the art they copy.
+    let effects = [rasterize.clone(), transform(json!({"moveV": 5})), transform(json!({"moveH": 100, "copies": 1}))];
+    let maps = crate::stage_maps(&effects, &[1, 2], &staged).unwrap();
+    let want = [Affine::translate((100.0, 5.0)), Affine::translate((0.0, 5.0))];
+    assert!(same_maps(&maps, &want), "{maps:?}");
+    // Copies stop where the geometry pass stops them: none past its reach of 1e9 pt.
+    let effects = [rasterize, transform(json!({"moveH": 1.0e7, "copies": 1000}))];
+    let maps = crate::stage_maps(&effects, &[1], &staged).unwrap();
+    assert_eq!(maps.len(), 100, "{}", maps.len());
 }
 
 /// An SVG filter keeps its options: it paints in its own user space.
@@ -781,7 +835,7 @@ fn a_groups_transform_moves_its_members_shadows() {
 }
 
 /// A group's Transform effect that makes copies or moves at random leaves its members' shadows as
-/// they are, as it leaves the shadows listed before it in its own effects.
+/// they are.
 #[test]
 fn a_groups_copying_transform_leaves_its_members_shadows() {
     for params in [json!({"scaleH": 200, "scaleV": 200, "copies": 1}), json!({"scaleH": 200, "scaleV": 200, "random": true})] {
@@ -790,6 +844,204 @@ fn a_groups_copying_transform_leaves_its_members_shadows() {
         let drawn = shadows_in(&art);
         assert!(!drawn.is_empty() && near(&drawn, &vec![(10.0, 10.0); drawn.len()]), "{params}: {drawn:?}");
     }
+}
+
+/// A layer of `members` with `effects` of its own.
+fn layer(id: u64, members: Vec<Node>, effects: Vec<Effect>) -> Node {
+    let mut l = Node::layer(NodeId(id), "Layer", vectorcraft_doc::LayerColor::Preset(0));
+    if let Some(ch) = l.children_mut() {
+        *ch = members.into_iter().map(std::sync::Arc::new).collect();
+    }
+    l.appearance.effects = effects;
+    l
+}
+
+/// The offset and blur of the Drop Shadow that each member of `art` draws of its own, in order.
+fn copy_shadows(art: &Node) -> Vec<(f64, f64, f64)> {
+    art.children().into_iter().flatten().map(|c| drawn_shadow(&c.appearance.effects)).collect()
+}
+
+fn close_all(a: &[(f64, f64, f64)], b: &[(f64, f64, f64)]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| close(*x, *y))
+}
+
+/// A group's or layer's Transform effect that makes copies gives each copy the shadow listed
+/// before it, moved, turned, reflected and scaled with that copy, the last copy lowest: drawn and
+/// baked. Each copy is a group holding all the members, which carry no shadow of their own, and
+/// the art paints none around all the copies. With Scale Strokes & Effects on, the shadow is not
+/// scaled a second time. A layer's art stays a layer.
+#[test]
+fn each_copy_of_a_groups_or_layers_transform_effect_carries_the_shadow_listed_before_it() {
+    let cases = [
+        (json!({"moveH": 100, "copies": 2}), vec![(10.0, 0.0, 4.0); 3]),
+        // A turn of 90° counterclockwise on screen takes an offset to the right to one upward.
+        (json!({"rotate": 90, "copies": 2}), vec![(-10.0, 0.0, 4.0), (0.0, -10.0, 4.0), (10.0, 0.0, 4.0)]),
+        (json!({"reflectX": true, "moveH": 100, "copies": 1}), vec![(-10.0, 0.0, 4.0), (10.0, 0.0, 4.0)]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1}), vec![(20.0, 0.0, 8.0), (10.0, 0.0, 4.0)]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1, "strokes": true}), vec![(20.0, 0.0, 8.0), (10.0, 0.0, 4.0)]),
+    ];
+    for (params, want) in cases {
+        let offsets: Vec<(f64, f64)> = want.iter().map(|w| (w.0, w.1)).collect();
+        for container in ["group", "layer"] {
+            let members = vec![square(101, vec![]), square(102, vec![])];
+            let effects = vec![shadow(10.0, 0.0, 4.0), transform(params.clone())];
+            let n = if container == "group" { group(100, members, effects) } else { layer(100, members, effects) };
+            assert!(crate::outer_effects(&n).iter().all(|e| e.id != "stylize.dropShadow"), "{params}: {container}");
+            let art = crate::evaluate_container(None, &n).unwrap();
+            assert_eq!(matches!(art.kind, vectorcraft_doc::NodeKind::Layer { .. }), container == "layer", "{params}: {container}");
+            assert!(raster_effects(&art.appearance.effects).is_empty(), "{params}: {container} {:?}", art.appearance.effects);
+            let drawn = copy_shadows(&art);
+            assert!(close_all(&drawn, &want), "{params}: {container} {drawn:?}");
+            assert_eq!(shadows_in(&art).len(), want.len(), "{params}: {container}: the members draw none");
+            for c in art.children().into_iter().flatten() {
+                assert!(matches!(c.kind, vectorcraft_doc::NodeKind::Group { .. }) && paths_in(c) == 2, "{params}: {container} {c:?}");
+            }
+            let b = baked(n);
+            assert!(near(&shadows_in(&b), &offsets), "{params}: {container} baked {:?}", shadows_in(&b));
+        }
+    }
+}
+
+/// A group's copying Transform effect leaves its members' own shadows on each copy as they are,
+/// and a shadow listed after it paints once around all the copies. A clip group's copies each clip
+/// and carry the shadow, and the art clips nothing. A Transform effect that makes no copies, or has
+/// Transform Objects off, leaves the group's shadows on the group.
+#[test]
+fn a_groups_copying_transform_leaves_member_and_later_shadows_where_they_paint() {
+    let g = group(
+        110,
+        vec![square(111, vec![shadow(5.0, 5.0, 0.0)]), square(112, vec![])],
+        vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1})), shadow(0.0, 5.0, 0.0)],
+    );
+    assert_eq!(crate::outer_effects(&g).len(), 2);
+    let art = crate::evaluate_container(None, &g).unwrap();
+    assert!(near(&shadows_in(&art), &[(0.0, 5.0), (0.0, -10.0), (5.0, 5.0), (10.0, 0.0), (5.0, 5.0)]), "{:?}", shadows_in(&art));
+
+    let mut clip = square(121, vec![]);
+    if let vectorcraft_doc::NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let mut g = group(120, vec![clip, square(122, vec![])], vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1}))]);
+    if let vectorcraft_doc::NodeKind::Group { clip, .. } = &mut g.kind {
+        *clip = true;
+    }
+    let art = crate::evaluate_container(None, &g).unwrap();
+    assert!(!art.clips());
+    assert!(art.children().into_iter().flatten().all(|c| c.clips()), "{art:?}");
+    assert!(close_all(&copy_shadows(&art), &[(10.0, 0.0, 0.0), (10.0, 0.0, 0.0)]), "{:?}", copy_shadows(&art));
+
+    for params in [json!({"rotate": 90}), json!({"rotate": 90, "copies": 1, "objects": false})] {
+        let g = group(130, vec![square(131, vec![]), square(132, vec![])], vec![shadow(10.0, 0.0, 0.0), transform(params.clone())]);
+        assert_eq!(crate::outer_effects(&g).len(), 2, "{params}");
+        let art = crate::evaluate_container(None, &g).unwrap();
+        assert_eq!(raster_effects(&art.appearance.effects).len(), 1, "{params}: the group keeps its shadow");
+    }
+}
+
+/// Copies of a group that stop at the effect budget each keep their shadow: no copy goes without
+/// one, and no shadow is left without its copy.
+#[test]
+fn a_groups_copies_past_the_budget_each_keep_their_shadow() {
+    let g = group(140, vec![path_node(141, wavy(30_000), vec![])], vec![shadow(1.0, 0.5, 0.0), transform(json!({"moveV": 50, "copies": 1000}))]);
+    let art = crate::evaluate_container(None, &g).unwrap();
+    let paths = paths_in(&art);
+    assert!(paths > 1 && paths < 1001, "{paths}");
+    assert_eq!(shadows_in(&art).len(), paths);
+}
+
+/// A layer's ruler guides stay once above the copies of its Transform effect, and carry no shadow.
+#[test]
+fn a_layers_guides_stay_once_above_copies_that_carry_its_shadow() {
+    let guide = Node::new(NodeId(152), vectorcraft_doc::NodeKind::RulerGuide { vertical: true, pos: 3.0, artboard: None });
+    let l = layer(150, vec![square(151, vec![]), guide], vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 2}))]);
+    let art = crate::evaluate_container(None, &l).unwrap();
+    let ch = art.children().unwrap();
+    assert_eq!(ch.len(), 4, "three copies, then the guide");
+    assert!(ch[3].is_ruler_guide() && ch.iter().filter(|c| c.is_ruler_guide()).count() == 1);
+    assert_eq!(shadows_in(&art).len(), 3);
+}
+
+/// The bounds of every node with `id` under `art`, in order.
+fn bounds_of(art: &Node, id: u64) -> Vec<Rect> {
+    let mut out = vec![];
+    art.walk(&mut |m| {
+        if m.id == NodeId(id)
+            && let Some(b) = m.geometric_bounds()
+        {
+            out.push(b);
+        }
+    });
+    out
+}
+
+fn rects_near(a: &[Rect], b: &[Rect]) -> bool {
+    let near = |p: f64, q: f64| (p - q).abs() < 1e-6;
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| near(p.x0, q.x0) && near(p.y0, q.y0) && near(p.x1, q.x1) && near(p.y1, q.y1))
+}
+
+/// A group with a fill of its own and only a shadow before its copying Transform effect applies
+/// its members' own effects before it copies them, as a group without a fill does: a member's own
+/// move is turned with each copy.
+#[test]
+fn a_painted_groups_copies_take_their_members_own_effects_first() {
+    let members = || vec![square(171, vec![transform(json!({"moveH": 40}))]), square(172, vec![])];
+    let effects = || vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1}))];
+    let plain = crate::evaluate_container(None, &group(170, members(), effects())).unwrap();
+    let mut painted = group(170, members(), effects());
+    *painted.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0);
+    painted.appearance.effects = effects();
+    let art = crate::evaluate_container(None, &painted).unwrap();
+    let (want, got) = (bounds_of(&plain, 171), bounds_of(&art, 171));
+    assert!(!want.is_empty());
+    assert!(rects_near(&got, &want), "{got:?} {want:?}");
+}
+
+/// A layer's copies are made about the bounds of its visible members, as the layer measures them:
+/// a hidden member does not move the center that a reflected copy turns about.
+#[test]
+fn a_layers_copies_leave_its_hidden_members_out_of_their_reference() {
+    let mut hidden = path_node(182, shapes::rectangle(Rect::new(1000.0, 0.0, 1050.0, 50.0)), vec![]);
+    hidden.visible = false;
+    let l = layer(180, vec![square(181, vec![]), hidden], vec![shadow(10.0, 0.0, 0.0), transform(json!({"reflectX": true, "copies": 1}))]);
+    let art = crate::evaluate_container(None, &l).unwrap();
+    let got = bounds_of(&art, 181);
+    assert!(rects_near(&got, &[Rect::new(0.0, 0.0, 50.0, 50.0); 2]), "{got:?}");
+}
+
+/// A shadow carried by the copies of an earlier copying Transform effect of a group turns with each
+/// copy of a later one, drawn and baked.
+#[test]
+fn a_groups_later_copying_transform_turns_the_shadows_of_earlier_copies() {
+    let g = || {
+        group(
+            190,
+            vec![square(191, vec![])],
+            vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 100, "copies": 1})), transform(json!({"rotate": 90, "copies": 1}))],
+        )
+    };
+    let want = [(0.0, -10.0), (0.0, -10.0), (10.0, 0.0), (10.0, 0.0)];
+    let art = crate::evaluate_container(None, &g()).unwrap();
+    assert!(near(&shadows_in(&art), &want), "{:?}", shadows_in(&art));
+    let b = baked(g());
+    assert!(near(&shadows_in(&b), &want), "baked {:?}", shadows_in(&b));
+}
+
+/// A group holding type whose Transform effect only moves its copies, baked for export, gives each
+/// copy the shadow listed before that effect, as the canvas draws it, rather than keeping the type
+/// as type under one shadow around all the copies. Built without fonts, type lays out no glyphs
+/// and the test is skipped.
+#[test]
+fn a_baked_group_with_type_keeps_a_shadow_on_each_copy() {
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let words = Node::new(NodeId(161), vectorcraft_doc::NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+    if !crate::outline_text(&words).is_some_and(|o| paths_in(&o) > 0) {
+        eprintln!("skipped: built without fonts (enable vectorcraft-text's bundled-fonts to run it)");
+        return;
+    }
+    let g = group(160, vec![words, square(162, vec![])], vec![shadow(10.0, 0.0, 0.0), transform(json!({"moveH": 150, "copies": 1}))]);
+    let b = baked(g);
+    assert!(near(&shadows_in(&b), &[(10.0, 0.0), (10.0, 0.0)]), "{:?}", shadows_in(&b));
 }
 
 /// The Transform effects inside a group apply before the group's: a member's own turn of 90°
