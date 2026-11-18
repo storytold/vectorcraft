@@ -11394,6 +11394,192 @@ fn variable_font_instances_name_their_design_space() {
     );
 }
 
+/// Style 12 pt black in family `family` and style `style`, with the Variable Font settings `axes`.
+fn font_style(family: &str, style: &str, axes: &[(&str, f64)]) -> vectorcraft_doc::CharStyle {
+    vectorcraft_doc::CharStyle {
+        font_family: family.into(),
+        font_style: style.into(),
+        font_axes: axes.iter().map(|(t, v)| (t.to_string(), *v)).collect(),
+        ..style_of(12.0)
+    }
+}
+
+/// A document of `k` rows 30 pt apart, each with point type in three runs (Source Sans 3 Regular
+/// and Bold, and the variable test font's Bold at a weight of 650), point type in four (Inter
+/// Medium, the variable test font's Bold at 500 and at a weight that differs from 500 by less than
+/// the font record's precision, and a family that isn't installed), and area type threaded through
+/// two frames in Bold and the variable test font's Regular.
+fn fonted_document(k: usize) -> Document {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    use vectorcraft_geom::Point;
+    use vectorcraft_text::test_fonts::{VARIABLE_FAMILY, variable_font};
+    vectorcraft_text::FontDb::global().add_font(variable_font().unwrap());
+    let (regular, bold) = (style_of(12.0), font_style("Source Sans 3", "Bold", &[]));
+    let mut doc = Document::new(400.0, 30.0 * k as f64 + 30.0);
+    let layer = doc.layers[0].id;
+    for i in 0..k {
+        let y = 20.0 + 30.0 * i as f64;
+        let mut three = TextObject::point(Point::new(10.0, y), "", regular.clone());
+        three.runs = vec![
+            TextRun::new("One ", regular.clone()),
+            TextRun::new("two ", bold.clone()),
+            TextRun::new("three", font_style(VARIABLE_FAMILY, "Bold", &[("wght", 650.0)])),
+        ];
+        let mut four = TextObject::point(Point::new(100.0, y), "", regular.clone());
+        four.runs = vec![
+            TextRun::new("four ", font_style("Inter", "Medium", &[])),
+            TextRun::new("five ", font_style(VARIABLE_FAMILY, "Bold", &[("wght", 500.0)])),
+            TextRun::new("six ", font_style(VARIABLE_FAMILY, "Bold", &[("wght", 500.000_001)])),
+            TextRun::new("seven", font_style("No Such Family", "Bold", &[])),
+        ];
+        let mut first = TextObject::point(Point::ZERO, "", bold.clone());
+        first.runs = vec![TextRun::new("eight nine ", bold.clone()), TextRun::new("ten", font_style(VARIABLE_FAMILY, "Regular", &[]))];
+        first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(250.0, y - 10.0, 315.0, y + 10.0)) };
+        first.xf = Affine::IDENTITY;
+        let mut second = first.clone();
+        second.runs = vec![TextRun::new("", bold.clone())];
+        second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(325.0, y - 10.0, 390.0, y + 10.0)) };
+        let nodes = [text_node(&mut doc, three), text_node(&mut doc, four), text_node(&mut doc, first), text_node(&mut doc, second)];
+        doc.text_threads.push(vec![nodes[2].id, nodes[3].id]);
+        for n in nodes {
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+    }
+    doc
+}
+
+/// A save resolves the font of each style once, however many runs are set in it: as many fonts are
+/// resolved (font records and checks that a font comes back) for one row of type as for four. Two
+/// weights of a variable font that the font record writes as one number are one font written.
+#[test]
+fn a_save_resolves_each_font_once() {
+    // How many fonts a save of `doc` resolves, in a save during which the font database didn't change.
+    let resolves = |doc: &Document| {
+        let db = vectorcraft_text::FontDb::global();
+        for _ in 0..20 {
+            let before = db.generation();
+            writer::FONT_RESOLVES.set(0);
+            export_ai_editing(doc, &opts()).unwrap();
+            if db.generation() == before {
+                return writer::FONT_RESOLVES.get();
+            }
+        }
+        panic!("the font database changed during every save");
+    };
+    let one = resolves(&fonted_document(1));
+    let doc = fonted_document(4);
+    let four = resolves(&doc);
+    assert!(one > 0);
+    assert_eq!(four, one, "fonts resolved with one row of type and with four");
+    let td = text_document(&program(&doc));
+    // 650 × 65536 and 500 × 65536.
+    assert_eq!(td.matches("VaritestSans-Bold) /2 1 /4 [ 42598400 ]").count(), 1, "{td}");
+    assert_eq!(td.matches("VaritestSans-Bold) /2 1 /4 [ 32768000 ]").count(), 1, "{td}");
+    assert_eq!(td.matches("/CoolTypeFont").count(), 8, "seven fonts and the hidden characters' font: {td}");
+}
+
+/// A save that resolves each style's font once writes the same program, header, warnings and private
+/// data as one that resolves the font of every run again: with type in many fonts, threaded type,
+/// type in envelopes, and type taken out again when an envelope is written as its art.
+#[test]
+fn a_save_writes_the_same_with_each_font_resolved_once() {
+    use vectorcraft_doc::live::EnvelopeKind;
+    let save = |doc: &Document, each_run: bool| {
+        writer::RESOLVE_EACH_RUN.set(each_run);
+        let out = export_ai_editing(doc, &opts()).unwrap();
+        let private = private_data(doc, &opts()).unwrap();
+        writer::RESOLVE_EACH_RUN.set(false);
+        (out.program, out.header, out.warnings, private.0.data, private.1)
+    };
+    let mut docs = vec![sample(), typed(), fonted_document(3)];
+    for (_, kind) in live_envelope_kinds() {
+        for editing in [false, true] {
+            let mut doc = Document::new(200.0, 100.0);
+            let envelope = typed_envelope_node(&mut doc, kind.clone(), editing);
+            docs.push(alone(envelope));
+        }
+    }
+    for doc in &docs {
+        let (once, again) = (save(doc, false), save(doc, true));
+        assert!(once == again, "{}", String::from_utf8_lossy(&once.0));
+    }
+    // An envelope of type one object short of room: it is written as its art, and its story and fonts
+    // are taken out again.
+    let kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: envelope_points(2, 3), handles: vec![] };
+    let mut doc = Document::new(200.0, 100.0);
+    let envelope = typed_envelope_node(&mut doc, kind, false);
+    let doc = alone(envelope);
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let within = |each_run: bool| {
+        writer::RESOLVE_EACH_RUN.set(each_run);
+        let out = export_within(&doc, &opts(), read - 1).unwrap();
+        writer::RESOLVE_EACH_RUN.set(false);
+        (out.program, out.warnings)
+    };
+    let (once, again) = (within(false), within(true));
+    assert!(once.1.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", once.1);
+    assert!(once == again, "{}", String::from_utf8_lossy(&once.0));
+}
+
+/// The CPU time of saving a document of 10,000 point type objects, each in three runs drawn in turn
+/// from four fonts (Source Sans 3 Regular and Bold, Inter Medium, and the variable test font's Bold
+/// at a weight of 650), with each style's font resolved once and with the font of every run
+/// resolved again: the median of 7 runs of each, alternating.
+/// Run with `cargo test -p vectorcraft-eps --lib -- --ignored --nocapture font_resolve_time`.
+#[test]
+#[ignore = "timing; run by hand"]
+fn font_resolve_time() {
+    use vectorcraft_doc::{TextObject, TextRun};
+    use vectorcraft_text::test_fonts::{VARIABLE_FAMILY, variable_font};
+    vectorcraft_text::FontDb::global().add_font(variable_font().unwrap());
+    let fonts = [
+        style_of(12.0),
+        font_style("Source Sans 3", "Bold", &[]),
+        font_style("Inter", "Medium", &[]),
+        font_style(VARIABLE_FAMILY, "Bold", &[("wght", 650.0)]),
+    ];
+    let mut doc = Document::new(2000.0, 2000.0);
+    let layer = doc.layers[0].id;
+    for i in 0..10_000usize {
+        let (x, y) = ((i % 100) as f64 * 20.0, (i / 100) as f64 * 20.0 + 10.0);
+        let mut t = TextObject::point(vectorcraft_geom::Point::new(x, y), "", fonts[0].clone());
+        t.runs = (0..3).map(|r| TextRun::new(["ab ", "cd ", "ef"][r], fonts[(i + r) % fonts.len()].clone())).collect();
+        let n = text_node(&mut doc, t);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    // The CPU time this thread has run, in nanoseconds: Linux's scheduler statistics, else the clock.
+    let start = std::time::Instant::now();
+    let cpu = || {
+        std::fs::read_to_string("/proc/thread-self/schedstat")
+            .ok()
+            .and_then(|s| s.split_whitespace().next().and_then(|n| n.parse::<u64>().ok()))
+            .unwrap_or_else(|| u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX))
+    };
+    // A first save loads the faces the document names.
+    export_ai_editing(&doc, &opts()).unwrap();
+    let mut times: [Vec<u64>; 2] = [vec![], vec![]];
+    let mut resolves = [0, 0];
+    let mut outputs: [Vec<u8>; 2] = [vec![], vec![]];
+    for _ in 0..7 {
+        for (k, each_run) in [(0, true), (1, false)] {
+            writer::RESOLVE_EACH_RUN.set(each_run);
+            writer::FONT_RESOLVES.set(0);
+            let t = cpu();
+            let out = export_ai_editing(&doc, &opts()).unwrap();
+            times[k].push(cpu() - t);
+            resolves[k] = writer::FONT_RESOLVES.get();
+            outputs[k] = out.program;
+        }
+    }
+    writer::RESOLVE_EACH_RUN.set(false);
+    assert!(outputs[0] == outputs[1]);
+    for (k, label) in [(0, "resolved for every run"), (1, "resolved once")] {
+        times[k].sort_unstable();
+        let ms: Vec<String> = times[k].iter().map(|t| format!("{:.1}", *t as f64 / 1e6)).collect();
+        println!("{label}: median {:.1} ms CPU, {} fonts resolved, runs {}", times[k][3] as f64 / 1e6, resolves[k], ms.join(" "));
+    }
+}
+
 fn style_of(size: f64) -> vectorcraft_doc::CharStyle {
     style(size, Color::BLACK)
 }
