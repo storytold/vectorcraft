@@ -4981,7 +4981,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	no active document	aucun document actif
 @msg	no active perspective plane	aucun plan de perspective actif
 @msg	the perspective grid is hidden	la grille de perspective est masquée
-@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Le positionnement automatique du plan étant désactivé, activez anchorPoint ou gridlineIntersection (perspective.widget.options)
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Le positionnement automatique du plan est désactivé : activez anchorPoint ou gridlineIntersection (perspective.widget.options)
 @msg	anchorPoint must be true or false	anchorPoint doit valoir true ou false
 @msg	gridlineIntersection must be true or false	gridlineIntersection doit valoir true ou false
 @msg	tolerance must be 0 or more	tolerance doit être supérieur ou égal à 0
