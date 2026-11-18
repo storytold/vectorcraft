@@ -96,6 +96,29 @@ fn apply_to_all_restyles_every_dimension_in_one_undo_step() {
 }
 
 #[test]
+fn each_arrow_style_draws_its_stroke_arrowhead_at_both_ends() {
+    use vectorcraft_doc::Arrowhead;
+    let mut s = session();
+    for (style, head) in
+        [("filled", Some(Arrowhead::Triangle)), ("open", Some(Arrowhead::TriangleOpen)), ("tick", Some(Arrowhead::Slash)), ("none", None)]
+    {
+        let id = run(&mut s, "dimension.create", json!({"a":[0,0],"b":[72,0],"options":{"arrowStyle":style}}))["id"].as_u64().unwrap();
+        let n = s.doc().unwrap().doc.node(NodeId(id)).unwrap();
+        let heads: Vec<_> = n
+            .children()
+            .unwrap()
+            .iter()
+            .filter_map(|n| n.appearance.stroke().map(|s| (s.start_arrow.clone(), s.end_arrow.clone())))
+            .filter(|(a, b)| a.is_some() || b.is_some())
+            .collect();
+        match head {
+            Some(head) => assert!(!heads.is_empty() && heads.iter().all(|h| *h == (Some(head.clone()), Some(head.clone()))), "{style}: {heads:?}"),
+            None => assert!(heads.is_empty(), "{style}: {heads:?}"),
+        }
+    }
+}
+
+#[test]
 fn dimension_angles_circles_arcs_and_curves() {
     let mut s = session();
     let a = run(
