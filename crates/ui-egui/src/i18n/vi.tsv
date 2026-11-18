@@ -576,6 +576,9 @@ font-technology	Variable	Biến thiên
 	Choose…	Chọn…
 	Circle	Hình tròn
 	Circle Tool	Công cụ Hình tròn
+	Curvature Circle Tool	Công cụ Đường tròn mật tiếp
+	Cusp	Điểm lùi
+	Straight segment	Đoạn thẳng
 	Circle too large	Hình tròn quá lớn
 	Classic	Cổ điển
 	Classic Defaults	Mặc định cổ điển
@@ -5542,6 +5545,11 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	no anchor points selected	chưa chọn điểm neo
 @msg	`points` must be two or three [x, y] pairs of numbers	`points` phải là hai hoặc ba cặp số [x, y]
 @msg	direct-select two or three anchor points, or give `points`	hãy chọn trực tiếp hai hoặc ba điểm neo hoặc cung cấp `points`
+@msg	the path is straight there, so no circle matches its curvature	đường dẫn thẳng tại đó, nên không có đường tròn nào khớp với độ cong của nó
+@msg	the path has a cusp there, so it has no single curvature	đường dẫn có điểm lùi tại đó, nên không có một độ cong duy nhất
+@msg	the path has a corner there, so it has no single curvature	đường dẫn có góc tại đó, nên không có một độ cong duy nhất
+@msg	a guide has no curvature circle	đường căn không có đường tròn độ cong
+@msg	the circle that matches the path there would reach past the canvas	đường tròn khớp với đường dẫn tại đó sẽ vượt quá giới hạn vùng vẽ
 @msg	no circle passes through these points: two are the same or all three lie on one line	không có đường tròn nào đi qua các điểm này: hai điểm trùng nhau hoặc cả ba điểm thẳng hàng
 @msg	no app to open files here	không có ứng dụng để mở tệp ở đây
 @msg	no artboard	không có bảng vẽ
