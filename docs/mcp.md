@@ -9138,7 +9138,10 @@ every object in the layers each time the list is read. A `dcsTransparency` that 
 `links.goTo {id}` selects an image (`onCanvas: true`); for an object outside the layer tree it clears the selection and
 returns `{id, onCanvas: false, owner}`, and the panel says the link has no place on the canvas. `links.embed {ids?}` keeps linked files' pixels in the document (an image whose
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
-(another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`.
+(another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`. An image from a PSD
+or PSB file written as stored (PNG, or TIFF for a CMYK file), with `path` or `folder`, keeps the clip group of the
+clipping path that file names, and the file written keeps the path: Open, Place, Relink and Update Links read the file
+with its clip group.
 `ids` of one image works as `id` does. `links.unembed {ids?, folder}` writes each embedded image of `ids` (or of
 `id`; default: the selected embedded images) to a new
 file in `folder`, in the format it is stored in (as PNG when that format is not one of VectorCraft's raster file formats), and links each image to its file, keeping its bounds, in one undo
