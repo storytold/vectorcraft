@@ -6644,6 +6644,7 @@ dependencies = [
  "webbrowser",
  "windows",
  "winit",
+ "winreg",
  "winresource",
  "winsafe",
  "wl-clipboard-rs",

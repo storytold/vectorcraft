@@ -61,6 +61,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         // A View › Rotate View item is checked when the active view is turned to its angle; without
         // a document no item is checked.
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
+        // Object › Align's Align To items: the choice the Align panel shows.
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::shown_align_to(app) == v,
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
         "view.statusBarShow" => p.get("show").and_then(Value::as_str) == Some(app.ui.status_bar_show.param()),
@@ -221,14 +223,21 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
     match id {
         // Save is off for a clean document that already has its own file.
         "file.save" => app.session.active().is_some_and(|d| d.path.is_none() || d.converted || d.is_dirty()),
-        "type.bold" | "type.italic" | "type.underline" | "type.lineComposer" | "type.hyphenate" | "type.highlightFontSize" => {
-            crate::panels::character::text_style(app).is_some()
-        }
+        "type.bold"
+        | "type.italic"
+        | "type.underline"
+        | "type.superscript"
+        | "type.subscript"
+        | "type.lineComposer"
+        | "type.hyphenate"
+        | "type.highlightFontSize" => crate::panels::character::text_style(app).is_some(),
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
         id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command_now(app)),
+        id if let Some(v) = crate::panels::align::align_to_command(id) => crate::panels::align::can_choose(app, v),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
-        "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
+        "file.cancelExport" | "file.exportInBackground" => app.background.running(crate::background::Kind::Export),
+        "file.cancelSave" | "file.saveInBackground" => app.background.running(crate::background::Kind::Save),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
@@ -320,7 +329,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.packageDialog" | "docInfo.save" => app.session.active().is_some(),
         "ui.batchDialog" => !app.ui.action_sets.is_empty() && app.ui.action_sets.iter().any(|s| !s.actions.is_empty()),
         "ui.epsOptionsDialog" => app.session.active().is_some(),
-        "file.saveForWeb" | "file.saveForWeb.browser" => app.session.active().is_some(),
+        "file.saveForWeb" | "file.saveForWeb.browser" | "file.export.svg.browser" => app.session.active().is_some(),
         "file.exportSelection" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "css.copy" | "css.exportFile" => app.session.active().is_some(),
         "print.printerSetup" => app.services.print.as_ref().is_some_and(|s| s.has_setup()),
