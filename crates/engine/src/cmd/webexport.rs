@@ -814,30 +814,31 @@ fn palette_image(rgba: &[u8], w: u32, h: u32, s: &WebSettings, matte: Option<[u8
             *slot = *c;
         }
     }
-    // Lossy compares the pixels with the colors the reduction made, and moves no pixel into or out
-    // of a color shifted by hand.
-    if s.format == WebFormat::Gif {
-        let fixed: Vec<u8> = sources.iter().enumerate().filter(|(_, c)| shifted_to(c).is_some()).filter_map(|(i, _)| u8::try_from(i).ok()).collect();
-        web::lossy(&mut ix, rgba, s.lossy, &fixed);
-    }
-    // The colors shifted by hand, then web shift and web snap (locked colors stay as they are).
+    // Web shift and web snap (locked colors and colors shifted by hand stay as they are).
     let clear = ix.transparent.map(usize::from);
     for (i, c) in ix.palette.iter_mut().enumerate() {
         let src = sources.get(i).copied().unwrap_or(*c);
-        if Some(i) == clear {
-            continue;
-        }
-        if let Some(to) = shifted_to(&src) {
-            *c = to;
-            continue;
-        }
-        if locked.contains(&src) {
+        if Some(i) == clear || shifted_to(&src).is_some() || locked.contains(&src) {
             continue;
         }
         if shift.contains(&src) {
             *c = quantize::web_safe(*c);
         } else if let Some(snapped) = web::snap(*c, s.web_snap) {
             *c = snapped;
+        }
+    }
+    // Lossy compares the pixels with the colors written for them, and moves no pixel into or out of
+    // a color shifted by hand.
+    if s.format == WebFormat::Gif {
+        let fixed: Vec<u8> = sources.iter().enumerate().filter(|(_, c)| shifted_to(c).is_some()).filter_map(|(i, _)| u8::try_from(i).ok()).collect();
+        web::lossy(&mut ix, rgba, s.lossy, &fixed);
+    }
+    // The colors shifted by hand.
+    for (i, c) in ix.palette.iter_mut().enumerate() {
+        if Some(i) != clear
+            && let Some(to) = sources.get(i).and_then(shifted_to)
+        {
+            *c = to;
         }
     }
     let order = web::sort(&mut ix, table.sort);

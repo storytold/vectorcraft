@@ -686,8 +686,8 @@ fn colour_table_shift_writes_the_picked_color_wherever_the_source_is() {
     assert!(old.color_table.shifted.is_empty());
 }
 
-/// Lossy GIF compression compares the pixels with the colors the reduction made, so a color shifted
-/// near another one does not take in that color's pixels.
+/// Lossy GIF compression leaves the pixels of a color shifted by hand alone, so a color shifted near
+/// another one does not take in that color's pixels.
 #[test]
 fn lossy_does_not_spread_a_shifted_color_into_another() {
     let mut s = session(30.0, 10.0);
@@ -711,6 +711,20 @@ fn lossy_moves_no_pixel_into_or_out_of_a_shifted_color() {
     let near_blue = [20, 20, 230, 255];
     for x in 0..30 {
         let want = if (10..20).contains(&x) { [255, 0, 0, 255] } else { near_blue };
+        assert_eq!(img.get_pixel(x, 5).0, want, "x = {x}");
+    }
+}
+
+/// Lossy GIF compression compares the pixels with the colors web snap writes, so a pixel does not
+/// take a color that snaps far from it.
+#[test]
+fn lossy_compares_pixels_with_the_snapped_colors() {
+    let mut s = session(20.0, 10.0);
+    rect(&mut s, [0.0, 0.0, 10.0, 10.0], "#1a1a1a");
+    rect(&mut s, [10.0, 0.0, 20.0, 10.0], "#000000");
+    let img = pixels(&one(&mut s, json!({"format": "gif", "dither": "none", "webSnap": 100, "lossy": 50})));
+    for x in 0..20 {
+        let want = if x < 10 { [51, 51, 51, 255] } else { [0, 0, 0, 255] };
         assert_eq!(img.get_pixel(x, 5).0, want, "x = {x}");
     }
 }
