@@ -5200,6 +5200,8 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no such spine point	kein solcher Achsenpunkt
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` muss eine Liste von höchstens 10000 Achsenpunkt-Indizes sein
 @msg	`with` moves points, not a handle	`with` verschiebt Punkte, keinen Griff
+@msg	`link` and `independent` cannot both be true	`link` und `independent` können nicht beide true sein
+@msg	`link` places a handle: give `handle`	`link` platziert einen Griff: geben Sie `handle` an
 @msg	no such spine segment	kein solches Achsensegment
 @msg	no such subpath	kein solcher Teilpfad
 @msg	no such user library	keine solche Benutzerbibliothek

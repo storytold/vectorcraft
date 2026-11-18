@@ -5421,6 +5421,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such spine point	brak takiego punktu grzbietu
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` musi być listą co najwyżej 10000 indeksów punktów grzbietu
 @msg	`with` moves points, not a handle	`with` przesuwa punkty, nie uchwyt
+@msg	`link` and `independent` cannot both be true	`link` i `independent` nie mogą mieć jednocześnie wartości true
+@msg	`link` places a handle: give `handle`	`link` umieszcza uchwyt: podaj `handle`
 @msg	no such spine segment	brak takiego segmentu grzbietu
 @msg	no such subpath	brak takiej ścieżki podrzędnej
 @msg	no such user library	brak takiej biblioteki użytkownika

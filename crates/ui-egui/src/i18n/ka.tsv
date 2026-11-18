@@ -8915,6 +8915,8 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	no such spine point	ხერხემლის ასეთი წერტილი არ არსებობს
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` უნდა იყოს ხერხემლის წერტილების არაუმეტეს 10000 ინდექსის სია
 @msg	`with` moves points, not a handle	`with` წერტილებს გადაადგილებს და არა სახელურს
+@msg	`link` and `independent` cannot both be true	`link` და `independent` ერთდროულად ვერ იქნება true
+@msg	`link` places a handle: give `handle`	`link` სახელურს ათავსებს: მიუთითეთ `handle`
 @msg	no such spine segment	ხერხემლის ასეთი სეგმენტი არ არსებობს
 @msg	not a blend	ეს გადასვლა არ არის
 @msg	only http, https and mailto URLs open in the browser, not “{url}”	ბრაუზერში მხოლოდ http, https და mailto URL-ები იხსნება და არა „{url}“
