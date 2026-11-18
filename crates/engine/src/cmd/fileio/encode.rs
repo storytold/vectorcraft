@@ -241,7 +241,8 @@ struct RasterOptions {
     width: Option<f64>,
     /// The height of each file in pixels (wins over `ppi` and `scale`).
     height: Option<f64>,
-    quality: Option<u8>,
+    /// JPEG and lossy WebP quality, read by [`RasterOptions::quality`].
+    quality: Option<Value>,
     background: Option<Value>,
     anti_alias: Option<String>,
     interlaced: Option<bool>,
@@ -281,6 +282,19 @@ fn clamped_ppi(ppi: f64) -> f64 {
 }
 
 impl RasterOptions {
+    /// `quality` as given: `None` when absent or null, else a whole number 0–255 (JPEG caps it at
+    /// 100; WebP refuses more than 100), or an error naming it.
+    fn quality(&self) -> Result<Option<u8>> {
+        match &self.quality {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => v
+                .as_u64()
+                .and_then(|q| u8::try_from(q).ok())
+                .map(Some)
+                .ok_or_else(|| bad(C, format!("quality must be a whole number from 0 to 100, not {v}"))),
+        }
+    }
+
     /// The pixel size each file is scaled to: `width`, else `height`; `None` when neither is set.
     fn pixel_size(&self) -> Result<Option<ScreenSize>> {
         let checked = |key: &str, n: f64| {
@@ -311,7 +325,8 @@ impl RasterOptions {
             },
             anti_alias: self.anti_alias.as_deref().map(anti_alias).transpose().map_err(|e| bad(C, e))?.unwrap_or_default(),
             interlaced: self.interlaced.unwrap_or(false),
-            quality: self.quality.unwrap_or(90).min(100),
+            quality: self.quality()?.unwrap_or(90).min(100),
+            webp_lossless: self.lossless.unwrap_or(true),
             jpeg: JpegOptions {
                 color_model,
                 method: parse(self.method.as_deref(), jpeg::Method::from_id, "method", "baseline, optimized or progressive")?,
@@ -1038,12 +1053,14 @@ fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
 
 /// The file exporter plug-in `plugin` writes of `doc` in its format `f`
 /// ([`vectorcraft_plugins::export`]). The plug-in is given the native file's JSON
-/// ([`vectorcraft_format::json_part`]) and `p`'s `params`, for the file `p`'s `path` names (else
-/// one named after the document) with that path's extension when the plug-in lists it, else its
-/// first. Its warnings come back with the file, as losses (the plug-in gives them no kind).
+/// ([`vectorcraft_format::json_part`]), without an Export for Screens folder outside the read roots
+/// ([`super::access::with_readable_settings_folder`]), and `p`'s `params`, for the file `p`'s `path`
+/// names (else one named after the document) with that path's extension when the plug-in lists it,
+/// else its first. Its warnings come back with the file, as losses (the plug-in gives them no kind).
 fn plugin_file(doc: &Document, plugin: &vectorcraft_plugins::Plugin, f: &Format, p: &Value) -> Result<Encoded> {
     use vectorcraft_plugins::{Error, export};
-    let doc = &*doc.without_edit_modes();
+    let doc = doc.without_edit_modes();
+    let doc = &*super::access::with_readable_settings_folder(&doc);
     let file = vectorcraft_format::save_with(doc, &vectorcraft_format::SaveOptions::default()).map_err(|e| EngineError::Other(e.to_string()))?;
     let path = p.get("path").and_then(Value::as_str);
     let listed = path.map(super::extension).and_then(|e| f.extensions.iter().copied().find(|x| *x == e));
@@ -1136,6 +1153,11 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 "psd" => RasterFormat::Psd,
                 _ => RasterFormat::WebP,
             };
+            if format == RasterFormat::WebP
+                && let Some(q) = o.quality()?.filter(|q| *q > 100)
+            {
+                return Err(bad(C, format!("quality {q}: WebP quality is 0–100")));
+            }
             check_options(format, &settings)?;
             // Use Artboards: one file per chosen artboard (default all); else the one chosen.
             let chosen = match use_artboards {
@@ -1182,9 +1204,6 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
             }
             let regions: Vec<Rect> = enc.files.iter().filter_map(|(b, _)| b.and_then(|b| doc.artboards.get(b))).map(|a| a.rect).collect();
             enc.warnings.extend(crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, Some(&regions)));
-            if format == RasterFormat::WebP && o.lossless == Some(false) {
-                enc.setting_notes.push("lossy WebP isn't available yet: the file is lossless (exact, but larger)".into());
-            }
             return Ok(enc);
         }
         _ => return Err(bad(C, format!("no encoder for {} yet", f.label))),

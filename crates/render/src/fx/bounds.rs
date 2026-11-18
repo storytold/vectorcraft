@@ -49,12 +49,13 @@ pub(crate) fn effected_path_carrying(doc: &Document, n: &Node, bp: &BezPath) -> 
 }
 
 /// `n`, a path or compound path whose own Rasterize effect is followed by Transform effects that
-/// move its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and the map
-/// they move the image by ([`effects::stage_map`]): the image is made of that node's art on its
-/// own pixel grid, then drawn through the map. `None` for any other object, when the node without
-/// those Transform effects is drawn through its art ([`has_object_fx`]: a Transform effect that
-/// copies it, Crop Marks, a 3D effect…), and when the art before the Transform effects is empty.
-pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)> {
+/// move or copy its image ([`effects::rasterize_stage`]), with those Transform effects hidden, and
+/// the maps they place the image by, the lowest first ([`effects::stage_maps`]): the image is made
+/// of that node's art on its own pixel grid, then drawn through each map. `None` for any other
+/// object, when the node without those Transform effects is drawn through its art
+/// ([`has_object_fx`]: Crop Marks, a 3D effect…), and when the art before the Transform effects is
+/// empty.
+pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Vec<Affine>)> {
     if !has_fx(n) {
         return None;
     }
@@ -65,15 +66,21 @@ pub(crate) fn rasterize_stage(doc: &Document, n: &Node) -> Option<(Node, Affine)
         return None;
     }
     let g = effected_path(doc, &stage, &node_bezpath(n)?);
-    let map = effects::stage_map(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
-    Some((stage, map))
+    let maps = effects::stage_maps(&n.appearance.effects, &at, &vectorcraft_geom::PathData::from_bezpath(&g))?;
+    Some((stage, maps))
 }
 
-/// The box `map` ([`rasterize_stage`]) takes `b` to; `None` when it flattens it to a line or a
-/// point, which leaves nothing to draw.
-pub(crate) fn staged_reach(map: Affine, b: Rect) -> Option<Rect> {
+/// Does `map` ([`rasterize_stage`]) place an image? Not when it flattens it to a line or a point,
+/// which leaves nothing to draw.
+pub(crate) fn places(map: Affine) -> bool {
     let det = map.determinant();
-    (det.is_finite() && det.abs() > 1e-12).then(|| map.transform_rect_bbox(b))
+    det.is_finite() && det.abs() > 1e-12
+}
+
+/// The box the maps of [`rasterize_stage`] take `b` to, all placements together; `None` when each
+/// one flattens it ([`places`]).
+pub(crate) fn staged_reach(maps: &[Affine], b: Rect) -> Option<Rect> {
+    maps.iter().filter(|m| places(**m)).map(|m| m.transform_rect_bbox(b)).reduce(|a, r| a.union(r))
 }
 
 pub(super) fn item_effects(item: &AppearanceItem) -> &[Effect] {
@@ -103,10 +110,10 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     {
         return cull_bounds(symbols, &art);
     }
-    // A Rasterize image moved by the Transform effects after it reaches as far as the map takes
-    // what the art before them reaches, the image included.
-    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
-        return staged_reach(map, visual_bounds(symbols, &stage)?);
+    // A Rasterize image moved or copied by the Transform effects after it reaches as far as the
+    // maps take what the art before them reaches, the image included.
+    if let Some((stage, maps)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(&maps, visual_bounds(symbols, &stage)?);
     }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
@@ -390,9 +397,7 @@ fn shape_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
         // effects in a symbol's art and a live object's content paint past it.
         _ if has_object_fx(n) => {
             let symbol = match &n.kind {
-                NodeKind::SymbolInstance { symbol, .. } => {
-                    symbols.document().symbols.iter().find(|s| s.name == *symbol).map(|s| dynamic_art(&s.art, n))
-                }
+                NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| dynamic_art(&s.art, n)),
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
@@ -459,7 +464,7 @@ fn pieces_within(symbols: &SymbolBoxes, art: &Node, depth: usize, budget: &mut u
         NodeKind::Path { .. } | NodeKind::Compound { .. } if has_fx(art) => visual_bounds(symbols, art),
         NodeKind::SymbolInstance { symbol, .. } if depth < vectorcraft_doc::depth::MAX_DEPTH && has_instance_row_effects(art) => {
             let doc = symbols.document();
-            let reshaped = doc.symbols.iter().find(|s| s.name == *symbol).and_then(|s| {
+            let reshaped = symbols.symbol(symbol).and_then(|s| {
                 let count = s.art.count() as u64;
                 if count > *budget {
                     return None;
@@ -483,8 +488,8 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = effects::crop_marks_art(n) {
         return drawn_bounds(symbols, &art);
     }
-    if let Some((stage, map)) = rasterize_stage(symbols.document(), n) {
-        return staged_reach(map, painted_reach(symbols, &stage)?);
+    if let Some((stage, maps)) = rasterize_stage(symbols.document(), n) {
+        return staged_reach(&maps, painted_reach(symbols, &stage)?);
     }
     let ran = ran(symbols.document(), n);
     let b = drawn_bounds_ran(symbols, n, Some(&ran))?;
@@ -494,13 +499,15 @@ pub(crate) fn painted_reach(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
 /// The outline the renderer clips `n`'s Feather, Inner Glow and Rasterize with Create Clipping
 /// Mask to: a path's or compound path's geometry with its object-level geometry effects applied,
 /// the outline of the art [`Renderer::fx_art`] makes for an object with object effects, and with
-/// Crop Marks the object's own. For other objects it is [`effects::clip_outline`].
-pub(crate) fn drawn_outline(doc: &Document, n: &Node) -> Option<(BezPath, FillRule)> {
+/// Crop Marks the object's own. For other objects it is [`effects::clip_outline`]. The symbols of
+/// instances are found in `symbols`.
+pub(crate) fn drawn_outline(symbols: &SymbolBoxes, n: &Node) -> Option<(BezPath, FillRule)> {
+    let doc = symbols.document();
     if let Some(art) = effects::crop_marks_art(n) {
-        return drawn_outline(doc, art.children()?.first()?);
+        return drawn_outline(symbols, art.children()?.first()?);
     }
     if has_object_fx(n) {
-        let art = Renderer::new().fx_art(doc, &Arc::new(n.clone()), false);
+        let art = Renderer::new().fx_art(symbols, &Arc::new(n.clone()), false);
         return effects::clip_outline(&art);
     }
     match &n.kind {
@@ -538,7 +545,7 @@ pub(crate) fn drawn_outlines(doc: &Document, symbols: &SymbolBoxes, n: &Node, le
         if is_container(n) && !makes_art && !effects::has_item_geometry(n) {
             object.appearance.items.clear();
         }
-        let art = Renderer::new().fx_art(doc, &Arc::new(object), false);
+        let art = Renderer::new().fx_art(symbols, &Arc::new(object), false);
         if art.children().is_some() && !has_object_fx(&art) {
             return evaluated_outlines(doc, symbols, &art, left, out);
         }
@@ -563,7 +570,7 @@ pub(crate) fn drawn_outlines(doc: &Document, symbols: &SymbolBoxes, n: &Node, le
         NodeKind::SymbolInstance { .. } => {
             push_outline(n.geometric_bounds_with(symbols).map(|b| vectorcraft_geom::shapes::rectangle(b).to_bezpath()), left, out)
         }
-        _ => push_outline(drawn_outline(doc, n).map(|(path, _)| path), left, out),
+        _ => push_outline(drawn_outline(symbols, n).map(|(path, _)| path), left, out),
     }
 }
 
@@ -683,9 +690,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
         // symbol instance's art paint past that art.
         _ if has_object_fx(n) => {
             let symbol = match &n.kind {
-                NodeKind::SymbolInstance { symbol, .. } => {
-                    symbols.document().symbols.iter().find(|s| s.name == *symbol).map(|s| dynamic_art(&s.art, n))
-                }
+                NodeKind::SymbolInstance { symbol, .. } => symbols.symbol(symbol).map(|s| dynamic_art(&s.art, n)),
                 _ => None,
             };
             let reshaped = effects::reshape(Some(symbols.document()), n, symbol.as_ref());
@@ -720,6 +725,12 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let b = n.visual_bounds_with(symbols)?;
             let a = art_effects_reach(symbols, n);
             Some(b.inflate(a, a))
+        }
+        // A spine can rotate a blend's keys and steps past their unrotated visual bounds.
+        NodeKind::Blend { .. } => {
+            let b = n.reach_bounds_with(symbols)?;
+            let a = live_content_reach(symbols, n);
+            vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_blend_effect_bounds(symbols, n))
         }
         _ => {
             let b = n.visual_bounds_with(symbols)?;
@@ -799,14 +810,41 @@ pub(crate) fn with_own_raster_reach(symbols: &SymbolBoxes, n: &Node, b: Rect) ->
     b.inflate(o, o)
 }
 
-/// `n`'s own visual box, type's grown to hold its glyphs ([`glyphs_box`]): what it draws when its
-/// object effects leave it as it is (Revolve builds no art from type).
+/// `n`'s own box, type's grown to hold its glyphs ([`glyphs_box`]) and a blend's to hold its
+/// spine-placed keys and steps: what it draws when its object effects leave it as it is
+/// (Revolve builds no art from type).
 fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = n.visual_bounds_with(symbols)?;
+    let b = match &n.kind {
+        NodeKind::Blend { .. } => vectorcraft_geom::union_opt(n.reach_bounds_with(symbols), placed_blend_effect_bounds(symbols, n)),
+        _ => n.visual_bounds_with(symbols),
+    }?;
     Some(match &n.kind {
         NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
         _ => b,
     })
+}
+
+/// A rotated blend's effect-bearing content, measured after spine placement. Geometry effects
+/// run on the placed shapes, so their reach on the original keys need not cover what they paint.
+/// Effect-free blends keep the quick rail envelope without evaluating their steps.
+fn placed_blend_effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
+    let NodeKind::Blend { spec, .. } = &n.kind else { return None };
+    if spec.orientation != vectorcraft_doc::BlendOrientation::AlignToPath {
+        return None;
+    }
+    let mut has_effects = false;
+    n.walk(&mut |c| {
+        has_effects |= has_fx(c)
+            || has_object_fx(c)
+            || match &c.kind {
+                NodeKind::SymbolInstance { symbol, .. } => symbols.has_effects(symbol),
+                _ => false,
+            };
+    });
+    if !has_effects {
+        return None;
+    }
+    effects::expand_live(Some(symbols.document()), n).iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, cull_bounds(symbols, c)))
 }
 
 /// The box of type `t`'s glyphs as laid out (its layout bounds, else laid out now), grown by its

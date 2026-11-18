@@ -3161,6 +3161,27 @@ fn direction_handles_leave_out_hidden_and_locked_paths() {
 }
 
 #[test]
+fn direction_handles_select_many_paths_in_groups_and_layers_in_paint_order() {
+    let mut s = session();
+    let mut paths: Vec<NodeId> = (0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, (i / 20) as f64 * 12.0, 10.0, 10.0)).collect();
+    sel(&mut s, &paths[10..40]);
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("layer.new", &json!({})).unwrap();
+    paths.extend((0..60).map(|i| rect(&mut s, (i % 20) as f64 * 12.0, 100.0 + (i / 20) as f64 * 12.0, 10.0, 10.0)));
+    s.execute("select.all", &json!({})).unwrap();
+    assert_eq!(s.execute("select.object.directionHandles", &json!({})).unwrap()["anchors"], 4 * paths.len());
+    let st = s.doc().unwrap();
+    let mut want = vectorcraft_doc::Selection::default();
+    for id in st.doc.paint_order(paths.iter().copied()) {
+        want.add(id);
+        want.anchors.insert(id, (0..4).map(|i| (0, i)).collect());
+    }
+    want.new_art = st.selection.new_art.clone();
+    assert_eq!(st.selection.objects.len(), paths.len());
+    assert_eq!(st.selection, want);
+}
+
+#[test]
 fn select_point_and_area_text() {
     let mut s = session();
     let p = text(&mut s, "point");
@@ -4088,6 +4109,17 @@ fn area_to_point_turns_wraps_into_breaks() {
     assert_eq!(txt.replace('\n', " "), "one two three four five six");
 }
 
+/// Convert To Point Type keeps the lines that a paragraph return or a forced line break (U+2028)
+/// starts as they are: neither gets a paragraph return added after it.
+#[test]
+fn area_to_point_keeps_forced_line_breaks() {
+    let mut s = session();
+    let a = id_of(&s.execute("text.create", &json!({"x": 0, "y": 0, "text": "ab\u{2028}c\nd", "area": {"width": 300, "height": 200}})).unwrap());
+    sel(&mut s, &[a]);
+    s.execute("type.convertToPointType", &json!({})).unwrap();
+    assert_eq!(plain(&s, a), "ab\u{2028}c\nd");
+}
+
 #[test]
 fn placeholder_and_insert_characters() {
     let mut s = session();
@@ -4101,6 +4133,76 @@ fn placeholder_and_insert_characters() {
     s.execute("type.insert", &json!({"text": "z"})).unwrap();
     assert_eq!(plain(&s, t), "A—©z");
     assert!(s.execute("type.insert", &json!({"char": "nope"})).is_err());
+}
+
+/// Type › Insert Break Character › Forced Line Break (`type.insert {char: "forcedLineBreak"}`)
+/// starts a new line in the same paragraph (U+2028, as Shift+Enter types it), so the paragraph's
+/// space before does not come between the two lines; `paragraphReturn` starts a new paragraph.
+/// Each insert is one undo step.
+#[test]
+fn insert_forced_line_break_differs_from_paragraph_return() {
+    fn second_line_gap(s: &Session, id: NodeId) -> f64 {
+        let NodeKind::Text(t) = &node(s, id).kind else { panic!("not text") };
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        assert_eq!(lay.lines.len(), 2, "{:?}", t.plain_text());
+        lay.lines[1].baseline - lay.lines[0].baseline
+    }
+    let mut s = session();
+    let mut gaps = Vec::new();
+    for (c, want) in [("forcedLineBreak", "ab\u{2028}c"), ("paragraphReturn", "ab\nc")] {
+        let t = text(&mut s, "ab");
+        sel(&mut s, &[t]);
+        s.execute("text.setFormat", &json!({"ids": [t.0], "spaceBefore": 30})).unwrap();
+        let steps = undo_len(&s);
+        s.execute("type.insert", &json!({"char": c})).unwrap();
+        assert_eq!(undo_len(&s), steps + 1, "{c}");
+        s.execute("type.insert", &json!({"text": "c"})).unwrap();
+        assert_eq!(plain(&s, t), want, "{c}");
+        gaps.push(second_line_gap(&s, t));
+    }
+    assert!(gaps[1] - gaps[0] > 29.0, "space before only at the paragraph return: {gaps:?}");
+    // The same character by `unicode` and by `text`.
+    let t = text(&mut s, "");
+    sel(&mut s, &[t]);
+    s.execute("type.insert", &json!({"unicode": "2028"})).unwrap();
+    s.execute("type.insert", &json!({"text": "\u{2028}"})).unwrap();
+    assert_eq!(plain(&s, t), "\u{2028}\u{2028}");
+}
+
+/// While the Type tool edits text, the Insert Special, Whitespace and Break menu items
+/// (`type.insert` without `ids`) insert at its caret or replace its selection, as one undo step,
+/// and the caret goes after the insertion; `ids` still appends to those objects.
+#[test]
+fn insert_character_goes_to_the_type_tool_caret() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 300.0), v).unwrap();
+    }
+    let t = s.doc().unwrap().selection.objects[0];
+    s.tool_text("abcd", v).unwrap();
+    for _ in 0..2 {
+        s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    }
+    let steps = undo_len(&s);
+    s.execute("type.insert", &json!({"text": ""})).unwrap();
+    assert_eq!(undo_len(&s), steps, "an empty insert changes nothing");
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}cd");
+    assert_eq!(s.tool_options()["caret"], json!(5));
+    s.tool_text("X", v).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd");
+    s.tool_key(ToolKey::Left, Mods { shift: true, ..Mods::default() }, v).unwrap();
+    s.execute("type.insert", &json!({"char": "paragraphReturn"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd");
+    s.execute("type.insert", &json!({"ids": [t.0], "text": "!"})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}\ncd!");
+    s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(plain(&s, t), "ab\u{2028}Xcd", "the replacement is one undo step");
 }
 
 /// `type.insert` by code (#5108): `code` as a Windows Alt+0 code types (Windows-1252 for
@@ -4369,6 +4471,58 @@ fn exit_isolation_leaves_a_locked_guide_path_deselected() {
     s.execute("object.isolate", &json!({"id": g.0})).unwrap();
     s.execute("object.exitIsolation", &json!({})).unwrap();
     assert_eq!(selected(&s), vec![g]);
+}
+
+/// Exit Isolation Mode on an isolated sublayer isolates its parent layer and selects the sublayer, one
+/// layer per call, without an undo step; from the top-level layer it leaves isolation mode. `all: true`
+/// leaves from any depth, a hidden parent layer is not isolated (the call leaves), and a group in a
+/// sublayer still leaves in one call.
+#[test]
+fn exit_isolation_goes_up_one_layer_from_a_sublayer() {
+    let mut s = session();
+    let top = s.doc().unwrap().doc.layers[0].id;
+    let mid = id_of(&s.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap());
+    let deep = id_of(&s.execute("layer.newSublayer", &json!({"parent": mid.0})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": deep.0})).unwrap();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let isolation = |s: &Session| s.doc().unwrap().isolation;
+    let exit = |s: &mut Session, p: Value| s.execute("object.exitIsolation", &p).unwrap();
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    let before = history(&s);
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(mid), vec![deep]), "up from the deepest sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(top), vec![mid]), "up from the middle sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![top]), "out from the top-level layer");
+    assert_eq!(history(&s), before, "no undo step");
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": true}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![deep]), "all: true");
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": false}));
+    assert_eq!(isolation(&s), Some(mid), "all: false");
+    for bad in [json!({"all": 1}), json!({"all": "yes"}), json!({"all": null})] {
+        let e = s.execute("object.exitIsolation", &bad).unwrap_err().to_string();
+        assert!(e.contains("`all` must be true or false"), "{bad}: {e}");
+        assert_eq!(isolation(&s), Some(mid), "{bad}: still isolated");
+    }
+
+    // A parent layer hidden while its sublayer is isolated isn't isolated: the call leaves.
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": false})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!(isolation(&s), None, "hidden parent layer");
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": true})).unwrap();
+
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![g]), "a group in a sublayer");
 }
 
 /// Undo and Redo bring back a selection without the guides, ruler guides or guide paths, that
@@ -5586,4 +5740,21 @@ fn crop_image_trim_leaves_a_cmyk_image_alone() {
     s.execute("select.all", &json!({})).unwrap();
     let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
     assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64(), r["height"].as_u64()), (Some(false), Some(4), Some(2)), "{r}");
+}
+
+/// Lock Guides is not an undo step: it adds none, and undo and redo of the steps before it leave
+/// the guides locked.
+#[test]
+fn lock_guides_is_not_an_undo_step() {
+    let mut s = session();
+    let g = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[g]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.guides_locked());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.guides_locked());
 }
