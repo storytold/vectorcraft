@@ -366,6 +366,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.repeat.release",
     "object.resetBoundingBox",
     "object.rotate",
+    "object.rotateBoundingBox",
     "object.scale",
     "object.setBounds",
     "object.setLiveShape",

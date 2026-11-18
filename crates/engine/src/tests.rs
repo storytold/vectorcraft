@@ -2811,6 +2811,26 @@ fn an_isolated_compound_paths_member_moves_alone() {
     assert_eq!((x0(&s, outer), x0(&s, hole)), (5.0, 55.0), "the compound path selected: the whole ring");
 }
 
+/// Rotate Bounding Box and Reset Bounding Box take the same objects as the transforms: a path of
+/// a compound path selected alone turns or squares its own box, and the compound path selected
+/// turns its box and its paths'.
+#[test]
+fn rotate_bounding_box_of_a_compound_paths_member_turns_only_that_path() {
+    let angle = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+    let mut s = session();
+    let (c, outer, hole) = isolated_ring(&mut s);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (0.0, 0.0, 30.0), "only the hole's box turned");
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 40.0), "the compound path and its paths");
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 0.0), "Reset squared only the hole's box");
+}
+
 /// The X, Y, W and H of the Properties and Transform panels run `object.setBounds`, which takes the
 /// same objects as the other transforms: a path of a compound path selected alone sets its own
 /// box and leaves the ring around it (#4046). The hole is off-centre, and a plain rectangle

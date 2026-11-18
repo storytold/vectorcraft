@@ -9689,7 +9689,11 @@ stay square to it, as in the reference app. `object.distort` turns it as the war
 (see Free Distort on a turned bounding box). `object.rotate {angle, absolute: true}` turns the selection to an angle
 (the Transform and Properties panels' Rotate field), and `object.setBounds` measures width, height and the reference
 point along the turned box (x, y stay page coordinates). Objects turned together share the box. A new group starts
-square to the page. `object.resetBoundingBox` squares the box again without moving the art. It also squares every
+square to the page. `object.rotateBoundingBox {angle}` turns the selection's box by `angle` without moving the art
+(`absolute: true` turns it to `angle`; the menu's Rotate Bounding Box… asks for the angle). Selected objects with
+different angles get one shared angle, and the objects inside them keep their angle relative to them. A path of a
+compound path selected on its own turns or squares only its own box. A box already at the angle adds no undo step.
+`object.resetBoundingBox` squares the box again without moving the art. It also squares every
 object inside the selected ones: the children of groups, compound paths, clip groups, blends, envelopes, repeats and
 intertwines, and the art of linked opacity masks (an unlinked mask's art keeps its angle). Ungroup, Release Clipping
 Mask, Release Compound Path, Blend Expand, Release Envelope, Release Repeat, Release Intertwine and Release Opacity Mask

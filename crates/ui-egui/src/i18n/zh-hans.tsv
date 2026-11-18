@@ -2937,6 +2937,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Reselect	重新选择
 	Reset	重置
 	Reset Bounding Box	重置定界框
+	Rotate Bounding Box	旋转定界框
+	Rotate Bounding Box…	旋转定界框…
 	Reset Envelope Mesh	重置封套网格
 	Reset Envelope Shape	重置封套形状
 	Reset Essentials	重置基本功能
