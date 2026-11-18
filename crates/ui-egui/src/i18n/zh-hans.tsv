@@ -3171,6 +3171,7 @@ digits	Malayalam	马拉雅拉姆数字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指针或拖动的点在屏幕上需离图稿多近，智能参考线才会吸附；该距离在任何缩放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	吸附线段的端点或从中心绘制的圆，使其与附近的曲线相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
+	Edit type set in fonts that aren't available?	要编辑使用了不可用字体的文字吗？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？

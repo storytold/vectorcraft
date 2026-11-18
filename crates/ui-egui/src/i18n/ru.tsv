@@ -3304,6 +3304,7 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Насколько близко на экране указатель или перетаскиваемая точка должны подойти к объекту, чтобы умные направляющие привязали их; расстояние одинаково при любом масштабе.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Привязывает конец отрезка или окружность, нарисованную от центра, так, чтобы она касалась ближайшей кривой.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Привязывает конец отрезка так, чтобы он встречал ближайший прямой сегмент под прямым углом.
+	Edit type set in fonts that aren't available?	Редактировать текст, набранный недоступными шрифтами?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показывает на холсте номер каждого фрагмента в рамке в его левом верхнем углу; если параметр выключен, контуры фрагментов по-прежнему видны.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цвет контуров пользовательских и объектных фрагментов и рамок с их номерами; автоматические фрагменты используют более бледный оттенок этого цвета.
 	Reset all preferences to their defaults?	Сбросить все настройки до значений по умолчанию?

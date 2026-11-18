@@ -4633,6 +4633,7 @@ antiAlias	Sharp	शार्प
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	स्मार्ट गाइड्स के स्नैप करने के लिए पॉइंटर या ड्रैग किया गया पॉइंट स्क्रीन पर आर्ट के कितने पास आना चाहिए; यह दूरी हर ज़ूम पर समान रहती है।
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	लाइन सेगमेंट के सिरे को, या केंद्र से ड्रॉ किए गए वृत्त को, इस तरह स्नैप करता है कि वह पास के वक्र को छुए।
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	लाइन सेगमेंट के सिरे को इस तरह स्नैप करता है कि वह पास के सीधे सेगमेंट से समकोण पर मिले।
+	Edit type set in fonts that aren't available?	जो फ़ॉन्ट उपलब्ध नहीं हैं, उनमें सेट टेक्स्ट एडिट करें?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	कैनवास पर हर स्लाइस का नंबर उसके ऊपरी बाएँ कोने में एक बॉक्स में दिखाता है; बंद होने पर भी स्लाइस की आउटलाइन दिखती रहती हैं।
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	यूज़र और ऑब्जेक्ट स्लाइस की आउटलाइन और उनके नंबर बॉक्स का रंग; ऑटो स्लाइस इसकी हल्की छाया इस्तेमाल करते हैं।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?

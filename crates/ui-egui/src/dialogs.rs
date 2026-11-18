@@ -345,6 +345,7 @@ registry! {
     ReplaceFiles: [confirm::REPLACE_FILES] => confirm::REPLACE_FILES_SPEC,
     ResetPreferences: [confirm::RESET_PREFS] => confirm::RESET_PREFS_SPEC,
     ResetActions: [confirm::RESET_ACTIONS] => confirm::RESET_ACTIONS_SPEC,
+    MissingFontEdit: [confirm::MISSING_FONT_EDIT] => confirm::MISSING_FONT_EDIT_SPEC,
     NewSwatch: [new_swatch::KIND] => new_swatch::SPEC,
     NewColorGroup: [new_color_group::KIND] => new_color_group::SPEC,
     GraphData: [graph_data::KIND] => graph_data::SPEC,
@@ -738,6 +739,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
         if d.kind == safe_mode::STOPPED {
             safe_mode::cancel_stopped(app);
+        }
+        if d.kind == confirm::MISSING_FONT_EDIT {
+            confirm::answer_missing_font_edit(app, &d, false);
         }
         // The growth question's Cancel button is its Stop button.
         if d.kind == script_run::GROWTH_KIND {

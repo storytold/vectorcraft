@@ -2759,6 +2759,7 @@ digits	Malayalam	Malaiala
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Quão perto na tela o ponteiro ou um ponto arrastado precisa chegar da arte para que as guias inteligentes se ajustem a ela; a distância é a mesma em qualquer zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta a extremidade de um segmento de linha, ou um círculo desenhado a partir do centro, para que toque uma curva próxima.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta a extremidade de um segmento de linha para que encontre um segmento reto próximo em ângulo reto.
+	Edit type set in fonts that aren't available?	Editar o texto em fontes que não estão disponíveis?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra na tela o número de cada fatia em uma caixa no canto superior esquerdo dela; quando desativado, os contornos das fatias continuam visíveis.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A cor dos contornos das fatias de usuário e de objeto e das caixas com seus números; as fatias automáticas usam um tom mais apagado dessa cor.
 	Reset all preferences to their defaults?	Redefinir todas as preferências para o padrão?

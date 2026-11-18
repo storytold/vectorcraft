@@ -3306,6 +3306,7 @@ mark-style	Japanese	日本式
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	スマートガイドがスナップするために、ポインターやドラッグしたポイントが画面上でアートにどこまで近づく必要があるかです。この距離はどのズームでも同じです。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	直線セグメントの端、または中心から描いた円を、近くの曲線に接するようにスナップします。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	直線セグメントの端を、近くの直線セグメントと直角に交わるようにスナップします。
+	Edit type set in fonts that aren't available?	使用できないフォントのテキストを編集しますか？
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	カンバス上で、各スライスの番号をスライスの左上のボックスに表示します。オフでもスライスの輪郭は表示されます。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	ユーザースライスとオブジェクトスライスの輪郭、およびその番号のボックスの色です。自動スライスにはこの色の淡い色合いが使われます。
 	Reset all preferences to their defaults?	すべての環境設定を初期値に戻しますか？

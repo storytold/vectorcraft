@@ -4088,6 +4088,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Πόσο κοντά στην οθόνη πρέπει να φτάσει ο δείκτης ή ένα σημείο που σύρεται σε γραφικά για να προσκολληθούν οι έξυπνοι οδηγοί· η απόσταση είναι ίδια σε κάθε ζουμ.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ή έναν κύκλο που σχεδιάζεται από το κέντρο του ώστε να αγγίζει μια κοντινή καμπύλη.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ώστε να συναντά ένα κοντινό ευθύ τμήμα σε ορθή γωνία.
+	Edit type set in fonts that aren't available?	Επεξεργασία κειμένου σε γραμματοσειρές που δεν είναι διαθέσιμες;
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Εμφανίζει στον καμβά τον αριθμό κάθε τομής σε ένα πλαίσιο πάνω αριστερά της· όταν είναι απενεργοποιημένο, τα περιγράμματα των τομών εξακολουθούν να εμφανίζονται.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Το χρώμα των περιγραμμάτων των τομών χρήστη και αντικειμένου και των πλαισίων με τους αριθμούς τους· οι αυτόματες τομές χρησιμοποιούν μια πιο αχνή απόχρωσή του.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;

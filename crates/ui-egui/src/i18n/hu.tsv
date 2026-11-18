@@ -3855,6 +3855,7 @@ mark-style	Japanese	Japán
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Milyen közel kell a mutatónak vagy egy húzott pontnak a képernyőn a grafikához érnie, hogy az intelligens segédvonalak illesszenek; a távolság minden nagyításnál azonos.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Egy szakasz végét vagy a középpontjából rajzolt kört úgy illeszti, hogy érintse a közeli görbét.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Egy szakasz végét úgy illeszti, hogy derékszögben találkozzon egy közeli egyenes szakasszal.
+	Edit type set in fonts that aren't available?	Szerkeszti a nem elérhető betűtípusokkal szedett szöveget?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	A vásznon minden szelet számát egy keretben mutatja a szelet bal felső sarkában; kikapcsolva a szeletek körvonalai továbbra is látszanak.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A felhasználói és objektumszeletek körvonalainak és számkereteinek színe; az automatikus szeletek ennek egy halványabb árnyalatát használják.
 	Reset all preferences to their defaults?	Visszaállítja az összes beállítást az alapértékre?

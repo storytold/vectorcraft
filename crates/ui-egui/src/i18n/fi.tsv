@@ -4652,6 +4652,7 @@ font-technology	Variable	Muuttuvat
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Kuinka lähelle grafiikkaa osoittimen tai vedettävän pisteen on tultava näytöllä, jotta älykkäät apuviivat kohdistavat siihen; etäisyys on sama kaikilla zoomauksilla.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Kohdistaa janan pään tai keskipisteestä piirretyn ympyrän niin, että se koskettaa lähellä olevaa käyrää.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Kohdistaa janan pään niin, että se kohtaa lähellä olevan suoran segmentin suorassa kulmassa.
+	Edit type set in fonts that aren't available?	Muokataanko tekstiä, jonka fontit eivät ole käytettävissä?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
