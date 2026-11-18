@@ -431,6 +431,52 @@ impl Session {
         painted(first, true, &mut nodes);
         node_stroke(nodes.first()?)
     }
+
+    /// Do all the strokes that `stroke.set` edits without `ids` or `item` draw with a brush
+    /// ([`vectorcraft_brush::keeps_brush_size`])? If they do, a width profile changes none of
+    /// them, and the result is `Some`, holding whether any of them has a width profile. The result
+    /// is `None` when a profile changes at least one of them.
+    ///
+    /// The strokes are the ones `stroke.set` edits:
+    /// - the Appearance panel's active stroke row in each target that has an equal row
+    ///   ([`ItemTarget::per_target`]), and the top stroke in the others;
+    /// - else a selected group's own stroke;
+    /// - else the top strokes of the objects it paints ([`own_stroke_or_leaves`]).
+    ///
+    /// The art of graph designs is left out, and so are images and symbol instances without an
+    /// active row. The result is also `None` with nothing selected, with an object inside a symbol
+    /// instance selected, with type among the targets while no Appearance row is active for it,
+    /// and with a target that has no stroke row, since `stroke.set` gives such a target a plain
+    /// stroke.
+    pub fn brushed_strokes_profiled(&self) -> Option<bool> {
+        const C: &str = "stroke.set";
+        let st = self.active()?;
+        if st.selected_symbol_part().is_some() {
+            return None;
+        }
+        let p = json!({});
+        let item = item_target(self, &p, C).ok()?.of_kind(self, false);
+        let ids = if item == ItemTarget::Top { own_stroke_or_leaves(self, &p).ok()? } else { item.targets(self, &p).ok()? };
+        let mut ids = super::appearance::drop_design_art_rows(self, ids, item, false, C).ok()?;
+        if item == ItemTarget::Top {
+            ids.retain(|id| !matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::SymbolInstance { .. })));
+        }
+        let mut strokes = vec![];
+        for (id, each) in ids.iter().zip(item.per_target(self, &ids)) {
+            let n = st.doc.node(*id)?;
+            let row = each?.resolve(&n.appearance, false, C).ok()?;
+            if row.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                return None;
+            }
+            strokes.push(n.appearance.stroke_at(row).filter(|s| s.brush.is_some())?);
+        }
+        if strokes.is_empty() {
+            return None;
+        }
+        // The library is read only when every stroke names a brush.
+        let lib = vectorcraft_brush::library(&st.doc);
+        strokes.iter().all(|s| vectorcraft_brush::keeps_brush_size(&lib, s)).then(|| strokes.iter().any(|s| s.profile.is_some()))
+    }
 }
 
 impl DocState {

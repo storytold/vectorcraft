@@ -1950,7 +1950,7 @@ fn global_sliders(ui: &mut Ui, d: &mut Dialog, sample: Color) {
 /// and its number field, showing `shown` with `suffix`. Returns the whole number in `shown`'s
 /// range that a drag, a key or the field sets.
 #[allow(clippy::too_many_arguments)]
-fn slider_cell(
+pub(crate) fn slider_cell(
     ui: &mut Ui,
     id: impl std::hash::Hash + Copy,
     label: &str,

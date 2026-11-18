@@ -605,6 +605,9 @@ Width Point Edit: double-clicking a width point with the Width tool, or `ui.widt
 `widthPoint` dialog (fields `id`, `index`, `t`, `side1` and `side2`: the left and right widths in points, `linked`,
 `adjustAdjoining`). `ui.dialog.confirm` runs `stroke.widthPoint.set` with them; `ui.dialog.set {field: "discard",
 value: true}` then confirm (the Delete button) removes the point with `stroke.widthPoint.remove`.
+Either half of a discontinuous point opens both: `index` is the incoming half, and `outIndex`, `outSide1`, `outSide2`
+and `outLinked` hold the outgoing half; `single` (`""`, `"incoming"` or `"outgoing"`) is Single Width Only. Confirm
+sets both halves in one `stroke.widthPoint.set` (one undo step), and Delete removes both.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
 corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,

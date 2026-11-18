@@ -59,7 +59,7 @@ fn bounds_transform(s: &Session, p: &Value, ids: Vec<NodeId>, least: f64, anchor
     let refi = reference_index(p)?;
     let st = s.doc()?;
     check_switches(p, &TRANSFORM_SWITCHES, "object.setBounds")?;
-    check_switches(p, &["proportional"], "object.setBounds")?;
+    check_switches(p, &["proportional", "interpolate"], "object.setBounds")?;
     let how = s.bounds_measure();
     if anchors
         && transforms_objects(p)

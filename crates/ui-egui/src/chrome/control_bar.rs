@@ -188,9 +188,9 @@ const INLINE_FIELD_WIDTH: f32 = 80.0;
 /// The keys and labels of the Control bar's inline X/Y/W/H fields, in their order.
 const INLINE_FIELDS: [(&str, &str); 4] = [("x", "X:"), ("y", "Y:"), ("width", "W:"), ("height", "H:")];
 
-/// The label of an inline X/Y/W/H field.
+/// The label of an inline X/Y/W/H field, underlined: a click on it opens the Transform panel.
 fn inline_label(t: &Tokens, lbl: &str) -> egui::RichText {
-    egui::RichText::new(tl!(lbl)).size(12.0).color(t.text_dim)
+    egui::RichText::new(tl!(lbl)).size(12.0).color(t.text).underline()
 }
 
 /// The room the Control bar's inline X/Y/W/H fields take: their labels as drawn in the current
@@ -217,17 +217,20 @@ fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, un
     // The W/H link sits between W and H, but is made after H so Tab goes from W
     // straight to H and finds the link after it.
     let mut link_room = None;
+    let mut labels = Vec::with_capacity(INLINE_FIELDS.len());
     for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
         if k == "height" {
             link_room = Some(crate::panels::transform::constrain_link_room(ui));
         }
-        widgets::field_label(ui, inline_label(t, lbl));
+        // A click on the label opens the Transform panel, as the Transform link does; a drag scrubs.
+        let label = widgets::field_panel_label(ui, inline_label(t, lbl)).on_hover_text(tl!("Transform options"));
         let (id, shown) = (("cb", k), Some(v - offset));
         let set = if matches!(k, "width" | "height") {
             widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
         } else {
             widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
         };
+        labels.push(label);
         if let Some(nv) = set {
             let params = match k {
                 "x" => json!({"x": reference.bounds_xy(nv + offset, 0.0).0, "reference": refi, "copy": copy}),
@@ -240,6 +243,10 @@ fn inline_transform_fields(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, un
     if let Some(room) = link_room {
         let id = ui.scope_id().with("cb-constrain-link");
         crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
+    }
+    // After the fields, which each take the label before them as their own.
+    for label in &labels {
+        crate::panels::transform::popover(app, label);
     }
 }
 
@@ -750,7 +757,7 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
         stroke_panel::weight_field(app, ui, "cb-stroke", weight, WEIGHT_FIELD_WIDTH);
         if ui.available_width() < row_width(ui, &[stroke_panel::PROFILE_DROPDOWN_WIDTH]) + reserve {
             left_out(ui);
-        } else if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
+        } else if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref()) {
             app.run("stroke.set", json!({"profile": id})).ok();
         }
     } else {
