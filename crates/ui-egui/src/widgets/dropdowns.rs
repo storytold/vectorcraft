@@ -27,7 +27,7 @@ pub fn dropdown_names_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<
     combo_named(ui, id, name, current, width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.add(egui::Button::selectable(*o == current, *o)).clicked() {
+            if option_row(ui, true, *o == current, *o).clicked() {
                 chosen = Some(i);
             }
         }
@@ -75,7 +75,7 @@ pub fn dropdown_icon_names_sized(
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
             let on = current == Some(i);
-            if ui.add(egui::Button::selectable(on, (atom(i, on), *o))).clicked() {
+            if option_row(ui, true, on, (atom(i, on), *o)).clicked() {
                 chosen = Some(i);
             }
         }
@@ -109,12 +109,28 @@ pub fn dropdown_with_named(
     combo_named(ui, id, name, tl!(current), width, |ui| {
         let mut chosen = None;
         for (i, o) in options.iter().enumerate() {
-            if ui.add_enabled(enabled(i), egui::Button::selectable(*o == current, tl!(o))).clicked() {
+            if option_row(ui, enabled(i), *o == current, tl!(o)).clicked() {
                 chosen = Some(i);
             }
         }
         chosen
     })
+}
+
+/// The flag that [`combo_atoms_named`] sets while it draws a list on the pass the list opens.
+fn opening_list_id() -> egui::Id {
+    egui::Id::unique("dropdown-list-opening")
+}
+
+/// One option of a dropdown list, `selected` for the current one. On the pass the list opens, the
+/// current option scrolls to the middle of the list, or as near to it as the list's ends allow, so
+/// that it shows whole (#5941).
+fn option_row<'a>(ui: &mut Ui, enabled: bool, selected: bool, atoms: impl egui::IntoAtoms<'a>) -> Response {
+    let response = ui.add_enabled(enabled, egui::Button::selectable(selected, atoms));
+    if selected && ui.data(|d| d.get_temp::<bool>(opening_list_id())).unwrap_or(false) {
+        ui.scroll_to_rect_animation(response.rect, Some(egui::Align::Center), egui::style::ScrollAnimation::none());
+    }
+    response
 }
 
 /// The id [`craft_ui::ComboBox::from_id_salt`] gives its button in this `Ui`: `from_id_salt`
@@ -159,16 +175,23 @@ fn combo_atoms_named<'a, R>(
         .corner_radius(CornerRadius::same(3))
         .show(ui, |ui| {
             let button_id = combo_button_id(ui, &id);
-            // A list opens at its first option, not where it was scrolled when it last closed (#5941).
+            // A list opens at its first option, or with its current option in view (`option_row`),
+            // not where it was scrolled when it last closed (#5941).
             let shown_key = button_id.with("list-shown-pass");
             let list = move |ui: &mut Ui| {
                 let pass = ui.ctx().cumulative_pass_nr();
                 let last = ui.data_mut(|d| d.get_temp::<u64>(shown_key));
                 ui.data_mut(|d| d.insert_temp(shown_key, pass));
-                if last.is_none_or(|p| p + 1 < pass) {
+                let opening = last.is_none_or(|p| p + 1 < pass);
+                if opening {
                     ui.scroll_to_cursor_animation(Some(egui::Align::TOP), egui::style::ScrollAnimation::none());
+                    ui.data_mut(|d| d.insert_temp(opening_list_id(), true));
                 }
-                list(ui)
+                let chosen = list(ui);
+                if opening {
+                    ui.data_mut(|d| d.remove::<bool>(opening_list_id()));
+                }
+                chosen
             };
             let enter_for_combo = ui.memory(|m| m.has_focus(button_id)) || craft_ui::ComboBox::is_open(ui.ctx(), button_id);
             let response = craft_ui::ComboBox::from_id_salt(HashOnly(&id))
