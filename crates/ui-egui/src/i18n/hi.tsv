@@ -7936,6 +7936,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	no item at index {from}	इंडेक्स {from} पर कोई आइटम नहीं
 @msg	no item at one of the indices {idx}	indices {idx} में से एक पर कोई आइटम नहीं
 @msg	no key object	कोई कुंजी ऑब्जेक्ट नहीं
+@msg	Align to Key Object isn't available with the Artboard tool	आर्टबोर्ड टूल के साथ "मुख्य ऑब्जेक्ट पर संरेखित करें" उपलब्ध नहीं है
 @msg	no layer	कोई लेयर नहीं
 @msg	no layer {id} (see layer.list)	कोई लेयर {id} (layer.list देखें)
 @msg	no layers to export	निर्यात करने के लिए कोई लेयरें नहीं

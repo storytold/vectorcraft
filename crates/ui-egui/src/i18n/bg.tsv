@@ -4818,6 +4818,7 @@ axis	Both	И двете
 @msg	no graphic style `{n}`	няма графичен стил `{n}`
 @msg	no interaction in progress	няма текущо взаимодействие
 @msg	no key object	няма основен обект
+@msg	Align to Key Object isn't available with the Artboard tool	„Подравняване спрямо ключов обект“ не е налично с инструмента „Работна област“
 @msg	no library `{key}` (see {list})	няма библиотека `{key}` (вижте {list})
 @msg	no native format	няма нативен формат
 @msg	no pages	няма страници
