@@ -1971,9 +1971,15 @@ fn dimension_colours_follow_the_document_colour_model() {
     let black = colours(&s, id);
     assert!(!black.is_empty() && black.iter().all(|c| *c == vectorcraft_color::Color::cmyk(0.0, 0.0, 0.0, 1.0)), "{black:?}");
     let pdf = pdf_content(&run(&mut s, "document.exportPdf", json!({"preset":"PDF/X-4:2010"})));
-    // PDF/X-4 paints in the output intent's CMYK space: `/c0 CS 0 0 0 1 SCN` strokes, `scn` fills.
-    let operands = |op: &str| pdf.match_indices(op).map(|(i, _)| pdf[i.saturating_sub(7)..i].to_string()).collect::<Vec<_>>();
-    let (strokes, fills) = (operands(" SCN"), operands(" scn"));
+    // PDF/X-4 writes CMYK in the output intent's profile as DeviceCMYK: `0 0 0 1 K` strokes, `k` fills.
+    let words: Vec<&str> = pdf.split_whitespace().collect();
+    let operands = |op: &str| {
+        (4..words.len())
+            .filter(|&i| words[i] == op && words[i - 4..i].iter().all(|w| w.parse::<f32>().is_ok()))
+            .map(|i| words[i - 4..i].join(" "))
+            .collect::<Vec<_>>()
+    };
+    let (strokes, fills) = (operands("K"), operands("k"));
     assert!(!strokes.is_empty() && !fills.is_empty(), "{pdf}");
     assert!(strokes.iter().chain(&fills).all(|v| v == "0 0 0 1"), "K-only colours: {strokes:?} {fills:?}");
     run(&mut s, "dimension.update", json!({"ids":[id],"options":{"lineColor":[255,0,0]}}));
