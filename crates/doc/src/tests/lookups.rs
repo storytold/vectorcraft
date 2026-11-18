@@ -157,6 +157,58 @@ fn cached_lookups_follow_any_edit_of_the_tree() {
     }
 }
 
+/// Every node whose id is in `ids`, by walking the tree.
+fn every_node(d: &Document, ids: &[NodeId]) -> Vec<*const Node> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if ids.contains(&n.id) {
+            out.push(n as *const Node);
+        }
+    });
+    out
+}
+
+/// [`Document::nodes_in_order`] gives every node with each id in tree order, repeated ids
+/// included, with the cache built and without it, for a few ids (cached paths) and for many (a
+/// walk).
+#[test]
+fn nodes_in_order_match_a_walk() {
+    for seed in 1..40 {
+        let (d, ids) = tree(seed);
+        let few: Vec<NodeId> = ids.iter().copied().step_by(17).collect();
+        for cold in [true, false] {
+            if cold {
+                d.drop_lookup_cache();
+            } else {
+                d.node(ids[0]);
+            }
+            for list in [&ids[..], &few[..], &ids[ids.len() / 2..ids.len() / 2 + 1], &[]] {
+                let found: Vec<*const Node> = d.nodes_in_order(list.iter().copied()).into_iter().map(|n| n as *const Node).collect();
+                assert_eq!(found, every_node(&d, list), "seed {seed}, cold {cold}, {list:?}");
+            }
+        }
+        // An id that the tree repeats: every node with it.
+        let Some(dup) = ids.iter().enumerate().find(|(i, id)| ids[..*i].contains(id)).map(|(_, id)| *id) else { continue };
+        assert!(d.nodes_in_order([dup]).len() >= 2, "seed {seed}: {dup:?} is in the tree more than once");
+        // A second node given an id once held once, after the cache was built: the lookup finds the
+        // cached node, which has that id; with the cache built afresh, both.
+        let mut d = d;
+        let once = ids.iter().copied().find(|id| every_node(&d, &[*id]).len() == 1 && d.node(*id).is_some_and(|n| !n.is_layer()));
+        let Some(once) = once else { continue };
+        d.node(once);
+        let copy = Arc::new(Node::path(once, shapes::rectangle(Rect::new(0.0, 0.0, 2.0, 2.0)), Appearance::default_art()));
+        if let Some(ch) = Arc::make_mut(&mut d.layers[0]).children_mut() {
+            ch.insert(0, copy);
+        }
+        let found = d.nodes_in_order([once]);
+        assert!(!found.is_empty() && found.iter().all(|n| n.id == once), "seed {seed}: {once:?}");
+        d.drop_lookup_cache();
+        d.node(once);
+        let found: Vec<*const Node> = d.nodes_in_order([once]).into_iter().map(|n| n as *const Node).collect();
+        assert_eq!(found, every_node(&d, &[once]), "seed {seed}: {once:?} cached afresh");
+    }
+}
+
 /// Nodes of `d` picked and ordered by `seed`. None lies inside another, and each of them, and each
 /// node it is in, appears in the tree once.
 fn picks(d: &Document, seed: u64) -> Vec<NodeId> {
