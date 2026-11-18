@@ -346,14 +346,36 @@ fn button_width(ui: &Ui) -> f32 {
     })
 }
 
-/// A compact width shared by the heading and body, bounded by the available window width.
+/// A compact width shared by the heading and body, bounded by the available window width. While
+/// the body scrolls, the width leaves out the column of its scroll bar, so the body and its bar fit
+/// in the window side by side.
 fn layout_size(ui: &Ui) -> (f32, f32, f32, bool) {
     let button_w = button_width(ui);
     let values_w = PREVIEW_W + COLUMN_GAP + button_w;
     let fixed_w = SLIDER_GAP + SLIDER_W + COLUMN_GAP + values_w;
-    let stacked = ui.available_width() < MIN_FIELD + fixed_w;
-    let side = (ui.available_width() - fixed_w).clamp(MIN_FIELD, FIELD);
+    let fit = |room: f32| ((room - fixed_w).clamp(MIN_FIELD, FIELD), room < MIN_FIELD + fixed_w);
+    let (side, stacked) = fit(ui.available_width());
+    // The margin keeps the bar's column whenever the body may scroll, as its height is estimated.
+    let (side, stacked) = if body_height(ui, side, stacked) + 40.0 > scroll_height(ui) {
+        fit(ui.available_width() - ui.spacing().scroll.allocated_width())
+    } else {
+        (side, stacked)
+    };
     (side, values_w, button_w, stacked)
+}
+
+/// The tallest the body's scrolling content is drawn.
+fn scroll_height(ui: &Ui) -> f32 {
+    (ui.ctx().content_rect().height() - 112.0).max(1.0)
+}
+
+/// How tall the body's field, slider and value columns are with a field `side` wide, `stacked` or
+/// side by side.
+fn body_height(ui: &Ui, side: f32, stacked: bool) -> f32 {
+    // Let the auto-sized window grow for the checkbox too, rather than clipping it to the
+    // scroll area's previous height while the dialog measures itself.
+    let field_h = side + 8.0 + 20.0 + 2.0 * ui.spacing().item_spacing.y;
+    if stacked { field_h + COLUMN_GAP + FIELD } else { field_h.max(FIELD) }
 }
 
 /// Full-width, draggable title band using the app's existing theme colours.
@@ -395,11 +417,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let mut action = DialogAction::None;
     // Shrink the field first, then stack the columns in narrow windows. Only vertical
     // scrolling is needed, so no controls depend on a horizontal scrollbar.
-    let height = (ui.ctx().content_rect().height() - 112.0).max(1.0);
-    // Let the auto-sized window grow for the checkbox too, rather than clipping it to the
-    // scroll area's previous height while the dialog measures itself.
-    let field_h = side + 8.0 + 20.0 + 2.0 * ui.spacing().item_spacing.y;
-    let body_height = if stacked { field_h + COLUMN_GAP + FIELD } else { field_h.max(FIELD) };
+    let height = scroll_height(ui);
+    let body_height = body_height(ui, side, stacked);
     let layout = if stacked { egui::Layout::top_down(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Min) };
     egui::ScrollArea::vertical()
         .id_salt("cp-content")

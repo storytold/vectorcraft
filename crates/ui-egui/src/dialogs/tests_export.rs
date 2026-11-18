@@ -317,9 +317,20 @@ fn the_format_list_shows_its_scroll_bar_at_rest_and_opens_at_its_first_format() 
         phase: egui::TouchPhase::Move,
         source: egui::MouseWheelSource::Unknown,
     };
+    let top_before = rows.iter().find(|(s, ..)| s == labels[0]).map(|(_, r, _)| r.top());
     run(&mut app, vec![wheel]);
+    let mut texts = vec![];
     for _ in 0..4 {
-        run(&mut app, vec![]);
+        (texts, _) = run(&mut app, vec![]);
+    }
+    // The wheel scrolled the list: its first format moved up or out of view.
+    if rows.len() < labels.len() {
+        let top_after = texts.iter().find(|(s, r, _)| s == labels[0] && list.contains_rect(*r)).map(|(_, r, _)| r.top());
+        assert!(
+            top_before.is_some_and(|before| top_after.is_none_or(|after| after < before - 1.0)),
+            "the wheel scrolls the list: {} at {top_before:?}, then {top_after:?}",
+            labels[0]
+        );
     }
     run(&mut app, vec![egui::Event::PointerMoved(field), click_at(field, true)]);
     run(&mut app, vec![click_at(field, false)]);
