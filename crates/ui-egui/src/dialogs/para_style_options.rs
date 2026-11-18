@@ -1,7 +1,7 @@
 //! Paragraph Style Options fields shared by editing and creating a paragraph style: General, Basic
 //! Paragraph Formats (alignment, indents and spacing), Tabs (the style's tab stops), Composition
 //! (composer and Roman Hanging Punctuation), Hyphenation, Justification and East Asian Composition
-//! Settings (Korean Line Break Anywhere).
+//! Settings (Bunri-Kinshi and Korean Line Break Anywhere).
 //!
 //! Each field is unset (empty, or a checkbox in its unset state) or set, and an unset field leaves
 //! its attribute out of the style. Distances are shown and typed in the General unit and kept in
@@ -105,6 +105,7 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
             "glyph_max",
             "auto_leading",
             "single_word",
+            "bunri_kinshi",
             "korean_line_break_anywhere",
             "tabs",
             "section",
@@ -234,7 +235,7 @@ pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>, unit: Unit) -> Map<S
         fields.insert(key.into(), distance_field(attrs.get(key), unit));
     }
     fields.insert("composer".into(), attrs.get("composer").filter(|v| v.is_string()).cloned().unwrap_or(Value::Null));
-    for key in ["roman_hanging", "hyphenate", "korean_line_break_anywhere"] {
+    for key in ["roman_hanging", "hyphenate", "bunri_kinshi", "korean_line_break_anywhere"] {
         fields.insert(key.into(), attrs.get(key).filter(|v| v.is_boolean()).cloned().unwrap_or(Value::Null));
     }
     let hyphenation = attrs.get("hyphenation");
@@ -360,7 +361,12 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
     }
 
     let same = unchanged("composer", "__resetComposition");
-    keep_or(&mut attrs, "composer", same, choice("composer").filter(|v| matches!(v.as_str(), Some("singleLine" | "everyLine"))));
+    keep_or(
+        &mut attrs,
+        "composer",
+        same,
+        choice("composer").filter(|v| matches!(v.as_str(), Some("singleLine" | "everyLine" | "standardSingleLine" | "standardEveryLine"))),
+    );
     let same = unchanged("roman_hanging", "__resetComposition");
     keep_or(&mut attrs, "roman_hanging", same, switch("roman_hanging"));
 
@@ -378,8 +384,10 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
     let value = if same { None } else { tab_stops(d, &original, unit)? };
     keep_or(&mut attrs, "tabs", same, value);
 
-    let same = unchanged("korean_line_break_anywhere", "__resetEastAsian");
-    keep_or(&mut attrs, "korean_line_break_anywhere", same, switch("korean_line_break_anywhere"));
+    for key in ["bunri_kinshi", "korean_line_break_anywhere"] {
+        let same = unchanged(key, "__resetEastAsian");
+        keep_or(&mut attrs, key, same, switch(key));
+    }
     Ok(attrs)
 }
 
@@ -559,9 +567,11 @@ fn reset_tabs(d: &mut Dialog) {
     d.fields.insert("__tabSel".into(), json!(0));
 }
 
-/// Reset Panel in East Asian Composition Settings: Korean Line Break Anywhere becomes unset.
+/// Reset Panel in East Asian Composition Settings: Bunri-Kinshi and Korean Line Break Anywhere
+/// become unset.
 fn reset_east_asian(d: &mut Dialog) {
     d.fields.insert("__resetEastAsian".into(), json!(true));
+    d.fields.insert("bunri_kinshi".into(), Value::Null);
     d.fields.insert("korean_line_break_anywhere".into(), Value::Null);
 }
 
@@ -632,7 +642,9 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(&str, &str)]
     let shown = options.iter().find(|(value, _)| *value == selected).map_or("", |(_, label)| *label);
     let labels: Vec<&str> = std::iter::once(" ").chain(options.iter().map(|(_, label)| *label)).collect();
     ui.add_enabled_ui(enabled, |ui| {
-        if let Some(i) = crate::widgets::dropdown(ui, (KIND, key), shown, &labels, 190.0) {
+        // shortcut: 7 pt per character approximates the widest label; measure the text when a label wraps.
+        let width = (labels.iter().map(|l| l.chars().count()).max().unwrap_or(0) as f32 * 7.0).max(190.0);
+        if let Some(i) = crate::widgets::dropdown(ui, (KIND, key), shown, &labels, width) {
             d.fields.insert(key.into(), if i == 0 { Value::Null } else { options.get(i - 1).map_or(Value::Null, |(value, _)| json!(value)) });
         }
     });
@@ -837,11 +849,16 @@ pub(crate) fn clear_tabs(d: &mut Dialog) {
     d.fields.remove("__tabEdited");
 }
 
-/// Composition: the Single-line or Every-line Composer, and Roman Hanging Punctuation.
+/// Composition: the Middle Eastern & South Asian or Standard, Single-line or Every-line Composer, and Roman Hanging Punctuation.
 pub(crate) fn composition_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("paragraph-style-composition").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         let row = ui.label(tl!("Composition"));
-        let composers = [("singleLine", tl!("Single-line Composer")), ("everyLine", tl!("Every-line Composer"))];
+        let composers = [
+            ("singleLine", tl!("Middle Eastern & South Asian Single-line Composer")),
+            ("everyLine", tl!("Middle Eastern & South Asian Every-line Composer")),
+            ("standardSingleLine", tl!("Standard Single-line Composer")),
+            ("standardEveryLine", tl!("Standard Every-line Composer")),
+        ];
         ui.label_inputs_by(row.id, |ui| choice(ui, d, "composer", &composers, true));
         ui.end_row();
         switch(ui, d, "roman_hanging", tl!("Roman Hanging Punctuation"), true);
@@ -852,7 +869,7 @@ pub(crate) fn composition_body(ui: &mut egui::Ui, d: &mut Dialog) {
 /// unset; Hyphenation Zone is also inactive with the Every-line Composer, which does not use it.
 pub(crate) fn hyphenation_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let on = d.fields.get("hyphenate").and_then(Value::as_bool) == Some(true);
-    let single_line = d.fields.get("composer").and_then(Value::as_str) == Some("singleLine");
+    let single_line = matches!(d.fields.get("composer").and_then(Value::as_str), Some("singleLine" | "standardSingleLine"));
     egui::Grid::new("paragraph-style-hyphenation").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         switch(ui, d, "hyphenate", tl!("Hyphenation"), true);
         for (key, suffix) in [
@@ -905,8 +922,12 @@ pub(crate) fn justification_body(ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
-/// East Asian Composition Settings: Korean Composition Settings › Korean Line Break Anywhere.
+/// East Asian Composition Settings: Bunri-Kinshi, and Korean Composition Settings › Korean Line
+/// Break Anywhere.
 pub(crate) fn east_asian_body(ui: &mut egui::Ui, d: &mut Dialog) {
+    egui::Grid::new("paragraph-style-bunri-kinshi").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
+        switch(ui, d, "bunri_kinshi", tl!("Bunri-Kinshi"), true);
+    });
     ui.strong(tl!("Korean Composition Settings"));
     egui::Grid::new("paragraph-style-east-asian").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         switch(ui, d, "korean_line_break_anywhere", tl!("Korean Line Break Anywhere"), true);
@@ -970,7 +991,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.separator();
         let section = d.str("section");
         let content_w = ui.available_width();
-        egui::ScrollArea::both()
+        let shown = egui::ScrollArea::both()
             .id_salt(("para-style-sections", section))
             .max_height(room)
             .min_scrolled_height(room)
@@ -978,15 +999,17 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 ui.vertical(|ui| section_body(ui, d));
-            })
-            .inner_rect
-            .height()
+            });
+        // `inner_rect` is the height offered before a short section shrinks the area to its content.
+        shown.inner_rect.height().min(shown.content_size.y)
     });
     let content_h = drawn.inner;
     let was = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui)));
     ui.ctx().data_mut(|m| m.insert_temp(content_id(ui), content_h));
+    // A new height lays the frame out again before it is shown, so the window is placed at its new
+    // size and OK and Cancel stay on the screen in the frame of a section switch.
     if was.is_none_or(|was| (was - content_h).abs() > 0.5) {
-        ui.ctx().request_repaint();
+        ui.ctx().request_discard("paragraph style content height changed");
     }
     reset_button(ui, d);
     match edited_attrs(d) {

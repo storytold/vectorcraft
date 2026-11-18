@@ -9,4 +9,5 @@ mod golden;
 mod gradient_alpha;
 mod gradient_text;
 mod radial_focal;
+mod spread;
 mod stroke_geometry;

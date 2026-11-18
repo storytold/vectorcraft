@@ -19,13 +19,16 @@ use super::edit::{outermost, selected_roots};
 use super::pathops::{remove_each, separate};
 use super::swatch::{anchor, names_param};
 use super::{
-    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, id_param, named_ids, number_or, ok,
-    str_param, switch_or,
+    CommandSpec, Result, Session, bad, check_numbers, cmd, color_param, find_command, has_doc, has_selection, named_ids, number_or, ok, str_param,
+    switch_or,
 };
 use crate::EngineError;
 
 /// Whether Reset Transformation changes a symbol instance.
 pub use symbols::reset_transformation_changes;
+
+/// The Symbols panel's current symbol, as `symbol.list` answers it.
+pub use symbols::current_symbol;
 
 mod brushes;
 mod dynamic;
@@ -162,7 +165,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Brush Options…",
             [],
             None,
-            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180° (counter-clockwise from level), roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure|tilt|bearing|rotation for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest; tilt from value − variation with the pen lying flat to value + variation with it upright; bearing and rotation add variation × the pen's bearing (which way it leans, counter-clockwise from leaning right) or its barrel's counter-clockwise rotation over 180°; the angle turns on past ±180°). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180° (counter-clockwise), modes: [fixed|random|pressure|tilt|bearing|rotation for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest; tilt: a with the pen lying flat to b upright; bearing and rotation: a at −180° to b at 180°), rotation_relative_to_path. art: width 1..1000%, width_mode: null (fixed)|pressure, width_max 1..1000% (pressure: width at the lightest pen pressure to width_max at the heaviest, half way on a stroke drawn without pressure), scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across, overlap. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across, outer_corner and inner_corner: corner tile art (drawn as the corner that joins a side tile on its right to one below it) or null, outer_source and inner_source: what that kind of corner draws without its art: none|autoCentered|autoBetween|autoSliced|autoOverlap (a tile made from the side tile), or null (the other kind of corner's art); side_tile, outer_corner_tile, inner_corner_tile, start_tile, end_tile: a document pattern name, original, or none (side refuses none); corner tiles also take autoCentered|autoBetween|autoSliced|autoOverlap. Each tile also accepts {pattern: name} to select a swatch whose name is a reserved choice. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour; without a key: the solid color the art's fills and strokes use most, black when they use none)}; colorization and the art brush's scale change only the fields given}, newName? (trimmed; blank: the name is kept; a new bristle brush name has at most 31 characters, and a longer name the brush has is kept)} edit a brush definition (strokes using it update) → {name}",
+            "{name, params?: {…fields to change (brush.get shows them; values outside their ranges are clamped). calligraphic: angle −180..180° (counter-clockwise from level), roundness 0..100%, size 0..1296 pt, variation: [angle°, roundness%, size pt], modes: [fixed|random|pressure|tilt|bearing|rotation for angle, roundness, size] (pressure goes from value − variation at the lightest pen pressure to value + variation at the heaviest; tilt from value − variation with the pen lying flat to value + variation with it upright; bearing and rotation add variation × the pen's bearing (which way it leans, counter-clockwise from leaning right) or its barrel's counter-clockwise rotation over 180°; the angle turns on past ±180°). scatter: size [a, b] 1..10000%, spacing [a, b] 1..10000%, scatter [a, b] −1000..1000%, rotation [a, b] −180..180° (counter-clockwise), modes: [fixed|random|pressure|tilt|bearing|rotation for size, spacing, scatter, rotation] (fixed: a; random: between a and b; pressure: a at the lightest pen pressure to b at the heaviest; tilt: a with the pen lying flat to b upright; bearing and rotation: a at −180° to b at 180°), rotation_relative_to_path. art: width 1..1000%, width_mode: null (fixed)|pressure|tilt|bearing|rotation, width_max 1..1000% (pressure: width at the lightest pen pressure to width_max at the heaviest; tilt: width with the pen lying flat to width_max upright; bearing and rotation: width at −180° to width_max at 180°; half way on a stroke drawn without that input), scale: {mode: proportional|stretch|betweenGuides, start, end: 0..1 of the art length}, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flip_along, flip_across, overlap. pattern: scale 1..10000%, spacing 0..10000%, fit: stretch|addSpace|approximate, flip_along, flip_across, outer_corner and inner_corner: corner tile art (drawn as the corner that joins a side tile on its right to one below it) or null, outer_source and inner_source: what that kind of corner draws without its art: none|autoCentered|autoBetween|autoSliced|autoOverlap (a tile made from the side tile), or null (the other kind of corner's art); side_tile, outer_corner_tile, inner_corner_tile, start_tile, end_tile: a document pattern name, original, or none (side refuses none); corner tiles also take autoCentered|autoBetween|autoSliced|autoOverlap. Each tile also accepts {pattern: name} to select a swatch whose name is a reserved choice. scatter, art and pattern: colorization: {method: none|tints|tintsAndShades|hueShift, key: colour (hueShift: the art colour that becomes the stroke colour; without a key: the solid color the art's fills and strokes use most, black when they use none)}; colorization and the art brush's scale change only the fields given}, newName? (trimmed; blank: the name is kept; a new bristle brush name has at most 31 characters, and a longer name the brush has is kept)} edit a brush definition (strokes using it update) → {name}",
             has_doc,
             brush_options
         ),
@@ -180,7 +183,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paintbrush",
             [],
             None,
-            "{…params as path.freehand, brush} paint a freehand stroke with a brush → {id}",
+            "{…params as path.freehand, brush?: name} paint a freehand stroke with a brush; without `brush` (or with null) the plain path is drawn; a `brush` that names no brush in the document, a `style` other than \"pencil\" or \"brush\", a `brush` for a path with no stroke (a continued or redrawn path without one, or a new filled \"pencil\" path while the stroke is None) and an unknown key are errors and nothing is drawn; the path and its brush are one undo step → {id}",
             has_doc,
             brush_freehand
         ),
@@ -190,7 +193,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbols",
             [],
             None,
-            "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic, nineSlice, type: static|dynamic}], current}",
+            "{} → {symbols: [{name, instances, size: [w,h], registration: 0..8, exportType: movieClip|graphic, nineSlice, type: static|dynamic, alignToPixelGrid: bool}], current}",
             has_doc,
             symbol_list
         ),
@@ -199,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Symbol…",
             [],
             None,
-            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions 0..1 of the natural size (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions → {name, id, registration, exportType, nineSlice, type}",
+            "{name?, ids?|id?, registration?: 0..8 (9-point grid, 4 = centre; Symbol Options › Registration), exportType?: movieClip (default)|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static (default)|dynamic (Symbol Options › Symbol Type), alignToPixelGrid?: bool (default false; Symbol Options › Align to Pixel Grid)} make a symbol from the selection and replace it with an instance; a frame of threaded text in the selection leaves its thread with the text it shows, which the symbol's art holds; nineSlice is Symbol Options › Enable Guides for 9-Slice Scaling, nineSliceGuides [left, top, right, bottom] as fractions of the natural size in from each edge, each -16..16 (below 0 or above 1 puts a guide outside the art), with left + right < 1 and top + bottom < 1 (default a quarter each); an instance of a symbol with guides keeps its corners' size when scaled, its edges stretch along their length and its center in both directions; alignToPixelGrid keeps the symbol's instances on the pixel grid as symbol.options describes → {name, id, registration, exportType, nineSlice, type, alignToPixelGrid}",
             has_selection,
             symbol_new
         ),
@@ -208,7 +211,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Symbol Options…",
             [],
             None,
-            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static|dynamic} rename a symbol and/or set Symbol Options › Registration, Export Type, 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions 0..1) and Symbol Type (a dynamic symbol's instances may change the appearance of objects in its art and stay linked; making it static drops those changes); default name: current → {name, registration, exportType, nineSlice, type}",
+            "{name?, newName?, registration?: 0..8, exportType?: movieClip|graphic, nineSlice?: bool, nineSliceGuides?: array, type?: static|dynamic, alignToPixelGrid?: bool} rename a symbol (its instances and the graphics mapped onto 3D objects follow the new name) and/or set Symbol Options › Registration, Export Type, 9-slice guides (nineSliceGuides [left, top, right, bottom] fractions in from each edge, each -16..16, with left + right < 1 and top + bottom < 1), Symbol Type (a dynamic symbol's instances may change the appearance of objects in its art and stay linked; making it static drops those changes) and Align to Pixel Grid (on: the horizontal and vertical straight segments of the paths in the symbol's art snap to whole points, or half points for an odd centered stroke, at the symbol's natural size, its stroke weights become whole points, and every instance placed at that size, reflected across one axis or not, moves to whole points and goes back to them after each move; a scaled, rotated (a half turn included) or sheared instance, and an instance in another symbol's art, is left where it is; the art snaps again after it is edited); alignToPixelGrid alone with the value the symbol already has changes nothing and adds no undo step; default name: current → {name, registration, exportType, nineSlice, type, alignToPixelGrid}",
             has_doc,
             symbol_options
         ),
@@ -226,7 +229,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask; a hidden or locked instance's art stays hidden or locked and is not selected → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask and its own bounding box (square after Reset Bounding Box); a hidden or locked instance's art stays hidden or locked and is not selected → {ids}",
             has_selection,
             symbol_break_link
         ),
@@ -326,7 +329,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select All Unused",
             [],
             None,
-            "{} → {names: [the symbols nothing places, in panel order]} (the Symbols panel selects them): instances in the art (opacity masks included), graph designs, pattern tiles (with the tiles that pattern editing's Cancel puts back) and brush art count, and so do instances in the art of a symbol that is used",
+            "{} → {names: [the symbols nothing places, in panel order]} (the Symbols panel selects them): instances in the art (opacity masks included), graphics mapped onto 3D objects (threeD.mapGraphic), graph designs, pattern tiles (with the tiles that pattern editing's Cancel puts back) and brush art count, and so do instances in the art of a symbol that is used",
             has_doc,
             symbol_unused
         ),

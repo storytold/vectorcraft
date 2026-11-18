@@ -43,7 +43,7 @@ pub(crate) fn end_point(cx: &ToolContext, snap: &mut DrawSnap, a: Point, p: Poin
         return a;
     }
     let u = d / len;
-    let to_point = cx.snap_to_point && !(cx.smart_guides || cx.snap_to_grid || cx.snap_to_pixel);
+    let to_point = cx.snap_to_point && !(cx.smart_guides || cx.snap_to_grid || cx.snaps_to_pixel(crate::PixelOp::Drawing));
     let s = if to_point { snap.measure(cx, p, None) } else { p };
     let q = a + u * (s - a).dot(u);
     let leave = crate::guides::Leave::segment(cx, a, true);

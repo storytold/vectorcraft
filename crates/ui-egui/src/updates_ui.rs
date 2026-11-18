@@ -9,6 +9,7 @@ use craft_update::updater::{Action, Status, Updater};
 #[cfg(not(target_arch = "wasm32"))]
 use craft_update::{CheckResultDialog, CheckResultResponse};
 
+#[cfg_attr(target_arch = "wasm32", derive(Default))]
 pub(crate) struct Runtime {
     #[cfg(not(target_arch = "wasm32"))]
     updater: Updater,
@@ -30,23 +31,15 @@ pub(crate) struct Runtime {
     pub(crate) status_message: Option<String>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for Runtime {
     fn default() -> Self {
         Self {
-            #[cfg(not(target_arch = "wasm32"))]
             updater: Updater::new(&crate::UPDATE_APP, env!("CARGO_PKG_VERSION")),
-            #[cfg(not(target_arch = "wasm32"))]
             startup_check: false,
-            #[cfg(not(target_arch = "wasm32"))]
             check_requested: false,
-            #[cfg(not(target_arch = "wasm32"))]
             repaint: None,
-            #[cfg(not(target_arch = "wasm32"))]
             was_blocking: false,
-            #[cfg(target_arch = "wasm32")]
-            manual_window_open: false,
-            #[cfg(target_arch = "wasm32")]
-            status_message: None,
         }
     }
 }
@@ -246,13 +239,45 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn offer(app: &mut VectorcraftApp) {
         app.updates_rt.updater = isolated_updater(env!("CARGO_PKG_VERSION"), "prompt");
-        app.updates_rt.updater.offer(craft_update::Release {
+        offer_and_wait(&mut app.updates_rt.updater, release_99());
+    }
+
+    /// The release the tests offer.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn release_99() -> craft_update::Release {
+        craft_update::Release {
             tag: "v99.0.0".into(),
             version: craft_update::parse_version("99.0.0"),
             name: "VectorCraft 99.0.0".into(),
             html_url: "https://github.com/storytold/vectorcraft/releases/tag/v99.0.0".into(),
             ..Default::default()
+        }
+    }
+
+    /// Offers `release` and returns once its prompt is open. The updater reads the installed
+    /// files for an offer on a thread of its own, which asks the context the updater keeps for a
+    /// repaint after it answers; the next tick opens the prompt. The observer sees every repaint
+    /// request, so each immediate one is followed by a tick until the prompt opens. The updater
+    /// must not have kept another context, which its thread would ask instead. A copy the
+    /// launcher manages ignores the offer and fails the test.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn offer_and_wait(updater: &mut Updater, release: craft_update::Release) {
+        let ctx = egui::Context::default();
+        let (answered, wait) = std::sync::mpsc::channel();
+        ctx.set_repaint_observer(move |info| {
+            if info.delay.is_zero() {
+                let _ = answered.send(());
+            }
         });
+        // Keeps `ctx` for the offer's thread.
+        updater.tick(&ctx);
+        updater.offer(release);
+        // `offer` reads the launcher's choice; a managed copy starts no inspection.
+        assert!(updater.managed().is_none(), "the launcher manages this copy, so it ignored the offer");
+        while !updater.prompt_open() {
+            wait.recv().unwrap();
+            updater.tick(&ctx);
+        }
     }
 
     /// An app with one saved document holding a selected rectangle.
@@ -343,14 +368,8 @@ mod tests {
     fn startup_prompt_shows_and_closes() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         let ctx = egui::Context::default();
-        let release = craft_update::Release {
-            tag: "v99.0.0".into(),
-            version: craft_update::parse_version("99.0.0"),
-            name: "VectorCraft 99.0.0".into(),
-            html_url: "https://github.com/storytold/vectorcraft/releases/tag/v99.0.0".into(),
-            ..Default::default()
-        };
-        app.updates_rt.updater.offer(release);
+        app.updates_rt.updater = isolated_updater(env!("CARGO_PKG_VERSION"), "startup");
+        offer_and_wait(&mut app.updates_rt.updater, release_99());
 
         let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
             show(&mut app, ui.ctx());

@@ -82,6 +82,7 @@ const DOCUMENT_FREE: &[&str] = &[
     "ui.shortcutImportDialog",
     crate::panels::actions::SAVE_SET,
     crate::panels::actions::LOAD_SET,
+    crate::panels::actions::REPLACE_SET,
 ];
 
 impl Entry {
@@ -220,6 +221,15 @@ pub(crate) fn as_entry<R>(app: &mut VectorcraftApp, entry: impl FnOnce() -> Entr
     app.picks.entry = Some(entry());
     let r = f(app);
     app.picks.entry = None;
+    r
+}
+
+/// Run a continuation under its own entry: a refused Save's panel must resume Save As, not retry
+/// the original Save. Restore the enclosing entry for any work it does afterwards.
+pub(crate) fn as_own_entry<R>(app: &mut VectorcraftApp, entry: Entry, f: impl FnOnce(&mut VectorcraftApp) -> R) -> R {
+    let outer = app.picks.entry.replace(entry);
+    let r = f(app);
+    app.picks.entry = outer;
     r
 }
 

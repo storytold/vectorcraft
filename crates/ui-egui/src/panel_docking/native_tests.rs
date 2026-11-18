@@ -527,8 +527,8 @@ fn reopened(saved: &craft_ui::docking::Layout<String>, monitors: &[crate::DockMo
 /// Two monitors side by side, with the main window on the left one (#5582).
 #[test]
 fn a_floating_panel_reopens_on_the_monitor_where_it_was_left() {
-    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
-    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0 };
+    let left = crate::DockMonitor { name: Some("left".into()), rect: [0.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
+    let right = crate::DockMonitor { name: Some("right".into()), rect: [1920.0, 0.0, 1920.0, 1080.0], scale: 1.0, work_area: None };
     let both = [left.clone(), right.clone()];
 
     let mut h = Harness::new();
@@ -1039,6 +1039,9 @@ fn ui_docking_leaves_out_the_controls_of_os_windows() {
 #[test]
 fn wheel_over_a_floating_character_font_field_changes_the_font() {
     let mut h = Harness::new();
+    // The later turns step to whichever families the process has loaded, test fonts without Latin
+    // glyphs included. Missing glyph protection would keep the text in its previous font.
+    h.app.run("prefs.set", json!({"key": "missingGlyphProtection", "value": false})).unwrap();
     h.app.run("text.create", json!({"x": 30, "y": 50, "text": "Hi", "font": "Source Sans 3"})).unwrap();
     let viewport = h.float("character");
     let field = h

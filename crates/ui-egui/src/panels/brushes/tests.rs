@@ -714,7 +714,41 @@ fn symbols_rendered(ctx: &egui::Context, app: &mut VectorcraftApp) -> usize {
 fn png(rgb: [u8; 3]) -> Vec<u8> {
     let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([rgb[0], rgb[1], rgb[2], 255]));
     let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| out.extend_from_slice(&__b))
+    }
+    .unwrap();
     out
 }
 
@@ -820,4 +854,37 @@ fn previews_follow_the_swatches_images_and_pattern_options_their_art_uses() {
     for (what, (brushes, symbols), f) in cases {
         assert_eq!(change(&mut app, what, f), (brushes, symbols, what.to_string()));
     }
+}
+
+/// Of two brushes with one name, the row of that name previews and drags the first, the one
+/// `brush.get` gives and a stroke that names it draws with. Reading the library numbers the second
+/// ("Twin 2"), so it gets a row of its own.
+#[test]
+fn rows_of_two_brushes_with_one_name_show_the_first() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    let mut twins: Vec<Brush> = Vec::new();
+    app.session
+        .edit("Brushes", |d, _| {
+            let mut lib = vectorcraft_brush::library(d);
+            let kinds: Vec<_> = ["Charcoal", "Dots"].iter().map(|n| lib.iter().find(|b| b.name == *n).unwrap().kind.clone()).collect();
+            twins = kinds.into_iter().map(|kind| Brush { name: "Twin".into(), kind }).collect();
+            lib.extend(twins.iter().cloned());
+            vectorcraft_brush::store(d, &lib);
+            Ok(())
+        })
+        .unwrap();
+    let rows: Vec<(String, String)> = brushes(&mut app).0.into_iter().filter(|b| b.0.starts_with("Twin")).map(|b| (b.0, b.1)).collect();
+    assert_eq!(rows, [("Twin".to_string(), "art".to_string()), ("Twin 2".to_string(), "scatter".to_string())], "the panel lists both");
+    let got = app.run("brush.get", json!({"name": "Twin"})).unwrap();
+    let memo = document_brushes(app.session.active().unwrap());
+    let shown = by_name(&memo)["Twin"];
+    assert_eq!(shown.ty, "art");
+    assert_eq!(shown.def, got, "the row shows and drags what brush.get gives");
+    // Rows of one name that reach the panel unnumbered still show the first.
+    let st = app.session.active().unwrap();
+    let raw: Vec<Shown> = twins.iter().map(|b| Shown::of(&st.doc, b)).collect();
+    let shown = by_name(&raw)["Twin"];
+    assert_eq!(shown.ty, "art");
+    assert_eq!(shown.def, got, "the first of two rows of one name is the one shown");
 }

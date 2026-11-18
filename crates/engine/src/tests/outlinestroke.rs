@@ -308,6 +308,54 @@ fn the_outline_of_a_reshaped_stroke_keeps_its_drop_shadow() {
     assert_eq!(differing(&before, &render(&s), 64), 0, "the shadowed outline draws as the stroke did");
 }
 
+/// A Transform effect after a drop shadow, on the object or on the stroke (brushed or not), turns
+/// and scales the shadow on the canvas; outlining the stroke keeps the shadow the canvas drew.
+#[test]
+fn a_shadow_before_a_transform_outlines_as_the_canvas_draws_it() {
+    let effects = [
+        ("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100})),
+        ("distort.transform", json!({"scaleH": 50, "scaleV": 50, "rotate": 90})),
+    ];
+    for (item, brush) in [(Value::Null, false), (json!(1), false), (json!(1), true)] {
+        // Flatten Transparency draws a brushed stroke's drop shadow differently with or without a
+        // Transform effect, so the brushed stroke is checked with the other two commands.
+        for (command, p) in outlining().into_iter().filter(|(command, _)| !(brush && *command == "object.flattenTransparency")) {
+            let mut s = session();
+            square_with(&mut s, json!({"color": "#ff0000"}), item.clone(), &effects);
+            if brush {
+                s.execute("brush.apply", &json!({"name": "Tapered Stroke"})).unwrap();
+            }
+            let before = render(&s);
+            outlined_by(&mut s, command, &p);
+            assert_eq!(differing(&before, &render(&s), 64), 0, "{command}, item {item}, brush {brush}");
+        }
+    }
+}
+
+/// The object's Transform effect turns and scales the drop shadow of its stroke (brushed or not)
+/// on the canvas; outlining the stroke keeps the shadow the canvas drew.
+#[test]
+fn a_strokes_shadow_under_the_objects_transform_outlines_as_the_canvas_draws_it() {
+    for brush in [false, true] {
+        for (command, p) in outlining().into_iter().filter(|(command, _)| !(brush && *command == "object.flattenTransparency")) {
+            let mut s = session();
+            square_with(
+                &mut s,
+                json!({"color": "#ff0000"}),
+                json!(1),
+                &[("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100}))],
+            );
+            s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"scaleH": 50, "scaleV": 100, "rotate": 90}})).unwrap();
+            if brush {
+                s.execute("brush.apply", &json!({"name": "Tapered Stroke"})).unwrap();
+            }
+            let before = render(&s);
+            outlined_by(&mut s, command, &p);
+            assert_eq!(differing(&before, &render(&s), 64), 0, "{command}, brush {brush}");
+        }
+    }
+}
+
 /// The brush art of a brushed stroke with a geometry effect follows the path the effect makes.
 #[test]
 fn a_brush_draws_along_the_path_the_stroke_effects_make() {

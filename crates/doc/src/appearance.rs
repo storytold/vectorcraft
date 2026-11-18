@@ -10,7 +10,7 @@ mod stroke_style;
 
 pub use layers::{Effect, FillLayer, StrokeGradientMode, StrokeLayer, stroke_paint_bounds};
 pub use profile::{AngleProfile, PressureProfile, ProfilePreset, SavedProfile, WidthProfile};
-pub use stroke_style::{ArrowAlign, Arrowhead, Dash, LineCap, LineJoin, StrokeAlign};
+pub use stroke_style::{ArrowAlign, Arrowhead, CustomArrowhead, Dash, LineCap, LineJoin, StrokeAlign};
 
 /// One entry of the appearance stack.
 // A stroke takes 328 bytes and a fill 104; an appearance holds a few of each.
@@ -270,6 +270,16 @@ impl Appearance {
             AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => Some(s),
             _ => None,
         })
+    }
+    /// Does any fill draw: one that is shown, has paint and has an opacity above 0, wherever it
+    /// sits in the stack?
+    pub fn has_drawn_fill(&self) -> bool {
+        self.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() && f.opacity > 0.0))
+    }
+    /// Does any stroke draw: one that is shown, has paint, a weight above 0 and an opacity above
+    /// 0, wherever it sits in the stack?
+    pub fn has_drawn_stroke(&self) -> bool {
+        self.painted_strokes().any(|s| s.width > 0.0 && s.opacity > 0.0)
     }
     /// Largest distance the painted area can extend beyond any geometry (see
     /// [`StrokeLayer::reach`]); paths measure their own with [`Self::stroked_bounds`].

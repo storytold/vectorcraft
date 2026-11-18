@@ -215,11 +215,22 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("tateChuYoko", json!(v.tate_chu_yoko)),
         ("tcyUpDown", json!(v.tcy_up_down)),
         ("tcyLeftRight", json!(v.tcy_left_right)),
+        ("warichu", json!(v.warichu)),
+        ("warichuLines", json!(v.warichu_lines)),
+        ("warichuGap", json!(v.warichu_gap)),
+        ("warichuScale", json!(v.warichu_scale)),
+        ("warichuAlign", json!(v.warichu_align)),
+        ("akiLeft", json!(v.aki_left)),
+        ("akiRight", json!(v.aki_right)),
+        ("tsume", json!(v.tsume)),
+        ("diacriticHorizontal", json!(v.diacritic_horizontal)),
+        ("diacriticVertical", json!(v.diacritic_vertical)),
         ("standardVerticalRoman", json!(v.standard_vertical_roman)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
         ("fontHeightReference", json!(v.font_height_reference)),
         ("language", json!(v.language)),
+        ("glyphForm", json!(v.glyph_form)),
     ] {
         m.insert(k.into(), x);
     }
@@ -243,6 +254,8 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
         ("kinsoku_type", json!(v.kinsoku_type)),
+        ("bunri_kinshi", json!(v.bunri_kinshi)),
+        ("kurikaeshi_moji_shori", json!(v.kurikaeshi_moji_shori)),
         ("roman_hanging", json!(v.roman_hanging)),
         ("kashida", json!(v.kashida)),
         ("korean_line_break_anywhere", json!(v.korean_line_break_anywhere)),
@@ -475,8 +488,14 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind, verb: &str) -> Result<Opt
             };
             char_attrs(&style)
         }
-        // The paragraph at `start`.
-        Kind::Para => para_attrs(t.para_at(t.paragraphs_in(at, at).start)),
+        // The paragraph at `start`, without the number its list gives that paragraph alone.
+        Kind::Para => {
+            let mut para = t.para_at(t.paragraphs_in(at, at).start).clone();
+            if let Some(l) = para.list.as_mut() {
+                l.start = None;
+            }
+            para_attrs(&para)
+        }
     }))
 }
 
@@ -501,6 +520,23 @@ pub fn default_new_style_attrs(s: &Session, para: bool) -> Map<String, Value> {
 /// Whether the document has a character (`para`: paragraph) style `name`, and its attributes.
 pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<String, Value>> {
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
+}
+
+/// The fill of `[Normal Character Style]` in `d`: black, or the fill a redefinition gave it. New
+/// type starts in that style ([Character and paragraph styles](https://helpx.adobe.com/illustrator/using/character-paragraph-styles.html):
+/// every character is in it by default; [FAQs on fonts](https://helpx.adobe.com/illustrator/using/fonts-faq.html):
+/// new type's defaults are changed by editing it), so it takes this fill, not the current fill
+/// left from the last shape (#7975).
+pub(crate) fn normal_char_fill(d: &Document) -> vectorcraft_color::Paint {
+    let normal = Kind::Char.attrs(d, NORMAL_CHAR).unwrap_or_default();
+    with_attrs(&CharStyle::default(), &normal, "text.create").map_or_else(|_| CharStyle::default().fill, |st| st.fill)
+}
+
+/// `attrs` in the form `charStyle.new` (`para`: `paraStyle.new`) stores them in `d`, or `None`
+/// when they don't pass its checks.
+pub(crate) fn stored_style_attrs(d: &Document, para: bool, attrs: &Map<String, Value>) -> Option<Map<String, Value>> {
+    let kind = if para { Kind::Para } else { Kind::Char };
+    attrs_param(d, &json!({ "attrs": attrs }), kind, "new", None).ok().flatten()
 }
 
 /// The name `charStyle.new` (`para`: `paraStyle.new`) gives a style when it is given none: the
@@ -557,6 +593,36 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                             return Err(bad(&c, format!("`{key}` must be from {} to {shift_max}", -shift_max)));
                         }
                     }
+                    let (lo, hi) = (0.0, vectorcraft_doc::text::MAX_AKI);
+                    for (key, value) in [("akiLeft", st.aki_left), ("akiRight", st.aki_right)] {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
+                    }
+                    let (key, lo, hi) = ("tsume", 0.0, vectorcraft_doc::text::MAX_TSUME);
+                    if changed(key) && !(lo..=hi).contains(&st.tsume) {
+                        return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                    }
+                    let hi = vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+                    let lo = -hi;
+                    for (key, value) in [("diacriticHorizontal", st.diacritic_horizontal), ("diacriticVertical", st.diacritic_vertical)] {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
+                    }
+                    let lines = vectorcraft_doc::text::WARICHU_LINES;
+                    if changed("warichuLines") && !lines.contains(&st.warichu_lines) {
+                        return Err(bad(&c, format!("`warichuLines` must be a whole number from {} to {}", lines.start(), lines.end())));
+                    }
+                    let scale = vectorcraft_doc::text::WARICHU_SCALE;
+                    for (key, value, lo, hi) in [
+                        ("warichuGap", st.warichu_gap, 0.0, vectorcraft_doc::text::MAX_WARICHU_GAP),
+                        ("warichuScale", st.warichu_scale, *scale.start(), *scale.end()),
+                    ] {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
+                    }
                     // A language of the list, stored as its tag (as text.setFormat takes it).
                     if let Some(l) = &st.language
                         && kept.and_then(|k| k.get("language")) != m.get("language")
@@ -579,6 +645,11 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                 }
                 Kind::Para => {
                     let mut st = with_attrs(&ParaStyle::default(), m, &c)?;
+                    // A list's number belongs to one paragraph, not to a style.
+                    if st.list.is_some_and(|l| l.start.is_some()) {
+                        let k = "list.start";
+                        return Err(bad(&c, format!("unknown attribute `{k}`")));
+                    }
                     para_ranges(&st, m, kept, &c)?;
                     sort_tabs(&mut st, m, kept);
                     para_attrs(&st)
@@ -1041,19 +1112,27 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
 
 /// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
 /// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
-/// scales, leading, shifts or stroke width are out of the range `charStyle.new` takes, whose
+/// scales, leading, shifts, Insert Aki, Tsume, diacritic positions, Warichu Settings or stroke width are out of the range `charStyle.new` takes, whose
 /// indents, spacing, Hyphenation or Justification options or tab stops are out of the range
 /// `paraStyle.new` takes, or whose name is empty, which are skipped. → (the styles, the names in
 /// `src` of those skipped)
 fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
-    const RANGED: [&str; 16] = [
+    const RANGED: [&str; 24] = [
         "size",
         "h_scale",
         "v_scale",
         "leading",
         "baseline_shift",
+        "akiLeft",
+        "akiRight",
+        "tsume",
+        "diacriticHorizontal",
+        "diacriticVertical",
         "tcyUpDown",
         "tcyLeftRight",
+        "warichuLines",
+        "warichuGap",
+        "warichuScale",
         "stroke_width",
         "left_indent",
         "right_indent",

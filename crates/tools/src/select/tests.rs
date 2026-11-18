@@ -171,6 +171,94 @@ fn a_move_grabbed_by_an_anchor_lands_it_on_another_anchor() {
     assert!((200.0 + x - 350.3).abs() < 1e-9 && (200.0 + y - 250.0).abs() < 1e-9, "the corner lands at ({}, {})", 200.0 + x, 200.0 + y);
 }
 
+/// A document with the rectangle of [`doc_with_rect`] (100..200 square) and a straight path from
+/// `a` to `b` for each pair, and the rectangle's id.
+fn doc_with_rect_and_lines(lines: &[(Point, Point)]) -> (vectorcraft_doc::Document, NodeId) {
+    let (mut d, id) = doc_with_rect();
+    let l = d.layers[0].id;
+    for &(a, b) in lines {
+        let n = d.alloc_id();
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[a, b], false));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(n, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    }
+    (d, id)
+}
+
+/// The rectangle of `d` grabbed at `(gx, gy)` (hovered first, so a press near an anchor grabs it)
+/// and dragged to `to`, with Smart Guides on or off (`smart`): the point it was grabbed at after the
+/// move, and the label shown.
+fn grabbed_and_dragged(d: &vectorcraft_doc::Document, id: NodeId, smart: bool, (gx, gy): (f64, f64), to: (f64, f64)) -> (Point, Option<String>) {
+    let (none, mut picked, p) = (Selection::default(), Selection::default(), paint());
+    picked.add(id);
+    let (before, after) = (ToolContext { smart_guides: smart, ..cx(d, &none, &p) }, ToolContext { smart_guides: smart, ..cx(d, &picked, &p) });
+    let mut t = SelectionTool::default();
+    t.pointer(&before, &ev(PointerKind::Move, gx, gy));
+    t.pointer(&before, &ev(PointerKind::Down, gx, gy));
+    let a = t.pointer(&after, &ev(PointerKind::Drag, to.0, to.1));
+    let Some(Action::Preview(_, v)) = a.iter().find(|a| matches!(a, Action::Preview(..))) else { panic!("{a:?}") };
+    let start = SelectionTool::hover_point(&before, Point::new(gx, gy)).map_or(Point::new(gx, gy), |(q, _)| q);
+    let label = t.overlays(&after).iter().find_map(|o| match o {
+        Overlay::Label { text, .. } => Some(text.clone()),
+        _ => None,
+    });
+    (start + Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), label)
+}
+
+/// #7411: grabbed by an anchor and dropped near a point along another path, away from its anchors
+/// and center, the anchor lands on the path ("path") with Smart Guides. A selection grabbed
+/// elsewhere, or with Smart Guides off, does not land on the path.
+#[test]
+fn a_move_grabbed_by_an_anchor_lands_it_on_another_path() {
+    let (a, b) = (Point::new(300.0, 400.0), Point::new(500.0, 300.0));
+    let (d, id) = doc_with_rect_and_lines(&[(a, b)]);
+    let off_line = |q: Point| ((b - a).cross(q - a) / (b - a).hypot()).abs();
+    // Grab the rectangle by its bottom-right corner (200, 200) and drop it half a point beside
+    // the line, at (430, 335) on it.
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (430.0, 335.5));
+    assert!(off_line(corner) < 1e-9, "the corner lands at {corner:?}, {} off the line", off_line(corner));
+    assert!((corner.x - 430.0).abs() < 0.5, "{corner:?}");
+    assert_eq!(label.as_deref(), Some("path"));
+    // Grabbed by its fill instead, the pointer stays half a point beside the line.
+    let (grip, _) = grabbed_and_dragged(&d, id, true, (150.0, 170.0), (430.0, 335.5));
+    assert!(off_line(grip) > 0.4, "the grip lands at {grip:?}");
+    // With Smart Guides off, the corner stays where it was dragged.
+    let (corner, _) = grabbed_and_dragged(&d, id, false, (201.0, 201.0), (430.0, 335.5));
+    assert!(off_line(corner) > 0.4, "the corner lands at {corner:?}");
+}
+
+/// #7411: a selection grabbed by an anchor lands it where two other paths cross ("intersect"), and
+/// on another object's anchor near the path rather than on the path.
+#[test]
+fn a_move_grabbed_by_an_anchor_lands_it_where_paths_cross() {
+    let (d, id) =
+        doc_with_rect_and_lines(&[(Point::new(300.0, 400.0), Point::new(500.0, 300.0)), (Point::new(460.0, 250.0), Point::new(460.0, 420.0))]);
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (460.4, 320.5));
+    assert!(corner.distance(Point::new(460.0, 320.0)) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("intersect"));
+    // The end of the upright path (460, 250) is an anchor: the corner lands on it.
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (460.5, 251.0));
+    assert!(corner.distance(Point::new(460.0, 250.0)) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("anchor"));
+}
+
+/// #7411: a selection grabbed by an anchor lands it where another path crosses a ruler guide
+/// ("intersect"), and a ruler guide running past does not pull it off a path it landed on.
+#[test]
+fn a_move_grabbed_by_an_anchor_lands_it_where_a_path_crosses_a_ruler_guide() {
+    let (a, b) = (Point::new(300.0, 400.0), Point::new(500.0, 300.0));
+    let (mut d, id) = doc_with_rect_and_lines(&[(a, b)]);
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 440.0));
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (440.5, 330.5));
+    assert!(corner.distance(Point::new(440.0, 330.0)) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("intersect"));
+    // Beyond reach of the crossing, the corner stays on the path with the guide 3.7 points beside
+    // it.
+    let off_line = |q: Point| ((b - a).cross(q - a) / (b - a).hypot()).abs();
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (436.43, 332.12));
+    assert!(off_line(corner) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("path"));
+}
+
 /// #3716: a press a few pixels from an anchor grabs the object by that anchor, but the drag
 /// threshold counts from where the pointer went down. A click that wobbles by a pixel selects
 /// the object without moving it, instead of jumping the anchor onto the pointer.
@@ -716,8 +804,10 @@ fn drag_moves_with_single_undo() {
     let cx = cx(&d, &s, &p);
     let mut t = SelectionTool::default();
     assert!(t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0)).is_empty());
+    assert!(!t.moving(), "a press is not a move yet");
     let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 150.0));
     assert_eq!(a[0], Action::Begin("Move".into()));
+    assert!(t.moving());
     assert!(matches!(&a[1], Action::Preview(c, v) if c == "object.transform" && v["matrix"][4] == 10.0));
     let a = t.pointer(&cx, &ev(PointerKind::Up, 160.0, 150.0));
     assert_eq!(a, vec![Action::Commit]);
@@ -737,9 +827,10 @@ fn escape_cancels_a_move_or_an_alt_drag_copy() {
         t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0).with_mods(m));
         let a = t.pointer(&cx, &ev(PointerKind::Drag, 160.0, 150.0).with_mods(m));
         assert!(matches!(&a[1], Action::Preview(_, v) if v["copy"] == m.alt), "{what}: {a:?}");
-        assert!(t.transforming(), "{what}");
+        // A move or a copy, which the canvas can show the bounding box for.
+        assert!(t.transforming() && t.moving() && !t.resizing(), "{what}");
         assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
-        assert!(!t.busy() && !t.transforming(), "{what}");
+        assert!(!t.busy() && !t.transforming() && !t.moving(), "{what}");
         assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Measure { .. })), "{what}: no readout stays");
         assert!(t.pointer(&cx, &ev(PointerKind::Drag, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the drag is over");
         assert!(t.pointer(&cx, &ev(PointerKind::Up, 170.0, 150.0).with_mods(m)).is_empty(), "{what}: the release commits nothing");
@@ -748,7 +839,7 @@ fn escape_cancels_a_move_or_an_alt_drag_copy() {
 }
 
 /// #1534: with Smart Guides on (the default), the point a selection is dragged by still snaps
-/// to a ruler guide within the Snap to Point distance; not with Snap to Point off.
+/// to a ruler guide within the Snapping Tolerance; not with Snap to Point off.
 #[test]
 fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     let (mut d, id) = doc_with_rect();
@@ -792,6 +883,39 @@ fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
     let off = ToolContext { snap_to_point: false, ..cx(&d, &s, &p) };
     let (m, _) = shift_moved(&off, (150.0 + 231.0, 150.0));
     assert!(moved_by(m, (231.0, 0.0)), "{m:?}");
+}
+
+/// With Smart Guides on, a moved selection reaches a ruler guide within the Snapping Tolerance
+/// (4 px), as drawing and handle drags do; with Smart Guides off, Snap to Point reaches it within
+/// its own distance (2 px).
+#[test]
+fn a_move_reaches_ruler_guides_within_the_snapping_tolerance() {
+    let (mut d, id) = doc_with_rect();
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 340.0));
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let dx = |c: &ToolContext, to: f64| {
+        let mut t = SelectionTool::default();
+        t.pointer(c, &ev(PointerKind::Down, 150.0, 150.0));
+        let a = t.pointer(c, &ev(PointerKind::Drag, to, 150.0));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        v["matrix"][4].as_f64().unwrap()
+    };
+    let c = cx(&d, &s, &p);
+    assert!(c.smart_guides && c.snap_to_point && c.guides);
+    // The right edge, 3 px short of the guide, lands on it, with or without Shift.
+    assert_eq!(dx(&c, 150.0 + 137.0), 140.0);
+    let (m, _) = shift_moved(&c, (150.0 + 137.0, 150.0));
+    assert!(moved_by(m, (140.0, 0.0)), "{m:?}");
+    // The grabbed point, 3 px from the guide, lands on it.
+    assert_eq!(dx(&c, 337.0), 190.0);
+    // 5 px away is out of reach.
+    assert_eq!(dx(&c, 150.0 + 135.0), 135.0);
+    // Smart Guides off: the grabbed point lands on the guide from 1.5 px, not from 3 px.
+    let off = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    assert_eq!(dx(&off, 338.5), 190.0);
+    assert_eq!(dx(&off, 337.0), 187.0);
 }
 
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
@@ -1758,6 +1882,51 @@ fn handle_drag_lands_what_it_moves_on_whole_pixels() {
     assert!(near(r, Rect::new(100.0, 100.0, 212.0, 231.0)), "{r:?}");
 }
 
+/// Pixel Snapping Options › While Scaling off: a handle drag keeps the fractional size it is
+/// dragged to with Snap to Pixel on, and turned back on, the drag lands on whole pixels again; While
+/// Drawing and While Moving do not change it.
+#[test]
+fn handle_drag_follows_the_while_scaling_option() {
+    use crate::PixelSnap;
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let drag = |pixel_snap: PixelSnap| {
+        let c = ToolContext { snap_to_pixel: true, pixel_snap, smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0));
+        scaled(&t.pointer(&c, &ev(PointerKind::Drag, 212.4, 230.7)))
+    };
+    let r = drag(PixelSnap { scaling: false, ..PixelSnap::default() });
+    assert!(near(r, Rect::new(100.0, 100.0, 212.4, 230.7)), "{r:?}");
+    let r = drag(PixelSnap { drawing: false, moving: false, scaling: true });
+    assert!(near(r, Rect::new(100.0, 100.0, 212.0, 231.0)), "{r:?}");
+}
+
+/// Pixel Snapping Options › While Moving off: a move keeps its fractional offset with Snap to
+/// Pixel on, and Smart Guides › Snap to Last Location works again for it.
+#[test]
+fn move_follows_the_while_moving_option() {
+    use crate::PixelSnap;
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let pixel_snap = PixelSnap { moving: false, ..PixelSnap::default() };
+    let c = ToolContext { snap_to_pixel: true, pixel_snap, smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+    let snap = MoveSnap::new(&c);
+    let (dv, _) = snap.snap(&c, Point::new(150.0, 150.0), Vec2::new(3.3, 4.6), false);
+    assert!((dv - Vec2::new(3.3, 4.6)).hypot() < 1e-9, "{dv:?}");
+    let on = ToolContext { pixel_snap: PixelSnap::default(), ..c };
+    let (dv, _) = MoveSnap::new(&on).snap(&on, Point::new(150.0, 150.0), Vec2::new(3.3, 4.6), false);
+    assert!((dv - Vec2::new(3.0, 5.0)).hypot() < 1e-9, "{dv:?}");
+    let back = ToolContext { smart_guides: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..c };
+    assert!(Targets::for_move(&back, &back.selection.objects).snap_back(None, Vec2::new(1.0, 1.0), back.snap_tol()).is_some());
+    let pixels = ToolContext { pixel_snap: PixelSnap::default(), ..back };
+    assert!(Targets::for_move(&pixels, &pixels.selection.objects).snap_back(None, Vec2::new(1.0, 1.0), pixels.snap_tol()).is_none());
+}
+
 /// #2054: with Smart Guides off, View › Snap to Point lands a dragged handle on another
 /// object's anchor or a ruler guide within its distance (2 px); with Smart Guides on, the
 /// ruler guides still pull it within the Snapping Tolerance (4 px), as a move does (#1534).
@@ -2026,6 +2195,110 @@ fn a_click_on_the_out_port_loads_the_text_and_the_next_click_or_drag_threads_it(
     // The bounding box's corner handle below the port still resizes the frame.
     let corner = Point::new(port.x, port.y + crate::text::PORT_RISE_PX);
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Resize Type Area".into())]);
+}
+
+/// Loaded text shows the link cursor over an object a click threads it into (a closed path,
+/// area type in no thread), and the loaded text elsewhere: empty canvas, an open path, point type,
+/// the frame it came from and a frame already in a thread, where a click makes a new frame
+/// instead. Held down on a target, the press keeps the link cursor until its drag draws a frame;
+/// placing the text or Escape ends both.
+#[test]
+fn loaded_text_shows_the_link_cursor_where_a_click_threads_it_into_the_object() {
+    use vectorcraft_doc::{Node, NodeKind, TextKind, TextObject};
+    use vectorcraft_geom::shapes;
+    let (mut d, id, rect, port) = overflowing_area_type();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, n: NodeKind| {
+        let nid = d.alloc_id();
+        d.insert(Some(l), 0, Node::new(nid, n)).unwrap();
+        nid
+    };
+    let area = |x: f64, y: f64| {
+        let mut t = TextObject::point(Point::new(x, y), "", Default::default());
+        t.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 120.0, 40.0)) };
+        NodeKind::Text(Box::new(t))
+    };
+    let free = add(&mut d, area(300.0, 100.0));
+    let threaded = add(&mut d, area(100.0, 380.0));
+    let next = add(&mut d, area(250.0, 440.0));
+    d.text_threads.push(vec![threaded, next]);
+    let line = vectorcraft_geom::kurbo::Line::new((50.0, 250.0), (250.0, 250.0));
+    let open = Node::path(
+        d.alloc_id(),
+        vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::kurbo::Shape::to_path(&line, 0.1)),
+        vectorcraft_doc::Appearance::default_art(),
+    );
+    d.insert(Some(l), 0, open).unwrap();
+    let point = TextObject::point(Point::new(40.0, 480.0), "Point", Default::default());
+    let point_at = point.bounds().expect("point type has bounds").center();
+    add(&mut d, NodeKind::Text(Box::new(point)));
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = SelectionTool::default();
+    let load = |t: &mut SelectionTool| {
+        t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+        t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    };
+    let at = |t: &SelectionTool, x: f64, y: f64| t.cursor(&cx, Point::new(x, y), Mods::default());
+    let thread = |params: Value| vec![Action::Exec("text.thread.add".into(), params)];
+    load(&mut t);
+    assert_eq!(at(&t, 150.0, 150.0), Cursor::LoadedTextLink, "a closed path");
+    assert_eq!(at(&t, 360.0, 120.0), Cursor::LoadedTextLink, "area type in no thread");
+    assert_eq!(at(&t, 30.0, 420.0), Cursor::LoadedText, "empty canvas");
+    assert_eq!(at(&t, 150.0, 250.0), Cursor::LoadedText, "an open path");
+    assert_eq!(at(&t, point_at.x, point_at.y), Cursor::LoadedText, "point type");
+    assert_eq!(at(&t, 360.0, 320.0), Cursor::LoadedText, "the frame the text came from");
+    assert_eq!(at(&t, 160.0, 400.0), Cursor::LoadedText, "a frame already in a thread");
+    // A click where the pointer shows the loaded text makes a new frame there.
+    t.pointer(&cx, &ev(PointerKind::Down, 160.0, 400.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 160.0, 400.0)), thread(json!({"from": id.0, "at": [160.0, 400.0]})));
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    assert_eq!(at(&t, 150.0, 150.0), Cursor::LoadedTextLink, "held down on the path");
+    t.pointer(&cx, &ev(PointerKind::Drag, 151.0, 151.0));
+    assert_eq!(at(&t, 151.0, 151.0), Cursor::LoadedTextLink, "a drag too small to draw a frame");
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 151.0, 151.0)), thread(json!({"from": id.0, "to": rect.0})));
+    assert!(!matches!(at(&t, 150.0, 150.0), Cursor::LoadedText | Cursor::LoadedTextLink), "the text is placed");
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 150.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 230.0, 240.0));
+    assert_eq!(at(&t, 230.0, 240.0), Cursor::LoadedText, "the drag draws a new frame");
+    t.pointer(&cx, &ev(PointerKind::Up, 230.0, 240.0));
+    load(&mut t);
+    t.pointer(&cx, &ev(PointerKind::Down, 360.0, 120.0));
+    assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, 360.0, 120.0)), thread(json!({"from": id.0, "to": free.0})));
+    load(&mut t);
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+    assert!(!matches!(at(&t, 150.0, 150.0), Cursor::LoadedText | Cursor::LoadedTextLink), "Escape drops the text");
+}
+
+/// In an isolated compound path, loaded text shows no link cursor over a member path, which
+/// `text.thread.add` does not take for `to`: a click there makes a new frame.
+#[test]
+fn loaded_text_shows_no_link_cursor_over_a_compound_paths_member() {
+    use vectorcraft_doc::{Appearance, Node, NodeKind};
+    let (mut d, id, _, port) = overflowing_area_type();
+    let l = d.layers[0].id;
+    let (c, member) = (d.alloc_id(), d.alloc_id());
+    let path = Node::path(member, vectorcraft_geom::shapes::rectangle(Rect::new(300.0, 100.0, 400.0, 200.0)), Appearance::default_art());
+    let mut compound = Node::new(c, NodeKind::Compound { children: vec![std::sync::Arc::new(path)], rule: Default::default() });
+    compound.appearance = Appearance::default_art().into();
+    d.insert(Some(l), 0, compound).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { isolation: Some(c), ..cx(&d, &s, &p) };
+    let mut t = SelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, port.x, port.y));
+    t.pointer(&cx, &ev(PointerKind::Up, port.x, port.y));
+    assert_eq!(t.cursor(&cx, Point::new(350.0, 150.0), Mods::default()), Cursor::LoadedText);
+    t.pointer(&cx, &ev(PointerKind::Down, 350.0, 150.0));
+    assert_eq!(
+        t.pointer(&cx, &ev(PointerKind::Up, 350.0, 150.0)),
+        vec![Action::Exec("text.thread.add".into(), json!({"from": id.0, "at": [350.0, 150.0]}))]
+    );
 }
 
 /// Loaded text clicked just inside a layer's clipping mask, where art is drawn over the mask's
@@ -2476,4 +2749,84 @@ fn outline_view_click_through_an_image_selects_the_path_behind() {
         let a = SelectionTool::default().pointer(&cx(&d, &s, &p), &ev(PointerKind::Down, 200.0, 180.0));
         assert!(!selects(&a, back), "preview, {picked:?} selected: {a:?}");
     }
+}
+
+/// A marquee across clipped art where the clipping path's own shape, but not the region a live
+/// effect moved it to, lets it show reaches the clip group in Outline view only, which draws the
+/// clipping path without its effects.
+#[test]
+fn outline_view_marquees_measure_a_clip_group_by_its_plain_clipping_path() {
+    let (d, g, _) = doc_with_moved_clip_region();
+    let s = Selection::default();
+    let p = paint();
+    let marquee = |outline: bool| {
+        let cx = ToolContext { outline, ..cx(&d, &s, &p) };
+        let mut t = SelectionTool::default();
+        t.pointer(&cx, &ev(PointerKind::Down, 440.0, 410.0));
+        t.pointer(&cx, &ev(PointerKind::Drag, 460.0, 430.0));
+        t.pointer(&cx, &ev(PointerKind::Up, 460.0, 430.0))
+    };
+    assert_eq!(marquee(true), vec![Action::Exec("select.set".into(), json!({"ids": [g.0]}))]);
+    assert_eq!(marquee(false), vec![Action::Exec("select.set".into(), json!({"ids": []}))]);
+}
+
+/// Objects selected inside a group (with Group Selection, say) stay selected when the Selection
+/// tool presses on one of them: the press shows the move pointer and a drag moves only them, not
+/// the group around them. A press on a member that is not selected still selects the whole group.
+#[test]
+fn a_press_on_a_selected_member_of_a_group_moves_the_selected_members() {
+    use vectorcraft_doc::{Appearance, Document, Node};
+    use vectorcraft_geom::shapes;
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let (outer, inner, a, b, c) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let path = |id: NodeId, x: f64| Node::path(id, shapes::rectangle(Rect::new(x, 100.0, x + 50.0, 150.0)), Appearance::default_art());
+    d.insert(Some(l), 0, Node::group(outer, vec![])).unwrap();
+    d.insert(Some(outer), 0, Node::group(inner, vec![])).unwrap();
+    d.insert(Some(inner), 0, path(a, 100.0)).unwrap();
+    d.insert(Some(inner), 1, path(b, 200.0)).unwrap();
+    d.insert(Some(outer), 1, path(c, 300.0)).unwrap();
+    let p = paint();
+    let is_select = |out: &[Action]| out.iter().any(|a| matches!(a, Action::Exec(id, _) if id.starts_with("select.")));
+    for picked in [vec![a], vec![a, b], vec![inner]] {
+        let mut s = Selection::default();
+        s.set(picked.iter().copied());
+        let c = cx(&d, &s, &p);
+        let mut t = SelectionTool::default();
+        assert_eq!(t.cursor(&c, Point::new(125.0, 125.0), Mods::default()), Cursor::Move, "{picked:?}");
+        let down = t.pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+        assert!(!is_select(&down), "{picked:?}: {down:?}");
+        let drag = t.pointer(&c, &ev(PointerKind::Drag, 145.0, 125.0));
+        assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "{picked:?}: {drag:?}");
+        // Shift: a drag moves the selected members, constrained, and a click takes the member
+        // pressed (or the selected group holding it) out of the selection, not the outer group.
+        let shift = |kind, x, y| ev(kind, x, y).with_mods(Mods { shift: true, ..Mods::default() });
+        let mut t = SelectionTool::default();
+        let down = t.pointer(&c, &shift(PointerKind::Down, 125.0, 125.0));
+        assert!(!is_select(&down), "Shift, {picked:?}: {down:?}");
+        let drag = t.pointer(&c, &shift(PointerKind::Drag, 145.0, 125.0));
+        assert!(drag.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "object.transform")), "Shift, {picked:?}: {drag:?}");
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &shift(PointerKind::Down, 125.0, 125.0));
+        let up = t.pointer(&c, &shift(PointerKind::Up, 125.0, 125.0));
+        assert_eq!(up, vec![Action::Exec("select.toggle".into(), json!({"id": picked[0].0}))], "Shift-click, {picked:?}");
+        // Alt over a selected member measures no Distance Guides to the group holding it.
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &alt(PointerKind::Move, 125.0, 125.0));
+        assert!(distances(&t, &c).0.is_empty(), "Alt over a selected member, {picked:?}");
+    }
+    // A member that is not selected: the press selects the outermost group.
+    let mut s = Selection::default();
+    s.set([a]);
+    let c = cx(&d, &s, &p);
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 325.0, 125.0));
+    assert_eq!(down, vec![Action::Exec("select.set".into(), json!({"ids": [outer.0]}))]);
+    // A member with only some anchors selected (a Direct Selection marquee) is not selected whole:
+    // the press selects the outermost group, as before.
+    let mut s = Selection::default();
+    s.set([a]);
+    s.anchors.insert(a, [(0, 0)].into_iter().collect());
+    let c = cx(&d, &s, &p);
+    let down = SelectionTool::default().pointer(&c, &ev(PointerKind::Down, 125.0, 125.0));
+    assert_eq!(down, vec![Action::Exec("select.set".into(), json!({"ids": [outer.0]}))]);
 }

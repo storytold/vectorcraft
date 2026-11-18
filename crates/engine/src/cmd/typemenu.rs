@@ -7,10 +7,11 @@ use vectorcraft_doc::{AreaFit, CharStyle, Document, Justify, LockedArtboards, No
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::object::choice;
-use super::typecmd::{area_text, block_gaps, refresh_bounds};
+use super::threads::ThreadIndex;
+use super::typecmd::{area_text, block_gaps, needed_room, refresh_bounds};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
-    switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, named_ids,
+    number_or, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -29,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smart Punctuation…",
             ["Type"],
             None,
-            "{quotes?: true (straight quotes become the Document Setup quotes), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), scope?: \"selection\"|\"document\"} → {changed}",
+            "{fiLigatures?: false (ff, fi, ffi → the ligatures U+FB00, U+FB01, U+FB03), flLigatures?: false (ff, fl, ffl → U+FB00, U+FB02, U+FB04), quotes?: true (straight quotes become the Document Setup quotes), spaces?: false (two or more spaces after a period → one), dashes?: true (-- → en dash, --- → em dash), ellipsis?: true (... → …), fractions?: false (1/2, 1/4, 3/4 and the other fractions Unicode encodes as one character, with no digit, slash or decimal point next to them, → ½, ¼, ¾ …), scope?: \"selection\"|\"document\"} the selected type, or every text object with scope document or nothing selected; a ligature or a fraction is written only where the run's font has a glyph for it. Nothing to replace records no undo step → {changed: text objects changed, replaced: {fiLigatures, flLigatures, quotes, spaces, dashes, ellipses, fractions}: how many of each were replaced}",
             has_doc,
             smart_punctuation
         ),
@@ -56,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Type on a Path Options…",
             ["Type", "Type on a Path"],
             None,
-            "{ids?|id?, start?: 0..1, end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
+            "{ids?|id?, start?: -1000000..1 (below 0 only on an open path), end?: 0..1|null, flip?: bool, effect?: rainbow|skew|3dRibbon|stairStep|gravity, alignToPath?: ascender|descender|center|baseline, spacing?: pt} set the selected type on a path's options: start and end place its start and end brackets as fractions of the path's length (end null: the end of the path, or once round a closed path); on an open path a start below 0 starts the text that far before the path's start, and the characters whose middle falls before it are not drawn (on a closed path it is the path's start), and flip then turns the type to the other side of its path (the path runs the other way, the brackets swap ends); alignToPath runs each character's em box top (ascender), font bounding box bottom (descender), half the height of its H's top above the baseline (center) or baseline along the path, by the character's own font, size and vertical scale (vertical type: half an em either way, or none for center); none given: query → the first object's {start, end, flip: false, effect, alignToPath, spacing}",
             has_selection,
             path_options
         ),
@@ -83,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Dynamic Text",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type (on omitted: the opposite of the first object's setting, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap, and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Point type in the selection is left as it is; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
+            "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type, or turn it on for point type (on omitted: the opposite of the first object's setting, point type counting as off, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap, and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection, and no point type it turns into area type, is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Turning it on turns point type into area type with Block on, with the default Area Type Options but the gaps (options kept from an earlier frame do not carry over): the frame is as wide (along the lines) as the widest line as typed with its paragraph's indents, so that line keeps its size and sits where it was (by its own alignment), the other lines are set to that width (when negative indents take more than that line's width, the frame is as wide as the line, and Block makes it larger), and the frame then grows in depth (down, or to the left for vertical type) to hold every fitted line, around any Text Wrap objects above it; the gaps apply to it as to area type. Point type with no line to fit (empty, or only spaces and breaks) is left as it is, and so is point type when it is turned off; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
             has_dynamic_type,
             dynamic_text
         ),
@@ -110,7 +111,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Character",
             ["Type"],
             None,
-            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} append to the selected text objects",
+            "{char: \"bullet\"|\"copyright\"|\"ellipsis\"|\"paragraph\"|\"registered\"|\"section\"|\"trademark\"|\"emDash\"|\"enDash\"|\"discretionaryHyphen\"|\"nonBreakingHyphen\"|\"doubleLeftQuote\"|\"doubleRightQuote\"|\"singleLeftQuote\"|\"singleRightQuote\"|\"emSpace\"|\"enSpace\"|\"hairSpace\"|\"sixthSpace\"|\"thinSpace\"|\"nonBreakingSpace\"|\"figureSpace\"|\"punctuationSpace\"|\"thirdSpace\"|\"quarterSpace\"|\"tab\"|\"forcedLineBreak\"|\"paragraphReturn\" | text: string | code: Windows Alt+0 code (0–255 in Windows-1252, a Unicode code point above: 176 → °, 151 → —) | unicode: hex code point (\"00B0\" or \"U+00B0\"), ids?|id?: object ids (default: the selection)} insert at the Type tool's caret, replacing its selection, while it edits text and no ids are given; otherwise append to the selected text objects. forcedLineBreak is U+2028, a new line in the same paragraph; paragraphReturn is a line feed, which starts a new paragraph",
             has_selection,
             insert_char
         ),
@@ -137,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs, which take a new graph's label character style and paragraph attributes (keeping their alignment); a pasted graph no longer keeps its labels' character and paragraph formats, so a later redraw sets them the same way → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -267,24 +268,227 @@ fn change_case(s: &mut Session, p: &Value) -> Result<Value> {
 
 // ---------- Smart Punctuation ----------
 
-#[derive(Default)]
-struct PunctState {
-    prev: Option<char>,
+/// What Smart Punctuation replaces: each option of its dialog.
+struct Punct {
+    /// ff, fi and ffi become the ligatures U+FB00, U+FB01 and U+FB03.
+    fi_ligatures: bool,
+    /// ff, fl and ffl become the ligatures U+FB00, U+FB02 and U+FB04.
+    fl_ligatures: bool,
+    /// Straight quotes become these quotes (the Document Setup quotes).
+    quotes: Option<Quotes>,
+    /// Two or more spaces after a period become one.
+    spaces: bool,
+    /// `--` becomes an en dash and `---` an em dash.
+    dashes: bool,
+    /// `...` becomes an ellipsis.
+    ellipses: bool,
+    /// `1/2` and the other fractions [`FRACTIONS`] lists become their one-character forms.
+    fractions: bool,
 }
 
-/// Dashes (`--` en, `---` em), ellipses and, with `quotes`, typographer's quotes.
-pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quotes>, dashes: bool, ellipsis: bool) -> String {
-    let mut s = text.to_string();
-    if dashes {
-        s = s.replace("---", "—").replace("--", "–");
+/// How many of each replacement Smart Punctuation made.
+#[derive(Default)]
+struct PunctCounts {
+    fi_ligatures: usize,
+    fl_ligatures: usize,
+    quotes: usize,
+    spaces: usize,
+    dashes: usize,
+    ellipses: usize,
+    fractions: usize,
+}
+
+/// The text before the run being rewritten, across the runs of one text object.
+#[derive(Default)]
+struct PunctState {
+    /// The character before the run.
+    prev: Option<char>,
+    /// The number of spaces since the last period, while only spaces follow it.
+    after_period: Option<usize>,
+    /// An inline graphic comes right before the run.
+    after_graphic: bool,
+}
+
+/// The fractions Expert Fractions writes as one character: every fraction Unicode encodes as a
+/// vulgar fraction with a numerator of 1 to 7 and a denominator of 2 to 10.
+const FRACTIONS: [(&str, char); 18] = [
+    ("1/2", '½'),
+    ("1/3", '⅓'),
+    ("2/3", '⅔'),
+    ("1/4", '¼'),
+    ("3/4", '¾'),
+    ("1/5", '⅕'),
+    ("2/5", '⅖'),
+    ("3/5", '⅗'),
+    ("4/5", '⅘'),
+    ("1/6", '⅙'),
+    ("5/6", '⅚'),
+    ("1/7", '⅐'),
+    ("1/8", '⅛'),
+    ("3/8", '⅜'),
+    ("5/8", '⅝'),
+    ("7/8", '⅞'),
+    ("1/9", '⅑'),
+    ("1/10", '⅒'),
+];
+
+/// `s` with every `from` replaced by `to`, adding the number replaced to `n`.
+fn replace_counted(s: String, from: &str, to: &str, n: &mut usize) -> String {
+    let found = s.matches(from).count();
+    if found == 0 {
+        return s;
     }
-    if ellipsis {
-        s = s.replace("...", "…");
+    *n += found;
+    s.replace(from, to)
+}
+
+/// Smart Spaces: `text` without the second and later spaces after a period, adding the number of
+/// periods whose spaces it shortened to `n`. `after` carries the spaces after a period from one run
+/// to the next.
+fn smart_spaces(text: &str, after: &mut Option<usize>, n: &mut usize) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match (c, *after) {
+            (' ', Some(k)) => {
+                *after = Some(k + 1);
+                if k >= 1 {
+                    if k == 1 {
+                        *n += 1;
+                    }
+                    continue;
+                }
+            }
+            ('.', _) => *after = Some(0),
+            _ => *after = None,
+        }
+        out.push(c);
     }
-    match quotes {
-        Some(q) => q.apply(&s, prev),
+    out
+}
+
+/// The fraction `cs` starts with, and its length in characters: one of [`FRACTIONS`] that no digit,
+/// slash or decimal part follows, so `1/25`, `1/2/2026` and `1/2.5` are left as they are. A digit
+/// counts in any script.
+fn fraction_at(cs: &[char]) -> Option<(usize, char)> {
+    FRACTIONS.iter().find_map(|(text, f)| {
+        let len = text.chars().count();
+        if cs.len() < len || !cs[..len].iter().copied().eq(text.chars()) {
+            return None;
+        }
+        let ends = match &cs[len..] {
+            [c, ..] if c.is_numeric() || *c == '/' => false,
+            ['.' | ',', d, ..] if d.is_numeric() => false,
+            _ => true,
+        };
+        ends.then_some((len, *f))
+    })
+}
+
+/// Expert Fractions: `text` with each fraction [`fraction_at`] finds, and no digit, slash or
+/// decimal point before, written as one character when `covers` it. `prev` is the character before
+/// `text`, and `next` the two characters after it (in the next runs), so a fraction at the end of
+/// a run is checked against what follows it.
+fn expert_fractions(text: &str, prev: Option<char>, next: [Option<char>; 2], covers: &mut impl FnMut(char) -> bool, n: &mut usize) -> String {
+    let mut cs: Vec<char> = text.chars().collect();
+    let len_text = cs.len();
+    cs.extend(next.into_iter().flatten());
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < len_text {
+        let before = if i == 0 { prev } else { Some(cs[i - 1]) };
+        let free = !before.is_some_and(|c| c.is_numeric() || matches!(c, '/' | '.' | ','));
+        let found = fraction_at(&cs[i..]).filter(|(len, f)| i + len <= len_text && covers(*f));
+        if free && let Some((len, f)) = found {
+            out.push(f);
+            *n += 1;
+            i += len;
+            continue;
+        }
+        out.push(cs[i]);
+        i += 1;
+    }
+    out
+}
+
+/// The ligatures and their letters, longest first, with whether each comes with the ff, fi, ffi
+/// option (else with the ff, fl, ffl option). ff comes with both.
+const LIGATURES: [(&str, char, bool); 5] =
+    [("ffi", '\u{FB03}', true), ("ffl", '\u{FB04}', false), ("ff", '\u{FB00}', true), ("fi", '\u{FB01}', true), ("fl", '\u{FB02}', false)];
+
+/// The ligature options: `text` with the letters of each ligature an option `o` asks for written
+/// as the ligature, the longest first, when `covers` it.
+fn ligatures(text: &str, o: &Punct, covers: &mut impl FnMut(char) -> bool, n: &mut PunctCounts) -> String {
+    let cs: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < cs.len() {
+        let found = (cs[i] == 'f').then(|| {
+            LIGATURES.iter().find(|(letters, lig, fi)| {
+                let on = if *letters == "ff" {
+                    o.fi_ligatures || o.fl_ligatures
+                } else if *fi {
+                    o.fi_ligatures
+                } else {
+                    o.fl_ligatures
+                };
+                let len = letters.chars().count();
+                on && cs.len() - i >= len && cs[i..i + len].iter().copied().eq(letters.chars()) && covers(*lig)
+            })
+        });
+        if let Some(&(letters, lig, fi)) = found.flatten() {
+            out.push(lig);
+            // ff counts with the ff, fi, ffi option when that option is on.
+            if fi && (letters != "ff" || o.fi_ligatures) {
+                n.fi_ligatures += 1;
+            } else {
+                n.fl_ligatures += 1;
+            }
+            i += letters.chars().count();
+            continue;
+        }
+        out.push(cs[i]);
+        i += 1;
+    }
+    out
+}
+
+/// One run's text with the replacements `o` asks for, counted in `n`. Ligatures and fractions are
+/// written only where the run's font has a glyph for them. `next` holds the two characters after
+/// the run.
+fn smarten(text: &str, style: &CharStyle, next: [Option<char>; 2], o: &Punct, st: &mut PunctState, n: &mut PunctCounts) -> String {
+    let mut s = if o.spaces { smart_spaces(text, &mut st.after_period, &mut n.spaces) } else { text.to_string() };
+    if o.dashes {
+        s = replace_counted(s, "---", "—", &mut n.dashes);
+        s = replace_counted(s, "--", "–", &mut n.dashes);
+    }
+    if o.ellipses {
+        s = replace_counted(s, "...", "…", &mut n.ellipses);
+    }
+    // The run's font, looked up once and only for a ligature or a fraction.
+    let mut face = None;
+    let mut covers = |c: char| {
+        face.get_or_insert_with(|| {
+            vectorcraft_text::FontDb::global().face_version(&style.font_family, &style.font_style, style.font_version.as_deref())
+        })
+        .as_ref()
+        .is_some_and(|f| f.covers(c))
+    };
+    if o.fractions && s.contains('/') {
+        let before = if st.after_graphic { None } else { st.prev };
+        s = expert_fractions(&s, before, next, &mut covers, &mut n.fractions);
+    }
+    st.after_graphic = false;
+    if (o.fi_ligatures || o.fl_ligatures) && s.contains('f') {
+        s = ligatures(&s, o, &mut covers, n);
+    }
+    match &o.quotes {
+        Some(q) => {
+            let out = q.apply(&s, &mut st.prev);
+            n.quotes += s.chars().zip(out.chars()).filter(|(a, b)| a != b).count();
+            out
+        }
         None => {
-            *prev = s.chars().last().or(*prev);
+            st.prev = s.chars().last().or(st.prev);
             s
         }
     }
@@ -292,12 +496,20 @@ pub(crate) fn smarten(text: &str, prev: &mut Option<char>, quotes: Option<&Quote
 
 fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.smartPunctuation";
-    let (d, e) = (switch_or(p, "dashes", true, C)?, switch_or(p, "ellipsis", true, C)?);
     let quotes = switch_or(p, "quotes", true, C)?;
+    let mut o = Punct {
+        fi_ligatures: switch_or(p, "fiLigatures", false, C)?,
+        fl_ligatures: switch_or(p, "flLigatures", false, C)?,
+        quotes: None,
+        spaces: switch_or(p, "spaces", false, C)?,
+        dashes: switch_or(p, "dashes", true, C)?,
+        ellipses: switch_or(p, "ellipsis", true, C)?,
+        fractions: switch_or(p, "fractions", false, C)?,
+    };
     let document = choice(p, C, "scope", &["selection", "document"])? == Some("document");
     let st = s.doc()?;
     // Quotes in the document's style (Document Setup → Type).
-    let q = quotes.then_some(st.doc.setup.quotes);
+    o.quotes = quotes.then_some(st.doc.setup.quotes);
     let ids = if document || st.selection.is_empty() {
         let mut v = vec![];
         st.doc.walk(|n| {
@@ -309,8 +521,93 @@ fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         text_ids(&st.doc, &st.selection.objects)
     };
-    let n = edit_runs::<PunctState>(s, "Smart Punctuation", &ids, |text, st| smarten(text, &mut st.prev, q.as_ref(), d, e))?;
-    Ok(json!({ "changed": n }))
+    let mut n = PunctCounts::default();
+    let changed = super::overprint::edit_counted(s, "Smart Punctuation", |d| {
+        let mut changed = 0;
+        for id in &ids {
+            let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let mut st = PunctState::default();
+            let mut any = false;
+            // The ruby spans' ends, in the plain text as it was. Each run is rewritten in pieces
+            // between them, so no replacement crosses one, and `moved` records where each end and
+            // each run's start lands in the new text.
+            let mut edges: Vec<usize> = t.ruby.iter().flat_map(|r| [r.start, r.end]).collect();
+            edges.sort_unstable();
+            edges.dedup();
+            let mut moved = vec![];
+            let (mut old_at, mut new_at) = (0, 0);
+            // Inline graphics are art, not characters to rewrite. Each run sees the first two
+            // characters of the runs after it, up to the next inline graphic, as they were.
+            for i in 0..t.runs.len() {
+                let len = t.runs[i].text.len();
+                moved.push((old_at, new_at));
+                if t.runs[i].inline.is_some() {
+                    // A graphic separates the characters on either side of it for Smart Spaces and
+                    // Expert Fractions; quotes still read the character before it.
+                    st.after_period = None;
+                    st.after_graphic = true;
+                    (old_at, new_at) = (old_at + len, new_at + len);
+                    continue;
+                }
+                let mut after = t.runs[i + 1..].iter().take_while(|r| r.inline.is_none()).flat_map(|r| r.text.chars());
+                let following = [after.next(), after.next()];
+                // Smart Spaces counts no space across a ruby span's end, so it removes no space on
+                // the other side of one.
+                if edges.binary_search(&old_at).is_ok() {
+                    st.after_period = None;
+                }
+                let r = &mut t.runs[i];
+                let mut cuts: Vec<usize> =
+                    edges.iter().filter(|&&e| e > old_at && e < old_at + len && r.text.is_char_boundary(e - old_at)).map(|e| e - old_at).collect();
+                cuts.push(len);
+                let mut new = String::with_capacity(len);
+                let mut from = 0;
+                for cut in cuts {
+                    if from > 0 {
+                        moved.push((old_at + from, new_at + new.len()));
+                        st.after_period = None;
+                    }
+                    let mut after = r.text[cut..].chars().chain(following.into_iter().flatten());
+                    let next = [after.next(), after.next()];
+                    new.push_str(&smarten(&r.text[from..cut], &r.style, next, &o, &mut st, &mut n));
+                    from = cut;
+                }
+                (old_at, new_at) = (old_at + len, new_at + new.len());
+                if new != r.text {
+                    r.text = new;
+                    any = true;
+                }
+            }
+            moved.push((old_at, new_at));
+            if any {
+                changed += 1;
+                // Each ruby end moves with the text before it; an end inside a character keeps its
+                // distance from the last place recorded before it.
+                let to_new = |v: usize| {
+                    let k = moved.partition_point(|&(old, _)| old <= v).saturating_sub(1);
+                    moved.get(k).map_or(v, |&(old, new)| new + (v - old.min(v)))
+                };
+                for span in &mut t.ruby {
+                    (span.start, span.end) = (to_new(span.start), to_new(span.end));
+                }
+                t.normalize_ruby();
+                refresh_bounds(t);
+            }
+        }
+        Ok(changed)
+    })?;
+    Ok(json!({
+        "changed": changed,
+        "replaced": {
+            "fiLigatures": n.fi_ligatures,
+            "flLigatures": n.fl_ligatures,
+            "quotes": n.quotes,
+            "spaces": n.spaces,
+            "dashes": n.dashes,
+            "ellipses": n.ellipses,
+            "fractions": n.fractions,
+        },
+    }))
 }
 
 // ---------- Area / Point conversion ----------
@@ -346,13 +643,7 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             // A little slack on the right so the text doesn't rewrap.
             let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
             let slack = size * 0.5 + trailing;
-            // Slack goes where the alignment leaves room, so the text doesn't move or rewrap.
-            let (sl, sr) = match t.para_at(0).justify {
-                Justify::Center | Justify::JustifyCenter => (slack * 0.5, slack * 0.5),
-                Justify::Right | Justify::JustifyRight => (slack, 0.0),
-                Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => (slack, 0.0),
-                _ => (0.0, slack),
-            };
+            let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
             let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
             t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
             refresh_bounds(t);
@@ -360,6 +651,107 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// How `slack` added to point type's lines in a frame is shared before and after them: where the
+/// alignment leaves room, so the text doesn't move or rewrap.
+fn slack_sides(justify: Justify, rtl: bool, slack: f64) -> (f64, f64) {
+    match justify {
+        Justify::Center | Justify::JustifyCenter => (slack * 0.5, slack * 0.5),
+        Justify::Right | Justify::JustifyRight => (slack, 0.0),
+        Justify::Auto if rtl => (slack, 0.0),
+        _ => (0.0, slack),
+    }
+}
+
+/// Point type `t` turned into area type with Dynamic Text's Block on, with the default Area Type
+/// Options but its gaps: the frame takes the room along the lines that keeps the widest line as
+/// typed at its size ([`needed_room`]), placed so that line stays where it is by its own
+/// alignment, and after the fit it takes the depth that holds every line, so nothing overflows.
+/// Lines run in line space (for vertical type, down the page), and the frame is mapped to the
+/// type's own space by the layout's `line_xf`. `wrap` is the Text Wrap shapes the new area type
+/// takes, in the type's own space, which the fit and the depth follow. When negative indents take
+/// more than the widest line's width, the frame is as wide as that line and placed so that the
+/// line keeps its aligned point. None when no line has a
+/// width (empty text, or only spaces and breaks), which Block leaves at its size.
+fn point_to_block(t: &TextObject, wrap: &[vectorcraft_doc::WrapShape]) -> Option<TextObject> {
+    let db = vectorcraft_text::FontDb::global();
+    // Options point type kept from a frame it had before (columns, inset, alignment, first
+    // baseline) do not carry over to the new frame.
+    let mut t = t.clone();
+    let (word_gap, line_gap) = (t.area.word_gap, t.area.line_gap);
+    t.area = vectorcraft_doc::AreaOptions { word_gap, line_gap, ..Default::default() };
+    t.wrap = wrap.to_vec();
+    let t = &t;
+    // The room is measured as Block sets the lines in a frame, with the word gap.
+    let as_block = TextObject { dynamic_text: true, kind: TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)) }, ..t.clone() };
+    let (room, widest, para_index) = needed_room(&as_block)?;
+    let lay = vectorcraft_text::layout(db, t);
+    let first = lay.lines.first()?;
+    let line = lay.lines.iter().find(|l| l.start == widest)?;
+    // Across, the widest line as it is aligned, with its paragraph's indents, which the frame holds.
+    let para = t.para_at(para_index);
+    let starts = widest == 0 || t.plain_text().as_bytes().get(widest - 1) == Some(&b'\n');
+    let start_indent = para.laid_out_left_indent() + if starts { para.first_line_indent } else { 0.0 };
+    // A horizontal right-to-left list paragraph has its indents mirrored, as the layout sets them.
+    let mirror = line.rtl && !t.vertical && para.list.is_some();
+    let (left, right) = if mirror { (para.right_indent, start_indent) } else { (start_indent, para.right_indent) };
+    let (lo, hi) = (line.x0 - left, line.x1 - line.trailing + right);
+    let top = lay.lines.iter().map(|l| l.baseline - l.ascent).fold(first.baseline - first.ascent, f64::min);
+    let bottom = lay.lines.iter().map(|l| l.baseline + l.descent).fold(top, f64::max);
+    if ![lo, hi, top, bottom, room].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    // Negative indents can take more than the line's width (hi below lo); the frame is then wider
+    // than the line with its indents, and the same split of the difference keeps the line's
+    // aligned point (its start, center or end) where it was when Block makes the line fill it.
+    let (sl, _) = slack_sides(para.justify, line.rtl, room - (hi - lo));
+    let frame = |depth: f64| lay.line_xf.transform_rect_bbox(Rect::new(lo - sl, top, lo - sl + room, top + depth.max(1.0)));
+    let start = frame(bottom - top);
+    let mut out = t.clone();
+    out.kind = TextKind::Area { frame: shapes::rectangle(start) };
+    out.dynamic_text = true;
+    refresh_bounds(&mut out);
+    // The lines fitted in one cell from the frame's top deep enough for all of them (every line at
+    // the largest size Block sets), around any wrap shapes, give the depth the frame takes.
+    let mut probe = out.clone();
+    let points = t.style_scale().map_or(1.0, |s| s.points).max(1e-12);
+    let deep = (bottom - top) + (lay.lines.len() as f64 + 1.0) * 3.0 * (1296.0 + out.area.line_gap.abs()) / points;
+    // Wrap shapes push lines on past them (an inverted one holds them inside it), so the cell also
+    // reaches as far again as the farthest one reaches past the frame's top.
+    let inv = lay.line_xf.inverse();
+    let deep = deep
+        + wrap
+            .iter()
+            .filter_map(|w| w.path.bounds().map(|r| inv.transform_rect_bbox(r)).map(|r| (r.y1 - top).max(0.0) + 2.0 * w.wrap.offset.abs()))
+            .filter(|d| d.is_finite())
+            .fold(0.0, f64::max);
+    probe.kind = TextKind::Area { frame: shapes::rectangle(frame(deep)) };
+    if !wrap.is_empty() {
+        refresh_bounds(&mut probe);
+    }
+    let laid = vectorcraft_text::layout(db, &probe);
+    if laid.overflow {
+        return Some(out);
+    }
+    let mut grown = start;
+    for l in &laid.lines {
+        for y in [l.baseline - l.ascent, l.baseline + l.descent] {
+            grown = grown.union_pt(laid.line_xf * vectorcraft_geom::Point::new(l.x0, y));
+        }
+    }
+    // Only the depth grows (for vertical type, the columns run on to the left), with a hundredth
+    // of a point to spare.
+    if t.vertical {
+        (grown.y0, grown.y1, grown.x0) = (start.y0, start.y1, grown.x0 - 0.01);
+    } else {
+        (grown.x0, grown.x1, grown.y1) = (start.x0, start.x1, grown.y1 + 0.01);
+    }
+    if grown.is_finite() && grown != start {
+        out.kind = TextKind::Area { frame: shapes::rectangle(grown) };
+        refresh_bounds(&mut out);
+    }
+    Some(out)
 }
 
 /// (run, byte within the run) for a byte offset into the plain text.
@@ -394,8 +786,9 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
             let plain = t.plain_text();
             let baseline = lay.lines.first().map(|l| l.baseline).unwrap_or(fb.y0 + t.first_style().size * 0.8);
             // Soft wraps → explicit breaks (replace the space before the wrap when there is one).
-            let mut breaks: Vec<usize> =
-                lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && plain.as_bytes().get(b - 1) != Some(&b'\n')).collect();
+            // A line after a paragraph return or a forced line break (U+2028) already starts there.
+            let hard = |b: usize| plain.get(..b).is_some_and(|s| s.ends_with(['\n', '\u{2028}']));
+            let mut breaks: Vec<usize> = lay.lines.iter().skip(1).map(|l| l.start).filter(|&b| b > 0 && !hard(b)).collect();
             breaks.sort_unstable();
             breaks.dedup();
             for b in breaks.into_iter().rev() {
@@ -461,7 +854,7 @@ fn path_center_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
         let open = open.join(", ");
         return Some(format!("type on an open or compound path cannot be centered on its top or bottom: {open}"));
     }
-    let frames = threaded_ids(d, ids);
+    let frames = threaded_ids(&ThreadIndex::of(d), ids);
     (!frames.is_empty()).then(|| format!("type on a path in a thread cannot be centered on its top or bottom: {frames}"))
 }
 
@@ -626,7 +1019,18 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
             Some(v) => v.as_f64().filter(|x| x.is_finite()).map(|x| Some(x.clamp(0.0, 1.0))).ok_or_else(|| bad(C, format!("`{k}` is a number 0..1"))),
         }
     };
-    let start = fraction("start")?;
+    // On an open path the text may start before the path's start (below 0, see
+    // `TextKind::path_text_start`); on a closed path a start below 0 is the path's start.
+    let start = match p.get("start") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_f64()
+                .filter(|x| x.is_finite())
+                .map(|x| x.clamp(-vectorcraft_doc::PATH_LEAD_MAX, 1.0))
+                .ok_or_else(|| bad(C, "`start` is a number up to 1 (below 0: before an open path's start)"))?,
+        ),
+    };
+    let start_on = |path: &vectorcraft_geom::PathData, v: f64| if path.is_closed() { v.max(0.0) } else { v };
     // `end: null` puts the end bracket back at the end of the path.
     let end = p.get("end").map(|_| fraction("end")).transpose()?;
     let flip = switch_or(p, "flip", false, C)?;
@@ -645,8 +1049,8 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     // Without a flip, when every object already has every value given, the document and its undo
     // history stay as they are.
     let has_values = |t: &TextObject| match &t.kind {
-        TextKind::OnPath { start: st, end: en, .. } => {
-            start.is_none_or(|v| v == *st)
+        TextKind::OnPath { path, start: st, end: en } => {
+            start.is_none_or(|v| start_on(path, v) == *st)
                 && end.is_none_or(|v| v == *en)
                 && effect.is_none_or(|e| t.path_effect == e)
                 && align.is_none_or(|a| t.path_align == a)
@@ -661,9 +1065,9 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Type on a Path Options", |d, _| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            let TextKind::OnPath { start: st, end: en, .. } = &mut t.kind else { continue };
+            let TextKind::OnPath { path, start: st, end: en } = &mut t.kind else { continue };
             if let Some(v) = start {
-                *st = v;
+                *st = start_on(path, v);
             }
             if let Some(v) = end {
                 *en = v;
@@ -688,24 +1092,28 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     options(s)
 }
 
-/// Whether type `id` is a frame of a thread.
-fn threaded(d: &Document, id: NodeId) -> bool {
-    !super::threads::story_of(d, id).is_empty()
-}
-
 /// Type on a path or area type: the type Dynamic Text works on.
 fn dynamic_type(n: Option<&Node>) -> Option<&TextObject> {
     path_text(n).or_else(|| area_text(n))
 }
 
-/// `type.dynamicText` is enabled for a selection holding type on a path or area type, none of it
-/// in a thread.
+/// Type `type.dynamicText` takes: type on a path, area type, and point type, which it turns into
+/// area type with Block on.
+fn dynamic_target(n: Option<&Node>) -> Option<&TextObject> {
+    match n.map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) if matches!(t.kind, TextKind::Point) => Some(t),
+        _ => dynamic_type(n),
+    }
+}
+
+/// `type.dynamicText` is enabled for a selection holding type on a path, area type or point type,
+/// none of it in a thread.
 fn has_dynamic_type(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     let d = &st.doc;
     let selected: Vec<NodeId> = st.selection.objects.to_vec();
-    let types: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| dynamic_type(d.node(*id)).is_some()).collect();
+    let types: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| dynamic_target(d.node(*id)).is_some()).collect();
     if types.is_empty() {
         return Err("select type on a path or area type".into());
     }
@@ -716,46 +1124,61 @@ fn has_dynamic_type(s: &Session) -> std::result::Result<(), String> {
 /// path first; None when none is.
 fn threaded_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
     let (paths, areas): (Vec<NodeId>, Vec<NodeId>) = ids.iter().copied().partition(|id| path_text(d.node(*id)).is_some());
-    let frames = threaded_ids(d, &paths);
+    let threads = ThreadIndex::of(d);
+    let frames = threaded_ids(&threads, &paths);
     if !frames.is_empty() {
         return Some(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
     }
-    let frames = threaded_ids(d, &areas);
+    let frames = threaded_ids(&threads, &areas);
     (!frames.is_empty()).then(|| format!("area type in a thread cannot use Dynamic Text: {frames}"))
 }
 
-/// The ids among `ids` of frames of threads, as a list for a message; empty when there are none.
-fn threaded_ids(d: &Document, ids: &[NodeId]) -> String {
-    ids.iter().filter(|id| threaded(d, **id)).map(|id| id.0.to_string()).collect::<Vec<_>>().join(", ")
+/// The ids among `ids` of frames of `threads`, as a list for a message; empty when there are none.
+fn threaded_ids(threads: &ThreadIndex, ids: &[NodeId]) -> String {
+    ids.iter().filter(|id| threads.threaded(**id)).map(|id| id.0.to_string()).collect::<Vec<_>>().join(", ")
 }
 
 /// Type › Dynamic Text: set `on` (without it, the opposite of the first object's setting, or on
 /// when a gap is given) on the selected type on a path and area type (Block, with its gaps), in
-/// one undo step, and none when nothing changes. Turning it off keeps the sizes the text was drawn
-/// at ([`bake_dynamic_text`]).
+/// one undo step, and none when nothing changes. Turning it on also turns the selected point type
+/// into area type with Block on ([`point_to_block`]). Turning it off keeps the sizes the text was
+/// drawn at ([`bake_dynamic_text`]).
 fn dynamic_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.dynamicText";
     let (word_gap, line_gap) = block_gaps(p, C)?;
-    let (ids, on, planned) = {
+    let (ids, on, planned, converted) = {
         let d = &s.doc()?.doc;
-        let ids: Vec<NodeId> = texts(s, p, C)?.into_iter().filter(|i| dynamic_type(d.node(*i)).is_some()).collect();
+        let ids: Vec<NodeId> = texts(s, p, C)?.into_iter().filter(|i| dynamic_target(d.node(*i)).is_some()).collect();
         let first = *ids.first().ok_or_else(|| bad(C, "select type on a path or area type"))?;
         if let Some(why) = threaded_refusal(d, &ids) {
             return Err(bad(C, why));
         }
         let gap_given = word_gap.is_some() || line_gap.is_some();
-        if gap_given && !ids.iter().any(|id| area_text(d.node(*id)).is_some()) {
+        let on = switch_or(p, "on", gap_given || !dynamic_type(d.node(first)).is_some_and(|t| t.dynamic_text), C)?;
+        // Point type with a line to fit, which turning it on makes area type.
+        let converts = |id: &NodeId| on && dynamic_target(d.node(*id)).is_some_and(|t| matches!(t.kind, TextKind::Point) && needed_room(t).is_some());
+        if gap_given && !ids.iter().any(|id| area_text(d.node(*id)).is_some() || converts(id)) {
             return Err(bad(C, "wordGap and lineGap need area type in the selection"));
         }
-        let on = switch_or(p, "on", gap_given || !dynamic_type(d.node(first)).is_some_and(|t| t.dynamic_text), C)?;
         // Each object as the command leaves it, and only those it changes.
         let mut planned: Vec<(NodeId, TextObject)> = vec![];
+        // The point type that becomes area type, with the gaps applied, by id.
+        let mut converted: Vec<(NodeId, TextObject)> = vec![];
         for id in &ids {
-            let Some(t) = dynamic_type(d.node(*id)) else { continue };
+            let Some(t) = dynamic_target(d.node(*id)) else { continue };
             let mut after = t.clone();
-            if matches!(t.kind, TextKind::Area { .. }) {
+            if matches!(t.kind, TextKind::Area { .. } | TextKind::Point) {
                 after.area.word_gap = word_gap.unwrap_or(t.area.word_gap);
                 after.area.line_gap = line_gap.unwrap_or(t.area.line_gap);
+            }
+            if matches!(t.kind, TextKind::Point) {
+                // Point type has no Dynamic Text of its own: on, it becomes area type with Block
+                // on; off, or with no line to fit, it stays as it is.
+                if let Some(block) = on.then(|| point_to_block(&after, &[])).flatten() {
+                    planned.push((*id, block));
+                    converted.push((*id, after));
+                }
+                continue;
             }
             match (on, t.dynamic_text) {
                 (true, true) => refresh_bounds(&mut after),
@@ -776,13 +1199,26 @@ fn dynamic_text(s: &mut Session, p: &Value) -> Result<Value> {
                 planned.push((*id, after));
             }
         }
-        (ids, on, planned)
+        (ids, on, planned, converted)
     };
     if !planned.is_empty() {
         s.edit("Dynamic Text", |d, _| {
             for (id, after) in &planned {
                 if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
                     **t = after.clone();
+                }
+            }
+            if converted.is_empty() {
+                return Ok(());
+            }
+            // The new area type takes the Text Wrap shapes above it; one that has any is fitted
+            // again around them, with the depth that holds every line.
+            for id in vectorcraft_doc::text::resolve_wrap(None, d) {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { continue };
+                let block = converted.iter().find(|(c, _)| *c == id).and_then(|(_, src)| point_to_block(src, &t.wrap));
+                match block {
+                    Some(block) => **t = block,
+                    None => refresh_bounds(t),
                 }
             }
             Ok(())
@@ -838,7 +1274,7 @@ fn has_preset_type(s: &Session) -> std::result::Result<(), String> {
     if ids.is_empty() {
         return Err("select point type or type on a path".into());
     }
-    let frames = threaded_ids(d, &ids);
+    let frames = threaded_ids(&ThreadIndex::of(d), &ids);
     if !frames.is_empty() {
         return Err(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
     }
@@ -977,7 +1413,7 @@ fn dynamic_text_preset(s: &mut Session, p: &Value) -> Result<Value> {
         if ids.is_empty() {
             return Err(bad(C, "select point type or type on a path"));
         }
-        let frames = threaded_ids(d, &ids);
+        let frames = threaded_ids(&ThreadIndex::of(d), &ids);
         if !frames.is_empty() {
             return Err(bad(C, format!("type on a path in a thread cannot use Dynamic Text: {frames}")));
         }
@@ -1090,8 +1526,9 @@ pub(crate) fn special_char(name: &str) -> Option<&'static str> {
         "thirdSpace" => "\u{2004}",
         "quarterSpace" => "\u{2005}",
         "tab" => "\t",
-        // Our text model breaks lines at paragraph returns only.
-        "forcedLineBreak" | "paragraphReturn" => "\n",
+        // A line break inside the paragraph, as Shift+Enter types it.
+        "forcedLineBreak" => "\u{2028}",
+        "paragraphReturn" => "\n",
         _ => return None,
     })
 }
@@ -1141,6 +1578,11 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         (None, None, None, Some(u)) => unicode_char(u).ok_or_else(|| bad(C, format!("`{u}` is no Unicode character")))?.to_string(),
         (None, None, None, None) => return Err(bad(C, "give `char`, `text`, `code` or `unicode`")),
     };
+    if named_ids(p)?.is_none()
+        && let Some(r) = insert_at_type_caret(s, &text)?
+    {
+        return Ok(r);
+    }
     let ids = texts(s, p, C)?;
     // When `text` is empty and every object ends with a run of text, the document and its undo
     // history stay as they are.
@@ -1169,6 +1611,44 @@ fn insert_char(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// `type.insert` while the Type tool edits text: `text` replaces the tool's selection (inserts at
+/// its caret) as one undo step, and the caret goes after it. `None` when no text is being edited.
+fn insert_at_type_caret(s: &mut Session, text: &str) -> Result<Option<Value>> {
+    let tool = s.tool_options();
+    let Some(id) = tool.get("editing").and_then(Value::as_u64).map(NodeId) else { return Ok(None) };
+    let d = &s.doc()?.doc;
+    let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else { return Ok(None) };
+    let len = vectorcraft_text::edit::runs_len(&t.runs);
+    let g = |k: &str| tool.get(k).and_then(Value::as_u64).map_or(len, |v| (v as usize).min(len));
+    let (x, y) = (g("start"), g("end"));
+    let (a, b) = (x.min(y), x.max(y));
+    // After Select All in threaded text the whole story is selected: the other frames' text goes
+    // in the same edit, as when typing replaces it.
+    let story: Vec<NodeId> = tool.get("story").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(NodeId).collect();
+    let clear: Vec<u64> = if a == 0 && b == len && story.contains(&id) {
+        let has_text = |f: &NodeId| matches!(d.node(*f).map(|n| &n.kind), Some(NodeKind::Text(o)) if !o.runs.iter().all(|r| r.text.is_empty()));
+        story.iter().filter(|f| **f != id && has_text(f)).map(|f| f.0).collect()
+    } else {
+        vec![]
+    };
+    if text.is_empty() && a == b && clear.is_empty() {
+        return Ok(Some(ids_json(&[id])));
+    }
+    // A typing session ends first: the insertion is a step of its own.
+    if tool.get("typing").and_then(Value::as_bool) == Some(true) {
+        s.set_tool_option("commitTyping", &Value::Bool(true));
+        s.commit_interaction()?;
+    }
+    // The frame's place in the story once the edit has cleared the frames in `clear`.
+    let start: usize =
+        super::panelcmds::story_frames(s, id).iter().take_while(|(f, _)| *f != id).filter(|(f, _)| !clear.contains(&f.0)).map(|(_, n)| n).sum();
+    let r = super::textedit::edit_range(s, &json!({"id": id.0, "start": a, "end": b, "insert": text, "clear": clear}))?;
+    let caret = r.get("caret").and_then(Value::as_u64).map_or(a + text.len(), |c| c as usize);
+    // Threaded text re-flows in the edit: the caret goes to the frame its place moved to.
+    super::panelcmds::select_story_range(s, id, start + caret, start + caret)?;
+    Ok(Some(ids_json(&[id])))
 }
 
 // ---------- Find and Replace ----------
@@ -1332,6 +1812,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
         t.set_all_paras(Default::default());
         refresh_bounds(t);
     }
+    // A graph keeps its labels' character and paragraph formats for each redraw: they go with the
+    // labels' own formatting, and the labels are set in a new graph's label formats. The graph's generated
+    // bounds follow its changed labels, so the next redraw does not read them as a move.
+    if n.extras().graph.is_some() {
+        super::graph::edit_graph_art(n, |n| super::graph::plain_labels(n, &strip_formatting));
+        return;
+    }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {
             strip_formatting(std::sync::Arc::make_mut(c));
@@ -1341,6 +1828,13 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
 
 fn paste_plain(s: &mut Session, p: &Value) -> Result<Value> {
     let saved = s.clipboard.nodes.clone();
+    // Pasted colors linked to a swatch merged with the document's show its color, so a pasted pie's legend labels take
+    // the contrast of the wedges as pasted. A `swatchConflict` the paste refuses is left to its error.
+    if let (Ok(choices), Ok(st)) = (super::clipboard::SwatchChoices::parse("edit.pasteWithoutFormatting", p), s.doc()) {
+        let same_doc = s.clipboard.source_doc == Some(st.uid);
+        let d = std::sync::Arc::clone(&st.doc);
+        s.clipboard.show_merged_colors(&d, &choices, same_doc);
+    }
     for n in &mut s.clipboard.nodes {
         strip_formatting(n);
     }

@@ -165,11 +165,14 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 "file.saveCopy" => SaveMode::Copy,
                 _ => SaveMode::Template,
             };
-            io::save(app, mode, p, true).map(|mut r| {
+            let saved = if mode == SaveMode::Save { io::save_current(app, p) } else { io::save(app, mode, p, true) };
+            saved.map(|mut r| {
                 vectorcraft_engine::cmd::fileio::leave_out_unreadable_save_paths(&mut r, p.get("path").and_then(Value::as_str));
                 r
             })
         }
+        // Without params the save panel picks the file, then its format's options dialog follows.
+        "document.exportSelection" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::export_selection(app),
         "document.exportSelection" => {
             io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
         }
@@ -319,6 +322,7 @@ fn run_ui_part3(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "type.bold" => crate::panels::character::toggle_face(app, Face::Bold),
         "type.italic" => crate::panels::character::toggle_face(app, Face::Italic),
         "type.highlightFontName" => crate::panels::character::highlight(app, crate::panels::character::Field::FontName),
+        "type.highlightFontSize" => crate::panels::character::highlight(app, crate::panels::character::Field::FontSize),
         "type.highlightKerning" => crate::panels::character::highlight(app, crate::panels::character::Field::Kerning),
         "type.highlightTracking" => crate::panels::character::highlight(app, crate::panels::character::Field::Tracking),
         "type.underline" => crate::panels::character::toggle_underline(app),
@@ -452,6 +456,7 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "view.goToArtboard" => go_to_artboard(app, p),
+        "view.statusBarShow" => crate::chrome::set_status_bar_show(app, p),
         // The navigator's four buttons as commands of their own, so Edit › Keyboard Shortcuts lists
         // them (view.goToArtboard needs an index, so a key alone can't run it).
         "view.firstArtboard" => go_to_artboard(app, &json!({ "index": "first" })),
@@ -515,13 +520,17 @@ fn run_ui_part5(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "window.control" => flag(&mut app.ui.control_bar),
         "window.helpBar" => flag(&mut app.ui.help_bar),
-        // The Control bar's panel menu and gripper: the edge of the window the bar docks to.
+        // The Control bar's panel menu and gripper: the edge of the window the bar docks to, or
+        // floating over the window at the position it last floated at.
         "window.control.dock" => {
             let key = "edge";
             let edges = crate::chrome::CONTROL_BAR_EDGES;
             match edges.iter().position(|e| s(key).as_deref() == Some(*e)) {
                 Some(i) => {
-                    app.ui.control_bar_bottom = i == 1;
+                    app.ui.control_bar_floating = i == 2;
+                    if i < 2 {
+                        app.ui.control_bar_bottom = i == 1;
+                    }
                     Ok(json!({ key: edges[i] }))
                 }
                 None => Err(format!("`{key}` must be one of {}", edges.join(", "))),
@@ -672,13 +681,16 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "window.nextDocument" => crate::chrome::step_document(app, true),
         "window.previousDocument" => crate::chrome::step_document(app, false),
         "tool.select" => match s("tool") {
-            Some(t) if vectorcraft_tools::tool_info(&t).is_some() => {
-                app.select_tool(&t);
-                Ok(json!({"tool": app.session.tool_id()}))
-            }
+            Some(t) if vectorcraft_tools::tool_info(&t).is_some() => app.try_select_tool(&t).map(|()| json!({"tool": app.session.tool_id()})),
             Some(t) => Err(format!("unknown tool `{t}`")),
             None => Err("missing `tool`".into()),
         },
+        "tool.selectLastSelection" => {
+            let id = app.session.last_selection_tool();
+            let switched = if app.session.tool_id() == id { Ok(()) } else { app.try_select_tool(id) };
+            switched.map(|()| json!({"tool": app.session.tool_id()}))
+        }
+        crate::touch::TOGGLE_MODE => crate::touch::toggle_mode(app),
         crate::addons::pathtools::corner::COMMAND => crate::addons::pathtools::corner::open(app),
         crate::addons::pathtools::shared_edge::COMMAND => crate::addons::pathtools::shared_edge::open(app),
         crate::addons::arrange::ZOOM => crate::addons::arrange::zoom(app),
@@ -690,10 +702,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "effect.dialog" => crate::dialogs::open_effect_dialog(app, p),
         "ui.recolorDialog" => crate::dialogs::recolor::open(app, p),
         "ui.cropImage" if !selected_image(app, |_| true) => Err("select an image".into()),
-        "ui.cropImage" => {
-            app.select_tool(vectorcraft_tools::cropimage::ID);
-            Ok(json!({"tool": app.session.tool_id()}))
-        }
+        "ui.cropImage" => app.try_select_tool(vectorcraft_tools::cropimage::ID).map(|()| json!({"tool": app.session.tool_id()})),
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
@@ -808,6 +817,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::dialogs::saturate::open(app);
             Ok(Value::Null)
         }
+        "ui.indexedColorDialog" => {
+            crate::dialogs::indexed_color::open(app);
+            Ok(Value::Null)
+        }
         "window.swatchLibrary" => crate::panels::swatches::open_library(app, p),
         "window.swatchLibrary.other" => crate::panels::swatches::other_library(app, s("path")),
         "ui.saveSwatchLibrary" => {
@@ -824,6 +837,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         }
         "ui.tileEdgeColor" => crate::dialogs::tile_edge_color::open(app),
         "ui.layerOptions" => crate::dialogs::layer_options::open(app, p),
+        "ui.layerDelete" => crate::panels::layers::delete(app, p),
         "ui.rename" => crate::panels::layers::rename(app, p),
         "ui.newLayer" => crate::dialogs::layer_options::open_new(app, p),
         "ui.newArtboard" => crate::dialogs::artboard_options::open_new(app),
@@ -832,6 +846,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
+        "ui.panelView" => crate::panels::set_view(app, p),
         "ui.flattenTransparencyDialog" => {
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)
@@ -896,7 +911,11 @@ fn run_ui_part9(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
 fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_string);
     let r = match id {
-        "ui.expandDialog" => crate::dialogs::expand::open(app),
+        "ui.expandDialog" => match opt_bool(p, "immediate") {
+            Ok(Some(true)) => crate::dialogs::expand::expand_now(app),
+            Ok(_) => crate::dialogs::expand::open(app),
+            Err(e) => Err(e),
+        },
         "ui.simplifyAuto" => crate::dialogs::simplify_slider::auto(app),
         "ui.simplifyMoreOptions" => crate::dialogs::simplify_slider::more_options(app),
         "ui.smoothAuto" => crate::dialogs::smooth_slider::auto(app),
@@ -926,8 +945,11 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.hyphenation" => crate::dialogs::hyphenation::open(app),
         "ui.justification" => crate::dialogs::justification::open(app),
         "ui.tateChuYokoSettings" => crate::dialogs::tate_chu_yoko::open(app),
+        "ui.warichuSettings" => crate::dialogs::warichu::open(app),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
+        "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
+        "ui.colorWheel" => crate::panels::color_wheel::command(app, p),
         "ui.savePdfDialog" => crate::dialogs::open_save_pdf(app, p),
         "file.exportAs" if s("path").is_none() => {
             crate::dialogs::open_export_as(app, s("format").as_deref(), p);
@@ -961,6 +983,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         }
         "links.editOriginal" => crate::panels::links::open_file(app, p, false),
         "links.reveal" => crate::panels::links::open_file(app, p, true),
+        "links.copyInfo" => crate::panels::links::copy_info(app, p),
         "ui.placementOptionsDialog" => crate::dialogs::placement_options::open(app, p),
         "ui.relinkDialog" => crate::dialogs::relink::open(app, p),
         "ui.findLinksInFolder" => {
@@ -972,21 +995,28 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::NEW_ACTION => crate::panels::actions::new_action(app, p),
         crate::panels::actions::ACTION_OPTIONS => crate::panels::actions::action_options(app, p),
         crate::panels::actions::PLAY_ACTION => crate::panels::actions::play_action(app, p),
+        crate::panels::actions::PLAY_AT => crate::panels::actions::play_at(app, p),
+        crate::panels::actions::BUTTON_MODE => crate::panels::actions::button_mode(app, p),
         crate::panels::actions::PLAYBACK_OPTIONS => crate::panels::actions::playback_options(app, p),
         crate::panels::actions::START_RECORDING => crate::panels::actions::record(app, p),
         crate::panels::actions::STOP_RECORDING => crate::panels::actions::stop(app, p),
         crate::panels::actions::INSERT_STOP => crate::panels::actions::insert_stop(app, p),
         crate::panels::actions::INSERT_MENU_ITEM => crate::panels::actions::insert_menu_item(app, p),
+        crate::panels::actions::INSERT_SELECT_PATH => crate::panels::actions::insert_select_path(app, p),
+        crate::panels::actions::INSERT_SELECT_OBJECT => crate::panels::actions::insert_select_object(app, p),
         crate::panels::actions::CONTINUE_PLAYBACK => crate::panels::actions::continue_playback(app, p),
         crate::panels::actions::DELETE_STEP => crate::panels::actions::delete_step(app, p),
+        crate::panels::actions::MOVE_STEP => crate::panels::actions::move_step(app, p),
         "ui.batchDialog" => {
             let index = |k: &str| opt_index(p, k).map(|i| i.unwrap_or(0));
             index("set").and_then(|set| Ok((set, index("action")?))).and_then(|(set, action)| crate::dialogs::action_batch::open(app, set, action))
         }
         crate::panels::actions::SAVE_SET => crate::panels::actions::save_set(app, p),
         crate::panels::actions::LOAD_SET => crate::panels::actions::load_set(app, p),
+        crate::panels::actions::REPLACE_SET => crate::panels::actions::replace_set(app, p),
         crate::panels::actions::DELETE_SETS => crate::panels::actions::delete_sets(app, p),
         crate::panels::actions::DUPLICATE => crate::panels::actions::duplicate(app, p),
+        crate::panels::actions::RESET => crate::panels::actions::reset(app, p),
         "ui.shortcutImportDialog" => crate::dialogs::shortcut_import::command(app, p),
         _ => return None,
     };
@@ -1073,6 +1103,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.blendOptions" => crate::dialogs::blend_options::open(app),
         "ui.livePaintGapOptions" => crate::dialogs::live_paint_gaps::open(app),
         "ui.perspectivePlane" => crate::dialogs::perspective_plane::open(app, p),
+        crate::dialogs::check_spelling::COMMAND => crate::dialogs::check_spelling::open(app),
 
         _ => return None,
     };

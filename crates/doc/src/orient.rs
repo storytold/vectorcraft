@@ -3,6 +3,8 @@
 //! square to it: scaling by a side handle stretches it along its own width or height. Path
 //! geometry is still baked; Object ▸ Transform ▸ Reset Bounding Box sets the angle back to 0.
 
+use std::sync::Arc;
+
 use vectorcraft_geom::{Affine, Point, Rect, Vec2, normalize_deg, union_opt};
 
 use crate::{Document, Node, NodeId, NodeKind, SymbolBoxes};
@@ -84,7 +86,35 @@ pub fn transformed_angle(angle: f64, a: Affine) -> f64 {
     }
 }
 
+/// The turn (counter-clockwise degrees) from the boxes of art placed by a symbol instance's
+/// transform `xf` to the instance's own box at `angle`: 0 while the box turns with the transform,
+/// otherwise the change Reset Bounding Box made to it. Under a mirroring `xf` the instance's box can
+/// stand 180° from the one `xf` gives in one step ([`transformed_angle`] keeps the angle nearer the
+/// one before at each step); the turn is then 180°, so the art's boxes match the instance's.
+pub fn placed_turn(angle: f64, xf: Affine) -> f64 {
+    let turn = normalize_deg(angle - transformed_angle(0.0, xf));
+    if turn.is_finite() && turn.abs() > EPS_DEG { turn } else { 0.0 }
+}
+
 impl Node {
+    /// Turns the box of this object, and of every object that turns with it ([`Node::transform`]:
+    /// its children and the art of a linked opacity mask), by `by` degrees counter-clockwise.
+    /// Layers have no box.
+    pub fn turn_boxes(&mut self, by: f64) {
+        if !self.is_layer() {
+            let a = normalize_deg(self.bbox_angle + by);
+            self.bbox_angle = if a.abs() <= EPS_DEG { 0.0 } else { a };
+        }
+        for c in self.children_mut().into_iter().flatten() {
+            Arc::make_mut(c).turn_boxes(by);
+        }
+        if let Some(m) = self.extras_if_any().and_then(|e| e.mask.as_mut())
+            && m.linked
+        {
+            Arc::make_mut(&mut m.art).turn_boxes(by);
+        }
+    }
+
     /// Bounds of this object as `a` would place it (geometric, or `visual` with its strokes),
     /// without changing it, symbol instances measured by their art from `symbols`
     /// ([`Node::geometric_bounds_with`]).
@@ -183,6 +213,44 @@ mod tests {
         assert!(close(transformed_angle(30.0, flip_v), -30.0));
         // Degenerate transforms leave it alone.
         assert_eq!(transformed_angle(30.0, Affine::scale(0.0)), 30.0);
+    }
+
+    #[test]
+    fn placed_turn_is_what_reset_bounding_box_took_off_the_instance() {
+        let xf = Affine::translate((40.0, 10.0)) * rot(20.0) * Affine::scale_non_uniform(2.0, 0.5);
+        // The box turns with the transform: no turn.
+        assert_eq!(placed_turn(transformed_angle(0.0, xf), xf), 0.0);
+        assert_eq!(placed_turn(0.0, Affine::scale(3.0)), 0.0);
+        // Reset to 0: the placed art turns back by the 20°.
+        assert!(close(placed_turn(0.0, xf), -20.0));
+        // Mirrored: turned 170° and then flipped, the instance's box stands 180° from the box the
+        // whole transform gives in one step, and the art turns the half turn to match it.
+        let flip = Affine::scale_non_uniform(1.0, -1.0);
+        let flipped = flip * rot(170.0);
+        let stepwise = transformed_angle(transformed_angle(0.0, rot(170.0)), flip);
+        assert!(close(stepwise, -170.0) && close(transformed_angle(0.0, flipped), 10.0));
+        assert!(close(placed_turn(stepwise, flipped).abs(), 180.0));
+        assert!(close(normalize_deg(placed_turn(0.0, flipped) + transformed_angle(0.0, flipped)), 0.0));
+        // Degenerate and non-finite transforms turn nothing.
+        assert_eq!(placed_turn(0.0, Affine::scale(0.0)), 0.0);
+        assert_eq!(placed_turn(f64::NAN, xf), 0.0);
+    }
+
+    #[test]
+    fn turn_boxes_turns_children_and_linked_mask_art_but_not_layers() {
+        let mut d = Document::new(500.0, 500.0);
+        let a = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
+        let mut g = Node::group(d.alloc_id(), vec![Arc::new(a.clone())]);
+        g.bbox_angle = 170.0;
+        g.extras_mut().mask = Some(Box::new(crate::OpacityMask::new(a.clone(), true)));
+        let mut layer = (*d.layers[0]).clone();
+        layer.children_mut().unwrap().push(Arc::new(g));
+        layer.turn_boxes(20.0);
+        assert_eq!(layer.bbox_angle, 0.0);
+        let g = &layer.children().unwrap()[0];
+        assert!(close(g.bbox_angle, -170.0), "wraps to (-180, 180]");
+        assert!(close(g.children().unwrap()[0].bbox_angle, 20.0));
+        assert!(close(g.extras().mask.as_ref().unwrap().art.bbox_angle, 20.0));
     }
 
     #[test]

@@ -463,6 +463,69 @@ fn expand_appearance_keeps_a_plug_in_effect_safe_mode_skips() {
     s.execute("effect.expandAppearance", &json!({})).unwrap();
 }
 
+/// In Safe Mode, a plug-in effect in the art of a graph design in a series stops Expand Appearance of the graph only
+/// when an effect of the series group draws that art with the group.
+#[test]
+fn expand_appearance_in_safe_mode_checks_design_art_its_series_group_draws() {
+    let _f = fresh();
+    let mut s = Session::new();
+    let fx = wat::parse_str(tpl::returning(&tpl::manifest("test.sm.graph", "effect", "{}"), r#"{"objects":[]}"#)).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&fx)})).unwrap();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4";
+    let graph = s.execute("graph.create", &json!({"type": "column", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "plugin.test.sm.graph", "ids": [r]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "Plug"})).unwrap();
+    s.execute("graph.column", &json!({"id": graph, "seriesIndexes": [0], "design": "Plug"})).unwrap();
+    let series = |s: &Session, index: u32| {
+        let d = &s.doc().unwrap().doc;
+        let n = d.node(vectorcraft_engine::doc::NodeId(graph)).unwrap();
+        n.children().unwrap().iter().find(|c| c.extras().series_index == Some(index)).unwrap().id
+    };
+    let (art_series, other_series) = (series(&s, 0), series(&s, 1));
+    // A mark in the other series has an effect to expand.
+    let mark = s.doc().unwrap().doc.node(other_series).unwrap().children().unwrap()[0].id;
+    s.execute("effect.apply", &json!({"effect": "distort.puckerBloat", "ids": [mark.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [graph]})).unwrap();
+    safe_mode::set_active(Some(safe_mode::Source::Flag));
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    safe_mode::set_active(None);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // With a Transform effect on the art's series group, expanding the group draws the art's plug-in effect.
+    let shift = {
+        let t = s.execute("shape.rectangle", &json!({"x": 700, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("effect.apply", &json!({"effect": "distort.transform", "ids": [t], "params": {"moveH": 5}})).unwrap();
+        s.doc().unwrap().doc.node(vectorcraft_engine::doc::NodeId(t)).unwrap().appearance.effects[0].clone()
+    };
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(art_series).unwrap().appearance.effects.push(shift);
+    s.execute("select.set", &json!({"ids": [graph]})).unwrap();
+    safe_mode::set_active(Some(safe_mode::Source::Flag));
+    let err = s.execute("effect.expandAppearance", &json!({})).unwrap_err().to_string();
+    safe_mode::set_active(None);
+    assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+    // With a Gaussian Blur on a fill of the art's series group instead, expanding the group makes an image of it, art included.
+    let blurred_fill = {
+        let t = s.execute("shape.rectangle", &json!({"x": 700, "y": 40, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+        s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [t], "item": 0, "params": {"radius": 2}})).unwrap();
+        s.doc().unwrap().doc.node(vectorcraft_engine::doc::NodeId(t)).unwrap().appearance.items[0].clone()
+    };
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let g = d.node_mut(art_series).unwrap();
+        g.appearance.effects.clear();
+        g.appearance.items.push(blurred_fill);
+    }
+    s.execute("select.set", &json!({"ids": [graph]})).unwrap();
+    safe_mode::set_active(Some(safe_mode::Source::Flag));
+    let err = s.execute("effect.expandAppearance", &json!({})).unwrap_err().to_string();
+    safe_mode::set_active(None);
+    assert!(err.contains("a plug-in effect in the selection can't be expanded in Safe Mode"), "{err}");
+}
+
 /// In Safe Mode, a plug-in effect on a dimension selected with the art it measures does not stop
 /// Expand Appearance: the dimension is left as it is, its effect included, and the art expands.
 #[test]

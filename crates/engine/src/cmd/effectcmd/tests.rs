@@ -169,6 +169,44 @@ fn solid_effects_apply_to_a_group_and_its_members_stay_editable() {
     assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
 }
 
+/// Extrude & Bevel is refused, and nothing changes, on a path whose fill's and strokes' solids each
+/// fit but together pass the limit of their faces; with one stroke the effect applies.
+#[test]
+fn extrude_is_refused_when_its_solids_together_are_too_complex() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, AppearanceItem};
+    let (mut s, id) = session_with_rect();
+    let points: Vec<vectorcraft_geom::Point> = (0..16_384)
+        .map(|k| {
+            let (sin, cos) = (k as f64 * std::f64::consts::TAU / 16_384.0).sin_cos();
+            vectorcraft_geom::Point::new(20_000.0 + 10_000.0 * cos, 20_000.0 + 10_000.0 * sin)
+        })
+        .collect();
+    let polygon = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    let painted = |strokes: usize| {
+        let mut items = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).items;
+        let stroke = AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::WHITE), 20.0));
+        items.extend(std::iter::repeat_n(stroke, strokes));
+        items
+    };
+    let set = |s: &mut Session, strokes: usize| {
+        let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+        let NodeKind::Path { path, live, .. } = &mut n.kind else { panic!("a path") };
+        *path = polygon.clone();
+        *live = None;
+        n.appearance.items = painted(strokes);
+    };
+    // The fill's solid and each stroke's fit on their own; sixty strokes' together do not.
+    set(&mut s, 60);
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("The 3D surface is too complex; simplify the shape"), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+    set(&mut s, 1);
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    assert!(effects::solid_art(&node(&s, id)).is_some());
+}
+
 /// A group of a clipping group (a rectangle clipped by an ellipse) and a rectangle: the session,
 /// the clipping group and the group.
 fn group_with_a_clipping_group() -> (Session, NodeId, NodeId) {
@@ -626,6 +664,50 @@ fn warp_options_non_warp_target_rejection_is_atomic() {
     assert!(!state.is_dirty());
 }
 
+/// `effect.setParams` refuses a `visible` that is not true or false, when called and when a step
+/// plays, and the effect, the document and the undo history stay as they were. `null` leaves the
+/// visibility as it is.
+#[test]
+fn set_params_refuses_a_visible_that_is_not_true_or_false() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": null})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for visible in [json!(1), json!(0), json!("false"), json!([])] {
+        let p = json!({"index": 0, "item": null, "visible": visible, "params": {"size": 9}});
+        for replay in [false, true] {
+            let r = if replay { s.replay("effect.setParams", &p) } else { s.execute("effect.setParams", &p) };
+            let err = r.err().map(|e| e.to_string()).unwrap_or_default();
+            assert!(err.contains("`visible` must be true or false"), "{visible} (replay {replay}): {err}");
+            let state = s.doc().unwrap();
+            assert_eq!(state.doc, before, "{visible} (replay {replay})");
+            assert_eq!(state.history.undo.len(), undo, "{visible} (replay {replay})");
+            assert!(!state.is_dirty());
+        }
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "visible": null, "params": {"size": 9}})).unwrap();
+    let n = node(&s, id);
+    assert!(n.appearance.effects[0].visible);
+    assert_eq!(n.appearance.effects[0].params["size"], 9);
+}
+
+/// The effect `effect.setParams` checks the parameters against is the one it leaves: a Warp's new
+/// style and a 3D effect's new type, and the effect as it is otherwise.
+#[test]
+fn set_params_checks_the_effect_it_leaves() {
+    use super::edited_effect_id;
+    assert_eq!(edited_effect_id("warp.arc", None, Some("flag")), "warp.flag");
+    assert_eq!(edited_effect_id("warp.arc", None, None), "warp.arc");
+    assert_eq!(edited_effect_id("distort.roughen", None, Some("flag")), "distort.roughen");
+    assert_eq!(edited_effect_id("threeD.extrude", Some("threeD.revolve"), None), "threeD.revolve");
+    assert_eq!(edited_effect_id("warp.arc", Some("threeD.revolve"), None), "warp.arc");
+    let (mut s, _) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "warp.arc", "item": null})).unwrap();
+    let p = json!({"index": 0, "item": null, "warpStyle": "flag", "params": {"bend": 25}});
+    assert_eq!(super::set_params_effects(&s, &p), ["warp.flag"]);
+}
+
 #[test]
 fn list_remove_and_set_params() {
     let (mut s, id) = session_with_rect();
@@ -933,4 +1015,264 @@ fn a_3d_shadow_is_one_undo_step_saved_exported_and_expanded() {
         }
     });
     assert_eq!(shadows, 1);
+}
+
+/// With the light's Softness, the 3D shadow is blurred: the canvas paints past the hard shadow's
+/// edge, the object's bounds take the blur in, SVG export blurs it as it does a Gaussian Blur
+/// effect, and Expand Appearance keeps it as an image with no live effect left.
+#[test]
+fn a_soft_3d_shadow_is_drawn_measured_exported_and_expanded_blurred() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null})).unwrap();
+    let set = |s: &mut Session, params: serde_json::Value| {
+        s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap();
+    };
+    let draw = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    let bounds = |s: &Session| {
+        let doc = &s.doc().unwrap().doc;
+        vectorcraft_render::effect_bounds(&doc.symbol_boxes(), doc.node(id).unwrap()).unwrap()
+    };
+    let blurs = |s: &mut Session| {
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        svg.matches("<feGaussianBlur").count()
+    };
+    let none = draw(&s);
+    set(&mut s, json!({"shadow": true, "shadowDistance": 50}));
+    let (hard, hard_bounds, hard_blurs) = (draw(&s), bounds(&s), blurs(&mut s));
+    let undo = s.doc().unwrap().history.undo.len();
+    set(&mut s, json!({"lightSoftness": 100}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let (soft, soft_bounds) = (draw(&s), bounds(&s));
+    // Pixels the hard shadow leaves as they are, the soft one paints.
+    let spread = none.chunks(4).zip(hard.chunks(4)).zip(soft.chunks(4)).filter(|((n, h), s)| n == h && n != s).count();
+    assert!(spread > 100, "{spread}");
+    assert!(soft_bounds.contains_rect(hard_bounds) && soft_bounds.area() > hard_bounds.area(), "{hard_bounds:?} {soft_bounds:?}");
+    assert_eq!(blurs(&mut s), hard_blurs + 1, "SVG export blurs the shadow as a Gaussian Blur effect");
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    let (mut live, mut pictures) = (0, 0);
+    s.doc().unwrap().doc.walk(|n| {
+        live += usize::from(!n.appearance.effects.is_empty() || n.appearance.items.iter().any(|i| !i.effects().is_empty()));
+        pictures += usize::from(matches!(n.kind, NodeKind::Image(_)));
+    });
+    assert_eq!((live, pictures), (0, 1), "the blurred shadow expands to an image");
+}
+
+/// Radial Blur's Blur Center: stored as given, drawn about that point of the object's bounds, and
+/// a value outside 0 to 1 (or not a number) is refused with nothing changed and no undo step.
+#[test]
+fn radial_blur_center_is_stored_drawn_and_checked() {
+    let (mut s, id) = session_with_rect();
+    let draw = |s: &Session| {
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    s.execute("effect.apply", &json!({"effect": "blur.radial", "params": {"amount": 40}})).unwrap();
+    assert_eq!(node(&s, id).appearance.effects[0].params["centerX"], json!(0.5), "the default center is stored");
+    let middle = draw(&s);
+    s.execute("effect.setParams", &json!({"index": 0, "params": {"centerX": 0.5, "centerY": 0.5}})).unwrap();
+    assert_eq!(draw(&s), middle, "the default center draws as before");
+    s.execute("effect.setParams", &json!({"index": 0, "params": {"centerX": 0, "centerY": 1}})).unwrap();
+    let params = node(&s, id).appearance.effects[0].params.clone();
+    assert_eq!((params["centerX"].clone(), params["centerY"].clone()), (json!(0), json!(1)));
+    let corner = draw(&s);
+    assert_ne!(corner, middle, "the blur turns about the bottom-left corner");
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, params) in [
+        ("effect.setParams", json!({"index": 0, "params": {"centerX": 1.5}})),
+        ("effect.setParams", json!({"index": 0, "params": {"centerY": -0.01}})),
+        ("effect.setParams", json!({"index": 0, "params": {"centerX": "0.5"}})),
+        ("effect.apply", json!({"effect": "blur.radial", "params": {"centerY": 2}})),
+    ] {
+        let e = s.execute(cmd, &params).unwrap_err().to_string();
+        assert!(e.contains("must be a number"), "{cmd} {params}: {e}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{cmd} {params}");
+        assert_eq!(node(&s, id).appearance.effects.len(), 1, "{cmd} {params}");
+        assert_eq!(draw(&s), corner, "{cmd} {params}");
+    }
+    // A replayed journal is checked too: the refusal is the command's own.
+    let e = s.replay("effect.setParams", &json!({"index": 0, "params": {"centerX": 7}})).unwrap_err().to_string();
+    assert!(e.contains("`centerX` must be a number from 0 to 1"), "{e}");
+    // Moving the object moves the blur with it.
+    s.execute("object.move", &json!({"ids": [id.0], "dx": 40, "dy": 20})).unwrap();
+    let moved = draw(&s);
+    let at = |px: &[u8], x: usize, y: usize| px[(y * 300 + x) * 4..][..4].to_vec();
+    for (x, y) in [(95, 150), (150, 205), (205, 95), (120, 120)] {
+        assert_eq!(at(&moved, x + 40, y + 20), at(&corner, x, y), "({x}, {y})");
+    }
+}
+
+/// A Rasterize with transparent room around the art, before another Rasterize, splits the stack,
+/// and the part after the split paints around content the room spreads. The Blur Center still
+/// lies in the object's own bounds, so the blur draws as it does without the room.
+#[test]
+fn radial_blur_center_stays_in_the_object_when_the_stack_splits() {
+    let draw = |room: bool| {
+        let (mut s, _) = session_with_rect();
+        let mut stack = vec![("rasterize", json!({})), ("blur.radial", json!({"amount": 60, "centerX": 0, "centerY": 0}))];
+        if room {
+            stack.insert(0, ("rasterize", json!({"addAround": 40})));
+        }
+        for (effect, params) in stack {
+            s.execute("effect.apply", &json!({"effect": effect, "params": params})).unwrap();
+        }
+        vectorcraft_render::Renderer::new().render(&s.doc().unwrap().doc, 300, 300, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    let (plain, split) = (draw(false), draw(true));
+    let alpha = |px: &[u8]| px.iter().skip(3).step_by(4).map(|a| u64::from(*a)).sum::<u64>();
+    assert!(alpha(&plain) > 0, "the blurred art draws");
+    let differ = (0..300 * 300).filter(|i| plain[i * 4 + 3].abs_diff(split[i * 4 + 3]) > 8).count();
+    assert!(differ < 50, "{differ} pixels' coverage moved with the room around the art");
+}
+
+/// The raster budget charges each image its pixels before it is made: an image past what is left
+/// is refused and counted, and the object keeps its blur.
+#[test]
+fn an_image_past_the_pixels_left_stays_unmade() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "blur.gaussian", "params": {"radius": 3}})).unwrap();
+    let mut d = s.doc().unwrap().doc.as_ref().clone();
+    let n = d.node(id).cloned().unwrap();
+    let pixels = super::rasterfx::raster_pixels(&d, &n, false, true);
+    assert!(pixels > 10_000, "a 100 pt square at 72 ppi: {pixels}");
+
+    let mut budget = super::RasterBudget { images: 10, pixels: pixels - 1, left: 0 };
+    assert!(super::raster_image(&mut d, &n, &mut budget).is_err());
+    assert_eq!((budget.images, budget.pixels, budget.left), (10, pixels - 1, 1), "nothing is taken");
+
+    let mut budget = super::RasterBudget { images: 10, pixels, left: 0 };
+    let (image, _) = super::raster_image(&mut d, &n, &mut budget).unwrap().expect("the image is made");
+    let NodeKind::Image(img) = &image.kind else { panic!("not an image") };
+    assert_eq!(u64::from(img.width) * u64::from(img.height), pixels, "the charge is the image's size");
+    assert_eq!((budget.images, budget.pixels, budget.left), (9, 0, 0));
+
+    let mut budget = super::RasterBudget { images: 0, pixels, left: 0 };
+    assert!(super::raster_image(&mut d, &n, &mut budget).is_err(), "no image is left");
+}
+
+/// A group whose Transform effect's copies each carry the drop shadow listed before it, with a
+/// symbol instance whose random Transform effect takes its seed from the instance's id, stays as it
+/// is when the raster budget has no image left for a copy's shadow, with none left or with one for
+/// the first copy's: the copies keep the ids their random moves are drawn with, the group draws as
+/// before, and the document holds no image the first copy's expansion made, nor the budget its
+/// charge.
+#[test]
+fn copies_the_raster_budget_leaves_keep_their_random_moves() {
+    let (mut s, id) = session_with_rect();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let id = NodeId(s.execute("symbol.new", &json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap());
+    let random = json!({"moveH": 40, "moveV": 40, "random": true});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": random})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "stylize.dropShadow", "params": shadow})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "distort.transform", "params": {"moveV": 150, "copies": 1}})).unwrap();
+    let draw = |d: &vectorcraft_doc::Document| {
+        vectorcraft_render::Renderer::new().render(d, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    for images in [0, 1] {
+        let mut d = s.doc().unwrap().doc.as_ref().clone();
+        let before = d.node(g).cloned().unwrap();
+        assert!(effects::outer_effects(&before).len() < before.appearance.effects.len(), "each copy carries the shadow");
+        let (drawn, keys) = (draw(&d), d.images.keys().cloned().collect::<Vec<_>>());
+
+        let mut budget = super::RasterBudget { images, pixels: u64::MAX, left: 0 };
+        let mut out = vec![];
+        super::expand_node(&mut d, g, &[], &mut out, &mut budget);
+        assert!(budget.left > 0, "{images}: a copy's shadow is left");
+        assert!(out.is_empty(), "{images}: nothing expands: {out:?}");
+        assert_eq!(d.node(g), Some(&before), "{images}: the group stays as it is");
+        assert!(draw(&d) == drawn, "{images}: the group draws as before");
+        assert_eq!(d.images.keys().cloned().collect::<Vec<_>>(), keys, "{images}: no image is added");
+        assert_eq!((budget.images, budget.pixels), (images, u64::MAX), "{images}: the budget gets back what the copies took");
+    }
+}
+
+/// A group whose Transform effect copies its symbol instance, which has a drop shadow and a random
+/// Transform effect that takes its seed from the instance's id: each copy's instance has that id.
+/// When the raster budget has no image left for a copy's shadow, with none left or with one for the
+/// first copy's, the group stays as it is: the copies keep the ids their random moves are drawn
+/// with, the group draws as before, and the document holds no image the first copy's expansion
+/// made, nor the budget its charge. With the whole budget, the group expands and each object gets
+/// an id of its own.
+#[test]
+fn a_member_the_raster_budget_leaves_keeps_its_random_move() {
+    let (mut s, id) = session_with_rect();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let id = NodeId(s.execute("symbol.new", &json!({"name": "Box"})).unwrap()["id"].as_u64().unwrap());
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "stylize.dropShadow", "params": shadow})).unwrap();
+    let random = json!({"moveH": 40, "moveV": 40, "random": true});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": random})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "distort.transform", "params": {"moveV": 150, "copies": 1}})).unwrap();
+    let draw = |d: &vectorcraft_doc::Document| {
+        vectorcraft_render::Renderer::new().render(d, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    for images in [0, 1, 1_024] {
+        let mut d = s.doc().unwrap().doc.as_ref().clone();
+        let before = d.node(g).cloned().unwrap();
+        assert!(effects::outer_effects(&before).len() == before.appearance.effects.len(), "the copies carry no shadow of the group's");
+        let art = effects::evaluate_container(Some(&d), &before).unwrap();
+        let mut instances = 0;
+        art.walk(&mut |n| instances += usize::from(n.id == id && super::has_seeded(n)));
+        assert!(instances >= 2, "{images}: each copy's instance has the id and its random effect: {instances}");
+        let (drawn, keys) = (draw(&d), d.images.keys().cloned().collect::<Vec<_>>());
+
+        let mut budget = super::RasterBudget { images, pixels: u64::MAX, left: 0 };
+        let mut out = vec![];
+        super::expand_node(&mut d, g, &[], &mut out, &mut budget);
+        if images < 2 {
+            assert!(budget.left > 0, "{images}: a shadow is left");
+            assert!(out.is_empty(), "{images}: nothing expands: {out:?}");
+            assert_eq!(d.node(g), Some(&before), "{images}: the group stays as it is");
+            assert!(draw(&d) == drawn, "{images}: the group draws as before");
+            assert_eq!(d.images.keys().cloned().collect::<Vec<_>>(), keys, "{images}: no image is added");
+            assert_eq!((budget.images, budget.pixels), (images, u64::MAX), "{images}: the budget gets back what the copies took");
+        } else {
+            assert_eq!(budget.left, 0, "no shadow is left");
+            assert!(!out.is_empty(), "the group expands");
+            let (mut ids, mut count, mut seeded) = (std::collections::HashSet::new(), 0, false);
+            d.node(g).unwrap().walk(&mut |n| {
+                ids.insert(n.id);
+                count += 1;
+                seeded |= super::has_seeded(n);
+            });
+            assert_eq!(ids.len(), count, "each object has an id of its own");
+            assert!(!seeded, "no random Transform effect is left");
+        }
+    }
+}
+
+/// An object with Crop Marks, a drop shadow and a random Transform effect that takes its seed from
+/// the object's id stays as it is when the raster budget has no image left for its shadow: the
+/// object keeps its id and its random move, and draws as before.
+#[test]
+fn crop_marks_the_raster_budget_leaves_keep_their_random_move() {
+    let (mut s, id) = session_with_rect();
+    let shadow = json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "stylize.dropShadow", "params": shadow})).unwrap();
+    let random = json!({"moveH": 40, "moveV": 40, "random": true});
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "distort.transform", "params": random})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [id.0], "effect": "cropMarks", "params": {}})).unwrap();
+    let draw = |d: &vectorcraft_doc::Document| {
+        vectorcraft_render::Renderer::new().render(d, 400, 400, vectorcraft_geom::Affine::IDENTITY, &Default::default()).pixels
+    };
+    let mut d = s.doc().unwrap().doc.as_ref().clone();
+    let before = d.node(id).cloned().unwrap();
+    assert!(effects::crop_marks_art(&before).is_some(), "the object has crop marks");
+    let (drawn, keys) = (draw(&d), d.images.keys().cloned().collect::<Vec<_>>());
+
+    let mut budget = super::RasterBudget { images: 0, pixels: u64::MAX, left: 0 };
+    let mut out = vec![];
+    super::expand_node(&mut d, id, &[], &mut out, &mut budget);
+    assert!(budget.left > 0, "the shadow is left");
+    assert!(out.is_empty(), "nothing expands: {out:?}");
+    assert_eq!(d.node(id), Some(&before), "the object stays as it is");
+    assert!(draw(&d) == drawn, "the object draws as before");
+    assert_eq!(d.images.keys().cloned().collect::<Vec<_>>(), keys, "no image is added");
+    assert_eq!((budget.images, budget.pixels), (0, u64::MAX), "the budget is as it was");
 }

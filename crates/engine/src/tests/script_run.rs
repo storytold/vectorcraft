@@ -170,6 +170,16 @@ fn an_error_names_the_script_its_place_and_kind() {
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
 
+/// An error raised where the run has no place for it, such as in code `eval` compiled, is named
+/// with the script and its kind alone, with one colon after the script's name.
+#[test]
+fn an_error_without_a_place_names_the_script_and_kind() {
+    let mut s = two_docs();
+    let e = run(&mut s, "eval(\"throw new TypeError('no')\");").unwrap_err().to_string();
+    assert_eq!(s.script_report().unwrap()["line"], 0);
+    assert_eq!(e, "t.js: TypeError: no (thrown)");
+}
+
 #[test]
 fn bad_parameters_are_refused_before_anything_runs() {
     let mut s = two_docs();
@@ -279,6 +289,11 @@ fn a_failed_run_puts_back_the_choices_its_commands_made() {
         {command: 'no.such', params: {}}]}); } catch (e) {}";
     run(&mut s, source).unwrap();
     assert_eq!(s.global_edit_options, before, "the failed command's choice went back");
+
+    let source = "vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10}); \
+        if (vc.run('select.similar', {by: 'opacity'}).by !== 'opacity') throw new Error('not run'); throw new Error('x');";
+    assert!(matches!(run(&mut s, source), Err(e) if !format!("{e:?}").contains("not run")));
+    assert_eq!(s.select_similar, "all", "the Select Similar Objects attribute went back");
 
     assert!(!s.caps_lock);
     assert!(run(&mut s, "vc.run('view.capsLock', {on: true}); throw new Error('x');").is_err());

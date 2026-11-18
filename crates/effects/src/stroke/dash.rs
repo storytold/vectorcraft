@@ -134,6 +134,10 @@ impl Plan {
 
     fn fitted(mut segs: Vec<PathSeg>, mut lens: Vec<f64>, closed: bool, period: f64) -> Self {
         let n = segs.len();
+        // A subpath with no segments (a lone moveto) has no runs to fit.
+        if n == 0 {
+            return Self::exact(segs, lens, closed, period);
+        }
         // Corners: where segments with length meet at a kink (zero-length ones have no direction).
         let live: Vec<usize> = (0..n).filter(|&i| lens[i] > EPS).collect();
         let mut corners: Vec<usize> = live.windows(2).filter(|w| kink(&segs[w[0]], &segs[w[1]])).map(|w| w[1]).collect();

@@ -142,12 +142,15 @@ impl Renderer {
         }
         // One paint box for the line and the heads, so a gradient runs on into the heads.
         let paint_bounds = bounds.inflate(st.width / 2.0, st.width / 2.0);
+        // A width profile's outline is fitted through samples, and fitted again differently when
+        // it is outlined near the view only: its curves are drawn as they are.
+        let fine = st.profile.is_none() && crate::stroke::fine(f.view * xf, f.px);
         if let Some(g) = st.path_gradient() {
-            self.fill_path_gradient(ctx, f, bp, rule, st, chars, &pieces, width, &g.gradient);
+            self.fill_path_gradient(ctx, f, bp, rule, st, chars, &pieces, width, fine, &g.gradient);
         } else {
-            let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
+            let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width, fine) {
                 Some(o) => o,
-                None => Arc::new(crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
+                None => Arc::new(uncached_outline(&pieces.line, st, width, f.px * 0.25, fine)),
             };
             // Miters, caps and heads can reach past the paint box: a paint drawn as pixels covers
             // them too.
@@ -191,7 +194,8 @@ impl Renderer {
     /// piece clips the slices, grown a pixel into each other and each replacing what it covers, so
     /// neighbours meet without seams and translucent colours paint once. The slices of a stroke
     /// of `self.cur` are kept in `stroke_slices`, and a moved copy of the object draws the slices
-    /// made before it moved, moved by the same offset ([`Self::moved_slices`]).
+    /// made before it moved, moved by the same offset ([`Self::moved_slices`]). `fine` is passed on
+    /// to [`Self::cached_stroke`].
     #[allow(clippy::too_many_arguments)]
     fn fill_path_gradient(
         &mut self,
@@ -203,6 +207,7 @@ impl Renderer {
         chars: Option<(&Arc<TextGeom>, usize)>,
         pieces: &effects::stroke::StrokePieces,
         width: f64,
+        fine: bool,
         g: &vectorcraft_color::Gradient,
     ) {
         let level = (f.px * 0.25).log2().floor() as i32;
@@ -212,11 +217,12 @@ impl Renderer {
             let tol = 2f64.powi(level);
             // Reach a pixel past the stroke, so its antialiased edge has colour under it.
             let slices = effects::stroke::gradient_slices(bp, rule, st, tol, f.px + tol, f.px);
+            let unrolled = g.unrolled();
             Arc::new(
                 slices
                     .into_iter()
                     .map(|s| {
-                        let (b, paint) = (s.shape.bounding_box(), s.paint(g));
+                        let (b, paint) = (s.shape.bounding_box(), s.paint(&unrolled));
                         (s.shape, paint, b)
                     })
                     .collect(),
@@ -254,9 +260,9 @@ impl Renderer {
             }
             None => (make(), kurbo::Vec2::ZERO),
         };
-        let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width) {
+        let line = match self.cached_stroke(f, chars, bp, &pieces.line, st, width, fine) {
             Some(o) => o,
-            None => Arc::new(crate::stroke::outline(&pieces.line, st, width, f.px * 0.25)),
+            None => Arc::new(uncached_outline(&pieces.line, st, width, f.px * 0.25, fine)),
         };
         ctx.set_fill_rule(peniko::Fill::NonZero);
         for clip in std::iter::once(&*line).chain(pieces.heads.iter().map(|h| &h.outline)) {
@@ -292,6 +298,9 @@ impl Renderer {
     /// tolerance (vello's 0.25 device px) is bucketed to powers of two, never coarser than needed,
     /// so zooming reuses outlines until the level changes. Other strokes aren't cached: for them
     /// this returns `None`. `line` is the line of `st` along `path` ([`effects::stroke::stroke_pieces`]).
+    /// With `fine` ([`crate::stroke::fine`]) a wide stroke's long curves are drawn as lines
+    /// ([`crate::stroke::wide`]); the keys keep the two kinds of outline apart.
+    #[allow(clippy::too_many_arguments)]
     fn cached_stroke(
         &mut self,
         f: &Frame,
@@ -300,11 +309,16 @@ impl Renderer {
         line: &BezPath,
         st: &StrokeLayer,
         width: f64,
+        fine: bool,
     ) -> Option<Arc<BezPath>> {
         let level = (f.px * 0.25).log2().floor() as i32;
-        let expand = || Arc::new(crate::stroke::outline(line, st, width, 2f64.powi(level)));
+        let tol = 2f64.powi(level);
+        // The keys' last field: the tolerance level, and whether long curves are drawn as lines.
+        let slot = level.saturating_mul(2).saturating_add(i32::from(fine));
+        let refined = |outline: BezPath| if fine { crate::stroke::wide(outline, width, tol) } else { outline };
+        let expand = || Arc::new(refined(crate::stroke::outline(line, st, width, tol)));
         if let Some((g, run)) = chars {
-            let key = (self.stroke_owner(Arc::as_ptr(g) as usize), run, width.to_bits(), level);
+            let key = (self.stroke_owner(Arc::as_ptr(g) as usize), run, width.to_bits(), slot);
             if let Some((kept, outline)) = self.char_strokes.get(&key, self.stamp)
                 && Arc::ptr_eq(kept, g)
             {
@@ -315,7 +329,7 @@ impl Renderer {
             return Some(outline);
         }
         let node = self.cur.clone().filter(|n| owns_stroke(n, st))?;
-        let key = (self.stroke_owner(Arc::as_ptr(&node) as usize), st as *const StrokeLayer as usize, width.to_bits(), level);
+        let key = (self.stroke_owner(Arc::as_ptr(&node) as usize), st as *const StrokeLayer as usize, width.to_bits(), slot);
         let v = f.visible;
         let holds = |crop: Option<Rect>| crop.is_none_or(|r| r.x0 <= v.x0 && r.y0 <= v.y0 && r.x1 >= v.x1 && r.y1 >= v.y1);
         if let Some(e) = self.strokes.get_mut(&key)
@@ -328,7 +342,7 @@ impl Renderer {
         // Under its object's id, the stroke's place and the outline's width and tolerance, the key
         // of the stroke's latest outline is kept, except for art made again in every frame.
         let place = node.appearance.items.iter().position(|i| matches!(i, AppearanceItem::Stroke(s) if std::ptr::eq(s, st)));
-        let moved = place.filter(|_| !self.made_again).map(|place| (node.id.0, place, width.to_bits(), level));
+        let moved = place.filter(|_| !self.made_again).map(|place| (node.id.0, place, width.to_bits(), slot));
         let own = moved.is_some() && self.own_path(&node, path);
         if let Some(mk) = moved
             && let Some((outline, crop)) = self.moved_outline(mk, &node, st, line, v)
@@ -341,7 +355,6 @@ impl Renderer {
         // A long stroke is outlined only in and around the view, with a margin of the view's
         // own size on each side. Width profiles keep their positions on the whole path.
         let region = v.inflate(v.width(), v.height());
-        let tol = 2f64.powi(level);
         if crops()
             && line.elements().len() > CROP_ELEMENTS
             && st.dash.is_none()
@@ -363,7 +376,7 @@ impl Renderer {
             && st.profile.is_none()
             && let Some(outline) = crop_dashed(line, st, width, region, crop_reach(st, width, f.px, tol), tol)
         {
-            let outline = Arc::new(outline);
+            let outline = Arc::new(refined(outline));
             self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop: Some(region), own }, moved);
             return Some(outline);
         }
@@ -371,7 +384,7 @@ impl Renderer {
             .then(|| crop_line(line, region, crop_reach(st, width, f.px, tol), width))
             .flatten();
         let (outline, crop) = match cropped {
-            Some(part) => (Arc::new(crate::stroke::outline(&part, st, width, tol)), Some(region)),
+            Some(part) => (Arc::new(refined(crate::stroke::outline(&part, st, width, tol))), Some(region)),
             None => (expand(), None),
         };
         self.keep_stroke(key, StrokeEntry { node, outline: outline.clone(), stamp: self.stamp, crop, own }, moved);
@@ -616,6 +629,14 @@ fn crops() -> bool {
     return CROP_STROKES.with(std::cell::Cell::get);
     #[cfg(not(test))]
     true
+}
+
+/// The outline of the line `line` of stroke `st` at `width` and tolerance `tol`, for a stroke that
+/// [`Renderer::cached_stroke`] does not keep; with `fine`, its long curves drawn as lines
+/// ([`crate::stroke::wide`]).
+fn uncached_outline(line: &BezPath, st: &StrokeLayer, width: f64, tol: f64, fine: bool) -> BezPath {
+    let outline = crate::stroke::outline(line, st, width, tol);
+    if fine { crate::stroke::wide(outline, width, tol) } else { outline }
 }
 
 /// How far stroke `st` at `width` can paint from its path, at a join or a cap, with two output

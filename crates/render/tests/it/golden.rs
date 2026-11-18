@@ -300,7 +300,7 @@ fn arrowheads_add_ink_at_the_ends() {
     // Every arrowhead kind renders.
     for a in Arrowhead::ALL {
         let mut b = DocBuilder::new(100.0, 100.0);
-        b.path(line(), stroke_only(2.0, |s| s.end_arrow = Some(a)), |_| {});
+        b.path(line(), stroke_only(2.0, |s| s.end_arrow = Some(a.clone())), |_| {});
         assert!(render(&b.build()).ink() > plain.ink(), "{a:?}");
     }
 }

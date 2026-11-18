@@ -13,10 +13,16 @@ fn web_image(b: &ImageBlob) -> std::borrow::Cow<'_, ImageBlob> {
     if matches!(b.mime.as_str(), "image/png" | "image/jpeg" | "image/jpg" | "image/gif" | "image/webp" | "image/svg+xml") {
         return Cow::Borrowed(b);
     }
-    let png = image::load_from_memory(&b.bytes).ok().and_then(|img| {
-        let mut out = Vec::new();
-        img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).ok()?;
-        Some(out)
+    let png = craft_image_codecs::decode(&b.bytes).ok().and_then(|img| {
+        let raw = craft_image_codecs::Image::from_raw(
+            img.width(),
+            img.height(),
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            img.to_rgba8(),
+        )
+        .ok()?;
+        craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()
     });
     png.map_or(Cow::Borrowed(b), |png| Cow::Owned(ImageBlob::png(png)))
 }
@@ -37,11 +43,29 @@ pub(super) enum StrokePlan {
     Written(Written),
 }
 
+/// Visit `n` and the descendants the writer draws ([`Writer::node_body`]): a hidden layer or object
+/// and what it holds only with `hidden` (SVG Options › hidden layers kept), and a template layer's
+/// art never.
+fn walk_drawn<'a>(n: &'a Node, hidden: bool, f: &mut impl FnMut(&'a Node)) {
+    if !(n.visible || hidden) {
+        return;
+    }
+    f(n);
+    if matches!(n.kind, NodeKind::Layer { template: true, .. }) {
+        return;
+    }
+    for c in n.children().into_iter().flatten() {
+        walk_drawn(c, hidden, f);
+    }
+}
+
 impl Writer<'_> {
     pub(super) fn count_colorized_images(&mut self, art: &Node) {
-        art.walk(&mut |n| {
+        walk_drawn(art, self.opts.hidden_layers, &mut |n| {
             let NodeKind::Image(im) = &n.kind else { return };
             let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
+            let shown = self.doc.shown_image(n, im);
+            let im = &*shown;
             if self.doc.image_blob(im).is_none_or(|blob| blob.gray_source().is_none()) {
                 return;
             }
@@ -79,15 +103,16 @@ impl Writer<'_> {
             for alpha in coverage {
                 rgba.extend_from_slice(&if self.tiny() { [rgb[0], rgb[1], rgb[2], alpha] } else { [255, 255, 255, alpha] });
             }
-            let Some(pixels) = image::RgbaImage::from_raw(width, height, rgba) else {
+            let Ok(pixels) =
+                craft_image_codecs::Image::from_raw(width, height, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba)
+            else {
                 self.warn(UNDECODED);
                 return;
             };
-            let mut png = Vec::new();
-            if pixels.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+            let Ok(png) = craft_image_codecs::encode(&pixels, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
                 self.warn(UNDECODED);
                 return;
-            }
+            };
             let href = self.blob_href(&ImageBlob::png(png));
             self.colorized_hrefs.insert(key.clone(), href.clone());
             href
@@ -174,14 +199,16 @@ impl Writer<'_> {
         self.count_colorized_images(art);
         // Each image's count and its first piece, which shows what they all show.
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
-        art.walk(&mut |c| {
+        walk_drawn(art, self.opts.hidden_layers, &mut |c| {
             if let NodeKind::Image(im) = &c.kind {
+                let shown = self.doc.shown_image(c, im);
+                let im = &*shown;
                 if matches!(c.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
                     && self.doc.image_blob(im).is_none_or(|b| b.gray_source().is_some())
                 {
                     return;
                 }
-                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, (**im).clone())).0 += 1;
+                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, im.clone())).0 += 1;
             }
         });
         let mut repeated: Vec<_> = seen.into_iter().filter(|(k, (n, _))| *n > 1 && !self.shared_images.contains_key(k)).collect();
@@ -273,7 +300,15 @@ impl Writer<'_> {
             // Object fills and strokes are four linear gradients or images (see `raster_paint`).
             self.warn("diamond gradients on characters are written as radial gradients");
         }
+        // A gradient that repeats or reflects: one run of its stops over its period, and
+        // `spreadMethod` to carry it on past both ends.
+        let spread = g.gradient.is_spread();
         let mut geom = g.resolve(bounds);
+        if spread {
+            // A conic is written as a linear gradient along its vector: its runs lie along it.
+            let written = if g.gradient.kind == GradientKind::Conic { GradientKind::Linear } else { g.gradient.kind };
+            geom = geom.period(written, g.gradient.repeat_count());
+        }
         geom.transform(self.xf, g.gradient.kind);
         if g.gradient.kind != GradientKind::Radial {
             // Only a radial gradient has a focal point (a plug-in's or a file's other kinds can
@@ -303,6 +338,11 @@ impl Writer<'_> {
                 "linear-gradient",
                 format!(" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"", self.num(s.x), self.num(s.y), self.num(e.x), self.num(e.y)),
             ),
+        };
+        let attrs = match g.gradient.spread {
+            _ if !spread => attrs,
+            vectorcraft_color::GradientSpread::Reflect => format!("{attrs} spreadMethod=\"reflect\""),
+            _ => format!("{attrs} spreadMethod=\"repeat\""),
         };
         let stops: Vec<String> = g
             .gradient
@@ -504,17 +544,24 @@ impl Writer<'_> {
                 let (cols, rows) = (along(cover.width()), along(cover.height()));
                 (g.pixels(b, cover, cols, rows, fill, &Color::to_rgb).flatten().collect(), cols, rows)
             };
-            let mut png = Vec::new();
-            let Some(img) = image::RgbaImage::from_raw(u32::from(cols), u32::from(rows), rgba) else { return };
-            if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+            let Ok(img) = craft_image_codecs::Image::from_raw(
+                u32::from(cols),
+                u32::from(rows),
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U8,
+                rgba,
+            ) else {
                 return;
-            }
+            };
+            let Ok(png) = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
+                return;
+            };
             self.warn(if freeform {
                 "freeform gradients are written as images clipped to their shapes"
             } else if conic {
-                "conic gradients with translucent stops, dither or the Perceptual method are written as images clipped to their shapes"
+                "conic gradients with translucent stops, dither or a method other than Classic are written as images clipped to their shapes"
             } else if g.gradient.kind == GradientKind::Diamond {
-                "diamond gradients with translucent stops, dither, the Perceptual method or no extent are written as images clipped to their shapes"
+                "diamond gradients with translucent stops, dither, a method other than Classic or no extent are written as images clipped to their shapes"
             } else {
                 "linear and radial gradients drawn as pixels are written as images clipped to their shapes"
             });
@@ -558,10 +605,10 @@ impl Writer<'_> {
                     }
                 }
                 None => {
-                    let sample = g.gradient.sampler();
-                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, CONIC_WEDGES, true) {
+                    let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
+                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, g.gradient.conic_wedge_count(CONIC_WEDGES), true) {
                         let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
-                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(t as f32).0.to_hex()));
+                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(spread(t) as f32).0.to_hex()));
                     }
                 }
             },
@@ -587,23 +634,39 @@ impl Writer<'_> {
         let mut inner = n.clone();
         inner.appearance.effects.retain(|e| !vectorcraft_effects::is_raster(&e.id));
         // An SVG filter's user-space coordinates are the document's from the effect's origin: the
-        // object is written in them, in a group that moves it where the rest of the art goes.
+        // object is written in them, in a group that moves it where the rest of the art goes. A
+        // user space that is scaled or turned ([`turned_filter_space`]) is the group's own: the
+        // object is written as it is in a group inside the filter that maps it back
+        // ([`Self::open_filters`]), so its strokes keep their widths.
         let xf = self.xf;
-        let origin = live_svg_filter(&n.appearance.effects).map(|f| Affine::translate(f.origin()));
+        let live = live_svg_filter(&n.appearance.effects);
+        let turned = self.turned_filter_space(live.as_ref());
+        let origin = live.filter(|_| turned.is_none()).map(|f| Affine::translate(f.origin()));
         let moved = origin.is_some_and(|o| xf * o != Affine::IDENTITY);
         if let Some(o) = origin.filter(|_| moved) {
             self.line(&format!("<g transform=\"{}\">", self.matrix(xf * o)));
             self.depth += 1;
             self.xf = o.inverse();
         }
+        if let Some(space) = turned {
+            self.line(&format!("<g transform=\"{}\">", exact_matrix(space)));
+            self.depth += 1;
+        }
         let opened = self.open_filters(n, &n.appearance.effects);
         self.node_body(&inner);
         self.close_filters(opened);
-        if moved {
+        if moved || turned.is_some() {
             self.xf = xf;
             self.depth -= 1;
             self.line("</g>");
         }
+    }
+
+    /// The group transform that holds a live SVG filter `live` ([`live_svg_filter`]) whose user
+    /// space is scaled or turned (not only moved, [`vectorcraft_effects::svg_filter::SvgFilterFx::moves_only`]): the filter's user
+    /// space in the output's. `None` for other filters and in SVG Tiny, which writes no filters.
+    fn turned_filter_space(&self, live: Option<&vectorcraft_effects::svg_filter::SvgFilterFx>) -> Option<Affine> {
+        live.filter(|f| !f.moves_only() && !self.tiny()).map(|f| self.xf * f.to_doc())
     }
 
     /// Open one `<g filter>` per visible raster effect of `effects` (an object's, or one fill or
@@ -617,7 +680,7 @@ impl Writer<'_> {
             }
             return 0;
         }
-        let bounds = n.visual_bounds_with(&self.doc.symbol_boxes());
+        let bounds = n.visual_bounds_with(&self.symbol_lookup.unmeasured());
         // An Outer Glow's silhouette grows by a quarter of a pixel of the document's raster grid first.
         let grow = 18.0 / self.doc.raster_ppi();
         let reach: f64 =
@@ -627,6 +690,7 @@ impl Writer<'_> {
         let mut opened = 0;
         // An SVG filter that is the object's last effect is written as it is ([`Self::filtered`]).
         let live = if std::ptr::eq(effects, n.appearance.effects.as_slice()) { live_svg_filter(effects) } else { None };
+        let turned = self.turned_filter_space(live.as_ref());
         for (k, f) in fx.iter().enumerate().rev() {
             if let RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(sf)) = f
                 && live.is_some()
@@ -637,12 +701,40 @@ impl Writer<'_> {
                 // against the object alone, which is all it runs on ([`live_svg_filter`]).
                 let mut input = n.clone();
                 input.appearance.effects.clear();
-                let input_bounds = input.visual_bounds_with(&self.doc.symbol_boxes()).unwrap_or_default();
-                if let Some(def) = sf.written_xml(input_bounds).and_then(|xml| vectorcraft_effects::svg_filter::with_id(&xml, &fid)) {
-                    self.def(1, &def);
+                // Its box in the filter's user space: in a turned or skewed one, the box of the
+                // object's geometry turned into it, grown by what its strokes and other paint add
+                // around it in the document: a square that far to each side, as it measures in
+                // user space along each axis (a miter corner reaches that far along both).
+                let symbols = self.symbol_lookup.unmeasured();
+                let visual = input.visual_bounds_with(&symbols).unwrap_or_default();
+                let user_box = if sf.moves_only() {
+                    visual - sf.origin()
+                } else {
+                    let geometric = input.geometric_bounds_with(&symbols).unwrap_or(visual);
+                    let margin = [geometric.x0 - visual.x0, geometric.y0 - visual.y0, visual.x1 - geometric.x1, visual.y1 - geometric.y1]
+                        .into_iter()
+                        .fold(0.0, f64::max);
+                    let to_user = sf.to_doc().inverse();
+                    input.transform(to_user, false);
+                    let [a, b, c, d, _, _] = to_user.as_coeffs();
+                    let turned = input.geometric_bounds_with(&symbols).unwrap_or_default();
+                    turned.inflate(margin * (a.abs() + c.abs()), margin * (b.abs() + d.abs()))
+                };
+                let def = sf.written_xml(user_box).and_then(|xml| vectorcraft_effects::svg_filter::with_id(&xml, &fid));
+                if let Some(def) = &def {
+                    self.def(1, def);
                     self.line(&format!("<g filter=\"url(#{fid})\">"));
                     self.depth += 1;
                     opened += 1;
+                }
+                // Inside the group of a turned user space ([`Self::filtered`]), the object and its
+                // other effects are written as they are, in a group that maps them back to it.
+                if let Some(space) = turned {
+                    self.line(&format!("<g transform=\"{}\">", exact_matrix(space.inverse())));
+                    self.depth += 1;
+                    opened += 1;
+                }
+                if def.is_some() {
                     continue;
                 }
             }
@@ -769,8 +861,18 @@ pub(super) fn pixel_gradient(p: &Paint, fill: bool) -> Option<&GradientPaint> {
     }
 }
 
+/// `a` as an SVG `matrix(…)` with every digit its numbers need to read back the same, whatever
+/// the export's decimals: the transforms around a turned SVG filter ([`Writer::turned_filter_space`])
+/// and their inverses still undo each other when one holds very small numbers.
+fn exact_matrix(a: Affine) -> String {
+    // (Without negative zeros.)
+    let [a, b, c, d, e, f] = a.as_coeffs().map(|v| v + 0.0);
+    format!("matrix({a} {b} {c} {d} {e} {f})")
+}
+
 /// The SVG filter (Effect › SVG Filters) of an object's `effects` that SVG keeps as a `<filter>`:
-/// its last visible effect, measured in points.
+/// its last visible effect, in any user space the effect gives it ([`Writer::turned_filter_space`])
+/// that SVG import can store again.
 fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_effects::svg_filter::SvgFilterFx> {
     if !vectorcraft_effects::svg_filter::writes_live(effects) {
         return None;
@@ -780,7 +882,7 @@ fn live_svg_filter(effects: &[vectorcraft_doc::Effect]) -> Option<vectorcraft_ef
     let alone = fx.len() == 1;
     match fx.pop() {
         Some(vectorcraft_effects::RasterFx::Pixel(vectorcraft_effects::PixelFx::Svg(f)))
-            if f.in_points() && (alone || !f.measured()) && f.writes_as_svg11() =>
+            if (alone || !f.measured()) && f.writes_as_svg11() && f.opens_again() =>
         {
             Some(f)
         }

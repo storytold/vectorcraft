@@ -18,7 +18,6 @@ use vectorcraft_geom::BezPath;
 
 use super::interp::{Interp, matrix_obj};
 use super::obj::{Dict, DictRef, Key, Obj, Op, PsError, Res, Shared, ps_err};
-use super::predefined_cmap::Unicode;
 
 /// Most codespace ranges, character and notdef mappings a CMap may hold.
 const MAX_RANGES: usize = 1 << 16;
@@ -71,6 +70,8 @@ pub(super) struct CidChar {
     /// The base-font code or glyph name a `bfchar` or `bfrange` mapping gives it, instead of a
     /// CID.
     pub base: Option<Base>,
+    /// The value of its code (`<8001>` is 32769).
+    pub value: u32,
 }
 
 impl CMap {
@@ -147,12 +148,12 @@ impl CMap {
             work += at.map_or(self.bases.len(), |k| k + 1) as u64;
             let base = at.and_then(|k| self.bases.get(k)).and_then(|m| Some((m.4, base_of(&m.3, c - m.1)?)));
             out.push(match (matched.is_some(), find(&self.cids, &mut work), base) {
-                (true, Some((font, cid, _)), _) => CidChar { font, cid, notdef, base: None },
-                (true, None, Some((font, base))) => CidChar { font, cid: 0, notdef: None, base: Some(base) },
+                (true, Some((font, cid, _)), _) => CidChar { font, cid, notdef, base: None, value: c },
+                (true, None, Some((font, base))) => CidChar { font, cid: 0, notdef: None, base: Some(base), value: c },
                 // No character mapping: the notdef mapping's CID, else font 0's CID 0.
                 _ => match find(&self.notdefs, &mut work) {
-                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None, base: None },
-                    _ => CidChar { font: 0, cid: 0, notdef: None, base: None },
+                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None, base: None, value: c },
+                    _ => CidChar { font: 0, cid: 0, notdef: None, base: None, value: c },
                 },
             });
             i += n;
@@ -209,32 +210,6 @@ fn code(bytes: &[u8]) -> u32 {
 fn number(data: &[u8], at: usize, n: usize) -> Option<u64> {
     let bytes = data.get(at..at.checked_add(n)?)?;
     (n <= 8).then(|| bytes.iter().fold(0u64, |v, b| v << 8 | u64::from(*b)))
-}
-
-/// The encoding of predefined Unicode CMap `name` and whether it is vertical: one of Adobe's
-/// public CMap resources whose name says its codes are Unicode: `Uni` and a character
-/// collection, then `-UCS2`, `-UTF8`, `-UTF16` or `-UTF32` (and `-HW` for half-width forms),
-/// then `-H` or `-V` (`UniJIS-UCS2-H`, `UniGB-UTF16-V`:
-/// <https://github.com/adobe-type-tools/cmap-resources>).
-pub(super) fn unicode_cmap(name: &str) -> Option<(Unicode, bool)> {
-    let (rest, dir) = name.rsplit_once('-')?;
-    let vertical = match dir {
-        "H" => false,
-        "V" => true,
-        _ => return None,
-    };
-    let rest = rest.strip_suffix("-HW").unwrap_or(rest);
-    let (collection, form) = rest.rsplit_once('-')?;
-    if !(collection.len() > 3 && collection.starts_with("Uni") && !collection.contains('-')) {
-        return None;
-    }
-    let form = match form {
-        "UCS2" | "UTF16" => Unicode::Utf16,
-        "UTF8" => Unicode::Utf8,
-        "UTF32" => Unicode::Utf32,
-        _ => return None,
-    };
-    Some((form, vertical))
 }
 
 /// A predefined Identity CMap: two-byte codes, each the CID of its own value; vertical for
@@ -396,11 +371,9 @@ impl Interp<'_> {
             return Ok(d.clone());
         }
         let text = name.text().map(|t| t.to_string()).unwrap_or_default();
-        // Another predefined CMap the file doesn't define, without its mappings: its codes are
-        // read by its name when type is set (see `text`).
-        let predefined = unicode_cmap(&text)
-            .map(|(_, vertical)| vertical)
-            .or_else(|| super::predefined_cmap::known(&text).then(|| super::predefined_cmap::vertical(&text)));
+        // A predefined CMap the file doesn't define, without its mappings: its codes are read by
+        // its name when type is set (see `text`).
+        let predefined = super::predefined_cmap::known(&text).then(|| super::predefined_cmap::vertical(&text));
         match predefined {
             Some(vertical) => {
                 let mut d = Dict::new();

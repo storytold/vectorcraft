@@ -264,7 +264,7 @@ fn hex_answers_read_as_srgb() {
     }
 }
 
-/// Without a sampler (Windows, Linux, a browser without an EyeDropper) the command answers an
+/// Without a sampler (the BSDs, a browser without an EyeDropper) the command answers an
 /// error and is disabled, and the Color Picker draws its button gray.
 #[test]
 fn without_a_sampler_the_command_is_unavailable() {

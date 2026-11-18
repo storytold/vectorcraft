@@ -335,6 +335,67 @@ fn diamond_gradients_give_css_radial_gradients_through_their_corners() {
     );
 }
 
+/// A linear or radial gradient that repeats or reflects is a repeating CSS gradient of one cycle (a
+/// run, or for Reflect a run and its mirror); a conic one has its stops repeated around the turn.
+#[test]
+fn spread_gradients_give_repeating_css_gradients() {
+    use vectorcraft_color::GradientSpread;
+    let mut d = doc();
+    let mut css = |kind, spread, geom: GradientGeom| {
+        let mut g = GradientPaint::new(Gradient { kind, spread, repeats: 4, ..Gradient::default() });
+        g.geom = Some(geom);
+        let mut n = rect(&mut d, (0.0, 0.0, 100.0, 60.0), 0.0);
+        n.appearance = Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0).into();
+        let id = add(&mut d, n);
+        prop(&one(&d, id, &CssOptions::default()), "background-image").map(str::to_string)
+    };
+    // Left to right across the box: a run is a quarter of it.
+    let across = GradientGeom { start: Point::new(0.0, 30.0), end: Point::new(100.0, 30.0), aspect: 1.0, focal: None };
+    assert_eq!(
+        css(GradientKind::Linear, GradientSpread::Repeat, across).as_deref(),
+        Some("repeating-linear-gradient(90deg, #ffffff 0%, #000000 25%)")
+    );
+    assert_eq!(
+        css(GradientKind::Linear, GradientSpread::Reflect, across).as_deref(),
+        Some("repeating-linear-gradient(90deg, #ffffff 0%, #000000 25%, #000000 25%, #ffffff 50%)")
+    );
+    // A period that is not a whole hundredth of the box keeps four decimals, so it does not drift
+    // across the box.
+    let short = GradientGeom { end: Point::new(10.3452, 30.0), ..across };
+    assert_eq!(
+        css(GradientKind::Linear, GradientSpread::Repeat, short).as_deref(),
+        Some("repeating-linear-gradient(90deg, #ffffff 0%, #000000 2.5863%)")
+    );
+    // About 1,000 periods across the box: six decimals, so their rounding adds up to at most a
+    // hundredth of a period at the far side (with four, `0.1%` would be almost half a period out
+    // there).
+    let tiny = GradientGeom { end: Point::new(0.400196, 30.0), ..across };
+    assert_eq!(
+        css(GradientKind::Linear, GradientSpread::Repeat, tiny).as_deref(),
+        Some("repeating-linear-gradient(90deg, #ffffff 0%, #000000 0.100049%)")
+    );
+    // A radial period of 0.03085 px out to a corner 67 px away: its radius keeps the decimals that
+    // hold the periods in place there.
+    let dot = GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(40.1234, 30.0), aspect: 1.0, focal: None };
+    assert_eq!(
+        css(GradientKind::Radial, GradientSpread::Repeat, dot).as_deref(),
+        Some("repeating-radial-gradient(circle 0.03085px at 40px 30px, #ffffff 0%, #000000 100%)")
+    );
+    let ring = GradientGeom { start: Point::new(40.0, 30.0), end: Point::new(80.0, 30.0), aspect: 1.0, focal: None };
+    assert_eq!(
+        css(GradientKind::Radial, GradientSpread::Reflect, ring).as_deref(),
+        Some("repeating-radial-gradient(circle 20px at 40px 30px, #ffffff 0%, #000000 50%, #000000 50%, #ffffff 100%)")
+    );
+    // A diamond's stand-in, the ellipse through its corners, repeats with each run of squares.
+    assert_eq!(
+        css(GradientKind::Diamond, GradientSpread::Repeat, ring).as_deref(),
+        Some("repeating-radial-gradient(circle 10px at 40px 30px, #ffffff 0%, #000000 100%)")
+    );
+    let conic = css(GradientKind::Conic, GradientSpread::Repeat, ring).unwrap();
+    assert!(conic.starts_with("conic-gradient(from 90deg at 40px 30px, #ffffff 0%, #000000 25%, #ffffff 25%"), "{conic}");
+    assert!(conic.ends_with("#000000 100%)"), "{conic}");
+}
+
 #[test]
 fn shadows_and_unsupported_art() {
     let mut d = doc();

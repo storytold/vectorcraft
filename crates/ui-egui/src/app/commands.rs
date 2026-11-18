@@ -150,6 +150,7 @@ impl VectorcraftApp {
         io::remember_active_artboard(self);
         let artboards = self.artboard_tool_state();
         if let Some(r) = menus::run_ui_command(self, id, &params) {
+            self.ui.recording_base = None;
             self.follow_artboard_tool(artboards);
             return r;
         }
@@ -221,6 +222,12 @@ impl VectorcraftApp {
         if fileio::SaveMode::of(id).is_some() {
             io::remember_view(self);
         }
+        // While an action records, a command that the recording would keep as a step runs only
+        // when the step fits in the action.
+        if let Err(e) = panels::actions::before_recorded_command(self, id, &params) {
+            self.ui.status = e.clone();
+            return Err(e);
+        }
         // A command that changes the edited text is an application edit (undo, a panel or menu
         // edit, a control request). Capture the bounded committed context around it so `Other`
         // dominates the frame even if an IME receipt follows. Selection/view commands that leave
@@ -229,7 +236,9 @@ impl VectorcraftApp {
         let ime_target = crate::ime::target(&mut self.session, ime_view);
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
         let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
+        let spot_base = panels::color_guide::before_command(self);
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        let r = panels::actions::after_recorded_command(self, r);
         if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
             self.canvas.hover_cursor = None;
         }
@@ -259,6 +268,8 @@ impl VectorcraftApp {
                 {
                     self.ui.status = w.to_string();
                 }
+                // A renamed spot color swatch stays the Color Guide's base; a deleted one ends the link.
+                panels::color_guide::after_command(self, id, &params, v, spot_base);
                 if id == "file.new" {
                     self.ui.status.clear();
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).
@@ -398,30 +409,54 @@ impl VectorcraftApp {
         }
     }
 
-    /// Select a tool (also used by the toolbar and shortcuts).
+    /// Select a tool (also used by the toolbar and shortcuts). A choice that fails shows its error
+    /// in the status bar.
     pub fn select_tool(&mut self, id: &str) {
+        if let Err(e) = self.try_select_tool(id) {
+            self.ui.status = e;
+        }
+    }
+
+    /// Select a tool for a command ([`Self::select_tool`]): a choice that fails returns its error,
+    /// and the tool remembered for the toolbar group and for the Touch workspace's drawing mode
+    /// stays as it was.
+    pub(crate) fn try_select_tool(&mut self, id: &str) -> Result<(), String> {
         // The tip of a pen whose eraser end selected the Eraser doesn't undo this choice, and
         // neither does letting go of a held tool shortcut.
         self.pen_end.forget_tool();
         self.held_tool.clear();
-        self.activate_tool(id, true);
+        self.activate_tool(id, true)?;
+        let now = self.session.tool_id();
+        if crate::touch::is_drawing_tool(now) {
+            self.ui.touch_drawing_tool = Some(now.to_string());
+        }
+        Ok(())
     }
 
     /// Go back to tool `id` after a tool that stood in for it (the pen's eraser end, [`stylus`]):
-    /// a perspective grid hidden meanwhile stays hidden.
+    /// a perspective grid hidden meanwhile stays hidden. A switch that fails shows its error in the
+    /// status bar.
     pub(crate) fn return_to_tool(&mut self, id: &str) {
-        self.activate_tool(id, false);
+        if let Err(e) = self.activate_tool(id, false) {
+            self.ui.status = e;
+        }
     }
 
     /// Make tool `id` active: chosen afresh (`fresh`, [`vectorcraft_engine::Session::select_tool`]),
     /// or back from a tool that stood in for it ([`vectorcraft_engine::Session::switch_tool`]).
-    fn activate_tool(&mut self, id: &str, fresh: bool) {
+    /// The toolbar group remembers `id` only when the switch succeeds.
+    fn activate_tool(&mut self, id: &str, fresh: bool) -> Result<(), String> {
         let v = self.view_info();
         let before = self.session.tool_id();
-        let switched = if fresh { self.session.select_tool(id, v) } else { self.session.switch_tool(id, v) };
-        if let Err(e) = switched {
-            self.ui.status = e.to_string();
-        }
+        #[cfg(test)]
+        let failed = self.fail_next_tool_choice.take();
+        #[cfg(not(test))]
+        let failed: Option<String> = None;
+        let switched = match failed {
+            Some(e) => Err(e),
+            None if fresh => self.session.select_tool(id, v).map_err(|e| e.to_string()),
+            None => self.session.switch_tool(id, v).map_err(|e| e.to_string()),
+        };
         if before != self.session.tool_id() {
             // A control gesture cannot resume after another tool has owned the pointer.
             self.control_rotate_press = None;
@@ -433,17 +468,46 @@ impl VectorcraftApp {
         {
             panels::artboards::select(self, panels::artboards::selected(self, n));
         }
+        self.ui.flyout = None;
+        switched?;
         if let Some(g) = vectorcraft_tools::catalog::group_of(id)
             && let Some(slot) = self.ui.group_tool.get_mut(g)
         {
             *slot = id.to_string();
         }
         toolbar::remember(self, id);
-        self.ui.flyout = None;
+        Ok(())
     }
 
     /// Show a transient status message.
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
+        self.ui.status_sets = self.ui.status_sets.wrapping_add(1);
+    }
+
+    /// Begin the interaction a dialog or a panel previews on. Typing in progress is kept as its own
+    /// undo step first, and the warning of the preview that keeping it applied shows in the status
+    /// bar, as it does when a tool's drag begins. On an error no interaction begins, so the caller
+    /// runs no preview.
+    pub(crate) fn begin_interaction(&mut self, label: &str) -> Result<(), String> {
+        let warnings = self.session.begin_interaction_warned(label).map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Keep typing in progress as one undo step and end the Type tool's typing session, with the
+    /// typing that Real-time Drawing off left unapplied applied first; its warning shows in the
+    /// status bar.
+    pub(crate) fn keep_typing(&mut self) -> Result<(), String> {
+        let warnings = self.session.keep_typing().map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Each warning in the status bar in turn, as the tool's status requests show; the last stays.
+    fn show_warnings(&mut self, warnings: Vec<String>) {
+        for w in warnings {
+            self.status(w);
+        }
     }
 }

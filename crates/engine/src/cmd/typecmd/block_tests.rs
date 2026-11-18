@@ -188,13 +188,25 @@ fn bad_params_and_other_type_are_refused() {
     assert!(!text(&s, id).dynamic_text);
     let point = s.execute("text.create", &json!({"x": 10, "y": 500, "text": "point"})).unwrap()["id"].as_u64().unwrap();
     s.execute("select.set", &json!({"ids": [point]})).unwrap();
+    // Off leaves point type as it is, with no undo step, and a gap needs it turned on.
+    let n = undo_len(&s);
+    assert_eq!(s.execute("type.dynamicText", &json!({"on": false})).unwrap()["ids"], json!([point]));
+    let e = s.execute("type.dynamicText", &json!({"on": false, "wordGap": 200})).unwrap_err().to_string();
+    assert!(e.contains("need area type"), "{e}");
+    assert_eq!(undo_len(&s), n);
+    assert!(matches!(text(&s, point).kind, TextKind::Point));
+    let shape = s.execute("shape.rectangle", &json!({"x": 500, "y": 500, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [shape]})).unwrap();
     let e = s.execute("type.dynamicText", &json!({})).unwrap_err().to_string();
     assert!(e.contains("select type on a path or area type"), "{e}");
-    // With point type selected too, only the area type changes.
+    // With point type selected too, both turn on, the point type as area type with Block on.
     s.execute("select.set", &json!({"ids": [id, point]})).unwrap();
+    let n = undo_len(&s);
     let r = s.execute("type.dynamicText", &json!({})).unwrap();
-    assert_eq!(r["ids"], json!([id]));
-    assert!(text(&s, id).dynamic_text && !text(&s, point).dynamic_text);
+    assert_eq!(r["ids"], json!([id, point]));
+    assert!(text(&s, id).dynamic_text && text(&s, point).dynamic_text);
+    assert!(matches!(text(&s, point).kind, TextKind::Area { .. }));
+    assert_eq!(undo_len(&s), n + 1);
     // A gap with only type on a path selected is an error, and nothing changes.
     let path = s.execute("path.create", &json!({"d": "M60 550 L340 550"})).unwrap()["id"].as_u64().unwrap();
     let along = s.execute("text.createInPath", &json!({"path": path, "mode": "onPath", "text": "Along"})).unwrap()["id"].as_u64().unwrap();
@@ -438,6 +450,228 @@ fn threaded_frames_are_refused_and_threading_turns_block_off() {
     assert!(matches!(text(&s, a).kind, TextKind::Area { .. }));
 }
 
+/// 12 pt point type at (300, 100) with `extra` params for `text.create`, selected.
+fn point(s: &mut Session, text: &str, extra: Value) -> u64 {
+    let mut p = json!({"x": 300, "y": 100, "size": 12, "text": text});
+    if let (Some(p), Some(extra)) = (p.as_object_mut(), extra.as_object()) {
+        p.extend(extra.clone());
+    }
+    let id = s.execute("text.create", &p).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    id
+}
+
+/// Where the first glyph of the laid-out line starting at byte `start` is in the document.
+fn line_start(t: &TextObject, start: usize) -> vectorcraft_geom::Point {
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    let l = lay.lines.iter().find(|l| l.start == start).expect("a line starts there");
+    t.xf * lay.glyphs[l.glyph_start].origin
+}
+
+#[test]
+fn point_type_becomes_area_type_with_block_at_its_widest_line() {
+    for justify in ["left", "center", "right"] {
+        let mut s = session();
+        let id = point(&mut s, "Short\nA much longer line", json!({}));
+        s.execute("text.setStyle", &json!({"ids": [id], "justify": justify})).unwrap();
+        let before = line_start(&text(&s, id), 6);
+        let n = undo_len(&s);
+        let r = s.execute("type.dynamicText", &json!({})).unwrap();
+        assert_eq!((r["on"].clone(), r["ids"].clone()), (json!(true), json!([id])));
+        assert_eq!((r["wordGap"].clone(), r["lineGap"].clone()), (json!(100.0), json!(0.0)), "the reply gives the new frame's gaps");
+        assert_eq!(undo_len(&s), n + 1, "{justify}: one undo step");
+        assert_eq!(s.doc().unwrap().history.undo.last().unwrap().label, "Dynamic Text");
+        let t = text(&s, id);
+        assert!(t.dynamic_text && matches!(t.kind, TextKind::Area { .. }), "{justify}");
+        assert_eq!(t.area.fit, AreaFit::None);
+        assert_block(&t);
+        assert_eq!(size_at(&t, 6), 12.0, "{justify}: the widest line keeps its size");
+        assert!(size_at(&t, 0) > 24.0, "{justify}: the short line grows to the frame's width: {}", size_at(&t, 0));
+        // Across, the widest line stays where it was; the short line above it grew, so it moved down.
+        let after = line_start(&t, 6);
+        assert!((after.x - before.x).abs() < 0.05, "{justify}: the widest line stays where it was across: {before:?} → {after:?}");
+        assert!(after.y > before.y + 12.0, "{justify}");
+        assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow, "{justify}: the frame holds every line");
+        // Edits fit it again as area type; undo brings the point type back as it was.
+        s.execute("edit.undo", &json!({})).unwrap();
+        let back = text(&s, id);
+        assert!(matches!(back.kind, TextKind::Point) && !back.dynamic_text && size_at(&back, 0) == 12.0, "{justify}");
+    }
+}
+
+#[test]
+fn point_type_with_gaps_indents_and_vertical_type_turns_into_block() {
+    let mut s = session();
+    // The gaps apply to the frame point type becomes.
+    let id = point(&mut s, "one\ntwo words here", json!({}));
+    let r = s.execute("type.dynamicText", &json!({"wordGap": 300, "lineGap": 4})).unwrap();
+    assert_eq!((r["wordGap"].clone(), r["lineGap"].clone()), (json!(300.0), json!(4.0)));
+    let t = text(&s, id);
+    assert!(t.dynamic_text && (t.area.word_gap, t.area.line_gap) == (300.0, 4.0));
+    assert_block(&t);
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
+    // Indents: the frame takes them in, so the widest line keeps its size.
+    let id = point(&mut s, "Tiny\nThe widest line of all", json!({"y": 300}));
+    s.execute("text.setFormat", &json!({"ids": [id], "leftIndent": 20, "firstLineIndent": 10})).unwrap();
+    let before = line_start(&text(&s, id), 5);
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert_block(&t);
+    assert_eq!(size_at(&t, 5), 12.0);
+    assert!((line_start(&t, 5).x - before.x).abs() < 0.05, "{before:?} → {:?}", line_start(&t, 5));
+    // A nested list item: the frame takes in the level's indent too.
+    let id = point(&mut s, "Tiny\nThe widest item of all", json!({"y": 200}));
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "bullet", "listLevel": 3})).unwrap();
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(size_at(&t, 5), 12.0, "nested list");
+    assert!(size_at(&t, 0) > 12.0);
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
+    // Mixed alignments: the widest line keeps its size and its place.
+    let id = point(&mut s, "Left\nThe widest line, right aligned", json!({"y": 400}));
+    let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    if let Some(NodeKind::Text(t)) = doc.node_mut(NodeId(id)).map(|n| &mut n.kind) {
+        let right = vectorcraft_doc::ParaStyle { justify: vectorcraft_doc::Justify::Right, ..t.para.clone() };
+        t.set_paragraph_styles(vec![t.para.clone(), right]);
+    }
+    let before = line_start(&text(&s, id), 5);
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(size_at(&t, 5), 12.0, "mixed alignments");
+    assert!((line_start(&t, 5).x - before.x).abs() < 0.05, "{before:?} → {:?}", line_start(&t, 5));
+    // A right-to-left list, whose indents the layout mirrors.
+    let id = point(&mut s, "קצר\nשורה ארוכה בהרבה מהראשונה", json!({"y": 450}));
+    s.execute("text.setFormat", &json!({"ids": [id], "list": "bullet", "rightIndent": 9})).unwrap();
+    let widest = "קצר\n".len();
+    let before = line_start(&text(&s, id), widest);
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert_eq!(size_at(&t, widest), 12.0, "right-to-left list");
+    assert!((line_start(&t, widest).x - before.x).abs() < 0.05, "{before:?} → {:?}", line_start(&t, widest));
+    // Point type that was area type with its own options: the new frame takes the defaults but the
+    // gaps.
+    let id = point(&mut s, "Was\nonce a frame of two columns", json!({"y": 500}));
+    s.execute("type.convertToAreaType", &json!({"ids": [id]})).unwrap();
+    s.execute(
+        "text.areaOptions",
+        &json!({"columns": 2, "gutter": 12, "inset": 6, "verticalAlign": "bottom", "firstBaselineMin": 40, "wordGap": 150}),
+    )
+    .unwrap();
+    s.execute("type.convertToPointType", &json!({"ids": [id]})).unwrap();
+    let before = line_start(&text(&s, id), 4);
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    let defaults = vectorcraft_doc::AreaOptions { word_gap: 150.0, ..Default::default() };
+    assert_eq!(t.area, defaults);
+    assert_eq!(size_at(&t, 4), 12.0, "options from an earlier frame");
+    assert!((line_start(&t, 4).x - before.x).abs() < 0.05, "{before:?} → {:?}", line_start(&t, 4));
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
+    // Vertical type: the frame is as tall as the longest column and grows to the left.
+    let id = point(&mut s, "縦書き\nもっと長い縦書きの行", json!({"x": 600, "y": 40, "vertical": true}));
+    let before = line_start(&text(&s, id), "縦書き\n".len());
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert!(t.vertical && t.dynamic_text && matches!(t.kind, TextKind::Area { .. }));
+    assert_block(&t);
+    assert_eq!(size_at(&t, "縦書き\n".len()), 12.0);
+    let after = line_start(&t, "縦書き\n".len());
+    assert!((after.y - before.y).abs() < 0.05, "the longest column stays where it was down the page: {before:?} → {after:?}");
+    assert!(after.x < before.x - 12.0, "the short column before it grew, so it moved left: {before:?} → {after:?}");
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
+}
+
+#[test]
+fn point_type_with_negative_indents_wider_than_its_line_turns_into_block() {
+    // Block makes the line larger; it keeps its start, center or end by its alignment.
+    let ends = |t: &TextObject| {
+        let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+        let l = &lay.lines[0];
+        ((t.xf * vectorcraft_geom::Point::new(l.x0, l.baseline)).x, (t.xf * vectorcraft_geom::Point::new(l.x1 - l.trailing, l.baseline)).x)
+    };
+    for justify in ["left", "center", "right"] {
+        let mut s = session();
+        let id = point(&mut s, "Short", json!({}));
+        s.execute("text.setStyle", &json!({"ids": [id], "justify": justify})).unwrap();
+        s.execute("text.setFormat", &json!({"ids": [id], "leftIndent": -200})).unwrap();
+        let (b0, b1) = ends(&text(&s, id));
+        let n = undo_len(&s);
+        s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+        assert_eq!(undo_len(&s), n + 1, "{justify}");
+        let t = text(&s, id);
+        assert!(t.dynamic_text && matches!(t.kind, TextKind::Area { .. }), "{justify}: the frame is as wide as the line");
+        assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow, "{justify}");
+        assert!(size_at(&t, 0) > 12.0, "{justify}: Block makes the line larger");
+        let (a0, a1) = ends(&t);
+        let kept = match justify {
+            "left" => (a0, b0),
+            "center" => ((a0 + a1) / 2.0, (b0 + b1) / 2.0),
+            _ => (a1, b1),
+        };
+        assert!((kept.0 - kept.1).abs() < 0.05, "{justify}: the line keeps its aligned point: {b0},{b1} → {a0},{a1}");
+    }
+}
+
+#[test]
+fn point_type_under_a_text_wrap_object_turns_into_block_that_holds_every_line() {
+    let mut s = session();
+    let id = point(&mut s, "One\nTwo\nThree\nA much longer line than the rest", json!({}));
+    // A wrap object above the type, across the top of the frame it becomes.
+    let r = s.execute("shape.rectangle", &json!({"x": 250, "y": 80, "width": 400, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("object.textWrap.make", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert!(t.dynamic_text && matches!(t.kind, TextKind::Area { .. }));
+    assert!(!t.wrap.is_empty(), "the new area type takes the wrap object");
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow, "the frame holds every line around the wrap");
+    // A wrap object deeper than any size Block sets, across the whole frame: the lines go below it.
+    let id = point(&mut s, "Below", json!({"x": 1000, "y": 100}));
+    let r = s.execute("shape.rectangle", &json!({"x": 900, "y": 80, "width": 400, "height": 9000})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("object.textWrap.make", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert!(t.dynamic_text && !t.wrap.is_empty());
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow, "the frame reaches past a deep wrap object");
+    // An inverted wrap object far below the type holds the lines inside it: the frame reaches it.
+    let id = point(&mut s, "Inside", json!({"x": 1600, "y": 100}));
+    let r = s.execute("shape.rectangle", &json!({"x": 1550, "y": 9000, "width": 400, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("object.textWrap.make", &json!({})).unwrap();
+    s.execute("object.textWrap.options", &json!({"invert": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let t = text(&s, id);
+    assert!(t.dynamic_text && !t.wrap.is_empty());
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow, "the frame reaches a distant inverted wrap object");
+}
+
+#[test]
+fn point_type_with_nothing_to_fit_is_left_as_it_is() {
+    let mut s = session();
+    for blank in ["", "   ", "\n\n"] {
+        let id = point(&mut s, blank, json!({}));
+        let before = text(&s, id);
+        let n = undo_len(&s);
+        let r = s.execute("type.dynamicText", &json!({})).unwrap();
+        assert_eq!(r["on"], json!(true));
+        assert_eq!(undo_len(&s), n, "{blank:?}: no undo step");
+        assert_eq!(text(&s, id), before, "{blank:?}");
+        // A gap needs type it can apply to.
+        let e = s.execute("type.dynamicText", &json!({"wordGap": 200})).unwrap_err().to_string();
+        assert!(e.contains("need area type"), "{blank:?}: {e}");
+    }
+    // A line far shorter than the widest one stops at the size limit, and the frame still holds it.
+    let id = point(&mut s, &format!(".\n{}", "w".repeat(400)), json!({"size": 6}));
+    s.execute("type.dynamicText", &json!({})).unwrap();
+    let t = text(&s, id);
+    assert!(t.dynamic_text);
+    assert_eq!(size_at(&t, 0), 1296.0);
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
+}
+
 #[test]
 fn long_text_fits_in_a_bounded_number_of_layouts() {
     let mut s = session();
@@ -451,4 +685,16 @@ fn long_text_fits_in_a_bounded_number_of_layouts() {
     // pass and the caches), plus the reply's own.
     let bound = 2 * (2 + 2 * super::block::BLOCK_PASSES as u64) + 4;
     assert!(used <= bound, "{used} layouts");
+    // Long point type: measured, fitted in its frame and fitted again at its depth, with the
+    // layouts that place and measure the frame.
+    let id = point(&mut s, &story, json!({}));
+    let before = vectorcraft_text::test_fonts::layouts_on_this_thread();
+    s.execute("type.dynamicText", &json!({"on": true})).unwrap();
+    let used = vectorcraft_text::test_fonts::layouts_on_this_thread() - before;
+    let t = text(&s, id);
+    assert!(t.dynamic_text && matches!(t.kind, TextKind::Area { .. }));
+    assert_block(&t);
+    assert!(!vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &t).overflow);
+    let bound = 2 * (2 + 2 * super::block::BLOCK_PASSES as u64) + 8;
+    assert!(used <= bound, "point type: {used} layouts");
 }

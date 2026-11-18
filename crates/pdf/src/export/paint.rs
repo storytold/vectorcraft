@@ -90,16 +90,20 @@ impl Exporter<'_> {
     /// The stops of a gradient whose every stop is a tint of one spot ink (or paper white, 0% of
     /// it) as tints of that ink — a Separation shading — with midpoints as explicit stops (the
     /// tint and opacity there are halfway). A gradient that mixes a spot ink with other colors
-    /// gets [`Self::device_n_stops`]. `None` for gradients without a spot ink.
+    /// gets [`Self::device_n_stops`]. `None` for gradients without a spot ink that prints
+    /// ([`Self::printed_spot`]).
     fn spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
-        let ink = g.stops.iter().find_map(|s| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot)))?;
+        let drawn = g.drawn_stops();
+        let ink = g.stops.iter().zip(&drawn).find_map(|(s, &d)| self.printed_spot(s, d))?;
         let tints: Option<Vec<f32>> = g
             .stops
             .iter()
-            .map(|s| match s.swatch.as_deref() {
+            .zip(&drawn)
+            .map(|(s, &d)| match s.swatch.as_deref() {
+                _ if !d => Some(0.0),
                 // A stop that also prints process plates needs a DeviceN space.
                 Some(n) if n == ink && s.plates.is_none() => Some(s.tint),
-                _ if self.paper_stop(s) => Some(0.0),
+                _ if self.inkless_stop(s) => Some(0.0),
                 _ => None,
             })
             .collect();
@@ -126,19 +130,22 @@ impl Exporter<'_> {
     /// the order the stops name them), with midpoints as explicit stops (the tints and opacity
     /// there are halfway), or for a Perceptual gradient the stops on its curve
     /// ([`vectorcraft_color::Gradient::ink_mixes`]). Paper white adds no ink; a spot stop with
-    /// process plates ([`vectorcraft_color::GradientStop::plates`]) prints them too. `None`, with a
-    /// warning, when a stop is written in RGB or Lab or the spot inks can't share a DeviceN space;
-    /// the gradient is then written in the colors of its stops.
+    /// process plates ([`vectorcraft_color::GradientStop::plates`]) prints them too. Only the stops
+    /// that color something that draws ([`vectorcraft_color::Gradient::drawn_stops`]) name inks:
+    /// the others are written with no ink. `None`, with a warning, when a stop is written in RGB or
+    /// Lab or the spot inks can't share a DeviceN space; the gradient is then written in the colors
+    /// of its stops.
     fn device_n_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
         use krilla::color::device_n::{Color as DnColor, Colorant, DeviceNSpace, Process};
         let doc = self.doc;
         fn spot_of<'s>(doc: &vectorcraft_doc::Document, s: &'s vectorcraft_color::GradientStop) -> Option<&'s str> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot))
         }
+        let drawn = g.drawn_stops();
         // Each spot ink: its swatch's name, then its colorant name and CMYK equivalent.
         let mut spots: Vec<(&str, (String, [f32; 4]))> = Vec::new();
-        for s in &g.stops {
-            if let Some(n) = spot_of(doc, s)
+        for (s, &d) in g.stops.iter().zip(&drawn) {
+            if let Some(n) = self.printed_spot(s, d)
                 && !spots.iter().any(|(m, _)| *m == n)
             {
                 spots.push((n, self.spot_ink(n)?));
@@ -146,12 +153,15 @@ impl Exporter<'_> {
         }
         // Each stop's ink coverage: the four process inks, then one tint per spot ink.
         let mut inks: Vec<Vec<f32>> = Vec::with_capacity(g.stops.len());
-        for s in &g.stops {
+        for (s, &d) in g.stops.iter().zip(&drawn) {
             let mut v = vec![0.0; 4 + spots.len()];
             match spot_of(doc, s) {
+                _ if !d => {}
                 Some(n) => {
-                    let i = spots.iter().position(|(m, _)| *m == n)?;
-                    v[4 + i] = s.tint;
+                    // A spot ink that no drawn stop prints ([`Self::printed_spot`]) has no colorant.
+                    if let Some(i) = spots.iter().position(|(m, _)| *m == n) {
+                        v[4 + i] = s.tint;
+                    }
                     if let Some(p) = s.plates {
                         v[..4].copy_from_slice(&p.map(|t| t.clamp(0.0, 1.0)));
                     }
@@ -236,6 +246,24 @@ impl Exporter<'_> {
             Paint::Solid { color: c, swatch, tint } => Some(self.solid(c, swatch.as_deref(), *tint).into()),
             Paint::Gradient(g) => {
                 let geom = g.resolve(bounds);
+                // A linear or radial gradient that repeats or reflects, where it isn't an area
+                // paint ([`Self::padded`]): its stops repeated over `bounds`, padding past them.
+                if matches!(g.gradient.kind, GradientKind::Linear | GradientKind::Radial) && g.gradient.is_spread() {
+                    let paint = match g.gradient.padded_over(&geom, bounds) {
+                        Some(padded) => {
+                            self.warn_capped(padded.capped);
+                            padded_paint(g, padded)
+                        }
+                        // Levels over `bounds` that are not finite (a vector of no length): the
+                        // stops repeated along the vector, padding past it.
+                        None => {
+                            self.warn_capped(true);
+                            let gradient = g.gradient.unrolled().into_owned();
+                            Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { gradient, ..(**g).clone() }))
+                        }
+                    };
+                    return self.paint_in(s, &paint, bounds, space);
+                }
                 let spot = match g.gradient.kind {
                     GradientKind::Freeform => None,
                     _ => self.perceptual_spot_stops(&g.gradient).or_else(|| self.spot_stops(&g.gradient)),
@@ -318,20 +346,27 @@ impl Exporter<'_> {
                     }
                     // A function-based shading (ISO 32000-1, 8.7.4.5.2) whose calculator function
                     // turns the angle about the origin into the ramp, once around (0 to 360
-                    // degrees), carried onto the extent ellipse by its frame.
+                    // degrees), carried onto the extent ellipse by its frame. Stops that repeat
+                    // or reflect `n` times run over 360/`n` degrees, the function repeating or
+                    // reflecting them past it.
                     GradientKind::Conic => {
                         let frame = geom.conic_frame();
                         if !writable(s, space * frame, Rect::new(-1.0, -1.0, 1.0, 1.0)) {
                             return None;
                         }
+                        let (end_angle, spread_method) = match g.gradient.spread {
+                            _ if !g.gradient.is_spread() => (360.0, SpreadMethod::Pad),
+                            vectorcraft_color::GradientSpread::Reflect => (360.0 / g.gradient.repeat_count() as f32, SpreadMethod::Reflect),
+                            _ => (360.0 / g.gradient.repeat_count() as f32, SpreadMethod::Repeat),
+                        };
                         Some(
                             SweepGradient {
                                 cx: 0.0,
                                 cy: 0.0,
                                 start_angle: 0.0,
-                                end_angle: 360.0,
+                                end_angle,
                                 transform: xf(space * frame),
-                                spread_method: SpreadMethod::Pad,
+                                spread_method,
                                 stops,
                                 anti_alias: false,
                             }
@@ -409,18 +444,38 @@ impl Exporter<'_> {
         !s.swatch.as_deref().is_some_and(|n| self.doc.swatch(n).is_some_and(|w| w.spot)) && paper(&s.color)
     }
 
-    /// The spot swatch whose tints are every stop of `g` that isn't paper white
-    /// ([`Self::paper_stop`]); `None` when no stop is linked to a spot swatch or a stop has
-    /// another color.
-    fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
-        let spot = |s: &'g vectorcraft_color::GradientStop| s.swatch.as_deref().filter(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
-        let ink = g.stops.iter().find_map(spot)?;
-        g.stops.iter().all(|s| (spot(s) == Some(ink) && s.plates.is_none()) || self.paper_stop(s)).then_some(ink)
+    /// The spot swatch stop `s` prints: the one it is linked to, when the stop colors something
+    /// that draws (`drawn`, [`vectorcraft_color::Gradient::drawn_stops`]) at a tint above 0 or
+    /// with process plates ([`vectorcraft_color::GradientStop::plates`]), which print in the same
+    /// DeviceN space.
+    fn printed_spot<'s>(&self, s: &'s vectorcraft_color::GradientStop, drawn: bool) -> Option<&'s str> {
+        s.swatch.as_deref().filter(|n| drawn && (s.tint > 0.0 || s.plates.is_some()) && self.doc.swatch(n).is_some_and(|w| w.spot))
     }
 
-    /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): is a stop
-    /// linked to a spot swatch, and is every other stop paper white ([`Self::paper_stop`]) or
-    /// written in CMYK or gray?
+    /// Does stop `s` add no ink to a Separation or DeviceN shading: is it paper white
+    /// ([`Self::paper_stop`]) or linked to a spot swatch at a tint of 0 without process plates?
+    fn inkless_stop(&self, s: &vectorcraft_color::GradientStop) -> bool {
+        let spot = s.swatch.as_deref().is_some_and(|n| self.doc.swatch(n).is_some_and(|w| w.spot));
+        self.paper_stop(s) || (spot && self.printed_spot(s, true).is_none())
+    }
+
+    /// The spot swatch whose tints are every stop of `g` that colors something that draws
+    /// ([`vectorcraft_color::Gradient::drawn_stops`]) and adds ink ([`Self::inkless_stop`]); `None`
+    /// when no such stop prints a spot swatch ([`Self::printed_spot`]) or one has another color.
+    fn one_spot_ink<'g>(&self, g: &'g vectorcraft_color::Gradient) -> Option<&'g str> {
+        let drawn = g.drawn_stops();
+        let ink = g.stops.iter().zip(&drawn).find_map(|(s, &d)| self.printed_spot(s, d))?;
+        g.stops
+            .iter()
+            .zip(&drawn)
+            .all(|(s, &d)| !d || (s.swatch.as_deref() == Some(ink) && s.plates.is_none()) || self.inkless_stop(s))
+            .then_some(ink)
+    }
+
+    /// Can every stop of `g` be inks of a DeviceN space ([`Self::device_n_stops`]): does a stop
+    /// print a spot swatch ([`Self::printed_spot`]), and is every other stop that colors something
+    /// that draws linked to a spot swatch, paper white ([`Self::paper_stop`]) or written in CMYK or
+    /// gray?
     fn device_n_inks_only(&self, g: &vectorcraft_color::Gradient) -> bool {
         let doc = self.doc;
         let cmyk_doc = doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
@@ -428,7 +483,9 @@ impl Exporter<'_> {
         let inks = |s: &vectorcraft_color::GradientStop| {
             self.paper_stop(s) || matches!(self.out.color(&s.color, self.intent, cmyk_doc, self.convert), Color::Cmyk { .. } | Color::Gray { .. })
         };
-        g.stops.iter().any(spot) && g.stops.iter().all(|s| spot(s) || inks(s))
+        let drawn = g.drawn_stops();
+        let mut stops = g.stops.iter().zip(&drawn);
+        stops.clone().any(|(s, &d)| self.printed_spot(s, d).is_some()) && stops.all(|(s, &d)| !d || spot(s) || inks(s))
     }
 
     /// Is `g` a Perceptual linear or radial gradient of spot inks, alone or mixed with process
@@ -438,7 +495,9 @@ impl Exporter<'_> {
     /// than an image?
     pub(super) fn perceptual_spot(&self, g: &vectorcraft_color::GradientPaint, fill: bool) -> bool {
         let gr = &g.gradient;
-        !gr.method.is_classic()
+        // Not one mixed around the hue wheel: its colors between two stops are not tints or
+        // mixes of the stops' inks, so it stays an image.
+        gr.method == vectorcraft_color::GradientMethod::Perceptual
             && gr.kind != GradientKind::Freeform
             && !(fill && gr.dither)
             && (self.one_spot_ink(gr).is_some() || self.device_n_inks_only(gr))
@@ -451,48 +510,64 @@ impl Exporter<'_> {
     /// other gradients, and for an ink too light for lightness to tell its tints apart, which
     /// [`Self::spot_stops`] then writes with the stops' own tints.
     fn perceptual_spot_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<Vec<(f32, krilla::color::Color, f32)>> {
-        if g.method.is_classic() {
+        if g.method != vectorcraft_color::GradientMethod::Perceptual {
             return None;
         }
         let ink = self.one_spot_ink(g)?;
         let doc = self.doc;
         let full = doc.linked_color(doc.swatch(ink)?.paint.color()?, true);
         let space = self.separation(ink)?;
-        // The stops keep their own tints; paper white is 0% of the ink.
-        let own: Vec<f32> = g.stops.iter().map(|s| if s.swatch.as_deref() == Some(ink) { s.tint } else { 0.0 }).collect();
+        // The stops keep their own tints; paper white, and a stop that colors nothing that draws,
+        // is 0% of the ink.
+        let own: Vec<f32> =
+            g.stops.iter().zip(g.drawn_stops()).map(|(s, d)| if d && s.swatch.as_deref() == Some(ink) { s.tint } else { 0.0 }).collect();
         Some(g.ink_tints(&full, &own)?.into_iter().map(|(o, t, a)| (o, SepColor::new_f32(t, space.clone()).into(), a)).collect())
     }
 
-    /// Warn when gradient `g`, drawn as an image, has stops linked to a spot swatch: the image is
-    /// in process colors, so the spot inks have no plate of their own.
+    /// Warn when gradient `g`, drawn as an image, has stops that print a spot swatch
+    /// ([`Self::printed_spot`]): the image is in process colors, so the spot inks have no plate of
+    /// their own.
     fn warn_spot_image(&mut self, g: &vectorcraft_color::GradientPaint) {
         let from_stops = g.gradient.kind != GradientKind::Freeform || !g.has_freeform_points();
-        if from_stops && self.has_spot_stop(&g.gradient) {
+        if from_stops && self.prints_spot(&g.gradient) {
             self.warn(
-                "spot colors in gradients exported as images (freeform or dithered gradients, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
+                "spot colors in gradients exported as images (freeform or dithered gradients, ones mixed around the hue wheel, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
             );
         }
     }
 
-    /// Is a stop of `g` linked to a spot swatch?
-    fn has_spot_stop(&self, g: &vectorcraft_color::Gradient) -> bool {
-        let doc = self.doc;
-        g.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot)))
+    /// Does a stop of `g` print a spot swatch ([`Self::printed_spot`]): color something that draws
+    /// ([`vectorcraft_color::Gradient::drawn_stops`]) at a tint above 0 or with process plates? A
+    /// stop linked to a spot swatch that colors nothing adds no spot ink.
+    fn prints_spot(&self, g: &vectorcraft_color::Gradient) -> bool {
+        g.stops.iter().zip(g.drawn_stops()).any(|(s, d)| self.printed_spot(s, d).is_some())
     }
 
     /// Draw diamond gradient `g`, placed on `bounds`, over `area` (inside the current clip) as four
     /// linear gradients, one for each quadrant of its frame, each equal to the diamond there (PDF
     /// has no diamond shading; [`vectorcraft_color::GradientGeom::diamond_quadrants`]). The
     /// quadrants overlap so no hairline shows between them, which needs opaque stops. False
-    /// (nothing drawn) for a diamond with translucent stops or without a frame, which
+    /// (nothing drawn) for a diamond with translucent stops or without a frame, for one with a
+    /// quadrant whose shading or outline PDF can't hold, and for a Perceptual one of spot inks
+    /// whose ink curve has too many tints once its stops are repeated, which
     /// [`Self::field_image`] draws instead.
     pub(super) fn diamond(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect) -> bool {
         if g.gradient.stops.iter().any(|st| st.opacity < 1.0) {
             return false;
         }
-        let Some(quadrants) = g.resolve(bounds).diamond_quadrants(area.abs()) else { return false };
-        self.warn("diamond gradients are exported as four linear gradients");
-        let gradient = vectorcraft_color::Gradient { kind: GradientKind::Linear, ..g.gradient.clone() };
+        // A diamond that repeats or reflects: its stops repeated over the levels the area reaches
+        // from the center, then split into quadrants, each of which runs those levels.
+        let (diamond, geom, capped) = match g.gradient.padded_over(&g.resolve(bounds), area.abs()) {
+            Some(padded) => (padded.gradient, padded.geom, padded.capped),
+            None => (g.gradient.clone(), g.resolve(bounds), false),
+        };
+        // A Perceptual one of spot inks whose ink curve no longer fits with its stops repeated.
+        if !diamond.method.is_classic() && !diamond.fits_ink_tints() {
+            return false;
+        }
+        let Some(quadrants) = geom.diamond_quadrants(area.abs()) else { return false };
+        let gradient = vectorcraft_color::Gradient { kind: GradientKind::Linear, ..diamond };
+        let mut drawn = Vec::with_capacity(4);
         for (outline, geom) in quadrants {
             let linear = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { gradient: gradient.clone(), geom: Some(geom), ..g.clone() }));
             let quadrant = kurbo::BezPath::from_vec(
@@ -503,14 +578,59 @@ impl Exporter<'_> {
                     .chain([kurbo::PathEl::ClosePath])
                     .collect(),
             );
-            if let (Some(paint), Some(path)) = (self.paint(s, &linear, bounds), to_path(s, &quadrant)) {
-                s.set_stroke(None);
-                s.set_fill(Some(krilla::paint::Fill { paint, opacity: krilla::num::NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
-                s.draw_path(&path);
-                s.set_fill(None);
-            }
+            let (Some(paint), Some(path)) = (self.paint(s, &linear, bounds), to_path(s, &quadrant)) else { return false };
+            drawn.push((paint, path));
+        }
+        self.warn("diamond gradients are exported as four linear gradients");
+        self.warn_capped(capped);
+        for (paint, path) in drawn {
+            s.set_stroke(None);
+            s.set_fill(Some(krilla::paint::Fill { paint, opacity: krilla::num::NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+            s.draw_path(&path);
+            s.set_fill(None);
         }
         true
+    }
+
+    /// Draw linear or radial gradient `g`, placed on `bounds`, that repeats or reflects, over
+    /// `area` (inside the current clip): PDF's axial and radial shadings pad past their ends, so
+    /// its stops are repeated as many times as the area needs
+    /// ([`vectorcraft_color::Gradient::padded_over`]). False (nothing drawn) for another gradient,
+    /// for one whose shading or area PDF can't hold, and for a Perceptual one of spot inks whose
+    /// ink curve has too many tints once repeated, which [`Self::field_image`] draws instead.
+    pub(super) fn padded(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect) -> bool {
+        if !matches!(g.gradient.kind, GradientKind::Linear | GradientKind::Radial) {
+            return false;
+        }
+        let Some(padded) = g.gradient.padded_over(&g.resolve(bounds), area.abs()) else { return false };
+        // A Perceptual gradient of spot inks whose ink curve no longer fits once its stops are
+        // repeated is an image, as one with too many stops is.
+        if !g.gradient.method.is_classic() && !padded.gradient.fits_ink_tints() {
+            return false;
+        }
+        let capped = padded.capped;
+        let paint = padded_paint(g, padded);
+        let (Some(paint), Some(path)) = (self.paint(s, &paint, bounds), to_path(s, &kurbo::Shape::to_path(&area.abs(), 0.1))) else {
+            return false;
+        };
+        self.warn_capped(capped);
+        s.set_stroke(None);
+        s.set_fill(Some(krilla::paint::Fill { paint, opacity: krilla::num::NormalizedF32::ONE, rule: krilla::paint::FillRule::NonZero }));
+        s.draw_path(&path);
+        s.set_fill(None);
+        true
+    }
+
+    /// Warn when a gradient that repeats or reflects needed more runs of its stops than were
+    /// written.
+    fn warn_capped(&mut self, capped: bool) {
+        if capped {
+            self.warn(format!(
+                "gradients that repeat or reflect are exported with at most {} runs of their stops (at most {} stops); they pad past those",
+                vectorcraft_color::gradient::MAX_SPREAD_RUNS,
+                vectorcraft_color::gradient::MAX_SPREAD_STOPS
+            ));
+        }
     }
 
     /// Draw gradient `g`, placed on `bounds`, as an image over `area`, sampled at the document's
@@ -518,8 +638,8 @@ impl Exporter<'_> {
     /// scaled type gets its pixels too): a freeform gradient's colour field (at most
     /// [`MAX_FIELD_PX`] a side), or a linear, radial, conic or diamond gradient (at most [`MAX_GRADIENT_PX`] a side),
     /// with dither's noise when it paints a fill (`fill`). A linear or radial gradient whose stops
-    /// are all CMYK and not linked to a spot swatch is a CMYK image, unless its Perceptual curve
-    /// has too many stops; any other is an RGB image.
+    /// are all CMYK and none of which prints a spot swatch ([`Self::prints_spot`]) is a CMYK image,
+    /// unless its Perceptual curve has too many stops; any other is an RGB image.
     pub(super) fn field_image(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect, fill: bool) {
         use vectorcraft_color::cms::Model;
         use vectorcraft_color::freeform::{painted_box, spread_scale};
@@ -541,13 +661,13 @@ impl Exporter<'_> {
         let field = freeform.then(|| g.freeform_on(b).model_field(spread_scale(b)));
         let cmyk_doc = self.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk;
         if g.gradient.kind == GradientKind::Conic {
-            self.warn("conic gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), in a PDF/A file or with more than 97 stops are exported as images");
+            self.warn("conic gradients drawn as pixels (dithered fills, ones mixed around the hue wheel, and Perceptual ones other than spot ink shadings), in a PDF/A file or with more than 97 stops are exported as images");
         } else if g.gradient.kind == GradientKind::Diamond {
-            self.warn("diamond gradients drawn as pixels (dithered fills, and Perceptual ones other than spot ink shadings), with translucent stops or without an extent are exported as images");
+            self.warn("diamond gradients drawn as pixels (dithered fills, ones mixed around the hue wheel, and Perceptual ones other than spot ink shadings), with translucent stops or without an extent are exported as images");
         } else if !freeform {
             self.warn("linear and radial gradients drawn as pixels are exported as images");
         }
-        let ramp_inks = if freeform || self.has_spot_stop(&g.gradient) { None } else { g.ink_pixels(b, area, cols, rows, fill) };
+        let ramp_inks = if freeform || self.prints_spot(&g.gradient) { None } else { g.ink_pixels(b, area, cols, rows, fill) };
         let ink_image = |inks, alpha| {
             let convert = if self.convert { self.out.cmyk_pixels() } else { None };
             crate::images::from_inks(inks, alpha, cols.into(), rows.into(), self.interpolate, convert)
@@ -586,6 +706,12 @@ impl Exporter<'_> {
         s.draw_image(img, size);
         s.pop();
     }
+}
+
+/// `g` written as `padded` gives it: its stops repeated, placed there.
+fn padded_paint(g: &vectorcraft_color::GradientPaint, padded: vectorcraft_color::gradient::Padded) -> Paint {
+    let geom = padded.geom;
+    Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { gradient: padded.gradient, geom: Some(geom), angle: geom.angle_deg(), ..g.clone() }))
 }
 
 /// Is `c` paper white: no ink in CMYK or gray, white in RGB or Lab?

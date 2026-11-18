@@ -1,7 +1,7 @@
 //! Synthetic XML 1.0/SVG round trips: https://www.w3.org/TR/xml/#AVNormalize
 //! https://www.w3.org/TR/xml/#NT-NameChar https://www.w3.org/TR/xml/#charsets
+use craft_svg::tree::usvg::roxmltree;
 use std::collections::HashSet;
-use usvg::roxmltree;
 use vectorcraft_doc::{Document, Node};
 use vectorcraft_svg::{Encoding, ExportOptions, ObjectIds, Output, Styling, export, export_full, import};
 
@@ -98,7 +98,7 @@ fn unicode_data_names_survive_each_encoding() {
                 }
                 if encoding == Encoding::Latin1 {
                     assert_eq!(out.encoding, Encoding::Utf8, "XML names cannot use character references");
-                    assert!(!out.warnings.is_empty());
+                    assert!(!out.setting_notes.is_empty());
                     assert!(!out.svg.contains("ISO-8859-1"));
                 } else {
                     assert_eq!(out.encoding, encoding);

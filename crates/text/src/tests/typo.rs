@@ -1108,16 +1108,47 @@ fn each_run_hyphenates_in_its_own_language() {
     let saved_without_one = hyphens(None);
     assert!(saved_without_one > 0, "some words hyphenated");
     assert_eq!(hyphens(Some("en-GB")), saved_without_one);
-    assert_eq!(hyphens(Some("de")), 0, "German has no break points yet");
+    assert_eq!(hyphens(Some("fr")), 0, "French has no break points yet");
+    assert_eq!(hyphens(Some("ru")), 0, "English words in a Russian run are not hyphenated as English");
     assert_eq!(hyphens(Some("x-from-a-file")), 0, "a tag that isn't known has no hyphenation");
 
-    // both in one paragraph: the English run breaks and the German one doesn't
+    // both in one paragraph: the English run breaks and the French one doesn't
     let mut t = area(&format!("{text} {text}"), style(14.0), frame, Justify::Left);
     t.para.hyphenate = true;
-    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("de".into()));
+    edit::style_range(&mut t.runs, text.len(), 2 * text.len() + 1, |s| s.language = Some("fr".into()));
     let l = layout(db(), &t);
     let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
     assert!(!at.is_empty() && at.iter().all(|b| *b < text.len()), "hyphens only in the English run: {at:?}");
+}
+
+/// A justified Russian paragraph in a narrow frame breaks its long words at the Russian rules'
+/// points with either composer, and not at all with Hyphenate off.
+#[test]
+fn a_russian_run_hyphenates_at_russian_break_points() {
+    let text = "Государственное законодательство регулирует достопримечательности.";
+    let frame = Rect::new(0.0, 0.0, 120.0, 600.0);
+    let st = CharStyle { language: Some("ru-RU".into()), ..style(14.0) };
+    for composer in [Composer::EveryLine, Composer::SingleLine] {
+        let mut t = area(text, st.clone(), frame, Justify::JustifyLeft);
+        t.para.composer = composer;
+        t.para.hyphenate = true;
+        let l = layout(db(), &t);
+        let at: Vec<usize> = l.glyphs.iter().filter(|g| g.len == 0).map(|g| g.byte).collect();
+        assert!(!at.is_empty(), "{composer:?}: some words hyphenated");
+        for b in at {
+            // The word the hyphen splits, and where in it the line ends.
+            let start = text[..b].rfind(' ').map_or(0, |i| i + 1);
+            let end = text[b..].find([' ', '.']).map_or(text.len(), |i| b + i);
+            let word = &text[start..end];
+            let point = text[start..b].chars().count();
+            assert!(
+                hyphen::hyphen_points_for_language(word, &t.para.hyphenation, Some("ru")).contains(&point),
+                "{composer:?}: {word} broken after {point} letters"
+            );
+        }
+        t.para.hyphenate = false;
+        assert_eq!(layout(db(), &t).glyphs.iter().filter(|g| g.len == 0).count(), 0, "{composer:?}: Hyphenate off");
+    }
 }
 
 #[test]
@@ -2040,4 +2071,41 @@ fn soft_return_breaks_line_even_inside_no_break() {
     let t = area("First\u{2028}Second", st, Rect::new(0.0, 0.0, 300.0, 200.0), Justify::Left);
     let lay = layout(db(), &t);
     assert_eq!(lay.lines.len(), 2, "soft return honors line break despite no_break");
+}
+
+/// An East Asian glyph form (the Glyphs panel menu's Traditional Forms, JIS 78 Forms, …) draws
+/// the characters with the font's glyphs of that form, and Default with its default glyphs. Needs
+/// craft-fonts' BIZ UDMincho, which has traditional, expert, JIS 78, 83 and 90, full-width and
+/// half-width forms and no JIS 04 forms (skipped without it). A form on one character of a run
+/// changes that character only.
+#[test]
+fn glyph_forms_draw_the_fonts_east_asian_forms() {
+    use vectorcraft_doc::GlyphForm;
+    const FAMILY: &str = "BIZ UDMincho";
+    if db().face(FAMILY, "Regular").is_none_or(|f| f.family != FAMILY) {
+        eprintln!("skipped: built without craft-fonts (set CRAFT_FONTS_DIR to a craft-fonts checkout to run it)");
+        return;
+    }
+    let st = |form| CharStyle { size: 20.0, font_family: FAMILY.into(), glyph_form: form, ..CharStyle::default() };
+    let glyphs = |text: &str, form| layout(db(), &TextObject::point(Point::ZERO, text, st(form))).glyphs;
+    let gids = |text: &str, form| glyphs(text, form).iter().map(|g| g.gid).collect::<Vec<_>>();
+    for (form, text) in
+        [(GlyphForm::Traditional, "亜"), (GlyphForm::Expert, "唖"), (GlyphForm::Jis78, "唖"), (GlyphForm::Jis83, "芦"), (GlyphForm::Jis90, "芦")]
+    {
+        assert_ne!(gids(text, form), gids(text, GlyphForm::Default), "{form:?} {text}");
+    }
+    // The font has no JIS 04 forms, so the characters keep their glyphs.
+    assert_eq!(gids("亜唖芦", GlyphForm::Jis04), gids("亜唖芦", GlyphForm::Default));
+    // Full-width Latin takes a whole em, half-width punctuation half of one.
+    let advance = |text: &str, form| glyphs(text, form).first().map_or(0.0, |g| g.advance);
+    assert!(advance("A", GlyphForm::Default) < 15.0, "{}", advance("A", GlyphForm::Default));
+    assert!((advance("A", GlyphForm::FullWidth) - 20.0).abs() < 0.01, "{}", advance("A", GlyphForm::FullWidth));
+    assert!((advance("、", GlyphForm::Default) - 20.0).abs() < 0.01, "{}", advance("、", GlyphForm::Default));
+    assert!((advance("、", GlyphForm::HalfWidth) - 10.0).abs() < 0.01, "{}", advance("、", GlyphForm::HalfWidth));
+    // Traditional Forms on the middle character only.
+    let mut t = TextObject::point(Point::ZERO, "亜亜亜", st(GlyphForm::Default));
+    edit::style_range(&mut t.runs, 3, 6, |s| s.glyph_form = GlyphForm::Traditional);
+    let ids: Vec<u32> = layout(db(), &t).glyphs.iter().map(|g| g.gid).collect();
+    let (plain, traditional) = (gids("亜", GlyphForm::Default), gids("亜", GlyphForm::Traditional));
+    assert_eq!(ids, [plain[0], traditional[0], plain[0]]);
 }

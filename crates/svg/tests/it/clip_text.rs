@@ -126,6 +126,20 @@ fn a_text_clip_path_with_a_clip_rule_or_a_clip_of_its_own_clips_by_its_outlines(
 }
 
 #[test]
+fn a_text_imported_as_several_objects_clips_by_all_their_outlines() {
+    // One object cannot put ג on its x, so the text is several objects; the clip outlines all of them.
+    let d = open(
+        r##"<clipPath id="c"><text x="100 160 220" y="80" direction="rtl" font-size="20">אbג</text></clipPath>
+        <rect width="400" height="300" clip-path="url(#c)"/>"##,
+    );
+    let (clip, _) = clip_group(&top(&d)[0]);
+    assert!(!matches!(clip.kind, NodeKind::Text(_)), "{:?}", clip.kind);
+    let b = clip_bounds(clip);
+    // ג ends at 220, the first object at 160.
+    assert!(b.x1 > 200.0 && b.x1 <= 220.0 + 1e-6 && b.x0 < 100.0, "{b:?}");
+}
+
+#[test]
 fn tspans_and_type_on_a_path_clip_too() {
     let d = open(
         r##"<clipPath id="c"><text font-size="60"><tspan x="10" y="80">A</tspan><tspan x="10" y="200">B</tspan></text></clipPath>
@@ -184,6 +198,20 @@ fn a_use_of_a_text_in_a_clip_path_clips_where_the_use_places_it() {
 }
 
 #[test]
+fn a_use_of_a_text_in_a_clip_path_passes_its_properties_on_to_the_text() {
+    let d = open(
+        r##"<defs><text id="t" x="0" y="0">HI</text></defs>
+        <clipPath id="c" font-weight="bold"><use href="#t" x="20" y="150" font-size="100"/></clipPath>
+        <rect width="400" height="300" clip-path="url(#c)"/>"##,
+    );
+    let (clip, _) = clip_group(&top(&d)[0]);
+    let NodeKind::Text(t) = &clip.kind else { panic!("{:?}", clip.kind) };
+    assert!(near(t.runs[0].style.size, 100.0, 1e-9), "{}", t.runs[0].style.size);
+    assert_eq!(t.runs[0].style.font_style, "Bold");
+    assert!(clip_bounds(clip).height() > 50.0, "{:?}", clip_bounds(clip));
+}
+
+#[test]
 fn a_clip_path_on_a_use_of_a_text_is_in_the_use_s_user_space() {
     // The text's transform moves its glyphs to x 200…; the `<use>`'s clip keeps x < 250 of its own
     // user space, which the text's transform doesn't move.
@@ -205,6 +233,27 @@ fn a_clip_path_on_a_use_of_a_text_is_in_the_use_s_user_space() {
     let (clip, _) = clip_group(&top(&d)[0]);
     let NodeKind::Text(t) = &clip.kind else { panic!("{:?}", clip.kind) };
     assert!(t.xf.translation().to_point().distance(Point::new(200.0, 160.0)) < 1e-9, "{:?}", t.xf);
+}
+
+#[test]
+fn a_use_and_the_text_it_shows_in_a_clip_path_both_clip() {
+    // The text's own clip keeps y < 120 of its user space; the `<use>`'s keeps x < 250 of the
+    // `<use>`'s, which the text's transform doesn't move. The glyphs keep only what both keep.
+    let body = r##"<defs><clipPath id="k"><rect width="250" height="300"/></clipPath>
+        <clipPath id="half"><rect width="400" height="120"/></clipPath>
+        <text id="t" transform="translate(200 0)" x="0" y="150" font-size="100" clip-path="url(#half)">HI</text></defs>
+        <clipPath id="c"><use href="#t" transform="translate(0 10)" clip-path="url(#k)"/></clipPath>
+        <rect width="400" height="300" clip-path="url(#c)"/>"##;
+    let (d, warnings) = import_with_report(&svg(body)).unwrap();
+    let (clip, _) = clip_group(&top(&d)[0]);
+    let b = clip_bounds(clip);
+    assert!(b.x0 >= 200.0 - 1e-6 && near(b.x1, 250.0, 1e-6), "{b:?}");
+    assert!(near(b.y1, 130.0, 1e-6) && b.y0 > 50.0, "{b:?}");
+    // It clips by the glyphs, not their box: nothing between the stems of the H.
+    let (bp, _) = vectorcraft_effects::clip_outline(clip).unwrap();
+    assert!(bp.contains(Point::new(b.x0 + 2.0, 110.0)), "on a stem");
+    assert!(!bp.contains(Point::new(225.0, 100.0)), "between the stems");
+    assert!(!warnings.iter().any(|w| w.contains("ignored")), "{warnings:?}");
 }
 
 #[test]
