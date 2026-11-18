@@ -4986,6 +4986,8 @@ theme	Appearance	Giao diện
 @msg	automation path rejected: outside the read root {root}: {path}	đường dẫn tự động bị từ chối: ngoài thư mục gốc đọc {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	đường dẫn tự động bị từ chối: ngoài các thư mục gốc đọc {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	một tệp JavaScript được liên kết nằm ngoài các thư mục gốc đọc
+@msg	a linked image file is outside the read roots	một tệp hình ảnh được liên kết nằm ngoài các thư mục gốc đọc
+@msg	a linked file's export folder is outside the read roots	thư mục xuất của một tệp được liên kết nằm ngoài các thư mục gốc đọc
 @msg	the library's file is outside the read roots	tệp của thư viện nằm ngoài các thư mục gốc đọc
 @msg	{file} names more than one linked JavaScript file	{file} khớp với nhiều hơn một tệp JavaScript được liên kết
 @msg	automation path rejected: outside the write root {root}: {path}	đường dẫn tự động bị từ chối: ngoài thư mục gốc ghi {root}: {path}
