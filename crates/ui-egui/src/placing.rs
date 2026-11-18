@@ -21,10 +21,11 @@ use vectorcraft_engine::file_access::ScopeHandle;
 
 use crate::VectorcraftApp;
 
-/// What was read: one file to place, the files to load the place cursor with (and whether they ask
-/// for their import options when placed), or a bitmap to paste.
+/// What was read: one file to place (and where new art went when it was placed), the files to load
+/// the place cursor with (and whether they ask for their import options when placed), or a bitmap
+/// to paste.
 enum Read {
-    Place(Box<PlaceRead>),
+    Place(Box<PlaceRead>, Insertion),
     Queue(QueueRead, bool),
     Paste(Box<Paste>),
 }
@@ -56,7 +57,8 @@ struct Paste {
 }
 
 /// Where new art goes in the active document: the current layer, the isolated group or object, and
-/// the drawing mode with the object Draw Inside draws into.
+/// the drawing mode with the object Draw Inside draws into. A paste and a placed file read off the
+/// UI thread keep the one from when they were given.
 #[derive(Clone, PartialEq)]
 struct Insertion {
     layer: Option<vectorcraft_doc::NodeId>,
@@ -81,9 +83,34 @@ impl Insertion {
         Some(Self { layer, isolation, draw_mode, draw_inside })
     }
 
+    /// Whether new art can still go where `self` says in `app`'s active document: the isolated group
+    /// or object when it names one, else the object Draw Inside draws into when it names one and
+    /// `draws_inside` (a paste draws inside it, a placed file does not), else its layer, which must
+    /// still be a layer, is still there, shown and unlocked. A paste or a placed file whose layer or
+    /// group was deleted, hidden or locked meanwhile goes where new art goes now.
+    fn usable(&self, app: &VectorcraftApp, draws_inside: bool) -> bool {
+        app.session.doc().is_ok_and(|st| {
+            let inside = self.draw_inside.filter(|_| draws_inside && self.draw_mode == vectorcraft_engine::DrawMode::Inside);
+            match (self.isolation, inside, self.layer) {
+                (Some(target), ..) | (None, Some(target), _) => st.doc.is_editable(target),
+                (None, None, Some(l)) => st.doc.node(l).is_some_and(|n| n.is_layer()) && st.doc.is_editable(l),
+                (None, None, None) => true,
+            }
+        })
+    }
+
+    /// `self` when new art can still go there ([`Self::usable`]), else `now`: where new art went
+    /// before the paste or the place selected anything again.
+    fn or_now(self, now: Option<&Self>, app: &VectorcraftApp, draws_inside: bool) -> Self {
+        match now {
+            Some(now) if !self.usable(app, draws_inside) => now.clone(),
+            _ => self,
+        }
+    }
+
     /// Put back each part of `self` (where new art went before [`Self::set`] set `started`) that
-    /// differs from `started`, what the user changed meanwhile; a part the paste itself changed
-    /// stays as the paste left it.
+    /// differs from `started`, what the user changed meanwhile; a part the paste or the place
+    /// itself changed stays as it left it.
     fn restore_changed(self, started: &Self, app: &mut VectorcraftApp) {
         if let Ok(st) = app.session.doc_mut() {
             if self.layer != started.layer {
@@ -224,7 +251,9 @@ pub fn start(app: &mut VectorcraftApp, p: &Value, dropped: bool) -> Result<Value
     crate::canvas::apply_requests(app, r);
     let job = app.session.prepare_place(p).map_err(|e| e.to_string())?;
     let name = job.name();
-    let started = spawn(app, name.clone(), name, dropped, move || job.read().map(|r| Read::Place(Box::new(r))).map_err(|e| e.to_string()))?;
+    let insertion = Insertion::of(app).ok_or("no document")?;
+    let started =
+        spawn(app, name.clone(), name, dropped, move || job.read().map(|r| Read::Place(Box::new(r), insertion)).map_err(|e| e.to_string()))?;
     started.map_or_else(
         || {
             let r = app.session.execute("file.place", p).map_err(|e| e.to_string());
@@ -486,7 +515,19 @@ fn finish(app: &mut VectorcraftApp, p: &Pending, r: Result<Read, String>) {
     }
     app.session.set_active(i);
     let r = match r {
-        Ok(Read::Place(read)) => app.session.place_read(*read).map(|_| ()).map_err(|e| e.to_string()),
+        Ok(Read::Place(read, insertion)) => {
+            // The file goes where new art went when it was placed (the current layer, the isolated
+            // group), as a paste does, and what the user changed meanwhile is kept. Where new art
+            // goes now is taken before Replace selects the object it swaps again.
+            let current = Insertion::of(app);
+            let insertion = insertion.or_now(current.as_ref(), app, false);
+            insertion.clone().set(app);
+            let r = app.session.place_read(*read).map(|_| ()).map_err(|e| e.to_string());
+            if let Some(current) = current {
+                current.restore_changed(&insertion, app);
+            }
+            r
+        }
         Ok(Read::Queue(read, asks)) => {
             app.session.place_queue_read(read).map(|r| crate::place::show_thumbnails(app, &r, asks)).map_err(|e| e.to_string())
         }
@@ -540,7 +581,8 @@ fn finish_paste(app: &mut VectorcraftApp, paste: Paste) {
             // The paste goes where new art went when it started (the current layer, the isolated
             // group, the object Draw Inside draws into), and what the user changed meanwhile is
             // kept.
-            paste.insertion.clone().set(app);
+            let insertion = paste.insertion.or_now(current.as_ref(), app, pastes_inside(&paste.id));
+            insertion.clone().set(app);
             let requested_selection = app.session.doc().map(|st| st.selection.objects.clone()).unwrap_or_default();
             app.placing.adopted = true;
             // `run` shows an error in the status bar.
@@ -552,7 +594,7 @@ fn finish_paste(app: &mut VectorcraftApp, paste: Paste) {
                 if let Ok(st) = app.session.doc() {
                     app.placing.swatch_paste = Some(PendingSwatch {
                         clipboard: app.session.clipboard.clone(),
-                        insertion: paste.insertion.clone(),
+                        insertion: insertion.clone(),
                         selection: requested_selection,
                         doc: st.uid,
                         reverts: st.reverts,
@@ -562,7 +604,7 @@ fn finish_paste(app: &mut VectorcraftApp, paste: Paste) {
                 }
             }
             if let Some(current) = current {
-                current.restore_changed(&paste.insertion, app);
+                current.restore_changed(&insertion, app);
             }
             app.session.doc().ok().map(|st| st.selection.objects.clone())
         }
@@ -613,6 +655,12 @@ pub(crate) fn settle_swatch_paste(app: &mut VectorcraftApp) {
     }
 }
 
+/// Does the paste command `id` paste inside the object Draw Inside draws into? Paste in Front and
+/// Paste in Back keep their own places.
+fn pastes_inside(id: &str) -> bool {
+    !matches!(id, "edit.pasteInFront" | "edit.pasteInBack")
+}
+
 /// Run the command confirmed by the deferred paste's Swatch Conflict dialog.
 pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: Value, token: Option<u64>) -> Result<Value, String> {
     if !app.placing.swatch_paste.as_ref().is_some_and(|waiting| Some(waiting.chain) == token) {
@@ -643,7 +691,7 @@ pub(crate) fn confirm_swatch_paste(app: &mut VectorcraftApp, id: &str, params: V
     if selected != now.iter().map(|id| id.0).collect::<Vec<_>>() {
         let _ = app.session.execute("select.set", &json!({"ids": selected}));
     }
-    let insertion = waiting.insertion.clone();
+    let insertion = waiting.insertion.clone().or_now(changed.as_ref(), app, pastes_inside(id));
     insertion.clone().set(app);
     app.placing.adopted = true;
     let result = app.run(id, params);

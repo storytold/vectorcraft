@@ -488,8 +488,14 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind, verb: &str) -> Result<Opt
             };
             char_attrs(&style)
         }
-        // The paragraph at `start`.
-        Kind::Para => para_attrs(t.para_at(t.paragraphs_in(at, at).start)),
+        // The paragraph at `start`, without the number its list gives that paragraph alone.
+        Kind::Para => {
+            let mut para = t.para_at(t.paragraphs_in(at, at).start).clone();
+            if let Some(l) = para.list.as_mut() {
+                l.start = None;
+            }
+            para_attrs(&para)
+        }
     }))
 }
 
@@ -516,14 +522,16 @@ pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<St
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
 }
 
-/// The fill of `[Normal Character Style]` in `d`: black, or the fill a redefinition gave it. New
-/// type starts in that style ([Character and paragraph styles](https://helpx.adobe.com/illustrator/using/character-paragraph-styles.html):
-/// every character is in it by default; [FAQs on fonts](https://helpx.adobe.com/illustrator/using/fonts-faq.html):
-/// new type's defaults are changed by editing it), so it takes this fill, not the current fill
-/// left from the last shape (#7975).
-pub(crate) fn normal_char_fill(d: &Document) -> vectorcraft_color::Paint {
+/// `[Normal Character Style]` in `d`: the defaults, with whatever a redefinition gave it (font,
+/// size, fill…). New type starts in that style ([Character and paragraph styles](https://helpx.adobe.com/illustrator/using/character-paragraph-styles.html):
+/// every character is in it by default; [FAQs on fonts](https://helpx.adobe.com/illustrator/using/fonts-faq.html)
+/// and [Change the default font](https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/change-the-default-font-in-illustrator.html):
+/// new type's defaults, its font included, are changed by editing it), so it takes this style's
+/// font and fill, not the current fill left from the last shape (#7975). Attributes that don't
+/// pass its checks leave the defaults.
+pub(crate) fn normal_char_style(d: &Document) -> CharStyle {
     let normal = Kind::Char.attrs(d, NORMAL_CHAR).unwrap_or_default();
-    with_attrs(&CharStyle::default(), &normal, "text.create").map_or_else(|_| CharStyle::default().fill, |st| st.fill)
+    with_attrs(&CharStyle::default(), &normal, "text.create").unwrap_or_default()
 }
 
 /// `attrs` in the form `charStyle.new` (`para`: `paraStyle.new`) stores them in `d`, or `None`
@@ -639,6 +647,11 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                 }
                 Kind::Para => {
                     let mut st = with_attrs(&ParaStyle::default(), m, &c)?;
+                    // A list's number belongs to one paragraph, not to a style.
+                    if st.list.is_some_and(|l| l.start.is_some()) {
+                        let k = "list.start";
+                        return Err(bad(&c, format!("unknown attribute `{k}`")));
+                    }
                     para_ranges(&st, m, kept, &c)?;
                     sort_tabs(&mut st, m, kept);
                     para_attrs(&st)
