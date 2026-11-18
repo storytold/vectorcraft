@@ -962,7 +962,8 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]). An image the decoder reads and that is stored as
 /// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
 /// other samples become 8-bit RGBA. A PSD/PSB composite's stored image keeps its imported
-/// clipping path ([`image_clip`]).
+/// clipping path ([`image_clip`]), and a PNG or TIFF that keeps such a path (as Unembed writes
+/// it) is read with that path.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
@@ -1139,13 +1140,15 @@ pub fn texture_image(bytes: &[u8]) -> Result<String> {
     texture.and_then(|t| t.to_stored()).ok_or_else(|| err("the image can't be read as a texture"))
 }
 
-/// An image's encoded `bytes`, `width` × `height` pixels, ready to embed.
+/// An image's encoded `bytes`, `width` × `height` pixels, ready to embed, with the clipping path a
+/// PNG or TIFF made from a PSD or PSB file keeps ([`image_clip`]).
 fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: Option<(f64, f64)>) -> Result<RasterImage> {
     if width == 0 || height == 0 {
         return Err(err("the image is empty"));
     }
     let blob = ImageBlob::new(mime, bytes);
-    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip: None })
+    let clip = image_clip(&blob).map(|path| (path, vectorcraft_geom::FillRule::EvenOdd));
+    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip })
 }
 
 /// The keyword of the PNG text chunk holding the clipping path of the file a PNG was made from

@@ -16,6 +16,8 @@ pub(super) struct HoverContext {
     pub(super) center: Point,
     pub(super) zoom: f64,
     pub(super) rotation: f64,
+    /// A pen turning in place changes a Bristle tip even when its pointer stays still.
+    pub(super) pen: Option<PenPose>,
     /// The active document's id and revision (which moves with every edit, undo and selection
     /// change).
     pub(super) doc: Option<(u64, u64)>,
@@ -317,7 +319,7 @@ pub(super) fn drag_art_out(app: &VectorcraftApp, ui: &Ui, resp: &egui::Response,
     // The art the drag started with: the release rolls the move back to it, and an Alt-copy's
     // copies, selected while it previews, go with that.
     let ids = it.selection.objects.clone();
-    egui::DragAndDrop::set_payload(ui.ctx(), widgets::PanelDrag::Art(ids));
+    widgets::drag_art(ui.ctx(), st.uid, ids);
     true
 }
 
@@ -423,6 +425,7 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
             for r in reqs {
                 match r {
                     vectorcraft_engine::UiRequest::Dialog(kind, p) => crate::dialogs::open_tool_dialog(app, &kind, p),
+                    vectorcraft_engine::UiRequest::Panel(panel) => activate_panel(app, &panel),
                     vectorcraft_engine::UiRequest::SwitchTool(t) => app.select_tool(&t),
                     vectorcraft_engine::UiRequest::Status(msg) => app.status(msg),
                     vectorcraft_engine::UiRequest::Place(p) => crate::place::place_from_cursor(app, &p),
@@ -440,5 +443,13 @@ pub fn apply_requests(app: &mut VectorcraftApp, r: vectorcraft_engine::Result<Ve
             crate::panels::actions::after_journaled_edit(app);
         }
         Err(e) => app.status(e.to_string()),
+    }
+}
+
+/// Show and select `panel` where it is (`window.panel.activate`): a panel already on show stays on
+/// show, and a dock hidden by Tab shows again.
+fn activate_panel(app: &mut VectorcraftApp, panel: &str) {
+    if let Err(e) = app.run("window.panel.activate", serde_json::json!({ "panel": panel })) {
+        app.status(e);
     }
 }
