@@ -145,7 +145,8 @@ impl FaceMap {
 
 /// The map of Extrude & Bevel's cap `face` for a solid built with `bounds`, `options` and `view`,
 /// as [`super::extrude`] builds it. With a depth of 0 the art is a plane, whose only face is the
-/// front. `None` for a hollow solid (no caps), for the back of a plane, and for invalid bounds.
+/// front. `None` for a hollow solid (no caps), for the back of a plane, for the side (which is not
+/// planar), and for invalid bounds.
 pub fn extrude_face_map(bounds: Rect, options: Extrude, view: View, face: PlanarFace) -> Option<FaceMap> {
     check_bounds(bounds).ok()?;
     let o = options.sanitized();
@@ -159,6 +160,7 @@ pub fn extrude_face_map(bounds: Rect, options: Extrude, view: View, face: Planar
     let (t, side) = match face {
         PlanarFace::Front => (0.0, 1.0),
         PlanarFace::Back => (1.0, -1.0),
+        PlanarFace::Side => return None,
     };
     let placing = Placing::new(&camera, bounds.center(), Turn::new(bounds, o.twist, o.taper, t), o.depth / 2.0 - o.depth * t);
     let at = placing.place(bounds.center());
@@ -235,7 +237,7 @@ impl MeshFace {
 /// Extrude & Bevel's cap `face` in the solid's mesh ([`MeshFace`]), for a solid built with
 /// `bounds`, `options` and `view`, as [`extrude_face_map`] maps it on the page. With a depth of 0
 /// the art is a plane ([`plane_mesh_face`]). `None` for a hollow solid, for the back of a plane,
-/// and for invalid bounds.
+/// for the side, and for invalid bounds.
 pub fn extrude_mesh_face(bounds: Rect, options: Extrude, view: View, face: PlanarFace) -> Option<MeshFace> {
     check_bounds(bounds).ok()?;
     let o = options.sanitized();
@@ -249,6 +251,7 @@ pub fn extrude_mesh_face(bounds: Rect, options: Extrude, view: View, face: Plana
     let (t, side) = match face {
         PlanarFace::Front => (0.0, 1.0),
         PlanarFace::Back => (1.0, -1.0),
+        PlanarFace::Side => return None,
     };
     let placing = Placing::new(&camera, bounds.center(), Turn::new(bounds, o.twist, o.taper, t), o.depth / 2.0 - o.depth * t);
     Some(MeshFace::new(&camera, &placing, bounds.center(), side, false))

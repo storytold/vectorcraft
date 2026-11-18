@@ -131,7 +131,10 @@ the two can still win that race.
 Swatch editors: `engine.execute` with `ui.swatchOptions {name}` opens the `swatchOptions` dialog for a colour swatch
 (fields `name`, `spot`, `global`, `mode`: `gray`/`rgb`/`hsb`/`lab`/`cmyk`/`web`, `color`: `"#rrggbb"` or a colour object,
 `preview`), which previews on the canvas while open; `ui.dialog.confirm` applies it with `swatch.edit` as one undo
-step and `ui.dialog.cancel` rolls the preview back. For a gradient swatch the dialog has `name` only (it shows the
+step and `ui.dialog.cancel` rolls the preview back. Under the colour it shows the out-of-gamut warning (in RGB, HSB
+and Lab) and the out-of-web-color warning (in every mode but `web`); a click on one sets `color` to the correction
+and `mode` to `cmyk` for the gamut correction, or to `rgb` for a web correction of a `gray`, `lab` or `cmyk` colour.
+The warnings are not fields: set `color` and `mode` to apply a correction from a script. For a gradient swatch the dialog has `name` only (it shows the
 gradient) and OK renames it; pattern swatches open pattern editing instead. Dropping a gradient (or colour) on a
 swatch of its kind in the Swatches panel with Alt held replaces it (`swatch.edit {name, paint}`), unless that is a
 tint swatch. A swatch dragged from the panel with Alt held also replaces the swatch of its kind it is dropped on,
@@ -265,7 +268,9 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected).
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?}` shows the wheel or the box (a
+color field with a channel strip at its right) and picks the box's channel; it returns the settings, and `ui.inspect`
+reports them as `ui.color_wheel`.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
@@ -302,7 +307,11 @@ right-click menu has Remove Color too. The base color can't be removed. A remove
 has current colors and art or a group is open: it then keeps them with `to: null`, that art keeps its colors, and the
 group's swatch at that place is removed. A row with no current colors recolors no art; with a group, the new color of
 one with `added: true` that is not excluded is added to the group after the group's other colors, and a row made with New Row adds none.
-Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`). The dialog previews
+`groupStorage` shows the Color Groups list (true when the dialog opens); setting `group` to a color group's name makes
+it the group being edited, as opening on it does, and refuses a name no group has; `groupAction` (`save`, `new` or
+`delete`) runs the list's Save Changes, New Color Group or Delete button on the next frame, or first on confirm (see
+`docs/mcp.md`). Setting `colors`, a preserve flag or `limitTo` reduces the rows again (also on `ui.dialog.confirm`).
+The dialog previews
 `recolor.apply` on the canvas; confirm keeps it as one undo step (with a group, the group is rewritten in the same
 step; with no art selected only the group changes). In the Swatches panel, double-clicking a colour group's folder,
 or the options button while a group is selected, opens it.
@@ -496,7 +505,10 @@ the desktop each floating window is an OS window of its own; on the web and on W
 window. `ui.toolbar_pos` in `ui.inspect` is the Tools panel's corner (null: docked); `window.panel.float` and
 `window.panel.dock` with `panel: "tools"` float it at `x`, `y` or dock it on the window's left edge. With
 `window.toolsBesideCanvas {on?}` (Window › Toolbars › Keep Tools Beside the Canvas, off by default; `ui.tools_beside_canvas`)
-the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there.
+the docked Tools panel sits between left-side panels and the canvas, and `window.panel.dock` docks it there. Dropping
+a floating Tools panel on the canvas's left edge, right of panels docked on the left, turns the setting on, and on the
+window's left edge turns it off; with no panels docked on the left, a drop leaves the setting as it is
+(`docs/mcp.md` › Tools panel placement).
 
 Flatten Transparency: `ui.flattenTransparencyDialog` opens the `flattenTransparency` dialog for the selection
 (fields `preset`: a preset name, setting it loads that preset's options; the option keys of
@@ -592,6 +604,9 @@ Width Point Edit: double-clicking a width point with the Width tool, or `ui.widt
 `widthPoint` dialog (fields `id`, `index`, `t`, `side1` and `side2`: the left and right widths in points, `linked`,
 `adjustAdjoining`). `ui.dialog.confirm` runs `stroke.widthPoint.set` with them; `ui.dialog.set {field: "discard",
 value: true}` then confirm (the Delete button) removes the point with `stroke.widthPoint.remove`.
+Either half of a discontinuous point opens both: `index` is the incoming half, and `outIndex`, `outSide1`, `outSide2`
+and `outLinked` hold the outgoing half; `single` (`""`, `"incoming"` or `"outgoing"`) is Single Width Only. Confirm
+sets both halves in one `stroke.widthPoint.set` (one undo step), and Delete removes both.
 
 Corners: double-clicking a Live Corners widget with the Selection or Direct Selection tool, or `ui.corners {id?,
 corners?}`, opens the `corners` dialog for a path's corners (the Direct-Selected ones, else every corner; fields `id`,
@@ -729,13 +744,14 @@ folder, then opens the dialog searching it. The web shows a status line instead 
 disabled there.
 
 Text Import Options: placing a `.txt` file through the app (`file.place` with a file and no `text` options, the Place
-dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: `unicode`/`ansi`,
+dialog, a drop) opens the `textImport` dialog (fields `platform`: `windows`/`mac`, `characterSet`: a `text.characterSet` value,
 `removeLineReturns`, `removeParagraphReturns`, `replaceSpaces`, `spaces`). `ui.dialog.confirm` places the file as area
 type with those options (`file.place {text: {…}}`).
 
 System clipboard formats: through the desktop app, `edit.copy`, `edit.cut`, `artboard.copy` and `artboard.cut` publish what `clipboard.flavours`
 lists to the system clipboard (once they are written, the status bar shows the first of the PNG's and PDF's
-`warnings`, such as an image that couldn't be decoded), and every Paste command first loads what another app copied (`clipboard.importSvg`,
+`warnings`, such as an image that couldn't be decoded, and how many there are, and hovering the message lists them, unless
+another message has replaced the Copy or Cut's meanwhile), and every Paste command first loads what another app copied (`clipboard.importSvg`,
 `importPdf`, `importEps`, `importText` or `importImage`, centred in the view; the desktop app reads PDF and EPS from
 the Windows clipboard and, with SVG, from the macOS pasteboard, and an `.eps` file, or a `.ai` or `.ait` file that holds a PDF or PostScript, copied in a file manager anywhere; a copied `.ai` or `.ait` file that holds a PDF loads with `importPdf {editingData: true}`, which reads its editing data); an import error answers the Paste with that error
 and pastes nothing. Cmd+V also pastes a bitmap or PDF with no text beside it (on the key's release, as egui sends no
@@ -818,12 +834,20 @@ selected slices. Hidden or locked slices (`view.slices.hide`, `view.slices.lock`
 EPS Options: Export As… with the EPS format (`file.exportAs {format: "eps"}`, then the save dialog), or
 `ui.epsOptionsDialog {path?, …document.exportEps options}` for agents, opens the `epsOptions` dialog. Its fields are
 `document.export` params: `previewFormat` (`none`, `tiffBw`, `tiffColor`), `transparentPreview`, `overprints`
-(`preserve`, `discard`), `flattenerPreset` (a built-in or saved preset's name), `includeLinkedFiles`, `thumbnails`,
+(`preserve`, `discard`), `flattenerPreset` (a built-in or saved preset's name), `flattener` (custom flattener options
+over the preset, as `object.flattenTransparency` takes them), `includeLinkedFiles`, `thumbnails`,
 `cmykPostScript`, `compatibleGradients`, `level` (`2`, `3`), plus `path` and the artboard choice (`useArtboards`,
 `range`). `ui.dialog.confirm` checks them (a bad value or an unknown preset keeps the dialog open), remembers them for
 the next EPS Options and writes the file(s), asking for a path when there is none. With Use Artboards and two or more
 artboards, it writes a central file of the whole document under the chosen name and one `{stem}_{artboard}.eps` per
 artboard. When no art shows, it writes only the artboard files.
+
+The Custom… button beside the preset opens the `epsFlattenerOptions` dialog over EPS Options, on the options the
+export would use. Its fields are the flattener options; `preserveAlpha` is always off, and overprints are kept only
+with `overprints: "preserve"`. Its `ui.dialog.confirm` sets every option as `flattener` (the preset then shows
+[Custom]) and goes back to EPS Options; `ui.dialog.cancel` goes back with the options unchanged. Choosing a preset,
+in the dropdown or with `ui.dialog.set {flattenerPreset}`, drops `flattener`, and so does `ui.epsOptionsDialog` with
+a `flattenerPreset` and no `flattener`.
 
 Data Recovery: at launch, copies left behind by a crash open the `recovery` dialog (never copies another running
 instance keeps, so instances started side by side for screenshots don't get it). Fields: `copies` (`[{file, title,
@@ -953,7 +977,11 @@ Halftone… (`engine.execute {command: "ui.menuDialog", params: {command: "objec
 Tool options last: `tool.setOption {key, value}` or `{values: {…}}` (and `tool` to set another tool's) sets them, and
 the options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, Symbolism, drawing tools) stay
 when you switch tools or documents and are saved with the preferences. The Liquify tools share their Global Brush
-Dimensions (`width`, `height`, `angle`, `intensity`).
+Dimensions (`width`, `height`, `angle`, `intensity`). `{}` reads the options and sets nothing; parameters that are
+not an object are an error. Every option given is checked before any is set: an option the tool doesn't have, a value
+of the wrong type, a number outside the tool's range or an unknown choice is an error that names the tool and the option
+(``tool `smooth`: `fidelity` must be a number from 0.05 to 100``), and no option, preference or undo step changes.
+The Live Paint tools' `width` and the Shape Builder's `gapLength` are set to the nearest end of their range instead.
 
 Perspective grid: View → Perspective Grid → Define Grid… (`ui.perspectiveGridDialog`) opens the `perspectiveGrid`
 dialog prefilled from the grid. Its fields are those of `perspective.grid.define` (`kind`, `units`, `scale`,

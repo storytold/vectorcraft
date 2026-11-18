@@ -84,7 +84,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
             std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
         }
     };
-    fileio::check_linked_images("file.exportAs", f.id, st, &doc, params).map_err(|e| e.to_string())?;
+    fileio::check_linked_images("file.exportAs", f.id, st, &doc, &checked).map_err(|e| e.to_string())?;
     // A PDF shows its title in the viewer's title bar only when it is the document's own, not the
     // file name it was titled after, as `document.export` writes it.
     let own_title = fileio::has_own_title(&doc);

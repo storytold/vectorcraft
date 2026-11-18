@@ -66,7 +66,8 @@ pub use expand::{
 use mesh::grid_eval;
 pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
 pub use warp::{
-    WARP_NET, WarpNet, WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, map_smooth_within, pieces, uses_net, warp_point, warp_version,
+    WARP_NET, WarpNet, WarpStyle, fit_piece, map_handles_within, map_nonlinear, map_nonlinear_within, map_smooth_within, pieces, uses_net,
+    warp_point, warp_version,
 };
 
 #[cfg(test)]
