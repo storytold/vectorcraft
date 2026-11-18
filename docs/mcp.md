@@ -3219,16 +3219,26 @@ dropped.
 ## Navigator panel options
 
 The Navigator panel menu's Panel Options… opens the `navigatorPanelOptions` dialog (fields `color`, `solidDashes`),
-and `ui.navigatorPanelOptions {color?, solidDashes?}` sets the options without it → `{color, solidDashes}`; with
-neither key it opens the dialog. `color` is the color the panel's view box is drawn in: `#rrggbb` or a preset name.
+and `ui.navigatorPanelOptions {color?, solidDashes?, viewArtboardContentsOnly?}` sets the options without it →
+`{color, solidDashes, viewArtboardContentsOnly}`; with none of the keys it opens the dialog. `color` is the color the
+panel's view box is drawn in: `#rrggbb` or a preset name.
 The presets are VectorCraft's own list: Light Red (`#ff3030`, the default), then the layer colors ("Light Blue",
 "Red", "Green" and the rest). `solidDashes` (Draw Dashed Lines as Solid Lines, off by default) makes the panel's
-thumbnail draw dashed strokes without their dashes; the canvas, printing and exports keep the dashes. Both are kept
-with the UI state. A `color` that is not a color, or a `solidDashes` that is not true or false, is an error and
-changes neither option. Behavior reference: [View artwork](https://helpx.adobe.com/illustrator/using/viewing-artwork.html).
+thumbnail draw dashed strokes without their dashes; the canvas, printing and exports keep the dashes.
+`viewArtboardContentsOnly` is the panel menu's View Artboard Contents Only, on by default: the thumbnail fits the
+artboards and draws only the art inside them, so art on the pasteboard and in the gaps between artboards is left out
+and a shape that crosses an artboard's edge is cut there. Off, the thumbnail also fits and draws the art outside the
+artboards. The view box still shows the canvas's view either way. All three are kept with the UI state and apply to
+every document; UI state saved without `viewArtboardContentsOnly` reads it as on, and a saved off stays off. Fitting
+the thumbnail to the union of the artboards with a small margin, cutting the art at each artboard, and keeping the
+choice with the UI state are VectorCraft's own rules. A `color` that is not a color, or a `solidDashes` or
+`viewArtboardContentsOnly` that is not true or false, is an error and changes none of the options. Behavior
+references: [View artwork](https://helpx.adobe.com/illustrator/using/viewing-artwork.html) and
+[Navigate and zoom artwork](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/navigate-and-zoom-artwork.html).
 
 ```json
 {"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"color":"Light Blue","solidDashes":true}}}
+{"name":"invoke_menu","arguments":{"command":"ui.navigatorPanelOptions","params":{"viewArtboardContentsOnly":false}}}
 ```
 
 ## Info panel

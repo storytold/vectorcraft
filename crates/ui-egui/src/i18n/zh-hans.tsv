@@ -4207,7 +4207,7 @@ variable-list-end	{0}, {1}	{0}和{1}
 	Vertical:	垂直：
 	Very High	极高
 	View	视图
-	View Artboard Only	仅查看画板
+	View Artboard Contents Only	仅查看画板内容
 	View Opacity Mask	查看不透明度蒙版
 	View PDF after saving	存储后查看 PDF
 	View {n}	查看 {n}

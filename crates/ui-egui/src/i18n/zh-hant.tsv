@@ -5550,7 +5550,7 @@ variable-list-end	{0}, {1}	{0}和{1}
 	Vertical:	垂直：
 	Very High	極高
 	View	檢視
-	View Artboard Only	僅檢視工作區域
+	View Artboard Contents Only	僅檢視工作區域內容
 	View Opacity Mask	檢視不透明度遮色片
 	View PDF after saving	儲存後檢視 PDF
 	View {n}	檢視 {n}
