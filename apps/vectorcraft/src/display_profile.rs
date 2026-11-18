@@ -73,8 +73,9 @@ impl Reader {
 
     /// The display to read at `now` when a reading is to start, looked up with `display`. A
     /// request from Refresh Monitor Profile ([`DisplayProfile::request_read`]) starts one at once,
-    /// past [`EVERY`] and [`LOOK_EVERY`]; while a reading runs it waits, and with the preference
-    /// off it is dropped.
+    /// past [`EVERY`] and [`LOOK_EVERY`]; while a reading runs it waits, and a frame that finds the
+    /// preference off drops it. A request made with the preference on is kept when the preference
+    /// goes off and on again between two frames.
     fn start(&mut self, now: f64, enabled: bool, profile: &DisplayProfile, display: impl FnOnce() -> Option<String>) -> Option<Option<String>> {
         if !enabled {
             profile.take_request();
