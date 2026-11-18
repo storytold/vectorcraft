@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md)",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults (in a document whose Default Graphic Style differs from the shipped one, as a New Document profile can redefine it: that style's fills, strokes and effects, without its opacity or a link to it); type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind, and on a graph's axis line, tick mark or radar ring its rows for every line of its kind (exceptions: docs/mcp.md)",
             has_doc,
             default_paint
         ),
@@ -274,8 +274,9 @@ impl DocState {
     /// Whether the selected objects' fills and strokes differ as the proxies show them (a "?"
     /// proxy; a group whose contents differ counts). `item` (the Appearance panel's active item)
     /// stands for the proxy of its kind, as in [`Session::proxy_paints`]: that fill or stroke of
-    /// each selected object's own stack is compared. One walk of the document, so callers that ask
-    /// every frame cache it by revision.
+    /// each selected object's own stack is compared. The selected objects are found through the id
+    /// cache ([`vectorcraft_doc::Document::nodes_in_order`]); a large selection takes one walk
+    /// of the document, so callers that ask every frame cache it by revision.
     pub fn proxy_mixed(&self, item: Option<usize>) -> (bool, bool) {
         self.proxy_mixed_with(item, &[])
     }
@@ -290,15 +291,17 @@ impl DocState {
         if self.selection.symbol_part.is_some() {
             return (false, false);
         }
-        let ids: std::collections::HashSet<NodeId> = self.selection.objects.iter().copied().collect();
-        let (mut selected, mut nodes) = (vec![], vec![]);
-        self.doc.walk(|n| {
-            if ids.contains(&n.id) {
-                selected.push(n);
-                painted(n, true, &mut nodes);
-            }
-        });
+        // Looking the first object up builds the id cache when there is none.
         let first = self.selection.objects.first().and_then(|id| self.doc.node(*id));
+        let (mut selected, mut nodes) = (vec![], vec![]);
+        // Every node with a selected id, in tree order: a repeated id (a damaged file) counts at each
+        // place it appears.
+        for n in self.doc.nodes_in_order(self.selection.objects.iter().copied()) {
+            #[cfg(test)]
+            tests::note_gathered();
+            selected.push(n);
+            painted(n, true, &mut nodes);
+        }
         let differ = |stroke: bool| {
             let item = first.and_then(|f| f.appearance.item_of_kind(item, !stroke));
             let set = if item.is_some() { &selected } else { &nodes };
@@ -1035,6 +1038,8 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
+        // A redefined Default Graphic Style gives other art its fills, strokes and effects, placed on each object.
+        let style = super::newart::redefined_default_style(&before).cloned();
         super::overprint::edit_counted(s, "Default Fill and Stroke", |d| {
             for id in &ids {
                 let Some(n) = d.node_mut(*id) else { continue };
@@ -1045,7 +1050,12 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                             r.style.stroke = Paint::None;
                         }
                     }
-                    _ => n.appearance = Appearance::default_art().into(),
+                    _ => {
+                        n.appearance = match &style {
+                            Some(g) => g.appearance_on(n).into_owned().into(),
+                            None => Appearance::default_art().into(),
+                        }
+                    }
                 }
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
@@ -1316,3 +1326,6 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     }
     s.execute("object.setProps", &Value::Object(q))
 }
+
+#[cfg(test)]
+mod tests;
