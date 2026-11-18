@@ -1942,7 +1942,8 @@ fn eraser_pinning_only_nested_gradient_matches_unchanged_render() {
     eraser_pinning_only_nested_case(true);
 }
 
-fn eraser_pinning_only_text_clip_case(stroked: bool) {
+fn eraser_pinning_only_text_clip_case(stroked: bool, no_stroke: Option<&vectorcraft_render::Rendered>) -> vectorcraft_render::Rendered {
+    assert_eq!(stroked, no_stroke.is_some(), "INPUT: the subject follows its no-stroke control");
     // Original clippaint.rs text, paint, font defaults and geometry; one retained ordinary scale.
     let mut s = session();
     let art = s.execute("shape.rectangle", &json!({"x": 0, "y": 50, "width": 30, "height": 100})).unwrap()["id"].as_u64().unwrap();
@@ -1987,38 +1988,38 @@ fn eraser_pinning_only_text_clip_case(stroked: bool) {
     for (key, expected) in [("scaleH", 100.0), ("scaleV", 150.0), ("reference", 8.0), ("copies", 0.0)] {
         assert_eq!(effects[0].params[key].as_f64(), Some(expected), "INPUT: accepted Transform {key}");
     }
-    let evaluated = vectorcraft_effects::evaluate_container(Some(doc), node).expect("INPUT: the real container pass evaluates the fixture");
-    if stroked {
-        let children = evaluated.children().unwrap();
-        assert!(!evaluated.clips() && children.len() >= 2, "INPUT: painted clipping strokes create an outer wrapper");
-        assert!(children[0].clips());
-        assert_eq!(children[0].id, owner);
-        assert_eq!(children[0].children().unwrap()[0].id, text);
-        assert_eq!(children[1].id, text);
-        assert!(!children[1].clips(), "INPUT: the second piece paints the stroke outside the clip");
-    } else {
-        assert!(evaluated.clips(), "INPUT: the same glyph/scale without character stroke has no painted-clip wrapper");
-    }
     let before = eraser_gradient_image(&s);
+    let background = before.pixel(299, 299);
+    assert_eq!(background[3], 0, "INPUT: the retained background sample is clear");
+    if let Some(control) = no_stroke {
+        assert_eq!(control.pixel(299, 299), background, "INPUT: both unchanged renders use the same background");
+    }
     let mut ramp = std::collections::BTreeSet::new();
     let mut green = 0;
+    let mut outside_green = 0;
     for y in 0..300 {
         for x in 0..300 {
             let p = before.pixel(x, y);
             if p[3] == 255 && p[0] > 0 && p[2] > 0 && p[1] == 0 {
                 ramp.insert(p);
             }
-            green += usize::from(p[3] > 0 && p[1] > 200 && p[0] < 60 && p[2] < 60);
+            let painted_stroke = p[3] > 0 && p[1] > 200 && p[0] < 60 && p[2] < 60;
+            green += usize::from(painted_stroke);
+            outside_green += usize::from(painted_stroke && no_stroke.is_some_and(|control| control.pixel(x, y) == background));
         }
     }
     assert!(ramp.len() > 1, "INPUT: the fitted container gradient paints actual nonconstant glyph pixels");
     assert_eq!(green > 0, stroked, "INPUT: the painted-character stroke is actually visible only in the subject");
+    if stroked {
+        assert!(outside_green > 0, "INPUT: the actual character stroke paints where the no-stroke control has only clear background");
+    }
     let label = if stroked { "PINNING_ONLY: painted clipping text under nonuniform scale" } else { "CONTROL: same glyph/scale without painted-clip wrapper" };
     eraser_pinning_only_store(doc, owner, &before, !stroked, label);
+    before
 }
 
 #[test]
 fn eraser_pinning_only_painted_text_clip_matches_unchanged_render() {
-    eraser_pinning_only_text_clip_case(false);
-    eraser_pinning_only_text_clip_case(true);
+    let control = eraser_pinning_only_text_clip_case(false, None);
+    eraser_pinning_only_text_clip_case(true, Some(&control));
 }
