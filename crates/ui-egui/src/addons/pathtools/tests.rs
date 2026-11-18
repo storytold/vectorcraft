@@ -343,6 +343,24 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
     app.run("select.set", json!({"ids": [oval, dot]})).unwrap();
     let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
     let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.node_count();
+    // The end points of every two-anchor path in the document, rounded and sorted.
+    let lines = |app: &VectorcraftApp| {
+        let mut ends = Vec::new();
+        app.session.doc().unwrap().doc.walk(|node| {
+            if let Some(path) = node.path_data() {
+                for sub in &path.subpaths {
+                    if sub.anchors.len() == 2 {
+                        let mut pair: Vec<(i64, i64)> =
+                            sub.anchors.iter().map(|a| ((a.p.x * 1e6).round() as i64, (a.p.y * 1e6).round() as i64)).collect();
+                        pair.sort();
+                        ends.push(pair);
+                    }
+                }
+            }
+        });
+        ends.sort();
+        ends
+    };
     let (n, nodes) = (steps(&app), count(&app));
     let open = |app: &mut VectorcraftApp| {
         let entries = menus::menu_entries(app);
@@ -352,15 +370,26 @@ fn common_tangents_on_a_point_gives_the_same_lines_for_every_choice() {
         menus::invoke(app, &cmd, p);
     };
 
-    open(&mut app);
-    crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "preview".into(), json!(true));
+    // Each choice previews the same two lines, and OK with that choice keeps them as one step.
+    let mut first: Option<Vec<Vec<(i64, i64)>>> = None;
     for (_, kind) in super::TANGENT_KINDS {
-        crate::dialogs::set_field(app.ui.dialog.as_mut().unwrap(), "tangents".into(), json!(kind));
+        open(&mut app);
+        let d = app.ui.dialog.as_mut().unwrap();
+        crate::dialogs::set_field(d, "preview".into(), json!(true));
+        crate::dialogs::set_field(d, "tangents".into(), json!(kind));
         painted_text(&mut app, |app, ui| crate::dialogs::show(app, ui.ctx()));
         assert_eq!(count(&app), nodes + 2, "{kind}: the two lines from the point");
+        let previewed = lines(&app);
+        assert_eq!(previewed.len(), 2, "{kind}");
+        let first = first.get_or_insert_with(|| previewed.clone());
+        assert_eq!(&previewed, first, "{kind}: the same lines as the first choice");
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!((steps(&app), count(&app)), (n + 1, nodes + 2), "{kind}: one undo step");
+        assert_eq!(&lines(&app), first, "{kind}: OK keeps the previewed lines");
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [oval, dot]})).unwrap();
+        assert_eq!((steps(&app), count(&app)), (n, nodes), "{kind}: undone");
     }
-    crate::dialogs::confirm(&mut app).unwrap();
-    assert_eq!((steps(&app), count(&app)), (n + 1, nodes + 2), "one undo step");
 
     // A point inside the ellipse: nothing changes, and a message says why.
     let inside = point(&mut app, 220.0, 150.0);

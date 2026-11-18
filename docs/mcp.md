@@ -13417,12 +13417,12 @@ Commands:
   only. A path inside the other has none. Paths that touch, from outside or from inside, share one tangent there
   instead: a line centered on the point where they touch and as long as the narrower path is wide along it. Paths
   that meet at a corner or along a shared stretch of outline get one such line, at the middle of the directions that
-  touch both. Paths count as touching when the gap between them is less than the tolerance, a billionth of the larger
+  touch both. Paths count as touching when the gap between them is at most the tolerance, a billionth of the larger
   of their sizes and the distance between their centers. One of the two may be a point instead, a path of one
   anchor: the lines then run from the point to where they touch the path, two when the point lies outside it (one
   that lies along a straight side covers the whole side), one when the point lies on its outline (centered on the
   point and as long as the path is wide along it, or the whole straight side the point lies on), and none when it
-  lies inside. The point counts as on the outline when it is less than the touching tolerance from it, with the
+  lies inside. The point counts as on the outline when it is at most the touching tolerance from it, with the
   point's distance from the path's center in place of the distance between centers. Every `tangents` value gives
   the same lines, counted in `internal` when `tangents` is `internal` and in `external` otherwise; the centerline
   runs from the point to the path's center. Two points are refused with "select two closed paths". The lines are
