@@ -195,6 +195,7 @@ pub fn show_icon_panel(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
         crate::addons::cleanup::ID => crate::addons::cleanup::show(app, ui),
         crate::addons::color::ID => crate::addons::color::show(app, ui),
         crate::addons::packaging::ID => crate::addons::packaging::show(app, ui),
+        crate::addons::packaging::preview::ID => crate::addons::packaging::preview::show(app, ui),
         crate::addons::pathtools::ID => crate::addons::pathtools::show(app, ui),
         crate::addons::pathtools::shape::ID => crate::addons::pathtools::shape::show(app, ui),
         crate::addons::pen::ID => crate::addons::pen::show(app, ui),

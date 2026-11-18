@@ -471,6 +471,21 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Area Type Options › First Baseline's choices (the dropdown reads them in the "effect" context,
+/// falling back to the plain row).
+#[test]
+fn first_baseline_choices_are_in_complete_catalogs() {
+    let mut missing = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Ascent", "Cap Height", "x Height", "Leading", "Em Box Height", "Fixed"] {
+            if lang.catalog().plain(label).is_none() && lang.catalog().contextual("effect", label).is_none() {
+                missing.push(format!("{} {label}", lang.code));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+}
+
 /// Each catalog's Saved View N and Saved Selection N rows carry the number N, and no two of a
 /// catalog's saved views or saved selections show one name, whatever digits the language uses.
 #[test]
@@ -557,6 +572,21 @@ fn copy_color_as_strings_are_in_complete_catalogs() {
     }
 }
 
+/// The status messages the Shape Builder tool gives when a gesture builds nothing come from the
+/// tools crate, which [`message_literals`] does not scan, so every complete catalog is checked for
+/// them here.
+#[test]
+fn shape_builder_status_messages_are_in_complete_catalogs() {
+    use vectorcraft_tools::builder::SHAPE_BUILDER_STATUS;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for s in SHAPE_BUILDER_STATUS {
+            assert_ne!(message(lang, s), s, "{code}: {s}");
+        }
+    }
+    assert_eq!(message(de(), SHAPE_BUILDER_STATUS[1]), "Formerstellung: Wählen Sie alle Pfade aus, die Sie zusammenfügen möchten");
+}
+
 /// The Window › Brush Libraries menu, built from the built-in library table, names each library.
 #[test]
 fn built_in_brush_library_names_are_in_complete_catalogs() {
@@ -595,6 +625,17 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// Window › Arrange's Tile layouts and the application bar's Arrange Documents button.
+#[test]
+fn tile_layout_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Tile All Vertically", "Tile All Horizontally", "2-Up Layout", "3-Up Layout", "4-Up Layout", "6-Up Layout", "Arrange Documents"]
+        {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Preference choices and the marquee's E hint share the same translated labels.
 #[test]
 fn marquee_selection_labels_are_in_complete_catalogs() {
@@ -618,6 +659,22 @@ fn monitor_profile_labels_are_in_complete_catalogs() {
         ] {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
+    }
+}
+
+/// Text Import Options' Character Set choices that name a script or a region (Shift JIS, GB2312
+/// and GB18030 are names of their own), and the error for an unknown character set.
+#[test]
+fn text_import_character_sets_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Chinese Big 5", "Cyrillic", "Greek", "Turkish", "Baltic", "Central European"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    let unknown = r#"text.characterSet `x`: use "unicode", "ansi", "shiftJis", "gb2312", "chineseBig5", "cyrillic", "gb18030", "greek", "turkish", "baltic" or "centralEuropean""#;
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        assert_ne!(message(lang, unknown), unknown, "{code}");
     }
 }
 
@@ -649,6 +706,20 @@ fn control_bar_panel_menu_labels_are_in_complete_catalogs() {
         for label in LABELS {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
         }
+    }
+}
+
+/// The Navigator panel menu's items are in every complete catalog, and no catalog keeps the
+/// item's earlier name, View Artboard Only.
+#[test]
+fn navigator_panel_menu_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["View Artboard Contents Only", "Panel Options…"] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+    for lang in LANGUAGES.iter() {
+        assert!(lang.catalog().plain("View Artboard Only").is_none(), "{} keeps View Artboard Only", lang.code);
     }
 }
 
@@ -1112,6 +1183,36 @@ fn bundled_fonts_cover_the_catalogs() {
         }
     });
     assert!(missing.is_empty(), "characters without a glyph: {missing:#?}");
+}
+
+/// The faces the web build fetches on demand (`web-fonts.txt`: NanumGothic for Korean, Noto Sans
+/// Devanagari for Hindi) cover every character of their scripts that a catalog or a language name
+/// uses. Checked where the craft-fonts checkout has them (the desktop build embeds every face).
+#[test]
+fn web_demand_fonts_cover_the_catalogs() {
+    use vectorcraft_text::craft_fonts::demand_script;
+    let demand: Vec<_> = vectorcraft_text::WEB_FONTS.iter().filter(|w| w.demand).collect();
+    if demand.is_empty() {
+        eprintln!("skipped: built without craft-fonts, or one without NanumGothic and Noto Sans Devanagari");
+        return;
+    }
+    let mut chars: std::collections::BTreeSet<char> = LANGUAGES.iter().flat_map(|l| l.name.chars()).collect();
+    for l in LANGUAGES.iter().filter(|l| !l.source.is_empty()) {
+        let (entries, _) = parse_entries(l.source);
+        chars.extend(entries.iter().flat_map(|(_, _, tr)| tr.chars()));
+    }
+    let mut missing = std::collections::BTreeMap::new();
+    for w in demand {
+        let Some(f) = vectorcraft_text::CRAFT_FONTS.iter().find(|f| f.family == w.family && f.style == w.style) else { continue };
+        let db = vectorcraft_text::FontDb::with_font_dirs(vec![]);
+        db.add_font(f.bytes.to_vec());
+        let face = db.face(f.family, f.style).expect("the craft-fonts face loads");
+        let gone: String = chars.iter().filter(|c| demand_script(**c).is_some_and(|s| w.scripts.contains(&s)) && !face.covers(**c)).collect();
+        if !gone.is_empty() {
+            missing.insert(w.family, gone);
+        }
+    }
+    assert!(missing.is_empty(), "characters the web's demand faces lack: {missing:#?}");
 }
 
 /// The Traditional Chinese catalog holds no Simplified-only characters (a translation written
@@ -2176,6 +2277,17 @@ fn georgian_rows_have_no_mtavruli() {
     assert!(caps.is_empty(), "Mtavruli in ka.tsv: {caps:?}");
 }
 
+/// A field label's colon follows the catalog's ":" row: French puts a no-break space before it,
+/// Chinese and Japanese write a full-width colon, and English and German write a plain colon.
+#[test]
+fn label_colons_follow_the_language() {
+    for (code, want) in [("fr", "X\u{a0}:"), ("zh-hans", "X："), ("zh-hant", "X："), ("ja", "X："), ("de", "X:"), ("en", "X:")] {
+        set_current(Lang::from_code(code).expect("registered"));
+        assert_eq!(colon("X"), want, "{code}");
+    }
+    set_current(Lang::EN);
+}
+
 /// French rows follow the typography fr.tsv's header sets: a no-break space before : ; ? ! and inside
 /// « », and the typographic apostrophe ’ in elisions. Text in backticks is code and is not checked, and
 /// a straight apostrophe inside double quotes is a literal value.
@@ -2481,6 +2593,68 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
             assert!(counts.iter().all(|n| shown.contains(n)), "{code}: {shown}");
         }
     }
+}
+
+/// The errors a script's `File` and `Folder` objects and file dialogs give, and those of the
+/// commands that answer the dialogs and keep their permissions, have a translated row in every
+/// complete-message language. Each one in the first list is still a message the source gives; the
+/// second list holds the note the file dialog shows when it left out picked files, and texts a
+/// script reads only from a File or Folder object's `error`.
+#[test]
+fn script_file_messages_translate_in_every_complete_message_language() {
+    const SCANNED: &[&str] = &[
+        "Script file access denied",
+        "Script file access denied: {path}",
+        "Script file access is unavailable on the web",
+        "Script file access to the app's own folders is not allowed",
+        "Script file cannot be decoded",
+        "Script file cannot encode the text",
+        "Script file could not be read",
+        "Script file could not be written",
+        "Script file dialogs need a person to answer them",
+        "Script file does not exist",
+        "Script file exceeds 8 MiB",
+        "Script file is not a regular file",
+        "Script file is not open",
+        "Script file is not open for writing",
+        "Script file name is already in use",
+        "Script file name must be a name without a folder",
+        "Script file path exceeds 32,767 characters",
+        "Script file permission can be kept only for a script run from a file",
+        "Script file permission could not be saved",
+        "Script files cannot be opened in another application",
+        "Script folder has more than 2,048 entries",
+        "Script folder mask takes too many steps to match",
+        "{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code",
+        "the script opened more file data than one run may open (32 MiB)",
+        "the script wrote more file data than one run may write (32 MiB)",
+        "`answer` for a script's file dialog must be one of: once, always, deny, stop",
+        "choose a file or folder first, or deny",
+        "the script file permissions could not be saved: {e}",
+        "this script's file access can be allowed only once",
+        "Only the person at the keyboard can allow a script's file access",
+    ];
+    const ERROR_ONLY: &[&str] = &[
+        "A script is given at most 2,048 files: the files picked after them were left out",
+        "Script file open mode must be r, w, e or a",
+        "Script has 256 files open",
+        "Script folder is not empty",
+        "Script files cannot make aliases",
+        "Script file hidden setting cannot be changed",
+    ];
+    let messages = message_literals();
+    let gone: Vec<&&str> = SCANNED.iter().filter(|m| !messages.contains(**m)).collect();
+    assert!(gone.is_empty(), "no longer messages in the source: {gone:?}");
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        for m in SCANNED.iter().chain(ERROR_ONLY) {
+            let row = entries.iter().find(|(ctx, src, _)| ctx == "@msg" && src == m);
+            assert!(row.is_some_and(|(_, src, tr)| tr != src), "{code}: no translated row for {m:?}");
+        }
+    }
+    let de = Lang::from_code("de").expect("de registered");
+    assert_eq!(message(de, "Script file access denied: C:/x/a.txt"), "Dateizugriff des Skripts verweigert: C:/x/a.txt");
 }
 
 /// The error that `text.setFormat` and the paragraph style commands give when a justification
@@ -4369,8 +4543,8 @@ fn script_errors_are_translated() {
         "Script file could not be read",
         "Script folder has more than 2,048 entries",
         "Script file open mode must be r, w, e or a",
-        "Script file writing is not available",
-        "Script file dialogs are not available",
+        "Script file is not open for writing",
+        "Script file dialogs need a person to answer them",
         "Script files cannot be opened in another application",
         "Script file access is unavailable on the web",
         "Script has 256 files open",
