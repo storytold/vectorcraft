@@ -6775,6 +6775,7 @@ dependencies = [
  "craft-stream-codecs",
  "craft-xml",
  "crc32fast",
+ "encoding_rs",
  "flate2",
  "hayro-ccitt",
  "heic-rs",

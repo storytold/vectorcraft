@@ -28,7 +28,7 @@ use vectorcraft_tools::{PaintDefaults, Tool};
 
 pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
-pub use cmd::distortcmds::perspective_click;
+pub use cmd::distortcmds::{perspective_click, width_point_pair};
 pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;
@@ -185,6 +185,10 @@ pub struct Session {
     /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
     /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
     new_doc_profile_dir: Option<std::path::PathBuf>,
+    /// The folder of each script's data folder (`Folder.userData`), beside which the grants file
+    /// keeps the file access people allowed scripts; `None`: no folder
+    /// ([`Session::attach_script_data`]).
+    script_data_dir: Option<std::path::PathBuf>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
