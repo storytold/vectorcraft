@@ -453,12 +453,20 @@ impl<'a> Device<'a> for Builder<'_> {
             self.flush();
         }
         self.marked.pop();
-        self.actual.end();
+        // A span's glyphs are stroked within it: a stroke after it goes over none of them.
+        if self.actual.end() {
+            self.end_fills();
+        }
     }
 
     fn actual_text(&mut self, text: &[u8]) {
+        let active = self.actual.active();
         if self.nested == 0 && self.text_as == crate::TextAs::Text && !self.actual.set(text) {
             self.warn("ActualText beyond the import size or nesting limit was left to glyph mappings");
+        }
+        // Nor does a stroke in a span go over a glyph filled before it.
+        if !active && self.actual.active() {
+            self.end_fills();
         }
     }
 }
