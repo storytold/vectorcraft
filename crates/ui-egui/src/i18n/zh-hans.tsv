@@ -505,6 +505,11 @@ antiAlias	Sharp	锐利
 	Color blindness – Deuteranopia-type	色盲 – 绿色盲型
 	Color blindness – Protanopia-type	色盲 – 红色盲型
 	Color blindness – Tritanopia-type	色盲 – 蓝色盲型
+	Show Color Vision Preview	显示色觉预览
+	Protanopia	红色盲
+	Deuteranopia	绿色盲
+	Tritanopia	蓝色盲
+	Achromatopsia	全色盲
 	Color Burn	颜色加深
 	Color conversion:	色彩转换：
 	Color Dodge	颜色减淡
@@ -677,6 +682,16 @@ antiAlias	Sharp	锐利
 	Create New Swatch…	新建色板…
 	Create New {kind} Style	创建新的{kind}样式
 	Create Object Mosaic…	创建对象马赛克…
+	Create Object Mosaic	创建对象马赛克
+	Current Size:	当前尺寸：
+	New Size:	新尺寸：
+	Tile Spacing:	拼贴间距：
+	Number of Tiles:	拼贴数量：
+	Constrain Ratio:	约束比例：
+	Result:	结果：
+	Resize Using Percentages	使用百分比调整大小
+	Delete Raster	删除栅格图像
+	Use Ratio	使用比例
 	Create Outlines	创建轮廓
 	Create Path	创建路径
 	Create PDF layers from layers and sublayers	从图层和子图层创建 PDF 图层
@@ -763,6 +778,7 @@ antiAlias	Sharp	锐利
 	Delete Brush	删除画笔
 	Delete Color	删除颜色
 	Restore Generated Table	恢复生成的颜色表
+	Unshift All Colors	取消偏移所有颜色
 	Delete Character Style	删除字符样式
 	Delete Empty Artboards	删除空白画板
 	Delete Freeform Point	删除自由点
@@ -936,6 +952,8 @@ antiAlias	Sharp	锐利
 	Duplicate	创建副本
 	Duplicate and Offset 10 pt	复制并偏移 10 pt
 	Duplicate Artboard	复制画板
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	单击在此侧添加画板，Alt+单击复制此画板及其图稿
+	Click to add an artboard on this side	单击在此侧添加画板
 	Copy Artboard	拷贝画板
 	Cut Artboard	剪切画板
 	Rename Artboards	重命名画板
@@ -1260,6 +1278,19 @@ antiAlias	Sharp	锐利
 	Fill: click for swatches, Shift-click for the color mixer	填色：单击开启色板，按住 Shift 单击开启混色器
 	Find	查找
 	Find and Replace…	查找和替换…
+	Find and Replace	查找和替换
+	Find:	查找：
+	Replace With:	替换为：
+	Replace & Find	替换并查找
+	Replace All	全部替换
+	Match Case	区分大小写
+	Find Whole Word	查找全字匹配
+	Search Backwards	反向搜索
+	Check Hidden Layers	检查隐藏图层
+	Check Locked Layers	检查锁定图层
+@msg	No matches found	未找到匹配项
+@msg	Matches replaced: {n}	已替换的匹配项：{n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	对象 {_3} 的字节 {_1}..{_2} 处没有 `find` 的匹配项
 	Find Font	查找字体
 	Find Font…	查找字体…
 	Find Next	查找下一个
@@ -3140,6 +3171,9 @@ digits	Malayalam	马拉雅拉姆数字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指针或拖动的点在屏幕上需离图稿多近，智能参考线才会吸附；该距离在任何缩放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	吸附线段的端点或从中心绘制的圆，使其与附近的曲线相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
+	Edit type set in fonts that aren't available?	要编辑使用了不可用字体的文字吗？
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
@@ -3342,6 +3376,9 @@ digits	Malayalam	马拉雅拉姆数字
 	No menu item	无菜单项
 	Toolbar	工具栏
 	{toolbar}, in the {tool} group	{toolbar}，位于 {tool} 组中
+	In the menu bar: {path}	在菜单栏中：{path}
+	In the {group} group: press and hold to open it	在“{group}”组中：按住即可打开
+	{home}, not shown now	{home}，当前未显示
 @plural	{n} result|{n} results	{n} 个结果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
@@ -3481,6 +3518,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Brush Size	显示画笔大小
 	Show Center	显示中心点
 	Show Code	显示代码
+	Show in Browser	在浏览器中显示
 	Show Color Groups	显示颜色组
 	Show Color Swatches	显示颜色色板
 	Show Corner Widget	显示转角 Widget
@@ -4495,6 +4533,7 @@ imageTrace	Outline	轮廓
 @msg	the art has no bounds	图稿没有边界
 @msg	Image Trace: the traced image is missing	图像描摹：缺少所描摹的图像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	实时上色合并：请选择一个实时上色组以及要添加的路径
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` 和 `Edge` 是实时上色组中表面和边缘的名称：请为路径另取一个名称
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	实时上色只接受路径和复合路径：请先将文字、图像和其他对象转换为路径
 @msg	Live Paint: select paths or compound paths	实时上色：请选择路径或复合路径
 @msg	Live Paint: these paths are too degenerate to paint	实时上色：这些路径过于退化，无法上色
@@ -4769,6 +4808,7 @@ imageTrace	Outline	轮廓
 @msg	paste unavailable	无法粘贴
 @msg	Save for Web: the image is empty	存储为 Web 所用格式：图像为空
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：颜色表中至少要保留一种颜色
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted：`{k}` 与另一个键指的是同一种颜色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是颜色，例如 "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 种颜色
 @msg	no artboard {i} (0-based; the document has {_1})	没有画板 {i} (从 0 开始计数；文档有 {_1} 个)
@@ -7073,6 +7113,7 @@ axis	Y Axis	Y 轴
 	Checkpoint	检查点
 	Inventory Icons	物品栏图标
 	Skill Icons	技能图标
+	Weather Icons	天气图标
 	Attack	攻击
 	Defend	防御
 	Heal	治疗
@@ -7194,6 +7235,255 @@ axis	Y Axis	Y 轴
 	Stars	星形
 	Triangles	三角形
 	Sparkles	闪光
+	Warm Gray	暖灰
+	Cool Gray	冷灰
+	Neutrals	中性色
+	Ivory	象牙白
+	Linen	亚麻
+	Oat	燕麦
+	Greige	灰米色
+	Stone	石色
+	Taupe	灰褐
+	Slate	石板灰
+	Clay	陶土
+	Terracotta	赤陶
+	Ochre	赭石
+	Umber	棕土
+	Sand	沙色
+	Olive	橄榄
+	Moss	苔藓
+	Rosy	玫瑰调
+	Neutral	中性
+	Golden	金黄
+	Pastel	粉彩
+	Pastel Red	粉彩红
+	Pastel Orange	粉彩橙
+	Pastel Amber	粉彩琥珀
+	Pastel Yellow	粉彩黄
+	Pastel Lime	粉彩青柠
+	Pastel Green	粉彩绿
+	Pastel Teal	粉彩蓝绿
+	Pastel Cyan	粉彩青
+	Pastel Azure	粉彩天蓝
+	Pastel Blue	粉彩蓝
+	Pastel Violet	粉彩紫罗兰
+	Pastel Magenta	粉彩洋红
+	Soft Red	柔和红
+	Soft Orange	柔和橙
+	Soft Amber	柔和琥珀
+	Soft Yellow	柔和黄
+	Soft Lime	柔和青柠
+	Soft Green	柔和绿
+	Soft Teal	柔和蓝绿
+	Soft Cyan	柔和青
+	Soft Azure	柔和天蓝
+	Soft Blue	柔和蓝
+	Soft Violet	柔和紫罗兰
+	Soft Magenta	柔和洋红
+	Vivid Red	鲜艳红
+	Vivid Orange	鲜艳橙
+	Vivid Amber	鲜艳琥珀
+	Vivid Yellow	鲜艳黄
+	Vivid Lime	鲜艳青柠
+	Vivid Green	鲜艳绿
+	Vivid Teal	鲜艳蓝绿
+	Vivid Cyan	鲜艳青
+	Vivid Azure	鲜艳天蓝
+	Vivid Blue	鲜艳蓝
+	Vivid Violet	鲜艳紫罗兰
+	Vivid Magenta	鲜艳洋红
+	Deep	深色
+	Deep Red	深红
+	Deep Orange	深橙
+	Deep Amber	深琥珀
+	Deep Yellow	深黄
+	Deep Lime	深青柠
+	Deep Green	深绿
+	Deep Teal	深蓝绿
+	Deep Cyan	深青
+	Deep Azure	深天蓝
+	Deep Blue	深蓝
+	Deep Violet	深紫罗兰
+	Deep Magenta	深洋红
+	Gold	金
+	Silver	银
+	Bronze	青铜
+	Copper	铜
+	Brass	黄铜
+	Rose Gold	玫瑰金
+	Gunmetal	枪灰
+	Platinum	铂金
+	Pewter	锡镴
+	Ember	余烬
+	Lagoon	泻湖
+	Dusk	黄昏
+	Clay to Teal	陶土到蓝绿
+	Plum to Olive	梅紫到橄榄
+	Complementary Coral	珊瑚色，互补色
+	Split Complementary Coral	珊瑚色，分裂互补色
+	Analogous Coral	珊瑚色，类似色
+	Triad Coral	珊瑚色，三色组
+	Tetrad Coral	珊瑚色，四色组
+	Pentagram Coral	珊瑚色，五角星
+	Complementary Teal	蓝绿，互补色
+	Split Complementary Teal	蓝绿，分裂互补色
+	Analogous Teal	蓝绿，类似色
+	Triad Teal	蓝绿，三色组
+	Tetrad Teal	蓝绿，四色组
+	Pentagram Teal	蓝绿，五角星
+	Soft Spectrum	柔和光谱
+	Red to Amber	红到琥珀
+	Orange to Yellow	橙到黄
+	Amber to Lime	琥珀到青柠
+	Yellow to Green	黄到绿
+	Lime to Teal	青柠到蓝绿
+	Green to Cyan	绿到青
+	Teal to Azure	蓝绿到天蓝
+	Cyan to Blue	青到蓝
+	Azure to Violet	天蓝到紫罗兰
+	Blue to Magenta	蓝到洋红
+	Violet to Red	紫罗兰到红
+	Magenta to Orange	洋红到橙
+	Dawn	黎明
+	Noon	正午
+	Sunset	日落
+	Night	夜晚
+	Overcast	阴天
+	White to Black	白到黑
+	Light Grays	浅灰
+	Dark Grays	深灰
+	Warm Grays	暖灰系
+	Cool Grays	冷灰系
+	Fade to Transparent	渐隐到透明
+	White Fade	白色渐隐
+	Vignette	暗角
+	Mist	薄雾
+	Petal	花瓣
+	Fern	蕨
+	Smoke	烟
+	Honey	蜂蜜
+	Seafoam	海沫
+	Lavender	薰衣草
+	Driftwood	浮木
+	Ink Wash	水墨
+	Tide	潮汐
+	Bloom	绽放
+	Dew	露珠
+	Pollen	花粉
+	Lichen	地衣
+	Prism Veil	棱镜纱
+	Opal Ribbon	蛋白石丝带
+	Pearl Flash	珍珠闪光
+	Aurora Foil	极光箔
+	Iris Sheen	虹彩光泽
+	Frost Spectrum	霜之光谱
+	Silver Tide	银潮
+	Rose Quartz Gleam	粉晶微光
+	Moonstone Shift	月光石流光
+	Violet Edge	紫罗兰边
+	Mint Halo	薄荷光晕
+	Amber Corona	琥珀日冕
+	Polar Glint	极地闪烁
+	Pastel Orbit	粉彩轨道
+	Coral and Navy	珊瑚色与海军蓝
+	Plum and Lime	梅紫与青柠
+	Teal and Gold	蓝绿与金
+	Indigo and Peach	靛蓝与桃色
+	Forest and Rose	森林与玫瑰
+	Red Glow	红色辉光
+	Orange Glow	橙色辉光
+	Amber Glow	琥珀辉光
+	Yellow Glow	黄色辉光
+	Lime Glow	青柠辉光
+	Green Glow	绿色辉光
+	Teal Glow	蓝绿辉光
+	Cyan Glow	青色辉光
+	Azure Glow	天蓝辉光
+	Blue Glow	蓝色辉光
+	Violet Glow	紫罗兰辉光
+	Magenta Glow	洋红辉光
+	Polka Dots	波点
+	Vertical Stripes	竖条纹
+	Horizontal Stripes	横条纹
+	Diagonal Stripes	斜条纹
+	Checkerboard	棋盘格
+	Diamonds	菱形
+	Crosses	十字
+	Coarse Grit	粗颗粒
+	Stipple	点画
+	Scratches	划痕
+	Sparse Flecks	稀疏斑点
+	Dense Flecks	密集斑点
+	Sine Bands	正弦带
+	Ripple Lines	涟漪线
+	Interference Rings	干涉环
+	Offset Rings	错位环
+	Warped Checks	扭曲方格
+	Pinched Stripes	收缩条纹
+	Chevron Pulse	人字脉冲
+	Radiating Lenses	放射透镜
+	Soft Shadow	柔和阴影
+	Hard Shadow	硬阴影
+	Lifted Card	浮起卡片
+	Neon Tube	霓虹灯管
+	Inner Light	内光
+	Feathered	羽化
+	Haze	雾霭
+	Double Rule	双线
+	Triple Rule	三线
+	Dashed Border	虚线边框
+	Dotted Border	点线边框
+	Offset Keyline	偏移轮廓线
+	Inset Keyline	内缩轮廓线
+	Outside Stroke	外描边
+	Pointer	指针
+	Highlighter	荧光笔
+	Sketchy Line	草图线
+	Scribble Fill	涂鸦填充
+	Wobble	摇晃
+	Zig Zag Edge	锯齿边
+	Wavy Edge	波浪边
+	Puffy	鼓起
+	Starburst	星爆
+	Glossy	光泽
+	Brushed Metal	拉丝金属
+	Spotlight	聚光灯
+	Sunset Band	日落条带
+	Sea Glass	海玻璃
+	Pearl	珍珠
+	Chrome Rim	镀铬边
+	Glow Orb	发光球
+	Pill Badge	胶囊徽章
+	Round Badge	圆形徽章
+	Flag Wave	飘扬的旗帜
+	Bulge	凸起
+	Twisted	扭转
+	Echo	回声
+	Spiral Copies	螺旋副本
+	Multiply Tint	正片叠底色调
+	Darken Veil	变暗薄纱
+	Ghosted	半透明
+	Two Tone	双色调
+	Overlay Glaze	叠加釉
+	Screen Light	滤色光
+	Soft Light Wash	柔光晕染
+	Cyan Neon	青色霓虹
+	Magenta Laser	品红激光
+	Amber Tube	琥珀灯管
+	Electric Lime	电光青柠
+	Pulse Violet	脉冲紫
+	Cobalt Phosphor	钴蓝荧光
+	Burst	爆发
+	Rounded Square	圆角正方形
+	Sun	太阳
+	Moon	月亮
+	Cloud	云
+	Rain	雨
+	Thunder	雷
+	Snow	雪
+	Bar	条形
+	Hexagon	六边形
+	Triangle	三角
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
@@ -7639,6 +7929,7 @@ breakText	Glyphs	字形
 @msg	One path lies inside the other, so they have no common tangents	一条路径位于另一条之内，因此它们没有公切线
 @msg	The paths overlap, so they have no internal tangents	路径相互重叠，因此它们没有内公切线
 @msg	One path lies inside the other, so they have no internal tangents	一条路径位于另一条之内，因此它们没有内公切线
+@msg	The point lies inside the path, so it has no tangents	该点位于路径之内，因此没有切线
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	将短划线扩展为路径
 @msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
@@ -9501,6 +9792,7 @@ breakText	Glyphs	字形
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	画板在画布上放不下：请减少画板、缩小间距或减小尺寸
 @msg	the character's size can't be measured	无法测量该字符的大小
 @msg	the compound shape is too complex to expand	复合形状过于复杂，无法扩展
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	直线或其他不围成区域的开放路径不会为复合形状增加任何区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	the container of the listed objects is gone	所列对象的容器已不存在
 @msg	the copy `{user_id}` can't be read as a library	副本 `{user_id}` 无法作为库读取
 @msg	the copy would leave the canvas	副本会超出画布
@@ -9961,3 +10253,8 @@ breakText	Glyphs	字形
 @msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
 @msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Pressure Sensitive	压感画笔
+	Flex Ribbon	柔韧色带
+	Pulse Stroke	脉动笔触
+	Round Flow	圆头流线
+	Chisel Flow	斜头流线
