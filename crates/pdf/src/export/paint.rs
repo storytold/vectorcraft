@@ -529,18 +529,18 @@ impl Exporter<'_> {
     /// their own.
     fn warn_spot_image(&mut self, g: &vectorcraft_color::GradientPaint) {
         let from_stops = g.gradient.kind != GradientKind::Freeform || !g.has_freeform_points();
-        let prints_spot = || g.gradient.stops.iter().zip(g.gradient.drawn_stops()).any(|(s, d)| self.printed_spot(s, d).is_some());
-        if from_stops && prints_spot() {
+        if from_stops && self.prints_spot(&g.gradient) {
             self.warn(
                 "spot colors in gradients exported as images (freeform or dithered gradients, ones mixed around the hue wheel, and Perceptual ones with RGB or Lab stops or too many stops) are written in process colors",
             );
         }
     }
 
-    /// Is a stop of `g` linked to a spot swatch?
-    fn has_spot_stop(&self, g: &vectorcraft_color::Gradient) -> bool {
-        let doc = self.doc;
-        g.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot)))
+    /// Does a stop of `g` print a spot swatch ([`Self::printed_spot`]): color something that draws
+    /// ([`vectorcraft_color::Gradient::drawn_stops`]) at a tint above 0 or with process plates? A
+    /// stop linked to a spot swatch that colors nothing adds no spot ink.
+    fn prints_spot(&self, g: &vectorcraft_color::Gradient) -> bool {
+        g.stops.iter().zip(g.drawn_stops()).any(|(s, d)| self.printed_spot(s, d).is_some())
     }
 
     /// Draw diamond gradient `g`, placed on `bounds`, over `area` (inside the current clip) as four
@@ -638,8 +638,8 @@ impl Exporter<'_> {
     /// scaled type gets its pixels too): a freeform gradient's colour field (at most
     /// [`MAX_FIELD_PX`] a side), or a linear, radial, conic or diamond gradient (at most [`MAX_GRADIENT_PX`] a side),
     /// with dither's noise when it paints a fill (`fill`). A linear or radial gradient whose stops
-    /// are all CMYK and not linked to a spot swatch is a CMYK image, unless its Perceptual curve
-    /// has too many stops; any other is an RGB image.
+    /// are all CMYK and none of which prints a spot swatch ([`Self::prints_spot`]) is a CMYK image,
+    /// unless its Perceptual curve has too many stops; any other is an RGB image.
     pub(super) fn field_image(&mut self, s: &mut Surface, g: &vectorcraft_color::GradientPaint, bounds: Rect, area: Rect, fill: bool) {
         use vectorcraft_color::cms::Model;
         use vectorcraft_color::freeform::{painted_box, spread_scale};
@@ -667,7 +667,7 @@ impl Exporter<'_> {
         } else if !freeform {
             self.warn("linear and radial gradients drawn as pixels are exported as images");
         }
-        let ramp_inks = if freeform || self.has_spot_stop(&g.gradient) { None } else { g.ink_pixels(b, area, cols, rows, fill) };
+        let ramp_inks = if freeform || self.prints_spot(&g.gradient) { None } else { g.ink_pixels(b, area, cols, rows, fill) };
         let ink_image = |inks, alpha| {
             let convert = if self.convert { self.out.cmyk_pixels() } else { None };
             crate::images::from_inks(inks, alpha, cols.into(), rows.into(), self.interpolate, convert)

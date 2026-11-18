@@ -2289,6 +2289,41 @@ fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, Strin
     (s, a, b, story)
 }
 
+/// Type › Insert Break Character › Forced Line Break (`type.insert`) after Select All in threaded
+/// text replaces the whole story, every frame's text, as one undo step.
+#[test]
+fn insert_character_replaces_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "\u{2028}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+}
+
+/// When `type.insert` at the caret in the first frame of threaded text pushes the caret's place on
+/// into the next frame, the Type tool's caret goes there with it, and typing goes after the
+/// insertion.
+#[test]
+fn insert_character_moves_the_caret_with_the_text_it_flows_on() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let first = obj(&s, a).plain_text();
+    // Before the last word of the first frame: two line breaks there push the line after the
+    // first one on into the second frame.
+    let at = first.trim_end().rfind(' ').map_or(0, |k| k + 1);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": at, "caret": at}));
+    for _ in 0..2 {
+        s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    }
+    assert!(obj(&s, a).plain_text().len() < at + 6, "the second break flows on into the second frame");
+    s.tool_text("X", ViewInfo::default()).unwrap();
+    let want = format!("{}\u{2028}\u{2028}X{}", &story[..at], &story[at..]);
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), want);
+}
+
 #[test]
 fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
     let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
@@ -4026,4 +4061,36 @@ fn apply_fill_to_stroke_with_characters_selected_changes_only_them() {
     assert!(t.runs[1].style.stroke.is_none(), "the rest of the type keeps its stroke");
     let labels = undo_labels(&s);
     assert_eq!((labels.len(), labels.last().map(String::as_str)), (steps + 1, Some("Apply Fill to Stroke")));
+}
+
+/// Redefines `[Normal Character Style]` with `fill` (`charStyle.setAttrs`).
+fn set_normal_fill(s: &mut Session, fill: vectorcraft_color::Paint) {
+    let attrs = crate::cmd::textstyles::char_attrs(&CharStyle { fill, ..CharStyle::default() });
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"fill": attrs["fill"]}})).unwrap();
+}
+
+/// #7975: type the Type tool starts is filled as [Normal Character Style] is, black unless it was
+/// redefined, not with the current fill a shape left behind.
+#[test]
+fn new_type_takes_the_normal_character_style_fill_not_the_current_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    assert_eq!(s.paint.fill, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "the current fill is red");
+    s.select_tool("type", v).unwrap();
+    click(&mut s, 200.0, 200.0);
+    s.tool_text("Black", v).unwrap();
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(obj(&s, id).runs[0].style.fill, Paint::solid(Color::BLACK));
+    // A redefined [Normal Character Style] gives new type its fill.
+    let blue = Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    set_normal_fill(&mut s, blue.clone());
+    let made = s.execute("text.create", &json!({"x": 100, "y": 300, "text": "Blue"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, blue);
+    // A color given to the command still wins.
+    let made = s.execute("text.create", &json!({"x": 100, "y": 400, "text": "Green", "color": "#00ff00"})).unwrap();
+    assert_eq!(obj(&s, NodeId(made["id"].as_u64().unwrap())).runs[0].style.fill, Paint::solid(Color::rgb(0.0, 1.0, 0.0)));
 }

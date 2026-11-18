@@ -34,7 +34,25 @@ fn names(r: &Value) -> Vec<String> {
 }
 
 fn size(png: &[u8]) -> (u32, u32) {
-    image::load_from_memory(png).unwrap().to_rgba8().dimensions()
+    craft_image_codecs::decode(png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8()
+        .dimensions()
 }
 
 #[test]
@@ -413,7 +431,28 @@ fn rich_black_reaches_the_files() {
     s.execute("paint.setFill", &json!({"color": {"c": 0, "m": 0, "y": 0, "k": 1}})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 40, "height": 30})).unwrap();
     let p = json!({"formats": [{"format": "png"}]});
-    let px = |r: &Value| image::load_from_memory(&files(r)[0].1).unwrap().to_rgba8().get_pixel(10, 10).0;
+    let px = |r: &Value| {
+        craft_image_codecs::decode(&files(r)[0].1)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(10, 10)
+            .0
+    };
     let accurate = px(&export(&mut s, p.clone()));
     assert!(accurate[0] > 10, "accurate: dark grey, {accurate:?}");
     s.execute("prefs.set", &json!({"key": "blackOutput", "value": "rich"})).unwrap();
@@ -507,20 +546,19 @@ fn type_in_a_missing_family_is_named_once_for_every_format() {
     assert!(fallback[0].contains("Nonexistent Sans Probe"), "{fallback:?}");
 }
 
-/// What a later file loses comes before a note on the options that an earlier file gave: the
-/// first artboard's WebP gives only the lossy WebP note, the second's also says its type doesn't
-/// fit.
+/// What a later file loses comes before a note on the options: the second artboard's WebP says
+/// its type doesn't fit, before the note on the row's option that WebP doesn't read.
 #[test]
 fn what_any_file_loses_comes_before_the_notes_on_the_options() {
     let mut s = session(2);
     let second = s.doc().unwrap().doc.artboards[1].rect;
     let area = json!({"width": 30, "height": 8});
     s.execute("text.create", &json!({"x": second.x0 + 2.0, "y": second.y0 + 2.0, "size": 12, "area": area, "text": "Ab\nCd\nEf\nGh"})).unwrap();
-    let r = export(&mut s, json!({"formats": [{"format": "webp", "lossless": false}]}));
+    let r = export(&mut s, json!({"formats": [{"format": "webp", "interlaced": true}]}));
     let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
     assert_eq!(warnings.len(), 2, "{warnings:?}");
     assert!(warnings[0].contains("doesn't fit its frame"), "{warnings:?}");
-    assert!(warnings[1].starts_with("lossy WebP"), "{warnings:?}");
+    assert!(warnings[1].starts_with("`formats[0].interlaced` was not used"), "{warnings:?}");
 }
 
 #[test]
@@ -555,7 +593,8 @@ fn include_bleed_grows_each_artboard() {
     assert_eq!(size(&files(&r)[0].1), (40, 30), "without it, the artboard alone");
 }
 
-/// Include Bleed puts the bleed on a PDF/X row's page, so the row doesn't warn that it leaves the bleed out.
+/// Include Bleed puts the bleed on a PDF/X row's page, so the row doesn't warn that it leaves the
+/// bleed out, unless the row sets a bleed of 0 itself.
 #[test]
 fn include_bleed_pdfx_rows_do_not_warn_about_the_bleed() {
     let mut s = session(1);
@@ -564,9 +603,101 @@ fn include_bleed_pdfx_rows_do_not_warn_about_the_bleed() {
     let row = json!([{"format": "pdf", "standard": "pdfX4"}]);
     assert!(warned(&export(&mut s, json!({"formats": row}))));
     assert!(!warned(&export(&mut s, json!({"includeBleed": true, "formats": row}))));
+    let zero = json!([{"format": "pdf", "standard": "pdfX4", "bleed": {"top": 0, "bottom": 0, "left": 0, "right": 0}}]);
+    assert!(warned(&export(&mut s, json!({"includeBleed": true, "formats": zero}))), "the row's own bleed of 0 leaves the bleed out");
     // A selection is written on a page of its own bounds, which Include Bleed doesn't grow.
     s.execute("shape.rectangle", &json!({"x": 5, "y": 5, "width": 10, "height": 10})).unwrap();
     assert!(warned(&export(&mut s, json!({"includeBleed": true, "selection": "one", "formats": row}))));
+}
+
+/// Each `[x0 y0 x1 y1]` that follows `key` in a PDF's bytes, in the order the file has them, read
+/// as text without VectorCraft's PDF reader (PDF 32000-1:2008, 14.11.2, Page Boundaries).
+fn raw_boxes(pdf: &[u8], key: &str) -> Vec<[f64; 4]> {
+    let text = String::from_utf8_lossy(pdf);
+    text.match_indices(key)
+        .map(|(at, _)| {
+            let mut words = text[at + key.len()..].split(|c: char| c.is_whitespace() || matches!(c, '[' | ']')).filter(|w| !w.is_empty());
+            std::array::from_fn(|_| words.next().and_then(|w| w.parse().ok()).unwrap_or(f64::NAN))
+        })
+        .collect()
+}
+
+/// A page's MediaBox, BleedBox and TrimBox sizes `(width, height)` in points, and the trim's
+/// distance from the bleed box's left and bottom edges.
+type PageSizes = ((f64, f64), (f64, f64), (f64, f64), (f64, f64));
+
+/// [`PageSizes`] of each page of `pdf`.
+fn page_sizes(pdf: &[u8]) -> Vec<PageSizes> {
+    let size = |b: &[f64; 4]| (b[2] - b[0], b[3] - b[1]);
+    let (media, bleed, trim) = (raw_boxes(pdf, "/MediaBox"), raw_boxes(pdf, "/BleedBox"), raw_boxes(pdf, "/TrimBox"));
+    assert!(!trim.is_empty() && media.len() == trim.len() && bleed.len() == trim.len(), "a MediaBox, BleedBox and TrimBox per page");
+    (0..trim.len()).map(|i| (size(&media[i]), size(&bleed[i]), size(&trim[i]), (trim[i][0] - bleed[i][0], trim[i][1] - bleed[i][1]))).collect()
+}
+
+/// With Include Bleed, a PDF page keeps the artboard as its TrimBox and puts the bleed around it
+/// once (PDF 32000-1:2008, 14.11.2: the trim box is the finished page, the bleed box holds it): the
+/// document's bleed when the row asks for it or sets none, else the row's own values.
+#[test]
+fn include_bleed_pdf_pages_trim_at_the_artboard() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100, "artboards": 2})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    s.execute("document.setup", &json!({"bleed": 9})).unwrap();
+    let pages = |s: &mut Session, p: Value| -> Vec<PageSizes> {
+        let r = export(s, p);
+        files(&r).iter().filter(|(n, _)| n.ends_with(".pdf")).flat_map(|(_, b)| page_sizes(b)).collect()
+    };
+    let one = |media: f64, bleed: f64, trim: f64| ((media, media), (bleed, bleed), (trim, trim), ((bleed - trim) / 2.0, (bleed - trim) / 2.0));
+    let document = json!({"format": "pdf", "bleed": {"useDocument": true}});
+    let sides = |b: f64| json!({"top": b, "bottom": b, "left": b, "right": b});
+    for (p, want) in [
+        (json!({"includeBleed": true, "artboard": 0, "formats": [document]}), one(118.0, 118.0, 100.0)),
+        (json!({"includeBleed": true, "artboard": 0, "formats": [{"format": "pdf"}]}), one(118.0, 118.0, 100.0)),
+        (json!({"includeBleed": true, "artboard": 0, "formats": [{"format": "pdf", "preset": "High Quality Print"}]}), one(118.0, 118.0, 100.0)),
+        (json!({"includeBleed": true, "artboard": 0, "formats": [{"format": "pdf", "bleed": sides(3.0)}]}), one(106.0, 106.0, 100.0)),
+        (json!({"includeBleed": true, "artboard": 0, "formats": [{"format": "pdf", "bleed": sides(0.0)}]}), one(100.0, 100.0, 100.0)),
+        (json!({"artboard": 0, "formats": [document]}), one(118.0, 118.0, 100.0)),
+        (json!({"artboard": 0, "formats": [{"format": "pdf"}]}), one(100.0, 100.0, 100.0)),
+    ] {
+        assert_eq!(pages(&mut s, p.clone()), [want], "{p}");
+    }
+    // Every page of a single file and of the Full Document, each artboard its own trim.
+    for p in [
+        json!({"includeBleed": true, "pdfs": "single", "formats": [document]}),
+        json!({"includeBleed": true, "fullDocument": true, "formats": [document]}),
+    ] {
+        assert_eq!(pages(&mut s, p.clone()), [one(118.0, 118.0, 100.0); 2], "{p}");
+    }
+    // A row with printer's marks: the sheet grows past the bleed box for them, around the same trim.
+    let marked = pages(
+        &mut s,
+        json!({"includeBleed": true, "artboard": 0, "formats": [{"format": "pdf", "bleed": {"useDocument": true}, "marks": {"trim": true}}]}),
+    );
+    let [(media, bleed, trim, at)] = marked[..] else { panic!("one page: {marked:?}") };
+    assert_eq!((bleed, trim, at), ((118.0, 118.0), (100.0, 100.0), (9.0, 9.0)));
+    assert!(media.0 > 118.0 && media.1 > 118.0, "{media:?}");
+    // A row that sets no bleed writes the same file as one that asks for the document's: one file.
+    let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [{"format": "pdf"}, document]}));
+    assert_eq!(names(&r).len(), 1, "{:?}", names(&r));
+    // So does it with a top-level anti-aliasing mode, which both rows take.
+    let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "antiAlias": "art", "formats": [{"format": "pdf"}, document]}));
+    assert_eq!(names(&r).len(), 1, "{:?}", names(&r));
+    // And with a saved PDF preset, which writes out every bleed value for both rows.
+    s.execute("pdf.preset.save", &json!({"name": "Saved Default"})).unwrap();
+    let saved = |bleed: Option<Value>| {
+        let mut row = json!({"format": "pdf", "preset": "Saved Default"});
+        if let Some(b) = bleed {
+            row["bleed"] = b;
+        }
+        row
+    };
+    let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [saved(None), saved(Some(json!({"useDocument": true})))]}));
+    assert_eq!(names(&r).len(), 1, "{:?}", names(&r));
+    assert_eq!(pages(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [saved(None)]})), [one(118.0, 118.0, 100.0)]);
+    // A raster row of the same export still holds the bleed in its pixels.
+    let r = export(&mut s, json!({"includeBleed": true, "artboard": 0, "formats": [document, {"format": "png"}]}));
+    let png = files(&r).into_iter().find(|(n, _)| n.ends_with(".png")).unwrap().1;
+    assert_eq!(size(&png), (118, 118));
 }
 
 #[test]
@@ -589,7 +720,28 @@ fn png_8_rows_write_indexed_colour() {
 #[test]
 fn a_second_file_with_a_taken_name_is_numbered() {
     let mut s = session(1);
-    let px = |png: &[u8]| image::load_from_memory(png).unwrap().to_rgba8().get_pixel(1, 1).0;
+    let px = |png: &[u8]| {
+        craft_image_codecs::decode(png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(1, 1)
+            .0
+    };
     let rows = json!([{"format": "png", "background": "black"}, {"format": "png", "background": "white"}, {"format": "png", "background": "black"}]);
     let r = export(&mut s, json!({ "formats": rows }));
     assert_eq!(names(&r), ["Artboard-1.png", "Artboard-1-2.png"]);
@@ -873,7 +1025,28 @@ fn kept_settings_leave_out_a_folder_outside_the_read_root() {
 #[test]
 fn format_settings_apply_to_their_rows_and_rows_win() {
     let mut s = session(1);
-    let px = |png: &[u8]| image::load_from_memory(png).unwrap().to_rgba8().get_pixel(1, 1).0;
+    let px = |png: &[u8]| {
+        craft_image_codecs::decode(png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(1, 1)
+            .0
+    };
     let r = export(
         &mut s,
         json!({"settings": {"png": {"background": "black", "scale": 9, "artboard": 7}, "jpg": {"quality": 5}}, "formats": [{"format": "png"}, {"format": "png", "suffix": "-w", "background": "white"}, {"format": "jpg"}, {"format": "jpg", "quality": 100, "suffix": "-100"}]}),
@@ -1162,6 +1335,41 @@ fn single_file_pdfs_hold_every_chosen_artboard() {
     let r = export(&mut s, json!({"range": "1-2", "pdfs": "multiple", "formats": [{"format": "pdf"}]}));
     assert_eq!(names(&r), ["Artboard-1.pdf", "Artboard-2.pdf"]);
     assert!(s.execute("document.exportForScreens", &json!({"pdfs": "both", "formats": [{"format": "pdf"}]})).is_err());
+}
+
+/// Export PDFs As › Single file holds artboards: with assets, layers or a file per selected object,
+/// whose files each hold one item's art, it is refused (the Example line too) instead of writing
+/// the first item alone under the document's name; Multiple files writes a PDF of each item. The
+/// selection as one file is one PDF either way.
+#[test]
+fn single_file_pdfs_are_refused_for_assets_layers_and_each_object() {
+    let mut s = session(1);
+    s.execute("layer.new", &json!({"name": "Second"})).unwrap();
+    s.execute("shape.ellipse", &json!({"x": 30, "y": 5, "width": 8, "height": 8})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let layers: Vec<u64> = doc.layers.iter().map(|l| l.id.0).collect();
+    let art: Vec<u64> = doc.layers.iter().filter_map(|l| l.children()).flatten().map(|c| c.id.0).collect();
+    assert_eq!((layers.len(), art.len()), (2, 2));
+    let a = s.execute("assets.add", &json!({"ids": [art[0]], "name": "Square"})).unwrap()["assets"][0].as_u64().unwrap();
+    let b = s.execute("assets.add", &json!({"ids": [art[1]], "name": "Dot"})).unwrap()["assets"][0].as_u64().unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let pdf = json!([{"format": "pdf"}]);
+    for source in [json!({"assets": [a, b]}), json!({"layers": layers}), json!({"selection": "each"})] {
+        let mut p = source.clone();
+        p["formats"] = pdf.clone();
+        p["pdfs"] = json!("multiple");
+        let r = export(&mut s, p.clone());
+        assert_eq!(names(&r).len(), 2, "a PDF each: {:?} ({source})", names(&r));
+        for (name, bytes) in files(&r) {
+            assert_eq!(vectorcraft_pdf::import(&bytes).unwrap().artboards.len(), 1, "{name}");
+        }
+        p["pdfs"] = json!("single");
+        let e = s.execute("document.exportForScreens", &p).unwrap_err().to_string();
+        assert!(e.contains("pdfs `single`"), "{e} ({source})");
+        assert!(super::screens::first_file(&s, &p).is_err(), "{source}");
+    }
+    let r = export(&mut s, json!({"selection": "one", "pdfs": "single", "formats": pdf}));
+    assert_eq!(names(&r), ["Selection.pdf"]);
 }
 
 /// The warnings of reply `r` that name an option the file doesn't read.

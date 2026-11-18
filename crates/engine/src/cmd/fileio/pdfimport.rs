@@ -36,6 +36,8 @@ pub struct LoadOptions {
     pub layers: bool,
     /// A PSD or PSB file's hidden layers come in, hidden (`hiddenLayers`; else they are left out).
     pub hidden_layers: bool,
+    /// A PSD or PSB file's slices become user slices (`importSlices`; else they are left out).
+    pub import_slices: bool,
     /// How a DXF drawing comes in (the `dxf` param, see [`super::dxfimport`]).
     pub dxf: vectorcraft_cad::ImportOptions,
     /// An Illustrator EPS or `.ai` that carries the editing copy of its art opens from it (its
@@ -67,6 +69,7 @@ impl Default for LoadOptions {
             text_as: TextAs::default(),
             layers: true,
             hidden_layers: false,
+            import_slices: true,
             dxf: Default::default(),
             editing_data: true,
             trust_editing_data: false,
@@ -81,7 +84,7 @@ impl LoadOptions {
     /// From command params: `pages` (`"2-3, 5"`, a page number or `"all"`), `page` (one page, when
     /// `pages` isn't given), `cropTo` (or `crop`), `password`, `colorMode` (`rgb` | `cmyk`) with `grays`,
     /// `textAs` (`text` | `outlines`), `layers` (true | false), `hiddenLayers` (true | false),
-    /// `editingData` (true | false | `always`),
+    /// `importSlices` (true | false), `editingData` (true | false | `always`),
     /// `legacyNameEncoding` (one of [`vectorcraft_eps::NameEncoding::LABELS`]), `linkPages` (true |
     /// false) and `dxf` (the DXF import options).
     pub fn from_params(cmd: &str, p: &Value) -> Result<Self> {
@@ -111,6 +114,10 @@ impl LoadOptions {
             None => false,
             Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "hiddenLayers must be true or false"))?,
         };
+        let import_slices = match p.get("importSlices").filter(|v| !v.is_null()) {
+            None => true,
+            Some(v) => v.as_bool().ok_or_else(|| bad(cmd, "importSlices must be true or false"))?,
+        };
         let (editing_data, trust_editing_data) = match p.get("editingData").filter(|v| !v.is_null()) {
             None => (true, false),
             Some(Value::String(s)) if s.eq_ignore_ascii_case("always") => (true, true),
@@ -137,6 +144,7 @@ impl LoadOptions {
             text_as,
             layers,
             hidden_layers,
+            import_slices,
             dxf,
             editing_data,
             trust_editing_data,
@@ -205,7 +213,7 @@ pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Docu
 }
 
 /// [`page_document`] of `opened`, the PDF `bytes` already read.
-fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
+pub(crate) fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
     vectorcraft_pdf::import_opened(bytes, opened, &page_options(page, o)).map(|r| (r.document, r.warnings)).map_err(err)
 }
 
@@ -217,8 +225,11 @@ fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
 /// `document.open` with `linkPages`: the pages `o` picks of the PDF (or PDF-compatible `.ai` or
 /// `.ait`) `name`, read from `path`, as a document holding one placed document per page, linked to
 /// that page of the file as File › Place with Link places one ([`document::source`]). Each page
-/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`), in a row from the left
-/// with the gap a PDF's artboards open with, and a layer named after the page. The document opens
+/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`, a blank page's crop box;
+/// a PDF-compatible `.ai` asked for its crop box gets its trim box, as it opens), in a row from the
+/// left with the gap a PDF's artboards open with, and a layer named after the page. On its trim box,
+/// a page shows its bleed box round the artboard, and the document's bleed is the pages' bleed (the
+/// widest on each side); the artboards are then the gap apart plus the bleed on both sides. The document opens
 /// in CMYK when most of the pages read in CMYK, unless `o.color_mode` names a mode. Refused without a
 /// path, for any other file, with a password (a linked page is read again without one), with
 /// `textAs: outlines` (a linked page shows the file's own type) and for a file over
@@ -239,12 +250,16 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
     if bytes.len() > document::MAX_FILE {
         return Err(bad(C, format!("linkPages: `{file}` is over {} MB", document::MAX_FILE >> 20)));
     }
-    let count = vectorcraft_pdf::open_pdf(bytes, None).map_err(err)?.page_count();
+    // The file is read once: every page is read from it.
+    let opened = vectorcraft_pdf::open_pdf(bytes, None).map_err(err)?;
+    let count = opened.page_count();
     let picked = match &o.pages {
         None => (0..count).collect(),
         Some(range) => parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?,
     };
     let bounding = o.crop == CropTo::Bounding;
+    // A PDF-compatible `.ai` asked for its crop box opens on its trim boxes ([`LoadOptions::import_options`]).
+    let crop = if o.crop == CropTo::Crop && opened.has_illustrator_data() { CropTo::Trim } else { o.crop };
     let mut doc = Document::new(1.0, 1.0);
     let board = doc.artboards.first().cloned().ok_or_else(|| err("a new document has no artboard"))?;
     doc.artboards.clear();
@@ -253,14 +268,55 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
     let gap = ImportOptions::default().artboard_gap;
     // Every page's object keeps the same one copy of the file.
     let shared = Arc::new(bytes.to_vec());
-    let (mut x, mut warnings, mut cmyk_pages) = (0.0, Vec::<String>::new(), 0);
-    for (i, &index) in picked.iter().enumerate() {
+    // The file is hashed once for all its pages.
+    let hash = link.hash.clone().unwrap_or_else(|| vectorcraft_doc::links::hash_bytes(bytes));
+    let (mut warnings, mut cmyk_pages) = (Vec::<String>::new(), 0);
+    // Each page as read, with its bleed (top, bottom, left, right). The pages are laid out once
+    // the document's bleed is known.
+    let mut read_pages = Vec::with_capacity(picked.len());
+    for &index in &picked {
         let page = index as u32 + 1;
-        let s = document::shared_source(name, &shared, Some(path), page, bounding, document::page_box(o.crop), C)?;
+        let file_once = document::SharedFile { bytes: &shared, hash: &hash, opened: &opened };
+        // On its trim box, a page shows its bleed box, the artboard on the trim box inside it, so
+        // the art in the bleed shows and prints as bleed.
+        let bleed = if crop == CropTo::Trim { opened.page_bleed(index) } else { None };
+        let page_box = if bleed.is_some() { vectorcraft_doc::PageBox::Bleed } else { document::page_box(crop) };
+        let read = |bounding| document::shared_source(name, file_once, Some(path), page, bounding, page_box, C);
+        // A blank page has no art's bounds: it keeps its crop box, as opening it as art does.
+        let (mut s, bounding) = match read(bounding) {
+            Err(e) if bounding && e.to_string().contains("has no art to place") => (read(false)?, false),
+            s => (s?, bounding),
+        };
+        // A page that is only a placeholder (a `.ai` saved without PDF compatibility) shows the
+        // file's editing data, not a page of the file.
+        if s.editing_data {
+            return Err(bad(C, format!("linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file")));
+        }
         cmyk_pages += usize::from(s.color_mode == ColorMode::Cmyk);
+        // The document's bleed is the widest of the pages' on each side.
+        let sides = bleed.unwrap_or_default();
+        for (side, b) in doc.setup.bleed.iter_mut().zip(sides) {
+            *side = side.max(b.min(vectorcraft_doc::setup::MAX_BLEED));
+        }
+        for w in std::mem::take(&mut s.warnings) {
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
+        read_pages.push((page, s, bounding, sides));
+    }
+    // Each artboard is the gap from the one before plus the bleed on both sides of it: the
+    // document's bleed, which export adds round every artboard, or a page's own bleed box where it
+    // reaches farther. Neither page then shows or exports the other's art.
+    let [_, _, doc_left, doc_right] = doc.setup.bleed;
+    let mut x = 0.0;
+    for (i, (page, s, bounding, [top, bottom, left, right])) in read_pages.into_iter().enumerate() {
+        if i > 0 {
+            x += doc_left.max(left);
+        }
         let mut node = document::node(&mut doc, &s, LinkInfo { page: Some(page), ..link.clone() }, bounding);
         if let NodeKind::PlacedDocument(p) = &mut node.kind {
-            p.xf = Affine::translate((x, 0.0));
+            p.xf = Affine::translate((x - left, -top));
         }
         node.name = Some(file.clone());
         let mut layer = Node::layer(doc.alloc_id(), &format!("Page {page}"), LayerColor::Preset((i % 27) as u8));
@@ -268,14 +324,9 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
             children.push(Arc::new(node));
         }
         doc.layers.push(Arc::new(layer));
-        let rect = Rect::new(x, 0.0, x + s.frame.width(), s.frame.height());
+        let rect = Rect::new(x, 0.0, x + s.frame.width() - left - right, s.frame.height() - top - bottom);
         doc.artboards.push(Artboard { id: i as u32 + 1, name: format!("Artboard {}", i + 1), rect, ..board.clone() });
-        x = rect.x1 + gap;
-        for w in s.warnings {
-            if !warnings.contains(&w) {
-                warnings.push(w);
-            }
-        }
+        x = rect.x1 + doc_right.max(right) + gap;
     }
     // Pages painted mostly in CMYK read as CMYK documents, as opening them as art does: the
     // document opens in CMYK (with the CMYK default swatches) when most of its pages do.

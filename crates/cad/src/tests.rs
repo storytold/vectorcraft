@@ -852,8 +852,19 @@ fn the_cnc_preset_writes_version_2000_in_millimeters_with_type_as_paths_and_stro
 /// A 4 × 2 px PNG placed at (10, 20) under key `raster-1`, and before it in paint order
 /// `fill`'s rectangle.
 fn image_and_fill_doc(fill: Paint) -> Document {
-    let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([0, 0, 255, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            4,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [0u8, 0, 255, 255].repeat(8),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     let mut d = doc_with(|d| {
         let im = ImageObject {
             key: "raster-1".into(),
@@ -1312,8 +1323,19 @@ fn a_font_height_reference_is_written_as_the_size_drawn() {
 
 #[test]
 fn images_link_png_or_jpeg_files() {
-    let mut png = vec![];
-    image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 128])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(
+            4,
+            2,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            [255u8, 0, 0, 128].repeat(8),
+        )
+        .unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
     let mut d = doc_with(|d| {
         let im = ImageObject {
             key: "raster-1".into(),
@@ -1450,4 +1472,24 @@ fn symbols_fanning_out_into_empty_symbols_stop_at_the_symbol_budget() {
     let out = export(&d, &opts(&d)).unwrap();
     assert!(entities(&out).is_empty());
     assert!(out.warnings.iter().any(|w| w.contains("symbols placed inside symbols")), "{:?}", out.warnings);
+}
+
+#[test]
+fn export_bytes_match_shared_writer_goldens() {
+    use std::path::PathBuf;
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data");
+    let cases: [(&str, DxfVersion, Document); 2] =
+        [("shapes_r12.dxf", DxfVersion::R12, shapes_doc()), ("shapes_r2018.dxf", DxfVersion::R2018, shapes_doc())];
+    for (name, version, doc) in cases {
+        let out = export(&doc, &DxfOptions { version, ..opts(&doc) }).unwrap();
+        let got = std::str::from_utf8(&out.bytes).expect("UTF-8 DXF");
+        let path = dir.join(name);
+        if std::env::var_os("WRITE_DXF_GOLDENS").is_some() {
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(&path, got).unwrap();
+            continue;
+        }
+        let expected = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        assert_eq!(got, expected, "DXF bytes changed versus {}", path.display());
+    }
 }

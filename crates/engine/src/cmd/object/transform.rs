@@ -158,6 +158,9 @@ fn apply_transform_moving_guides(
                 }
                 None => ids.clone(),
             };
+            // Pattern editing with Move Tile with Art: the tile art's bounds before a move.
+            let moves_only = c[0] == 1.0 && c[1] == 0.0 && c[2] == 0.0 && c[3] == 1.0;
+            let tile_art = if objects && !copy && moves_only { crate::cmd::patterncmds::tile_art_bounds(d) } else { None };
             // Transforms don't move nodes in the tree, so reuse the paths found for the no-copy
             // case; copies and a settled typing session need paths from the edited document.
             let paths = if reindex { d.index_paths(targets.iter().copied()) } else { paths };
@@ -171,6 +174,10 @@ fn apply_transform_moving_guides(
             if objects {
                 for id in &targets {
                     super::pixelgrid::keep_compound_aligned(d, *id, sc);
+                }
+                // Moving all of the tile art moves the tile as far.
+                if let Some(before) = tile_art {
+                    crate::cmd::patterncmds::move_tile_with_art(d, &targets, before);
                 }
             }
             if with_guides && (delta.x != 0.0 || delta.y != 0.0) {

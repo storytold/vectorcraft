@@ -299,14 +299,17 @@ fn code_view(app: &VectorcraftApp, ui: &mut egui::Ui, d: &Dialog) {
         Some((_, c)) => c,
         None => {
             const MAX: usize = 200_000;
-            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st).and_then(|()| {
-                let params = json!({ "svg": opts });
-                if selection {
-                    let (doc, _) = vectorcraft_engine::cmd::fileio::selection_doc(st, "document.exportSelection", false)?;
-                    vectorcraft_engine::cmd::fileio::encode_all(&doc, "svg", &params)
+            let params = json!({ "svg": opts });
+            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st, &params).and_then(|()| {
+                let selected;
+                let doc = if selection {
+                    selected = vectorcraft_engine::cmd::fileio::selection_doc(st, "document.exportSelection", false)?.0;
+                    &selected
                 } else {
-                    vectorcraft_engine::cmd::fileio::encode_all(&st.doc, "svg", &params)
-                }
+                    &st.doc
+                };
+                vectorcraft_engine::cmd::fileio::check_linked_images("document.export", "svg", st, doc, &params)?;
+                vectorcraft_engine::cmd::fileio::encode_all(doc, "svg", &params)
             });
             let mut text = match encoded {
                 // Shown as text whatever the file's encoding.
@@ -444,6 +447,52 @@ mod tests {
         let shown = code(&mut app, None);
         assert!(shown.contains(&format!("<script xlink:href=\"{script}\"/>")), "{shown}");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// Show Code under read roots draws no SVG that would name a linked image's file outside them
+    /// (Images: Link): it shows the error, which names no file or folder. Embedded pixels are
+    /// shown, and without roots the link is shown.
+    #[test]
+    fn show_code_leaves_out_a_linked_image_file_outside_the_read_roots() {
+        let tmp = std::env::temp_dir();
+        let root = tmp.join(format!("vc-svg-image-root-{}", std::process::id()));
+        let away = tmp.join(format!("vc-svg-image-away-{}", std::process::id()));
+        for dir in [&root, &away] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let photo = away.join("photo.png").to_string_lossy().into_owned();
+        let mut png = vec![];
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([200, 40, 40, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        std::fs::write(&photo, png).unwrap();
+        let (mut app, _) = app("/tmp/code.svg");
+        app.run("file.place", json!({"path": photo, "link": true, "at": [50, 50]})).unwrap();
+        app.run("file.export.svg", Value::Null).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("showCode".into(), json!(true));
+        let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap().unwrap();
+        // The text the code view shows after two frames in one context, with `roots` in force.
+        let code = |app: &mut VectorcraftApp, roots: Option<&Arc<vectorcraft_engine::file_access::AutomationRoots>>| {
+            let ctx = egui::Context::default();
+            theme::install_fonts(&ctx);
+            for _ in 0..2 {
+                let mut out =
+                    vectorcraft_engine::file_access::confine(roots, || ctx.run_ui(Default::default(), |ui| super::super::show(app, ui.ctx())));
+                out.textures_delta.clear();
+            }
+            ctx.data(|m| m.get_temp::<(u64, Arc<String>)>(egui::Id::unique("svg-code"))).map(|(_, c)| c.to_string()).unwrap_or_default()
+        };
+        let embedded = code(&mut app, Some(&roots));
+        assert!(embedded.contains("data:image/png;base64,") && !embedded.contains(&photo), "{embedded}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("images".into(), json!("link"));
+        let confined = code(&mut app, Some(&roots));
+        assert!(confined.contains("a linked image file is outside the read roots"), "{confined}");
+        assert!(!confined.contains("photo.png") && !confined.contains("vc-svg-image"), "{confined}");
+        let shown = code(&mut app, None);
+        assert!(shown.contains(&format!("xlink:href=\"{photo}\"")), "{shown}");
+        for dir in [root, away] {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 
     /// Show Code under Export Selection shows the SVG that OK writes: the selection alone, cropped

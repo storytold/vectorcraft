@@ -97,7 +97,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 cp("Find and Replace…", "edit.findReplace", json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false})),
                 cp("Find Next", "edit.findNext", json!({"find": ""})),
-                sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), todos("Check Spelling…", "Cmd+I")]),
+                sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), c("Check Spelling…", crate::dialogs::check_spelling::COMMAND)]),
                 // Edit › Edit Custom Dictionary…, beside Spelling, on the public Check and correct
                 // spelling page.
                 c("Edit Custom Dictionary…", crate::dialogs::custom_dictionary::COMMAND),
@@ -739,12 +739,13 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         (
             "Help",
             vec![
+                c("Search Commands…", "help.commandPalette"),
+                Sep,
                 c("Join Our Discord", "help.discord"),
                 c("ArtCraft Website", "help.website"),
                 c("VectorCraft on getartcraft.com", "help.appPage"),
                 c("VectorCraft on GitHub", "help.github"),
                 Sep,
-                c("Search Commands…", "help.commandPalette"),
                 todos("VectorCraft Help…", "F1"),
                 c("Safe Mode…", "help.safeMode"),
                 c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),

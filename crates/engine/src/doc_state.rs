@@ -29,6 +29,9 @@ pub struct DocState {
     /// Bound Object act on. Panel state, not art selection: not saved, not undoable
     /// (`variable.highlight`). A name, so renaming a variable moves the highlight with it.
     pub variables_highlight: Option<String>,
+    /// The order of the Variables panel's list: the column it is sorted by, and whether it is
+    /// reversed. Panel state: not saved, not undoable (`variable.sort`).
+    pub variables_sort: cmd::VariableSort,
     /// Isolation mode container.
     pub isolation: Option<NodeId>,
     /// Select › Start Global Edit: the objects edited together until Stop Global Edit or Escape
@@ -316,6 +319,7 @@ impl DocState {
             active_layer,
             layer_rows: vec![],
             variables_highlight: None,
+            variables_sort: Default::default(),
             isolation: None,
             global_edit: None,
             similar_outlines: Default::default(),

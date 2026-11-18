@@ -26,6 +26,7 @@ serde_json = { workspace = true }
 log = { workspace = true }
 
 image = { workspace = true }
+craft-image-codecs = { workspace = true }
 
 [dev-dependencies]
 vectorcraft-testkit = { workspace = true }

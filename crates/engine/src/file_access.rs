@@ -399,6 +399,12 @@ impl ScriptScope {
         Self { roots: std::fs::canonicalize(dir).ok().into_iter().collect() }
     }
 
+    /// The scope of a script run from a file in the folder whose real path, with its links already
+    /// followed, is `real`: that folder, which is not looked up again.
+    pub(crate) fn of_real_folder(real: PathBuf) -> Self {
+        Self { roots: vec![real] }
+    }
+
     /// Is `path` refused by its name alone: a `..` component, a NUL, a Windows device name or
     /// stream, or a computer on the network?
     fn refused_by_name(path: &Path) -> bool {

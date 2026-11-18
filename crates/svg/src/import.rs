@@ -1,11 +1,12 @@
 //! usvg tree → document conversion.
 
+use craft_svg::tree::usvg;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use usvg::roxmltree;
+use craft_svg::tree::usvg::roxmltree;
 use vectorcraft_color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
 use vectorcraft_doc::{
     Appearance, AppearanceItem, Dash, Document, FillLayer, ForeignAttribute, ImageBlob, ImageObject, LayerColor, LineCap, LineJoin, MAX_SVG_SCRIPTS,
@@ -20,7 +21,7 @@ use text::TextSlots;
 
 pub use depth::MAX_ELEMENT_DEPTH;
 pub(crate) use depth::xml_too_deep;
-pub use files::{MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
+pub use files::{MAX_DATA_URL_BYTES, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
 pub(crate) use fx::BLEND;
 
 /// Most objects an imported SVG may expand to: a guard against `<use>` and nested-image
@@ -201,11 +202,11 @@ pub(crate) fn import_finding(
         hidden: found.hidden,
         uses: found.uses,
         symbols: HashMap::new(),
-        symbol_names: HashSet::new(),
+        symbol_names: HashMap::new(),
         symbol_suffixes: HashMap::new(),
         pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
-        filter_sources: fx::sources(&xml, &scan.markers),
+        filter_sources: fx::sources(&xml, &scan.markers, |h| files.data_href(h)),
         files,
         non_scaling: found.non_scaling,
         data: found.data,
@@ -359,8 +360,8 @@ struct Importer {
     uses: HashMap<String, String>,
     /// The symbols made so far, by `<symbol>` id.
     symbols: HashMap<String, SymbolMade>,
-    /// The names of the symbols made so far.
-    symbol_names: HashSet<String>,
+    /// The names of the symbols made so far, each with its index in the document's symbols.
+    symbol_names: HashMap<String, usize>,
     /// Where the suffixes of each symbol and pattern name base go on from (`unique_name`).
     symbol_suffixes: HashMap<String, usize>,
     pattern_suffixes: HashMap<String, usize>,
