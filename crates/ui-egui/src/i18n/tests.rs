@@ -471,6 +471,21 @@ fn font_height_reference_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Area Type Options › First Baseline's choices (the dropdown reads them in the "effect" context,
+/// falling back to the plain row).
+#[test]
+fn first_baseline_choices_are_in_complete_catalogs() {
+    let mut missing = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Ascent", "Cap Height", "x Height", "Leading", "Em Box Height", "Fixed"] {
+            if lang.catalog().plain(label).is_none() && lang.catalog().contextual("effect", label).is_none() {
+                missing.push(format!("{} {label}", lang.code));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+}
+
 /// Each catalog's Saved View N and Saved Selection N rows carry the number N, and no two of a
 /// catalog's saved views or saved selections show one name, whatever digits the language uses.
 #[test]

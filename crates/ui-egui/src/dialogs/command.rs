@@ -250,8 +250,14 @@ const PATH_ALIGN: form::Choices = &[("Ascender", "ascender"), ("Descender", "des
 const AREA_FIT: form::Choices = &[("None", "none"), ("Auto Size", "autoHeight"), ("Shrink Text to Fit", "shrinkText"), ("Block", "block")];
 
 /// Area Type Options › First Baseline.
-const FIRST_BASELINE: form::Choices =
-    &[("Ascent", "ascent"), ("Cap Height", "capHeight"), ("x Height", "xHeight"), ("Leading", "leading"), ("Fixed", "fixed")];
+const FIRST_BASELINE: form::Choices = &[
+    ("Ascent", "ascent"),
+    ("Cap Height", "capHeight"),
+    ("x Height", "xHeight"),
+    ("Leading", "leading"),
+    ("Em Box Height", "emBoxHeight"),
+    ("Fixed", "fixed"),
+];
 
 /// Area Type Options › Align (vertical alignment of the lines in each row/column).
 const VERTICAL_ALIGN: form::Choices = &[("Top", "top"), ("Center", "center"), ("Bottom", "bottom"), ("Justify", "justify")];
@@ -311,6 +317,35 @@ mod tests {
         crate::dialogs::confirm(&mut app).unwrap();
         let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
         assert_eq!(t.area.vertical_align, VerticalAlign::Center);
+    }
+
+    /// Area Type Options › First Baseline offers Em Box Height: OK sets it with its Min, and the
+    /// dialog opens again with it chosen.
+    #[test]
+    fn area_type_options_dialog_sets_the_em_box_height_first_baseline() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let id = app.run("text.create", json!({"x": 20, "y": 20, "text": "Hello", "area": {"width": 200, "height": 200}})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        // The labels `i18n::tests::first_baseline_choices_are_in_complete_catalogs` checks.
+        let labels: Vec<&str> = choices("text.areaOptions", "firstBaseline").unwrap().iter().map(|(l, _)| *l).collect();
+        assert_eq!(labels, ["Ascent", "Cap Height", "x Height", "Leading", "Em Box Height", "Fixed"]);
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "ascent");
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::dialogs::show(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
+        fields.insert("firstBaseline".into(), json!("emBoxHeight"));
+        fields.insert("firstBaselineMin".into(), json!(4.0));
+        crate::dialogs::confirm(&mut app).unwrap();
+        let NodeKind::Text(t) = &app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
+        assert_eq!((t.area.first_baseline, t.area.first_baseline_min), (vectorcraft_doc::FirstBaseline::EmBoxHeight, 4.0));
+        crate::menus::invoke(&mut app, "text.areaOptions", json!({}));
+        assert_eq!(app.ui.dialog.as_ref().unwrap().str("firstBaseline"), "emBoxHeight");
     }
 
     /// Area Type Options shows the gutter between rows beside the gutter, and OK sets a gutter
