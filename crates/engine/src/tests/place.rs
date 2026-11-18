@@ -1212,6 +1212,30 @@ fn a_click_of_the_place_cursor_asks_the_frontend_to_place_the_file_when_asked_to
     assert_eq!(s.journal.last(), at_once.journal.last());
 }
 
+/// A Shift-click of the place cursor asks the frontend for the file's import options
+/// (`showImportOptions: true`); headless, with no frontend to ask, it places the file as a click
+/// does.
+#[test]
+fn a_shift_click_of_the_place_cursor_places_headless_as_a_click_does() {
+    let view = ViewInfo::default();
+    let files: Vec<Value> = ["a.png", "b.png"].iter().map(|n| file(n, &png(40, 20, [9, 9, 9, 255], None))).collect();
+    let shift = Mods { shift: true, ..Mods::default() };
+    let (mut headless, mut app) = (session(), session());
+    app.place_cursor_requests = true;
+    let mut reqs = vec![];
+    for s in [&mut headless, &mut app] {
+        s.execute("file.place.queue", &json!({"files": files})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, 10.0, 10.0).with_mods(shift), view).unwrap();
+        reqs = s.pointer(&PointerEvent::new(PointerKind::Up, 10.0, 10.0).with_mods(shift), view).unwrap();
+    }
+    let [UiRequest::Place(p)] = &reqs[..] else { panic!("{reqs:?}") };
+    assert_eq!(p["showImportOptions"], true);
+    let [img] = &top_children(&headless)[..] else { panic!("one image placed") };
+    let b = img.geometric_bounds().unwrap();
+    assert_eq!([b.x0, b.y0, b.width(), b.height()], [10.0, 10.0, 40.0, 20.0]);
+    assert_eq!(headless.tool_options()["names"], json!(["b.png"]));
+}
+
 /// Files read for the place cursor apart from the session ([`Session::prepare_place_queue`], then
 /// [`cmd::place::QueueJob::read`] on another thread and [`Session::place_queue_read`]) load it as
 /// `file.place.queue` loads it: the same reply, with the files that can't be read skipped, and the

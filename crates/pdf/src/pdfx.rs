@@ -6,7 +6,7 @@
 //!   transparency (the app flattens it before writing), no layers, PDF 1.3.
 //! - PDF/X-3:2002: colours are ICC-based (always tagged), no transparency, no layers, PDF 1.3.
 //! - PDF/X-4:2010: transparency and layers are kept, colours are tagged, PDF 1.6 at most, and the
-//!   XMP metadata names the standard too.
+//!   XMP metadata names the standard too and carries `xmp:MetadataDate`.
 //! - All of them: a `/GTS_PDFX` output intent (blank, the CMYK profile in effect, embedded), a
 //!   TrimBox on every page (the artboard), `/Trapped` True or False, `/GTS_PDFXVersion` in the
 //!   document information, a title and dates, embedded fonts (or text as outlines), no editing
@@ -120,8 +120,9 @@ pub(crate) fn info_entries(standard: Standard) -> String {
 }
 
 /// Edit the XMP metadata of a PDF/X file (the catalog's `/Metadata` stream; `root` is the
-/// catalog dictionary's contents) into `patch`: PDF/X-4 adds the standard, Trapped and a version
-/// id (PDF 1.3 files say so in [`finish`]). Files without metadata are left as they are.
+/// catalog dictionary's contents) into `patch`: PDF/X-4 adds the standard, Trapped, a version id
+/// and the metadata date (PDF 1.3 files say so in [`finish`]). Files without metadata are left as
+/// they are.
 pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Patch, standard: Standard, trapped: bool) -> Result<(), PdfError> {
     if !standard.is_pdfx() {
         return Ok(());
@@ -145,6 +146,22 @@ pub(crate) fn xmp(pdf: &[u8], xref: &Xref, root: (usize, usize), patch: &mut Pat
             "<pdfxid:GTS_PDFXVersion xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\">{version}</pdfxid:GTS_PDFXVersion><pdf:Trapped>{trapped}</pdf:Trapped><xmpMM:VersionID>1</xmpMM:VersionID>"
         );
         edits.push((close, close, props.into_bytes()));
+        // When the packet has no `<xmp:MetadataDate>` element, this adds one after the writer's
+        // `<xmp:ModifyDate>` element with the same value. The search expects the writer's form:
+        // properties written as elements with the `xmp` prefix, and `<` in text written as `&lt;`.
+        // The writer's description declares the `xmp` prefix there, and
+        // [`crate::post::modification_date`] keeps the two dates equal.
+        if find(xml, b"<xmp:MetadataDate>", 0).is_none()
+            && let Some(at) = find(xml, b"<xmp:ModifyDate>", 0).map(|i| i + b"<xmp:ModifyDate>".len())
+            && let Some(to) = find(xml, b"</xmp:ModifyDate>", at)
+        {
+            let date = xml.get(at..to).ok_or_else(bad)?;
+            let mut prop = b"<xmp:MetadataDate>".to_vec();
+            prop.extend_from_slice(date);
+            prop.extend_from_slice(b"</xmp:MetadataDate>");
+            let after = to + b"</xmp:ModifyDate>".len();
+            edits.push((after, after, prop));
+        }
     }
     // Every edit grows the stream (or keeps its length).
     let grown: usize = edits.iter().map(|(s, e, new)| new.len().saturating_sub(e - s)).sum();

@@ -328,6 +328,33 @@ fn contour_with_rounding(pts: &[Point], rounded: f64) -> PathData {
     PathData::single(SubPath::new(anchors, true))
 }
 
+/// The circle through the points `a`, `b` and `c`: its center and radius. `None` when two of the
+/// points are the same or the three lie on one line, which this takes to be when twice the
+/// triangle's area is at most 10⁻¹⁰ of its longest side squared.
+pub fn circle_through(a: Point, b: Point, c: Point) -> Option<(Point, f64)> {
+    // The corner opposite the longest side is the origin, so the two shorter sides are used.
+    let (ab, bc, ca) = ((b - a).hypot2(), (c - b).hypot2(), (a - c).hypot2());
+    let (o, p, q, longest) = if bc >= ab && bc >= ca {
+        (a, b, c, bc)
+    } else if ca >= ab {
+        (b, c, a, ca)
+    } else {
+        (c, a, b, ab)
+    };
+    let (u, v) = (p - o, q - o);
+    let cross = u.cross(v);
+    // Not a number, or nearly zero: no circle (a not-a-number side fails the finite check below).
+    if cross.is_nan() || cross.abs() <= 1e-10 * longest {
+        return None;
+    }
+    let (uu, vv) = (u.hypot2(), v.hypot2());
+    let d = 2.0 * cross;
+    let offset = Vec2::new((v.y * uu - u.y * vv) / d, (u.x * vv - v.x * uu) / d);
+    let center = o + offset;
+    let radius = offset.hypot();
+    (center.is_finite() && radius.is_finite()).then_some((center, radius))
+}
+
 /// Regular polygon with `sides` (≥ 3), first vertex straight up from the centre.
 pub fn polygon(center: Point, radius: f64, sides: u32, rotation_deg: f64) -> PathData {
     let n = sides.max(3);
@@ -700,6 +727,47 @@ mod tests {
         assert!(big.subpaths[0].anchors.len() <= 6 && big.subpaths[0].closed);
         assert_eq!(big.bounds().map(|b| (b.x0.round(), b.y0.round(), b.x1.round(), b.y1.round())), Some((0.0, 0.0, 200.0, 100.0)));
         assert!(ellipse_pie(r, f64::NAN, 10.0).anchor_count() == 4, "not a number: the whole ellipse");
+    }
+
+    /// The circle through three points against the closed form: (0, 0), (8, 0) and (0, 6) lie on
+    /// the circle with the hypotenuse (8, 0)–(0, 6) as its diameter, center (4, 3) and radius 5.
+    #[test]
+    fn the_circle_through_three_points_has_the_closed_form_center_and_radius() {
+        let (o, a, b) = (Point::ORIGIN, Point::new(8.0, 0.0), Point::new(0.0, 6.0));
+        for (p, q, r) in [(o, a, b), (a, b, o), (b, o, a), (b, a, o)] {
+            let (c, radius) = circle_through(p, q, r).unwrap();
+            assert!(c.distance(Point::new(4.0, 3.0)) < 1e-12 && (radius - 5.0).abs() < 1e-12, "{c:?} {radius}");
+        }
+        // Moved far from the origin, the answer moves with the points.
+        let far = Vec2::new(3.0e6, -2.0e6);
+        let (c, radius) = circle_through(o + far, a + far, b + far).unwrap();
+        assert!(c.distance(Point::new(4.0, 3.0) + far) < 1e-6 && (radius - 5.0).abs() < 1e-6, "{c:?} {radius}");
+    }
+
+    /// Two points that are the same, or three on one line, give no circle.
+    #[test]
+    fn coincident_or_collinear_points_give_no_circle() {
+        let (a, b) = (Point::new(1.0, 2.0), Point::new(5.0, 7.0));
+        assert_eq!(circle_through(a, a, b), None);
+        assert_eq!(circle_through(a, b, b), None);
+        assert_eq!(circle_through(a, a, a), None);
+        assert_eq!(circle_through(a, b, a.midpoint(b)), None);
+        assert_eq!(circle_through(a, b, a + (b - a) * 3.0), None);
+        assert_eq!(circle_through(a, b, Point::new(f64::NAN, 0.0)), None);
+    }
+
+    /// Nearly on one line: a point 10⁻⁴ off a chord 2000 long still gives the circle (its sagitta
+    /// formula `r = (h² + (L/2)²) / 2h`), and its center sits on the chord's perpendicular
+    /// bisector; a point 10⁻¹² off it does not.
+    #[test]
+    fn nearly_collinear_points_give_a_stable_circle() {
+        let (a, b) = (Point::new(-1000.0, 0.0), Point::new(1000.0, 0.0));
+        let h = 1e-4;
+        let (c, radius) = circle_through(a, b, Point::new(0.0, h)).unwrap();
+        let want = (h * h + 1000.0 * 1000.0) / (2.0 * h);
+        assert!((radius - want).abs() / want < 1e-9, "{radius} vs {want}");
+        assert!(c.x.abs() < 1e-6 && (c.y - (h - want)).abs() / want < 1e-9, "{c:?}");
+        assert_eq!(circle_through(a, b, Point::new(0.0, 1e-12)), None);
     }
 
     #[test]

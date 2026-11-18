@@ -30,7 +30,9 @@ pub use buttons::{
     SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_hint, menu_item_name, paint_icon_button,
     primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
-pub(crate) use buttons::{button_width, flat_button_fit_width, icon_button_info, primary_button_width, secondary_button_width};
+pub(crate) use buttons::{
+    button_width, flat_button_fit_width, icon_button_info, paint_icon_button_named, primary_button_width, secondary_button_width,
+};
 #[cfg(test)]
 use chips::gradient_chip_colors;
 pub use chips::{ProxyClicks, chip_button, chip_button_named, fill_stroke_proxy, gradient_chip, paint_chip, proxy_chip, swatch_tile};
@@ -606,7 +608,7 @@ mod decimal_point_tests {
         }
         assert_eq!(mm("1,000.5"), None, "a point and a comma");
         assert_eq!(mm("1,2,3"), None, "two commas");
-        for thousand in ["1,000", "12,500 mm", "-1,000", "999,999mm"] {
+        for thousand in ["1,000", "12,500 mm", "-1,000", "+1,000", "999,999mm", "1,000\"", "1,000'"] {
             assert_eq!(mm(thousand), None, "{thousand} reads as thousands: refused, not a thousand times too small");
         }
         for (text, want) in [("0,125", 0.125), ("1,25", 1.25), ("1,0000", 1.0), ("1,500+2", 3.5)] {
@@ -648,6 +650,15 @@ mod field_number_tests {
         }
         assert_eq!(field_number("45*2°", "°", false), Some(90.0));
         assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
+    }
+
+    /// A resolution field reads the unit it shows: "200 ppp" in a French interface.
+    #[test]
+    fn a_resolution_field_reads_its_translated_unit() {
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let read = [field_number("200 ppp", &crate::dialogs::ppi_suffix(), false), field_number("200", &crate::dialogs::ppi_suffix(), false)];
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(read, [Some(200.0), Some(200.0)]);
     }
 
     /// A thousands comma is refused inside Kerning's pair of parentheses and before `%` or the

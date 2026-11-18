@@ -17,10 +17,18 @@
 //! New Brush opens the dialog for a brush that does not exist yet ([`open_new`]), with `__create`
 //! and, for dropped art, `__ids`: OK runs `brush.new` instead, which gives a name another brush has
 //! a number, and Cancel adds nothing.
+//!
+//! The panel menu's Options of Selected Object opens the dialog on the brush of the first selected
+//! brushed path, with that path's own settings ([`open_object`]), with `__object`, `__targets` (the
+//! brushed paths), `__opened` (the values it opened with) and `__doc` (the uid of the document). It
+//! has no name, and of the Art and Pattern brush options only those a path can set for itself. OK
+//! runs `brush.objectOptions` with the values changed since it opened: the paths change and the
+//! brush stays as it is. OK after another document has become the active one changes nothing.
 
 use egui::{Color32, Sense, Stroke, pos2, vec2};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{Bristle, Brush, BrushKind, Calligraphic, Variation};
+use vectorcraft_doc::{AppearanceItem, NodeId, NodeKind};
 
 use super::swatch_options::{grid, label};
 use super::{DialogSpec, brush_art_options, form};
@@ -38,6 +46,18 @@ const CREATE: &str = "__create";
 
 /// The field of such a dialog holding the ids of the art dropped on the Brushes panel.
 const IDS: &str = "__ids";
+
+/// The field of a Brush Options dialog that Options of Selected Object opened.
+pub(super) const OBJECT: &str = "__object";
+
+/// The field of such a dialog holding the brushed paths it sets.
+const TARGETS: &str = "__targets";
+
+/// The field of such a dialog holding the `brush.objectOptions` params it opened with.
+const OPENED: &str = "__opened";
+
+/// The field of such a dialog holding the uid of the document it opened in.
+const DOC: &str = "__doc";
 
 /// Calligraphic values: (field, label, suffix, decimals), in [`Calligraphic::RANGES`] order.
 const CALLI: [(&str, &str, &str, usize); 3] = [("angle", "Angle:", "°", 0), ("roundness", "Roundness:", "%", 0), ("size", "Size:", " pt", 1)];
@@ -73,6 +93,9 @@ const NIB_W: f32 = 120.0;
 const STROKE_W: f32 = 400.0;
 
 fn heading(d: &Dialog) -> String {
+    if d.bool(OBJECT) {
+        return tl!("Options of Selected Object").into();
+    }
     match d.str("__type").as_str() {
         "bristle" => tl!("Bristle Brush Options").into(),
         "calligraphic" => tl!("Calligraphic Brush Options").into(),
@@ -144,6 +167,118 @@ fn target(app: &VectorcraftApp) -> Option<String> {
     let st = app.session.active()?;
     let selected = st.selection.subjects().first().and_then(|id| st.doc.node(*id)).and_then(|n| n.appearance.stroke()?.brush.clone());
     selected.or_else(|| vectorcraft_brush::current(&st.doc))
+}
+
+/// The brush that the first brushed stroke of path `id` paints with, in library `lib`.
+fn stroke_brush<'a>(app: &VectorcraftApp, lib: &'a [Brush], id: NodeId) -> Option<&'a Brush> {
+    let n = app.session.active()?.doc.node(id)?;
+    n.appearance.items.iter().find_map(|i| match i {
+        AppearanceItem::Stroke(st) => st.brush.as_deref().and_then(|name| lib.iter().find(|b| b.name == name)),
+        AppearanceItem::Fill(_) => None,
+    })
+}
+
+/// Can Options of Selected Object open: does a selected path or compound path (or one in a
+/// selected group, but not a path inside a compound path, as `brush.objectOptions` takes them)
+/// paint with a brush, are all their brushes of one type, and can a path set options of its own
+/// for that type? These are the selections `brush.objectOptions` takes.
+pub fn object_available(app: &VectorcraftApp) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let ids = st.selection.subjects();
+    if ids.is_empty() {
+        return false;
+    }
+    let lib = vectorcraft_brush::library(&st.doc);
+    let doc = &st.doc;
+    // The brush of every brushed stroke of the paths the command sets.
+    let mut brushes: Vec<&Brush> = vec![];
+    for id in ids {
+        let Some(n) = doc.node(*id) else { continue };
+        n.walk(&mut |c| {
+            let own = matches!(c.kind, NodeKind::Path { guide: false, clipping: false, .. } | NodeKind::Compound { .. });
+            let in_compound = doc.parent_of(c.id).and_then(|p| doc.node(p)).is_some_and(|p| matches!(p.kind, NodeKind::Compound { .. }));
+            if !own || in_compound {
+                return;
+            }
+            for i in &c.appearance.items {
+                if let AppearanceItem::Stroke(s) = i
+                    && let Some(b) = s.brush.as_deref().and_then(|name| lib.iter().find(|b| b.name == name))
+                {
+                    brushes.push(b);
+                }
+            }
+        });
+    }
+    let Some(first) = brushes.first() else { return false };
+    !first.kind.stroke_option_keys().is_empty() && brushes.iter().all(|b| b.kind.type_id() == first.kind.type_id())
+}
+
+/// Open Options of Selected Object: the Brush Options of the brush the first selected brushed path
+/// paints with, at that path's own settings, without the name and with only the options a path can
+/// set for itself.
+pub fn open_object(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let r = app.run("brush.objectOptions", json!({}))?;
+    let targets = r["ids"].clone();
+    let first = targets.get(0).and_then(Value::as_u64).map(NodeId).ok_or("no path painted with a brush is selected")?;
+    let st = app.session.active().ok_or("no document open")?;
+    let (lib, doc) = (vectorcraft_brush::library(&st.doc), st.uid);
+    let b = stroke_brush(app, &lib, first).ok_or("no path painted with a brush is selected")?;
+    let own: Map<String, Value> = serde_json::from_value(r["options"].clone()).unwrap_or_default();
+    let edited = b.with_stroke_options(&own)?;
+    let def = serde_json::to_value(&edited).map_err(|e| e.to_string())?;
+    let mut f = fields(&edited, def)?;
+    f.insert("__brush".into(), json!(b.name));
+    f.insert(OBJECT.into(), json!(true));
+    f.insert(TARGETS.into(), targets);
+    f.insert(DOC.into(), json!(doc));
+    let mut d = Dialog { kind: KIND.into(), fields: f };
+    let opened = object_params(&d, b.kind.stroke_option_keys());
+    d.fields.insert(OPENED.into(), Value::Object(opened));
+    d.fields.insert("__keys".into(), json!(b.kind.stroke_option_keys()));
+    app.ui.dialog = Some(d);
+    Ok(Value::Null)
+}
+
+/// The fields' `brush.options` params that a path can set for itself (`keys`).
+fn object_params(d: &Dialog, keys: &[&str]) -> Map<String, Value> {
+    match params(d) {
+        Value::Object(p) => p.into_iter().filter(|(k, _)| keys.contains(&k.as_str())).collect(),
+        _ => Map::new(),
+    }
+}
+
+/// What of option value `now` changed from `was`, the value it opened with: `None` when nothing
+/// did; of a range or a list of modes, the items that changed with `null` for the others, and of a
+/// colorization, the fields that changed. The paths keep their own values for the rest.
+fn changed_part(was: Option<&Value>, now: Value) -> Option<Value> {
+    match (was, now) {
+        (Some(w), n) if *w == n => None,
+        (Some(Value::Array(w)), Value::Array(n)) if w.len() == n.len() => {
+            Some(Value::Array(w.iter().zip(n).map(|(w, n)| if *w == n { Value::Null } else { n }).collect()))
+        }
+        (Some(Value::Object(w)), Value::Object(n)) => Some(Value::Object(n.into_iter().filter(|(f, v)| w.get(f) != Some(v)).collect())),
+        (_, n) => Some(n),
+    }
+}
+
+/// OK of Options of Selected Object: `brush.objectOptions` on the paths it opened for, with the
+/// values changed since it opened ([`changed_part`]). The dialog closes when they are set. When
+/// another document has become the active one, it closes as Cancel does and changes nothing.
+fn confirm_object(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    if d.fields.get(DOC).and_then(Value::as_u64) != app.session.active().map(|doc| doc.uid) {
+        app.ui.dialog = None;
+        return Ok(json!({}));
+    }
+    let keys: Vec<String> = d.fields.get("__keys").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    let opened = d.fields.get(OPENED).and_then(Value::as_object).cloned().unwrap_or_default();
+    let changed: Map<String, Value> =
+        object_params(d, &keys).into_iter().filter_map(|(k, v)| changed_part(opened.get(&k), v).map(|v| (k, v))).collect();
+    let r = app.run("brush.objectOptions", json!({ "ids": d.fields.get(TARGETS).cloned().unwrap_or_default(), "params": changed }));
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
+    r
 }
 
 /// Open the Brush Options of a new brush of type `ty` (`calligraphic` | `scatter` | `art` |
@@ -240,7 +375,13 @@ fn create(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
 
 /// OK: make the new brush when New Brush opened the dialog, else edit the brush.
 fn ok(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    if d.bool(CREATE) { create(app, d) } else { confirm(app, d) }
+    if d.bool(CREATE) {
+        create(app, d)
+    } else if d.bool(OBJECT) {
+        confirm_object(app, d)
+    } else {
+        confirm(app, d)
+    }
 }
 
 /// The value of field `key` within `range`.
@@ -279,13 +420,16 @@ fn params(d: &Dialog) -> Value {
 }
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    grid(ui, |ui| {
-        label(ui, tl!("Name:"));
-        let max = if d.str("__type") == "bristle" { Bristle::MAX_NAME_CHARS } else { usize::MAX };
-        form::text_edit_limited(ui, d, "name", 240.0, max);
-        ui.end_row();
-    });
-    ui.add_space(10.0);
+    // Options of Selected Object sets a path's settings, not the brush, so it has no name.
+    if !d.bool(OBJECT) {
+        grid(ui, |ui| {
+            label(ui, tl!("Name:"));
+            let max = if d.str("__type") == "bristle" { Bristle::MAX_NAME_CHARS } else { usize::MAX };
+            form::text_edit_limited(ui, d, "name", 240.0, max);
+            ui.end_row();
+        });
+        ui.add_space(10.0);
+    }
     match d.str("__type").as_str() {
         "bristle" => bristle_body(app, ui, d),
         "calligraphic" => calligraphic_body(app, ui, d),
