@@ -1029,7 +1029,7 @@ impl Renderer {
 /// the Transform effects the geometry pass left out hidden ([`effects::Carry::hide_skipped`]), so
 /// its raster effects and those of its fills and strokes stay with its art; `None` when it stays
 /// as it is.
-fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
+pub(super) fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
     let moves = carry.moves(&n.appearance);
     (moves || carry.skipped()).then(|| {
         let mut m = n.clone();

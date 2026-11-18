@@ -103,6 +103,9 @@ pub(super) struct Builder<'p> {
     pub(super) raster_scales: HashMap<u128, (f32, f32)>,
     /// The images kept with their CMYK samples ([`crate::import_image`]).
     pub(super) cmyk_keys: HashSet<u128>,
+    /// The file's PDF/X output intent profile of CMYK, which DeviceCMYK images are tagged with
+    /// ([`crate::import_image::output_intent_cmyk`]).
+    pub(super) intent_cmyk: Option<Vec<u8>>,
     /// Images in a Separation space, by key: the paint of their ink, or `None` when they open in
     /// RGB (an ink that can't be told, tints that can't be read).
     pub(super) separation_paints: HashMap<u128, Option<Paint>>,
