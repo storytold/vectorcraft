@@ -121,7 +121,7 @@ pub fn invoke_from_system_menu(app: &mut VectorcraftApp, ctx: &egui::Context, id
     };
     match focused_text_field(ctx).and_then(|f| Some((f, field_event(app, id)?))) {
         Some((field, e)) => to_field(ctx, field, e),
-        None if label_event.as_ref().is_some_and(|(id, _)| crate::shortcuts::leave_to_labels(ctx, id)) => {
+        None if label_event.as_ref().is_some_and(|(id, _)| crate::shortcuts::leave_to_labels(app, ctx, id)) => {
             if let Some((_, e)) = label_event {
                 ctx.input_mut(|i| i.events.push(e));
             }

@@ -23,7 +23,7 @@ pub(crate) use hold_keys::HoldKeys;
 #[cfg(test)]
 pub(crate) use labels::note_copied_in_window;
 pub(crate) use labels::{leave_to_labels, take_copied_in_window};
-use labels::{left_to_labels, take_command_after_labels, watch_label_copies};
+use labels::{left_to_labels, note_copies_before_labels, run_after_labels, take_command_after_labels, watch_label_copies};
 use paste::unclip_chords;
 pub(crate) use paste::{PasteChord, paste_command};
 pub(crate) use presentation::presentation_step;
@@ -201,11 +201,13 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
     }
     ctx.input(|i| crate::shortcut_editor::note_backtick_text(&i.events));
     // A Copy or Cut the last pass left to labels that copied nothing runs now, whatever this
-    // frame's keys do.
+    // frame's keys do. The text it copies goes out now, so it is not taken for a label's copy.
     watch_label_copies(ctx);
-    if let Some(id) = take_command_after_labels(ctx) {
-        crate::menus::invoke(app, id, json!({}));
+    if let Some(c) = take_command_after_labels(ctx) {
+        run_after_labels(app, c);
+        app.flush_clipboard_out(ctx);
     }
+    note_copies_before_labels(ctx);
     note_key_surfaces(app, ctx);
     forget_opening_key(ctx);
     let focused = ctx.input(|input| input.focused) || app.forwarded_frame && ctx.viewport_id() == egui::ViewportId::ROOT;
@@ -844,8 +846,9 @@ fn handle_clipboard(app: &mut VectorcraftApp, ctx: &egui::Context, textless_past
     // here does nothing more.
     let mut clip = vec![];
     let forwarded = app.forwarded_clipboard && ctx.viewport_id() == egui::ViewportId::ROOT;
-    let to_labels =
-        |e: egui::Event, id| ctx.input(|i| i.events.contains(&e)) && (left_to_labels(ctx) == Some(id) || (!forwarded && leave_to_labels(ctx, id)));
+    let to_labels = |e: egui::Event, id| {
+        ctx.input(|i| i.events.contains(&e)) && (left_to_labels(ctx) == Some(id) || (!forwarded && leave_to_labels(app, ctx, id)))
+    };
     let (labels_copy, labels_cut) = (to_labels(egui::Event::Copy, "edit.copy"), to_labels(egui::Event::Cut, "edit.cut"));
     // The labels' text, or the art copied in the next pass when they copy nothing, replaces what an
     // earlier Copy or Cut has not written yet.
@@ -890,7 +893,7 @@ fn clipboard_key_to_labels(app: &mut VectorcraftApp, ctx: &egui::Context, id: &s
         "edit.cut" => ("edit.cut", egui::Event::Cut),
         _ => return false,
     };
-    if ctx.viewport_id() == egui::ViewportId::ROOT && forwarded_key_runs(app, command) || !leave_to_labels(ctx, command) {
+    if ctx.viewport_id() == egui::ViewportId::ROOT && forwarded_key_runs(app, command) || !leave_to_labels(app, ctx, command) {
         return false;
     }
     ctx.input_mut(|i| i.events.push(event));
