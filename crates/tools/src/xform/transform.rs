@@ -447,8 +447,10 @@ impl Tool for TransformTool {
 
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
         match key {
+            // Escape cancels a drag, and drops the Reflect axis the drag was drawing from too.
             ToolKey::Escape if self.busy() => {
                 self.end_drag();
+                self.drop_axis();
                 vec![Action::Cancel]
             }
             // Escape drops a Reflect axis waiting for its second point, and a press not yet
@@ -958,7 +960,8 @@ mod tests {
 
     /// Escape pressed between the press and the release of the second click drops the axis and the
     /// press with it: the release starts no new axis and moves no reference point, so the click
-    /// after it starts an axis and reflects nothing.
+    /// after it starts an axis and reflects nothing. Escape during a drag from the first point
+    /// cancels the drag and drops the axis too.
     #[test]
     fn escape_during_the_second_reflect_click_cancels_that_click() {
         let (d, id) = doc_with_rect();
@@ -977,6 +980,13 @@ mod tests {
         assert_eq!(t.reference_point(&c), Some(Point::new(100.0, 100.0)));
         assert!(click(&mut t, &c, 150.0, 300.0, none).is_empty());
         assert!(t.ends_on_escape(&c));
+        // A drag from the first point, then Escape.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 300.0, 300.0)).is_empty());
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Drag, 100.0, 250.0))[0], Action::Begin("Reflect".into()));
+        assert_eq!(t.key(&c, ToolKey::Escape, none), vec![Action::Cancel]);
+        assert!(!t.ends_on_escape(&c));
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 100.0, 250.0)).is_empty());
+        assert!(click(&mut t, &c, 200.0, 200.0, none).is_empty());
     }
 
     /// After a click sets the first point, a drag draws the axis from it (Shift in 45° steps from a
