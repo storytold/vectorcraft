@@ -38,7 +38,7 @@ mod shape_builder;
 mod trace;
 
 pub use live_paint::live_paint_gaps;
-pub(crate) use live_paint::{isolated_live_paint, merge_drawn_in_isolation};
+pub(crate) use live_paint::{LivePaintMove, check_part_name, clear_part_name, isolated_live_paints, merge_drawn_in_isolation};
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
 use shape_builder::{sb_merge, sb_regions};
 pub(crate) use trace::TracePresetChanges;
@@ -659,6 +659,7 @@ fn fit_to_edge(row: &mut AppearanceItem, run: Option<(f64, bool, bool, bool)>) {
         }
         s.profile = None;
         s.brush = None;
+        s.brush_options.clear();
     }
     if !starts {
         s.start_arrow = None;

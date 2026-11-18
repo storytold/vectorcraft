@@ -696,3 +696,108 @@ fn a_locked_or_hidden_layer_keeps_the_isolated_compound_shape_from_clicks() {
         assert!(selected(&s).is_empty(), "{prop}: nor by a marquee");
     }
 }
+
+/// A straight line, closed as a compound shape closes open paths, encloses no area, so it
+/// contributes no area to the shape: Make Compound Shape still makes it, in any mode and at any
+/// place in the stack, and its reply carries a warning that names Outline Stroke. The shape draws
+/// the area the other members make in that mode: the square alone in Add, or on top in Subtract,
+/// and nothing in Intersect or when the line is the backmost member in Subtract. A line in a group,
+/// beside a closed path too, an open evenodd square traced twice, and open evenodd subpaths that cancel one another or a closed
+/// subpath of the same path are the same. An open path that encloses an area once closed (a bow tie
+/// whose lobes cancel in signed area included) and closed shapes alone give no warning (#7849).
+#[test]
+fn lines_that_add_no_area_are_reported() {
+    use crate::cmd::OPEN_PATHS_ADD_NO_AREA;
+    fn line_of(s: &mut Session) -> NodeId {
+        NodeId(run(s, "shape.line", json!({"x1": 20, "y1": 50, "x2": 180, "y2": 50}))["id"].as_u64().unwrap())
+    }
+    fn vee_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 50}, {"x": 100, "y": 150}, {"x": 180, "y": 50}]);
+        NodeId(run(s, "path.create", json!({ "anchors": anchors }))["id"].as_u64().unwrap())
+    }
+    fn bow_tie_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 0}, {"x": 180, "y": 100}, {"x": 180, "y": 0}, {"x": 20, "y": 100}]);
+        NodeId(run(s, "path.create", json!({ "anchors": anchors }))["id"].as_u64().unwrap())
+    }
+    fn twice_around_of(s: &mut Session) -> NodeId {
+        let d = "M20 20 L80 20 L80 80 L20 80 L20 20 L80 20 L80 80 L20 80";
+        let id = NodeId(run(s, "path.create", json!({ "d": d }))["id"].as_u64().unwrap());
+        run(s, "path.setFillRule", json!({"rule": "evenOdd"}));
+        id
+    }
+    fn evenodd_of(s: &mut Session, d: &str) -> NodeId {
+        let id = NodeId(run(s, "path.create", json!({ "d": d }))["id"].as_u64().unwrap());
+        run(s, "path.setFillRule", json!({"rule": "evenOdd"}));
+        id
+    }
+    fn two_open_squares_of(s: &mut Session) -> NodeId {
+        evenodd_of(s, "M20 20 L80 20 L80 80 L20 80 M20 20 L80 20 L80 80 L20 80")
+    }
+    fn open_over_closed_of(s: &mut Session) -> NodeId {
+        evenodd_of(s, "M20 20 L80 20 L80 80 L20 80 Z M20 20 L80 20 L80 80 L20 80")
+    }
+    fn group_of(s: &mut Session, ids: &[NodeId]) -> NodeId {
+        run(s, "select.set", json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()}));
+        NodeId(run(s, "object.group", json!({}))["id"].as_u64().unwrap())
+    }
+    type Build = fn(&mut Session) -> NodeId;
+    // (case, mode, the other member, whether it goes behind the 100 pt square, warned, area drawn)
+    type Case = (&'static str, &'static str, Build, bool, bool, Option<f64>);
+    let cases: [Case; 13] = [
+        ("an open evenodd square traced twice", "add", twice_around_of, false, true, Some(10_000.0)),
+        ("two open evenodd squares on one another", "add", two_open_squares_of, false, true, Some(10_000.0)),
+        ("an open evenodd square on the same closed square", "add", open_over_closed_of, false, true, Some(10_000.0)),
+        ("a line", "add", line_of, false, true, Some(10_000.0)),
+        ("a line, subtracting", "subtract", line_of, false, true, Some(10_000.0)),
+        ("a line, intersecting", "intersect", line_of, false, true, Some(0.0)),
+        ("a line behind, subtracting", "subtract", line_of, true, true, Some(0.0)),
+        (
+            "a group of lines",
+            "add",
+            |s| {
+                let ids = [line_of(s), line_of(s)];
+                group_of(s, &ids)
+            },
+            false,
+            true,
+            Some(10_000.0),
+        ),
+        (
+            "a group of a line and a square",
+            "add",
+            |s| {
+                let ids = [line_of(s), square(s, 200.0, "#00ff00")];
+                group_of(s, &ids)
+            },
+            false,
+            true,
+            Some(20_000.0),
+        ),
+        ("an open path that encloses an area", "add", vee_of, false, false, None),
+        ("an open bow tie, whose signed area is zero", "add", bow_tie_of, false, false, None),
+        ("a square", "add", |s| square(s, 50.0, "#0000ff"), false, false, Some(15_000.0)),
+        ("a square, subtracting", "subtract", |s| square(s, 50.0, "#0000ff"), false, false, Some(5_000.0)),
+    ];
+    for (what, mode, build, behind, warned, want) in cases {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 400, "height": 300}));
+        let (back, front) = if behind {
+            let other = build(&mut s);
+            (other, square(&mut s, 0.0, "#ff0000"))
+        } else {
+            let sq = square(&mut s, 0.0, "#ff0000");
+            (sq, build(&mut s))
+        };
+        run(&mut s, "select.set", json!({"ids": [back.0, front.0]}));
+        let r = run(&mut s, "object.compoundShape.make", json!({ "mode": mode }));
+        let id = NodeId(r["id"].as_u64().unwrap_or_else(|| panic!("{what}: {r}")));
+        assert_eq!(node(&s, id).children().unwrap().len(), 2, "{what}: both are members");
+        assert_eq!(r.get("warning").and_then(Value::as_str), warned.then_some(OPEN_PATHS_ADD_NO_AREA), "{what}: {r}");
+        if let Some(want) = want {
+            let d = &s.doc().unwrap().doc;
+            let hook = |c: &Node| effects::outline_object(Some(d), c);
+            let got = effects::compound_shape_area(None, &node(&s, id), Some(&hook)).map_or(0.0, |p| area(&p));
+            assert!((got - want).abs() < 0.5, "{what}: draws {got}, not {want}");
+        }
+    }
+}

@@ -355,6 +355,18 @@ pub fn circle_through(a: Point, b: Point, c: Point) -> Option<(Point, f64)> {
     (center.is_finite() && radius.is_finite()).then_some((center, radius))
 }
 
+/// The circle through two or three points: two are the ends of a diameter, and three lie on its
+/// edge ([`circle_through`]). Its center and radius; `None` for any other number of points, for
+/// points that are the same, for three on one line, and for a center or radius that is not finite.
+pub fn circle_through_points(points: &[Point]) -> Option<(Point, f64)> {
+    let circle = match *points {
+        [a, b] if a != b => Some((a.midpoint(b), a.distance(b) / 2.0)),
+        [a, b, c] => circle_through(a, b, c),
+        _ => None,
+    };
+    circle.filter(|(c, r)| c.is_finite() && r.is_finite() && *r > 0.0)
+}
+
 /// Regular polygon with `sides` (≥ 3), first vertex straight up from the centre.
 pub fn polygon(center: Point, radius: f64, sides: u32, rotation_deg: f64) -> PathData {
     let n = sides.max(3);
@@ -754,6 +766,19 @@ mod tests {
         assert_eq!(circle_through(a, b, a.midpoint(b)), None);
         assert_eq!(circle_through(a, b, a + (b - a) * 3.0), None);
         assert_eq!(circle_through(a, b, Point::new(f64::NAN, 0.0)), None);
+    }
+
+    /// Two points are the ends of a diameter, three are on the edge; one, four, two that are the
+    /// same and a point that is not finite give no circle.
+    #[test]
+    fn the_circle_through_two_or_three_points() {
+        let (a, b, c) = (Point::new(8.0, 0.0), Point::new(0.0, 6.0), Point::ORIGIN);
+        assert_eq!(circle_through_points(&[a, b]), Some((Point::new(4.0, 3.0), 5.0)));
+        let (center, r) = circle_through_points(&[a, b, c]).unwrap();
+        assert!(center.distance(Point::new(4.0, 3.0)) < 1e-12 && (r - 5.0).abs() < 1e-12, "{center:?} {r}");
+        for points in [&[a][..], &[a, b, c, a], &[a, a], &[a, Point::new(f64::INFINITY, 0.0)], &[], &[a, b, a.midpoint(b)]] {
+            assert_eq!(circle_through_points(points), None, "{points:?}");
+        }
     }
 
     /// Nearly on one line: a point 10⁻⁴ off a chord 2000 long still gives the circle (its sagitta
