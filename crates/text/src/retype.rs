@@ -40,6 +40,8 @@ const TOLERANCE: f64 = 2e-3;
 const OUTLINE_TOLERANCE: f64 = 5e-3;
 /// Points of a flattened outline past which the whole-outline check gives up (and so rejects).
 const MAX_OUTLINE_POINTS: usize = 8192;
+/// Points along an outline past which the whole-outline check gives up (and so rejects).
+const MAX_CHECKED_POINTS: usize = 65_536;
 /// How far apart two shapes' spread-to-length ratios may be and still be compared.
 const INVARIANT_SLACK: f64 = 0.02;
 
@@ -250,7 +252,14 @@ fn face_keys(db: &FontDb, face: &FontFace) -> FaceKeys {
     gids.sort_unstable();
     let keys: FaceKeys = Arc::new(gids.into_iter().filter_map(|(gid, ch)| Some((gid, ch, shape_key(&db.outline_uncached(face, gid))?))).collect());
     let mut k = kept.lock().unwrap_or_else(|e| e.into_inner());
-    if k.generation == generation && k.glyphs + keys.len() <= KEPT_KEYS {
+    if k.generation != generation {
+        return keys;
+    }
+    // Another Retype may have worked them out meanwhile: keep and charge one list.
+    if let Some(already) = k.faces.get(&at) {
+        return already.clone();
+    }
+    if k.glyphs + keys.len() <= KEPT_KEYS {
         k.glyphs += keys.len();
         k.faces.insert(at, keys.clone());
     }
@@ -331,7 +340,22 @@ fn outlines_agree(a: &BezPath, b: &BezPath, tol: f64) -> bool {
     };
     let (Some(sa), Some(sb)) = (flat(a), flat(b)) else { return false };
     let near = |p: Point, segs: &[(Point, Point)]| segs.iter().any(|(s, e)| Line::new(*s, *e).nearest(p, 1e-9).distance_sq <= tol * tol);
-    sa.iter().all(|(p, _)| near(*p, &sb)) && sb.iter().all(|(p, _)| near(*p, &sa))
+    // Points along every edge, not only its ends: two outlines with the same corners joined in
+    // another order differ between them. Spaced `tol` apart; past the work limit, not a match.
+    let along = |segs: &[(Point, Point)]| -> Option<Vec<Point>> {
+        let mut pts = vec![];
+        for (s, e) in segs {
+            let steps = (s.distance(*e) / tol).ceil();
+            if !steps.is_finite() || pts.len() as f64 + steps > MAX_CHECKED_POINTS as f64 {
+                return None;
+            }
+            let steps = (steps as usize).max(1);
+            pts.extend((0..steps).map(|i| s.lerp(*e, i as f64 / steps as f64)));
+        }
+        Some(pts)
+    };
+    let (Some(pa), Some(pb)) = (along(&sa), along(&sb)) else { return false };
+    pa.iter().all(|p| near(*p, &sb)) && pb.iter().all(|p| near(*p, &sa))
 }
 
 /// `seg` as a line when it is one (a curve with its handles on its ends or on its line), else as it is.
@@ -727,5 +751,22 @@ mod tests {
         let tol = signature(&inn).unwrap().spread * OUTLINE_TOLERANCE;
         assert!(!outlines_agree(&out, &inn, tol), "the whole outline does");
         assert!(outlines_agree(&out, &out, tol));
+    }
+
+    #[test]
+    fn the_same_corners_joined_another_way_are_another_outline() {
+        let poly = |pts: &[(f64, f64)]| {
+            let mut p = BezPath::new();
+            p.move_to(pts[0]);
+            for q in &pts[1..] {
+                p.line_to(*q);
+            }
+            p.close_path();
+            p
+        };
+        let square = poly(&[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]);
+        let bow = poly(&[(0.0, 0.0), (100.0, 100.0), (100.0, 0.0), (0.0, 100.0)]);
+        assert!(!outlines_agree(&square, &bow, 1.0), "every corner lies on the other, the edges do not");
+        assert!(outlines_agree(&square, &square, 1.0));
     }
 }

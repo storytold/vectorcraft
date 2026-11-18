@@ -80,7 +80,15 @@ fn a_drawn_shape_is_reported_and_left_alone() {
     let e = s.execute("type.retype", &json!({})).unwrap_err().to_string();
     assert!(e.contains("no selected shape matches"), "{e}");
     assert!(s.doc().unwrap().doc == before, "nothing changes");
-    assert!(s.execute("type.retype", &json!({"fonts": "Source Sans 3"})).is_err(), "fonts is a list");
+    // With outlines that would match, a bad `fonts` is refused for itself, and nothing changes.
+    let g = outlined(&mut s, json!({"x": 40, "y": 200, "text": "AB", "size": 40}));
+    s.execute("select.set", &json!({"ids": [g]})).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    for bad in [json!("Source Sans 3"), json!([1]), json!({"family": "x"})] {
+        let e = s.execute("type.retype", &json!({"fonts": bad})).unwrap_err().to_string();
+        assert!(e.contains("fonts must be a list of family names"), "{e}");
+    }
+    assert!(s.doc().unwrap().doc == before);
 }
 
 #[test]
