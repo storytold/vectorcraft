@@ -389,6 +389,12 @@ font-technology	Variable	可變
 	Character / Paragraph	字元／段落
 	Character Alignment	字元對齊
 	Character Rotation	字元旋轉
+	Chinese Big 5	繁體中文 Big 5
+	Cyrillic	西里爾文
+	Greek	希臘文
+	Turkish	土耳其文
+	Baltic	波羅的海文
+	Central European	中歐文
 	Character Set:	字元集：
 	Character Style	字元樣式
 	Character Style Options	字元樣式選項
@@ -9697,4 +9703,14 @@ breakText	Glyphs	字符
 @msg	A panel is not joined to the rest by a crease.	一個面板沒有透過任何壓痕線與其餘部分相連。
 @msg	A fold line is on a non-printing layer.	一條摺線位於不列印的圖層上。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，鉸鏈：{hinges}，錯誤：{errors}，警告：{warnings}
+	Fold Preview	摺疊預覽
+	Fold	摺疊
+	Show Fold Lines	顯示摺線
+	Three-Quarter	四分之三視圖
+	Open a document to preview its folded shape.	開啟文件以預覽其摺疊後的形狀。
+@msg	Check the fold lines first.	請先檢查摺線。
+@msg	Panels: {panels}, hinges: {hinges}	面板：{panels}，鉸鏈：{hinges}
+@msg	Other blanks not shown: {count}	未顯示的其他展開圖：{count}
+@msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
+@msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
