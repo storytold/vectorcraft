@@ -727,6 +727,141 @@ fn colour_table_buttons_edit_the_lists() {
     assert_eq!(d.fields["colorTable"], json!({"locked": [], "webShift": ["#123456"], "sort": "hue"}));
 }
 
+/// A click selects one color, a Shift-click the range from the last one clicked, a Ctrl-click
+/// (Command-click) adds or removes one; Delete Color deletes the whole selection in one edit,
+/// takes it out of the other lists, fixes the palette and refuses to delete every color.
+#[test]
+fn colour_table_selection_and_delete_color() {
+    let mut d = Dialog::new(save_for_web::KIND, json!({}));
+    let order: Vec<String> = ["#000000", "#111111", "#222222", "#333333"].map(String::from).to_vec();
+    let sel = |d: &Dialog| save_for_web::selection(d);
+    assert!(sel(&d).is_empty());
+    save_for_web::pick(&mut d, &order, "#111111", false, false);
+    assert_eq!(sel(&d), ["#111111"]);
+    save_for_web::pick(&mut d, &order, "#333333", true, false);
+    assert_eq!((sel(&d), d.str("__color")), (vec!["#111111".to_string(), "#222222".into(), "#333333".into()], "#111111".into()));
+    save_for_web::pick(&mut d, &order, "#222222", false, true);
+    assert_eq!(sel(&d), ["#111111", "#333333"]);
+    save_for_web::pick(&mut d, &order, "#000000", false, true);
+    assert_eq!((sel(&d), d.str("__color")), (vec!["#111111".to_string(), "#333333".into(), "#000000".into()], "#000000".into()));
+    save_for_web::pick(&mut d, &order, "#000000", false, true);
+    assert_eq!((sel(&d), d.str("__color")), (vec!["#111111".to_string(), "#333333".into()], "#333333".into()));
+    // A Shift-click back from the anchor.
+    save_for_web::pick(&mut d, &order, "#222222", false, false);
+    save_for_web::pick(&mut d, &order, "#000000", true, false);
+    assert_eq!(sel(&d), ["#000000", "#111111", "#222222"]);
+    // `__color` alone (an agent's selection) is the selection too.
+    d.fields.remove("__colors");
+    d.fields.insert("__color".into(), json!("#222222"));
+    assert_eq!(sel(&d), ["#222222"]);
+
+    save_for_web::toggle(&mut d, "locked", "#222222", true);
+    save_for_web::toggle(&mut d, "locked", "#000000", true);
+    save_for_web::toggle(&mut d, "webShift", "#333333", true);
+    save_for_web::pick(&mut d, &order, "#333333", false, true);
+    save_for_web::delete_colors(&mut d, &order).unwrap();
+    assert_eq!(d.fields["colorTable"], json!({"locked": ["#000000"], "webShift": [], "customPalette": order, "deleted": ["#222222", "#333333"]}));
+    assert!(!d.fields.contains_key("__colors") && !d.fields.contains_key("__color") && sel(&d).is_empty());
+    // Nothing selected: nothing deleted.
+    let before = d.fields.clone();
+    save_for_web::delete_colors(&mut d, &order).unwrap();
+    assert_eq!(d.fields, before);
+    // The colors left can't all go: refused, nothing changed.
+    save_for_web::pick(&mut d, &order, "#000000", false, false);
+    save_for_web::pick(&mut d, &order, "#111111", false, true);
+    let before = d.fields.clone();
+    assert_eq!(save_for_web::delete_colors(&mut d, &order), Err(vectorcraft_engine::cmd::webexport::KEEP_ONE.to_string()));
+    assert_eq!(d.fields, before);
+    // Nor can the last color that is not mapped to transparent.
+    save_for_web::toggle(&mut d, "transparent", "#111111", true);
+    save_for_web::pick(&mut d, &order, "#000000", false, false);
+    let before = d.fields.clone();
+    assert_eq!(save_for_web::delete_colors(&mut d, &order), Err(vectorcraft_engine::cmd::webexport::KEEP_ONE.to_string()));
+    assert_eq!(d.fields, before);
+    // Restore Generated Table.
+    save_for_web::restore_table(&mut d);
+    assert_eq!((&d.fields["colorTable"]["deleted"], &d.fields["colorTable"]["customPalette"]), (&json!([]), &json!([])));
+}
+
+/// Click the dialog's text `label` with the pointer (frames a quarter second apart).
+fn click_text(app: &mut VectorcraftApp, label: &str) {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        let time = ctx.input(|i| i.time) + 0.25;
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 1000.0)));
+        let raw = egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        fn walk(s: &egui::Shape, v: &mut Vec<(String, egui::Rect)>) {
+            match s {
+                egui::Shape::Text(t) => v.push((t.galley.text().to_string(), egui::Rect::from_min_size(t.pos, t.galley.size()))),
+                egui::Shape::Vec(s) => s.iter().for_each(|s| walk(s, v)),
+                _ => {}
+            }
+        }
+        let mut v = vec![];
+        out.shapes.iter().for_each(|c| walk(&c.shape, &mut v));
+        v
+    };
+    frame(app, vec![]);
+    let texts = frame(app, vec![]);
+    let at = texts.iter().find(|(t, _)| t == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("no `{label}` in {texts:?}"));
+    let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(app, vec![egui::Event::PointerMoved(at)]);
+    frame(app, vec![press(true)]);
+    frame(app, vec![press(false)]);
+}
+
+/// A Custom table whose preview fails (only a color mapped to transparent left) still offers
+/// Restore Generated Table, which brings the preview back.
+#[test]
+fn restore_generated_table_shows_when_the_preview_fails() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-restore-table");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    let table = json!({"deleted": ["#cc3300"], "customPalette": ["#cc3300", "#0000ff"], "transparent": ["#0000ff"]});
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none")), ("colorTable", table)] {
+        set(&mut app, k, v);
+    }
+    let p = json!({"format": "gif", "antiAlias": "none", "colorTable": app.ui.dialog.as_ref().unwrap().fields["colorTable"].clone()});
+    assert!(app.session.execute("document.exportForWeb.preview", &p).is_err(), "the preview fails");
+    click_text(&mut app, "Restore Generated Table");
+    let t = &app.ui.dialog.as_ref().unwrap().fields["colorTable"];
+    assert_eq!((&t["deleted"], &t["customPalette"]), (&json!([]), &json!([])));
+}
+
+/// The saved file lacks the deleted color, whose pixels take the color left; the edit is
+/// remembered, reopens with the dialog and stays through a format change.
+#[test]
+fn delete_color_reaches_the_saved_file_and_is_remembered() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-delete-color");
+    let (mut app, _) = app(&dir, false);
+    app.run("shape.rectangle", json!({"x": 40, "y": 0, "width": 20, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [("format", json!("gif")), ("antiAlias", json!("none")), ("dither", json!("none"))] {
+        set(&mut app, k, v);
+    }
+    frame(&mut app);
+    set(&mut app, "__colors", json!(["#cc3300"]));
+    save_for_web::delete_colors(app.ui.dialog.as_mut().unwrap(), &["#cc3300".into(), "#0000ff".into()]).unwrap();
+    frame(&mut app);
+    for format in ["jpg", "gif"] {
+        set(&mut app, "format", json!(format));
+        frame(&mut app);
+    }
+    let r = confirm(&mut app).unwrap();
+    let image = image::open(r["path"].as_str().unwrap()).unwrap().to_rgba8();
+    assert_eq!((image.get_pixel(20, 14).0, image.get_pixel(50, 20).0), ([0, 0, 255, 255], [0, 0, 255, 255]));
+    assert_eq!(app.session.last_web_settings().color_table.deleted, ["#cc3300"]);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().unwrap().fields["colorTable"]["deleted"], json!(["#cc3300"]));
+    frame(&mut app);
+}
+
 #[test]
 fn optimize_to_file_size_takes_the_settings_that_fit() {
     let dir = vectorcraft_testkit::temp_dir("sfw-optimize");

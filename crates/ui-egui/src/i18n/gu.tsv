@@ -165,6 +165,9 @@
 	Additional Fonts Folder	વધારાનું ફોન્ટ ફોલ્ડર
 	Additional Plug-ins Folder	વધારાનું પ્લગ-ઇન ફોલ્ડર
 	Adjust Adjoining Width Points	અડીને આવેલા પહોળાઈ બિંદુઓ ગોઠવો
+	Incoming	આવતી બાજુ
+	Outgoing	જતી બાજુ
+	Single Width Only	ફક્ત એક પહોળાઈ
 	Adjust Color Balance…	રંગ બૅલેન્સ ગોઠવો…
 	Adjust Colors	રંગ ગોઠવો
 	Adjust Options:	ગોઠવણ વિકલ્પો:
@@ -227,6 +230,7 @@
 	Anchors selected: {count}	પસંદ કરેલા એન્કર: {count}
 	Anchors:	એન્કર:
 	Angle	ખૂણો
+	Axis Angle	અક્ષનો ખૂણો
 	Angle:	ખૂણો:
 	Angled Strokes…	ત્રાંસા સ્ટ્રોક…
 	Angles	ખૂણા
@@ -542,6 +546,11 @@
 	Character Color	અક્ષર રંગ
 	Character Direction	અક્ષર દિશા
 	Character Rotation	અક્ષર પરિભ્રમણ
+	Chinese Big 5	ચાઇનીઝ Big 5
+	Cyrillic	સિરિલિક
+	Greek	ગ્રીક
+	Baltic	બાલ્ટિક
+	Central European	મધ્ય યુરોપિયન
 	Character Set:	અક્ષર સેટ:
 	Character Style Options	અક્ષર સ્ટાઇલ વિકલ્પો
 	Character Styles	અક્ષર સ્ટાઇલ
@@ -566,6 +575,8 @@
 	Chosen: {n} of {total}	પસંદ કરેલ: {total} માંથી {n}
 	Chrome…	ક્રોમ…
 	Circle	વર્તુળ
+	Circle Tool	વર્તુળ ટૂલ
+	Circle too large	વર્તુળ ખૂબ મોટું છે
 	Circle:	વર્તુળ:
 	Classic	ક્લાસિક
 	Clean Up	સાફ કરો
@@ -910,6 +921,8 @@
 	Delete Artboard	આર્ટબોર્ડ કાઢી નાખો
 	Delete Artboards	આર્ટબોર્ડ્સ કાઢી નાખો
 	Delete Brush	બ્રશ કાઢી નાખો
+	Delete Color	રંગ કાઢી નાખો
+	Restore Generated Table	જનરેટ થયેલું ટેબલ પુનઃસ્થાપિત કરો
 	Delete Character Style	અક્ષર સ્ટાઇલ કાઢી નાખો
 	Delete Data Set	ડેટા સેટ કાઢી નાખો
 	Delete Data Sets	ડેટા સેટ્સ કાઢી નાખો
@@ -1001,6 +1014,7 @@
 	Direction:	દિશા:
 	Directives	નિર્દેશો
 	Disable Auto Add/Delete	ઑટો ઍડ/ડિલીટ બંધ કરો
+	Interpolate Control Points When Moving Anchors	એન્કર બિંદુઓ ખસેડતી વખતે દિશા હેન્ડલ્સ ઇન્ટરપોલેટ કરો
 	Disable Opacity Mask	ઓપેસિટી માસ્ક બંધ કરો
 	Disable and Continue	બંધ કરો અને ચાલુ રાખો
 	Disabled plug-ins	બંધ કરેલા પ્લગ-ઇન્સ
@@ -1385,6 +1399,8 @@
 	Files	ફાઇલો
 	Files of a PDF standard can't be password-protected.	PDF સ્ટાન્ડર્ડની ફાઇલો પાસવર્ડ-સુરક્ષિત કરી શકાતી નથી.
 	Files of this standard tag their colours with ICC profiles.	આ સ્ટાન્ડર્ડની ફાઇલો તેમના રંગોને ICC પ્રોફાઇલ્સ સાથે ટૅગ કરે છે.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	આ સ્ટાન્ડર્ડની ફાઇલો તેમના રંગોને ICC પ્રોફાઇલ્સ સાથે ટૅગ કરે છે, આઉટપુટ ઇન્ટેન્ટ પ્રોફાઇલમાંના CMYK રંગો સિવાય, જે DeviceCMYK તરીકે લખાય છે.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	“પ્રોફાઇલ્સ શામેલ કરશો નહીં” અને CMYK આઉટપુટ ઇન્ટેન્ટ સાથે, દરેક CMYK રંગ DeviceCMYK તરીકે લખાય છે, સિવાય કે તેને બીજી પ્રોફાઇલના CMYK ગંતવ્યમાં રૂપાંતરિત કરવામાં આવે.
 	Fill	ભરો
 	Fill & Stroke	ભરો અને સ્ટ્રોક
 	Fill (X), double-click for the Color Picker	ભરો (X), કલર પીકર માટે ડબલ-ક્લિક કરો
@@ -1518,6 +1534,7 @@
 	From Selection	પસંદગીમાંથી
 	From:	થી:
 	Front	આગળ
+	Side	બાજુ
 	Full Document	સંપૂર્ણ દસ્તાવેજ
 	Full Justify	સંપૂર્ણ જસ્ટિફાય
 	Full Screen Mode	ફુલ સ્ક્રીન મોડ
@@ -1917,6 +1934,7 @@
 	Kashidas	કાશીદા
 	Keep Formatting	ફોર્મેટિંગ રાખો
 	Keep Original	મૂળ રાખો
+	Keep Originals	મૂળ રાખો
 	Keep Plain Text	સાદો ટેક્સ્ટ રાખો
 	Keep Shared Points Together	વહેંચાયેલા પોઇન્ટ સાથે રાખો
 	Keep Tools Beside the Canvas	ટૂલ્સ કેનવાસની બાજુમાં રાખો
@@ -2105,6 +2123,7 @@
 	Loads native code	નેટિવ કોડ લોડ કરે છે
 	Local Libraries	સ્થાનિક લાઇબ્રેરીઓ
 	Locate Library…	લાઇબ્રેરી શોધો…
+	Locate Layer	લેયર શોધો
 	Locate Object	ઑબ્જેક્ટ શોધો
 	Locate Selected Objects	પસંદ કરેલા ઑબ્જેક્ટ શોધો
 	Location	સ્થાન
@@ -2772,6 +2791,10 @@
 	Polish	પોલિશ
 	Polygon	બહુકોણ
 	Polygon Properties:	બહુકોણના ગુણધર્મો:
+	Line Properties:	રેખાના ગુણધર્મો:
+	Line Length:	રેખાની લંબાઈ:
+	Line Angle:	રેખાનો કોણ:
+	Constrain Pie Angle	પાઇ કોણ મર્યાદિત કરો
 	Polygon Tool	બહુકોણ ટૂલ
 	Polygonal Lasso	બહુકોણીય લાસો
 	Polygonal Lasso Tool	બહુકોણીય લાસો ટૂલ
@@ -3197,6 +3220,7 @@
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Cmd/Ctrl દબાવી રાખીને માઉસ વ્હીલ ફેરવવાથી કેનવાસ બાજુમાં સ્ક્રોલ થાય છે.
 	Dragging sideways on a numeric field's label changes the field's value.	સંખ્યાત્મક ફીલ્ડના લેબલ પર બાજુમાં ખેંચવાથી ફીલ્ડનું મૂલ્ય બદલાય છે.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ટ્રેકપેડ પર બે આંગળીથી ફેરવવાનો હાવભાવ કેનવાસનું દૃશ્ય ફેરવે છે.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	જ્યારે તમે એન્કર પોઇન્ટ ખસેડો છો, ત્યારે એક ખસેલા છેડાવાળો દરેક વળાંક તેના છેડાઓની સાપેક્ષે પોતાનો આકાર જાળવે છે.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ટૂલની શોર્ટકટ કી દબાવી રાખવાથી છોડો ત્યાં સુધી તે ટૂલ પસંદ રહે છે, પછી અગાઉનું ટૂલ ફરી પસંદ થાય છે.
 	Shows the bounding box while you move the selection or draw a shape.	તમે પસંદગી ખસેડો કે આકાર દોરો ત્યારે બાઉન્ડિંગ બોક્સ બતાવે છે.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	ટ્રિમ માર્ક્સ બનાવો રોમન ને બદલે જાપાની શૈલીના ચિહ્નો દોરે છે.
@@ -3321,6 +3345,7 @@
 	Rotation Y	પરિભ્રમણ Y
 	Rotation Z	પરિભ્રમણ Z
 	Rotation relative to:	આના સાપેક્ષે પરિભ્રમણ:
+	Hue Jitter:	રંગછટામાં ફેરફાર:
 	Rotation:	પરિભ્રમણ:
 	Rough Pastels…	રફ પેસ્ટલ્સ…
 	Roughen…	રફ બનાવો…
@@ -3332,6 +3357,7 @@
 	Rounded Rectangle	ગોળાકાર લંબચોરસ
 	Rounded Rectangle Tool	ગોળાકાર લંબચોરસ ટૂલ
 	Rounded Rectangle…	ગોળાકાર લંબચોરસ…
+	Roundness	ગોળાઈ
 	Roundness:	ગોળાઈ:
 	Row Size:	પંક્તિનું માપ:
 	Rows	પંક્તિઓ
@@ -3658,6 +3684,7 @@
 	Set Zoom	ઝૂમ સેટ કરો
 	Set as Default	ડિફૉલ્ટ તરીકે સેટ કરો
 	Set base color to the current color	બેઝ રંગ વર્તમાન રંગ પર સેટ કરો
+	Set the current fill or stroke to the selected color	વર્તમાન ભરો અથવા સ્ટ્રોક પસંદ કરેલ રંગ પર સેટ કરો
 	Set the selected color to the current color	પસંદ કરેલ રંગ વર્તમાન રંગ પર સેટ કરો
 	Set {n}	{n} સેટ કરો
 	Settings	સેટિંગ્સ
@@ -3775,7 +3802,7 @@
 	Show its progress, see Cancel and write log lines	તેની પ્રગતિ બતાવવી, રદ કરવાની વિનંતી જોવી અને લૉગ લાઇનો લખવી
 	Show segmented color wheel	સેગમેન્ટેડ રંગ ચક્ર બતાવો
 	Show smooth color wheel	સ્મૂધ રંગ ચક્ર બતાવો
-	Show/hide plate (Alt-click: only this plate)	પ્લેટ બતાવો/છુપાવો (Alt-ક્લિક: માત્ર આ પ્લેટ)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	પ્લેટ બતાવો/છુપાવો (Alt-ક્લિક: માત્ર આ પ્લેટ; ફરી Alt-ક્લિક: બધી પ્લેટ)
 	Show:	બતાવો:
 	Shown with the optimised preview.	ઑપ્ટિમાઇઝ્ડ પ્રીવ્યૂ સાથે બતાવેલ.
 	Side 1:	બાજુ 1:
@@ -3850,6 +3877,8 @@
 	Report Results	પરિણામોનો અહેવાલ
 	Smooth	સ્મૂધ
 	Smooth Anchors…	એન્કર સ્મૂધ કરો…
+	Smooth Bridge	સ્મૂધ બ્રિજ
+	Smooth Bridge…	સ્મૂધ બ્રિજ…
 	Smooth Tool	સ્મૂધ ટૂલ
 	Smooth…	સ્મૂધ કરો…
 	Smudge Stick…	સ્મજ સ્ટિક…
@@ -4376,6 +4405,8 @@
 	Variable Font	વેરિએબલ ફૉન્ટ
 	Variable Options…	વેરિએબલ વિકલ્પો…
 	Variable Width Profile	વેરિએબલ પહોળાઈ પ્રોફાઇલ
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	સ્ટ્રોકનું બ્રશ પોતાનું કદ જાળવે છે, તેથી પહોળાઈ પ્રોફાઇલ તેને બદલતી નથી. પ્રોફાઇલ વાપરવા માટે બ્રશ દૂર કરો.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	સ્ટ્રોકનું બ્રશ પોતાનું કદ જાળવે છે, તેથી પહોળાઈ પ્રોફાઇલ તેને બદલતી નથી. પ્રોફાઇલ વાપરવા માટે બ્રશ દૂર કરો.
 	Variables	વેરિએબલ્સ
 	Variation:	વેરિએશન:
 	Vector Effects	વેક્ટર અસરો
@@ -4684,6 +4715,7 @@ antiAlias	Sharp	શાર્પ
 	Include Placed Images	પ્લેસ કરેલી ઇમેજો સામેલ કરો
 	Include Fill Hatches	ફિલ હેચિસ સામેલ કરો
 	Use Monitor Profile for Canvas	કેનવાસ માટે મોનિટર પ્રોફાઇલ વાપરો
+	Refresh Monitor Profile	મોનિટર પ્રોફાઇલ તાજી કરો
 	The canvas is drawn in sRGB.	કેનવાસ sRGBમાં દોરાય છે.
 	Canvas display profile:	કેનવાસ ડિસ્પ્લે પ્રોફાઇલ:
 	The system matches the window to the display's colors.	સિસ્ટમ વિન્ડોના રંગો ડિસ્પ્લેના રંગો સાથે મેળવે છે.
@@ -5054,6 +5086,16 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 @msg	A panel is not joined to the rest by a crease.	એક પેનલ કોઈ ક્રીઝ લાઇનથી બાકીના સાથે જોડાયેલી નથી.
 @msg	A fold line is on a non-printing layer.	એક ફોલ્ડ લાઇન નોન-પ્રિન્ટિંગ લેયર પર છે.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	પેનલ: {panels}, હિન્જ: {hinges}, ભૂલો: {errors}, ચેતવણીઓ: {warnings}
+	Fold Preview	ફોલ્ડ પ્રિવ્યૂ
+	Fold	ફોલ્ડ
+	Show Fold Lines	ફોલ્ડ લાઇન્સ બતાવો
+	Three-Quarter	ત્રણ-ચતુર્થાંશ
+	Open a document to preview its folded shape.	તેનો ફોલ્ડ કરેલો આકાર જોવા દસ્તાવેજ ખોલો.
+@msg	Check the fold lines first.	પહેલાં ફોલ્ડ લાઇન્સ ચેક કરો.
+@msg	Panels: {panels}, hinges: {hinges}	પેનલ: {panels}, હિન્જ: {hinges}
+@msg	Other blanks not shown: {count}	બીજા બ્લેન્ક બતાવ્યા નથી: {count}
+@msg	A joint does not close by {gap} pt.	એક સાંધો {gap} pt થી બંધ થતો નથી.
+@msg	Two panels pass through each other.	બે પેનલ એકબીજામાંથી પસાર થાય છે.
 	Middle Eastern & South Asian Single-line Composer	સિંગલ-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Middle Eastern & South Asian Every-line Composer	એવરી-લાઇન કમ્પોઝર (મધ્ય પૂર્વ અને દક્ષિણ એશિયા)
 	Standard Single-line Composer	સ્ટાન્ડર્ડ સિંગલ-લાઇન કમ્પોઝર

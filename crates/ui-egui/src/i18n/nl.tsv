@@ -213,6 +213,14 @@ liquify-list-end	{0}, {1}	{0} en {1}
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	de hoofdscriptengine is bij elke uitvoering nieuw en wordt nooit bewaard, dus kan hij niet worden verwijderd
 @msg	there is no script engine named {name}	er is geen scriptengine met de naam {name}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` is alleen voor een uitvoering zonder iemand om te vragen: in de app beantwoordt de persoon elk dialoogvenster
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` moet een geheel getal van 1 tot {_1} zijn
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` is meer dan 64 niveaus diep genest
+@msg	`args` must be an object	`args` moet een object zijn
+@msg	`args` is larger than 1 MiB	`args` is groter dan 1 MiB
+@msg	`path` is empty	`path` is leeg
+@msg	`installed` takes a `path`, not a `source`	`installed` neemt een `path`, geen `source`
+@msg	`path` must name a .js or .jsx file	`path` moet een .js- of .jsx-bestand aanwijzen
+@msg	give exactly one of `path` and `source`	geef precies een van `path` en `source`
 @msg	Running a script	Er wordt een script uitgevoerd
 @msg	Data Recovery can't keep copies in {path}: {e}	Gegevensherstel kan geen kopieën bewaren in {path}: {e}
 @msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kunnen niet worden geladen uit {path}: {e}
@@ -2273,6 +2281,7 @@ digits	Malayalam	Malayalam
 	Underline	Onderstrepen
 	Vertical Scale %	Verticale schaal %
 	Axis	As
+	Axis Angle	Ashoek
 	ICF Top/Right	ICF boven/rechts
 	ICF Bottom/Left	ICF onder/links
 	Show Font Height Options	Opties voor letterhoogte tonen
@@ -2315,6 +2324,7 @@ digits	Malayalam	Malayalam
 	Rule:	Regel:
 	Save changes to {name}	Wijzigingen opslaan in {name}
 	Save theme to My Themes	Thema opslaan in Mijn thema's
+	Set the current fill or stroke to the selected color	De huidige vulling of contour op de geselecteerde kleur instellen
 	Set the selected color to the current color	De geselecteerde kleur op de huidige kleur instellen
 	Copy All Styles	Alle stijlen kopiëren
 	Exported {path}	{path} geëxporteerd
@@ -2673,7 +2683,7 @@ digits	Malayalam	Malayalam
 	Overprint Preview (separations)	Overprintvoorbeeld (separaties)
 	Show All Plates	Alle platen weergeven
 	Show all plates	Alle platen weergeven
-	Show/hide plate (Alt-click: only this plate)	Plaat weergeven/verbergen (Alt-klik: alleen deze plaat)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Plaat weergeven/verbergen (Alt-klik: alleen deze plaat; nogmaals Alt-klik: alle platen)
 	Simulate Paper	Papier simuleren
 	Use Black Point Compensation	Zwartpuntcompensatie gebruiken
 	Working CMYK (don't tag)	Werk-CMYK (niet taggen)
@@ -2713,6 +2723,8 @@ digits	Malayalam	Malayalam
 	Tip extends past the end point	Punt steekt uit voorbij het eindpunt
 	Tip on the end point	Punt op het eindpunt
 	Variable Width Profile	Variabel breedteprofiel
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Het penseel van de contour behoudt zijn eigen grootte, dus een breedteprofiel verandert de contour niet. Verwijder het penseel om een profiel te gebruiken.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Het penseel van de contour behoudt zijn eigen grootte, dus een breedteprofiel verandert de contour niet. Verwijder het penseel om een profiel te gebruiken.
 	Weight:	Dikte:
 	Art using a deleted global swatch keeps its colour.	Artwork met een verwijderd globaal staal behoudt zijn kleur.
 	Color Group: {name}	Kleurgroep: {name}
@@ -2822,6 +2834,10 @@ digits	Malayalam	Malayalam
 	Flip Horizontal	Horizontaal spiegelen
 	Flip Vertical	Verticaal spiegelen
 	Polygon Properties:	Veelhoekeigenschappen:
+	Line Properties:	Lijneigenschappen:
+	Line Length:	Lijnlengte:
+	Line Angle:	Lijnhoek:
+	Constrain Pie Angle	Taarthoek vastleggen
 	Rectangle Properties:	Rechthoekeigenschappen:
 	Shape Properties:	Vormeigenschappen:
 	Shape Properties	Vormeigenschappen
@@ -2863,6 +2879,7 @@ digits	Malayalam	Malayalam
 	Scatter:	Verspreiding:
 	Rotation:	Rotatie:
 	Rotation relative to:	Rotatie ten opzichte van:
+	Hue Jitter:	Tintvariatie:
 	Brush Scale Options	Opties voor penseelschaling
 	Scale Proportionately	Proportioneel schalen
 	Stretch to Fit Stroke Length	Uitrekken tot lijnlengte
@@ -2901,6 +2918,7 @@ digits	Malayalam	Malayalam
 	Size:	Grootte:
 	Calligraphic Brush Options	Opties voor kalligrafisch penseel
 	Bristle Brush Options	Opties voor borstelpenseel
+	Roundness	Rondheid
 	Roundness:	Rondheid:
 	Shape:	Vorm:
 	Bristle Length:	Borstellengte:
@@ -3565,6 +3583,8 @@ antiAlias	Sharp	Scherp
 	Every option matches {base}.	Elke optie komt overeen met {base}.
 	Files of a PDF standard can't be password-protected.	Bestanden volgens een PDF-standaard kunnen niet met een wachtwoord worden beveiligd.
 	Files of this standard tag their colours with ICC profiles.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Bestanden volgens deze standaard voorzien hun kleuren van ICC-profielen, behalve CMYK-kleuren in het profiel voor uitvoerintentie, die als DeviceCMYK worden geschreven.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Met ‘Geen profielen opnemen’ en een CMYK-uitvoerintentie wordt elke CMYK-kleur als DeviceCMYK geschreven, tenzij deze wordt omgezet naar een CMYK-bestemming met een ander profiel.
 	Flattener preset:	Voorinstelling voor afvlakking:
 	General › Thumbnails	Algemeen › Miniaturen
 	Grayscale images	Grijswaardenafbeeldingen
@@ -3748,6 +3768,12 @@ antiAlias	Sharp	Scherp
 	LF (macOS, Linux)	LF (macOS, Linux)
 	CRLF (Windows)	CRLF (Windows)
 	Text Export Options	Opties tekstexport
+	Chinese Big 5	Chinees Big 5
+	Cyrillic	Cyrillisch
+	Greek	Grieks
+	Turkish	Turks
+	Baltic	Baltisch
+	Central European	Centraal-Europees
 	Character Set:	Tekenset:
 	Join the lines of each paragraph	De regels van elke alinea samenvoegen
 	Line Breaks	Regeleinden
@@ -3777,6 +3803,9 @@ antiAlias	Sharp	Scherp
 	Variable Options	Variabeleopties
 	Define a variable first	Definieer eerst een variabele
 	Adjust Adjoining Width Points	Aangrenzende breedtepunten aanpassen
+	Incoming	Inkomend
+	Outgoing	Uitgaand
+	Single Width Only	Slechts één breedte
 	Keep both sides the same width	Beide zijden dezelfde breedte houden
 	Side 1:	Zijde 1:
 	Side 2:	Zijde 2:
@@ -3886,6 +3915,8 @@ theme	Appearance	Vormgeving
 	Current Brush	Huidig penseel
 	Current Symbol	Huidig symbool
 	Delete Brush	Penseel verwijderen
+	Delete Color	Kleur verwijderen
+	Restore Generated Table	Gegenereerde tabel herstellen
 	Delete Symbol	Symbool verwijderen
 	Delete the selected symbol?	Het geselecteerde symbool verwijderen?
 	Delete the selected symbols?	De geselecteerde symbolen verwijderen?
@@ -4162,6 +4193,7 @@ theme	Appearance	Vormgeving
 	Select Art	Kunst selecteren
 	Set Current Layer	Huidige laag instellen
 	Flatten Artwork	Kunst afvlakken
+	Locate Layer	Laag lokaliseren
 	Locate Object	Object lokaliseren
 	Lock Others	Overigen vergrendelen
 	Merge Selected	Selectie samenvoegen
@@ -4364,6 +4396,7 @@ theme	Appearance	Vormgeving
 	Data Recovery	Gegevensherstel
 	Default Language	Standaardtaal
 	Disable Auto Add/Delete	Automatisch toevoegen/verwijderen uitschakelen
+	Interpolate Control Points When Moving Anchors	Richtingsgrepen interpoleren bij het verplaatsen van ankerpunten
 	Display All Blacks Accurately	Alle zwarttinten nauwkeurig weergeven
 	Display All Blacks as Rich Black	Alle zwarttinten weergeven als rijk zwart
 	Display Bitmaps as Anti-aliased Images in Pixel Preview	Bitmaps in pixelvoorbeeld weergeven als afbeeldingen met antialiasing
@@ -4452,6 +4485,9 @@ theme	Appearance	Vormgeving
 	Printing / Exporting	Afdrukken / exporteren
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
 	Use Monitor Profile for Canvas	Monitorprofiel gebruiken voor canvas
+	Refresh Monitor Profile	Monitorprofiel vernieuwen
+@msg	turn on Use Monitor Profile for Canvas first	schakel eerst 'Monitorprofiel gebruiken voor canvas' in
+@msg	this build doesn't read display profiles	deze versie leest geen beeldschermprofielen
 	The canvas is drawn in sRGB.	Het canvas wordt in sRGB getekend.
 	Canvas display profile:	Weergaveprofiel van het canvas:
 	The system matches the window to the display's colors.	Het systeem stemt het venster af op de kleuren van het scherm.
@@ -4885,6 +4921,7 @@ font-technology	Variable	Variabel
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Het muiswiel met Cmd/Ctrl ingedrukt schuift het canvas zijwaarts.
 	Dragging sideways on a numeric field's label changes the field's value.	Zijwaarts slepen over het label van een numeriek veld wijzigt de waarde van het veld.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Een draaigebaar met twee vingers op een trackpad draait de weergave van het canvas.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Als u ankerpunten verplaatst, behoudt elke curve met één verplaatst uiteinde zijn vorm ten opzichte van zijn uiteinden.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Als u de sneltoets van een gereedschap ingedrukt houdt, is dat gereedschap gekozen tot u loslaat, en daarna wordt het vorige gereedschap weer gekozen.
 	Shows the bounding box while you move the selection or draw a shape.	Toont het begrenzingskader terwijl u de selectie verplaatst of een vorm tekent.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Afsnijtekens maken tekent tekens in Japanse stijl in plaats van Romeinse.
@@ -4981,6 +5018,8 @@ font-technology	Variable	Variabel
 	Couldn't paste from the clipboard: {e}	Kon niet vanaf het klembord plakken: {e}
 	Channel	Kanaal
 	Circle	Cirkel
+	Circle Tool	Cirkelgereedschap
+	Circle too large	Cirkel te groot
 	Clip to Art	Clippen op artwork
 	Colorize	Inkleuren
 	Gamma	Gamma
@@ -5409,6 +5448,7 @@ imageTrace	Outline	Contour
 @msg	choose a folder to export to	kies een map om naar te exporteren
 @msg	choose a location for the package	kies een locatie voor het pakket
 @msg	clipboard is empty	het klembord is leeg
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: er moet ten minste één kleur in de kleurentabel blijven
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` is geen kleur zoals "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maximaal {MAX_TABLE} kleuren
 @msg	command `{0}` is not available right now: {1}	opdracht `{0}` is nu niet beschikbaar: {1}
@@ -5463,9 +5503,15 @@ imageTrace	Outline	Contour
 @msg	no PNG encoder	geen PNG-encoder
 @msg	no active document	geen actief document
 @msg	no active perspective plane	geen actief perspectiefvlak
+@msg	the perspective grid is hidden	het perspectiefraster is verborgen
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Automatische vlakpositionering staat uit: zet anchorPoint of gridlineIntersection aan (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint moet true of false zijn
+@msg	gridlineIntersection must be true or false	gridlineIntersection moet true of false zijn
+@msg	tolerance must be 0 or more	tolerance moet 0 of meer zijn
+@msg	give `at` or `clear`, not both	geef `at` of `clear`, niet beide
 @msg	no anchor points selected	geen ankerpunten geselecteerd
-@msg	`points` must be three [x, y] pairs of numbers	`points` moet uit drie getallenparen [x, y] bestaan
-@msg	direct-select three anchor points, or give `points`	selecteer met directe selectie drie ankerpunten of geef `points` op
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` moet uit twee of drie getallenparen [x, y] bestaan
+@msg	direct-select two or three anchor points, or give `points`	selecteer met directe selectie twee of drie ankerpunten of geef `points` op
 @msg	no circle passes through these points: two are the same or all three lie on one line	er gaat geen cirkel door deze punten: twee zijn gelijk of alle drie liggen op één lijn
 @msg	no app to open files here	hier is geen app om bestanden mee te openen
 @msg	no artboard	geen tekengebied
@@ -5556,6 +5602,9 @@ imageTrace	Outline	Contour
 @msg	no such user library	gebruikersbibliotheek bestaat niet
 @msg	no such view	weergave bestaat niet
 @msg	no such width point	breedtepunt bestaat niet
+@msg	`single` must be `incoming` or `outgoing`	`single` moet `incoming` of `outgoing` zijn
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` en `outIndex` moeten de twee helften van één onderbroken breedtepunt zijn
+@msg	a discontinuous width point keeps its place	een onderbroken breedtepunt behoudt zijn plaats
 @msg	no swatch `{name}`	geen staal `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	geen stalenbibliotheek `{l}` (zie swatch.library.list)
 @msg	no symbol instances selected	geen symboolinstanties geselecteerd
@@ -5865,6 +5914,8 @@ imageTrace	Outline	Contour
 @msg	Reload the page to go on (changes not saved yet may be lost).	Laad de pagina opnieuw om door te gaan (nog niet opgeslagen wijzigingen kunnen verloren gaan).
 @msg	tool (a tool id) is required	tool (een gereedschaps-id) is vereist
 @msg	{tool} isn't in a toolbar group of several tools	{tool} zit niet in een werkbalkgroep met meerdere gereedschappen
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Presentatiemodus verbergt de werkbalken: wijzig de schermmodus om ze te tonen
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab heeft de werkbalken verborgen: druk op Tab om ze te tonen
 @msg	onto must name a panel floating in another group	onto moet een zwevend paneel in een andere groep benoemen
 @msg	below and above must name a panel floating in another group	below en above moeten een zwevend paneel in een andere groep benoemen
 @msg	give only one of onto, below and above	geef slechts één van onto, below en above
@@ -6637,6 +6688,7 @@ imageTrace	Outline	Contour
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	samengestelde vormen accepteren paden, samengestelde paden, groepen, samengestelde vormen, tekst, mengsels en omvormingen
 @msg	compound {_1} must contain exactly one open path to join	samengesteld object {_1} moet precies één open pad bevatten om te verbinden
 @msg	connect needs a path other than the one extended	connect heeft een ander pad nodig dan het pad dat wordt verlengd
+@msg	connect needs extend	connect heeft extend nodig
 @msg	connect needs id	connect heeft id nodig
 @msg	connect path has no open end	het pad van connect heeft geen open uiteinde
 @msg	continuation must be an array of path chunks	continuation moet een array van padstukken zijn
@@ -8149,6 +8201,7 @@ mark-style	Japanese	Japans
 	Cove	Cove
 	Depth	Diepte
 	Front	Voorkant
+	Side	Zijkant
 	Isometric Bottom	Isometrisch onder
 	Isometric Left	Isometrisch links
 	Isometric Right	Isometrisch rechts
@@ -8243,7 +8296,7 @@ mark-style	Japanese	Japans
 @msg	each of `{GRAPHICS}` must be an object	elk item van `{GRAPHICS}` moet een object zijn
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	items van `{GRAPHICS}` nemen symbol, face, x, y, scale en rotation aan, niet `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	elk item van `{GRAPHICS}` heeft `symbol` nodig, de naam van een symbool
-@msg	`{GRAPHICS}` face must be front or back	face in `{GRAPHICS}` moet front of back zijn
+@msg	`{GRAPHICS}` face must be front, back or side	face in `{GRAPHICS}` moet front, back of side zijn
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} in `{GRAPHICS}` moet een getal van {lo} tot {hi} zijn
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` moet een array zijn
 @msg	Graphics map onto planar faces: use the Extrude or Plane object type	Illustraties worden op platte vlakken geplaatst: gebruik het objecttype Extruderen of Vlak
@@ -9613,6 +9666,14 @@ breakText	Glyphs	Glyphs
 	Remove Gaps	Tussenruimten verwijderen
 @msg	that makes too many pieces (at most 100000): make the dashes longer	dat geeft te veel stukken (hoogstens 100000): maak de streepjes langer
 @msg	select paths, or segments, to divide	selecteer paden of segmenten om te verdelen
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Vloeiende brug…
+	Smooth Bridge	Vloeiende brug
+	Keep Originals	Originelen behouden
+@msg	select two circles to bridge	selecteer twee cirkels om te verbinden
+@msg	one circle is inside the other	de ene cirkel ligt binnen de andere
+@msg	the circles are too far apart for this radius: raise the radius	de cirkels liggen te ver uit elkaar voor deze straal: vergroot de straal
+@msg	the circles are too far apart for this radius	de cirkels liggen te ver uit elkaar voor deze straal
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Gemeenschappelijke raaklijnen…
 	Common Tangents	Gemeenschappelijke raaklijnen
@@ -10080,3 +10141,13 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Fold Preview	Vouwvoorbeeld
+	Fold	Vouwen
+	Show Fold Lines	Vouwlijnen tonen
+	Three-Quarter	Driekwart
+	Open a document to preview its folded shape.	Open een document om de gevouwen vorm te bekijken.
+@msg	Check the fold lines first.	Controleer eerst de vouwlijnen.
+@msg	Panels: {panels}, hinges: {hinges}	Panelen: {panels}, scharnieren: {hinges}
+@msg	Other blanks not shown: {count}	Andere uitslagen niet getoond: {count}
+@msg	A joint does not close by {gap} pt.	Een naad sluit {gap} pt niet.
+@msg	Two panels pass through each other.	Twee panelen gaan door elkaar heen.
