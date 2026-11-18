@@ -39,6 +39,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ("ctrlWheelScrollsSideways", "The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways."),
     ("scrubNumericFields", "Dragging sideways on a numeric field's label changes the field's value."),
     ("trackpadRotateView", "A two-finger rotate gesture on a trackpad rotates the canvas view."),
+    ("interpolateControlPoints", "When you move anchor points, each curve with one moved end keeps its shape relative to its ends."),
     ("holdToolKeys", "Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again."),
     ("boundingBoxWhileMovingAndDrawing", "Shows the bounding box while you move the selection or draw a shape."),
     ("japaneseCropMarks", "Create Trim Marks draws Japanese-style marks instead of Roman ones."),
@@ -217,6 +218,9 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     ("snapTangent", "Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve."),
     ("snapPerpendicular", "Snaps the end of a line segment so that it meets a nearby straight segment at a right angle."),
+    // Slices
+    ("showSliceNumbers", "Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show."),
+    ("sliceLineColor", "The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it."),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
