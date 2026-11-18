@@ -45,14 +45,18 @@ fn point(app: &VectorcraftApp, id: u64, index: usize) -> Option<(f64, f64, f64)>
 }
 
 /// The incoming and outgoing halves of the discontinuous point that width point `index` of `id`
-/// belongs to, or none when no other point shares its place (or more than one does).
+/// belongs to, or none when it is a continuous point. As `stroke.widthPoint.set` pairs them, a
+/// point `a` and the next one are the two halves when they are the only points within
+/// [`SAME_T`] of `a`'s place, so either half finds the same pair.
 fn halves(app: &VectorcraftApp, id: u64, index: usize) -> Option<(usize, usize)> {
     let points = &app.session.active()?.doc.node(NodeId(id))?.appearance.stroke()?.profile.as_ref()?.points;
-    let t = points.get(index)?.0;
-    match (0..points.len()).filter(|i| (points[*i].0 - t).abs() <= SAME_T).collect::<Vec<_>>()[..] {
-        [a, b] => Some((a, b)),
-        _ => None,
-    }
+    points.get(index)?;
+    let pair = |a: usize| {
+        let t = points.get(a)?.0;
+        let at: Vec<usize> = (0..points.len()).filter(|i| (points[*i].0 - t).abs() <= SAME_T).collect();
+        (at == [a, a + 1]).then_some((a, a + 1))
+    };
+    pair(index).or_else(|| index.checked_sub(1).and_then(pair))
 }
 
 /// Open Width Point Edit for `index`, or a prospective point at fraction `t` without an index

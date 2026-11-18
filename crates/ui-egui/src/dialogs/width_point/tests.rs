@@ -445,6 +445,36 @@ fn either_half_of_a_discontinuous_point_shows_both_sets_of_side_widths() {
     assert_eq!(shown.iter().filter(|t| *t == "Side 1:").count(), 1);
 }
 
+/// Three width points each within 1e-6 of the next, but the outer two farther apart: the halves
+/// are paired as `stroke.widthPoint.set` pairs them, from the incoming half's place, whichever
+/// of them is opened. The first two make one discontinuous point, and the third stays a
+/// continuous point.
+#[test]
+fn points_in_a_chain_pair_as_the_engine_pairs_them() {
+    let chain = json!([[0, 1, 1], [0.5, 0.8, 0.8], [0.50000075, 0.4, 1.2], [0.5000015, 0.6, 0.6], [1, 1, 1]]);
+    for index in [1, 2] {
+        let (mut app, id) = app();
+        app.run("stroke.widthProfile.set", json!({"ids": [id], "points": chain})).unwrap();
+        app.run("ui.widthPointEdit", json!({"id": id, "index": index})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        assert_eq!((d.fields["index"].clone(), d.fields["outIndex"].clone()), (json!(1), json!(2)), "opened {index}");
+        d.fields.insert("outSide1".into(), json!(1));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none(), "opened {index}");
+        assert_eq!(points(&app, id)[2], (0.50000075, 0.2, 1.2), "opened {index}");
+    }
+    let (mut app, id) = app();
+    app.run("stroke.widthProfile.set", json!({"ids": [id], "points": chain})).unwrap();
+    app.run("ui.widthPointEdit", json!({"id": id, "index": 3})).unwrap();
+    let d = app.ui.dialog.as_mut().unwrap();
+    assert_eq!(d.fields["index"], json!(3));
+    assert!(d.fields.get("outIndex").is_none());
+    d.fields.insert("side1".into(), json!(1));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(points(&app, id)[3], (0.5000015, 0.2, 0.6));
+}
+
 #[test]
 fn ok_sets_both_halves_of_a_discontinuous_point_in_one_step() {
     let (mut app, id) = pair_app();
