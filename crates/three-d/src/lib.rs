@@ -13,7 +13,7 @@ mod solid;
 mod visibility;
 pub use solid::{
     Bevel, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, MeshFace, PlanarFace, TOO_COMPLEX_SOLID, View, extrude, extrude_face_map,
-    extrude_mesh_face, inflate, inflate_each, inflate_together, plane, plane_face_map, plane_mesh_face,
+    extrude_mesh_face, extrude_side_size, inflate, inflate_each, inflate_together, plane, plane_face_map, plane_mesh_face,
 };
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;
@@ -389,7 +389,9 @@ pub struct Face {
     pub plane: Option<DepthPlane>,
 }
 
-/// Where a face of Revolve's swept side lies on the side surface, unrolled flat: x runs around the
+/// Where a face of a side surface lies on it unrolled flat, for the graphics mapped onto it. On
+/// Extrude & Bevel's side ([`Facet::surface`]) x runs along the outline and y from the front toward
+/// the back. On Revolve's swept side x runs around the
 /// axis and y along the profile, in points. x is the angle from the middle of the surface times the
 /// point's own distance from the axis, so a graphic keeps its size at every distance and wraps
 /// farther around the axis where the profile comes closer to it. y is the length along the profile

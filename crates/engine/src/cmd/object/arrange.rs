@@ -384,6 +384,11 @@ fn add_drawn_live_paint(s: &mut Session, isolated: NodeId, next: Option<NodeId>)
 }
 
 pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
+    let key = "all";
+    let all = match p.get(key) {
+        None => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad("object.exitIsolation", format!("`{key}` must be true or false")))?,
+    };
     // Opacity mask editing, pattern editing and symbol editing isolate their editing layer. Leaving
     // isolation mode then leaves that mode, as Stop Editing Opacity Mask and the isolation bar's
     // Done do. A group isolated inside the symbol's art goes back to the symbol's layer.
@@ -419,12 +424,18 @@ pub(super) fn exit_isolation(s: &mut Session, p: &Value) -> Result<Value> {
         return ok();
     }
     let menu = s.menu.clone();
-    let prev = s.active().and_then(|d| d.isolation);
+    let prev = st.isolation;
+    // An isolated sublayer goes up to its parent layer, which stays isolated, unless `all` is true or
+    // that layer is hidden or locked; anything else leaves isolation mode.
+    let up = prev
+        .filter(|i| !all && st.doc.node(*i).is_some_and(Node::is_layer))
+        .and_then(|i| st.doc.parent_of(i))
+        .filter(|parent| st.doc.is_editable(*parent));
     if let Some(i) = prev {
         crate::cmd::settle_interaction(s)?;
-        let left = add_drawn_live_paint(s, i, None)?.unwrap_or(i);
+        let left = add_drawn_live_paint(s, i, up)?.unwrap_or(i);
         let st = s.doc_mut()?;
-        st.isolation = None;
+        st.isolation = up;
         crate::cmd::distortcmds::finish_edit_text(st, i);
         let target = st.doc.parent_of(left).filter(|p| st.doc.node(*p).is_some_and(|n| n.extras().shaper.is_some())).unwrap_or(left);
         st.selection.set([target]);

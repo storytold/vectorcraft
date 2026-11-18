@@ -186,6 +186,7 @@
 	Add Anchor Point	Afegeix un punt d’ancoratge
 	Add Anchor Point Tool	Eina d’afegir un punt d’ancoratge
 	Add Anchor Points	Afegeix punts d’ancoratge
+	Add Around	Afegeix al voltant de l’objecte
 	Add Content	Afegeix contingut
 	Add Effect	Afegeix un efecte
 	Add Event	Afegeix un esdeveniment
@@ -222,7 +223,11 @@
 	Add Used Colors	Afegeix els colors utilitzats
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
+	Plug-in Instruction Budget	Pressupost d’instruccions dels complements
 	Adjust Adjoining Width Points	Ajusta els punts d’amplada contigus
+	Incoming	Entrant
+	Outgoing	Sortint
+	Single Width Only	Només una amplada
 	Adjust Color Balance…	Ajusta l’equilibri de color…
 	Adjust Colors	Ajusta els colors
 	Adjust Options:	Opcions d’ajust:
@@ -296,6 +301,7 @@
 	Angles	Angles
 	Angular	Angular
 	Animated Zoom	Zoom animat
+	Anti Alias	Antialiàsing
 	Anti-alias	Antialiàsing
 	Anti-Alias	Antialiàsing
 	Anti-alias Rasters	Antialiàsing de ràsters
@@ -434,6 +440,7 @@ antiAlias	Sharp	Nítid
 	Average…	Mitjana…
 	Away from the Line	Allunyat de la línia
 	Axis	Eix
+	Axis Angle	Angle de l’eix
 	Axis side	Costat de l’eix
 	Axis:	Eix:
 	B4	B4
@@ -583,6 +590,12 @@ antiAlias	Sharp	Nítid
 	Brush Libraries Menu	Menú de biblioteques de pinzells
 	Brush Library	Biblioteca de pinzells
 	Brush Options…	Opcions del pinzell…
+	Options of Selected Object…	Opcions de l’objecte seleccionat…
+	Options of Selected Object	Opcions de l’objecte seleccionat
+@msg	no path painted with a brush is selected	no hi ha cap traçat pintat amb un pinzell seleccionat
+@msg	the selected paths are painted with brushes of different types	els traçats seleccionats estan pintats amb pinzells de tipus diferents
+@msg	give `params` or `reset`, not both	indiqueu `params` o `reset`, no tots dos
+@msg	a bristle brush has no options of its own on a path	un pinzell de cerres no té opcions pròpies en un traçat
 	Brush Scale Options	Opcions d’escala del pinzell
 	Brush Size	Mida del pinzell
 	Brush Strokes	Traços del pinzell
@@ -677,6 +690,12 @@ antiAlias	Sharp	Nítid
 	Character options	Opcions de caràcter
 	Paragraph options	Opcions de paràgraf
 	Character Rotation	Rotació de caràcters
+	Chinese Big 5	Xinès Big 5
+	Cyrillic	Ciríl·lic
+	Greek	Grec
+	Turkish	Turc
+	Baltic	Bàltic
+	Central European	Centreeuropeu
 	Character Set:	Joc de caràcters:
 	Character Style	Estil de caràcter
 	Character Style Options	Opcions de l’estil de caràcter
@@ -700,6 +719,8 @@ antiAlias	Sharp	Nítid
 	Chrome	Crom
 	Chrome…	Crom…
 	Circle	Cercle
+	Circle Tool	Eina de cercle
+	Circle too large	El cercle és massa gran
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -804,6 +825,7 @@ antiAlias	Sharp	Nítid
 	Color Mixer (Shift-click the chip)	Mesclador de colors (Maj+clic a la mostra)
 	Color Mode	Mode de color
 	Color Mode:	Mode de color:
+	Color Model	Model de color
 	Color Model:	Model de color:
 	Color Models	Models de color
 	Color Panel Options	Opcions del panell de color
@@ -826,6 +848,11 @@ antiAlias	Sharp	Nítid
 	Saturation and brightness	Saturació i lluentor
 	Color field	Camp de color
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Visualització de roda
+	Box View	Visualització de quadre
+	Box Channel	Canal del quadre
+	Color box	Quadre de color
+	Color Wheel Options	Opcions de la roda de colors
 	Color Type:	Tipus de color:
 	Color wheel	Roda de color
 	Color:	Color:
@@ -840,6 +867,7 @@ antiAlias	Sharp	Nítid
 	Column Graph Tool	Eina de gràfic de columnes
 	Column Type:	Tipus de columna:
 	Column Width:	Amplada de columna:
+	Columns	Columnes
 	Columns:	Columnes:
 	Column…	Columna…
 	Combine Slices	Combina els talls
@@ -1126,6 +1154,9 @@ antiAlias	Sharp	Nítid
 	Delete Artboard	Suprimeix el tauler
 	Delete Artboards	Suprimeix els taulers
 	Delete Brush	Suprimeix el pinzell
+	Delete Color	Suprimeix el color
+	Restore Generated Table	Restaura la taula generada
+	Unshift All Colors	Desfés el desplaçament de tots els colors
 	Delete Character Style	Suprimeix l’estil de caràcter
 	Delete Data Set	Suprimeix el conjunt de dades
 	Delete Data Sets	Suprimeix els conjunts de dades
@@ -1235,6 +1266,7 @@ antiAlias	Sharp	Nítid
 	Direction:	Direcció:
 	Directives	Directrius
 	Disable Auto Add/Delete	Desactiva l’addició i la supressió automàtiques
+	Interpolate Control Points When Moving Anchors	Interpola les manetes de direcció en moure punts d’ancoratge
 	Disable Opacity Mask	Desactiva la màscara d’opacitat
 	Discard	Descarta
 	Discard Empty Type	Descarta el text buit
@@ -1521,6 +1553,7 @@ antiAlias	Sharp	Nítid
 	Enable text access for screen readers	Activa l’accés al text per als lectors de pantalla
 	Enable Touch Gestures	Activa els gestos tàctils
 	Switch Selection and Drawing Modes	Canvia entre els modes de selecció i de dibuix
+	Select Last Selection Tool	Tria l'última eina de selecció
 	Enable Touch Workspace	Activa l’espai de treball tàctil
 	Encoding	Codificació
 	Encoding and writing the file…	S’està codificant i escrivint el fitxer…
@@ -1706,6 +1739,8 @@ digits	Malayalam	Malaiàlam
 	Files	Fitxers
 	Files of a PDF standard can't be password-protected.	Els fitxers d’un estàndard PDF no es poden protegir amb contrasenya.
 	Files of this standard tag their colours with ICC profiles.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC, excepte els colors CMYK del perfil d’intenció de sortida, que s’escriuen com a DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Amb «No incloguis els perfils» i una intenció de sortida CMYK, cada color CMYK s’escriu com a DeviceCMYK, tret que es converteixi a una destinació CMYK d’un altre perfil.
 	Fill	Farciment
 	Fill & Stroke	Farciment i traç
 	Fill (X), double-click for the Color Picker	Farciment (X), fes doble clic per al selector de color
@@ -1819,6 +1854,8 @@ digits	Malayalam	Malaiàlam
 	Fonts added in the last 30 days	Tipus de lletra afegits en els darrers 30 dies
 	Font Preview Size	Mida de previsualització del tipus de lletra
 	Font Size	Mida del tipus de lletra
+	Highlight Font Size	Ressalta la mida del tipus de lletra
+	Other…	Una altra…
 	Font Style:	Estil de tipus de lletra:
 	Font Technology	Tecnologia del tipus de lletra
 	Font:	Tipus de lletra:
@@ -1856,6 +1893,7 @@ digits	Malayalam	Malaiàlam
 	from the format's public description	de la descripció pública del format
 	from your earlier imports	de les importacions anteriors
 	Front	Davant
+	Side	Lateral
 	Frosted	Glaçat
 	Full Document	Document complet
 	Full Justify	Justificació completa
@@ -2498,6 +2536,7 @@ digits	Malayalam	Malaiàlam
 	Linked Files	Fitxers enllaçats
 	Links	Enllaços
 	Linux Display Server	Servidor de pantalla de Linux
+	Low-Latency Drawing	Dibuix de baixa latència
 	Liquify	Liquifica
 	List Data Sets	Llista els conjunts de dades
 	List Folder	Llista la carpeta
@@ -2543,6 +2582,7 @@ digits	Malayalam	Malaiàlam
 	Loads native code	Carrega codi natiu
 	Local Libraries	Biblioteques locals
 	Locate Library…	Localitza la biblioteca…
+	Locate Layer	Localitza la capa
 	Locate Object	Localitza l’objecte
 	Locate Selected Objects	Localitza els objectes seleccionats
 	Location	Ubicació
@@ -3042,35 +3082,35 @@ digits	Malayalam	Malaiàlam
 	Open password:	Contrasenya d’obertura:
 	Open Paths	Traçats oberts
 	Open Recent File 1	Obre el fitxer recent 1
-	Open Recent File 10	Obre el fitxer recent 2
-	Open Recent File 11	Obre el fitxer recent 3
-	Open Recent File 12	Obre el fitxer recent 4
-	Open Recent File 13	Obre el fitxer recent 5
-	Open Recent File 14	Obre el fitxer recent 6
-	Open Recent File 15	Obre el fitxer recent 7
-	Open Recent File 16	Obre el fitxer recent 8
-	Open Recent File 17	Obre el fitxer recent 9
-	Open Recent File 18	Obre el fitxer recent 10
-	Open Recent File 19	Obre el fitxer recent 11
-	Open Recent File 2	Obre el fitxer recent 12
-	Open Recent File 20	Obre el fitxer recent 13
-	Open Recent File 21	Obre el fitxer recent 14
-	Open Recent File 22	Obre el fitxer recent 15
-	Open Recent File 23	Obre el fitxer recent 16
-	Open Recent File 24	Obre el fitxer recent 17
-	Open Recent File 25	Obre el fitxer recent 18
-	Open Recent File 26	Obre el fitxer recent 19
-	Open Recent File 27	Obre el fitxer recent 20
-	Open Recent File 28	Obre el fitxer recent 21
-	Open Recent File 29	Obre el fitxer recent 22
-	Open Recent File 3	Obre el fitxer recent 23
-	Open Recent File 30	Obre el fitxer recent 24
-	Open Recent File 4	Obre el fitxer recent 25
-	Open Recent File 5	Obre el fitxer recent 26
-	Open Recent File 6	Obre el fitxer recent 27
-	Open Recent File 7	Obre el fitxer recent 28
-	Open Recent File 8	Obre el fitxer recent 29
-	Open Recent File 9	Obre el fitxer recent 30
+	Open Recent File 10	Obre el fitxer recent 10
+	Open Recent File 11	Obre el fitxer recent 11
+	Open Recent File 12	Obre el fitxer recent 12
+	Open Recent File 13	Obre el fitxer recent 13
+	Open Recent File 14	Obre el fitxer recent 14
+	Open Recent File 15	Obre el fitxer recent 15
+	Open Recent File 16	Obre el fitxer recent 16
+	Open Recent File 17	Obre el fitxer recent 17
+	Open Recent File 18	Obre el fitxer recent 18
+	Open Recent File 19	Obre el fitxer recent 19
+	Open Recent File 2	Obre el fitxer recent 2
+	Open Recent File 20	Obre el fitxer recent 20
+	Open Recent File 21	Obre el fitxer recent 21
+	Open Recent File 22	Obre el fitxer recent 22
+	Open Recent File 23	Obre el fitxer recent 23
+	Open Recent File 24	Obre el fitxer recent 24
+	Open Recent File 25	Obre el fitxer recent 25
+	Open Recent File 26	Obre el fitxer recent 26
+	Open Recent File 27	Obre el fitxer recent 27
+	Open Recent File 28	Obre el fitxer recent 28
+	Open Recent File 29	Obre el fitxer recent 29
+	Open Recent File 3	Obre el fitxer recent 3
+	Open Recent File 30	Obre el fitxer recent 30
+	Open Recent File 4	Obre el fitxer recent 4
+	Open Recent File 5	Obre el fitxer recent 5
+	Open Recent File 6	Obre el fitxer recent 6
+	Open Recent File 7	Obre el fitxer recent 7
+	Open Recent File 8	Obre el fitxer recent 8
+	Open Recent File 9	Obre el fitxer recent 9
 	Open Recent Files	Obre fitxers recents
 	Open Swatch Library	Obre la biblioteca de mostres
 	Open Symbol Library	Obre la biblioteca de símbols
@@ -3150,6 +3190,9 @@ digits	Malayalam	Malaiàlam
 	Overprint	Sobrimpressió
 	Overprint and Transparency Flattener	Aplanador de sobremipressió i transparència
 	Overprint and Transparency Flattener Options	Opcions de l’aplanador de sobremipressió i transparència
+	Custom…	Personalitzat…
+	Custom Transparency Flattener Options	Opcions personalitzades de l’aplanador de transparència
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	L’EPS no té transparència alfa, i Sobreimpressions determina si es conserven les sobreimpressions.
 	Overprint Black…	Sobrimpressió del negre…
 	Overprint Fill	Sobrimpressió del farciment
 	Overprint Preview	Previsualització de la sobremipressió
@@ -3216,6 +3259,11 @@ digits	Malayalam	Malaiàlam
 	Path Eraser	Esborrador de traçats
 	Path Eraser Tool	Eina d’esborrador de traçats
 	Path Length	Longitud del traçat
+	Grid Size	Mida de la quadrícula
+	Grid Colors	Colors de la quadrícula
+	Flattener Preset	Preajust de l’aplanador
+	X	X
+	Y	Y
 	Path:	Traçat:
 	Pathfinder	Cercador de traçats
 	Pathfinder Options	Opcions del cercador de traçats
@@ -3343,6 +3391,7 @@ digits	Malayalam	Malaiàlam
 	Play Current Selection	Reprodueix la selecció actual
 	Save Actions…	Desa les accions…
 	Load Actions…	Carrega accions…
+	Replace Actions…	Reemplaça les accions…
 	Reset Actions	Restableix les accions
 	Replace the current actions with the default set?	Voleu reemplaçar les accions actuals pel conjunt predeterminat?
 	Append adds the default set after the current sets instead.	Amb Afegeix, el conjunt predeterminat s’afegeix després dels conjunts actuals.
@@ -3365,6 +3414,10 @@ digits	Malayalam	Malaiàlam
 	Polar Grid Tool Options	Opcions de l’eina de quadrícula polar
 	Polygon	Polígon
 	Polygon Properties:	Propietats del polígon:
+	Line Properties:	Propietats de la línia:
+	Line Length:	Longitud de la línia:
+	Line Angle:	Angle de la línia:
+	Constrain Pie Angle	Restringeix l’angle del sector
 	Polygon Tool	Eina de polígon
 	Portrait	Vertical
 	Portrait (flipped)	Vertical (invertit)
@@ -3563,6 +3616,9 @@ digits	Malayalam	Malaiàlam
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
 	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	Refresh Monitor Profile	Actualitza el perfil del monitor
+@msg	turn on Use Monitor Profile for Canvas first	activeu primer «Utilitza el perfil del monitor per al llenç»
+@msg	this build doesn't read display profiles	aquesta versió no llegeix perfils de pantalla
 	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
 	Canvas display profile:	Perfil de pantalla del llenç:
 	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.
@@ -3759,6 +3815,8 @@ digits	Malayalam	Malaiàlam
 	Reset Automation	Restableix Automation
 	Reset Bar Position	Restableix la posició de la barra
 	Reset Bounding Box	Restableix el quadre delimitador
+	Rotate Bounding Box	Gira el quadre delimitador
+	Rotate Bounding Box…	Gira el quadre delimitador…
 	Reset Envelope Mesh	Restableix la malla de l’embolcall
 	Reset Envelope Shape	Restableix la forma de l’embolcall
 	Reset Essentials	Restableix Essentials
@@ -3819,6 +3877,7 @@ digits	Malayalam	Malaiàlam
 	Resize panels	Redimensiona els panells
 	Resize Slice	Redimensiona el tall
 	Resize Type Area	Redimensiona l’àrea de text
+	Resolution	Resolució
 	Resolution:	Resolució:
 	Responsive	Adaptatiu
 	Restore	Restaura
@@ -3845,6 +3904,7 @@ digits	Malayalam	Malaiàlam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La roda del ratolí amb Cmd/Ctrl premut desplaça el llenç en horitzontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrossegar en horitzontal sobre l’etiqueta d’un camp numèric canvia el valor del camp.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quan moveu punts d’ancoratge, cada corba amb un extrem desplaçat conserva la forma respecte dels seus extrems.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Crea marques de retall dibuixa marques d’estil japonès en lloc de romanes.
@@ -3875,6 +3935,29 @@ digits	Malayalam	Malaiàlam
 	The unit for East Asian type measurements, which no field uses yet.	La unitat per a les mesures del text d’Àsia oriental, que encara no fa servir cap camp.
 	When on, a number typed without a unit into a field in picas is read in points.	Quan està activat, un nombre escrit sense unitat en un camp en piques es llegeix en punts.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	Amb ID XML, els noms dels objectes es mostren com a ID XML a Capes, Variables i Opcions de la capa.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	El pas de la mida del text i de l’interlineat: Cmd/Ctrl+Maj+. i Cmd/Ctrl+Maj+, canvien la mida un pas, o cinc amb Alt també; en text horitzontal, Alt amb la fletxa amunt o avall canvia l’interlineat un pas, o cinc amb Cmd/Ctrl.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	El pas del tracking i del kerning, en mil·lèsimes d’em: en text horitzontal, Alt amb la fletxa esquerra o dreta canvia el kerning al cursor o el tracking del text seleccionat un pas, o cinc amb Cmd/Ctrl.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	El pas del desplaçament de la línia de base: en text horitzontal, Alt i Maj amb la fletxa amunt o avall mouen la línia de base un pas, o cinc amb Cmd/Ctrl.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Mostra les opcions del text japonès i d’altres llengües d’Àsia oriental als taulers Caràcter, Paràgraf, OpenType i Glifs, i l’ordre Tipus de lletra compostos.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Mostra les opcions del text àrab, hebreu i índic als taulers Caràcter i Paràgraf, com la direcció del paràgraf, les caixides i els dígits.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Les eines de selecció seleccionen el text només a la línia de base, al marc del text d’àrea o al seu traçat, no a qualsevol punt dins de la seva caixa.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Els menús de tipus de lletra mostren cada tipus de lletra amb el nom en anglès; desactivat, un tipus de lletra que també té nom en la seva llengua mostra aquest nom.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	El text d’àrea nou comença amb Mida automàtica activada, de manera que un marc rectangular de text horitzontal creix o s’encongeix en alçada per encabir-hi el text.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Les llistes de tipus de lletra i el menú Tipus de lletra mostren una mostra de cada tipus de lletra al costat del nom.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Les mostres de tipus de lletra es dibuixen en text fosc sobre blanc, sigui quina sigui la brillantor de la interfície; només s’aplica mentre les previsualitzacions als menús estan activades.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	L’alçada de cada fila a les llistes dels camps de tipus de lletra, com el del tauler Caràcter, i per tant la mida de cada mostra.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Quants dels últims tipus de lletra usats, de 1 a 15, mostren Tipus de lletra recents i les llistes, del més recent al més antic.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Quan canvieu el tipus de lletra o l’estil d’un text, els caràcters per als quals el nou tipus de lletra no té glif conserven el que tenien.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Un ressaltat rosa al llenç marca els glifs que les funcions OpenType han substituït, com les lligadures; no s’imprimeix ni s’exporta.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	Amb l’eina de text, seleccionar un sol caràcter mostra al seu costat, al llenç, una fila dels seus glifs alternatius per triar-ne un.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Un ressaltat rosa al llenç marca el text dibuixat amb un tipus de lletra substitut perquè el seu falta; no s’imprimeix ni s’exporta.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	El text nou fet amb una eina de text comença amb text de farciment seleccionat, que el que escriviu substitueix.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Escriure un marcador de llista com 1. o * i després un espai a l’inici d’un paràgraf converteix el paràgraf en una llista.
+	Fonts in this folder show in the font menus and can be used without being installed.	Els tipus de lletra d’aquesta carpeta apareixen als menús de tipus de lletra i es poden usar sense instal·lar-los.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Aplicar un estil gràfic a un text treu als caràcters el seu propi emplenament o traç on l’estil en té un, perquè es vegi la pintura de l’estil.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Alinea i Distribueix mesuren el text de punt per la tinta dels seus glifs en lloc de la seva caixa em.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Alinea i Distribueix mesuren el text d’àrea per la tinta dels seus glifs en lloc del seu marc.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	El quadre delimitador i el tauler Transforma mesuren el text de punt per la tinta dels seus glifs en lloc de la seva caixa em.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Ajusta el dibuix, el desplaçament i l’escalat a les subdivisions de la quadrícula, fins i tot quan la quadrícula està amagada; mentre està activat, Ajusta al píxel no s’aplica.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	El color de les guies no seleccionades; un tauler amb una Etiqueta de les guies dibuixa les seves guies amb el color de l’etiqueta.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Dibuixa les guies com a línies contínues o com a punts, incloses les guies que ja són al document.
@@ -3902,6 +3985,8 @@ digits	Malayalam	Malaiàlam
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Com d’a prop a la pantalla han d’arribar el punter o un punt arrossegat a l’art perquè les guies intel·ligents s’hi ajustin; la distància és la mateixa a qualsevol zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta l’extrem d’un segment de línia, o un cercle dibuixat des del centre, perquè toqui una corba propera.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta l’extrem d’un segment de línia perquè trobi un segment recte proper en angle recte.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra al llenç el número de cada tall en un requadre a la seva cantonada superior esquerra; si està desactivat, els contorns dels talls continuen visibles.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color dels contorns dels talls d’usuari i d’objecte i dels requadres amb el seu número; els talls automàtics fan servir un to més apagat d’aquest color.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
 	Restore Recovered Documents	Restaura els documents recuperats
@@ -3962,6 +4047,7 @@ digits	Malayalam	Malaiàlam
 	Rotate…	Gira…
 	Rotation	Rotació
 	Rotation relative to:	Rotació relativa a:
+	Hue Jitter:	Variació del to:
 	Rotation X	Rotació X
 	Rotation Y	Rotació Y
 	Rotation Z	Rotació Z
@@ -3982,8 +4068,10 @@ digits	Malayalam	Malaiàlam
 	Rounded Rectangle	Rectangle arrodonit
 	Rounded Rectangle Tool	Eina de rectangle arrodonit
 	Rounded Rectangle…	Rectangle arrodonit…
+	Roundness	Arrodoniment
 	Roundness:	Arrodoniment:
 	Row Size:	Mida de la fila:
+	Rows	Files
 	Rows:	Files:
 	Ruby	Rubí
 	Ruby…	Rubí…
@@ -4217,6 +4305,12 @@ digits	Malayalam	Malaiàlam
 	Search commands, tools, panels and effects…	Cerca ordres, eines, panells i efectes…
 	No commands match	Cap ordre coincideix
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Cap element de menú
+	Toolbar	Barra d’eines
+	{toolbar}, in the {tool} group	{toolbar}, al grup {tool}
+	In the menu bar: {path}	A la barra de menús: {path}
+	In the {group} group: press and hold to open it	Al grup {group}: manteniu premut per obrir-lo
+	{home}, not shown now	{home}, ara no es mostra
 @plural	{n} result|{n} results	{n} resultat|{n} resultats
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultat. Continueu escrivint per reduir-los.|{shown} de {n} resultats. Continueu escrivint per reduir-los.
 	Recent Commands	Ordres recents
@@ -4384,6 +4478,7 @@ digits	Malayalam	Malaiàlam
 	Set Slice Rectangle	Defineix el rectangle del tall
 	Set Tab Stops	Defineix les tabulacions
 	Set Text	Defineix el text
+	Set the current fill or stroke to the selected color	Defineix el color seleccionat com a farciment o traç actual
 	Set the selected color to the current color	Defineix el color seleccionat com a color actual
 	Set Zoom	Defineix el zoom
 	Set:	Defineix:
@@ -4530,7 +4625,7 @@ digits	Malayalam	Malaiàlam
 	Show Vivid/Muted	Mostra els vius/apagats
 	Show Warm/Cool	Mostra els càlids/freds
 	Show {kind} Brushes	Mostra els pinzells {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa; Alt+clic de nou: totes les planxes)
 	Show:	Mostra:
 	Shown with the optimised preview.	Es mostra amb la previsualització optimitzada.
 	Shrink Text to Fit	Redueix el text perquè hi càpiga
@@ -4894,7 +4989,7 @@ digits	Malayalam	Malaiàlam
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
 	Import Composite Fonts	Importa tipus de lletra compostos
-@msg	each font must be {name, parts}	cada tipus de lletra ha de ser {name, parts}
+@msg	each font must be {{name, parts}}	cada tipus de lletra ha de ser {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	clau desconeguda `{k}`; un tipus de lletra admet name i parts
 @msg	each font needs a name	cada tipus de lletra necessita un nom
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no pot anomenar un tipus de lletra compost (d’1 a {COMPOSITE_NAME_MAX} caràcters, sense caràcters de control)
@@ -4907,7 +5002,10 @@ digits	Malayalam	Malaiàlam
 @msg	two composite fonts are named `{_1}`	dos tipus de lletra compostos es diuen `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` és el nom d’un tipus de lletra instal·lat
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un tipus de lletra compost
-@msg	give fonts: [{name, parts}…]	indiqueu fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	indiqueu fonts: [{{name, parts}}…]
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` ha de ser "document", {{artboards: [index, …]}} o {{layers: [id, …]}}
+@msg	numbers out of order in {{}} quantifier	nombres desordenats al quantificador {{}}
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	la pintura no és un degradat de forma lliure (apliqueu-ne un amb paint.editGradient {{kind: "freeform"}})
 @msg	path is empty	path és buit
 @msg	fonts must be a list of composite fonts	fonts ha de ser una llista de tipus de lletra compostos
 @msg	names must be strings	names ha de contenir cadenes
@@ -5023,6 +5121,13 @@ digits	Malayalam	Malaiàlam
 	TIFF (8-bit Color)	TIFF (color de 8 bits)
 	TIFF (Black & White)	TIFF (blanc i negre)
 	Tile	Mosaic
+	Tile All Vertically	Mosaic vertical de tot
+	Tile All Horizontally	Mosaic horitzontal de tot
+	2-Up Layout	Disposició de 2
+	3-Up Layout	Disposició de 3
+	4-Up Layout	Disposició de 4
+	6-Up Layout	Disposició de 6
+	Arrange Documents	Organitza els documents
 	Tile Edge Color	Color de la vora del mosaic
 	Tile Edge Color…	Color de la vora del mosaic…
 	Tile Full Pages	Mosaic de pàgines senceres
@@ -5303,6 +5408,8 @@ digits	Malayalam	Malaiàlam
 	Variable Options	Opcions de variable
 	Variable Options…	Opcions de variable…
 	Variable Width Profile	Perfil d’amplada variable
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
 	Variables	Variables
 	Variation	Variació
 	Variation:	Variació:
@@ -5356,7 +5463,7 @@ digits	Malayalam	Malaiàlam
 	Update While Dragging	Actualitza mentre s’arrossega
 	Video Thumbnail 1280×720	Miniatura de vídeo 1280×720
 	View	Visualitza
-	View Artboard Only	Visualitza només el tauler
+	View Artboard Contents Only	Visualitza només el contingut del tauler
 	View Opacity Mask	Visualitza la màscara d’opacitat
 	View PDF after saving	Visualitza el PDF després de desar
 	View {n}	Vista {n}
@@ -5430,6 +5537,7 @@ digits	Malayalam	Malaiàlam
 	Write Layers	Escriu les capes
 	Writes, moves or deletes files	Escriu, mou o suprimeix fitxers
 	x Height	Alçada de la x
+	Em Box Height	Alçada de la caixa em
 	X11 (XWayland)	X11 (XWayland)
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) quan hi ha un llapis connectat
 	X:	X:
@@ -5555,6 +5663,8 @@ digits	Malayalam	Malaiàlam
 @msg	a negative `aspect` applies to conic gradients	un `aspect` negatiu s’aplica als degradats cònics
 @msg	`focal` applies to radial gradients	`focal` s’aplica als degradats radials
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
+@msg	`view` must be wheel or box	`view` ha de ser wheel o box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
@@ -5702,6 +5812,9 @@ digits	Malayalam	Malaiàlam
 @msg	automation path rejected: outside the read root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel de lectura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	camí d’automatització rebutjat: fora de les arrels de lectura {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	un fitxer JavaScript enllaçat és fora de les arrels de lectura
+@msg	a linked image file is outside the read roots	un fitxer d’imatge enllaçat és fora de les arrels de lectura
+@msg	a linked file's export folder is outside the read roots	la carpeta d’exportació d’un fitxer enllaçat és fora de les arrels de lectura
+@msg	a linked file's editing data can't be read to check it against the read roots	no es poden llegir les dades d’edició d’un fitxer enllaçat per comprovar-les amb les arrels de lectura
 @msg	the library's file is outside the read roots	el fitxer de la biblioteca és fora de les arrels de lectura
 @msg	{file} names more than one linked JavaScript file	{file} correspon a més d’un fitxer JavaScript enllaçat
 @msg	automation path rejected: outside the write root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel d’escriptura {root}: {path}
@@ -5720,6 +5833,7 @@ digits	Malayalam	Malaiàlam
 @msg	bad trailer	tràiler incorrecte
 @msg	balance must be between 0 and 100	balance ha d’estar entre 0 i 100
 @msg	batch step {_1} (`{id}`) failed: {e}	el pas de lot {_1} (`{id}`) ha fallat: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	el pas {_1} de l’acció (`{id}`) ha fallat: {reason}
 @msg	Batch: {count} processed	Lot: {count} processats
 @msg	Batch: {count} processed, {failed} failed	Lot: {count} processats, {failed} fallits
 @msg	before must name a panel	before ha de nomenar un panell
@@ -5754,6 +5868,8 @@ digits	Malayalam	Malaiàlam
 @msg	Choose two nonzero angle arms	Trieu dos braços d’angle no nuls
 @msg	clipboard is empty	el porta-retalls és buit
 @msg	closing needs three anchors	el tancament necessita tres punts d’ancoratge
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: almenys un color ha de quedar a la taula de colors
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` indica un color que també indica una altra clau
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no és un color com "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: com a màxim {MAX_TABLE} colors
 @msg	column docks a set as a dock column, with no anchor or icon	column acobla un conjunt com a columna d’acoblament, sense àncora ni icona
@@ -5772,6 +5888,13 @@ digits	Malayalam	Malaiàlam
 	Show External Script Warning	Mostra l'avís dels scripts externs
 	A Script Is Running	S'està executant un script
 	Script Alert	Avís de l'script
+	Script File Access	Accés de l’script als fitxers
+	The script asks to read a file you choose.	L’script demana llegir un fitxer que trieu.
+	The script asks to read and write a file you choose.	L’script demana llegir i escriure un fitxer que trieu.
+	The script asks to read and write a folder you choose, with everything in it.	L’script demana llegir i escriure una carpeta que trieu, amb tot el que conté.
+	Allow Once	Permet un cop
+	Always Allow This Script	Permet sempre aquest script
+	Deny	Denega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
@@ -5788,6 +5911,8 @@ digits	Malayalam	Malaiàlam
 @msg	the script is no longer in the Scripts folder	l'script ja no és a la carpeta Scripts
 	Some scripts were not listed	Alguns scripts no s'han llistat
 	The Scripts folder cannot be read	No es pot llegir la carpeta Scripts
+	Loading scripts…	S’estan carregant els scripts…
+	The Scripts folder is still being read	Encara s’està llegint la carpeta Scripts
 @msg	the script's run is no longer available	l'execució de l'script ja no està disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	una ordre fallida ha canviat passos de desfer que no s'han pogut restaurar, així que l'script s'ha aturat
 @msg	a recovery copy could not be written, so the script was not run	no s'ha pogut escriure una còpia de recuperació, per tant l'script no s'ha executat
@@ -5800,8 +5925,6 @@ digits	Malayalam	Malaiàlam
 @msg	Script file could not be read	No s'ha pogut llegir el fitxer de l'script
 @msg	Script folder has more than 2,048 entries	La carpeta de l'script té més de 2.048 entrades
 @msg	Script file open mode must be r, w, e or a	El mode d'obertura del fitxer de l'script ha de ser r, w, e o a
-@msg	Script file writing is not available	L'escriptura de fitxers de l'script no està disponible
-@msg	Script file dialogs are not available	Els quadres de diàleg de fitxers de l'script no estan disponibles
 @msg	Script files cannot be opened in another application	Els fitxers de l'script no es poden obrir en una altra aplicació
 @msg	Script file access is unavailable on the web	L'accés als fitxers de l'script no està disponible al web
 @msg	Script has 256 files open	L'script té 256 fitxers oberts
@@ -5940,8 +6063,37 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	és la resposta d'un prompt, i el seu `value` ha de ser una cadena o null
 @msg	must have `kind` alert, confirm or prompt	ha de tenir `kind` alert, confirm o prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` ha de ser un nombre enter d’1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` està imbricat en més de 64 nivells
+@msg	`args` must be an object	`args` ha de ser un objecte
+@msg	`args` is larger than 1 MiB	`args` ocupa més d'1 MiB
+@msg	`path` is empty	`path` és buit
+@msg	`installed` takes a `path`, not a `source`	`installed` admet un `path`, no un `source`
+@msg	`path` must name a .js or .jsx file	`path` ha d’indicar un fitxer .js o .jsx
+@msg	give exactly one of `path` and `source`	indiqueu exactament un de `path` i `source`
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
+@msg	Script file access denied: {path}	S’ha denegat l’accés de l’script als fitxers: {path}
+@msg	Script file access to the app's own folders is not allowed	Els scripts no poden accedir a les carpetes pròpies de l’aplicació
+@msg	Script file cannot encode the text	El fitxer de l’script no pot codificar el text
+@msg	Script file could not be written	No s’ha pogut escriure el fitxer de l’script
+@msg	Script file dialogs need a person to answer them	Els diàlegs de fitxers de l’script necessiten una persona que els respongui
+@msg	Script file is not open for writing	El fitxer de l’script no està obert per escriure-hi
+@msg	Script file name is already in use	El nom del fitxer de l’script ja està en ús
+@msg	Script file name must be a name without a folder	El nom del fitxer de l’script ha de ser un nom sense carpeta
+@msg	Script file permission can be kept only for a script run from a file	El permís de fitxers només es pot conservar per a un script executat des d’un fitxer
+@msg	Script file permission could not be saved	No s’ha pogut desar el permís de fitxers de l’script
+@msg	Script folder is not empty	La carpeta de l’script no és buida
+@msg	Script files cannot make aliases	Els fitxers de l’script no poden crear àlies
+@msg	Script file hidden setting cannot be changed	No es pot canviar l’opció d’ocult del fitxer de l’script
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un diàleg de fitxers no es pot obrir dins d’una crida de retorn d’una funció integrada, d’un getter, d’una conversió o d’un fitxer que executa $.evalFile; crideu-lo des del codi propi de l’script
+@msg	the script wrote more file data than one run may write (32 MiB)	l’script ha escrit més dades de fitxers de les que pot escriure una execució (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per al diàleg de fitxers d’un script ha de ser un d’aquests: once, always, deny, stop
+@msg	choose a file or folder first, or deny	trieu primer un fitxer o una carpeta, o denegueu
+@msg	the script file permissions could not be saved: {e}	no s’han pogut desar els permisos de fitxers dels scripts: {e}
+@msg	this script's file access can be allowed only once	l’accés als fitxers d’aquest script només es pot permetre una vegada
+@msg	Only the person at the keyboard can allow a script's file access	Només la persona al teclat pot permetre l’accés als fitxers d’un script
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script rep com a màxim 2.048 fitxers: els fitxers triats després d’aquests s’han deixat fora
 @msg	Copied the link info	S’ha copiat la informació de l’enllaç
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
@@ -6148,9 +6300,15 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu
 @msg	no active perspective plane	no hi ha cap pla de perspectiva actiu
+@msg	the perspective grid is hidden	la quadrícula de perspectiva està oculta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	El posicionament automàtic del pla està desactivat: activeu anchorPoint o gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint ha de ser true o false
+@msg	gridlineIntersection must be true or false	gridlineIntersection ha de ser true o false
+@msg	tolerance must be 0 or more	tolerance ha de ser 0 o més
+@msg	give `at` or `clear`, not both	indiqueu `at` o `clear`, no tots dos
 @msg	no anchor points selected	no hi ha cap punt d’ancoratge seleccionat
-@msg	`points` must be three [x, y] pairs of numbers	`points` han de ser tres parells de nombres [x, y]
-@msg	direct-select three anchor points, or give `points`	seleccioneu directament tres punts d’ancoratge o indiqueu `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` han de ser dos o tres parells de nombres [x, y]
+@msg	direct-select two or three anchor points, or give `points`	seleccioneu directament dos o tres punts d’ancoratge o indiqueu `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers
 @msg	no artboard	no hi ha tauler
@@ -6274,6 +6432,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such user library	no existeix aquesta biblioteca d’usuari
 @msg	no such view	no existeix aquesta vista
 @msg	no such width point	no existeix aquest punt d’amplada
+@msg	`single` must be `incoming` or `outgoing`	`single` ha de ser `incoming` o `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` han de ser les dues meitats d’un mateix punt d’amplada discontinu
+@msg	a discontinuous width point keeps its place	un punt d’amplada discontinu manté la seva posició
 @msg	no swatch `{name}`	no hi ha la mostra `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	no hi ha la biblioteca de mostres `{l}` (vegeu swatch.library.list)
 @msg	no symbol `{n}`	no hi ha el símbol `{n}`
@@ -6284,6 +6445,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no target object has an opacity mask: select one or give `id`	no hi ha cap objecte de destinació amb màscara d’opacitat: seleccioneu-ne un o doneu `id`
 @msg	no threaded text selected	no hi ha cap text encadenat seleccionat
 @msg	no user library folder here	aquí no hi ha cap carpeta de biblioteca d’usuari
+@msg	`{file}` has no swatches of its own	`{file}` no té mostres pròpies
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` té mostres de motius, que un fitxer .vcswatches no pot contenir
 @msg	no user workspace `{from}`	no hi ha l’espai de treball d’usuari `{from}`
 @msg	node {_1} is not text	el node {_1} no és text
 @msg	node {_1} is on a locked artboard	el node {_1} és en un tauler bloquejat
@@ -6435,6 +6598,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Saved to User Defined: {_1}	Desat a User Defined: {_1}
 @msg	Saved {n} files beside {path}	S’han desat {n} fitxers al costat de {path}
 @msg	Saved {path}	Desat {path}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	S’ha copiat amb {n} nota: {first}|S’ha copiat amb {n} notes: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	S’ha retallat amb {n} nota: {first}|S’ha retallat amb {n} notes: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	S’ha traçat la imatge amb {n} nota: {first}|S’ha traçat la imatge amb {n} notes: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	S’ha desat {path} amb {n} nota: {first}|S’ha desat {path} amb {n} notes: {first}
 @msg	Saving	S’està desant
 @msg	Saving recovery data for {_1}	S’estan desant les dades de recuperació de {_1}
@@ -6508,6 +6674,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	shadings of more than 4096 patches or triangles were left out	els ombrejats de més de 4096 pedaços o triangles s’han omès
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	els ombrejats les funcions dels quals són d’un tipus desconegut s’omplen amb el seu color central
 @msg	Shape Builder: no region under the pointer	Constructor de formes: no hi ha cap regió sota el punter
+@msg	Shape Builder: select all paths you want to merge	Constructor de formes: selecciona tots els traçats que vulguis combinar
 @msg	Shape Builder: select paths or compound paths	Constructor de formes: selecciona traçats o traçats compostos
 @msg	shortcut for `{k}` must be a string	la drecera de `{k}` ha de ser una cadena
 @msg	Show All Hidden Attributes: nothing is hidden	Mostra tots els atributs ocults: no hi ha res d’ocult
@@ -6590,7 +6757,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	each of `{GRAPHICS}` must be an object	cada element de `{GRAPHICS}` ha de ser un objecte
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	les entrades de `{GRAPHICS}` admeten symbol, face, x, y, scale i rotation, no `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada element de `{GRAPHICS}` necessita `symbol`, el nom d’un símbol
-@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` ha de ser front o back
+@msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` ha de ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
@@ -6763,6 +6930,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Trap: select two or more objects filled with solid colours	Trap: selecciona dos o més objectes emplenats amb colors sòlids
 @msg	truncated	truncat
 @msg	Unembedded to {_1}	S’ha desincrustat a {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	S’ha desincrustat {n} imatge a {folder}|S’han desincrustat {n} imatges a {folder}
+@msg	every numbered name for {name} is taken in that folder	tots els noms numerats per a {name} estan ocupats en aquesta carpeta
 @msg	unknown command `{0}`	ordre desconeguda `{0}`
 @msg	step {step} of “{action}” runs the unknown command `{command}`	el pas {step} de “{action}” executa l’ordre desconeguda `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	ordre desconeguda `{0}`; volies dir `{1}`?
@@ -6838,6 +7007,13 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	més de {MAX_CSV_ROWS} conjunts de dades: Importa conjunts de dades en llegeix com a màxim {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	més de {MAX_CSV_COLS} variables: Importa conjunts de dades en llegeix com a màxim {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	les variables que no són text s’han omès: {kinds}
+variable-kind	Visibility	Visibilitat
+variable-kind	Linked File	Fitxer enllaçat
+variable-kind	Graph Data	Dades del gràfic
+variable-kind	Unknown	Desconegut
+variable-list-two	{0}, {1}	{0} i {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} i {1}
 @msg	a new document won't read these variables back with their kind: {names}	un document nou no tornarà a llegir aquestes variables amb el seu tipus: {names}
 @msg	a new document refuses this file because of these variables: {names}	un document nou rebutja aquest fitxer a causa d'aquestes variables: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	la capçalera `{header}` de `{name}` es tornaria a llegir com la variable `{other}`: canvieu el nom d’una de les dues
@@ -6891,6 +7067,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	{label}: lost track of a shape's style	{label}: s’ha perdut el rastre de l’estil d’una forma
 @msg	{label}: select paths	{label}: selecciona traçats
 @msg	{label}: select paths, compound paths, groups or text	{label}: selecciona traçats, traçats compostos, grups o text
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	una línia o un altre traçat obert que no tanca cap àrea no canvia la forma del resultat; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} ha produït un resultat buit: una línia o un altre traçat obert no tanca cap àrea; per incloure’l, apliqueu-hi primer Objecte › Traçat › Contorneja el traç
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: CRC no coincideix
 @msg	{name}: no local header	{name}: no hi ha capçalera local
@@ -6902,6 +7080,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	el Mode de presentació amaga les barres d’eines: canvieu el mode de pantalla per mostrar-les
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ha amagat les barres d’eines: premeu Tab per mostrar-les
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` ha de tenir 1-64 caràcters imprimibles
@@ -7378,6 +7558,12 @@ anchor	Points:	Punts:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` ha de ser "free", "keepAngles" o "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` ha de ser [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Convertidor d’unitats
+	Unit Converter Panel	Tauler Convertidor d’unitats
+	Copy with Units	Copia amb les unitats
+	From Selection	De la selecció
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Selecciona per tipus de color
 	Objects with Spot Colors	Objectes amb colors directes
@@ -7614,6 +7800,14 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pont suau…
+	Smooth Bridge	Pont suau
+	Keep Originals	Conserva els originals
+@msg	select two circles to bridge	seleccioneu dos cercles per unir-los
+@msg	one circle is inside the other	un cercle és dins de l’altre
+@msg	the circles are too far apart for this radius: raise the radius	els cercles estan massa separats per a aquest radi: augmenteu el radi
+@msg	the circles are too far apart for this radius	els cercles estan massa separats per a aquest radi
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangents comunes…
 	Common Tangents	Tangents comunes
@@ -7630,6 +7824,7 @@ breakText	Glyphs	Glifs
 @msg	One path lies inside the other, so they have no common tangents	Un camí és dins de l’altre, per tant no tenen tangents comunes
 @msg	The paths overlap, so they have no internal tangents	Els camins se superposen, per tant no tenen tangents internes
 @msg	One path lies inside the other, so they have no internal tangents	Un camí és dins de l’altre, per tant no tenen tangents internes
+@msg	The point lies inside the path, so it has no tangents	El punt és dins del camí, per tant no té tangents
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandeix els guions en camins
 @msg	select paths with dashed strokes to expand	seleccioneu camins amb traç discontinu per expandir
@@ -8125,4 +8320,20 @@ breakText	Glyphs	Glifs
 @msg	A panel is not joined to the rest by a crease.	Un panell no està unit a la resta per cap línia d’hendit.
 @msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
+	Fold Preview	Previsualització del plegat
+	Fold	Plegat
+	Show Fold Lines	Mostra les línies de plegat
+	Three-Quarter	Tres quarts
+	Open a document to preview its folded shape.	Obre un document per previsualitzar-ne la forma plegada.
+@msg	Check the fold lines first.	Primer comprova les línies de plegat.
+@msg	Panels: {panels}, hinges: {hinges}	Panells: {panels}, frontisses: {hinges}
+@msg	Other blanks not shown: {count}	Altres troquelats no mostrats: {count}
+@msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
+@msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Pressure Sensitive	Sensible a la pressió
+	Flex Ribbon	Cinta flexible
+	Pulse Stroke	Traç pulsant
+	Round Flow	Flux rodó
+	Chisel Flow	Flux bisellat
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"

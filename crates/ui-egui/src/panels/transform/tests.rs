@@ -82,6 +82,35 @@ fn rotation_field_shows_the_angle_the_box_keeps() {
     assert!(shown.iter().any(|t| t == "0°") && !shown.iter().any(|t| t == "100 pt"), "{shown:?}");
 }
 
+/// Object › Transform › Rotate Bounding Box… asks for an angle and turns the box, not the art, in
+/// one undo step: the panel then shows the box's angle.
+#[test]
+fn rotate_bounding_box_menu_item_turns_the_box_by_the_dialog_angle() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 100, "height": 50})).unwrap();
+    let entry = crate::menus::menu_entries(&app)
+        .into_iter()
+        .find(|e| e.path == ["Object", "Transform"] && e.label == "Rotate Bounding Box…")
+        .expect("menu item");
+    let (id, p) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
+    crate::menus::invoke(&mut app, &id, p);
+    let d = app.ui.dialog.as_mut().expect("a dialog opens");
+    assert_eq!(d.str("__command"), "object.rotateBoundingBox");
+    d.fields.insert("angle".into(), json!(90));
+    let bounds = |app: &VectorcraftApp| {
+        let st = app.session.doc().unwrap();
+        st.doc.bounds_of(&st.selection.objects, false)
+    };
+    let art = bounds(&app);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+    assert_eq!(bounds(&app), art, "the art stays where it is");
+    let shown = texts(&mut app, show);
+    assert!(shown.iter().any(|t| t == "90°"), "{shown:?}");
+}
+
 /// #812: a selected live polygon shows its Polygon Properties in the Transform panel and the
 /// Properties panel's Transform section, and Make Sides Equal evens it out after a stretch.
 #[test]
@@ -123,6 +152,113 @@ fn an_ellipse_shows_its_pie_properties() {
     app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
     let shown = texts(&mut app, show);
     assert!(shown.iter().any(|s| s == "30°") && shown.iter().any(|s| s == "120°"), "{shown:?}");
+}
+
+/// Ellipse Properties' Constrain Pie Angle link, in the Transform panel and the Properties panel's
+/// Transform section: off at first, a click or Space with the keyboard on it toggles it, and while
+/// it is on a typed Pie Start or End Angle moves the other angle by as much, keeping the span, in
+/// one undo step. Off, each angle changes on its own.
+#[test]
+fn the_constrain_pie_angle_link_keeps_the_span() {
+    use egui_kittest::kittest::Queryable;
+    const LINK: &str = "Constrain Pie Angle";
+    let pie = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Ellipse { pie, .. } => pie,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 80})).unwrap();
+        app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
+        assert!(!app.ui.constrain_pie_angle, "off at first");
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(320.0, 900.0)).with_accessibility_check(false).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                draw(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle, "a click turns it on");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).focus();
+        h.run_steps(1);
+        h.key_press(egui::Key::Space);
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle, "Space turns it off");
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(h.state().ui.constrain_pie_angle);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let n = undo(h.state());
+        type_into(&ctx, h.state_mut(), draw, "30°", "60");
+        assert_eq!(pie(h.state()), (60.0, 150.0));
+        assert_eq!(undo(h.state()), n + 1, "one undo step");
+        type_into(&ctx, h.state_mut(), draw, "150°", "200");
+        assert_eq!(pie(h.state()), (110.0, 200.0));
+        h.get_by_role_and_label(egui::accesskit::Role::Button, LINK).click();
+        h.run_steps(2);
+        assert!(!h.state().ui.constrain_pie_angle);
+        type_into(&ctx, h.state_mut(), draw, "110°", "100");
+        assert_eq!(pie(h.state()), (100.0, 200.0), "off, the end stays");
+    }
+}
+
+/// A live line shows its Line Properties in the Transform panel and the Properties panel's
+/// Transform section: a typed length keeps its first end in place and a typed angle turns it
+/// about its midpoint, each one undo step. A line with other objects selected, and a line after
+/// Expand Shape, show none.
+#[test]
+fn a_line_shows_and_takes_its_line_properties() {
+    let ends = |app: &VectorcraftApp| match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Line { a, b } => (a, b),
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    };
+    let near = |p: Point, x: f64, y: f64| (p.x - x).abs() < 1e-6 && (p.y - y).abs() < 1e-6;
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        // 100 pt long, going down the page to the right: 53.13° clockwise, 306.87° counterclockwise.
+        let id = app.run("shape.line", json!({"x1": 50, "y1": 50, "x2": 110, "y2": 130})).unwrap()["id"].as_u64().unwrap();
+        let shown = texts(&mut app, draw);
+        for t in ["Line Properties:", "Line Length:", "100 pt", "Line Angle:", "306.9°"] {
+            assert!(shown.iter().any(|s| s == t), "{t} in {shown:?}");
+        }
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        type_into(&ctx, &mut app, draw, "100 pt", "50");
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "{a:?} {b:?}");
+        type_into(&ctx, &mut app, draw, "306.9°", "90");
+        let (a, b) = ends(&app);
+        assert!(near(a, 65.0, 95.0) && near(b, 65.0, 45.0), "{a:?} {b:?}");
+        assert!(texts(&mut app, draw).iter().any(|s| s == "90°"));
+        app.run("edit.undo", json!({})).unwrap();
+        let (a, b) = ends(&app);
+        assert!(near(a, 50.0, 50.0) && near(b, 80.0, 90.0), "one undo step: {a:?} {b:?}");
+        // With a rectangle selected too, the fields would set the line alone: they don't show.
+        let rect = app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id, rect]})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert!(texts(&mut app, draw).iter().any(|s| s == "Line Properties:"));
+        app.run("object.expandShape", json!({})).unwrap();
+        assert!(!texts(&mut app, draw).iter().any(|s| s == "Line Properties:" || s == "Line Length:"));
+    }
 }
 
 #[test]
@@ -233,8 +369,9 @@ fn type_into(ctx: &egui::Context, app: &mut VectorcraftApp, draw: fn(&mut Vector
 }
 
 /// The panel menu's Transform Object Only, Transform Pattern Only and Transform Both, one
-/// checked: a new X typed in the panel (or the Properties panel's Transform section) moves the
-/// pattern-filled rectangle and leaves its tiles, moves its tiles alone, or moves both. Until
+/// checked: a new X typed in the panel (or the Properties panel's Transform section, or the
+/// Control bar) moves the pattern-filled rectangle and leaves its tiles, moves its tiles alone, or
+/// moves both. Until
 /// one is chosen the panels do as General › Transform Pattern Tiles says, as they did before
 /// the menu acted, and the menu checks Transform Both while it is on, Transform Object Only
 /// while it is off; a choice overrides it, and resetting the preferences returns to it.
@@ -248,7 +385,7 @@ fn the_menu_chooses_whether_the_object_its_pattern_or_both_transform() {
     let labels = ["Transform Object Only", "Transform Pattern Only", "Transform Both"];
     let modes = ["object", "pattern", "both"];
     let checked = |shown: &[String]| -> Vec<usize> { (0..3).filter(|i| shown.contains(&format!("✓ {}", labels[*i]))).collect() };
-    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section, crate::chrome::control_bar] {
         for general in [false, true] {
             for pick in [None, Some(0), Some(1), Some(2)] {
                 let case = format!("General › Transform Pattern Tiles {general}, menu choice {pick:?}");
@@ -333,12 +470,12 @@ fn the_menu_choice_also_applies_to_rotation_and_shear() {
     }
 }
 
-/// Use Registration Point for Symbol: with one symbol instance selected, the panel and the
-/// Properties panel's Transform section show and set X and Y at its symbol's registration point
-/// (here the top-left one) instead of the reference point (the centre).
+/// Use Registration Point for Symbol: with one symbol instance selected, the panel, the
+/// Properties panel's Transform section and the Control bar show and set X and Y at its symbol's
+/// registration point (here the top-left one) instead of the reference point (the center).
 #[test]
 fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_point() {
-    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section, crate::chrome::control_bar] {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 100, "y": 50, "width": 80, "height": 40})).unwrap();
@@ -363,6 +500,47 @@ fn use_registration_point_for_symbol_measures_an_instance_from_its_registration_
         app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
         let rect = shown(&mut app);
         assert!(rect.iter().any(|t| t == "210 pt") && !rect.iter().any(|t| t == "200 pt"), "the centre: {rect:?}");
+    }
+}
+
+/// The Control bar's X, Y, W and H use the reference point the Transform panel's locator chose:
+/// X and Y show that point of the selection's box and a new X or Y moves it there, a new W or H
+/// keeps it in place, and choosing another point changes what the fields show without editing the
+/// art. Each field edit is one undo step.
+#[test]
+fn the_control_bar_fields_use_the_shared_reference_point() {
+    use crate::panels::tests_appearance::frame_events;
+    let draw = crate::chrome::control_bar as fn(&mut VectorcraftApp, &mut Ui);
+    // The reference point (top-left, center, bottom-right): X/Y shown for the rectangle at
+    // (10, 20), 100 × 50; the box after X becomes `x`, and after W becomes 200 and H 100.
+    let cases = [
+        (0usize, ("10 pt", "20 pt"), "30", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(30.0, 20.0, 230.0, 120.0)),
+        (4, ("60 pt", "45 pt"), "80", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(-20.0, -5.0, 180.0, 95.0)),
+        (8, ("110 pt", "70 pt"), "130", Rect::new(30.0, 20.0, 130.0, 70.0), Rect::new(-70.0, -30.0, 130.0, 70.0)),
+    ];
+    for (refi, (x, y), new_x, moved, sized) in cases {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 50})).unwrap();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let revision = |app: &VectorcraftApp| app.session.active().unwrap().revision;
+        let shown = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], draw).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        shown(&mut app);
+        let before = revision(&app);
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("refpt"), refi));
+        let texts = shown(&mut app);
+        assert!(texts.iter().any(|t| t == x) && texts.iter().any(|t| t == y), "reference {refi}: X {x}, Y {y} in {texts:?}");
+        assert_eq!(revision(&app), before, "reference {refi}: choosing the point leaves the art");
+        type_into(&ctx, &mut app, draw, x, new_x);
+        assert_eq!(app.selection_box().unwrap().rect, moved, "reference {refi}: X");
+        assert_eq!(revision(&app), before + 1, "reference {refi}: one undo step");
+        type_into(&ctx, &mut app, draw, "100 pt", "200");
+        type_into(&ctx, &mut app, draw, "50 pt", "100");
+        assert_eq!(app.selection_box().unwrap().rect, sized, "reference {refi}: W and H");
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.selection_box().unwrap().rect, moved, "reference {refi}: undo");
     }
 }
 
