@@ -3087,6 +3087,20 @@ fn the_eraser_tip_follows_its_variation_modes() {
         [&o["angleMode"], &o["angleVariation"], &o["roundnessMode"], &o["roundnessVariation"], &o["sizeMode"], &o["sizeVariation"]],
         [&json!("rotation"), &json!(90.0), &json!("random"), &json!(10.0), &json!("tilt"), &json!(8.0)]
     );
+    // `tool.setOption` takes back what the tool reports, and refuses a mode or Variation it does
+    // not take.
+    let reported = o.as_object().unwrap().clone();
+    assert_eq!(t.check_options(&reported), Ok(()));
+    for mode in Variation::ALL {
+        for k in ["sizeMode", "angleMode", "roundnessMode"] {
+            assert_eq!(t.check_option(k, &json!(mode.id())), Ok(()), "{k} {mode:?}");
+        }
+    }
+    let modes = "must be one of `fixed`, `random`, `pressure`, `tilt`, `bearing`, `rotation`";
+    assert_eq!(t.check_option("angleMode", &json!("wheel")), Err(format!("`angleMode` {modes}")));
+    assert_eq!(t.check_option("angleVariation", &json!(181)), Err("`angleVariation` must be a number from 0 to 180".into()));
+    assert_eq!(t.check_option("roundnessVariation", &json!(500)), Err("`roundnessVariation` must be a number from 0 to 100".into()));
+    assert_eq!(GestureTool::new("blobBrush").check_option("sizeMode", &json!("tilt")), Err("`sizeMode` must be one of `fixed`, `pressure`".into()));
     // A mode it does not have leaves the mode as it was; a Variation is kept within its range.
     t.set_option("angleMode", &json!("wheel"));
     t.set_option("roundnessVariation", &json!(500));
