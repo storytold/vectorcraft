@@ -3,6 +3,7 @@
 //! paths around the area stay as they are, and nothing needs to be selected.
 
 use vectorcraft_geom::path::segment_bounds;
+use vectorcraft_geom::{ParamCurve, PathSeg};
 
 use super::lookup::path_contains;
 use super::*;
@@ -66,10 +67,31 @@ fn meet(a: &Rect, b: &Rect) -> bool {
 }
 
 /// Does a segment of `path` (closing segments included) meet `zone`? A path whose box meets the zone
-/// may still lie wholly outside it, as a path of subpaths far apart does.
+/// may still lie wholly outside it, as a path of subpaths far apart, a diagonal line or a curve
+/// that arcs around the zone does.
 fn reaches(path: &PathData, zone: &Rect) -> bool {
     let bez = path.to_bezpath();
-    vectorcraft_geom::kurbo::segments(bez.elements().iter().copied()).any(|seg| meet(&segment_bounds(seg), zone))
+    vectorcraft_geom::kurbo::segments(bez.elements().iter().copied()).any(|seg| segment_reaches(seg, zone, 0))
+}
+
+/// How many times [`segment_reaches`] halves a segment: a piece of 1/2^24 of a segment counts as
+/// meeting the zone when its box does.
+const REACH_SPLITS: u32 = 24;
+
+/// The side (pt) below which a piece of a segment whose box meets the zone counts as meeting it.
+const REACH_TOLERANCE: f64 = 0.01;
+
+/// Does `seg` meet `zone`? Its halves are checked in turn while their boxes meet the zone and
+/// neither end is in it; a piece smaller than [`REACH_TOLERANCE`] whose box meets the zone counts.
+fn segment_reaches(seg: PathSeg, zone: &Rect, depth: u32) -> bool {
+    let b = segment_bounds(seg);
+    if !meet(&b, zone) {
+        return false;
+    }
+    if holds(zone, seg.start()) || holds(zone, seg.end()) || depth >= REACH_SPLITS || b.width().max(b.height()) < REACH_TOLERANCE {
+        return true;
+    }
+    segment_reaches(seg.subsegment(0.0..0.5), zone, depth + 1) || segment_reaches(seg.subsegment(0.5..1.0), zone, depth + 1)
 }
 
 /// Does `outer` hold all of `inner`?
