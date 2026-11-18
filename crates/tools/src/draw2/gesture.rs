@@ -1798,6 +1798,10 @@ impl Tool for GestureTool {
                 self.close_to = None;
                 self.connect_to.clear();
                 self.redraw = None;
+                if self.id == "paintbrush" {
+                    // The release can change a drawing stroke into an Alt-borrowed Smooth hover.
+                    self.pointer_tip(cx, ev);
+                }
                 out
             }
             _ => vec![],

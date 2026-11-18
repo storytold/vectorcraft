@@ -3099,6 +3099,17 @@ fn bristle_tip_annotator_follows_a_rotation_capable_pen() {
     let mut release = heavy;
     release.kind = PointerKind::Up;
     tool.pointer(&view, &release);
+    let mut alt_stroke = light;
+    alt_stroke.pressure = 0.5;
+    tool.pointer(&selected_view, &alt_stroke);
+    alt_stroke.kind = PointerKind::Drag;
+    alt_stroke.mods.alt = true;
+    tool.pointer(&selected_view, &alt_stroke);
+    assert!(bounds(&tool, &selected_view).is_some(), "Alt during a drawing stroke keeps the tip");
+    alt_stroke.kind = PointerKind::Up;
+    tool.pointer(&selected_view, &alt_stroke);
+    assert_eq!(tool.cursor(&selected_view, alt_stroke.pos, alt_stroke.mods), Cursor::Smooth);
+    assert!(bounds(&tool, &selected_view).is_none(), "Alt release borrows Smooth without a stale tip");
     let precise = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
     assert!(bounds(&tool, &precise).is_none());
     tool.pointer(&view, &at(Some(0.0)).with_mods(Mods { cmd: true, ..Default::default() }));
