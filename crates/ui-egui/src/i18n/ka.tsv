@@ -9519,6 +9519,12 @@ axis	Y Axis	Y ღერძი
 	Bus Lines	სალტის ხაზები
 	Terminal Nodes	ტერმინალური კვანძები
 
+# Original arrow art brushes.
+	Arrows	ისრები
+	Solid Arrow	მყარი ისარი
+	Open Arrow	ღია ისარი
+	Chevron Arrow	შევრონიანი ისარი
+
 	Notched Ribbon	დაკბილული ლენტი
 	Double Line	ორმაგი ხაზი
 	Wave	ტალღა
@@ -10776,6 +10782,7 @@ font-script	Japanese	იაპონური
 @msg	Hold {_1} is already used by {_2}	ხანგრძლივი დაჭერა {_1} უკვე გამოიყენება ამისთვის: {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	ხანგრძლივი დაჭერის მალსახმობი არის კლავიში, რომელიც სიმბოლოს წერს, ცალკე ან Shift კლავიშთან ერთად ({shown} შეიცავს Cmd, Ctrl ან Alt კლავიშს)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ვერ იქნება ხანგრძლივი დაჭერის მალსახმობი: გამოიყენეთ ასო, ციფრი ან სასვენი ნიშნის კლავიში
+	Dashed Arrow	წყვეტილი ისარი
 	Pressure Sensitive	წნევაზე მგრძნობიარე
 	Flex Ribbon	მოქნილი ლენტი
 	Pulse Stroke	პულსირებადი მონასმი

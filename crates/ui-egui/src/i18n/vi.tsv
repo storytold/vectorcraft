@@ -7045,6 +7045,13 @@ axis	Y Axis	Trục Y
 	Bus Lines	Đường bus
 	Terminal Nodes	Nút đầu cuối
 
+# Original arrow art brushes.
+	Arrows	Cọ mũi tên
+	Solid Arrow	Mũi tên đặc
+	Open Arrow	Mũi tên rỗng
+	Double Arrow	Mũi tên đôi
+	Chevron Arrow	Mũi tên chữ V
+
 	Notched Ribbon	Dải băng khía
 	Double Line	Đường đôi
 	Wave	Sóng
@@ -8284,6 +8291,7 @@ breakText	Glyphs	Glyph
 @msg	Hold {_1} is already used by {_2}	Nhấn giữ {_1} đã được {_2} sử dụng
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	phím tắt nhấn giữ là một phím gõ ra ký tự, dùng riêng hoặc cùng Shift ({shown} có Cmd, Ctrl hoặc Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} không thể là phím tắt nhấn giữ: hãy dùng chữ cái, chữ số hoặc phím dấu câu
+	Dashed Arrow	Mũi tên nét đứt
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	một đường thẳng hoặc đường dẫn mở khác không bao quanh vùng nào sẽ không thêm vùng nào vào hình phức hợp; để đưa nó vào, trước tiên hãy áp dụng Đối tượng › Đường dẫn › Đường bao nét cho nó
 	Pressure Sensitive	Nhạy áp lực
 	Flex Ribbon	Dải mềm

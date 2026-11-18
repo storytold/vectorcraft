@@ -6666,6 +6666,12 @@ axis	Y Axis	Sumbu Y
 	Bus Lines	Jalur bus
 	Terminal Nodes	Simpul terminal
 
+# Original arrow art brushes.
+	Arrows	Kuas panah
+	Solid Arrow	Panah solid
+	Open Arrow	Panah terbuka
+	Chevron Arrow	Panah chevron
+
 	Notched Ribbon	Pita bertakik
 	Double Line	Garis ganda
 	Wave	Gelombang
@@ -7700,6 +7706,7 @@ breakText	Glyphs	Glif
 @msg	Hold {_1} is already used by {_2}	Tahan {_1} sudah digunakan oleh {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pintasan tahan adalah tombol yang mengetik karakter, sendiri atau dengan Shift ({shown} memakai Cmd, Ctrl, atau Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} tidak bisa menjadi pintasan tahan: gunakan huruf, angka, atau tombol tanda baca
+	Dashed Arrow	Panah Putus-putus
 	Pressure Sensitive	Peka Tekanan
 	Flex Ribbon	Pita Lentur
 	Pulse Stroke	Goresan Berdenyut

@@ -7001,6 +7001,13 @@ axis	Y Axis	Вісь Y
 	Bus Lines	Лінії шини
 	Terminal Nodes	Контактні вузли
 
+# Original arrow art brushes.
+	Arrows	Пензлі-стрілки
+	Solid Arrow	Суцільна стрілка
+	Open Arrow	Відкрита стрілка
+	Double Arrow	Подвійна стрілка
+	Chevron Arrow	Стрілка з шевроном
+
 	Notched Ribbon	Стрічка з насічками
 	Double Line	Подвійна лінія
 	Wave	Хвиля
@@ -10046,6 +10053,7 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Dashed Arrow	Пунктирна стрілка
 	Pressure Sensitive	Чутливі до натиску
 	Flex Ribbon	Гнучка стрічка
 	Pulse Stroke	Пульсуючий штрих

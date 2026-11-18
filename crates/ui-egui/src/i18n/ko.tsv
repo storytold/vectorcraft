@@ -6991,6 +6991,13 @@ axis	Y Axis	Y축
 	Bus Lines	버스 배선
 	Terminal Nodes	단자 노드
 
+# Original arrow art brushes.
+	Arrows	화살표 브러시
+	Solid Arrow	채워진 화살표
+	Open Arrow	속이 빈 화살표
+	Double Arrow	양방향 화살표
+	Chevron Arrow	갈매기형 화살표
+
 	Notched Ribbon	노치 리본
 	Double Line	이중선
 	Wave	물결
@@ -10033,6 +10040,7 @@ breakText	Glyphs	글리프
 @msg	A panel is not joined to the rest by a crease.	패널이 어떤 오시선으로도 나머지와 연결되어 있지 않습니다.
 @msg	A fold line is on a non-printing layer.	접는 선이 인쇄되지 않는 레이어에 있습니다.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	패널: {panels}, 힌지: {hinges}, 오류: {errors}, 경고: {warnings}
+	Dashed Arrow	점선 화살표
 	Pressure Sensitive	압력 감지
 	Flex Ribbon	유연한 리본
 	Pulse Stroke	맥동 획

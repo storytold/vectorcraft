@@ -7249,6 +7249,12 @@ axis	Y Axis	Oś Y
 	Bus Lines	Linie magistrali
 	Terminal Nodes	Węzły końcowe
 
+# Original arrow art brushes.
+	Arrows	Strzałki
+	Solid Arrow	Pełna strzałka
+	Open Arrow	Otwarta strzałka
+	Chevron Arrow	Strzałka z szewronem
+
 	Notched Ribbon	Wstęga z nacięciami
 	Double Line	Podwójna linia
 	Wave	Fala
@@ -10288,6 +10294,7 @@ breakText	Glyphs	Glify
 @msg	A panel is not joined to the rest by a crease.	Panel nie jest połączony z resztą żadną linią bigowania.
 @msg	A fold line is on a non-printing layer.	Linia zgięcia znajduje się na warstwie niedrukowanej.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panele: {panels}, zawiasy: {hinges}, błędy: {errors}, ostrzeżenia: {warnings}
+	Dashed Arrow	Przerywana strzałka
 	Pressure Sensitive	Czułe na nacisk
 	Flex Ribbon	Elastyczna wstążka
 	Pulse Stroke	Pulsujące pociągnięcie

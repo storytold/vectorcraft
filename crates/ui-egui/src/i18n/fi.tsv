@@ -7460,6 +7460,12 @@ axis	Y Axis	Y-akseli
 	Bus Lines	Väylälinjat
 	Terminal Nodes	Liitäntäpisteet
 
+# Original arrow art brushes.
+	Arrows	Nuolet
+	Solid Arrow	Umpinainen nuoli
+	Open Arrow	Avoin nuoli
+	Chevron Arrow	Kulmanuoli
+
 	Notched Ribbon	Lovettu nauha
 	Double Line	Kaksoisviiva
 	Wave	Aalto
@@ -8697,6 +8703,7 @@ breakText	Glyphs	Merkit
 @msg	Hold {_1} is already used by {_2}	Pitkä painallus {_1} on jo käytössä kohteella {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	pitkän painalluksen pikanäppäin on merkin kirjoittava näppäin yksin tai Shiftin kanssa ({shown} sisältää Cmd-, Ctrl- tai Alt-näppäimen)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ei voi olla pitkän painalluksen pikanäppäin: käytä kirjainta, numeroa tai välimerkkinäppäintä
+	Dashed Arrow	Katkoviivanuoli
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	viiva tai muu avoin polku, joka ei rajaa aluetta, ei lisää yhdistelmämuotoon aluetta; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
 	Pressure Sensitive	Paineherkkä
 	Flex Ribbon	Joustava nauha

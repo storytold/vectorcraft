@@ -7383,6 +7383,12 @@ axis	Y Axis	Άξονας Y
 	Bus Lines	Γραμμές διαύλου
 	Terminal Nodes	Τερματικοί κόμβοι
 
+# Original arrow art brushes.
+	Arrows	Βέλη
+	Solid Arrow	Συμπαγές βέλος
+	Open Arrow	Ανοιχτό βέλος
+	Chevron Arrow	Βέλος με σεβρόν
+
 	Notched Ribbon	Οδοντωτή κορδέλα
 	Double Line	Διπλή γραμμή
 	Wave	Κύμα
@@ -8614,6 +8620,7 @@ breakText	Glyphs	Γλύφοι
 @msg	Hold {_1} is already used by {_2}	το παρατεταμένο πάτημα του {_1} χρησιμοποιείται ήδη από το {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	μια συντόμευση παρατεταμένου πατήματος είναι ένα πλήκτρο που πληκτρολογεί έναν χαρακτήρα, μόνο του ή με Shift (το {shown} έχει Cmd, Ctrl ή Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	το {shown} δεν μπορεί να είναι συντόμευση παρατεταμένου πατήματος: χρησιμοποιήστε γράμμα, ψηφίο ή πλήκτρο στίξης
+	Dashed Arrow	Διακεκομμένο βέλος
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	μια γραμμή ή άλλη ανοιχτή διαδρομή που δεν περικλείει εμβαδόν δεν προσθέτει εμβαδόν στο σύνθετο σχήμα· για να τη συμπεριλάβετε, εφαρμόστε της πρώτα Αντικείμενο › Διαδρομή › Μετατροπή περιγράμματος σε διαδρομή
 	Pressure Sensitive	Ευαίσθητα στην πίεση
 	Flex Ribbon	Εύκαμπτη κορδέλα

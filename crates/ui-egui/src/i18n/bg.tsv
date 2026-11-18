@@ -6648,6 +6648,12 @@ axis	Y Axis	Y ос
 	Bus Lines	Шинни линии
 	Terminal Nodes	Крайни възли
 
+# Original arrow art brushes.
+	Arrows	Стрелки
+	Solid Arrow	Плътна стрелка
+	Open Arrow	Отворена стрелка
+	Chevron Arrow	Стрелка с шеврон
+
 	Notched Ribbon	Назъбена лента
 	Double Line	Двойна линия
 	Wave	Вълна
@@ -7683,6 +7689,7 @@ breakText	Glyphs	Глифи
 @msg	Hold {_1} is already used by {_2}	Задържането на {_1} вече се използва от {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	комбинация със задържане е клавиш, който въвежда знак, самостоятелно или с Shift ({shown} съдържа Cmd, Ctrl или Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} не може да бъде комбинация със задържане: използвайте буква, цифра или препинателен знак
+	Dashed Arrow	Пунктирана стрелка
 	Pressure Sensitive	Чувствителни на натиск
 	Flex Ribbon	Гъвкава лента
 	Pulse Stroke	Пулсиращ щрих

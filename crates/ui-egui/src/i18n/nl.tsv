@@ -9319,6 +9319,12 @@ axis	Y Axis	Y-as
 	Bus Lines	Buslijnen
 	Terminal Nodes	Aansluitpunten
 
+# Original arrow art brushes.
+	Arrows	Pijlen
+	Solid Arrow	Massieve pijl
+	Open Arrow	Open pijl
+	Chevron Arrow	Chevronpijl
+
 	Notched Ribbon	Gekerfd lint
 	Double Line	Dubbele lijn
 	Wave	Golf
@@ -10462,6 +10468,7 @@ breakText	Glyphs	Glyphs
 @msg	A panel is not joined to the rest by a crease.	Een paneel is door geen rillijn met de rest verbonden.
 @msg	A fold line is on a non-printing layer.	Een vouwlijn staat op een laag die niet wordt afgedrukt.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panelen: {panels}, scharnieren: {hinges}, fouten: {errors}, waarschuwingen: {warnings}
+	Dashed Arrow	Gestreepte pijl
 	Pressure Sensitive	Drukgevoelig
 	Flex Ribbon	Flexibel lint
 	Pulse Stroke	Pulserende streek

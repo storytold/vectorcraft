@@ -9481,6 +9481,12 @@ axis	Y Axis	Y-akse
 	Bus Lines	Buslinjer
 	Terminal Nodes	Terminalpunkter
 
+# Original arrow art brushes.
+	Arrows	Pile
+	Solid Arrow	Massiv pil
+	Open Arrow	Åben pil
+	Chevron Arrow	Chevronpil
+
 	Notched Ribbon	Takket bånd
 	Double Line	Dobbelt linje
 	Wave	Bølge
@@ -10528,6 +10534,7 @@ breakText	Glyphs	Glyffer
 @msg	Hold {_1} is already used by {_2}	Hold {_1} bruges allerede af {_2}
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	en holdegenvej er en tast, der skriver et tegn, alene eller med Shift ({shown} har Cmd, Ctrl eller Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} kan ikke være en holdegenvej: brug et bogstav, et ciffer eller en tegnsætningstast
+	Dashed Arrow	Stiplet pil
 @msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	en linje eller anden åben kurve, der ikke omslutter noget område, tilføjer intet område til den sammensatte figur; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
 	Pressure Sensitive	Trykfølsom
 	Flex Ribbon	Fleksibelt bånd

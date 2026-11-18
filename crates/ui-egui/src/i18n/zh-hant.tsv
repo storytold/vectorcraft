@@ -7050,6 +7050,13 @@ axis	Y Axis	Y 軸
 	Bus Lines	匯流排
 	Terminal Nodes	端子節點
 
+# Original arrow art brushes.
+	Arrows	箭頭筆刷
+	Solid Arrow	實心箭頭
+	Open Arrow	空心箭頭
+	Double Arrow	雙向箭頭
+	Chevron Arrow	人字紋箭頭
+
 	Notched Ribbon	凹口緞帶
 	Double Line	雙線
 	Wave	波浪
@@ -10097,6 +10104,7 @@ breakText	Glyphs	字符
 @msg	Hold {_1} is already used by {_2}	按住 {_1} 已被 {_2} 使用
 @msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	按住快速鍵是可輸入字元的按鍵，可單獨使用或搭配 Shift ({shown} 含有 Cmd、Ctrl 或 Alt)
 @msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} 不能作為按住快速鍵：請使用字母、數字或標點符號按鍵
+	Dashed Arrow	虛線箭頭
 	Pressure Sensitive	壓感筆刷
 	Flex Ribbon	柔韌色帶
 	Pulse Stroke	脈動筆觸
