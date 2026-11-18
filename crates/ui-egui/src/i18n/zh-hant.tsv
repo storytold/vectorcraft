@@ -99,6 +99,7 @@
 	Add to Swatches	新增至色票
 	Add Used Colors	新增使用中的顏色
 	Additional Plug-ins Folder	額外的增效模組資料夾
+	Plug-in Instruction Budget	增效模組指令預算
 	Additional Fonts Folder	額外的字體資料夾
 	Adjust Adjoining Width Points	調整相鄰寬度點
 	Incoming	入側
@@ -521,6 +522,11 @@ font-technology	Variable	可變
 	Color blindness – Deuteranopia-type	色盲 – 綠色盲型
 	Color blindness – Protanopia-type	色盲 – 紅色盲型
 	Color blindness – Tritanopia-type	色盲 – 藍色盲型
+	Show Color Vision Preview	顯示色覺預覽
+	Protanopia	紅色盲
+	Deuteranopia	綠色盲
+	Tritanopia	藍色盲
+	Achromatopsia	全色盲
 	Color Burn	加深顏色
 	Color conversion:	色彩轉換：
 	Color Dodge	加亮顏色
@@ -694,6 +700,16 @@ font-technology	Variable	可變
 	Create New Swatch…	建立新色票…
 	Create New {kind} Style	建立新的{kind}樣式
 	Create Object Mosaic…	建立物件馬賽克…
+	Create Object Mosaic	建立物件馬賽克
+	Current Size:	目前大小：
+	New Size:	新大小：
+	Tile Spacing:	拼貼間距：
+	Number of Tiles:	拼貼數量：
+	Constrain Ratio:	限制比例：
+	Result:	結果：
+	Resize Using Percentages	使用百分比調整大小
+	Delete Raster	刪除點陣圖
+	Use Ratio	使用比例
 	Create Outlines	建立外框
 	Create Path	建立路徑
 	Create PDF layers from layers and sublayers	從圖層和子圖層建立 PDF 圖層
@@ -782,6 +798,7 @@ font-technology	Variable	可變
 	Delete Brush	刪除筆刷
 	Delete Color	刪除顏色
 	Restore Generated Table	還原產生的色彩表
+	Unshift All Colors	取消位移所有顏色
 	Delete Character Style	刪除字元樣式
 	Delete Empty Artboards	刪除空白工作區域
 	Delete Freeform Point	刪除任意形狀錨點
@@ -964,6 +981,8 @@ font-technology	Variable	可變
 	Duplicate	製作複本
 	Duplicate and Offset 10 pt	製作複本並位移 10 pt
 	Duplicate Artboard	製作工作區域複本
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	按一下以在這一側新增工作區域，Alt 加按一下以製作此工作區域及其圖稿的複本
+	Click to add an artboard on this side	按一下以在這一側新增工作區域
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
 	Rename Artboards	重新命名工作區域
@@ -1293,6 +1312,19 @@ font-technology	Variable	可變
 	Fill: click for swatches, Shift-click for the color mixer	填色：按一下開啟色票，按住 Shift 按一下開啟混色器
 	Find	尋找
 	Find and Replace…	尋找與取代…
+	Find and Replace	尋找與取代
+	Find:	尋找：
+	Replace With:	取代為：
+	Replace & Find	取代並尋找
+	Replace All	全部取代
+	Match Case	大小寫須相符
+	Find Whole Word	尋找全字
+	Search Backwards	反向搜尋
+	Check Hidden Layers	檢查隱藏圖層
+	Check Locked Layers	檢查鎖定圖層
+@msg	No matches found	找不到相符項目
+@msg	Matches replaced: {n}	已取代的相符項目：{n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	物件 {_3} 的位元組 {_1}..{_2} 處沒有 `find` 的相符項目
 	Find Font	尋找字體
 	Find Font…	尋找字體…
 	Find Next	尋找下一個
@@ -1963,6 +1995,7 @@ file-filter	Templates	範本
 @msg	the art has no bounds	圖稿沒有邊界
 @msg	Image Trace: the traced image is missing	影像描圖：找不到描圖的影像
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	即時上色合併：請選取即時上色群組和要加入的路徑
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` 和 `Edge` 是即時上色群組中表面和邊緣的名稱：請為路徑另取名稱
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	即時上色只接受路徑和複合路徑：請先將文字、影像和其他物件轉換為路徑
 @msg	Live Paint: select paths or compound paths	即時上色：請選取路徑或複合路徑
 @msg	Live Paint: these paths are too degenerate to paint	即時上色：這些路徑過度退化，無法上色
@@ -2236,6 +2269,7 @@ file-filter	Templates	範本
 @msg	paste unavailable	無法貼上
 @msg	Save for Web: the image is empty	儲存為網頁用：影像是空的
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：色彩表中至少要保留一種顏色
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted：`{k}` 與另一個鍵指的是同一種顏色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是像 "#ff8800" 這樣的顏色
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 種顏色
 @msg	no artboard {i} (0-based; the document has {_1})	沒有工作區域 {i} (從 0 起算；文件有 {_1} 個)
@@ -2962,6 +2996,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	a linked JavaScript file is outside the read roots	連結的 JavaScript 檔案位於所有讀取根目錄之外
 @msg	a linked image file is outside the read roots	連結的影像檔案位於所有讀取根目錄之外
 @msg	a linked file's export folder is outside the read roots	連結檔案的匯出資料夾位於所有讀取根目錄之外
+@msg	a linked file's editing data can't be read to check it against the read roots	無法讀取連結檔案的編輯資料，因此無法對照讀取根目錄進行檢查
 @msg	automation path rejected: outside the write root {root}: {path}	已拒絕自動化路徑：位於寫入根目錄 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒絕自動化路徑：位於所有寫入根目錄 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒絕自動化路徑：路徑是空的
@@ -4488,6 +4523,9 @@ digits	Malayalam	馬來亞拉姆數字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指標或拖曳的點在螢幕上需離圖稿多近，智慧型參考線才會靠齊；此距離在任何縮放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	靠齊線段的端點或從中心繪製的圓，使其與附近的曲線相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	靠齊線段的端點，使其與附近的直線段成直角相交。
+	Edit type set in fonts that aren't available?	要編輯使用了無法使用之字體的文字嗎？
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在畫布上於每個切片左上角的方框中顯示其編號；關閉時，切片輪廓仍會顯示。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	使用者切片和物件切片的輪廓及其編號方框的顏色；自動切片使用此顏色較淡的色調。
 	Reset all preferences to their defaults?	要將所有偏好設定重設為預設值嗎？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在偏好設定中按下確定後才會套用預設值。在那裡按下取消會保留目前的偏好設定。
 	Restore Recovered Documents	還原找回的文件
@@ -4717,6 +4755,14 @@ digits	Malayalam	馬來亞拉姆數字
 	Search commands, tools, panels and effects…	搜尋指令、工具、面板與效果…
 	No commands match	沒有符合的指令
 	{pos} of {total}: {name}	第 {pos} 個，共 {total} 個：{name}
+	No menu item	無選單項目
+	Toolbar	工具列
+	{toolbar}, in the {tool} group	{toolbar}，位於 {tool} 群組中
+	In the menu bar: {path}	在選單列中：{path}
+	In the {group} group: press and hold to open it	在「{group}」群組中：按住即可開啟
+	{home}, not shown now	{home}，目前未顯示
+	Tool	工具
+	Command	指令
 @plural	{n} result|{n} results	{n} 個結果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 個結果，顯示 {shown} 個。繼續輸入以縮小範圍。
 	Recent Commands	最近使用的指令
@@ -4860,6 +4906,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Show Brush Size	顯示筆刷大小
 	Show Center	顯示中心點
 	Show Code	顯示程式碼
+	Show in Browser	在瀏覽器中顯示
 	Show Color Groups	顯示顏色群組
 	Show Color Swatches	顯示顏色色票
 	Show Corner Widget	顯示轉角 Widget
@@ -6888,6 +6935,7 @@ axis	Y Axis	Y 軸
 	Checkpoint	檢查點
 	Inventory Icons	物品欄圖示
 	Skill Icons	技能圖示
+	Weather Icons	天氣圖示
 	Attack	攻擊
 	Defend	防禦
 	Heal	治療
@@ -7009,6 +7057,257 @@ axis	Y Axis	Y 軸
 	Stars	星形
 	Triangles	三角形
 	Sparkles	閃光
+	Warm Gray	暖灰
+	Cool Gray	冷灰
+	Neutrals	中性色
+	Ivory	象牙白
+	Linen	亞麻
+	Oat	燕麥
+	Greige	灰米色
+	Stone	石色
+	Taupe	灰褐
+	Slate	石板灰
+	Clay	陶土
+	Terracotta	赤陶
+	Ochre	赭石
+	Umber	棕土
+	Sand	沙色
+	Olive	橄欖
+	Moss	苔蘚
+	Rosy	玫瑰調
+	Neutral	中性
+	Golden	金黃
+	Pastel	粉彩
+	Pastel Red	粉彩紅
+	Pastel Orange	粉彩橙
+	Pastel Amber	粉彩琥珀
+	Pastel Yellow	粉彩黃
+	Pastel Lime	粉彩萊姆
+	Pastel Green	粉彩綠
+	Pastel Teal	粉彩藍綠
+	Pastel Cyan	粉彩青
+	Pastel Azure	粉彩天藍
+	Pastel Blue	粉彩藍
+	Pastel Violet	粉彩紫羅蘭
+	Pastel Magenta	粉彩洋紅
+	Soft Red	柔和紅
+	Soft Orange	柔和橙
+	Soft Amber	柔和琥珀
+	Soft Yellow	柔和黃
+	Soft Lime	柔和萊姆
+	Soft Green	柔和綠
+	Soft Teal	柔和藍綠
+	Soft Cyan	柔和青
+	Soft Azure	柔和天藍
+	Soft Blue	柔和藍
+	Soft Violet	柔和紫羅蘭
+	Soft Magenta	柔和洋紅
+	Vivid Red	鮮豔紅
+	Vivid Orange	鮮豔橙
+	Vivid Amber	鮮豔琥珀
+	Vivid Yellow	鮮豔黃
+	Vivid Lime	鮮豔萊姆
+	Vivid Green	鮮豔綠
+	Vivid Teal	鮮豔藍綠
+	Vivid Cyan	鮮豔青
+	Vivid Azure	鮮豔天藍
+	Vivid Blue	鮮豔藍
+	Vivid Violet	鮮豔紫羅蘭
+	Vivid Magenta	鮮豔洋紅
+	Deep	深色
+	Deep Red	深紅
+	Deep Orange	深橙
+	Deep Amber	深琥珀
+	Deep Yellow	深黃
+	Deep Lime	深萊姆
+	Deep Green	深綠
+	Deep Teal	深藍綠
+	Deep Cyan	深青
+	Deep Azure	深天藍
+	Deep Blue	深藍
+	Deep Violet	深紫羅蘭
+	Deep Magenta	深洋紅
+	Gold	金
+	Silver	銀
+	Bronze	青銅
+	Copper	銅
+	Brass	黃銅
+	Rose Gold	玫瑰金
+	Gunmetal	槍灰
+	Platinum	白金
+	Pewter	錫鑞
+	Ember	餘燼
+	Lagoon	潟湖
+	Dusk	黃昏
+	Clay to Teal	陶土到藍綠
+	Plum to Olive	梅紫到橄欖
+	Complementary Coral	珊瑚色，互補色
+	Split Complementary Coral	珊瑚色，分割互補色
+	Analogous Coral	珊瑚色，類似色
+	Triad Coral	珊瑚色，三色組
+	Tetrad Coral	珊瑚色，四色組
+	Pentagram Coral	珊瑚色，五角星
+	Complementary Teal	藍綠，互補色
+	Split Complementary Teal	藍綠，分割互補色
+	Analogous Teal	藍綠，類似色
+	Triad Teal	藍綠，三色組
+	Tetrad Teal	藍綠，四色組
+	Pentagram Teal	藍綠，五角星
+	Soft Spectrum	柔和光譜
+	Red to Amber	紅到琥珀
+	Orange to Yellow	橙到黃
+	Amber to Lime	琥珀到萊姆
+	Yellow to Green	黃到綠
+	Lime to Teal	萊姆到藍綠
+	Green to Cyan	綠到青
+	Teal to Azure	藍綠到天藍
+	Cyan to Blue	青到藍
+	Azure to Violet	天藍到紫羅蘭
+	Blue to Magenta	藍到洋紅
+	Violet to Red	紫羅蘭到紅
+	Magenta to Orange	洋紅到橙
+	Dawn	黎明
+	Noon	正午
+	Sunset	日落
+	Night	夜晚
+	Overcast	陰天
+	White to Black	白到黑
+	Light Grays	淺灰
+	Dark Grays	深灰
+	Warm Grays	暖灰系
+	Cool Grays	冷灰系
+	Fade to Transparent	漸隱到透明
+	White Fade	白色漸隱
+	Vignette	暈影
+	Mist	薄霧
+	Petal	花瓣
+	Fern	蕨
+	Smoke	煙
+	Honey	蜂蜜
+	Seafoam	海沫
+	Lavender	薰衣草
+	Driftwood	漂流木
+	Ink Wash	水墨
+	Tide	潮汐
+	Bloom	綻放
+	Dew	露珠
+	Pollen	花粉
+	Lichen	地衣
+	Prism Veil	稜鏡紗
+	Opal Ribbon	蛋白石緞帶
+	Pearl Flash	珍珠閃光
+	Aurora Foil	極光箔
+	Iris Sheen	虹彩光澤
+	Frost Spectrum	霜之光譜
+	Silver Tide	銀潮
+	Rose Quartz Gleam	粉晶微光
+	Moonstone Shift	月光石流光
+	Violet Edge	紫羅蘭邊
+	Mint Halo	薄荷光暈
+	Amber Corona	琥珀日冕
+	Polar Glint	極地閃爍
+	Pastel Orbit	粉彩軌道
+	Coral and Navy	珊瑚色與海軍藍
+	Plum and Lime	梅紫與萊姆
+	Teal and Gold	藍綠與金
+	Indigo and Peach	靛藍與桃色
+	Forest and Rose	森林與玫瑰
+	Red Glow	紅色光暈
+	Orange Glow	橙色光暈
+	Amber Glow	琥珀光暈
+	Yellow Glow	黃色光暈
+	Lime Glow	萊姆光暈
+	Green Glow	綠色光暈
+	Teal Glow	藍綠光暈
+	Cyan Glow	青色光暈
+	Azure Glow	天藍光暈
+	Blue Glow	藍色光暈
+	Violet Glow	紫羅蘭光暈
+	Magenta Glow	洋紅光暈
+	Polka Dots	圓點
+	Vertical Stripes	直條紋
+	Horizontal Stripes	橫條紋
+	Diagonal Stripes	斜條紋
+	Checkerboard	棋盤格
+	Diamonds	菱形
+	Crosses	十字
+	Coarse Grit	粗顆粒
+	Stipple	點畫
+	Scratches	刮痕
+	Sparse Flecks	稀疏斑點
+	Dense Flecks	密集斑點
+	Sine Bands	正弦帶
+	Ripple Lines	漣漪線
+	Interference Rings	干涉環
+	Offset Rings	錯位環
+	Warped Checks	扭曲方格
+	Pinched Stripes	收縮條紋
+	Chevron Pulse	人字脈衝
+	Radiating Lenses	放射透鏡
+	Soft Shadow	柔和陰影
+	Hard Shadow	硬陰影
+	Lifted Card	浮起卡片
+	Neon Tube	霓虹燈管
+	Inner Light	內光
+	Feathered	羽化
+	Haze	霧靄
+	Double Rule	雙線
+	Triple Rule	三線
+	Dashed Border	虛線邊框
+	Dotted Border	點線邊框
+	Offset Keyline	位移輪廓線
+	Inset Keyline	內縮輪廓線
+	Outside Stroke	外側筆畫
+	Pointer	指標
+	Highlighter	螢光筆
+	Sketchy Line	草圖線
+	Scribble Fill	塗鴉填色
+	Wobble	搖晃
+	Zig Zag Edge	鋸齒邊
+	Wavy Edge	波浪邊
+	Puffy	鼓起
+	Starburst	星爆
+	Glossy	光澤
+	Brushed Metal	拉絲金屬
+	Spotlight	聚光燈
+	Sunset Band	日落條帶
+	Sea Glass	海玻璃
+	Pearl	珍珠
+	Chrome Rim	鍍鉻邊
+	Glow Orb	發光球
+	Pill Badge	膠囊徽章
+	Round Badge	圓形徽章
+	Flag Wave	飄揚的旗幟
+	Bulge	凸起
+	Twisted	扭轉
+	Echo	回聲
+	Spiral Copies	螺旋副本
+	Multiply Tint	色彩增值色調
+	Darken Veil	變暗薄紗
+	Ghosted	半透明
+	Two Tone	雙色調
+	Overlay Glaze	覆蓋釉
+	Screen Light	濾色光
+	Soft Light Wash	柔光暈染
+	Cyan Neon	青色霓虹
+	Magenta Laser	洋紅雷射
+	Amber Tube	琥珀燈管
+	Electric Lime	電光萊姆
+	Pulse Violet	脈衝紫
+	Cobalt Phosphor	鈷藍螢光
+	Burst	爆發
+	Rounded Square	圓角正方形
+	Sun	太陽
+	Moon	月亮
+	Cloud	雲
+	Rain	雨
+	Thunder	雷
+	Snow	雪
+	Bar	長條
+	Hexagon	六邊形
+	Spectrum	光譜
+	Triangle	三角
+	Vivid	鮮豔
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）
@@ -7455,6 +7754,7 @@ breakText	Glyphs	字符
 @msg	One path lies inside the other, so they have no common tangents	一條路徑位於另一條之內，因此它們沒有公切線
 @msg	The paths overlap, so they have no internal tangents	路徑互相重疊，因此它們沒有內公切線
 @msg	One path lies inside the other, so they have no internal tangents	一條路徑位於另一條之內，因此它們沒有內公切線
+@msg	The point lies inside the path, so it has no tangents	該點位於路徑之內，因此沒有切線
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	將短破折號展開為路徑
 @msg	select paths with dashed strokes to expand	請選取要展開的虛線筆畫路徑
@@ -9429,6 +9729,7 @@ breakText	Glyphs	字符
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	工作區域無法容納於畫布：請減少工作區域、縮小間距或縮小尺寸
 @msg	the character's size can't be measured	無法測量字元的大小
 @msg	the compound shape is too complex to expand	複合形狀過於複雜，無法展開
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	直線或其他不圍成區域的開放路徑不會為複合形狀增加任何區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	the container of the listed objects is gone	所列物件的容器已不存在
 @msg	the copy `{user_id}` can't be read as a library	複本 `{user_id}` 無法讀取為資料庫
 @msg	the copy would leave the canvas	複本會超出畫布
@@ -9695,7 +9996,6 @@ breakText	Glyphs	字符
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 檔案沒有透明度，而檔案中會有 {what}：請先將它平面化 (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	無法開啟 {kind} 影像 (請參閱 document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` 不是選項之一
-@msg	{k} has control characters{_1}	{k} 含有控制字元{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} 過長 (最多 {MAX_TEXT} 個字元)
 @msg	{k} must be > 0	{k} 必須 > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} 必須是數字 (pt) 或 "210 mm" 這類長度
@@ -9770,3 +10070,8 @@ breakText	Glyphs	字符
 @msg	A joint does not close by {gap} pt.	有一處接縫相差 {gap} pt 未閉合。
 @msg	Two panels pass through each other.	兩個面板相互穿插。
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+	Pressure Sensitive	壓感筆刷
+	Flex Ribbon	柔韌色帶
+	Pulse Stroke	脈動筆觸
+	Round Flow	圓頭流線
+	Chisel Flow	斜頭流線

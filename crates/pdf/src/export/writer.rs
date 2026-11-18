@@ -64,8 +64,8 @@ pub(crate) struct Sheet<'a> {
 
 impl Writer {
     /// A PDF with `set`'s version, standard, compression and colour output, and `doc`'s metadata
-    /// under `title`, created at `created` (Unix seconds). With `cmyk`, transparency blends in
-    /// CMYK (unless the colours are converted to RGB).
+    /// and language under `title`, created at `created` (Unix seconds). With `cmyk`, transparency
+    /// blends in CMYK (unless the colours are converted to RGB).
     pub(crate) fn new(doc: &Document, set: &crate::PdfSettings, title: &str, created: Option<i64>, cmyk: bool) -> Result<Self, PdfError> {
         let out = ColorOut::new(doc, set)?;
         let mut warnings = out.profile_notes.clone();
@@ -111,7 +111,11 @@ impl Writer {
             created: created.map(date_time),
             modified: None,
         };
-        let pdf = write::Writer::new(settings, metadata);
+        // The document language (Document Setup) as the catalog's `Lang` and the XMP packet's
+        // `dc:language` (ISO 32000-1, 14.9.2): its BCP 47 tag. A language without a tag writes
+        // none rather than a guess.
+        let language = vectorcraft_doc::setup::language_tag(&doc.setup.language).map(str::to_string);
+        let pdf = write::Writer::new_with_language(settings, metadata, language);
         Ok(Self {
             pdf,
             cmyk: out.blends_cmyk(cmyk),

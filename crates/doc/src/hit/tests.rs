@@ -164,8 +164,8 @@ fn clicks_in_a_clip_group_evaluate_its_clipping_paths_region_once_until_it_chang
     // So with a marquee across the art's left edge: in the view, only in Outline view. The
     // clipping path's own left edge lies there too, and counts in both.
     let edge = Rect::new(-5.0, 40.0, 5.0, 60.0);
-    assert_eq!(marquee_in_view(&d, edge, None, true, false), [mask_id]);
-    assert_eq!(marquee_in_view(&d, edge, None, true, true), [mask_id, art_id]);
+    assert_eq!(marquee_in_view(&d, edge, None, true, false, false), [mask_id]);
+    assert_eq!(marquee_in_view(&d, edge, None, true, true, false), [mask_id, art_id]);
     // `marquee_in` measures by the plain shapes, as its callers clip by them.
     assert!(marquee_in(d.node(g).unwrap(), edge).is_some());
     // Hidden, the effect no longer moves the region.
@@ -489,8 +489,8 @@ fn a_marquee_touches_a_paths_shifted_art_not_its_source() {
     for leaves in [false, true] {
         assert_eq!(marquee(&d, drawn, None, leaves), [a], "where it is drawn");
         assert!(marquee(&d, own, None, leaves).is_empty(), "its own place");
-        assert!(marquee_in_view(&d, drawn, None, leaves, true).is_empty(), "outline: no drawn art");
-        assert_eq!(marquee_in_view(&d, own, None, leaves, true), [a], "outline: its own place");
+        assert!(marquee_in_view(&d, drawn, None, leaves, true, false).is_empty(), "outline: no drawn art");
+        assert_eq!(marquee_in_view(&d, own, None, leaves, true, false), [a], "outline: its own place");
     }
 }
 
@@ -868,6 +868,68 @@ fn a_selected_guide_hidden_by_a_mask_counts_only_while_guides_can_be_clicked() {
     let (hidden, opt) = (Point::new(150.0, 50.0), HitOptions::default());
     assert_eq!(selected_hidden_at(&d, hidden, opt, &[guide_id]), Some(guide_id));
     assert_eq!(selected_hidden_at(&d, hidden, HitOptions { skip_guides: true, ..opt }, &[guide_id]), None);
+}
+
+/// #8538: while guides are locked or hidden (`skip_guides`), a marquee touches no guide path, at
+/// the top of a layer or in a group (the group is not taken for it), nor in a group in a group,
+/// with leaves or without. The group's other members still take it, and with the guides unlocked
+/// the guide does.
+#[test]
+fn a_marquee_skips_guide_paths_in_groups_while_guides_are_locked() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let guide = |d: &mut Document, r: Rect| {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default_art());
+        if let NodeKind::Path { guide, .. } = &mut n.kind {
+            *guide = true;
+        }
+        n
+    };
+    let top = guide(&mut d, Rect::new(0.0, 0.0, 20.0, 20.0));
+    let inner = guide(&mut d, Rect::new(100.0, 0.0, 120.0, 20.0));
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(200.0, 0.0, 220.0, 20.0)), Appearance::default_art());
+    let (top_id, inner_id, art_id) = (top.id, inner.id, art.id);
+    let (outer_id, nested_id) = (d.alloc_id(), d.alloc_id());
+    let nested = Node::group(nested_id, vec![Arc::new(inner)]);
+    d.insert(Some(l), 0, top).unwrap();
+    d.insert(Some(l), 1, Node::group(outer_id, vec![Arc::new(nested), Arc::new(art)])).unwrap();
+    let (on_top, on_inner, on_art) = (Rect::new(-5.0, 5.0, 5.0, 10.0), Rect::new(95.0, 5.0, 105.0, 10.0), Rect::new(195.0, 5.0, 205.0, 10.0));
+    for leaves in [false, true] {
+        let m = |r: Rect, skip: bool| marquee_in_view(&d, r, None, leaves, false, skip);
+        assert!(m(on_top, true).is_empty(), "a guide at the top, leaves {leaves}");
+        assert!(m(on_inner, true).is_empty(), "a guide in a group in a group, leaves {leaves}");
+        assert!(m(Rect::new(0.0, 0.0, 300.0, 200.0), true).iter().all(|id| ![top_id, inner_id].contains(id)), "all, leaves {leaves}");
+        assert_eq!(m(on_art, true), [if leaves { art_id } else { outer_id }], "the group's art, leaves {leaves}");
+        // Unlocked: the guides are touched.
+        assert_eq!(m(on_top, false), [top_id], "unlocked, leaves {leaves}");
+        assert_eq!(m(on_inner, false), [if leaves { inner_id } else { outer_id }], "unlocked, leaves {leaves}");
+    }
+    // An enclosing loop's candidates leave them out alike.
+    assert!(enclosure_candidates(&d, on_inner, None, false, true).is_empty());
+    assert_eq!(enclosure_candidates(&d, on_inner, None, false, false), [inner_id]);
+}
+
+/// #8538: an enclosing loop's candidates leave out a compound path whose touched contours are all
+/// locked or hidden guides, as the marquee does.
+#[test]
+fn guide_contours_do_not_make_a_compound_an_enclosure_candidate() {
+    let mut d = Document::new(300.0, 200.0);
+    let l = d.layers[0].id;
+    let part = |d: &mut Document, r: Rect| {
+        let mut n = Node::path(d.alloc_id(), shapes::rectangle(r), Appearance::default_art());
+        if let NodeKind::Path { guide, .. } = &mut n.kind {
+            *guide = true;
+        }
+        Arc::new(n)
+    };
+    let (a, b) = (part(&mut d, Rect::new(10.0, 10.0, 50.0, 50.0)), part(&mut d, Rect::new(20.0, 20.0, 40.0, 40.0)));
+    let id = d.alloc_id();
+    let mut compound = Node::group(id, vec![]);
+    compound.kind = NodeKind::Compound { children: vec![a, b], rule: Default::default() };
+    d.insert(Some(l), 0, compound).unwrap();
+    let r = Rect::new(0.0, 0.0, 60.0, 60.0);
+    assert!(enclosure_candidates(&d, r, None, false, true).is_empty(), "locked or hidden");
+    assert_eq!(enclosure_candidates(&d, r, None, false, false), [id], "shown and unlocked");
 }
 
 /// A selected path in a Shaper group's original shapes, where an outer mask hides it, counts only
@@ -2674,7 +2736,7 @@ fn a_symbol_instance_is_hit_where_a_moved_clipping_path_in_its_art_shows_the_art
         assert_eq!(marquee(&d, edge, None, false), [g], "layer {layer}");
         assert_eq!(marquee(&d, edge, None, true), [inst], "layer {layer}");
         assert!(marquee(&d, past, None, false).is_empty());
-        assert!(marquee_in_view(&d, edge, None, false, true).is_empty(), "Outline view");
+        assert!(marquee_in_view(&d, edge, None, false, true, false).is_empty(), "Outline view");
     }
     // Preview off for the layer the instance is on.
     let (mut d, _, _) = build("test.move", Affine::IDENTITY, false, true, false);

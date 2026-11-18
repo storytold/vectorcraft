@@ -458,24 +458,8 @@ pub(super) fn break_line(
     line_end: &[f64],
     fits: Option<&dyn Fn(usize, bool) -> bool>,
 ) -> (usize, bool) {
-    // The line ending at `chosen`, once it holds a tab, when it fits as drawn; otherwise the latest
-    // of the legal `breaks` before it that fits as drawn, measuring at most `checks` of them from
-    // the latest back and bisecting the earlier ones without a hyphen; the first of them when none
-    // of those measured fits.
-    let settle = |tabbed: bool, checks: usize, chosen: (usize, bool), breaks: &[(usize, bool)]| -> (usize, bool) {
-        let Some(fits) = fits.filter(|_| tabbed) else { return chosen };
-        if fits(chosen.0, chosen.1) {
-            return chosen;
-        }
-        let earlier = breaks.get(breaks.partition_point(|b| b.0 <= i)..breaks.partition_point(|b| b.0 < chosen.0)).unwrap_or_default();
-        if let Some(&b) = earlier.iter().rev().take(checks).find(|b| fits(b.0, b.1)) {
-            return b;
-        }
-        // Without a hyphen, a line that ends later is drawn no narrower, so those breaks bisect.
-        let rest = earlier.get(..earlier.len().saturating_sub(checks)).unwrap_or_default();
-        let plain: Vec<&(usize, bool)> = rest.iter().filter(|b| !b.1).collect();
-        let fitting = plain.partition_point(|b| fits(b.0, b.1));
-        fitting.checked_sub(1).and_then(|k| plain.get(k).copied()).or(earlier.first()).copied().unwrap_or(chosen)
+    let settle = |tabbed: bool, checks: usize, chosen: (usize, bool), breaks: &[(usize, bool)]| {
+        craft_font_catalog::settle_line_break(tabbed, checks, i, chosen, breaks, fits)
     };
     // How many breaks a line measures as drawn one by one.
     let checks = |back: f64| if back > 0.0 { MAX_DRAWN_CHECKS_STEPPING_BACK } else { MAX_DRAWN_CHECKS };

@@ -753,21 +753,25 @@ impl<'a> Interp<'a> {
     }
 
     fn search_string(&mut self, op: Op) -> Res {
-        let seek = self.pop_str()?.to_vec();
+        let seek = self.pop_str()?;
         let s = self.pop_str()?;
-        let text = s.to_vec();
-        self.spend((text.len() / 64) as u64)?;
-        let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+        // Both strings are read in place, and the borrows end before the results are pushed.
+        let (len, n, at) = {
+            let (text, seek) = (s.borrow(), seek.borrow());
+            self.spend((text.len() / 64) as u64)?;
+            let at = if op == Op::Search { super::lex::find(&text, &seek) } else { text.starts_with(&seek).then_some(0) };
+            (text.len(), seek.len(), at)
+        };
         match at {
             Some(i) => {
                 let o = Obj::Str(s);
                 if op == Op::Search {
-                    self.push_interval(o.clone(), i + seek.len(), text.len() - i - seek.len())?;
-                    self.push_interval(o.clone(), i, seek.len())?;
+                    self.push_interval(o.clone(), i + n, len - i - n)?;
+                    self.push_interval(o.clone(), i, n)?;
                     self.push_interval(o, 0, i)?;
                 } else {
-                    self.push_interval(o.clone(), seek.len(), text.len() - seek.len())?;
-                    self.push_interval(o, 0, seek.len())?;
+                    self.push_interval(o.clone(), n, len - n)?;
+                    self.push_interval(o, 0, n)?;
                 }
                 self.push(Obj::Bool(true))?;
             }

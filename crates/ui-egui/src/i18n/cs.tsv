@@ -90,6 +90,19 @@
 	Paste without Formatting	Vložit bez formátování
 	Clear	Smazat
 	Find and Replace…	Najít a nahradit…
+	Find and Replace	Najít a nahradit
+	Find:	Najít:
+	Replace With:	Nahradit čím:
+	Replace & Find	Nahradit a najít
+	Replace All	Nahradit vše
+	Match Case	Rozlišovat velká a malá písmena
+	Find Whole Word	Najít celé slovo
+	Search Backwards	Hledat zpět
+	Check Hidden Layers	Prohledat skryté vrstvy
+	Check Locked Layers	Prohledat zamknuté vrstvy
+@msg	No matches found	Nenalezeny žádné shody
+@msg	Matches replaced: {n}	Nahrazeno shod: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	na bajtech {_1}..{_2} objektu {_3} není žádná shoda s `find`
 	Find Next	Najít další
 	Spelling	Pravopis
 	Auto Spell Check	Automatická kontrola pravopisu
@@ -230,6 +243,16 @@
 	To Center	Ke středu
 	To Edge	K okraji
 	Create Object Mosaic…	Vytvořit mozaiku objektů…
+	Create Object Mosaic	Vytvořit mozaiku objektů
+	Current Size:	Aktuální velikost:
+	New Size:	Nová velikost:
+	Tile Spacing:	Rozestupy dlaždic:
+	Number of Tiles:	Počet dlaždic:
+	Constrain Ratio:	Zachovat poměr:
+	Result:	Výsledek:
+	Resize Using Percentages	Změnit velikost v procentech
+	Delete Raster	Odstranit rastrový obraz
+	Use Ratio	Použít poměr
 	Vector Halftone…	Vektorový polotón…
 	Create Trim Marks	Vytvořit značky ořezu
 	Flatten Transparency…	Sloučit průhlednost…
@@ -624,6 +647,11 @@
 	Color blindness – Protanopia-type	Barvoslepost – protanopie
 	Color blindness – Deuteranopia-type	Barvoslepost – deuteranopie
 	Color blindness – Tritanopia-type	Barvoslepost – tritanopie
+	Show Color Vision Preview	Zobrazit náhled barevného vidění
+	Protanopia	Protanopie
+	Deuteranopia	Deuteranopie
+	Tritanopia	Tritanopie
+	Achromatopsia	Achromatopsie
 	Customize…	Vlastní…
 	Proof Colors	Barvy nátisku
 	Zoom In	Zvětšit
@@ -3358,6 +3386,7 @@ antiAlias	Sharp	Ostré
 	Preserve Editing Capabilities	Zachovat možnosti úprav
 	Responsive	Responzivní
 	Show Code	Zobrazit kód
+	Show in Browser	Zobrazit v prohlížeči
 	Style Attributes	Atributy stylu
 	Style Attributes (Entity References)	Atributy stylu (odkazy na entity)
 	Styling:	Stylování:
@@ -3588,6 +3617,7 @@ theme	Appearance	Motiv
 	Delete Brush	Odstranit štětec
 	Delete Color	Odstranit barvu
 	Restore Generated Table	Obnovit vygenerovanou tabulku
+	Unshift All Colors	Zrušit posun všech barev
 	Delete Symbol	Odstranit symbol
 	Delete the selected symbol?	Odstranit vybraný symbol?
 	Delete the selected symbols?	Odstranit vybrané symboly?
@@ -4048,6 +4078,7 @@ theme	Appearance	Motiv
 	90° & 45° Angles	Úhly 90° a 45°
 	90° Angles	Úhly 90°
 	Additional Plug-ins Folder	Další složka zásuvných modulů
+	Plug-in Instruction Budget	Rozpočet instrukcí zásuvných modulů
 	Additional Fonts Folder	Další složka písem
 	Alignment Guides	Vodítka zarovnání
 	Anchor Points, Handle, and Bounding Box Display	Zobrazení kotevních bodů, úchytů a ohraničovacího rámečku
@@ -4443,6 +4474,8 @@ axis	Both	Obě
 	Show	Zobrazit
 	Copy Width Point	Kopírovat bod šířky
 	Duplicate Artboard	Duplikovat pracovní plochu
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Kliknutím přidáte pracovní plochu na tuto stranu, Alt+kliknutím duplikujete tuto pracovní plochu i s kresbou
+	Click to add an artboard on this side	Kliknutím přidáte pracovní plochu na tuto stranu
 	Area / Path Type	Text v oblasti / na cestě
 	Decrease Font Size	Zmenšit velikost písma
 	Decrease Font Size by Five Steps	Zmenšit velikost písma o pět kroků
@@ -4588,6 +4621,12 @@ font-technology	Variable	Variabilní
 	Search commands, tools, panels and effects…	Hledat příkazy, nástroje, panely a efekty…
 	No commands match	Žádný příkaz neodpovídá
 	{pos} of {total}: {name}	{pos} z {total}: {name}
+	No menu item	Žádná položka nabídky
+	Toolbar	Panel nástrojů
+	{toolbar}, in the {tool} group	{toolbar}, ve skupině {tool}
+	In the menu bar: {path}	V řádku nabídek: {path}
+	In the {group} group: press and hold to open it	Ve skupině {group}: stisknutím a podržením ji otevřete
+	{home}, not shown now	{home}, nyní není zobrazeno
 @plural	{n} result|{n} results	{n} výsledek|{n} výsledky|{n} výsledků
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} z {n} výsledku. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.|{shown} z {n} výsledků. Pište dál a výsledky se zúží.
 	Recent Commands	Nedávné příkazy
@@ -4705,6 +4744,9 @@ font-technology	Variable	Variabilní
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Jak blízko na obrazovce musí ukazatel nebo tažený bod přijít ke kresbě, aby se chytrá vodítka přichytila; vzdálenost je stejná při každém zvětšení.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Přichytí konec úsečky nebo kružnici kreslenou od středu tak, aby se dotýkala blízké křivky.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Přichytí konec úsečky tak, aby se s blízkým rovným segmentem setkal v pravém úhlu.
+	Edit type set in fonts that aren't available?	Upravit text v písmech, která nejsou k dispozici?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Zobrazí na plátně číslo každého řezu v rámečku v jeho levém horním rohu; když je vypnuto, obrysy řezů zůstanou zobrazené.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Barva obrysů uživatelských a objektových řezů a rámečků s jejich čísly; automatické řezy používají tlumenější odstín této barvy.
 	Reset all preferences to their defaults?	Obnovit všechny předvolby na výchozí hodnoty?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Výchozí hodnoty se použijí po klepnutí na OK v Předvolbách. Zrušit tam zachová vaše současné předvolby.
 	Smaller ↔ Larger	Menší ↔ Větší
@@ -5180,6 +5222,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	Installed plug-in {_1}	Nainstalován zásuvný modul {_1}
 @msg	Internal error: {msg} (please report this bug)	Vnitřní chyba: {msg} (nahlaste prosím tuto chybu)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Sloučit živou malbu: vyberte skupinu živé malby a cesty, které chcete přidat
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` a `Edge` jsou názvy ploch a hran skupiny živé malby: dejte cestě jiný název
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Živá malba přijímá cesty a složené cesty: text, obrazy a jiné objekty nejprve převeďte na cesty
 @msg	Live Paint: select paths or compound paths	Živá malba: vyberte cesty nebo složené cesty
 @msg	Live Paint: these paths are too degenerate to paint	Živá malba: tyto cesty jsou příliš degenerované, aby je bylo možné malovat
@@ -5381,6 +5424,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	choose a location for the package	zvolte umístění balíčku
 @msg	clipboard is empty	schránka je prázdná
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: v tabulce barev musí zůstat alespoň jedna barva
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` označuje barvu, kterou označuje i jiný klíč
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` není barva jako "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: nejvýše {MAX_TABLE} barev
 @msg	command `{0}` is not available right now: {1}	příkaz `{0}` nyní není k dispozici: {1}
@@ -6018,6 +6062,7 @@ variable-list-end	{0}, {1}	{0} a {1}
 @msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
 @msg	a linked image file is outside the read roots	propojený soubor obrázku je mimo kořeny pro čtení
 @msg	a linked file's export folder is outside the read roots	exportní složka propojeného souboru je mimo kořeny pro čtení
+@msg	a linked file's editing data can't be read to check it against the read roots	editační data propojeného souboru nelze přečíst a ověřit vůči kořenům pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná
@@ -7236,6 +7281,7 @@ axis	Y Axis	osa Y
 	Checkpoint	Kontrolní bod
 	Inventory Icons	Ikony inventáře
 	Skill Icons	Ikony dovedností
+	Weather Icons	Ikony počasí
 	Attack	Útok
 	Defend	Obrana
 	Heal	Léčení
@@ -7357,6 +7403,252 @@ axis	Y Axis	osa Y
 	Stars	Hvězdy
 	Triangles	Trojúhelníky
 	Sparkles	Jiskry
+	Warm Gray	Teplá šedá
+	Cool Gray	Studená šedá
+	Neutrals	Neutrální tóny
+	Ivory	Slonovina
+	Linen	Len
+	Oat	Oves
+	Greige	Greige
+	Stone	Kámen
+	Taupe	Taupe
+	Slate	Břidlice
+	Clay	Hlína
+	Terracotta	Terakota
+	Ochre	Okr
+	Umber	Umbra
+	Sand	Písek
+	Olive	Olivová
+	Moss	Mech
+	Rosy	Růžová
+	Neutral	Neutrální
+	Golden	Zlatavá
+	Pastel	Pastelové
+	Pastel Red	Pastelová červená
+	Pastel Orange	Pastelová oranžová
+	Pastel Amber	Pastelová jantarová
+	Pastel Yellow	Pastelová žlutá
+	Pastel Lime	Pastelová limetková
+	Pastel Green	Pastelová zelená
+	Pastel Teal	Pastelová modrozelená
+	Pastel Cyan	Pastelová azurová
+	Pastel Azure	Pastelová blankytná
+	Pastel Blue	Pastelová modrá
+	Pastel Violet	Pastelová fialová
+	Pastel Magenta	Pastelová purpurová
+	Soft Red	Jemná červená
+	Soft Orange	Jemná oranžová
+	Soft Amber	Jemná jantarová
+	Soft Yellow	Jemná žlutá
+	Soft Lime	Jemná limetková
+	Soft Green	Jemná zelená
+	Soft Teal	Jemná modrozelená
+	Soft Cyan	Jemná azurová
+	Soft Azure	Jemná blankytná
+	Soft Blue	Jemná modrá
+	Soft Violet	Jemná fialová
+	Soft Magenta	Jemná purpurová
+	Vivid Red	Sytá červená
+	Vivid Orange	Sytá oranžová
+	Vivid Amber	Sytá jantarová
+	Vivid Yellow	Sytá žlutá
+	Vivid Lime	Sytá limetková
+	Vivid Green	Sytá zelená
+	Vivid Teal	Sytá modrozelená
+	Vivid Cyan	Sytá azurová
+	Vivid Azure	Sytá blankytná
+	Vivid Blue	Sytá modrá
+	Vivid Violet	Sytá fialová
+	Vivid Magenta	Sytá purpurová
+	Deep	Tmavé
+	Deep Red	Tmavě červená
+	Deep Orange	Tmavě oranžová
+	Deep Amber	Tmavě jantarová
+	Deep Yellow	Tmavě žlutá
+	Deep Lime	Tmavě limetková
+	Deep Green	Tmavě zelená
+	Deep Teal	Tmavě modrozelená
+	Deep Cyan	Tmavě azurová
+	Deep Azure	Tmavě blankytná
+	Deep Blue	Tmavě modrá
+	Deep Violet	Tmavě fialová
+	Deep Magenta	Tmavě purpurová
+	Gold	Zlato
+	Silver	Stříbro
+	Bronze	Bronz
+	Copper	Měď
+	Brass	Mosaz
+	Rose Gold	Růžové zlato
+	Gunmetal	Ocelově šedá
+	Platinum	Platina
+	Pewter	Cín
+	Ember	Žhavé uhlíky
+	Lagoon	Laguna
+	Dusk	Soumrak
+	Clay to Teal	Hlína do modrozelené
+	Plum to Olive	Švestka do olivové
+	Complementary Coral	Korálová, komplementární
+	Split Complementary Coral	Korálová, rozdělená komplementární
+	Analogous Coral	Korálová, analogická
+	Triad Coral	Korálová, triáda
+	Tetrad Coral	Korálová, tetráda
+	Pentagram Coral	Korálová, pentagram
+	Complementary Teal	Modrozelená, komplementární
+	Split Complementary Teal	Modrozelená, rozdělená komplementární
+	Analogous Teal	Modrozelená, analogická
+	Triad Teal	Modrozelená, triáda
+	Tetrad Teal	Modrozelená, tetráda
+	Pentagram Teal	Modrozelená, pentagram
+	Soft Spectrum	Jemné spektrum
+	Red to Amber	Červená do jantarové
+	Orange to Yellow	Oranžová do žluté
+	Amber to Lime	Jantarová do limetkové
+	Yellow to Green	Žlutá do zelené
+	Lime to Teal	Limetková do modrozelené
+	Green to Cyan	Zelená do azurové
+	Teal to Azure	Modrozelená do blankytné
+	Cyan to Blue	Azurová do modré
+	Azure to Violet	Blankytná do fialové
+	Blue to Magenta	Modrá do purpurové
+	Violet to Red	Fialová do červené
+	Magenta to Orange	Purpurová do oranžové
+	Dawn	Svítání
+	Noon	Poledne
+	Sunset	Západ slunce
+	Night	Noc
+	Overcast	Zataženo
+	White to Black	Bílá do černé
+	Light Grays	Světlé šedé
+	Dark Grays	Tmavé šedé
+	Warm Grays	Teplé šedé
+	Cool Grays	Studené šedé
+	Fade to Transparent	Přechod do průhledné
+	White Fade	Bílý přechod
+	Vignette	Viněta
+	Mist	Opar
+	Petal	Okvětní lístek
+	Fern	Kapradí
+	Smoke	Kouř
+	Honey	Med
+	Seafoam	Mořská pěna
+	Lavender	Levandule
+	Driftwood	Naplavené dřevo
+	Ink Wash	Tušová lavírovka
+	Tide	Příliv
+	Bloom	Rozkvět
+	Dew	Rosa
+	Pollen	Pyl
+	Lichen	Lišejník
+	Prism Veil	Hranolový závoj
+	Opal Ribbon	Opálová stuha
+	Pearl Flash	Perleťový záblesk
+	Aurora Foil	Polární fólie
+	Iris Sheen	Duhový lesk
+	Frost Spectrum	Ojíněné spektrum
+	Silver Tide	Stříbrný příliv
+	Rose Quartz Gleam	Lesk růženínu
+	Moonstone Shift	Měsíční třpyt
+	Violet Edge	Fialový okraj
+	Mint Halo	Mátová svatozář
+	Amber Corona	Jantarová koróna
+	Polar Glint	Polární záblesk
+	Pastel Orbit	Pastelová dráha
+	Coral and Navy	Korálová a námořnická modrá
+	Plum and Lime	Švestková a limetková
+	Teal and Gold	Modrozelená a zlatá
+	Indigo and Peach	Indigo a broskvová
+	Forest and Rose	Lesní a růžová
+	Red Glow	Červená záře
+	Orange Glow	Oranžová záře
+	Amber Glow	Jantarová záře
+	Yellow Glow	Žlutá záře
+	Lime Glow	Limetková záře
+	Green Glow	Zelená záře
+	Teal Glow	Modrozelená záře
+	Cyan Glow	Azurová záře
+	Azure Glow	Blankytná záře
+	Blue Glow	Modrá záře
+	Violet Glow	Fialová záře
+	Magenta Glow	Purpurová záře
+	Polka Dots	Puntíky
+	Vertical Stripes	Svislé pruhy
+	Horizontal Stripes	Vodorovné pruhy
+	Diagonal Stripes	Šikmé pruhy
+	Checkerboard	Šachovnice
+	Diamonds	Kosočtverce
+	Crosses	Křížky
+	Coarse Grit	Hrubé zrno
+	Stipple	Tečkování
+	Scratches	Škrábance
+	Sparse Flecks	Řídké skvrnky
+	Dense Flecks	Husté skvrnky
+	Sine Bands	Sinusové pásy
+	Ripple Lines	Zvlněné čáry
+	Interference Rings	Interferenční kruhy
+	Offset Rings	Posunuté kruhy
+	Warped Checks	Zkreslené kostky
+	Pinched Stripes	Sevřené pruhy
+	Chevron Pulse	Pulzující krokve
+	Radiating Lenses	Paprsčité čočky
+	Soft Shadow	Měkký stín
+	Hard Shadow	Ostrý stín
+	Lifted Card	Zvednutá karta
+	Neon Tube	Neonová trubice
+	Inner Light	Vnitřní světlo
+	Feathered	Měkké okraje
+	Haze	Mlžný opar
+	Double Rule	Dvojitá linka
+	Triple Rule	Trojitá linka
+	Dashed Border	Čárkovaný okraj
+	Dotted Border	Tečkovaný okraj
+	Offset Keyline	Posunutá obrysová linka
+	Inset Keyline	Vnitřní obrysová linka
+	Outside Stroke	Vnější tah
+	Pointer	Ukazatel
+	Highlighter	Zvýrazňovač
+	Sketchy Line	Skicovitá čára
+	Scribble Fill	Čmáraná výplň
+	Wobble	Kolísání
+	Zig Zag Edge	Klikatý okraj
+	Wavy Edge	Vlnitý okraj
+	Puffy	Nafouknutý
+	Starburst	Hvězdný výbuch
+	Glossy	Lesklý
+	Brushed Metal	Kartáčovaný kov
+	Spotlight	Reflektor
+	Sunset Band	Pás západu slunce
+	Sea Glass	Mořské sklo
+	Pearl	Perla
+	Chrome Rim	Chromový lem
+	Glow Orb	Zářící koule
+	Pill Badge	Odznak tvaru pilulky
+	Round Badge	Kulatý odznak
+	Flag Wave	Vlající vlajka
+	Bulge	Vyboulení
+	Twisted	Zkroucený
+	Echo	Ozvěna
+	Spiral Copies	Kopie ve spirále
+	Multiply Tint	Odstín násobení
+	Darken Veil	Ztmavující závoj
+	Ghosted	Průsvitný
+	Two Tone	Dvoubarevný
+	Overlay Glaze	Glazura překrytí
+	Screen Light	Světlo závoje
+	Soft Light Wash	Lavírka měkkého světla
+	Cyan Neon	Azurový neon
+	Magenta Laser	Purpurový laser
+	Amber Tube	Jantarová trubice
+	Electric Lime	Elektrická limetková
+	Pulse Violet	Pulzující fialová
+	Cobalt Phosphor	Kobaltový luminofor
+	Burst	Výbuch
+	Rounded Square	Zaoblený čtverec
+	Sun	Slunce
+	Moon	Měsíc
+	Cloud	Mrak
+	Rain	Déšť
+	Thunder	Hrom
+	Snow	Sníh
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
@@ -7799,6 +8091,7 @@ breakText	Glyphs	Glyfy
 @msg	One path lies inside the other, so they have no common tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné společné tečny
 @msg	The paths overlap, so they have no internal tangents	Cesty se překrývají, takže nemají žádné vnitřní tečny
 @msg	One path lies inside the other, so they have no internal tangents	Jedna cesta leží uvnitř druhé, takže nemají žádné vnitřní tečny
+@msg	The point lies inside the path, so it has no tangents	Bod leží uvnitř cesty, takže nemá žádné tečny
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Rozložit čárky na cesty
 @msg	select paths with dashed strokes to expand	vyberte cesty s čárkovaným tahem k rozložení
@@ -9678,6 +9971,7 @@ breakText	Glyphs	Glyfy
 @msg	the character's size can't be measured	velikost znaku nelze změřit
 @msg	the code runs past its last instruction	kód běží za svou poslední instrukci
 @msg	the compound shape is too complex to expand	složený tvar je příliš složitý na rozložení
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	čára nebo jiná otevřená cesta, která neohraničuje žádnou plochu, nepřidá složenému tvaru žádnou plochu; chcete-li ji zahrnout, použijte na ni nejprve Objekt › Cesta › Převést tah na obrys
 @msg	the container of the listed objects is gone	kontejner uvedených objektů už neexistuje
 @msg	the copy `{user_id}` can't be read as a library	kopii `{user_id}` nelze přečíst jako knihovnu
 @msg	the copy would leave the canvas	kopie by opustila plátno
@@ -10018,7 +10312,6 @@ breakText	Glyphs	Glyfy
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	soubory {kind} nemají průhlednost a soubor by obsahoval {what}: nejprve ji slučte (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	obrázky {kind} nelze otevřít (viz document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` není jedna z nabízených voleb
-@msg	{k} has control characters{_1}	{k} obsahuje řídicí znaky{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} je příliš dlouhé (nejvýše {MAX_TEXT} znaků)
 @msg	{k} must be > 0	{k} musí být > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} musí být číslo (pt) nebo délka jako "210 mm"
@@ -10105,6 +10398,11 @@ breakText	Glyphs	Glyfy
 @msg	A panel is not joined to the rest by a crease.	Panel není se zbytkem spojen žádnou linií bigu.
 @msg	A fold line is on a non-printing layer.	Linie skladu je na netisknutelné vrstvě.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panely: {panels}, panty: {hinges}, chyby: {errors}, upozornění: {warnings}
+	Pressure Sensitive	Citlivé na tlak
+	Flex Ribbon	Pružná stuha
+	Pulse Stroke	Pulzující tah
+	Round Flow	Kulatý tah
+	Chisel Flow	Zkosený tah
 	Fold Preview	Náhled skládání
 	Fold	Složení
 	Show Fold Lines	Zobrazit linie skladu
