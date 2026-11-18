@@ -220,6 +220,7 @@ fn run_ui_part2(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "file.export.svg" => io::export(app, Some("svg"), s("path"), p),
+        "file.export.svg.browser" => crate::dialogs::svg_options::browser_preview(app, p),
         "file.exportForScreens" if p.as_object().is_none_or(|o| o.is_empty()) => {
             crate::dialogs::open_export_for_screens(app);
             Ok(Value::Null)

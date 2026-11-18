@@ -244,7 +244,8 @@ the suite) keep the agent to the folders you give it:
   `export`), `document.exportSelection`, `document.exportForScreens` and `assets.export` (before the folder is
   made or any row is written), `document.save`, `file.save`, `file.saveAs` and `file.saveCopy` (also a save
   without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
-  Show Code. The same error refuses, before any file is written, every output that carries the native document,
+  Show Code. The dialog's Show in Browser (`file.export.svg.browser`) runs the same checks, and a control or MCP
+  request for it is refused before it writes a file, since it opens another app. The same error refuses, before any file is written, every output that carries the native document,
   which holds the link: a native file or template, an EPS file, a `.ai` or `.ait` file of every artboard (not a
   legacy version 7 `.ai` file; a save of a `.ai` file always has every artboard), a PDF of every artboard with
   Preserve Editing on (also from `document.exportPdf`), and `file.package` (also when a linked native document,
