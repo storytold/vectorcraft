@@ -5433,6 +5433,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 	Name 40%	Nome 40%
 	Name* @ 66.67 % (RGB/Preview)	Nome* @ 66.67 % (RGB/Visualização)
 	Name* @ 66.67% (RGB/Preview)	Nome* @ 66.67% (RGB/Visualização)
+	Roundness	Arredondamento
 	Roundness:	Arredondamento:
 	Fixed	Fixo
 	Pressure	Pressão

@@ -2337,6 +2337,7 @@ file-filter	Templates	Modelli
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Il nero diventa il colore della traccia e il bianco resta bianco. Gli altri colori diventano tinte del colore della traccia, e più un colore è chiaro, più è chiara la sua tinta.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Il nero resta nero e il bianco resta bianco. Gli altri colori diventano ombre del colore della traccia quando sono scuri e tinte di esso quando sono chiari.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Il colore chiave diventa il colore della traccia. Gli altri colori ruotano sulla ruota dei colori quanto il colore chiave e mantengono la loro saturazione e luminosità.
+	Roundness	Rotondità
 	Roundness:	Rotondità:
 	Fixed	Fisso
 	Pressure	Pressione

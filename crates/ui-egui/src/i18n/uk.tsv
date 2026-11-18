@@ -2329,6 +2329,7 @@ file-filter	Templates	Шаблони
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Чорний стає кольором обведення, а білий залишається білим. Інші кольори стають відтінками кольору обведення, і що світліший колір, то світліший його відтінок.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Чорний залишається чорним, а білий залишається білим. Інші кольори стають тінями кольору обведення, якщо вони темні, і його відтінками, якщо вони світлі.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Ключовий колір стає кольором обведення. Інші кольори зсуваються по колірному колу на стільки ж, на скільки ключовий колір, і зберігають насиченість та яскравість.
+	Roundness	Округлість
 	Roundness:	Округлість:
 	Fixed	Фіксований
 	Pressure	Натиск
