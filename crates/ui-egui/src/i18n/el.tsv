@@ -778,6 +778,7 @@ font-technology	Variable	Μεταβλητές
 	Delete Brush	Διαγραφή πινέλου
 	Delete Color	Διαγραφή χρώματος
 	Restore Generated Table	Επαναφορά του παραγόμενου πίνακα
+	Unshift All Colors	Αναίρεση μετατόπισης όλων των χρωμάτων
 	Delete Character Style	Διαγραφή στυλ χαρακτήρων
 	Delete Empty Artboards	Διαγραφή κενών πινάκων σχεδίασης
 	Delete Freeform Point	Διαγραφή ελεύθερου σημείου
@@ -4061,6 +4062,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Πόσο κοντά στην οθόνη πρέπει να φτάσει ο δείκτης ή ένα σημείο που σύρεται σε γραφικά για να προσκολληθούν οι έξυπνοι οδηγοί· η απόσταση είναι ίδια σε κάθε ζουμ.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ή έναν κύκλο που σχεδιάζεται από το κέντρο του ώστε να αγγίζει μια κοντινή καμπύλη.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Προσκολλά το άκρο ενός ευθύγραμμου τμήματος ώστε να συναντά ένα κοντινό ευθύ τμήμα σε ορθή γωνία.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Εμφανίζει στον καμβά τον αριθμό κάθε τομής σε ένα πλαίσιο πάνω αριστερά της· όταν είναι απενεργοποιημένο, τα περιγράμματα των τομών εξακολουθούν να εμφανίζονται.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Το χρώμα των περιγραμμάτων των τομών χρήστη και αντικειμένου και των πλαισίων με τους αριθμούς τους· οι αυτόματες τομές χρησιμοποιούν μια πιο αχνή απόχρωσή του.
 	Reset all preferences to their defaults?	Επαναφορά όλων των προτιμήσεων στις προεπιλογές τους;
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Οι προεπιλογές εφαρμόζονται όταν κάνετε κλικ στο Εντάξει στις Προτιμήσεις. Το Ακύρωση εκεί διατηρεί τις τρέχουσες προτιμήσεις σας.
 	Restore Recovered Documents	Επαναφορά ανακτημένων εγγράφων
@@ -4181,6 +4184,9 @@ digits	Malayalam	Μαλαγιάλαμ
 	No menu item	Χωρίς στοιχείο μενού
 	Toolbar	Γραμμή εργαλείων
 	{toolbar}, in the {tool} group	{toolbar}, στην ομάδα {tool}
+	In the menu bar: {path}	Στη γραμμή μενού: {path}
+	In the {group} group: press and hold to open it	Στην ομάδα {group}: πατήστε παρατεταμένα για να ανοίξει
+	{home}, not shown now	{home}, δεν εμφανίζεται τώρα
 @plural	{n} result|{n} results	{n} αποτέλεσμα|{n} αποτελέσματα
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} από {n} αποτέλεσμα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.|{shown} από {n} αποτελέσματα. Συνεχίστε να πληκτρολογείτε για να τα περιορίσετε.
 	Recent Commands	Πρόσφατες εντολές
@@ -5041,6 +5047,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	choose a location for the package	επιλέξτε τοποθεσία συσκευασίας
 @msg	clipboard is empty	το πρόχειρο είναι κενό
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: τουλάχιστον ένα χρώμα πρέπει να παραμείνει στον πίνακα χρωμάτων
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: το `{k}` ορίζει ένα χρώμα που ορίζει και άλλο κλειδί
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: το `{h}` δεν είναι έγκυρο χρώμα, όπως το "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: επιτρέπονται το πολύ {MAX_TABLE} χρώματα
 @msg	command `{0}` is not available right now: {1}	η εντολή `{0}` δεν είναι διαθέσιμη αυτήν τη στιγμή: {1}
@@ -7790,6 +7797,7 @@ breakText	Glyphs	Γλύφοι
 @msg	One path lies inside the other, so they have no common tangents	Η μία διαδρομή βρίσκεται μέσα στην άλλη, επομένως δεν έχουν κοινές εφαπτόμενες
 @msg	The paths overlap, so they have no internal tangents	Οι διαδρομές επικαλύπτονται, επομένως δεν έχουν εσωτερικές εφαπτόμενες
 @msg	One path lies inside the other, so they have no internal tangents	Η μία διαδρομή βρίσκεται μέσα στην άλλη, επομένως δεν έχουν εσωτερικές εφαπτόμενες
+@msg	The point lies inside the path, so it has no tangents	Το σημείο βρίσκεται μέσα στη διαδρομή, επομένως δεν έχει εφαπτόμενες
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Επέκταση παυλών σε διαδρομές
 @msg	select paths with dashed strokes to expand	επιλέξτε διαδρομές με διακεκομμένο περίγραμμα για επέκταση
@@ -8302,4 +8310,9 @@ breakText	Glyphs	Γλύφοι
 	Filigree Arrow	Φιλιγκράν βέλος
 	Petal Sweep	Καμπύλη πετάλων
 	Twin Curl	Διπλή σπείρα
+	Pressure Sensitive	Ευαίσθητα στην πίεση
+	Flex Ribbon	Εύκαμπτη κορδέλα
+	Pulse Stroke	Παλμική πινελιά
+	Round Flow	Στρογγυλή ροή
+	Chisel Flow	Λοξή ροή
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: χρησιμοποιήστε "{_1}" ή "{_2}"
