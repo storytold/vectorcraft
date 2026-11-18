@@ -141,3 +141,60 @@ fn blend_5179_replace_spine_move_undo_matches_fresh_cpu() {
     let restored = frame(&s, &mut retained, "undo-replace");
     same_pixels(&restored, &warm);
 }
+
+// A fixed ordinary anisotropic Transform, evaluated after Align to Path turns the key.
+// 200% is the legitimate control; 400% is the single source-derived witness.
+fn rotated_transform_damage(scale_h: f64) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": WIDTH, "height": HEIGHT})).unwrap();
+    let mut rectangle = |x: f64, color: &str| {
+        let id = NodeId(s.execute("shape.rectangle", &json!({"x": x, "y": 200.0, "width": 8.0, "height": 80.0})).unwrap()["id"].as_u64().unwrap());
+        s.execute("paint.setFill", &json!({"color": color})).unwrap();
+        s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+        s.execute("effect.apply", &json!({"effect": "distort.transform", "params": {"scaleH": scale_h, "scaleV": 100.0, "reference": 4}})).unwrap();
+        let n = s.doc().unwrap().doc.node(id).unwrap();
+        let b = n.geometric_bounds().unwrap();
+        assert!((b.width() - 8.0).abs() < 1e-8 && (b.height() - 80.0).abs() < 1e-8, "INPUT: the Transform must remain live on the narrow key");
+        assert_eq!(n.appearance.effects.len(), 1);
+        assert_eq!(n.appearance.effects[0].params["scaleH"], json!(scale_h));
+        id
+    };
+    let keys = [rectangle(260.0, "#d52c38"), rectangle(460.0, "#25b453")];
+    let blend = NodeId(
+        s.execute("object.blend.make", &json!({"ids": [keys[0].0, keys[1].0], "steps": 3, "orientation": "path"})).unwrap()["id"].as_u64().unwrap(),
+    );
+    live(&s, blend, keys, false);
+    let path = NodeId(s.execute("path.create", &json!({"d": "M264 160 L264 320"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [blend.0, path.0]})).unwrap();
+    let before = serde_json::to_value(s.doc().unwrap().doc.as_ref()).unwrap();
+    let mut retained = (cpu(), None);
+    let warm = frame(&s, &mut retained, "anisotropic-before-replace");
+    s.execute("object.blend.replaceSpine", &json!({})).unwrap();
+    live(&s, blend, keys, false);
+    assert!(s.doc().unwrap().doc.node(path).is_none());
+    assert_eq!(s.doc().unwrap().selection.objects, vec![blend]);
+    let n = s.doc().unwrap().doc.node(blend).unwrap();
+    let NodeKind::Blend { spec, .. } = &n.kind else { panic!("INPUT: the fixture must remain a live blend") };
+    let spine = spec.spine.as_ref().unwrap().bounds().unwrap();
+    assert!(spine.width().abs() < 1e-8 && (spine.height() - 160.0).abs() < 1e-8, "INPUT: this is the fixed vertical rail");
+    let expanded = vectorcraft_render::expand_live(n);
+    let placed = expanded.iter().find(|n| n.id == keys[0]).unwrap();
+    let b = placed.geometric_bounds().unwrap();
+    assert!((b.width() - 80.0).abs() < 1e-8 && (b.height() - 8.0).abs() < 1e-8, "INPUT: Align to Path must really turn the key by 90 degrees");
+    assert_eq!(placed.appearance.effects.len(), 1);
+    assert_eq!(placed.appearance.effects[0].params["scaleH"], json!(scale_h));
+    let replaced = frame(&s, &mut retained, &format!("rotated-transform-{scale_h}-replace"));
+    assert!(replaced.pixels != warm.pixels, "INPUT: the replacement must really change the painted frame");
+    move_and_undo(&mut s, &mut retained, blend, keys, false, &replaced);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(serde_json::to_value(s.doc().unwrap().doc.as_ref()).unwrap(), before);
+    let restored = frame(&s, &mut retained, "anisotropic-undo-replace");
+    same_pixels(&restored, &warm);
+}
+
+#[test]
+fn blend_5179_rotated_transform_damage_contains_painted_pixels() {
+    // The control completes every render, move and history check before the witness runs.
+    rotated_transform_damage(200.0);
+    rotated_transform_damage(400.0);
+}
