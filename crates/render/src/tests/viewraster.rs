@@ -463,3 +463,19 @@ fn backdrop_drag_perf() {
         );
     }
 }
+
+/// A gradient mesh far larger than any buffer (a damaged file can give one) is drawn without
+/// flattening its whole outline in device pixels, which would make more segments than memory holds.
+#[test]
+fn a_mesh_past_any_buffer_draws_without_flattening_its_outline() {
+    let side = 1e30;
+    let mut d = Document::new(595.0, 842.0);
+    let m = vectorcraft_doc::GradientMesh::from_surface(2, 2, &|u, v| vectorcraft_geom::Point::new(u * side, v * side + u * u * side), &|u, v| {
+        Color::rgb(u as f32, v as f32, 0.5)
+    });
+    let layer = d.layers[0].id;
+    let node = Node::new(d.alloc_id(), NodeKind::Mesh(m));
+    d.insert(Some(layer), 0, node).unwrap();
+    let image = Renderer::new().render(&d, 640, 900, view(1.0, (640, 900)), &RenderOptions::default());
+    assert_eq!(image.pixels.len(), 640 * 900 * 4);
+}
