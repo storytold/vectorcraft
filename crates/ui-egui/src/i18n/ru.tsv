@@ -884,6 +884,7 @@ font-technology	Variable	Вариативные
 	Direct Selection Tool	Инструмент «Прямое выделение»
 	Direction Handles	Маркеры направления
 	Disable Auto Add/Delete	Отключить авто-добавление/удаление
+	Interpolate Control Points When Moving Anchors	Интерполировать маркеры направления при перемещении опорных точек
 	Disable Opacity Mask	Отключить непрозрачную маску
 	Discard	Отменить
 	Discard Empty Type	Отменить пустой текст
@@ -3186,6 +3187,7 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетаскивание по подписи числового поля в сторону меняет значение поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест поворота двумя пальцами на трекпаде поворачивает вид холста.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	При перемещении опорных точек каждая кривая с одним перемещённым концом сохраняет форму относительно своих концов.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Пока вы удерживаете клавишу инструмента, он остаётся выбранным, а после отпускания снова выбирается предыдущий инструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показывает ограничивающую рамку, пока вы перемещаете выделение или рисуете фигуру.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	«Создать метки подрезки» рисует метки в японском стиле вместо западных.
