@@ -289,6 +289,76 @@ fn save_remembers_and_writes_and_done_only_remembers() {
     assert!(!dir.join("Untitled-1.png").exists());
 }
 
+/// `ui.dialogReset` puts the remembered settings back (the defaults when none are remembered) on
+/// the document's active artboard, drops a pending preset, the preset name being typed and the
+/// selected color, keeps the view, zoom, speed and path, writes and remembers nothing, and leaves
+/// the dialog open; settings changed after it are remembered as usual.
+#[test]
+fn reset_puts_the_remembered_settings_back() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset");
+    let (mut app, _) = app(&dir, false);
+    let defaults = vectorcraft_engine::cmd::webexport::WebSettings::default().to_json();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    for (k, v) in [
+        ("format", json!("jpg")),
+        ("quality", json!(20)),
+        ("colorTable", json!({"locked": ["nope"]})),
+        ("preset", json!("PNG-24")),
+        ("__presetName", json!("Mine")),
+        ("__color", json!("#cc3300")),
+        ("__zoom", json!("200")),
+        ("__kbps", json!(1024)),
+        ("path", json!("elsewhere.png")),
+    ] {
+        set(&mut app, k, v);
+    }
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().expect("Reset leaves the dialog open");
+    for (k, v) in defaults.as_object().unwrap() {
+        let want = if k == "artboard" { &json!(0) } else { v };
+        assert_eq!(d.fields.get(k), Some(want), "{k}");
+    }
+    for k in ["preset", "__presetName", "__color"] {
+        assert!(!d.fields.contains_key(k), "{k}");
+    }
+    assert_eq!((d.str("__zoom"), d.f64("__kbps", 0.0), d.str("path")), ("200".into(), 1024.0, "elsewhere.png".into()));
+    assert_eq!(app.session.last_web_settings().to_json(), defaults, "Reset remembers nothing");
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "Reset writes nothing");
+    set(&mut app, "quality", json!(55));
+    set(&mut app, "discard", json!(true));
+    confirm(&mut app).unwrap();
+    assert_eq!(app.session.last_web_settings().quality, 55);
+
+    // Remembered on another document's second artboard: Reset keeps this document's active one.
+    let mut app = two_artboards(&vectorcraft_testkit::temp_dir("sfw-reset-artboard"));
+    app.run("view.goToArtboard", json!({"index": 1})).unwrap();
+    app.run("webExport.settings", json!({"artboard": 1, "quality": 40})).unwrap();
+    app.run("file.new", json!({"width": 50, "height": 50})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "quality", json!(90));
+    set(&mut app, "artboard", json!(3));
+    app.run("ui.dialogReset", json!({})).unwrap();
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.fields["artboard"].clone(), d.f64("quality", 0.0)), (json!(0), 40.0));
+}
+
+/// A Done that failed on a bad setting leaves `discard` in the dialog; Reset drops it, so Save…
+/// after Reset writes the file instead of only remembering the settings.
+#[test]
+fn reset_drops_a_done_that_failed() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-reset-done");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "colorTable", json!({"locked": ["nope"]}));
+    set(&mut app, "discard", json!(true));
+    assert!(confirm(&mut app).is_err());
+    app.run("ui.dialogReset", json!({})).unwrap();
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("discard"));
+    let r = confirm(&mut app).unwrap();
+    let path = r["path"].as_str().expect("Save… writes a file");
+    assert!(std::path::Path::new(path).exists(), "{path}");
+}
+
 #[test]
 fn html_output_with_slices_saves_the_page_and_images() {
     let dir = vectorcraft_testkit::temp_dir("sfw-html");
@@ -655,4 +725,193 @@ fn colour_table_buttons_edit_the_lists() {
     save_for_web::toggle(&mut d, "locked", "#cc3300", false);
     save_for_web::set_table(&mut d, "sort", json!("hue"));
     assert_eq!(d.fields["colorTable"], json!({"locked": [], "webShift": ["#123456"], "sort": "hue"}));
+}
+
+#[test]
+fn optimize_to_file_size_takes_the_settings_that_fit() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "quality", json!(100));
+    frame(&mut app);
+    let full = app.session.execute("document.exportForWeb.preview", &json!({"format": "jpg", "quality": 100})).unwrap()["bytes"].as_u64().unwrap();
+    let field = |app: &VectorcraftApp, k: &str| app.ui.dialog.as_ref().unwrap().fields.get(k).cloned();
+    // A size of 0 is refused: the settings and the rows stay.
+    set(&mut app, "__optimizeK", json!(0));
+    set(&mut app, "__optimizeStart", json!("current"));
+    set(&mut app, "__optimizeGo", json!(true));
+    frame(&mut app);
+    assert_eq!(field(&app, "quality"), Some(json!(100)));
+    assert_eq!(field(&app, "__optimizeK"), Some(json!(0)));
+    assert_eq!((field(&app, "__optimized"), field(&app, "__optimizeGo")), (None, None));
+    // OK takes the settings found and closes the rows.
+    set(&mut app, "__optimizeK", json!(full as f64 * 0.8 / 1024.0));
+    set(&mut app, "__optimizeGo", json!(true));
+    frame(&mut app);
+    let found = field(&app, "__optimized").unwrap();
+    assert_eq!(found["achieved"], json!(true), "{found}");
+    let quality = field(&app, "quality").unwrap().as_u64().unwrap();
+    assert!(quality < 100, "{found}");
+    assert_eq!(field(&app, "__optimizeK"), None);
+    // The result holds for the settings found on the art it measured.
+    let settings = app.session.web_settings(&found["settings"]).unwrap();
+    let shown = |app: &VectorcraftApp| {
+        save_for_web::optimized_result(app.ui.dialog.as_ref().unwrap(), Some(&settings), &save_for_web::art_key(app)).is_some()
+    };
+    assert!(shown(&app));
+    // The result line draws, and Save writes the size found.
+    frame(&mut app);
+    let r = confirm(&mut app).unwrap();
+    let written = std::fs::read(r["path"].as_str().unwrap()).unwrap();
+    assert_eq!(written.len() as u64, found["bytes"].as_u64().unwrap());
+    assert!(written.len() as u64 <= found["targetBytes"].as_u64().unwrap());
+    assert_eq!(app.session.last_web_settings().quality as u64, quality);
+    // A change to the art drops the result.
+    app.run("file.saveForWeb", json!({})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), found.clone());
+    assert!(shown(&app));
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 5, "height": 5})).unwrap();
+    assert!(!shown(&app));
+    // So does a change to the selection, which decides the slices Save writes with `slices: selected`,
+    // also one that leaves the revision as it is (a click on the canvas).
+    let mut current = found.clone();
+    current["art"] = json!(save_for_web::art_key(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), current);
+    assert!(shown(&app));
+    let st = app.session.active_mut().unwrap();
+    assert!(!st.selection.objects.is_empty());
+    st.selection.objects.clear();
+    assert!(!shown(&app));
+    // And a change to the selected slices alone (the Slice Selection tool).
+    let mut current = found.clone();
+    current["art"] = json!(save_for_web::art_key(&app));
+    app.ui.dialog.as_mut().unwrap().fields.insert("__optimized".into(), current);
+    assert!(shown(&app));
+    let st = app.session.active_mut().unwrap();
+    let any = st.doc.layers[0].id;
+    st.selection.slices.push(any);
+    assert!(!shown(&app));
+}
+
+/// Enter while the Optimize to File Size rows are open runs the search and writes nothing; once the
+/// search has closed the rows, Enter saves with the settings it found.
+#[test]
+fn enter_in_the_optimize_rows_runs_the_search_and_saves_nothing() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-enter");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("jpg"));
+    set(&mut app, "quality", json!(100));
+    frame(&mut app);
+    let full = app.session.execute("document.exportForWeb.preview", &json!({"format": "jpg", "quality": 100})).unwrap()["bytes"].as_u64().unwrap();
+    set(&mut app, "__optimizeK", json!(full as f64 * 0.8 / 1024.0));
+    set(&mut app, "__optimizeStart", json!("current"));
+    let files = |dir: &std::path::Path| std::fs::read_dir(dir).map_or(0, |r| r.count());
+    let enter_with = |app: &mut VectorcraftApp, modifiers: egui::Modifiers| {
+        let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers };
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+    };
+    let enter = |app: &mut VectorcraftApp| enter_with(app, egui::Modifiers::NONE);
+    // Ctrl+Enter, which the size field does not commit, neither searches nor saves.
+    enter_with(&mut app, egui::Modifiers::CTRL);
+    frame(&mut app);
+    assert_eq!(kind(&app), Some(save_for_web::KIND), "Ctrl+Enter in the rows does not save");
+    assert!(app.ui.dialog.as_ref().unwrap().fields.contains_key("__optimizeK"), "the rows stay open");
+    assert!(!app.ui.dialog.as_ref().unwrap().fields.contains_key("__optimized"));
+    assert_eq!(files(&dir), 0);
+    enter(&mut app);
+    assert_eq!(kind(&app), Some(save_for_web::KIND), "Enter in the rows does not save");
+    assert_eq!(files(&dir), 0);
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    let found = d.fields.get("__optimized").cloned().unwrap();
+    assert_eq!(found["achieved"], json!(true), "{found}");
+    assert!(!d.fields.contains_key("__optimizeK"), "the search closed the rows");
+    enter(&mut app);
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(files(&dir), 1);
+}
+
+/// An Enter in the Optimize to File Size rows runs no search when a field of the dialog, one drawn
+/// after the rows included, refused the value typed in it on that press, or when a control drawn
+/// after the rows (an open dropdown) took the press.
+#[test]
+fn enter_in_the_optimize_rows_runs_nothing_when_a_later_control_refused_or_took_it() {
+    // `before` stands for the controls drawn after the rows, which act on the press first.
+    let go = |before: fn(&egui::Context)| {
+        let mut d = Dialog::new(save_for_web::KIND, json!({"__optimizeK": 10}));
+        let key = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![key], ..Default::default() }, |ui| {
+            before(ui.ctx());
+            save_for_web::optimize_on_enter(ui.ctx(), &mut d);
+        });
+        out.textures_delta.clear();
+        assert!(d.fields.contains_key("__optimizeK"), "the rows stay open");
+        d.fields.contains_key("__optimizeGo")
+    };
+    assert!(go(|_| {}), "a plain Enter runs the search");
+    assert!(!go(crate::widgets::reject_dialog_commit), "a refused value runs nothing");
+    assert!(!go(|ctx| ctx.input_mut(|i| _ = i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))), "a taken press runs nothing");
+}
+
+#[test]
+fn optimize_to_file_size_starts_at_the_size_of_the_slices_files() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-slices");
+    let (mut app, _) = app(&dir, false);
+    app.run("object.slice.create", json!({"x": 0, "y": 0, "width": 30, "height": 20})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    frame(&mut app);
+    let slices = app.session.execute("webExport.optimizeToFileSize", &json!({"format": "png24", "desiredK": 1048576})).unwrap();
+    let whole = app.session.execute("document.exportForWeb.preview", &json!({"format": "png24"})).unwrap()["bytes"].as_u64().unwrap();
+    let k = |b: u64| json!(save_for_web::size_k(b as usize));
+    assert_ne!(k(slices["bytes"].as_u64().unwrap()), k(whole), "{slices}");
+    // The size asked for holds the files measured.
+    let b = slices["bytes"].as_u64().unwrap();
+    assert!((save_for_web::size_k(b as usize) * 1024.0).floor() as u64 >= b);
+    set(&mut app, "__optimizeOpen", json!(true));
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("__optimizeK"), Some(&k(slices["bytes"].as_u64().unwrap())));
+    assert_eq!((d.fields.get("__optimizeUse"), d.fields.get("__optimizeOpen")), (Some(&json!("allSlices")), None));
+}
+
+#[test]
+fn optimize_to_file_size_starts_at_the_size_of_the_art_as_it_is_now() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-optimize-revision");
+    let (mut app, _) = app(&dir, false);
+    // One context for every frame, so the preview cache of the first frame is still there.
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let frame = |app: &mut VectorcraftApp| ctx.run_ui(Default::default(), |ui| show(app, ui.ctx())).textures_delta.clear();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    frame(&mut app);
+    let bytes = |app: &mut VectorcraftApp| {
+        app.session.execute("document.exportForWeb.preview", &json!({"format": "png24"})).unwrap()["bytes"].as_u64().unwrap()
+    };
+    let before = bytes(&mut app);
+    // The art changes after the preview drew and before the button's click is handled.
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 60, "height": 40})).unwrap();
+    app.run("paint.setFill", json!({"color": "#3366ff"})).unwrap();
+    let after = bytes(&mut app);
+    assert_ne!(save_for_web::size_k(before as usize), save_for_web::size_k(after as usize));
+    set(&mut app, "__optimizeOpen", json!(true));
+    frame(&mut app);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields.get("__optimizeK"), Some(&json!(save_for_web::size_k(after as usize))));
+}
+
+#[test]
+fn size_in_k_holds_sizes_past_4_mib_on_every_target() {
+    assert_eq!(save_for_web::size_k(5 * 1024 * 1024), 5120.0);
+    assert_eq!(save_for_web::size_k(0), 0.001);
+    assert_eq!(save_for_web::size_k(1), 0.001);
+    // The largest size a target can hold still rounds up to a size that holds it.
+    assert!(save_for_web::size_k(usize::MAX) * 1024.0 >= usize::MAX as f64 * 0.999);
 }

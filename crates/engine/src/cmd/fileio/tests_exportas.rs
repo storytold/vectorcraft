@@ -135,26 +135,25 @@ fn formats_list_use_artboards() {
     assert!(opts("vectorcraft").get("useArtboards").is_none());
 }
 
-/// An export's reply gives what the file loses before its notes on the options, whatever order
-/// the encoder gave them: the WebP encoder notes that lossy WebP isn't applied before the export
-/// notes the type it drew in the fallback font. With only notes on the options, they keep their
-/// order.
+/// An export's reply gives what the file loses before its notes on the options: the type the
+/// export drew in the fallback font comes before the note on an option WebP doesn't read. With
+/// only notes on the options, they keep their order.
 #[test]
 fn what_the_file_loses_comes_before_a_note_on_the_options() {
-    let lossy = "lossy WebP isn't available yet: the file is lossless (exact, but larger)";
+    let unused = "`interlaced` was not used: WebP files don't read it";
     let warnings = |s: &mut Session, p: Value| -> Vec<String> {
         let r = s.execute("document.export", &p).unwrap();
         r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).map(str::to_string).collect()
     };
     let mut s = session(60.0, 40.0, 1);
-    assert_eq!(warnings(&mut s, json!({"format": "webp", "lossless": false})), [lossy]);
+    assert_eq!(warnings(&mut s, json!({"format": "webp", "interlaced": true})), [unused]);
     s.execute("text.create", &json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
-    let w = warnings(&mut s, json!({"format": "webp", "lossless": false}));
+    let w = warnings(&mut s, json!({"format": "webp", "interlaced": true}));
     assert_eq!(w.len(), 2, "{w:?}");
     assert!(w[0].contains("fallback font") && w[0].contains("Nonexistent Sans Probe"), "{w:?}");
-    assert_eq!(w[1], lossy);
+    assert_eq!(w[1], unused);
     // document.serialize gives them in the same order.
-    let r = s.execute("document.serialize", &json!({"format": "webp", "lossless": false})).unwrap();
+    let r = s.execute("document.serialize", &json!({"format": "webp", "interlaced": true})).unwrap();
     assert_eq!(r["warnings"], json!(w));
 }
 
