@@ -1609,6 +1609,8 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlRequest)
                     let names = crate::dialogs::field_names(d).join(", ");
                     return err(format!("the `{}` dialog has no field `{f}`; its fields: {names}", d.kind));
                 }
+                // Create Object Mosaic converts New Size against the selected image's size as it is now.
+                crate::dialogs::object_mosaic::refresh(app);
                 // In order: a field that sets others (an export preset) goes before the fields after it.
                 // A field that fails leaves the dialog as it was before the request.
                 let before = app.ui.dialog.clone();
