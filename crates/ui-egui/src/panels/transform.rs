@@ -562,7 +562,13 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
 /// popover under it, as the Stroke link does with the Stroke panel.
 pub fn link(app: &mut VectorcraftApp, ui: &mut Ui) {
     let resp = ui.link(link_text(ui)).on_hover_text(tl!("Transform options"));
-    widgets::popover(&resp, resp.clicked(), |ui| {
+    popover(app, &resp);
+}
+
+/// The Transform panel in a popover under `resp`, which a click on it toggles: the Control bar's
+/// Transform [`link`], and its X:, Y:, W: and H: labels.
+pub fn popover(app: &mut VectorcraftApp, resp: &egui::Response) {
+    widgets::popover(resp, resp.clicked(), |ui| {
         ui.set_width(300.0);
         show(app, ui);
     });

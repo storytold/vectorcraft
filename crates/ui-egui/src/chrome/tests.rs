@@ -4653,3 +4653,59 @@ fn the_control_bar_shows_the_inline_transform_fields_only_when_they_fit() {
         assert!(groups_seen.iter().all(|s| *s), "{count} objects: a wide bar shows every group: {groups_seen:?}");
     }
 }
+
+/// A click on the Control bar's X:, Y:, W: or H: label opens the Transform panel in a popover under
+/// it, as the Transform link does, and a second click closes it. The click leaves the selection and
+/// its bounds as they were, and no field takes the keyboard. A drag on W: still scrubs the width and
+/// opens nothing.
+#[test]
+fn the_control_bars_x_y_w_and_h_labels_open_the_transform_panel() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 40, "height": 30})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [id] })).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2000.0, 600.0));
+    let frame = |app: &mut crate::VectorcraftApp, events| control_bar_frame_in(app, &ctx, screen, events);
+    let state = |app: &crate::VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let b = st.doc.bounds_of(&st.selection.objects, false).unwrap();
+        (st.selection.objects.len(), [b.x0, b.y0, b.x1, b.y1])
+    };
+    // The label's own node: a label whose text is `name` (the field it names is named the same).
+    let label = |nodes: &[egui::accesskit::Node], name: &str| {
+        let n = nodes.iter().find(|n| n.role() == egui::accesskit::Role::Label && n.value() == Some(name));
+        let b = n.and_then(|n| n.bounds()).unwrap_or_else(|| panic!("no {name} label"));
+        egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32)
+    };
+    // The Transform panel's Rotate field is not on the bar itself.
+    let open = |nodes: &[egui::accesskit::Node]| nodes.iter().any(|n| n.label() == Some("Rotate"));
+    let before = state(&app);
+    frame(&mut app, vec![]);
+    for name in ["X:", "Y:", "W:", "H:"] {
+        let nodes = frame(&mut app, vec![]);
+        assert!(!open(&nodes), "{name}: the Transform panel is closed at first");
+        let at = label(&nodes, name);
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(open(&frame(&mut app, vec![])), "{name}: a click on the label opens the Transform panel");
+        assert_eq!(ctx.memory(|m| m.focused()), None, "{name}: no field took the keyboard");
+        assert_eq!(state(&app), before, "{name}: the selection and its bounds stay");
+        frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+        frame(&mut app, vec![press_at(at, false)]);
+        assert!(!open(&frame(&mut app, vec![])), "{name}: a second click closes it");
+    }
+    let at = label(&frame(&mut app, vec![]), "W:");
+    frame(&mut app, vec![egui::Event::PointerMoved(at), press_at(at, true)]);
+    for i in 1..=4 {
+        frame(&mut app, vec![egui::Event::PointerMoved(at + egui::vec2(5.0 * i as f32, 0.0))]);
+    }
+    frame(&mut app, vec![press_at(at + egui::vec2(20.0, 0.0), false)]);
+    let nodes = frame(&mut app, vec![]);
+    assert!(!open(&nodes), "a drag on W: opens nothing");
+    let (_, [x0, _, x1, _]) = state(&app);
+    assert!(x1 - x0 > before.1[2] - before.1[0], "a drag on W: scrubs the width: {:?} to {:?}", before.1, [x0, x1]);
+}
