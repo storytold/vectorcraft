@@ -49,6 +49,9 @@ font-technology	Variable	バリアブル
 	Cap Height	キャップハイト
 	x-Height	x ハイト
 	ICF Box	平均字面
+	Ascent	アセント
+	x Height	x ハイト
+	Em Box Height	仮想ボディの高さ
 	Show Sample	サンプルを表示
 	Hide Sample	サンプルを隠す
 	Max Ascent/Descent	最大アセント/ディセント
@@ -754,6 +757,13 @@ digits	Malayalam	マラヤーラム数字
 	Previous Document	前のドキュメント
 	Cascade	重ねて表示
 	Tile	並べて表示
+	Tile All Vertically	すべてを左右に並べて表示
+	Tile All Horizontally	すべてを上下に並べて表示
+	2-Up Layout	2 分割レイアウト
+	3-Up Layout	3 分割レイアウト
+	4-Up Layout	4 分割レイアウト
+	6-Up Layout	6 分割レイアウト
+	Arrange Documents	ドキュメントの配置
 	Float in Window	ウィンドウを分離
 	Float All in Windows	すべてをウィンドウに分離
 	Consolidate All Windows	すべてのウィンドウを統合
@@ -1255,6 +1265,12 @@ antiAlias	Sharp	シャープ
 	Channel	チャンネル
 	Character / Paragraph	文字／段落
 	Character Rotation	文字回転
+	Chinese Big 5	中国語 Big 5
+	Cyrillic	キリル文字
+	Greek	ギリシャ語
+	Turkish	トルコ語
+	Baltic	バルト言語
+	Central European	中央ヨーロッパ言語
 	Character Set:	文字セット:
 	Character Style Options	文字スタイルオプション
 	Check Links	リンクを確認
@@ -3852,7 +3868,7 @@ mark-style	Japanese	日本式
 	Vertical Type Tool	縦書き文字ツール
 	Vertical Type on a Path Tool	縦書きパス上文字ツール
 	Vertical:	垂直方向:
-	View Artboard Only	アートボードのみ表示
+	View Artboard Contents Only	アートボードの内容のみ表示
 	View Opacity Mask	不透明マスクを表示
 	View PDF after saving	保存後に PDF を表示
 	Viewing Angle:	視角:
@@ -4736,6 +4752,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Live Paint: select paths or compound paths	ライブペイント: パスまたは複合パスを選択してください
 @msg	Live Paint: these paths are too degenerate to paint	ライブペイント: これらのパスは形状がつぶれすぎていてペイントできません
 @msg	Shape Builder: no region under the pointer	シェイプ形成ツール: ポインターの下に領域がありません
+@msg	Shape Builder: select all paths you want to merge	シェイプ形成ツール: 結合するパスをすべて選択してください
 @msg	Shape Builder: select paths or compound paths	シェイプ形成ツール: パスまたは複合パスを選択してください
 @msg	image data `{_1}` is missing	画像データ `{_1}` が見つかりません
 @msg	no Live Paint edge near that point	その位置の近くにライブペイントのエッジがありません
@@ -5442,6 +5459,13 @@ variable-list-end	{0}, {1}	{0}、{1}
 	Show External Script Warning	外部スクリプトの警告を表示
 	A Script Is Running	スクリプトの実行中
 	Script Alert	スクリプトの通知
+	Script File Access	スクリプトのファイルアクセス
+	The script asks to read a file you choose.	スクリプトが、選択したファイルの読み取りを求めています。
+	The script asks to read and write a file you choose.	スクリプトが、選択したファイルの読み書きを求めています。
+	The script asks to read and write a folder you choose, with everything in it.	スクリプトが、選択したフォルダーとその中身すべての読み書きを求めています。
+	Allow Once	今回のみ許可
+	Always Allow This Script	このスクリプトを常に許可
+	Deny	拒否
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
 	Stop the script and undo what it did? Then quit again.	スクリプトを停止して変更を取り消しますか？その後、もう一度終了してください。
@@ -5472,8 +5496,6 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	Script file could not be read	スクリプトファイルを読み込めませんでした
 @msg	Script folder has more than 2,048 entries	スクリプトフォルダーの項目が 2,048 を超えています
 @msg	Script file open mode must be r, w, e or a	スクリプトファイルを開くモードは r、w、e、a のいずれかにしてください
-@msg	Script file writing is not available	スクリプトファイルの書き込みは利用できません
-@msg	Script file dialogs are not available	スクリプトファイルのダイアログは利用できません
 @msg	Script files cannot be opened in another application	スクリプトファイルを別のアプリケーションで開くことはできません
 @msg	Script file access is unavailable on the web	Web ではスクリプトファイルにアクセスできません
 @msg	Script has 256 files open	スクリプトが 256 個のファイルを開いています
@@ -5591,6 +5613,27 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` は尋ねる相手がいない実行専用です。アプリでは、各ダイアログに本人が回答します
 @msg	Running a script	スクリプトを実行中
 @msg	Copied the script report	スクリプトのレポートをコピーしました
+@msg	Script file access denied: {path}	スクリプトのファイルアクセスが拒否されました: {path}
+@msg	Script file access to the app's own folders is not allowed	スクリプトからアプリ自身のフォルダーへのアクセスは許可されていません
+@msg	Script file cannot encode the text	スクリプトのファイルでテキストをエンコードできません
+@msg	Script file could not be written	スクリプトのファイルを書き込めませんでした
+@msg	Script file dialogs need a person to answer them	スクリプトのファイルダイアログには応答する人が必要です
+@msg	Script file is not open for writing	スクリプトのファイルが書き込み用に開かれていません
+@msg	Script file name is already in use	スクリプトのファイル名はすでに使用されています
+@msg	Script file name must be a name without a folder	スクリプトのファイル名はフォルダーを含まない名前にしてください
+@msg	Script file permission can be kept only for a script run from a file	ファイルの許可を保持できるのは、ファイルから実行したスクリプトだけです
+@msg	Script file permission could not be saved	スクリプトのファイルの許可を保存できませんでした
+@msg	Script folder is not empty	スクリプトのフォルダーが空ではありません
+@msg	Script files cannot make aliases	スクリプトのファイルではエイリアスを作成できません
+@msg	Script file hidden setting cannot be changed	スクリプトのファイルの非表示設定は変更できません
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 組み込み関数、ゲッター、変換、または $.evalFile が実行するファイルのコールバック内ではファイルダイアログを開けません。スクリプト自身のコードから呼び出してください
+@msg	the script wrote more file data than one run may write (32 MiB)	スクリプトが 1 回の実行で書き込める量を超えるファイルデータを書き込みました (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	スクリプトのファイルダイアログの `answer` は once、always、deny、stop のいずれかにしてください
+@msg	choose a file or folder first, or deny	先にファイルまたはフォルダーを選択するか、拒否してください
+@msg	the script file permissions could not be saved: {e}	スクリプトのファイル許可を保存できませんでした: {e}
+@msg	this script's file access can be allowed only once	このスクリプトのファイルアクセスは 1 回だけ許可できます
+@msg	Only the person at the keyboard can allow a script's file access	スクリプトのファイルアクセスを許可できるのはキーボードの前にいる人だけです
+@msg	A script is given at most 2,048 files: the files picked after them were left out	スクリプトに渡せるファイルは 2,048 個までのため、それ以降に選んだファイルは除外されました
 @msg	Copied the link info	リンク情報をコピーしました
 @msg	Exported {path}	{path} を書き出しました
 @msg	no CSS to copy: select objects with CSS of their own	コピーする CSS がありません: 独自の CSS を持つオブジェクトを選択してください
@@ -9717,3 +9760,13 @@ breakText	Glyphs	字形
 @msg	A fold line is on a non-printing layer.	折り線が印刷しないレイヤーにあります。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	パネル: {panels}、ヒンジ: {hinges}、エラー: {errors}、警告: {warnings}
 	Dashed Arrow	破線矢印
+	Fold Preview	折りプレビュー
+	Fold	折り
+	Show Fold Lines	折り線を表示
+	Three-Quarter	斜め
+	Open a document to preview its folded shape.	ドキュメントを開くと折った形をプレビューできます。
+@msg	Check the fold lines first.	先に折り線をチェックしてください。
+@msg	Panels: {panels}, hinges: {hinges}	パネル: {panels}、ヒンジ: {hinges}
+@msg	Other blanks not shown: {count}	表示されていない他の展開図: {count}
+@msg	A joint does not close by {gap} pt.	継ぎ目が {gap} pt 閉じていません。
+@msg	Two panels pass through each other.	2 つのパネルが互いを貫通しています。

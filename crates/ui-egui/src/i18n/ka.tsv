@@ -2842,6 +2842,13 @@
 	Previous Document	წინა დოკუმენტი
 	Cascade	კასკადად
 	Tile	ფილებად
+	Tile All Vertically	ყველა ფილებად ვერტიკალურად
+	Tile All Horizontally	ყველა ფილებად ჰორიზონტალურად
+	2-Up Layout	2-იანი განლაგება
+	3-Up Layout	3-იანი განლაგება
+	4-Up Layout	4-იანი განლაგება
+	6-Up Layout	6-იანი განლაგება
+	Arrange Documents	დოკუმენტების დალაგება
 	Float in Window	ცალკე ფანჯარაში გამოტანა
 	Float All in Windows	ყველას ცალკე ფანჯრებში გამოტანა
 	Consolidate All Windows	ყველა ფანჯრის გაერთიანება
@@ -4057,7 +4064,7 @@ digits	Malayalam	მალაიალამური
 	Stroke: click for swatches, Shift-click for the color mixer	კონტური: დაწკაპეთ ფერის ნიმუშებისთვის, Shift-დაწკაპუნებით — ფერის შემრევისთვის
 	This panel is on the roadmap (see the parity plan).	ეს პანელი სამომავლო გეგმაშია (იხ. პარიტეტის გეგმა).
 	Open a document to navigate it.	გახსენით დოკუმენტი მასში სანავიგაციოდ.
-	View Artboard Only	მხოლოდ სამუშაო დაფის ჩვენება
+	View Artboard Contents Only	მხოლოდ სამუშაო დაფის შიგთავსის ჩვენება
 	Contextual Alternates	კონტექსტური ალტერნატივები
 	Default Figure	ნაგულისხმევი ციფრები
 	Discretionary Ligatures	დამატებითი ლიგატურები
@@ -5182,6 +5189,11 @@ antiAlias	Sharp	მკვეთრი
 	Encoding:	კოდირება:
 	Line Endings:	სტრიქონის დაბოლოებები:
 	Text Export Options	ტექსტის ექსპორტის პარამეტრები
+	Chinese Big 5	ჩინური Big 5
+	Cyrillic	კირილიცა
+	Greek	ბერძნული
+	Baltic	ბალტიური
+	Central European	ცენტრალურევროპული
 	Character Set:	სიმბოლოთა ნაკრები:
 	Join the lines of each paragraph	თითოეული აბზაცის სტრიქონების შეერთება
 	Line Breaks	სტრიქონის წყვეტები
@@ -6668,6 +6680,7 @@ font-technology	Variable	ცვლადი
 @msg	Saved {path}	შენახულია: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	გლიფების ჩასასმელად მონიშნეთ ტექსტი ან ტექსტის ხელსაწყოთი დაწკაპეთ ტექსტში
 @msg	Shape Builder: no region under the pointer	ფიგურების კონსტრუქტორი: მაჩვენებლის ქვეშ არე არ არის
+@msg	Shape Builder: select all paths you want to merge	ფიგურების კონსტრუქტორი: მონიშნეთ ყველა ტრაექტორია, რომლის გაერთიანებაც გსურთ
 @msg	Shape Builder: select paths or compound paths	ფიგურების კონსტრუქტორი: მონიშნეთ ტრაექტორიები ან შედგენილი ტრაექტორიები
 @msg	Show All Hidden Attributes: nothing is hidden	ყველა დამალული ატრიბუტის ჩვენება: დამალული არაფერია
 @msg	Split Into Grid: select paths large enough for the grid	ბადედ გაყოფა: მონიშნეთ ბადისთვის საკმარისად დიდი ტრაექტორიები
@@ -7645,6 +7658,7 @@ font-technology	Variable	ცვლადი
 	Ascent	ზედა გამონაშვერი
 	Cap Height	მთავრული ასოს სიმაღლე
 	x Height	x-სიმაღლე
+	Em Box Height	Em-ბლოკის სიმაღლე
 	Justify	ორმხრივი სწორება
 	First Baseline	პირველი საბაზისო ხაზი
 	Vertical Align	ვერტიკალური სწორება
@@ -8055,6 +8069,13 @@ imageTrace	Outline	კონტური
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
 	A Script Is Running	სკრიპტი მუშაობს
 	Script Alert	სკრიპტის შეტყობინება
+	Script File Access	სკრიპტის წვდომა ფაილებზე
+	The script asks to read a file you choose.	სკრიპტი ითხოვს თქვენ მიერ არჩეული ფაილის წაკითხვას.
+	The script asks to read and write a file you choose.	სკრიპტი ითხოვს თქვენ მიერ არჩეული ფაილის წაკითხვასა და ჩაწერას.
+	The script asks to read and write a folder you choose, with everything in it.	სკრიპტი ითხოვს თქვენ მიერ არჩეული საქაღალდისა და მთელი მისი შიგთავსის წაკითხვასა და ჩაწერას.
+	Allow Once	ერთხელ დაშვება
+	Always Allow This Script	ამ სკრიპტის ყოველთვის დაშვება
+	Deny	უარყოფა
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
 	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
@@ -8085,8 +8106,6 @@ imageTrace	Outline	კონტური
 @msg	Script file could not be read	სკრიპტის ფაილის წაკითხვა ვერ მოხერხდა
 @msg	Script folder has more than 2,048 entries	სკრიპტის საქაღალდეში 2048-ზე მეტი ჩანაწერია
 @msg	Script file open mode must be r, w, e or a	სკრიპტის ფაილის გახსნის რეჟიმი უნდა იყოს r, w, e ან a
-@msg	Script file writing is not available	სკრიპტის ფაილების ჩაწერა მიუწვდომელია
-@msg	Script file dialogs are not available	სკრიპტის ფაილის დიალოგები მიუწვდომელია
 @msg	Script files cannot be opened in another application	სკრიპტის ფაილების სხვა აპლიკაციაში გახსნა შეუძლებელია
 @msg	Script file access is unavailable on the web	ვებში სკრიპტის ფაილებზე წვდომა მიუწვდომელია
 @msg	Script has 256 files open	სკრიპტს 256 ფაილი აქვს გახსნილი
@@ -8204,6 +8223,27 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` მხოლოდ ისეთი გაშვებისთვისაა, სადაც შესაკითხი არავინაა: აპში თითოეულ დიალოგს ადამიანი პასუხობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Script file access denied: {path}	სკრიპტის წვდომა ფაილებზე უარყოფილია: {path}
+@msg	Script file access to the app's own folders is not allowed	სკრიპტს არ აქვს აპის საკუთარ საქაღალდეებზე წვდომის უფლება
+@msg	Script file cannot encode the text	სკრიპტის ფაილი ვერ აკოდირებს ტექსტს
+@msg	Script file could not be written	სკრიპტის ფაილის ჩაწერა ვერ მოხერხდა
+@msg	Script file dialogs need a person to answer them	სკრიპტის ფაილის დიალოგებს სჭირდება ადამიანი, რომელიც უპასუხებს
+@msg	Script file is not open for writing	სკრიპტის ფაილი ჩასაწერად გახსნილი არ არის
+@msg	Script file name is already in use	სკრიპტის ფაილის სახელი უკვე გამოიყენება
+@msg	Script file name must be a name without a folder	სკრიპტის ფაილის სახელი უნდა იყოს სახელი საქაღალდის გარეშე
+@msg	Script file permission can be kept only for a script run from a file	ფაილების ნებართვის შენახვა შესაძლებელია მხოლოდ ფაილიდან გაშვებული სკრიპტისთვის
+@msg	Script file permission could not be saved	სკრიპტის ფაილების ნებართვის შენახვა ვერ მოხერხდა
+@msg	Script folder is not empty	სკრიპტის საქაღალდე ცარიელი არ არის
+@msg	Script files cannot make aliases	სკრიპტის ფაილებს არ შეუძლიათ ფსევდონიმების შექმნა
+@msg	Script file hidden setting cannot be changed	სკრიპტის ფაილის დამალვის პარამეტრის შეცვლა შეუძლებელია
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ფაილის დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის, getter-ის, გარდაქმნის ან $.evalFile-ის მიერ გაშვებული ფაილის callback-ში; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
+@msg	the script wrote more file data than one run may write (32 MiB)	სკრიპტმა ჩაწერა იმაზე მეტი ფაილის მონაცემი, ვიდრე ერთ გაშვებას შეუძლია ჩაწეროს (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	სკრიპტის ფაილის დიალოგისთვის `answer` უნდა იყოს ერთ-ერთი: once, always, deny, stop
+@msg	choose a file or folder first, or deny	ჯერ აირჩიეთ ფაილი ან საქაღალდე, ან უარყავით
+@msg	the script file permissions could not be saved: {e}	სკრიპტების ფაილების ნებართვების შენახვა ვერ მოხერხდა: {e}
+@msg	this script's file access can be allowed only once	ამ სკრიპტის წვდომა ფაილებზე მხოლოდ ერთხელ შეიძლება დაიშვას
+@msg	Only the person at the keyboard can allow a script's file access	სკრიპტის წვდომას ფაილებზე მხოლოდ კლავიატურასთან მყოფი ადამიანი უშვებს
+@msg	A script is given at most 2,048 files: the files picked after them were left out	სკრიპტი იღებს მაქსიმუმ 2 048 ფაილს: მათ შემდეგ არჩეული ფაილები გამოტოვებულია
 @msg	Copied the link info	კოპირებულია ბმულის ინფორმაცია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
@@ -10370,5 +10410,15 @@ font-script	Japanese	იაპონური
 @msg	A panel is not joined to the rest by a crease.	პანელი დანარჩენს არცერთი ბიგის ხაზით არ უერთდება.
 @msg	A fold line is on a non-printing layer.	მოკეცვის ხაზი არაბეჭდვად შრეზეა.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	პანელები: {panels}, ანჯამები: {hinges}, შეცდომები: {errors}, გაფრთხილებები: {warnings}
+	Fold Preview	მოკეცვის გადახედვა
+	Fold	მოკეცვა
+	Show Fold Lines	მოკეცვის ხაზების ჩვენება
+	Three-Quarter	სამი მეოთხედი
+	Open a document to preview its folded shape.	გახსენით დოკუმენტი მისი მოკეცილი ფორმის სანახავად.
+@msg	Check the fold lines first.	ჯერ შეამოწმეთ მოკეცვის ხაზები.
+@msg	Panels: {panels}, hinges: {hinges}	პანელები: {panels}, ანჯამები: {hinges}
+@msg	Other blanks not shown: {count}	სხვა ნამზადები არ ჩანს: {count}
+@msg	A joint does not close by {gap} pt.	შეერთება არ იხურება {gap} pt-ით.
+@msg	Two panels pass through each other.	ორი პანელი ერთმანეთში გადის.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"
 	Dashed Arrow	წყვეტილი ისარი

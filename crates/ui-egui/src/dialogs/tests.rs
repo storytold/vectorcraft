@@ -178,6 +178,64 @@ fn effect_preview_is_kept_as_one_undo_step() {
     assert_eq!(app.session.doc().unwrap().doc, before);
 }
 
+/// A field label's colon is written as the UI language writes it, in the generic parameter
+/// dialogs and the effect dialogs alike (#7991): French puts a no-break space before it, Chinese
+/// writes a full-width colon, and English is unchanged.
+#[test]
+fn field_label_colons_follow_the_ui_language() {
+    let mut app = app();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let text =
+        app.run("text.create", json!({"x": 20, "y": 80, "text": "Hello", "area": {"width": 100, "height": 100}})).unwrap()["id"].as_u64().unwrap();
+    // Each dialog, opened the way its menu item opens it, and the label it shows.
+    let entries = crate::menus::menu_entries(&app);
+    let clean_up = entries.iter().find(|e| e.path == ["Object", "Path"] && e.label == "Clean Up…").expect("listed");
+    let clean_up = crate::menus::click_target(&clean_up.label, clean_up.command.as_deref().unwrap(), &clean_up.params);
+    let dialogs = [
+        (clean_up.0, clean_up.1, "Stray Points"),
+        ("effect.dialog".to_string(), json!({"effect": "blur.radial"}), "Horizontal"),
+        ("text.areaOptions".to_string(), json!({}), "Text Flow"),
+    ];
+    for (command, params, label) in dialogs {
+        app.run("select.set", json!({"ids": [text]})).unwrap();
+        if command != "text.areaOptions" {
+            app.run("select.all", json!({})).unwrap();
+        }
+        crate::menus::invoke(&mut app, &command, params);
+        assert!(app.ui.dialog.is_some(), "{command} opened no dialog");
+        for (code, colon) in [("fr", "\u{a0}:"), ("zh-hans", "："), ("en", ":")] {
+            let lang = crate::i18n::Lang::from_code(code).unwrap();
+            crate::i18n::set_current(lang);
+            let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui.ctx()));
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            let want = format!("{}{colon}", crate::i18n::tr(lang, label));
+            assert!(shown.lines().any(|l| l.trim() == want), "{command}, {code}: {want:?} in {shown}");
+            if code == "fr" {
+                let bare: Vec<_> = shown.lines().map(str::trim).filter(|l| l.ends_with(':') && !l.ends_with("\u{a0}:")).collect();
+                assert!(bare.is_empty(), "{command}: French labels with a bare colon: {bare:?}");
+            }
+        }
+        app.ui.dialog = None;
+    }
+    assert_eq!(super::form::humanized("strayPoints"), "Stray Points:", "English is unchanged");
+}
+
+/// A label followed by its value takes the UI language's colon too (#7991): Blur Center's value for
+/// screen readers, and a style's attribute list, which no longer shows a second colon.
+#[test]
+fn label_and_value_colons_follow_the_ui_language() {
+    let fr = crate::i18n::Lang::from_code("fr").unwrap();
+    crate::i18n::set_current(fr);
+    let center = super::effect::blur_center_value([0.5, 0.25]);
+    let attribute = super::form::attribute_line("fontSize", &json!(12));
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (h, v) = (crate::i18n::tr(fr, "Horizontal"), crate::i18n::tr(fr, "Vertical"));
+    assert_eq!(center, format!("{h}\u{a0}: 50%, {v}\u{a0}: 25%"));
+    assert_eq!(attribute, format!("{}\u{a0}: 12", crate::i18n::tr(fr, "Font Size")));
+    assert_eq!(super::effect::blur_center_value([0.5, 0.25]), "Horizontal: 50%, Vertical: 25%");
+    assert_eq!(super::form::attribute_line("fontSize", &json!(12)), "Font Size: 12");
+}
+
 /// Drop Shadow's Color typed as text the effect can't draw: OK returns the error and keeps the
 /// dialog open, with Preview on or off, and the document stays as it was.
 #[test]

@@ -426,6 +426,12 @@ font-technology	Variable	Variables
 	Character Alignment	Alignement des caractères
 	Character / Paragraph	Caractère / Paragraphe
 	Character Rotation	Rotation des caractères
+	Chinese Big 5	Chinois Big 5
+	Cyrillic	Cyrillique
+	Greek	Grec
+	Turkish	Turc
+	Baltic	Balte
+	Central European	Europe centrale
 	Character Set:	Jeu de caractères :
 	Character Style	Style de caractère
 	Character Style Options	Options de style de caractère
@@ -4038,6 +4044,13 @@ digits	Malayalam	Malayalam
 	Thumbnail View	Vignettes
 	Thumbnails:	Vignettes :
 	Tile	Mosaïque
+	Tile All Vertically	Tout en mosaïque verticale
+	Tile All Horizontally	Tout en mosaïque horizontale
+	2-Up Layout	Disposition par 2
+	3-Up Layout	Disposition par 3
+	4-Up Layout	Disposition par 4
+	6-Up Layout	Disposition par 6
+	Arrange Documents	Disposer les documents
 	Tile Edge Color	Couleur du bord du carreau
 	Tile Edge Color…	Couleur du bord du carreau…
 	Tile Full Pages	Mosaïque de pages entières
@@ -4295,7 +4308,7 @@ digits	Malayalam	Malayalam
 	Vertical:	Vertical :
 	Very High	Très élevée
 	View	Affichage
-	View Artboard Only	Afficher le plan de travail uniquement
+	View Artboard Contents Only	Afficher uniquement le contenu du plan de travail
 	View Opacity Mask	Afficher le masque d’opacité
 	View PDF after saving	Afficher le PDF après l’enregistrement
 	View {n}	Vue {n}
@@ -4583,6 +4596,13 @@ axis	Both	Les deux
 	Show External Script Warning	Afficher l’avertissement des scripts externes
 	A Script Is Running	Un script est en cours d’exécution
 	Script Alert	Alerte de script
+	Script File Access	Accès du script aux fichiers
+	The script asks to read a file you choose.	Le script demande à lire un fichier que vous choisissez.
+	The script asks to read and write a file you choose.	Le script demande à lire et écrire un fichier que vous choisissez.
+	The script asks to read and write a folder you choose, with everything in it.	Le script demande à lire et écrire un dossier que vous choisissez, avec tout son contenu.
+	Allow Once	Autoriser une fois
+	Always Allow This Script	Toujours autoriser ce script
+	Deny	Refuser
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
 	Do not show this warning again	Ne plus afficher cet avertissement
 	Stop the script and undo what it did? Then quit again.	Arrêter le script et annuler ce qu’il a fait ? Quittez ensuite à nouveau.
@@ -4613,8 +4633,6 @@ axis	Both	Les deux
 @msg	Script file could not be read	Le fichier de script n’a pas pu être lu
 @msg	Script folder has more than 2,048 entries	Le dossier de script contient plus de 2 048 entrées
 @msg	Script file open mode must be r, w, e or a	Le mode d’ouverture du fichier de script doit être r, w, e ou a
-@msg	Script file writing is not available	L’écriture de fichiers de script n’est pas disponible
-@msg	Script file dialogs are not available	Les boîtes de dialogue de fichiers de script ne sont pas disponibles
 @msg	Script files cannot be opened in another application	Les fichiers de script ne peuvent pas être ouverts dans une autre application
 @msg	Script file access is unavailable on the web	L’accès aux fichiers de script n’est pas disponible sur le web
 @msg	Script has 256 files open	Le script a 256 fichiers ouverts
@@ -4732,6 +4750,27 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` est réservé à une exécution sans personne à qui demander : dans l’application, la personne répond à chaque boîte de dialogue
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
+@msg	Script file access denied: {path}	Accès du script aux fichiers refusé : {path}
+@msg	Script file access to the app's own folders is not allowed	L’accès du script aux dossiers propres à l’application n’est pas autorisé
+@msg	Script file cannot encode the text	Le fichier du script ne peut pas encoder le texte
+@msg	Script file could not be written	Le fichier du script n’a pas pu être écrit
+@msg	Script file dialogs need a person to answer them	Les boîtes de dialogue de fichiers du script ont besoin d’une personne pour y répondre
+@msg	Script file is not open for writing	Le fichier du script n’est pas ouvert en écriture
+@msg	Script file name is already in use	Le nom du fichier du script est déjà utilisé
+@msg	Script file name must be a name without a folder	Le nom du fichier du script doit être un nom sans dossier
+@msg	Script file permission can be kept only for a script run from a file	L’autorisation d’accès aux fichiers ne peut être conservée que pour un script exécuté depuis un fichier
+@msg	Script file permission could not be saved	L’autorisation d’accès aux fichiers du script n’a pas pu être enregistrée
+@msg	Script folder is not empty	Le dossier du script n’est pas vide
+@msg	Script files cannot make aliases	Les fichiers du script ne peuvent pas créer d’alias
+@msg	Script file hidden setting cannot be changed	Le réglage masqué du fichier du script ne peut pas être modifié
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name} : une boîte de dialogue de fichiers ne peut pas s’ouvrir dans un rappel d’une fonction intégrée, d’un accesseur, d’une conversion ou d’un fichier exécuté par $.evalFile ; appelez-la depuis le propre code du script
+@msg	the script wrote more file data than one run may write (32 MiB)	le script a écrit plus de données de fichiers qu’une exécution ne peut en écrire (32 Mio)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pour la boîte de dialogue de fichiers d’un script doit être l’une des valeurs : once, always, deny, stop
+@msg	choose a file or folder first, or deny	choisissez d’abord un fichier ou un dossier, ou refusez
+@msg	the script file permissions could not be saved: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être enregistrées : {e}
+@msg	this script's file access can be allowed only once	l’accès aux fichiers de ce script ne peut être autorisé qu’une fois
+@msg	Only the person at the keyboard can allow a script's file access	Seule la personne au clavier peut autoriser l’accès aux fichiers d’un script
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script reçoit au plus 2 048 fichiers : les fichiers choisis après eux ont été laissés de côté
 @msg	Copied the link info	Informations sur le lien copiées
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
@@ -4807,6 +4846,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	Saved {path}	{path} enregistré
 @msg	Select text or click into text with the Type tool to insert glyphs	Sélectionnez du texte ou cliquez dans un texte avec l’outil Texte pour insérer des glyphes
 @msg	Shape Builder: no region under the pointer	Concepteur de forme : aucune zone sous le pointeur
+@msg	Shape Builder: select all paths you want to merge	Concepteur de forme : sélectionnez tous les tracés à fusionner
 @msg	Shape Builder: select paths or compound paths	Concepteur de forme : sélectionnez des tracés ou des tracés transparents
 @msg	Show All Hidden Attributes: nothing is hidden	Afficher tous les attributs masqués : rien n’est masqué
 @msg	Split Into Grid: select paths large enough for the grid	Découper en grille : sélectionnez des tracés assez grands pour la grille
@@ -6460,6 +6500,7 @@ lighting	Light	Lumière
 	of	sur
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	x Height	Hauteur d’x
+	Em Box Height	Hauteur du cadratin
 	▾ Default Actions	▾ Scripts par défaut
 	⚠ {chord} was already used by {names} — it has been removed there.	Attention : {chord} était déjà utilisé par {names} ; il en a été retiré.
 @id	file.close	Fermer
@@ -9997,5 +10038,15 @@ breakText	Glyphs	Glyphes
 @msg	A panel is not joined to the rest by a crease.	Un panneau n’est relié au reste par aucune ligne de rainage.
 @msg	A fold line is on a non-printing layer.	Une ligne de pliage se trouve sur un calque non imprimable.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	{panels} panneau(x), {hinges} charnière(s), {errors} erreur(s), {warnings} avertissement(s)
+	Fold Preview	Aperçu du pliage
+	Fold	Pliage
+	Show Fold Lines	Afficher les lignes de pliage
+	Three-Quarter	Trois-quarts
+	Open a document to preview its folded shape.	Ouvrez un document pour prévisualiser sa forme pliée.
+@msg	Check the fold lines first.	Vérifiez d’abord les lignes de pliage.
+@msg	Panels: {panels}, hinges: {hinges}	{panels} panneau(x), {hinges} charnière(s)
+@msg	Other blanks not shown: {count}	{count} autre(s) flan(s) non affiché(s)
+@msg	A joint does not close by {gap} pt.	Un joint ne se ferme pas, avec un écart de {gap} pt.
+@msg	Two panels pass through each other.	Deux panneaux se traversent.
 @msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
 	Dashed Arrow	Flèche en pointillés
