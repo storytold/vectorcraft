@@ -141,6 +141,7 @@
 	Add to Swatches	Agregar a muestras
 	Add Used Colors	Agregar colores usados
 	Additional Plug-ins Folder	Carpeta de plugins adicionales
+	Plug-in Instruction Budget	Presupuesto de instrucciones de plugins
 	Additional Fonts Folder	Carpeta de fuentes adicionales
 	Adjust Adjoining Width Points	Ajustar puntos de anchura contiguos
 	Incoming	Entrante
@@ -3471,6 +3472,9 @@ digits	Malayalam	Malayálam
 	Search commands, tools, panels and effects…	Buscar comandos, herramientas, paneles y efectos…
 	No commands match	Ningún comando coincide
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Sin elemento de menú
+	Toolbar	Barra de herramientas
+	{toolbar}, in the {tool} group	{toolbar}, en el grupo {tool}
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Sigue escribiendo para acotarlos.|{shown} de {n} resultados. Sigue escribiendo para acotarlos.
 	Recent Commands	Comandos recientes

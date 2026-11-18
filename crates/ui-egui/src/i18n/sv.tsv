@@ -129,6 +129,7 @@
 	Add to Swatches	Lägg till i färgrutor
 	Add Used Colors	Lägg till använda färger
 	Additional Plug-ins Folder	Mapp för ytterligare plugins
+	Plug-in Instruction Budget	Instruktionsbudget för plugins
 	Additional Fonts Folder	Mapp för ytterligare typsnitt
 	Adjust Adjoining Width Points	Justera angränsande breddpunkter
 	Incoming	Inkommande
@@ -3383,6 +3384,9 @@ digits	Malayalam	Malayalam
 	Search commands, tools, panels and effects…	Sök kommandon, verktyg, paneler och effekter…
 	No commands match	Inga kommandon matchar
 	{pos} of {total}: {name}	{pos} av {total}: {name}
+	No menu item	Inget menyalternativ
+	Toolbar	Verktygsfält
+	{toolbar}, in the {tool} group	{toolbar}, i gruppen {tool}
 @plural	{n} result|{n} results	{n} resultat|{n} resultat
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.|{shown} av {n} resultat. Fortsätt skriva för att begränsa dem.
 	Recent Commands	Senaste kommandon
