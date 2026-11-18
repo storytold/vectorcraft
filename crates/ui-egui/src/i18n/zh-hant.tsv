@@ -780,6 +780,8 @@ font-technology	Variable	可變
 	Delete Artboard	刪除工作區域
 	Delete Artboards	刪除工作區域
 	Delete Brush	刪除筆刷
+	Delete Color	刪除顏色
+	Restore Generated Table	還原產生的色彩表
 	Delete Character Style	刪除字元樣式
 	Delete Empty Artboards	刪除空白工作區域
 	Delete Freeform Point	刪除任意形狀錨點
@@ -2230,6 +2232,7 @@ file-filter	Templates	範本
 @msg	Create Outlines: select text objects	建立外框：請選取文字物件
 @msg	paste unavailable	無法貼上
 @msg	Save for Web: the image is empty	儲存為網頁用：影像是空的
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：色彩表中至少要保留一種顏色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是像 "#ff8800" 這樣的顏色
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 種顏色
 @msg	no artboard {i} (0-based; the document has {_1})	沒有工作區域 {i} (從 0 起算；文件有 {_1} 個)

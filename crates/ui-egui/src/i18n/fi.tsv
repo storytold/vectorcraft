@@ -3524,6 +3524,8 @@ theme	Appearance	Ulkoasu
 	Current Brush	Nykyinen sivellin
 	Current Symbol	Nykyinen symboli
 	Delete Brush	Poista sivellin
+	Delete Color	Poista väri
+	Restore Generated Table	Palauta luotu taulukko
 	Delete Symbol	Poista symboli
 	Delete the selected symbol?	Poistetaanko valittu symboli?
 	Delete the selected symbols?	Poistetaanko valitut symbolit?
@@ -5283,6 +5285,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	choose a folder to export to	valitse kansio, johon viedään
 @msg	choose a location for the package	valitse paketin sijainti
 @msg	clipboard is empty	leikepöytä on tyhjä
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: väritaulukkoon on jäätävä vähintään yksi väri
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` ei ole väri, kuten "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: enintään {MAX_TABLE} väriä
 @msg	command `{0}` is not available right now: {1}	komento `{0}` ei ole nyt käytettävissä: {1}
