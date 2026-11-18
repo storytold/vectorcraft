@@ -387,22 +387,79 @@ fn a_fill_effect_reshapes_the_fill_of_a_group_in_the_art() {
     assert!(differing(&before, &after, 8) < 200, "expanding changed {} pixels", differing(&before, &after, 8));
 }
 
+/// An image whose fill Convert to Shape gives a shape, selected. The frame runs from 85 to 115;
+/// the fill's shape is 9 pt larger on each side.
+fn image_with_shaped_fill(s: &mut Session) -> NodeId {
+    let mut png = vec![];
+    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let r = run(s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 100]}));
+    let im = NodeId(r["ids"][0].as_u64().unwrap());
+    run(s, "select.set", json!({"ids": [im.0]}));
+    run(s, "appearance.addFill", json!({}));
+    run(s, "paint.setFill", json!({"color": "#0000ff", "item": 0}));
+    run(s, "effect.apply", json!({"effect": "convertToShape.rectangle", "item": 0}));
+    im
+}
+
+/// The objects a marquee from `x0` to `x1` across y = 100 touches, as the canvas shows them, in
+/// outline with `outline`.
+fn marquee_at(s: &Session, x0: f64, x1: f64, outline: bool) -> Vec<NodeId> {
+    let r = vectorcraft_geom::Rect::new(x0, 90.0, x1, 110.0);
+    vectorcraft_doc::hit::marquee_in_view(&s.doc().unwrap().doc, r, None, true, outline, false)
+}
+
+/// A marquee touches a symbol instance where the geometry effects of its fill or stroke paint its
+/// art outside its box, as a click there selects it, except in outline.
+#[test]
+fn a_marquee_where_a_symbol_instance_fill_or_stroke_effect_paints_selects_it() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    assert_eq!(marquee_at(&s, 38.0, 45.0, false), []);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 38.0, 45.0, false), [id], "a marquee across the grown fill");
+    assert_eq!(marquee_at(&s, 30.0, 37.0, false), [], "a marquee past the grown fill");
+    assert_eq!(marquee_at(&s, 38.0, 45.0, true), [], "outline mode draws the art as it is");
+
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", false);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 38.0, 42.0, false), [id], "a marquee across the moved stroke");
+    assert_eq!(marquee_at(&s, 43.0, 45.0, false), [], "a marquee between the moved stroke and the fill");
+
+    let mut s = session();
+    let (id, row) = nested_instance_with_row(&mut s);
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 38.0, 45.0, false), [id], "a marquee across the grown fill of the nested art");
+}
+
+/// A marquee touches an image where the shape of its own fill lies outside its frame, and an
+/// instance of a symbol made of that image where the instance's fill effect grows that shape, as
+/// clicks there select them, except in outline.
+#[test]
+fn a_marquee_on_the_shape_of_an_image_fill_selects_it() {
+    let mut s = session();
+    let im = image_with_shaped_fill(&mut s);
+    assert_eq!(marquee_at(&s, 74.0, 79.0, false), [im], "a marquee across the fill's shape outside the frame");
+    assert_eq!(marquee_at(&s, 70.0, 75.0, false), [], "a marquee past the fill's shape");
+    assert_eq!(marquee_at(&s, 74.0, 79.0, true), [], "outline mode draws the frame");
+
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Image"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    offset_row(&mut s, id, row, 10.0);
+    assert_eq!(marquee_at(&s, 64.0, 68.0, false), [id], "a marquee across the instance's grown fill");
+    assert_eq!(marquee_at(&s, 58.0, 63.0, false), [], "a marquee past the grown fill");
+}
+
 /// An image in the symbol's art whose fill Convert to Shape gives a shape: the instance's fill
 /// effect grows what that fill paints, and a click there selects the instance.
 #[test]
 fn a_click_on_the_grown_fill_of_an_image_in_the_art_selects_the_instance() {
     let mut s = session();
-    let mut png = vec![];
-    image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
-    // The frame runs from 85 to 115; the fill's shape is 9 pt larger on each side.
-    let r = run(&mut s, "file.place", json!({"name": "red.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 100]}));
-    let im = NodeId(r["ids"][0].as_u64().unwrap());
-    run(&mut s, "select.set", json!({"ids": [im.0]}));
-    run(&mut s, "appearance.addFill", json!({}));
-    run(&mut s, "paint.setFill", json!({"color": "#0000ff", "item": 0}));
-    run(&mut s, "effect.apply", json!({"effect": "convertToShape.rectangle", "item": 0}));
+    image_with_shaped_fill(&mut s);
     let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Image"}))["id"].as_u64().unwrap());
     run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
     let row = node(&s, id).appearance.items.len() - 1;

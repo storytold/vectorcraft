@@ -91,22 +91,20 @@ pub(crate) fn row_problems(source: &str, text: &str) -> Vec<String> {
     problems
 }
 
-/// The words that more than one of a catalog's `search` rows, given as `(source, text)`, add, each
-/// with the first two rows that add it.
+/// What is wrong with one catalog's `search` rows, each a group's `source` and its translation
+/// `text`: each row's [`row_problems`], and a word that rows add to two different groups.
 #[cfg(test)]
-pub(crate) fn shared_row_words(rows: &[(&str, &str)]) -> Vec<String> {
-    let mut first: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
+pub(crate) fn catalog_problems<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<String> {
     let mut problems = vec![];
-    for &(source, text) in rows {
-        for (w, single) in row_words(text) {
-            if !single {
-                continue;
-            }
-            match first.get(&w) {
-                Some(&other) if other != source => problems.push(format!("{w:?} is a word of {other:?} and {source:?}")),
+    let mut groups: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
+    for (source, text) in rows {
+        problems.extend(row_problems(source, text));
+        for (w, _) in row_words(text).filter(|(_, single)| *single) {
+            match groups.get(w.as_str()) {
+                Some(&first) if first != source => problems.push(format!("{w:?} is a word of {first:?} and {source:?}")),
                 Some(_) => {}
                 None => {
-                    first.insert(w, source);
+                    groups.insert(w, source);
                 }
             }
         }
@@ -146,13 +144,15 @@ mod tests {
         assert_eq!(row_problems("remove, delete, erase, clear", "Text").len(), 1, "a word of another group once lowercased");
     }
 
-    /// A word that two `search` rows of one catalog add is reported; a word repeated in one row is not.
+    /// A catalog's rows fail when they add one word to two groups, and pass when a word is repeated
+    /// for one group or the catalog has no rows.
     #[test]
-    fn a_word_in_two_rows_of_a_catalog_is_reported() {
-        let remove = "remove, delete, erase, clear";
-        let image = "image, picture, photo, img, bitmap";
-        assert!(shared_row_words(&[(remove, "entfernen, löschen"), (image, "bild, foto")]).is_empty());
-        assert!(shared_row_words(&[(remove, "entfernen, Entfernen")]).is_empty(), "one row");
-        assert_eq!(shared_row_words(&[(remove, "entfernen, löschen"), (image, "Bild, Löschen")]).len(), 1);
+    fn a_word_in_two_groups_of_a_catalog_is_checked() {
+        let (remove, artboard) = ("remove, delete, erase, clear", "artboard, canvas");
+        let problems = catalog_problems([(remove, "retrait"), (artboard, "plan, Retrait")]);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems.iter().all(|p| p.contains("retrait") && p.contains(remove) && p.contains(artboard)), "{problems:?}");
+        assert!(catalog_problems([(remove, "retrait, retrait"), (remove, "Retrait"), (artboard, "plan")]).is_empty());
+        assert!(catalog_problems([]).is_empty());
     }
 }
