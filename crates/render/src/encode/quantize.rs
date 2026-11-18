@@ -203,6 +203,21 @@ pub fn quantize_to(rgba: &[u8], width: u32, height: u32, o: &PaletteOptions, pal
     finish(px, &colors, width, height, &palette, o, o.dither)
 }
 
+/// For each pixel of `rgba`, the entry of `palette` nearest its color, as [`quantize_to`] measures
+/// it (the matte, transparency and `o.reduction`'s distance weights) without dither; `None` for a
+/// pixel that becomes transparent, and for every pixel when `palette` is empty.
+pub fn nearest_entries(rgba: &[u8], o: &PaletteOptions, palette: &[[u8; 3]]) -> Vec<Option<usize>> {
+    let px = rgba.as_chunks::<4>().0;
+    let colors = opaque_colors(px, o, false);
+    let pal: Vec<[f32; 3]> = palette.iter().map(|c| c.map(f32::from)).collect();
+    let index = PaletteIndex::new(&pal, o.reduction.weights());
+    colors
+        .iter()
+        .zip(px)
+        .map(|(c, p)| if pal.is_empty() || (o.transparency && p[3] < 128) { None } else { Some(index.nearest(c.map(f32::from))) })
+        .collect()
+}
+
 /// The color of each pixel when opaque: blended over the matte, and gray when `gray`.
 fn opaque_colors(px: &[[u8; 4]], o: &PaletteOptions, gray: bool) -> Vec<[u8; 3]> {
     let matte = o.matte.unwrap_or([255; 3]);
