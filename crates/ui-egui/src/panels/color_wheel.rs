@@ -305,7 +305,7 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Colo
     let mut edit: Option<(f32, Live)> = None;
     ui.add_enabled_ui(live, |ui| {
         ui.horizontal(|ui| {
-            let t = crate::theme::Tokens::get(ui.ctx());
+            let t = Tokens::get(ui.ctx());
             crate::icons::icon(ui, "dc-transparency", 16.0, if live { t.icon } else { t.text_disabled }).on_hover_text(tl!("Opacity"));
             let width = (ui.available_width() - OPACITY_FIELD - ui.spacing().item_spacing.x).max(40.0);
             let shown = SliderValue::field(percent, 0.0..=100.0, "%", 0);

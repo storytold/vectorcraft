@@ -687,7 +687,7 @@ shows the wheel again. `"opacity": true` checks Show Opacity, as the panel menu 
 box with a slider and a percent field sets the opacity of the fill or stroke row (`paint.setFill {opacity}`), the
 selected gradient stop or the selected freeform point (the first stop or point when none is selected), and `false`
 hides the row. The row is gray with nothing selected, for an object selected in a symbol instance, and when the fill
-or stroke row it would set is on type characters or missing. Keys left out keep their values.
+or stroke row it would set is on type characters or missing. Keys left out or null keep their values.
 Params that are not an object, another key or a value off the list return an error and change nothing. The command
 returns `{view, channel, opacity, vision}`, and the settings are kept with the preferences.
 `ui.colorWheel {"vision": true}` turns on the Color Wheel panel's Show Color Vision Preview, as its panel menu
