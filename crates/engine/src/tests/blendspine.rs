@@ -431,3 +431,35 @@ fn a_spine_segment_bends_with_perpendicular_handles() {
     use vectorcraft_geom::kurbo::ParamCurve;
     assert!(sp.segment(0).eval(0.5).distance(Point::new(55.0, 45.0)) < 1e-9, "{sp:?}");
 }
+
+/// `link` with `handle` makes a spine point smooth, the other handle in line opposite the moved
+/// one, without moving the keys; the same request again records no undo step, and `link` that is
+/// not a boolean, goes with `independent` or comes without `handle` is refused.
+#[test]
+fn a_linked_spine_handle_makes_the_point_smooth() {
+    let mut s = session();
+    let (_, _, g) = blend(&mut s);
+    s.execute("object.blend.spine.addAnchor", &json!({"x": 55, "y": 5})).unwrap();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let link = json!({"anchor": 1, "handle": "out", "x": 75, "y": 25, "link": true});
+    s.execute("object.blend.spine.moveAnchor", &link).unwrap();
+    let a = spec(&s, g).spine.unwrap().subpaths[0].anchors[1];
+    assert_eq!((a.kind, a.h_out), (vectorcraft_geom::AnchorKind::Smooth, Point::new(75.0, 25.0)));
+    let (din, dout) = (a.h_in - a.p, a.h_out - a.p);
+    assert!(din.hypot() > 1e-6 && (din.normalize() + dout.normalize()).hypot() < 1e-9, "{a:?}");
+    let st = steps(&s, g);
+    assert_eq!((center(&st[0]), center(&st[2])), (Point::new(5.0, 5.0), Point::new(105.0, 5.0)), "the keys stay put");
+    let done = undo(&s);
+    s.execute("object.blend.spine.moveAnchor", &link).unwrap();
+    assert_eq!(undo(&s), done, "an unchanged spine recorded an undo step");
+    let before = spec(&s, g);
+    for bad in [
+        json!({"anchor": 1, "handle": "out", "x": 75, "y": 25, "link": "yes"}),
+        json!({"anchor": 1, "handle": "out", "x": 75, "y": 25, "link": true, "independent": true}),
+        json!({"anchor": 1, "x": 75, "y": 25, "link": true}),
+    ] {
+        assert!(s.execute("object.blend.spine.moveAnchor", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(spec(&s, g), before);
+    assert_eq!(undo(&s), done);
+}

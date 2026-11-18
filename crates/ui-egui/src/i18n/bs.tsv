@@ -810,6 +810,9 @@
 	Magic Wand	Čarobni štapić
 	Navigator	Navigator
 	Navigator Panel Options	Opcije panela navigatora
+	Attributes Panel Options	Opcije panela atributa
+	Number of Recent URLs:	Broj nedavnih URL-ova:
+@msg	`count` must be a whole number from 1 to 30	`count` mora biti cijeli broj od 1 do 30
 	Draw Dashed Lines as Solid Lines	Crtaj isprekidane linije kao pune
 	Pattern Options	Opcije uzorka
 	Properties	Svojstva
@@ -1561,6 +1564,7 @@ lighting	Light	Svjetlo
 	Save Actions…	Sačuvaj akcije…
 	Load Actions…	Učitaj akcije…
 	Replace Actions…	Zamijeni akcije…
+	Clear Actions	Očisti akcije
 	Reset Actions	Vrati akcije na početno
 	Replace the current actions with the default set?	Zamijeniti trenutne akcije zadanim skupom?
 	Append adds the default set after the current sets instead.	Dugme Dodaj umjesto toga dodaje zadani skup iza trenutnih skupova.
@@ -1865,6 +1869,7 @@ digits	Malayalam	Malajalam
 	Duplicate Action or Action Set	Dupliciraj akciju ili skup akcija
 	Delete the action set “{name}” and its actions?	Izbrisati skup akcija „{name}” i njegove akcije?
 	Delete the selected action sets and their actions?	Izbrisati odabrane skupove akcija i njihove akcije?
+	Delete all action sets and their actions?	Izbrisati sve skupove akcija i njihove akcije?
 	Delete these {n} graphic styles?	Izbrisati ove grafičke stilove ({n})?
 	Delete this {n} graphic style?	Izbrisati ovaj grafički stil ({n})?
 	Graphic Style Libraries Menu	Meni biblioteka grafičkih stilova
@@ -4260,6 +4265,7 @@ theme	Appearance	Izgled
 	Set Tab Stops	Postavi tabulatore
 	Tab Stops	Tabulatori
 	Flare	Odsjaj
+	Edit Flare	Uredi odsjaj
 	Rays	Zrake
 	Rectangle	Pravougaonik
 	Paintbrush	Kist
@@ -4551,6 +4557,8 @@ font-technology	Variable	Varijabilni
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Točkić miša uz pritisnut Cmd/Ctrl pomjera platno u stranu.
 	Dragging sideways on a numeric field's label changes the field's value.	Prevlačenje u stranu po oznaci brojčanog polja mijenja vrijednost polja.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
+	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
+	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
@@ -5223,6 +5231,7 @@ imageTrace	Outline	Obris
 @msg	no graphic style `{n}`	nema grafičkog stila `{n}`
 @msg	no interaction in progress	nema interakcije u toku
 @msg	no key object	nema ključnog objekta
+@msg	Align to Key Object isn't available with the Artboard tool	„Poravnaj s ključnim objektom“ nije dostupno s alatom radna ploča
 @msg	no library `{key}` (see {list})	nema biblioteke `{key}` (vidi {list})
 @msg	no native format	nema izvornog formata
 @msg	no pages	nema stranica
@@ -5278,6 +5287,8 @@ imageTrace	Outline	Obris
 @msg	no such spine point	nema takve tačke kičme
 @msg	`with` must be a list of at most 10000 spine point indexes	`with` mora biti lista od najviše 10000 indeksa tačaka kičme
 @msg	`with` moves points, not a handle	`with` pomjera tačke, ne ručicu
+@msg	`link` and `independent` cannot both be true	`link` i `independent` ne mogu oba biti true
+@msg	`link` places a handle: give `handle`	`link` postavlja ručicu: navedite `handle`
 @msg	no such spine segment	nema takvog segmenta kičme
 @msg	no such subpath	nema takve podputanje
 @msg	no such user library	nema takve korisničke biblioteke
@@ -5366,6 +5377,7 @@ imageTrace	Outline	Obris
 @msg	select a blend	odaberite stapanje
 @msg	select a blend or give `id`	odaberite stapanje ili navedite `id`
 @msg	select a clip group	odaberite grupu isijecanja
+@msg	select a flare	odaberite odsjaj
 @msg	select a gradient mesh	odaberite gradijentnu mrežu
 @msg	select a linked image: an embedded one has no file	odaberite povezanu sliku: ugrađena nema datoteku
 @msg	select a repeat	odaberite ponavljanje
@@ -5589,6 +5601,7 @@ imageTrace	Outline	Obris
 @msgplural	{n} linked image changed on disk: Update Links shows the new version|{n} linked images changed on disk: Update Links shows the new versions	{n} povezana slika promijenjena je na disku: Ažuriraj veze prikazuje novu verziju|{n} povezane slike promijenjene su na disku: Ažuriraj veze prikazuje nove verzije|{n} povezanih slika promijenjeno je na disku: Ažuriraj veze prikazuje nove verzije
 @msgplural	Updated {n} linked file changed on disk|Updated {n} linked files changed on disk	Ažurirana je {n} povezana datoteka promijenjena na disku|Ažurirane su {n} povezane datoteke promijenjene na disku|Ažurirano je {n} povezanih datoteka promijenjenih na disku
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	dokument zadaje napust koji ova PDF/X datoteka izostavlja: uključite „Koristi postavke napusta dokumenta“
+@msgplural	{n} object reaches the trim edge but stops short of the bleed|{n} objects reach the trim edge but stop short of the bleed	{n} objekt doseže rub obreza, ali ne doseže napust|{n} objekta dosežu rub obreza, ali ne dosežu napust|{n} objekata doseže rub obreza, ali ne doseže napust
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	Izvezeno {what} s {n} bilješkom: {first}|Izvezeno {what} s {n} bilješke: {first}|Izvezeno {what} s {n} bilješki: {first}
 @msgplural	{n} font file is now in {folder}|{n} font files are now in {folder}	{n} datoteka fonta sada je u {folder}|{n} datoteke fontova sada su u {folder}|{n} datoteka fontova sada je u {folder}
 @msgplural	{n} font file is now in {folder}; {failed} couldn't be added: {reason}|{n} font files are now in {folder}; {failed} couldn't be added: {reason}	{n} datoteka fonta sada je u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteke fontova sada su u {folder}; {failed} nije moguće dodati: {reason}|{n} datoteka fontova sada je u {folder}; {failed} nije moguće dodati: {reason}
@@ -6358,6 +6371,9 @@ mark-style	Japanese	Japanski
 	Continue in Background	Nastavi u pozadini
 	Cancel Export	Otkaži izvoz
 @msg	Export cancelled	Izvoz otkazan
+	Cancel Save	Otkaži čuvanje
+@plural	{n} more save waiting|{n} more saves waiting	Čeka još {n} čuvanje|Čekaju još {n} čuvanja|Čeka još {n} čuvanja
+@msg	Save canceled	Čuvanje otkazano
 	Desired	Željeno
 	Word Spacing:	Razmak riječi:
 	Letter Spacing:	Razmak slova:
@@ -6692,6 +6708,12 @@ axis	Y Axis	Y osa
 	Circuit Trace	Vod sklopa
 	Bus Lines	Linije sabirnice
 	Terminal Nodes	Priključni čvorovi
+
+# Original arrow art brushes.
+	Arrows	Strelice
+	Solid Arrow	Puna strelica
+	Open Arrow	Otvorena strelica
+	Chevron Arrow	Strelica sa ševronom
 
 	Notched Ribbon	Zarezana traka
 	Double Line	Dvostruka linija
@@ -7340,10 +7362,18 @@ shape	Open	Otvoren
 	Smooth Bridge…	Glatki most…
 	Smooth Bridge	Glatki most
 	Keep Originals	Zadrži originale
-@msg	select two circles to bridge	odaberite dva kruga za premošćavanje
+@msg	select two or more circles to bridge	odaberite dva ili više krugova za premošćavanje
 @msg	one circle is inside the other	jedan krug je unutar drugog
 @msg	the circles are too far apart for this radius: raise the radius	krugovi su predaleko jedan od drugog za ovaj radijus: povećajte radijus
 @msg	the circles are too far apart for this radius	krugovi su predaleko jedan od drugog za ovaj radijus
+	Constant Gap	Stalni razmak
+	Reach:	Domet:
+@msg	the circles are too far apart for this gap: raise the gap	krugovi su predaleko jedan od drugog za ovaj razmak: povećajte razmak
+@msg	the circles are too far apart for this gap	krugovi su predaleko jedan od drugog za ovaj razmak
+@msg	no two circles are within reach: raise the reach	nijedna dva kruga nisu u dometu: povećajte domet
+@msg	select at most 2000 circles to bridge	odaberite najviše 2000 krugova za premošćavanje
+@msg	that makes too many bridges (at most 8000): lower the reach	to daje previše mostova (najviše 8000): smanjite domet
+@msg	the bridged circles are too complex to unite	premošteni krugovi su previše složeni za spajanje
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Zajedničke tangente…
 	Common Tangents	Zajedničke tangente
@@ -7709,6 +7739,17 @@ shape	Open	Otvoren
 @msg	A joint does not close by {gap} pt.	Spoj se ne zatvara za {gap} pt.
 @msg	Two panels pass through each other.	Dva panela prolaze jedan kroz drugi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer mora biti "singleLine", "everyLine", "standardSingleLine" ili "standardEveryLine"
+	Tap	Kratki pritisak
+	Clear Hold	Očisti zadržavanje
+	Hold Shortcuts	Prečice zadržavanjem
+	Hold Shortcut Delay	Kašnjenje prečica zadržavanjem
+	How hold shortcuts work	Kako rade prečice zadržavanjem
+	Click, then press a key to hold for this (Esc cancels). Holding the key runs this; a quick press runs the key's own shortcut.	Kliknite, zatim pritisnite tipku koju treba zadržati za ovo (Esc otkazuje). Zadržavanje tipke pokreće ovo; kratki pritisak pokreće vlastitu prečicu tipke.
+	A quick press of a key runs its shortcut. Holding the key for the delay runs the tool or command in its Hold column instead. A hold shortcut is a letter, digit or punctuation key, alone or with Shift.	Kratki pritisak tipke pokreće njenu prečicu. Zadržavanje tipke tokom kašnjenja umjesto toga pokreće alat ili naredbu iz njene kolone Zadrži. Prečica zadržavanjem je tipka sa slovom, cifrom ili interpunkcijskim znakom, sama ili sa Shift.
+@msg	Hold {_1} is already used by {_2}	Zadržavanje {_1} već koristi {_2}
+@msg	a hold shortcut is a key that types a character, alone or with Shift ({shown} has Cmd, Ctrl or Alt)	prečica zadržavanjem je tipka koja upisuje znak, sama ili sa Shift ({shown} ima Cmd, Ctrl ili Alt)
+@msg	{shown} can't be a hold shortcut: use a letter, a digit or a punctuation key	{shown} ne može biti prečica zadržavanjem: koristite slovo, cifru ili interpunkcijsku tipku
+	Dashed Arrow	Isprekidana strelica
 	Pressure Sensitive	Osjetljivo na pritisak
 	Flex Ribbon	Savijajuća traka
 	Pulse Stroke	Pulsirajući potez
