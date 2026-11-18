@@ -258,7 +258,7 @@ impl Tool for TrimTool {
     }
 
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
-        Cursor::Crosshair
+        Cursor::Knife
     }
 }
 
@@ -287,7 +287,8 @@ mod tests {
         let up = t.pointer(&cx, &ev(PointerKind::Up, 100.5, 100.0));
         assert_eq!(up, vec![Action::Exec(COMMAND.into(), json!({"at": [100.0, 100.0], "tolerance": 2.0}))], "4 px at 200%");
         assert!(!t.busy());
-        assert_eq!(t.cursor(&cx, Point::ZERO, Mods::default()), Cursor::Crosshair);
+        assert_eq!(t.cursor(&cx, Point::ZERO, Mods::default()), Cursor::Knife, "the Knife's cursor, the blade's point on the pointer");
+        assert_eq!(Cursor::Knife.precise(), Cursor::Crosshair, "Use Precise Cursors shows the crosshair");
     }
 
     #[test]

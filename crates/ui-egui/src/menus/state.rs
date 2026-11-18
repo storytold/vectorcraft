@@ -99,6 +99,8 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
+        // The Tile layout the panes show.
+        "window.arrange.tile" => app.ui.tiled && crate::canvas::TileLayout::from_params(p) == Ok(app.ui.tile_layout),
         "window.brightness" => p.get("brightness").and_then(Value::as_str).and_then(Brightness::parse) == Some(app.ui.brightness),
         "view.slices.lock" => app.session.slices_locked(),
         "object.slice.clipToArtboard" => app.session.active().is_some_and(|d| d.doc.slices_clip_to_artboard),
@@ -291,6 +293,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
+        "ui.brushObjectOptions" => crate::dialogs::brush_options::object_available(app),
         "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" | "ui.warichuSettings" => {
             crate::panels::character::text_style(app).is_some()
         }

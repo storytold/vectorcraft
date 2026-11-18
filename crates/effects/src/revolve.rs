@@ -801,7 +801,7 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
         let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
         let (paint, opacity, _) = paint_of(item);
         let mesh = vectorcraft_three_d::revolve_mesh(path, rule, b, fx_options(fx))?;
-        Ok(crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity) })
+        Ok(crate::SolidMesh::plain(mesh, crate::solids::mesh_color(&paint, opacity)))
     };
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
         let before = n.appearance.effects.get(..index).unwrap_or_default();
@@ -924,7 +924,7 @@ fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::
         let Some(item) = surface_item(&s.items) else { continue };
         let (paint, opacity, _) = paint_of(item);
         let mesh = vectorcraft_three_d::revolve_mesh(&s.path, s.rule, b, options)?;
-        crate::solids::keep_mesh(&mut out, total, crate::SolidMesh { mesh, color: crate::solids::mesh_color(&paint, opacity * s.opacity) }, limit)?;
+        crate::solids::keep_mesh(&mut out, total, crate::SolidMesh::plain(mesh, crate::solids::mesh_color(&paint, opacity * s.opacity)), limit)?;
     }
     Ok(out)
 }

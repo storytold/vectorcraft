@@ -4,13 +4,16 @@
 //! Open profiles optionally close their circular ends with caps, and a partial sweep its cut sides. Faces are projected and sorted back to front,
 //! then flat or smoothly shaded with vector gradients. This preview uses a painter's algorithm, not a depth buffer:
 //! intersecting profiles can have ambiguous visibility and are not solid modelling inputs.
+//!
+//! [`fold`] finds the panels and hinges of a flat packaging blank from its fold lines.
 #![forbid(unsafe_code)]
 
+pub mod fold;
 mod solid;
 mod visibility;
 pub use solid::{
-    Bevel, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, PlanarFace, TOO_COMPLEX_SOLID, View, extrude, extrude_face_map, inflate,
-    inflate_each, inflate_together, plane, plane_face_map,
+    Bevel, BevelShape, DepthPlane, Extrude, FaceMap, Facet, Inflate, MeshFace, PlanarFace, TOO_COMPLEX_SOLID, View, extrude, extrude_face_map,
+    extrude_mesh_face, inflate, inflate_each, inflate_together, plane, plane_face_map, plane_mesh_face,
 };
 pub use visibility::{VisibleFace, visible_faces};
 mod shading;

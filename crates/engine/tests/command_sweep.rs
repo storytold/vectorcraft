@@ -604,6 +604,17 @@ fn structured_junk() {
         ("brush.options", json!({"name": "Arrow", "params": {"width": -5, "direction": "diagonal", "flip_along": "yes"}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "flip_across": true}})),
         ("brush.options", json!({"name": "Chain", "params": {"scale": 0, "spacing": 1e308, "fit": "nope", "side": null}})),
+        ("brush.apply", json!({"name": "Chain", "id": 2})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"scale": 1e308, "spacing": -1e308, "fit": "approximate", "colorization": {"method": "hueShift"}}}),
+        ),
+        ("brush.objectOptions", json!({"id": 2, "params": {"scale": "x", "fit": "nope", "side": null}})),
+        (
+            "brush.objectOptions",
+            json!({"id": 2, "params": {"colorization": {"method": "hueShift", "key": {"model": "rgb", "r": 1e308, "g": -1e308, "b": 0}}}}),
+        ),
+        ("brush.objectOptions", json!({"ids": [1e308, -1], "params": {}, "reset": true})),
         ("path.curvature", json!({"points": [{"x": 0, "y": 0}]})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 1000, "x": 0, "y": 0})),
         ("path.curvatureEdit", json!({"id": 2, "op": "move", "anchor": 0, "x": 1e308, "y": -1e308})),
@@ -1011,6 +1022,9 @@ fn structured_junk() {
         ("addon.packaging.roles", json!({"ids": [-1, 1e300]})),
         ("addon.packaging.setRoleSwatch", json!({"role": "perforation", "swatch": "[Registration]"})),
         ("addon.packaging.setRoleSwatch", json!({"role": "cut", "swatch": 5})),
+        ("addon.packaging.check", json!({"ids": [u64::MAX, -1], "select": "yes", "tolerance": 1e308})),
+        ("addon.packaging.check", json!({"tolerance": "-5 mm", "select": true})),
+        ("addon.packaging.check", json!({"ids": [], "tolerance": null})),
         // Smart Pen add-on.
         ("addon.pen.append", json!({"id": 2, "x": 1e308, "y": 0, "in": [1e308, -1e308]})),
         ("addon.pen.append", json!({"id": 2, "subpath": u64::MAX, "x": 0, "y": 0, "segment": "curved"})),
@@ -1055,6 +1069,12 @@ fn structured_junk() {
         ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
         ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
         ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
+        // Unit Converter add-on.
+        ("addon.units.convert", json!({"value": f64::MAX, "unit": "yards"})),
+        ("addon.units.convert", json!({"value": "1e308m*1e308", "unit": "q"})),
+        ("addon.units.convert", json!({"value": "-2p6/0", "unit": ["mm"]})),
+        ("addon.units.convert", json!({"value": [1], "unit": 5})),
+        ("addon.units.selectionSize", json!({"ids": [u64::MAX]})),
         // Cutting Tools add-on: Stencil Bridges.
         ("addon.cutting.bridges", json!({"width": 0.01, "count": 16, "direction": "shortest", "keepOriginal": true})),
         ("addon.cutting.bridges", json!({"width": 1000, "count": 1, "direction": "horizontal", "keepOriginal": false})),

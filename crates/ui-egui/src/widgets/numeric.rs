@@ -22,29 +22,7 @@ pub(crate) fn typed_unit(ctx: &egui::Context, unit: Unit) -> Unit {
     if bare_points && unit == Unit::Picas { Unit::Points } else { unit }
 }
 
-/// `text` typed in a numeric field, with a decimal comma read as a point: `0,1 mm` is `0.1 mm`
-/// (#3837), and each number of a sum reads its own separator, so `100.5 mm-0,5` (a comma typed
-/// after the value the field shows) is 100 mm (#5684). A number written with both separators has
-/// two points once read, so `1,000.5` and `1.234,5` are refused rather than guessed at; so is a
-/// number that reads as thousands ([`thousands`]).
-pub(super) fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
-}
-
-/// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
-/// digits (not a lone 0), a comma, exactly three digits, then at most a unit? Read as a decimal it
-/// would be a thousand times too small, so the field refuses it instead (`0,125` and `1,25` are
-/// decimals).
-fn thousands(text: &str) -> bool {
-    let number = text.trim().trim_start_matches('-');
-    let Some((whole, rest)) = number.split_once(',') else { return false };
-    let (part, unit) = rest.split_at(rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len()));
-    (1..=3).contains(&whole.len())
-        && whole.bytes().all(|b| b.is_ascii_digit())
-        && !whole.starts_with('0')
-        && part.len() == 3
-        && unit.trim().chars().all(char::is_alphabetic)
-}
+pub(super) use vectorcraft_doc::decimal_point;
 
 /// A recessed numeric field showing `value` (points) in `unit`. Returns the new value (points)
 /// when the user commits (Enter / focus loss / Shift+Enter, which keeps the focus outside dialogs).
@@ -302,8 +280,8 @@ pub(super) fn shown_alike(show: impl Fn(f64) -> String) -> impl Fn(f64, f64) -> 
 /// goes to the next whole number in its direction (5.1 up to 6, down to 5), a Ctrl/Cmd step goes to
 /// the next tenth, and a Shift step adds or takes ten. Steps stop at the field's `bounds` (#3370:
 /// a weight stops at 0, a miter limit at 1), and a plain step also stops at each of `stops`
-/// ([`step_through`]). The new value is applied at once, as in
-/// Illustrator's panels and dialogs, and the new text replaces `buf`, all selected so typing
+/// ([`step_through`]). The new value is applied at once, and
+/// the new text replaces `buf`, all selected so typing
 /// replaces it when focused. Returns the new number when a step was taken. An enabled field takes
 /// the wheel without taking keyboard focus, and the panel under it doesn't scroll, when the wheel
 /// stream began over the field and the pointer was moved onto it, or pressed on it, after the
@@ -754,7 +732,7 @@ impl egui::Plugin for WheelTailPlugin {
 
 /// A [`num_field`] for a width or height (Transform panel, Properties panel, Control bar): Ctrl/Cmd+Enter
 /// also commits it and ends its editing, as Enter does, and [`enter_modifiers`] reports Command. A
-/// percentage typed alone (`50%`) is that share of the size shown, as in Illustrator (#2401).
+/// percentage typed alone (`50%`) is that share of the size shown (#2401).
 pub fn size_field(ui: &mut Ui, id: impl std::hash::Hash, value: Option<f64>, unit: Unit, width: f32) -> Option<f64> {
     size_field_named(ui, id, None, value, unit, width)
 }
