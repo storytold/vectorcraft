@@ -896,7 +896,10 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
         params.entry("hiddenLayers").or_insert(Value::Bool(true));
     }
     let params = Value::Object(params);
-    super::check_linked_images(cmd, plan.format.id, st, &own, &params)?;
+    // Other formats are checked below, with the options the encoder reads.
+    if is_svg(plan.format) {
+        super::check_linked_images(cmd, plan.format.id, st, &own, &params)?;
+    }
     // The file the document is saved as (else its own) titles it if New's name is all it has.
     let file = plan.path.as_deref().filter(|_| plan.retargets()).or(st.path.as_deref());
     if let Some(d) = super::titled_for_export(&own, file, plan.format.id) {
@@ -941,6 +944,7 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
         _ => std::borrow::Cow::Borrowed(&params),
     };
     super::check_linked_scripts(cmd, plan.format.id, st, &checked)?;
+    super::access::check_native_images(cmd, plan.format.id, &st.doc, crate::cmd::links::LinkBase::of(st), &checked)?;
     Ok(SaveJob { plan, doc, params, snapshot, source: st.doc.clone(), stamped, boards })
 }
 

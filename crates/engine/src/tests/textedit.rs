@@ -2289,6 +2289,41 @@ fn threaded_list_edited_in_its_second_frame() -> (Session, NodeId, NodeId, Strin
     (s, a, b, story)
 }
 
+/// Type › Insert Break Character › Forced Line Break (`type.insert`) after Select All in threaded
+/// text replaces the whole story, every frame's text, as one undo step.
+#[test]
+fn insert_character_replaces_the_whole_story_that_select_all_selected() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    s.execute("select.all", &json!({})).unwrap();
+    let steps = undo_labels(&s).len();
+    s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    assert_eq!(undo_labels(&s).len(), steps + 1, "one undo step");
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), "\u{2028}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), story);
+}
+
+/// When `type.insert` at the caret in the first frame of threaded text pushes the caret's place on
+/// into the next frame, the Type tool's caret goes there with it, and typing goes after the
+/// insertion.
+#[test]
+fn insert_character_moves_the_caret_with_the_text_it_flows_on() {
+    let (mut s, a, b, story) = threaded_story_edited_in_its_second_frame();
+    let first = obj(&s, a).plain_text();
+    // Before the last word of the first frame: two line breaks there push the line after the
+    // first one on into the second frame.
+    let at = first.trim_end().rfind(' ').map_or(0, |k| k + 1);
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.set_tool_option("textSelection", &json!({"editing": a.0, "anchor": at, "caret": at}));
+    for _ in 0..2 {
+        s.execute("type.insert", &json!({"char": "forcedLineBreak"})).unwrap();
+    }
+    assert!(obj(&s, a).plain_text().len() < at + 6, "the second break flows on into the second frame");
+    s.tool_text("X", ViewInfo::default()).unwrap();
+    let want = format!("{}\u{2028}\u{2028}X{}", &story[..at], &story[at..]);
+    assert_eq!(format!("{}{}", obj(&s, a).plain_text(), obj(&s, b).plain_text()), want);
+}
+
 #[test]
 fn remove_breaks_takes_the_whole_story_that_select_all_selected() {
     let (mut s, a, b, story) = threaded_list_edited_in_its_second_frame();
@@ -3136,6 +3171,41 @@ fn a_previewed_transform_while_typing_keeps_the_typing() {
     s.tool_text("!", v).unwrap();
     assert_eq!(obj(&s, id).plain_text(), "Hello world!");
     assert!((left(&s, id) - 400.0).abs() < 1e-6);
+}
+
+/// With Performance › Real-time Drawing and Editing off, the typing is applied when its session
+/// ends. Ending it for another edit applies it first, as a step of its own: a dialog or a panel
+/// beginning its preview, the font menus ([`Session::keep_typing`]), a paint for the selected
+/// characters.
+#[test]
+fn ending_deferred_typing_for_another_edit_keeps_the_typing() {
+    let typed = |end: &dyn Fn(&mut Session)| {
+        let mut s = session();
+        s.prefs.real_time_drawing = false;
+        let v = ViewInfo::default();
+        let id = text(&mut s, "Hello");
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+        click(&mut s, b.x1 - 1.0, b.center().y);
+        s.tool_text(" world", v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), "Hello", "the typing waits for its session to end");
+        let steps = undo_labels(&s).len();
+        end(&mut s);
+        assert_eq!(obj(&s, id).plain_text(), "Hello world");
+        assert_eq!(undo_labels(&s)[steps], "Typing", "{:?}", undo_labels(&s));
+    };
+    typed(&|s| {
+        assert!(s.begin_interaction_warned("Fill Color").unwrap().is_empty());
+        s.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+        s.commit_interaction().unwrap();
+    });
+    typed(&|s| {
+        assert!(s.keep_typing().unwrap().is_empty());
+        assert!(!s.in_interaction());
+    });
+    typed(&|s| {
+        s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    });
 }
 
 /// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the

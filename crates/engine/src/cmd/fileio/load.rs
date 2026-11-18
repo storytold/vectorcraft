@@ -60,8 +60,7 @@ impl Loaded {
     }
 }
 
-/// An image ready to embed: PNG/JPEG/GIF/WebP keep their bytes, other formats are stored as PNG
-/// (what browsers, PDF and SVG viewers show).
+/// An image ready to embed. CMYK images use JPEG or TIFF; other images use browser-readable formats.
 #[derive(Clone)]
 pub struct RasterImage {
     /// Content key for `Document::images` (identical files share one blob).
@@ -937,8 +936,9 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// ink are written again with their inks together ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]);
 /// CMYK TIFFs with an alpha channel, which the decoder can't read, become RGBA in the active color
 /// settings' CMYK, whichever of their extra channels is the alpha
-/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]), as do CMYK Photoshop documents, whose
-/// merged image is read ([`psdread`]).
+/// ([`vectorcraft_doc::cmyk::extra_samples_tiff_rgba`]). Opaque CMYK PSD/PSB merged images retain
+/// 8- or 16-bit inks and their CMYK ICC profile as TIFF, within the native CMYK pixel and allocation limits;
+/// other CMYK composites use the RGBA decoder's allocation limit ([`psdread`]).
 /// 1-bit TIFFs compressed with CCITT Group 3, which the decoder can't read either, become RGBA
 /// too ([`vectorcraft_doc::cmyk::group3_tiff_rgba`]).
 /// Grayscale TIFFs with an alpha channel or other extra channels, which the decoder can't read
@@ -961,14 +961,27 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// or TIFF keeps its inks, at the 8 or 16 bits the file has, and its CMYK ICC profile as a CMYK
 /// TIFF ([`vectorcraft_doc::cmyk::turned_cmyk`]). An image the decoder reads and that is stored as
 /// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
-/// other samples become 8-bit RGBA. A Photoshop document's PNG keeps the clipping path the file
-/// names ([`png_with_clip`]).
+/// other samples become 8-bit RGBA. A PSD/PSB composite's stored image keeps its imported
+/// clipping path ([`image_clip`]).
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
     }
     if psdread::is_psd(bytes) {
+        if let Some(mut native) = psdread::decode_cmyk(bytes, MAX_RASTER_ALLOC).map_err(err)? {
+            native.meta.dpi = ppi.map(|(x, y)| (x as f32, y as f32));
+            let clip = psdread::clipping_path(bytes).and_then(|path| {
+                let json = serde_json::to_string(&path).ok().filter(|j| j.len() <= MAX_PNG_CLIP)?;
+                native.meta.text.push(("Description".into(), format!("{CLIP_KEYWORD}\n{json}")));
+                Some((path, vectorcraft_geom::FillRule::EvenOdd))
+            });
+            let data =
+                craft_image_codecs::encode(&native, craft_image_codecs::Format::Tiff, &craft_image_codecs::EncodeOptions::default()).map_err(err)?;
+            let mut img = stored(data, "image/tiff", native.dimensions(), ppi)?;
+            img.clip = clip;
+            return Ok(img);
+        }
         let cms = vectorcraft_color::cms::active();
         let img = as_png(psdread::decode(bytes, MAX_RASTER_ALLOC, |c| cms.cmyk_to_srgb(c, false)).map_err(err)?, None, ppi)?;
         return Ok(png_with_clip(img, psdread::clipping_path(bytes)));
@@ -1167,6 +1180,31 @@ pub(crate) fn png_clip(png: &[u8]) -> Option<vectorcraft_geom::PathData> {
     let json = super::ppi::png_chunks(png)
         .take_while(|(ty, _)| *ty != b"IDAT")
         .find_map(|(ty, data)| data.strip_prefix(keyword.as_slice()).filter(|_| ty == b"tEXt"))?;
+    if json.len() > MAX_PNG_CLIP {
+        return None;
+    }
+    vectorcraft_geom::path::with_anchor_budget(vectorcraft_geom::path::MAX_READ_ANCHORS, || serde_json::from_slice(json).ok())
+}
+
+/// The imported clipping-path marker in a stored PNG or CMYK TIFF, within the path budget.
+pub(crate) fn image_clip(blob: &ImageBlob) -> Option<vectorcraft_geom::PathData> {
+    if blob.mime == "image/png" {
+        return png_clip(&blob.bytes);
+    }
+    if blob.mime != "image/tiff" {
+        return None;
+    }
+    use tiff::tags::{Tag, Type, ValueBuffer};
+    let mut d = tiff::decoder::Decoder::new(std::io::Cursor::new(blob.bytes.as_slice())).ok()?;
+    let mut ifd = d.image_ifd();
+    let entry = ifd.find_entry(Tag::ImageDescription)?;
+    if entry.field_type() != Type::ASCII || entry.count() > (MAX_PNG_CLIP + CLIP_KEYWORD.len() + 2) as u64 {
+        return None;
+    }
+    let mut buf = ValueBuffer::empty(Type::ASCII);
+    ifd.find_tag_buf(Tag::ImageDescription, &mut buf).ok()??;
+    let json = buf.as_bytes().strip_prefix(CLIP_KEYWORD.as_bytes())?.strip_prefix(b"\n")?;
+    let json = json.strip_suffix(b"\0").unwrap_or(json);
     if json.len() > MAX_PNG_CLIP {
         return None;
     }
