@@ -252,9 +252,7 @@ impl VectorcraftApp {
         {
             self.last_pathfinder = Some(op.to_string());
         }
-        if r.is_ok() && matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut") {
-            self.publish_clipboard();
-        }
+        let copied = r.is_ok() && self.publish_copy(id);
         self.sync_views();
         self.refresh_replace_font_warning(false);
         // File › Revert replaces the document in its tab, keeps the tab's view and starts the tool afresh.
@@ -262,16 +260,13 @@ impl VectorcraftApp {
         match &r {
             Err(e) => self.ui.status = e.clone(),
             Ok(v) => {
-                // Image Trace's notes (a large image traces more slowly, or was scaled down).
-                if id.starts_with("imageTrace.make")
-                    && let Some(w) = v["warnings"].as_array().and_then(|w| w.first()).and_then(Value::as_str)
-                {
-                    self.ui.status = w.to_string();
+                if matches!(id, "imageTrace.make" | "imageTrace.makeAndExpand") {
+                    self.show_trace_notes(v);
                 }
                 // A renamed spot color swatch stays the Color Guide's base; a deleted one ends the link.
                 panels::color_guide::after_command(self, id, &params, v, spot_base);
                 if id == "file.new" {
-                    self.ui.status.clear();
+                    self.status("");
                     // New Document's Pixel preview mode (Overprint Preview is the engine's).
                     if v["previewMode"] == "pixel" {
                         self.ui.view.pixel_preview = true;
@@ -280,7 +275,7 @@ impl VectorcraftApp {
                 // Choosing a data set, or stepping to one, clears the status bar. The reply's `warning`
                 // below then shows when no object is bound to a variable the data set has a value for.
                 if matches!(id, "dataset.select" | "dataset.next" | "dataset.prev") {
-                    self.ui.status.clear();
+                    self.status("");
                 }
                 // A font applied with Character's font menu or Find Font's Change becomes the newest recent font.
                 // Find Font's Change records the family the text now carries (any name of it is stored as its
@@ -312,7 +307,40 @@ impl VectorcraftApp {
                 }
             }
         }
+        // The message the Copy or Cut leaves is the one its clipboard formats' notes may replace.
+        if copied {
+            self.clipboard_publishing.ran_with_status(&self.ui);
+        }
         r
+    }
+
+    /// After a Copy or Cut `id` that ran: offer what it copied to other apps
+    /// ([`Self::publish_clipboard`]) → whether `id` is one.
+    fn publish_copy(&mut self, id: &str) -> bool {
+        let copy = matches!(id, "edit.copy" | "edit.cut" | "artboard.copy" | "artboard.cut");
+        if copy {
+            self.publish_clipboard(matches!(id, "edit.cut" | "artboard.cut"));
+        }
+        copy
+    }
+
+    /// Image Trace's notes in `reply` (a large image traces more slowly, or was scaled down): the
+    /// first of them and how many there are, with the rest for the message's hover. A trace that
+    /// made no paths shows its first note as it is. Without notes, the message an earlier trace's
+    /// notes left is cleared while nothing has set the status since, and any other message stays.
+    fn show_trace_notes(&mut self, reply: &Value) {
+        let notes = io::notes_of(reply);
+        let left = self.trace_runs.notes_status.take();
+        let Some(first) = notes.first() else {
+            io::clear_notes_left(self, left);
+            return;
+        };
+        let status = match reply["paths"].as_u64() {
+            Some(0) => first.clone(),
+            _ => crate::trace_runs::traced_with_notes(notes.len(), first),
+        };
+        io::show_with_notes(self, status, notes);
+        self.trace_runs.notes_status = Some((self.ui.status.clone(), self.ui.status_sets));
     }
 
     fn set_command_warning(&mut self, id: &str, warning: &str) {
@@ -483,5 +511,31 @@ impl VectorcraftApp {
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
         self.ui.status_sets = self.ui.status_sets.wrapping_add(1);
+    }
+
+    /// Begin the interaction a dialog or a panel previews on. Typing in progress is kept as its own
+    /// undo step first, and the warning of the preview that keeping it applied shows in the status
+    /// bar, as it does when a tool's drag begins. On an error no interaction begins, so the caller
+    /// runs no preview.
+    pub(crate) fn begin_interaction(&mut self, label: &str) -> Result<(), String> {
+        let warnings = self.session.begin_interaction_warned(label).map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Keep typing in progress as one undo step and end the Type tool's typing session, with the
+    /// typing that Real-time Drawing off left unapplied applied first; its warning shows in the
+    /// status bar.
+    pub(crate) fn keep_typing(&mut self) -> Result<(), String> {
+        let warnings = self.session.keep_typing().map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Each warning in the status bar in turn, as the tool's status requests show; the last stays.
+    fn show_warnings(&mut self, warnings: Vec<String>) {
+        for w in warnings {
+            self.status(w);
+        }
     }
 }

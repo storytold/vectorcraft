@@ -85,6 +85,7 @@ mod history_mem;
 mod ids_without_selection;
 mod inline;
 mod interactivity;
+mod interpolate_handles;
 mod intertwine;
 mod journal;
 mod keyanchor;
@@ -122,6 +123,7 @@ mod paintproxy;
 mod panelcmds;
 mod paragraphs;
 mod params;
+mod params_cache;
 mod path_menu_enabled;
 mod pathfinder_clip;
 mod pathops;
@@ -371,9 +373,12 @@ fn a_long_unknown_command_id_is_answered_at_once() {
 fn action_batch_names_the_nearest_command_id() {
     let mut s = session();
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "select.al"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `select.al`; did you mean `select.all`?");
+    assert_eq!(
+        e.to_string(),
+        "invalid parameters for `action.batch`: action step 1 (`select.al`) failed: unknown command `select.al`; did you mean `select.all`?"
+    );
     let e = s.execute("action.batch", &json!({"source": "dataSets", "commands": [{"command": "nope"}]})).unwrap_err();
-    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: commands[0]: unknown command `nope`");
+    assert_eq!(e.to_string(), "invalid parameters for `action.batch`: action step 1 (`nope`) failed: unknown command `nope`");
 }
 
 #[test]
@@ -2809,6 +2814,26 @@ fn an_isolated_compound_paths_member_moves_alone() {
     assert_eq!((x0(&s, outer), x0(&s, hole)), (5.0, 55.0), "the compound path selected: the whole ring");
 }
 
+/// Rotate Bounding Box and Reset Bounding Box take the same objects as the transforms: a path of
+/// a compound path selected alone turns or squares its own box, and the compound path selected
+/// turns its box and its paths'.
+#[test]
+fn rotate_bounding_box_of_a_compound_paths_member_turns_only_that_path() {
+    let angle = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().bbox_angle;
+    let mut s = session();
+    let (c, outer, hole) = isolated_ring(&mut s);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 30})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (0.0, 0.0, 30.0), "only the hole's box turned");
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("object.rotateBoundingBox", &json!({"angle": 10})).unwrap();
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 40.0), "the compound path and its paths");
+    s.execute("select.set", &json!({"ids": [hole.0]})).unwrap();
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!((angle(&s, c), angle(&s, outer), angle(&s, hole)), (10.0, 10.0, 0.0), "Reset squared only the hole's box");
+}
+
 /// The X, Y, W and H of the Properties and Transform panels run `object.setBounds`, which takes the
 /// same objects as the other transforms: a path of a compound path selected alone sets its own
 /// box and leaves the ring around it (#4046). The hole is off-centre, and a plain rectangle
@@ -3193,6 +3218,101 @@ fn every_command_has_unique_id_and_doc() {
     ids.dedup();
     assert_eq!(ids.len(), n);
     assert!(command_specs().iter().all(|c| !c.params.is_empty() && !c.label.is_empty()));
+}
+
+/// Ids that name no built-in command: commands only the app runs, near misses of real ids and
+/// plug-in command ids of plug-ins that are not installed.
+const NOT_BUILT_IN: &[&str] =
+    &["", "file.save", "file.open", "edit.preferences", "select", "select.none.", "SELECT.NONE", " select.none", "plugin.nobody.cmd", "plugin."];
+
+/// The spec a search of the built-in list in order finds for `id`.
+fn first_built_in(id: &str) -> Option<&'static CommandSpec> {
+    command_specs().iter().find(|c| c.id == id)
+}
+
+#[test]
+fn find_command_finds_the_spec_a_search_of_the_list_finds() {
+    let misses: Vec<String> = NOT_BUILT_IN.iter().map(|id| (*id).to_string()).chain((0..200).map(|i| format!("missing.command{i}"))).collect();
+    for id in command_specs().iter().map(|c| c.id.to_string()).chain(misses) {
+        let (found, first) = (find_command(&id), first_built_in(&id));
+        assert!(found.map(std::ptr::from_ref) == first.map(std::ptr::from_ref), "{id:?}");
+        assert_eq!(found.is_none(), NOT_BUILT_IN.contains(&id.as_str()) || id.starts_with("missing."), "{id:?}");
+    }
+}
+
+#[test]
+fn the_command_index_keeps_the_first_spec_of_an_id() {
+    let base = &command_specs()[0];
+    let specs = [
+        CommandSpec { id: "test.twice", label: "First", ..*base },
+        CommandSpec { id: "test.once", ..*base },
+        CommandSpec { id: "test.twice", label: "Second", ..*base },
+    ];
+    let index = crate::cmd::index_by_id(&specs);
+    assert_eq!(index.len(), 2);
+    assert!(index.get("test.twice").is_some_and(|c| std::ptr::eq(*c, &specs[0])));
+    assert!(index.get("test.once").is_some_and(|c| std::ptr::eq(*c, &specs[1])));
+    assert!(!index.contains_key("test.none"));
+}
+
+/// Times [`find_command`] against a search of the built-in list in order (the lookup before the
+/// index), in one process, over every built-in id and 200 ids that name no command, and
+/// `select.none` run 100,000 times on a document with one rectangle.
+/// Run with `cargo test --release -p vectorcraft-engine --lib command_lookup_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "manual timing probe; wall-clock performance depends on machine load"]
+fn command_lookup_timing() {
+    use std::hint::black_box;
+    use std::time::Instant;
+    let hits: Vec<&str> = command_specs().iter().map(|c| c.id).collect();
+    let missing: Vec<String> = (0..200 - NOT_BUILT_IN.len()).map(|i| format!("missing.command{i}")).collect();
+    let misses: Vec<&str> = NOT_BUILT_IN.iter().copied().chain(missing.iter().map(String::as_str)).collect();
+    let linear = |id: &str| first_built_in(id).or_else(|| crate::cmd::plugin::find_spec(id));
+    for id in hits.iter().chain(&misses) {
+        assert!(find_command(id).map(std::ptr::from_ref) == linear(id).map(std::ptr::from_ref), "{id:?}");
+    }
+    let per_lookup = |ids: &[&str], f: &dyn Fn(&str) -> Option<&'static CommandSpec>| {
+        let rounds = 50;
+        let start = Instant::now();
+        for _ in 0..rounds {
+            for id in ids {
+                black_box(f(black_box(id)));
+            }
+        }
+        start.elapsed().as_nanos() as f64 / (rounds * ids.len()) as f64
+    };
+    let median = |mut v: Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    println!("{} built-in ids, {} ids that name no command", hits.len(), misses.len());
+    for (what, ids) in [("built-in id", &hits), ("no such command", &misses)] {
+        let (mut old, mut new) = (Vec::new(), Vec::new());
+        for run in 0..7 {
+            // Alternates which lookup goes first, so a change in machine load falls on both.
+            if run % 2 == 0 {
+                old.push(per_lookup(ids, &linear));
+                new.push(per_lookup(ids, &find_command));
+            } else {
+                new.push(per_lookup(ids, &find_command));
+                old.push(per_lookup(ids, &linear));
+            }
+        }
+        println!("{what}: search of the list {old:.0?} ns, median {:.0}; index {new:.0?} ns, median {:.0}", median(old.clone()), median(new.clone()));
+    }
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 200})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let runs: Vec<f64> = (0..7)
+        .map(|_| {
+            let start = Instant::now();
+            for _ in 0..100_000 {
+                black_box(s.execute("select.none", &json!({})).unwrap());
+            }
+            start.elapsed().as_nanos() as f64 / 100_000.0
+        })
+        .collect();
+    println!("select.none: {runs:.0?} ns a command, median {:.0}", median(runs.clone()));
 }
 
 #[test]
