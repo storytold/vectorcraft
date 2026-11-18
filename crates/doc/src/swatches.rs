@@ -187,8 +187,9 @@ impl Document {
     /// [`Document::map_solid_paints`] limited to the art in the subtrees of `ids` (each paint
     /// visited once even when an id is inside another).
     pub fn map_solid_paints_in(&mut self, ids: &[NodeId], f: &mut LinkFn) -> usize {
+        let listed: HashSet<NodeId> = ids.iter().copied().collect();
         let roots: Vec<NodeId> =
-            ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
+            ids.iter().copied().filter(|id| !self.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| listed.contains(p)))).collect();
         let mut n = 0;
         let mut g = relink(f);
         for id in roots {
@@ -842,6 +843,77 @@ mod tests {
         let mut colors = vec![];
         node_colors(d.node(b).unwrap(), &mut |c, s| colors.push((*c, s.map(str::to_string))));
         assert_eq!(colors, [(Color::rgb(1.0, 0.0, 0.0), None)]);
+    }
+
+    /// [`Document::map_solid_paints_in`] with each ancestor searched for in `ids` rather than looked up in a set.
+    fn map_solid_paints_in_by_search(d: &mut Document, ids: &[NodeId], f: &mut LinkFn) -> usize {
+        let roots: Vec<NodeId> =
+            ids.iter().copied().filter(|id| !d.ancestry(*id).is_some_and(|a| a[..a.len() - 1].iter().any(|p| ids.contains(p)))).collect();
+        let mut n = 0;
+        let mut g = relink(f);
+        for id in roots {
+            let Some(node) = d.node(id) else { continue };
+            if let Some((new, count)) = map_node(node, &mut g)
+                && let Some(slot) = d.node_mut(id)
+            {
+                *slot = new;
+                n += count;
+            }
+        }
+        n
+    }
+
+    #[test]
+    fn mapping_within_ids_matches_a_search_of_the_ids() {
+        // Two layers: the first holds group `outer` (group `inner` with two rectangles, and a
+        // rectangle) and a rectangle; the second holds a rectangle. Each rectangle has its own color.
+        let mut d = Document::new(100.0, 100.0);
+        let first = d.layers[0].id;
+        let second = d.alloc_id();
+        d.insert(None, usize::MAX, Node::layer(second, "Second", crate::LayerColor::Preset(1))).unwrap();
+        let rect = |d: &mut Document, i: u8| {
+            let id = d.alloc_id();
+            let r = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+            let color = Color::rgb(f32::from(i) / 8.0, 0.0, 0.0);
+            (id, Arc::new(Node::path(id, r, Appearance::basic(Paint::solid(color), Paint::solid(color), 1.0))))
+        };
+        let (r1, n1) = rect(&mut d, 1);
+        let (r2, n2) = rect(&mut d, 2);
+        let (r3, n3) = rect(&mut d, 3);
+        let (r4, n4) = rect(&mut d, 4);
+        let (r5, n5) = rect(&mut d, 5);
+        let (inner, outer) = (d.alloc_id(), d.alloc_id());
+        let outer_node = Node::group(outer, vec![Arc::new(Node::group(inner, vec![n1, n2])), n3]);
+        d.insert(Some(first), usize::MAX, outer_node).unwrap();
+        d.insert(Some(first), usize::MAX, Arc::unwrap_or_clone(n4)).unwrap();
+        d.insert(Some(second), usize::MAX, Arc::unwrap_or_clone(n5)).unwrap();
+        let missing = NodeId(u64::MAX);
+        let all = [first, second, outer, inner, r1, r2, r3, r4, r5, missing];
+        // Every list of up to three of them: nested ids in both orders, duplicates, a missing id and none.
+        let mut lists: Vec<Vec<NodeId>> = vec![vec![]];
+        let mut shorter: Vec<Vec<NodeId>> = vec![vec![]];
+        for _ in 0..3 {
+            shorter = shorter.iter().flat_map(|l| all.map(|id| [l.as_slice(), &[id]].concat())).collect();
+            lists.extend(shorter.iter().cloned());
+        }
+        assert_eq!(lists.len(), 1 + 10 + 100 + 1000);
+        for ids in &lists {
+            // A callback that changes every paint it visits, so a paint visited twice counts twice.
+            let run = |map: &dyn Fn(&mut Document, &[NodeId], &mut LinkFn) -> usize| {
+                let mut d = d.clone();
+                let mut visits = vec![];
+                let n = map(&mut d, ids, &mut |c, s, t| {
+                    visits.push((*c, s.clone(), *t));
+                    *s = Some(format!("{}", visits.len()));
+                    *t *= 0.5;
+                    true
+                });
+                (n, visits, d.layers)
+            };
+            let by_set = run(&|d, ids, f| d.map_solid_paints_in(ids, f));
+            let by_search = run(&|d, ids, f| map_solid_paints_in_by_search(d, ids, f));
+            assert_eq!(by_set, by_search, "{ids:?}");
+        }
     }
 
     /// The colors [`node_colors`] visits, in its order, by a [`Node::walk`] that reads the whole subtree.

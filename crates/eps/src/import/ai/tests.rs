@@ -7552,6 +7552,92 @@ fn twist_is_read_on_straight_paths_and_compound_paths_up_to_half_a_turn() {
 }
 
 #[test]
+fn transform_and_free_distort_keep_the_drawn_look_where_a_guide_reaches_past_the_rest_of_the_art() {
+    // GUARDS: a compound path or group whose guides reach past the rest of its art was read with a
+    // live Transform that scales, turns or reflects (or, on a group, a live Free Distort) measured from
+    // bounds that take in those guides. Such an object keeps its drawn look.
+    let hide = |s: String| s.replace('\n', "\n%_");
+    // A compound path of a square and `rest`, under its drawn look.
+    let compound = |rest: &str| {
+        format!(
+            "0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n",
+            rect_path(16.0, 16.0, 64.0, 54.0),
+            hide(format!("*u\n{}f\n{rest}*U\n", rect_path(20.0, 20.0, 60.0, 50.0)))
+        )
+    };
+    // A group of a red square and `rest`, under its drawn look.
+    let group = |rest: &str| {
+        format!(
+            "0 Ae\nu\n{RED}{}f\nU\n%_0 Ae\n%_u\n%_{}U\n1 (Bent) XW\n",
+            rect_path(16.0, 16.0, 64.0, 54.0),
+            hide(format!("{RED}{}f\n{rest}", rect_path(20.0, 20.0, 60.0, 50.0)))
+        )
+    };
+    let guide = |from: (f64, f64), to: (f64, f64)| format!("{} {} m\n{} {} L\n(N) *\n", from.0, from.1, to.0, to.1);
+    let inside = guide((25.0, 25.0), (35.0, 35.0));
+    let past = guide((30.0, 30.0), (70.0, 40.0));
+    let nested = format!("0 Ae\nu\n{past}U\n");
+    let transform = |keys: &str| format!("{keys}0 /Bool (transformPatterns) ,\n");
+    let scale = transform("0.5 /Real (scaleH_Factor) ,\n0.5 /Real (scaleV_Factor) ,\n0 /Bool (scaleLines) ,\n");
+    let turn = transform("0.5 /Real (rotate_Radians) ,\n");
+    let reflect = transform("1 /Bool (reflectX) ,\n");
+    let moved = transform("5 /Real (moveH_Pts) ,\n");
+    let scale_in_place = transform("0.5 /Real (scaleH_Factor) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformObjects) ,\n");
+    // Transform Objects off and Transform Patterns on: only a pattern moves, and a solid fill has none.
+    let scale_patterns = "0.5 /Real (scaleH_Factor) ,\n0 /Bool (scaleLines) ,\n0 /Bool (transformObjects) ,\n1 /Bool (transformPatterns) ,\n";
+    let slanted = free_distort_keys([[25.0, 50.0], [65.0, 50.0], [20.0, 20.0], [60.0, 20.0]]);
+    let read = |name: &str, keys: &str, paint, art_: &str| read_ok(&format!("{}{}", distort_styles(name, keys, paint), layer(art_)));
+    let tr = "Adobe Transform";
+    let fd = "Adobe Free Distort";
+    for (what, r, id) in [
+        ("a compound path scaled, its guide inside", read(tr, &scale, BLUE_FILL, &compound(&inside)), "distort.transform"),
+        ("a compound path moved, its guide past", read(tr, &moved, BLUE_FILL, &compound(&past)), "distort.transform"),
+        ("a compound path distorted, its guide past", read(fd, &slanted, BLUE_FILL, &compound(&past)), "distort.freeDistort"),
+        ("a group scaled, its guide inside", read(tr, &scale, None, &group(&inside)), "distort.transform"),
+        ("a group moved, its guide past", read(tr, &moved, None, &group(&past)), "distort.transform"),
+        ("a group scaled with Transform Objects off, its guide past", read(tr, &scale_in_place, None, &group(&past)), "distort.transform"),
+        (
+            "a compound path scaled with Transform Objects off and Transform Patterns on, its guide past",
+            read(tr, scale_patterns, BLUE_FILL, &compound(&past)),
+            "distort.transform",
+        ),
+        ("a group distorted, its guide inside", read(fd, &slanted, None, &group(&inside)), "distort.freeDistort"),
+        ("a group distorted with no corner moved, its guide past", read(fd, "", None, &group(&past)), "distort.freeDistort"),
+        // A hidden member is measured too, and this one takes in the guide.
+        (
+            "a group scaled, its guide past the square and inside a hidden member",
+            read(tr, &scale, None, &group(&format!("1 Xw\n{RED}{}f\n0 Xw\n{past}", rect_path(10.0, 10.0, 80.0, 60.0)))),
+            "distort.transform",
+        ),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].children().map_or(0, |c| c.len()) >= 2, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!(e.id, id, "{what}");
+    }
+    for (what, r) in [
+        ("a compound path scaled, its guide past", read(tr, &scale, BLUE_FILL, &compound(&past))),
+        ("a compound path turned, its guide past", read(tr, &turn, BLUE_FILL, &compound(&past))),
+        ("a compound path reflected, its guide past", read(tr, &reflect, BLUE_FILL, &compound(&past))),
+        ("a group scaled, its guide past", read(tr, &scale, None, &group(&past))),
+        ("a group turned, its guide past", read(tr, &turn, None, &group(&past))),
+        ("a group distorted, its guide past", read(fd, &slanted, None, &group(&past))),
+        ("a group scaled, its guide past in a group in it", read(tr, &scale, None, &group(&nested))),
+        (
+            "a group scaled, its guide past in a compound path in it",
+            read(tr, &scale, None, &group(&format!("*u\n{RED}{}f\n{past}*U\n", rect_path(25.0, 25.0, 35.0, 35.0)))),
+        ),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
 fn twist_on_a_straight_compound_path_keeps_the_drawn_look_where_a_guide_reaches_past_its_other_members() {
     // GUARDS: a straight compound path whose guide members reach past its other members was read
     // with a live Twist measured from bounds that take in those guides, which draws differently from
@@ -10397,11 +10483,11 @@ fn a_brushs_art_places_a_version_7_patterns_tiles_with_its_operands() {
     };
     let plain = placed("0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0]");
     // The operands and the move they make from the plain placement (a b c d e f): those of
-    // `a_pattern_fill_applies_its_offset_scale_rotation_reflection_and_shear` with y down, as the
-    // art's space has it.
+    // `a_pattern_fill_applies_its_offset_scale_rotation_reflection_and_shear` in the file's own
+    // space (y up), since a Scatter brush's art is turned over with its tiles.
     let cases = [
-        ("10 15 1 1 0 0 0 0 0 [1 0 0 1 0 0]", [1.0, 0.0, 0.0, 1.0, 10.0, -15.0]),
-        ("-5 7 2 .5 -45 0 0 -15 45 [1 0 0 1 0 0]", [1.793151, 0.353553, -1.035276, 0.353553, -5.0, -7.0]),
+        ("10 15 1 1 0 0 0 0 0 [1 0 0 1 0 0]", [1.0, 0.0, 0.0, 1.0, 10.0, 15.0]),
+        ("-5 7 2 .5 -45 0 0 -15 45 [1 0 0 1 0 0]", [1.793151, -0.353553, 1.035276, 0.353553, -5.0, 7.0]),
     ];
     for (ops, want) in cases {
         let got = (placed(ops) * plain.inverse()).as_coeffs();
@@ -11237,6 +11323,103 @@ fn type_with_an_art_brush_keeps_its_drawn_look() {
     let mut brushed = 0;
     r.doc.walk(|n| brushed += usize::from(n.appearance.stroke().is_some_and(|s| s.brush.is_some())));
     assert_eq!(brushed, 0, "{:?}", r.warnings);
+}
+
+/// Each copy a Scatter brush places is its section's art turned over before the copy's rotation:
+/// the side of the section with y up goes down the page with the rotation at 0° to the page, and
+/// to the right of the path's direction when the rotation follows the path. A rotation turns the
+/// copy counterclockwise on the page, from the page or from the path's direction.
+#[test]
+fn a_scatter_brushs_copies_are_its_art_turned_over() {
+    // Size, spacing 100% and scatter 0%, fixed; the rotation 0° or 90°, to the page or following
+    // the path.
+    let still = "2 /Lopsided art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0";
+    let turned = "2 /Lopsided art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 90 90 0 0 0";
+    let along = "2 /Lopsided art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 1 0";
+    let def = format!(
+        "{}{}{}{}",
+        lopsided_art("Lopsided art"),
+        plugin_object(SCATTER, "Still", still),
+        plugin_object(SCATTER, "Turned", turned),
+        plugin_object(SCATTER, "Along", along)
+    );
+    let r = read_ok(&format!("{def}{}", layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let stroke = vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 1.0);
+    // The art is 40 by 8, so copies are 40 apart along a line 100 long, centered at 20, 60 and 100
+    // from its start.
+    let pieces = |name: &str, from: (f64, f64), to: (f64, f64)| {
+        let b = lib.iter().find(|b| b.name == name).unwrap();
+        let line = kurbo::BezPath::from_vec(vec![kurbo::PathEl::MoveTo(Point::new(from.0, from.1)), kurbo::PathEl::LineTo(Point::new(to.0, to.1))]);
+        vectorcraft_brush::stroke_pieces(&r.doc, b, &line, &stroke)
+    };
+    let filled = |pieces: &[Node], x: f64, y: f64| {
+        pieces.iter().any(|n| {
+            let mut hit = false;
+            n.walk(&mut |c| hit |= c.path_data().is_some_and(|p| kurbo::Shape::winding(&p.to_bezpath(), Point::new(x, y)) != 0));
+            hit
+        })
+    };
+    let still = pieces("Still", (0.0, 0.0), (100.0, 0.0));
+    assert_eq!(still.len(), 3, "{still:#?}");
+    // The copy at 60 spans 40 to 80: the narrow block is its first 10, the wide block all of it.
+    assert!(filled(&still, 70.0, -2.0) && !filled(&still, 70.0, 2.0), "the wide block is above the line");
+    assert!(filled(&still, 45.0, 2.0), "the narrow block is below it");
+    // Turned 90° to the page, the copy at 60 stands across the line from 40 above it to 80 below
+    // it: the wide block on the left, the narrow block on the right at its bottom 10.
+    let turned = pieces("Turned", (0.0, 0.0), (100.0, 0.0));
+    assert_eq!(turned.len(), 3, "{turned:#?}");
+    assert!(filled(&turned, 58.0, 0.0) && !filled(&turned, 62.0, 0.0), "the wide block is left of the copy's middle");
+    assert!(filled(&turned, 62.0, 15.0) && !filled(&turned, 62.0, -15.0), "the narrow block is at its bottom");
+    // Right to left with the rotation following the path, the copy at 40 (20 to 60) is turned half
+    // way round: its narrow block is its last 10.
+    let along = pieces("Along", (100.0, 0.0), (0.0, 0.0));
+    assert_eq!(along.len(), 3, "{along:#?}");
+    assert!(filled(&along, 30.0, 2.0) && !filled(&along, 30.0, -2.0), "the wide block is below the line");
+    assert!(filled(&along, 55.0, -2.0), "the narrow block is above it, at the copy's other end");
+    // Up the page with the rotation following the path, the copy at y 40 (20 to 60) is turned a
+    // quarter round: the wide block on the left of the line, the narrow block on its right at its
+    // bottom 10, where the line starts.
+    let up = pieces("Along", (0.0, 100.0), (0.0, 0.0));
+    assert_eq!(up.len(), 3, "{up:#?}");
+    assert!(filled(&up, -2.0, 40.0) && !filled(&up, 2.0, 40.0), "the wide block is left of the line");
+    assert!(filled(&up, 2.0, 55.0) && !filled(&up, 2.0, 25.0), "the narrow block is right of it, at the copy's bottom");
+}
+
+/// A pattern fill in a Scatter or Art brush's art is turned over with the art: the tiles keep their
+/// place on the art. The section fills a 40 by 8 rectangle with an 8-point tile placed with the
+/// identity, so the tile's top left is at the rectangle's top left in the section (y up).
+#[test]
+fn a_pattern_fill_in_brush_art_turns_over_with_the_art() {
+    let still = "2 /Tiled art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0";
+    let ribbon = "2 / Tiled art/ / / / / 0 0/ 5 0 0 0 /  1 1 1 0 1 0 0 0 1 1 0 0 0 0 1";
+    let section = format!(
+        "%AI8_BeginBrushPattern\n(Tiled art)\n0 A\n(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n%AI8_EndBrushPattern\n",
+        rect_path(0.0, 0.0, 40.0, 8.0)
+    );
+    let def = format!("{DOTS}{section}{}{}", plugin_object(SCATTER, "Spray", still), plugin_object(ART_BRUSH, "Ribbon", ribbon));
+    let r = read_ok(&format!("{def}{}", layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
+    let lib = vectorcraft_brush::library(&r.doc);
+    for name in ["Spray", "Ribbon"] {
+        let b = lib.iter().find(|b| b.name == name).unwrap_or_else(|| panic!("{name}: {lib:?}"));
+        let art = match &b.kind {
+            vectorcraft_brush::BrushKind::Scatter(s) => &s.art,
+            vectorcraft_brush::BrushKind::Art(a) => &a.art,
+            k => panic!("{name}: {k:?}"),
+        };
+        let mut found = None;
+        art.walk(&mut |n| {
+            if let (Some(_), Paint::Pattern { xf, .. }) = (n.path_data(), fill(n)) {
+                found = Some((n.geometric_bounds(), xf));
+            }
+        });
+        let Some((Some(bounds), xf)) = found else { panic!("{name}: {art:#?}") };
+        // The art is turned over (y up again): the tile's top left (0, 0) and its dot (4, 4), in
+        // the tile's space with y down, are at the rectangle's top left and 4 below it.
+        assert_eq!(bounds, Rect::new(0.0, 0.0, 40.0, 8.0), "{name}");
+        assert!((xf * Point::ZERO - Point::new(0.0, bounds.y1)).hypot() < 1e-9, "{name}: {xf:?}");
+        assert!((xf * Point::new(4.0, 4.0) - Point::new(4.0, bounds.y1 - 4.0)).hypot() < 1e-9, "{name}: {xf:?}");
+    }
 }
 
 use read::{GRAPH_PLAIN, GRAPH_UNENDED};
