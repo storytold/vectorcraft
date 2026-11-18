@@ -244,6 +244,59 @@ fn an_empty_export_as_range_shows_an_example() {
     assert!(text.lines().any(|l| l == "1-3, 5"), "{text}");
 }
 
+/// #5941: the Format list showed no scroll bar until the pointer came over it, so nothing told
+/// the user that more formats lay below the last one shown. Opened with the pointer elsewhere, the
+/// list shows its bar beside the formats.
+#[test]
+fn the_format_list_shows_its_scroll_bar_while_the_pointer_is_elsewhere() {
+    fn walk(shape: &egui::Shape, clip: egui::Rect, texts: &mut Vec<(String, egui::Rect, egui::Rect)>, bars: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Text(t) => texts.push((t.galley.text().into(), t.visual_bounding_rect(), clip)),
+            egui::Shape::Rect(r) if r.fill.a() > 0 && r.rect.width() <= 8.0 && r.rect.height() > 40.0 => bars.push(r.rect),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, texts, bars)),
+            _ => {}
+        }
+    }
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": "png"})).unwrap();
+    let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
+    theme::apply(&ctx, Default::default());
+    let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1024.0, 480.0)));
+    let mut time = 0.0;
+    let mut run = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+        time += 0.25;
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, events, time: Some(time), ..Default::default() }, |ui| show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let (mut texts, mut bars) = (vec![], vec![]);
+        out.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts, &mut bars));
+        (texts, bars)
+    };
+    let away = egui::Event::PointerMoved(egui::pos2(1.0, 1.0));
+    run(&mut app, vec![away.clone()]);
+    let (texts, _) = run(&mut app, vec![]);
+    let field = texts.iter().find(|(s, ..)| s == "PNG").map(|(_, r, _)| r.center()).expect("the Format field shows PNG");
+    let click = |pressed| egui::Event::PointerButton { pos: field, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+    run(&mut app, vec![egui::Event::PointerMoved(field), click(true)]);
+    run(&mut app, vec![click(false)]);
+    run(&mut app, vec![away]);
+    let (mut texts, mut bars) = (vec![], vec![]);
+    for _ in 0..4 {
+        (texts, bars) = run(&mut app, vec![]);
+    }
+    let labels: Vec<&str> = export_as::formats().iter().map(|f| f.label).collect();
+    // The list's rows: the format names drawn below the field.
+    let rows: Vec<_> = texts.iter().filter(|(s, r, _)| labels.contains(&s.as_str()) && r.top() > field.y + 8.0).collect();
+    assert!(!rows.is_empty(), "the Format list is open");
+    assert!(rows.len() < labels.len(), "the list holds more formats than it shows: {} of {}", rows.len(), labels.len());
+    let left = rows.iter().map(|(_, r, _)| r.left()).fold(f32::INFINITY, f32::min);
+    let top = rows.iter().map(|(_, r, _)| r.top()).fold(f32::INFINITY, f32::min);
+    let bottom = rows.iter().map(|(_, r, _)| r.bottom()).fold(0.0, f32::max);
+    // The list is no wider than the 160 pt field.
+    let beside = egui::Rect::from_min_max(egui::pos2(left, top - 12.0), egui::pos2(left + 160.0, bottom + 12.0));
+    assert!(bars.iter().any(|b| beside.contains_rect(*b)), "the list's scroll bar is drawn at rest beside the formats in {beside:?}: {bars:?}");
+}
+
 #[test]
 fn svg_continues_in_svg_options() {
     let (mut app, written) = app(2);
