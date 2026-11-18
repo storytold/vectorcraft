@@ -98,6 +98,19 @@
 	Paste without Formatting	Liitä ilman muotoilua
 	Clear	Tyhjennä
 	Find and Replace…	Etsi ja korvaa…
+	Find and Replace	Etsi ja korvaa
+	Find:	Etsi:
+	Replace With:	Korvaa tekstillä:
+	Replace & Find	Korvaa ja etsi
+	Replace All	Korvaa kaikki
+	Match Case	Sama kirjainkoko
+	Find Whole Word	Etsi koko sana
+	Search Backwards	Etsi taaksepäin
+	Check Hidden Layers	Tarkista piilotetut tasot
+	Check Locked Layers	Tarkista lukitut tasot
+@msg	No matches found	Osumia ei löytynyt
+@msg	Matches replaced: {n}	Korvattuja osumia: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	objektin {_3} tavuissa {_1}..{_2} ei ole haun `find` osumaa
 	Find Next	Etsi seuraava
 	Spelling	Oikeinkirjoitus
 	Auto Spell Check	Automaattinen oikeinkirjoituksen tarkistus
@@ -237,6 +250,16 @@
 	To Center	Keskustaa kohti
 	To Edge	Reunaa kohti
 	Create Object Mosaic…	Luo objektimosaiikki…
+	Create Object Mosaic	Luo objektimosaiikki
+	Current Size:	Nykyinen koko:
+	New Size:	Uusi koko:
+	Tile Spacing:	Laattojen välistys:
+	Number of Tiles:	Laattojen määrä:
+	Constrain Ratio:	Rajoita suhdetta:
+	Result:	Tulos:
+	Resize Using Percentages	Muuta kokoa prosentteina
+	Delete Raster	Poista rasterikuva
+	Use Ratio	Käytä suhdetta
 	Vector Halftone…	Vektorirasterointi…
 	Create Trim Marks	Luo leikkuumerkit
 	Flatten Transparency…	Litistä läpinäkyvyys…
@@ -3305,6 +3328,7 @@ antiAlias	Sharp	Terävä
 	Preserve Editing Capabilities	Säilytä muokkausominaisuudet
 	Responsive	Responsiivinen
 	Show Code	Näytä koodi
+	Show in Browser	Näytä selaimessa
 	Style Attributes	Tyyliattribuutit
 	Style Attributes (Entity References)	Tyyliattribuutit (entiteettiviittaukset)
 	Styling:	Tyylit:
@@ -4366,6 +4390,8 @@ axis	Both	Molemmat
 	Show	Näytä
 	Copy Width Point	Kopioi leveyspiste
 	Duplicate Artboard	Monista piirtoalusta
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Lisää piirtoalusta tälle puolelle napsauttamalla, monista piirtoalusta kuvituksineen Alt-napsautuksella
+	Click to add an artboard on this side	Lisää piirtoalusta tälle puolelle napsauttamalla
 	Area / Path Type	Alue- / polkuteksti
 	Decrease Font Size	Pienennä fonttikokoa
 	Decrease Font Size by Five Steps	Pienennä fonttikokoa viisi askelta
@@ -4627,6 +4653,7 @@ font-technology	Variable	Muuttuvat
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Kuinka lähelle grafiikkaa osoittimen tai vedettävän pisteen on tultava näytöllä, jotta älykkäät apuviivat kohdistavat siihen; etäisyys on sama kaikilla zoomauksilla.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Kohdistaa janan pään tai keskipisteestä piirretyn ympyrän niin, että se koskettaa lähellä olevaa käyrää.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Kohdistaa janan pään niin, että se kohtaa lähellä olevan suoran segmentin suorassa kulmassa.
+	Edit type set in fonts that aren't available?	Muokataanko tekstiä, jonka fontit eivät ole käytettävissä?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Näyttää piirtopinnalla kunkin viipaleen numeron ruudussa sen vasemmassa yläkulmassa; kun asetus on pois päältä, viipaleiden ääriviivat näkyvät edelleen.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Käyttäjä- ja objektiviipaleiden ääriviivojen ja niiden numeroruutujen väri; automaattiset viipaleet käyttävät siitä himmeämpää sävyä.
 	Reset all preferences to their defaults?	Palautetaanko kaikki asetukset oletuksiin?
@@ -5122,6 +5149,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Installed plug-in {_1}	Asennettiin laajennus {_1}
 @msg	Internal error: {msg} (please report this bug)	Sisäinen virhe: {msg} (ilmoita tästä virheestä)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Elävän maalauksen yhdistäminen: valitse elävän maalauksen ryhmä ja lisättävät polut
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` ja `Edge` ovat elävän maalauksen ryhmän pintojen ja reunojen nimiä: anna polulle toinen nimi
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Elävä maalaus ottaa polkuja ja yhdistelmäpolkuja: muunna teksti, kuvat ja muut objektit ensin poluiksi
 @msg	Live Paint: select paths or compound paths	Elävä maalaus: valitse polkuja tai yhdistelmäpolkuja
 @msg	Live Paint: these paths are too degenerate to paint	Elävä maalaus: nämä polut ovat liian surkastuneita maalattaviksi
@@ -6579,6 +6607,11 @@ mark-style	Japanese	Japanilainen
 	Close the circular ends of open profiles. Partial sweeps also close their cut sides.	Sulje avointen profiilien pyöreät päät. Osittaiset pyöräytykset sulkevat myös leikkauspintansa.
 	Color Panel Options	Väri-paneelin asetukset
 	Color blindness – Tritanopia-type	Värisokeus – tritanopia
+	Show Color Vision Preview	Näytä värinäön esikatselu
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Akromatopsia
 	Create Dimension	Luo mitta
 	Darkness	Tummuus
 	Destination Folder:	Kohdekansio:
@@ -7310,6 +7343,7 @@ axis	Y Axis	Y-akseli
 	Checkpoint	Tarkastuskohta
 	Inventory Icons	Inventaarioikonit
 	Skill Icons	Taitoikonit
+	Weather Icons	Sääikonit
 	Attack	Hyökkäys
 	Defend	Puolustus
 	Heal	Parannus
@@ -7437,6 +7471,252 @@ axis	Y Axis	Y-akseli
 	Stars	Tähdet
 	Triangles	Kolmiot
 	Sparkles	Kipinät
+	Warm Gray	Lämmin harmaa
+	Cool Gray	Viileä harmaa
+	Neutrals	Neutraalit
+	Ivory	Norsunluu
+	Linen	Pellava
+	Oat	Kaura
+	Greige	Greige
+	Stone	Kivi
+	Taupe	Taupe
+	Slate	Liuskekivi
+	Clay	Savi
+	Terracotta	Terrakotta
+	Ochre	Okra
+	Umber	Umbra
+	Sand	Hiekka
+	Olive	Oliivi
+	Moss	Sammal
+	Rosy	Ruusuinen
+	Neutral	Neutraali
+	Golden	Kultainen
+	Pastel	Pastelli
+	Pastel Red	Pastellinpunainen
+	Pastel Orange	Pastellinoranssi
+	Pastel Amber	Pastellinmeripihka
+	Pastel Yellow	Pastellinkeltainen
+	Pastel Lime	Pastellinlime
+	Pastel Green	Pastellinvihreä
+	Pastel Teal	Pastellinsinivihreä
+	Pastel Cyan	Pastellinsyaani
+	Pastel Azure	Pastellinasuuri
+	Pastel Blue	Pastellinsininen
+	Pastel Violet	Pastellinvioletti
+	Pastel Magenta	Pastellinmagenta
+	Soft Red	Pehmeä punainen
+	Soft Orange	Pehmeä oranssi
+	Soft Amber	Pehmeä meripihka
+	Soft Yellow	Pehmeä keltainen
+	Soft Lime	Pehmeä lime
+	Soft Green	Pehmeä vihreä
+	Soft Teal	Pehmeä sinivihreä
+	Soft Cyan	Pehmeä syaani
+	Soft Azure	Pehmeä asuuri
+	Soft Blue	Pehmeä sininen
+	Soft Violet	Pehmeä violetti
+	Soft Magenta	Pehmeä magenta
+	Vivid Red	Eloisa punainen
+	Vivid Orange	Eloisa oranssi
+	Vivid Amber	Eloisa meripihka
+	Vivid Yellow	Eloisa keltainen
+	Vivid Lime	Eloisa lime
+	Vivid Green	Eloisa vihreä
+	Vivid Teal	Eloisa sinivihreä
+	Vivid Cyan	Eloisa syaani
+	Vivid Azure	Eloisa asuuri
+	Vivid Blue	Eloisa sininen
+	Vivid Violet	Eloisa violetti
+	Vivid Magenta	Eloisa magenta
+	Deep	Syvät
+	Deep Red	Syvä punainen
+	Deep Orange	Syvä oranssi
+	Deep Amber	Syvä meripihka
+	Deep Yellow	Syvä keltainen
+	Deep Lime	Syvä lime
+	Deep Green	Syvä vihreä
+	Deep Teal	Syvä sinivihreä
+	Deep Cyan	Syvä syaani
+	Deep Azure	Syvä asuuri
+	Deep Blue	Syvä sininen
+	Deep Violet	Syvä violetti
+	Deep Magenta	Syvä magenta
+	Gold	Kulta
+	Silver	Hopea
+	Bronze	Pronssi
+	Copper	Kupari
+	Brass	Messinki
+	Rose Gold	Ruusukulta
+	Gunmetal	Tykkimetalli
+	Platinum	Platina
+	Pewter	Tina
+	Ember	Hiillos
+	Lagoon	Laguuni
+	Dusk	Iltahämärä
+	Clay to Teal	Savesta sinivihreään
+	Plum to Olive	Luumusta oliiviin
+	Complementary Coral	Koralli, vastaväri
+	Split Complementary Coral	Koralli, jaettu vastaväri
+	Analogous Coral	Koralli, analoginen
+	Triad Coral	Koralli, triadi
+	Tetrad Coral	Koralli, tetradi
+	Pentagram Coral	Koralli, pentagrammi
+	Complementary Teal	Sinivihreä, vastaväri
+	Split Complementary Teal	Sinivihreä, jaettu vastaväri
+	Analogous Teal	Sinivihreä, analoginen
+	Triad Teal	Sinivihreä, triadi
+	Tetrad Teal	Sinivihreä, tetradi
+	Pentagram Teal	Sinivihreä, pentagrammi
+	Soft Spectrum	Pehmeä spektri
+	Red to Amber	Punaisesta meripihkaan
+	Orange to Yellow	Oranssista keltaiseen
+	Amber to Lime	Meripihkasta limeen
+	Yellow to Green	Keltaisesta vihreään
+	Lime to Teal	Limestä sinivihreään
+	Green to Cyan	Vihreästä syaaniin
+	Teal to Azure	Sinivihreästä asuuriin
+	Cyan to Blue	Syaanista siniseen
+	Azure to Violet	Asuurista violettiin
+	Blue to Magenta	Sinisestä magentaan
+	Violet to Red	Violetista punaiseen
+	Magenta to Orange	Magentasta oranssiin
+	Dawn	Aamunkoitto
+	Noon	Keskipäivä
+	Sunset	Auringonlasku
+	Night	Yö
+	Overcast	Pilvinen
+	White to Black	Valkoisesta mustaan
+	Light Grays	Vaaleat harmaat
+	Dark Grays	Tummat harmaat
+	Warm Grays	Lämpimät harmaat
+	Cool Grays	Viileät harmaat
+	Fade to Transparent	Häivytys läpinäkyvään
+	White Fade	Valkoinen häivytys
+	Vignette	Vinjetti
+	Mist	Usva
+	Petal	Terälehti
+	Fern	Saniainen
+	Smoke	Savu
+	Honey	Hunaja
+	Seafoam	Merivaahto
+	Lavender	Laventeli
+	Driftwood	Ajopuu
+	Ink Wash	Tussilaveeraus
+	Tide	Vuorovesi
+	Bloom	Kukinta
+	Dew	Kaste
+	Pollen	Siitepöly
+	Lichen	Jäkälä
+	Prism Veil	Prismaharso
+	Opal Ribbon	Opaalinauha
+	Pearl Flash	Helmiäisvälähdys
+	Aurora Foil	Revontulifolio
+	Iris Sheen	Iiriskiilto
+	Frost Spectrum	Huurrespektri
+	Silver Tide	Hopeavuoksi
+	Rose Quartz Gleam	Ruusukvartsin hohde
+	Moonstone Shift	Kuukiven väreily
+	Violet Edge	Violetti reuna
+	Mint Halo	Mintunvärinen kehä
+	Amber Corona	Meripihkakorona
+	Polar Glint	Napakiilto
+	Pastel Orbit	Pastellirata
+	Coral and Navy	Koralli ja laivastonsininen
+	Plum and Lime	Luumu ja lime
+	Teal and Gold	Sinivihreä ja kulta
+	Indigo and Peach	Indigo ja persikka
+	Forest and Rose	Metsä ja ruusu
+	Red Glow	Punainen hehku
+	Orange Glow	Oranssi hehku
+	Amber Glow	Meripihkan hehku
+	Yellow Glow	Keltainen hehku
+	Lime Glow	Limen hehku
+	Green Glow	Vihreä hehku
+	Teal Glow	Sinivihreä hehku
+	Cyan Glow	Syaani hehku
+	Azure Glow	Asuurin hehku
+	Blue Glow	Sininen hehku
+	Violet Glow	Violetti hehku
+	Magenta Glow	Magentan hehku
+	Polka Dots	Pallokuvio
+	Vertical Stripes	Pystyraidat
+	Horizontal Stripes	Vaakaraidat
+	Diagonal Stripes	Vinoraidat
+	Checkerboard	Shakkiruudukko
+	Diamonds	Vinoneliöt
+	Crosses	Ristit
+	Coarse Grit	Karkea rae
+	Stipple	Pisteytys
+	Scratches	Naarmut
+	Sparse Flecks	Harvat täplät
+	Dense Flecks	Tiheät täplät
+	Sine Bands	Siniaaltovyöt
+	Ripple Lines	Väreviivat
+	Interference Rings	Interferenssirenkaat
+	Offset Rings	Siirretyt renkaat
+	Warped Checks	Vääristyneet ruudut
+	Pinched Stripes	Puristetut raidat
+	Chevron Pulse	Nuolikuviopulssi
+	Radiating Lenses	Säteilevät linssit
+	Soft Shadow	Pehmeä varjo
+	Hard Shadow	Terävä varjo
+	Lifted Card	Kohotettu kortti
+	Neon Tube	Neonputki
+	Inner Light	Sisävalo
+	Feathered	Pehmeäreunainen
+	Haze	Utu
+	Double Rule	Kaksoisviiva
+	Triple Rule	Kolmoisviiva
+	Dashed Border	Katkoviivareuna
+	Dotted Border	Pisteviivareuna
+	Offset Keyline	Siirretty ääriviiva
+	Inset Keyline	Sisäinen ääriviiva
+	Outside Stroke	Ulkoreunan viiva
+	Pointer	Osoitin
+	Highlighter	Korostuskynä
+	Sketchy Line	Luonnosviiva
+	Scribble Fill	Töherrystäyttö
+	Wobble	Huojunta
+	Zig Zag Edge	Siksakreuna
+	Wavy Edge	Aaltoreuna
+	Puffy	Pullistunut
+	Starburst	Tähtiräjähdys
+	Glossy	Kiiltävä
+	Brushed Metal	Harjattu metalli
+	Spotlight	Kohdevalo
+	Sunset Band	Auringonlaskun vyö
+	Sea Glass	Merilasi
+	Pearl	Helmi
+	Chrome Rim	Kromireuna
+	Glow Orb	Hehkupallo
+	Pill Badge	Pillerimerkki
+	Round Badge	Pyöreä merkki
+	Flag Wave	Liehuva lippu
+	Bulge	Pullistuma
+	Twisted	Kierretty
+	Echo	Kaiku
+	Spiral Copies	Spiraalikopiot
+	Multiply Tint	Kerro-sävy
+	Darken Veil	Tummenna-harso
+	Ghosted	Haamumainen
+	Two Tone	Kaksivärinen
+	Overlay Glaze	Sulautus-lasite
+	Screen Light	Rasteri-valo
+	Soft Light Wash	Pehmeä valo -laveeraus
+	Cyan Neon	Syaani neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Meripihkaputki
+	Electric Lime	Sähköinen lime
+	Pulse Violet	Sykkivä violetti
+	Cobalt Phosphor	Kobolttifosfori
+	Burst	Purkaus
+	Rounded Square	Pyöristetty neliö
+	Sun	Aurinko
+	Moon	Kuu
+	Cloud	Pilvi
+	Rain	Sade
+	Thunder	Ukkonen
+	Snow	Lumi
 	Save Brush Library…	Tallenna sivellinkirjasto…
 @msg	`{_1}` has no brushes to apply	Kohteessa `{_1}` ei ole käytettäviä siveltimiä
 @msg	missing `library` (see brush.libraries)	`library` puuttuu (katso brush.libraries)
@@ -8395,6 +8675,7 @@ breakText	Glyphs	Merkit
 @msg	Two panels pass through each other.	Kaksi paneelia kulkee toistensa läpi.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
 	Dashed Arrow	Katkoviivanuoli
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	viiva tai muu avoin polku, joka ei rajaa aluetta, ei lisää yhdistelmämuotoon aluetta; jos haluat sisällyttää sen, käytä siihen ensin komentoa Objekti › Polku › Ääriviivaa viiva
 	Pressure Sensitive	Paineherkkä
 	Flex Ribbon	Joustava nauha
 	Pulse Stroke	Sykkivä veto
