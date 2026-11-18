@@ -23,7 +23,10 @@ versions. Among those presets, Corners is 100 in Technical Drawing, 75 in Defaul
 Logo, Line Art and Outline, and 50 in the other eight. Noise is 1 px in Technical Drawing, 5 in High Fidelity Photo and Black and White Logo, 8 in 6 Colors
 and 16 Colors, 10 in Low Fidelity Photo, 15 in 3 Colors and Shades of Gray, 20 in Sketched Art, Line
 Art and Outline, 25 in Default, and 90 in Silhouettes (see
-[image-trace-quality.md](image-trace-quality.md#preset-paths-corners-and-noise)).
+[image-trace-quality.md](image-trace-quality.md#preset-paths-corners-and-noise)). High Fidelity Photo
+traces with Palette › Full Tone at Color detail 85 and Method › Abutting (VectorCraft's own values; see
+[image-trace-quality.md](image-trace-quality.md#high-fidelity-photo-in-full-tone)); Low Fidelity Photo
+traces with a Limited palette of 20 colors, Overlapping.
 
 Sliders apply on release, and their numeric fields can be edited directly. Each committed
 adjustment re-traces the selected object as one undo step and changes the preset to Custom.
@@ -83,9 +86,9 @@ leaves out every white area whatever `ignoreBackground` is.
 color nearest to it in lightness and hue, with a difference in hue or chroma counted three times
 as much as one in lightness, so a gray or a muted brown takes a black, white or other neutral
 library color rather than a saturated color of the same lightness.
-**Abutting and Overlapping.** Abutting is the default Method, and the Default, Auto Color, 3 Colors,
-6 Colors and 16 Colors presets use it. With Abutting, two neighboring colors share one exact edge. The
-canvas smooths the edges of each path on its own, so each of the two paths covers only part of the
+**Abutting and Overlapping.** Abutting is the default Method, and the Default, Auto Color, High Fidelity
+Photo, 3 Colors, 6 Colors and 16 Colors presets use it. With Abutting, two neighboring colors share one
+exact edge. The canvas smooths the edges of each path on its own, so each of the two paths covers only part of the
 pixels along that edge, and a thin line of the background can show between the colors. Web browsers
 and PDF viewers usually draw an exported SVG or PDF file the same way and show the same line. Raster
 exports (PNG, JPEG, TIFF and the other bitmap formats) with None anti-aliasing do not show it at any
@@ -123,29 +126,41 @@ lies on an edge between them and that blend lies nearer the pixel than the blend
 The pixel lies on such an edge when, along the line between the outer two colors, it reaches a pixel
 darker than the middle color in at most 5 steps, each to the neighbor that lies farthest toward the
 darker color while the pixels keep getting darker, and reaches a pixel lighter than the middle color the
-same way. A blend lies as near the pixel as the farther of its colors' nearest flat areas within 6
-pixels. The blend of the outer two also lies as near as the larger of the two step counts to a pixel of
-each outer color, when that number is smaller.
+same way. When the first step toward one outer color comes to a pixel that is less than half as far from
+that color as from any other traced color, the path toward the other outer color stops at the first
+pixel within 4 levels (out of 255) of the middle color that it comes to before it gets past the middle
+color. A blend lies as near the pixel as the farther of its colors' nearest flat areas within 6 pixels.
+The blend of the outer two also lies as near as the larger of the two step counts, when that number is
+smaller. Each path counts its steps to the first pixel past the middle color that is less than half as
+far from that path's outer color as from any other traced color.
 
 A black disc beside a gray square on white traces with one gray shape, the square, and no gray slivers
 around the disc, when its edges are sharp or blurred by up to 2 pixels, with the colors found or named.
-With the colors named and edges blurred by 3 pixels, a gray of 128 is still one shape, a gray of 200
-leaves 4 slivers with no area, and a light gray (230) leaves 8 slivers of up to 21 pixels. An image with
-noise of a level or more in its pixels can still leave gray slivers along the disc.
+A light gray (230) blurred by 1.5 pixels leaves up to 4 slivers of up to 3 pixels. With the colors named
+and edges blurred by 3 pixels, a gray of 128 is still one shape, a gray of 200 leaves 4 slivers with no
+area, and a light gray leaves 8 slivers of up to 21 pixels. An image with noise of a level or more in its
+pixels can still leave gray slivers along the disc.
 
 With sharp edges, a gray stroke two or three pixels wide beside black has no darker pixel next to it and
-stays gray, and so does a gray band along black. On edges blurred by a pixel or more, gray near black
-loses some of its pixels. A soft-edged gray band up to 4 pixels wide lying along black traces as black
-and white at blurs of 1.5 and 2 pixels, and so does one up to 3 pixels wide at blurs of 1 and 3 pixels; a
-wider band loses some of its pixels next to black, and one 8 pixels wide keeps at least half of its gray
-at blurs of 1.5 and 2 pixels. A soft-edged gray stroke 2 pixels from black can lose some or all of its
-gray, one 4 pixels from black loses a few pixels (a light gray stroke 2 pixels wide, blurred by 1.5
-pixels, keeps 28 of 34), and the pixels of one 6 pixels or more from black do not reach black in 5 steps
-and are not read as an edge of black and white. A soft-edged gray
-stroke 2 or 3 pixels wide running straight out of black, blurred by 1 or 1.5 pixels, loses 3 or 4 of
-the 16 pixels nearest black. A soft-edged gray stroke about two
-pixels wide that touches black traces as black and white, and one about three pixels wide that touches
-black can lose most or all of its gray when it is short (12 pixels long or less). A line of gray one
+stays gray, and so does a gray band along black. The counts below are of pixel centers that trace gray.
+With edges blurred by 0.6 pixels, as by ordinary anti-aliasing, a gray band 3 to 8 pixels wide along
+black traces gray at no fewer than 4 of every 5 of its pixel centers. On edges blurred by a pixel or
+more, gray near black traces gray at fewer of its pixel centers. A soft-edged gray band along black
+traces as black and white, with gray at no more than 1 of every 16 of its pixel centers, when it is up
+to 4 pixels wide at blurs of 1.5 and 2 pixels, up to 3 pixels wide at a blur of 3 pixels, or 2 pixels
+wide at a blur of 1 pixel. A wider band loses some or most of its gray next to black. Bands 3 and 4
+pixels wide blurred by 1 pixel trace gray at about 60 of their 336 pixel centers (over grays of 230, 200
+and 128), bands 4 pixels wide blurred by 3 pixels at about 39 of 192, and a band 8 pixels wide at no
+fewer than half of its pixel centers at blurs of 1 to 3 pixels. A light gray stroke 2 pixels wide,
+blurred by 1.5 pixels, traces gray at about 10 of the 34 pixel centers along its middle when it lies 2
+pixels from black and at about 25 when it lies 4 pixels away. At 6 or 8 pixels from black it traces gray
+at all 34: its pixels do not reach black in 5 steps and are not read as an edge of black and white. A
+soft-edged gray stroke 2 or 3 pixels wide running straight out of black, blurred by 1 or 1.5 pixels,
+loses 3 or 4 of the 16 pixel centers along its middle nearest black. Blurred by 2 pixels, one 3 pixels
+wide loses 2 or 3 of them, and one 2 pixels wide traces as black and white along its whole length. A
+soft-edged gray stroke about two pixels wide lying along black traces as black and white, and one about
+three pixels wide lying along black can lose most or all of its gray when it is short (12 pixels long or
+less). A line of gray one
 pixel wide between black and white stays gray when at least 13 of its pixels touch: such a line and a
 straight black-to-white edge whose pixels are as light as the gray give the same pixels, and both
 trace as gray. A one-pixel gray line between black and white that is shorter than 13 pixels, falls

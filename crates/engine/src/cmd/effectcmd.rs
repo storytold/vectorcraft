@@ -1040,7 +1040,8 @@ impl RasterBudget {
 /// of their own. Random in a Transform effect takes its seed from the id, and the canvas draws the
 /// pieces with the ids they have before that. `kept` gets the new id of each object in them that
 /// had an id `skip` lists before. Returns what each of those other members' expansions lists, by
-/// the member's new id.
+/// the member's new id. `Err` when such a member still holds a random Transform effect after the
+/// raster budget left part of it as it is: its new ids would give that effect another seed.
 #[allow(clippy::too_many_arguments)]
 fn expand_pieces(
     d: &mut Document,
@@ -1051,7 +1052,7 @@ fn expand_pieces(
     kept: &mut Vec<NodeId>,
     stroke_art: effects::StrokeArt,
     raster: &mut RasterBudget,
-) -> std::collections::HashMap<NodeId, Vec<Listed>> {
+) -> std::result::Result<std::collections::HashMap<NodeId, Vec<Listed>>, OverBudget> {
     let id = m.id;
     let mut seen = std::collections::HashSet::from([id]);
     let mut expanded = std::collections::HashMap::new();
@@ -1065,7 +1066,12 @@ fn expand_pieces(
         if all || c.id == id {
             effects::expand_art(d, c, stroke_art);
         } else if has_seeded(c) && repeats_an_id(c, &seen) {
-            listed = Some(expand_in_place(d, c, brushes, skip, raster));
+            let left = raster.left;
+            let expanded = expand_in_place(d, c, brushes, skip, raster);
+            if raster.left > left && has_seeded(c) {
+                return Err(OverBudget);
+            }
+            listed = Some(expanded);
         }
         let mut was = vec![];
         if !skip.is_empty() {
@@ -1086,7 +1092,7 @@ fn expand_pieces(
             expanded.insert(c.id, listed);
         }
     }
-    expanded
+    Ok(expanded)
 }
 
 /// `m`, the art a 3D effect expanded into, with each object in it that has effects of its own (a
@@ -1301,6 +1307,19 @@ fn carries_copies(n: &Node) -> bool {
     is_container(n) && effects::outer_effects(n).len() != n.appearance.effects.len()
 }
 
+/// Does `n`, something in it, or the art of the symbol it places when a color adjustment makes it
+/// that art, hold a random Transform effect ([`has_seeded`])? The raster budget can then leave `n`
+/// as it is after part of it expanded ([`expand_pieces`], Crop Marks).
+fn holds_seeded(d: &Document, n: &Node) -> bool {
+    has_seeded(n)
+        || match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } if effects::has_adjustment(n) => {
+                d.symbols.iter().find(|s| s.name == *symbol).is_some_and(|s| has_seeded(&s.art))
+            }
+            _ => false,
+        }
+}
+
 /// [`expand_node`] of `n`, which need not be in `d`: `n` with its appearance expanded, `None` when
 /// it has nothing to expand. `out` gets the objects whose appearance expands, by places in the walk
 /// of the expanded `n`, `n`'s first when its own does. The objects `skip` lists are not expanded.
@@ -1331,12 +1350,22 @@ fn expanded_node(
         _ => None,
     };
     // The embedded images before the adjustment and the expansions of the copies
-    // ([`copies_carrying_raster`]), when the raster budget may yet leave `n` as it is: the
-    // recolored copies and the images those add then go again.
-    let images_before = ((effects::has_adjustment(&n) && !rasterfx::raster_fx(&n).is_empty()) || carries_copies(&n))
+    // ([`copies_carrying_raster`]) and of the members that hold a random Transform effect, when the
+    // raster budget may yet leave `n` as it is: the recolored copies and the images those add then
+    // go again.
+    let images_before = ((effects::has_adjustment(&n) && !rasterfx::raster_fx(&n).is_empty()) || carries_copies(&n) || holds_seeded(d, &n))
         .then(|| d.images.keys().cloned().collect::<std::collections::HashSet<_>>());
     // What the raster budget had left before those expansions: it gets back what they took.
     let budget_before = (raster.images, raster.pixels);
+    // `n` stays as it is: `out` lists nothing of it, and the document and the raster budget lose
+    // what expanding it added and took.
+    let leave = |d: &mut Document, out: &mut Vec<Listed>, raster: &mut RasterBudget| {
+        out.truncate(listed_before);
+        if let Some(keys) = &images_before {
+            d.images.retain(|k, _| keys.contains(k));
+        }
+        (raster.images, raster.pixels) = budget_before;
+    };
     if effects::has_adjustment(&n)
         && let Some(m) = effects::adjust_in_document(d, &n, symbol_art)
     {
@@ -1352,14 +1381,21 @@ fn expanded_node(
     let container = is_container(&n);
     // Crop Marks: the object and its marks become a group. The object expands on its own first,
     // with `id`: the canvas draws it with that id, which Random in a Transform effect takes its
-    // seed from. Then the object and the marks get ids of their own.
+    // seed from. Then the object and the marks get ids of their own. When the raster budget leaves
+    // a random Transform effect in the object, `n` stays as it is: new ids would give that effect
+    // another seed.
     if let Some(mut m) = effects::crop_marks_art(&n) {
         let mut seen = std::collections::HashSet::from([id]);
         let mut expanded = vec![];
         for (i, c) in m.children_mut().into_iter().flatten().enumerate() {
             let c = Arc::make_mut(c);
             if i == 0 {
+                let left = raster.left;
                 expanded = expand_in_place(d, c, brushes, skip, raster);
+                if raster.left > left && has_seeded(c) {
+                    leave(d, out, raster);
+                    return None;
+                }
                 fresh_ids_listed(d, c, &mut seen, &mut expanded);
             } else {
                 effects::fresh_ids(d, c, &mut seen);
@@ -1390,16 +1426,13 @@ fn expanded_node(
     let copies = copies_carrying_raster(d, &mut n, (brushes, skip), &mut kept, &mut members, (out, &mut listed_n), raster);
     // Raster effects whose image would go past the budget stay: so does the object, with what is
     // inside it and its color adjustments (a symbol instance stays an instance of its symbol), and
-    // so does a group or layer whose copies keep a random Transform effect the budget left.
+    // so does a group or layer whose copies or members keep a random Transform effect the budget
+    // left.
     let Ok(image) = copies.and_then(|copied| {
         changed |= copied;
         raster_image(d, &n, raster)
     }) else {
-        out.truncate(listed_before);
-        if let Some(keys) = images_before {
-            d.images.retain(|k, _| keys.contains(k));
-        }
-        (raster.images, raster.pixels) = budget_before;
+        leave(d, out, raster);
         return None;
     };
     let mut v = n.clone();
@@ -1413,18 +1446,20 @@ fn expanded_node(
         image => {
             let m = if (container || matches!(n.kind, NodeKind::Text(_))) && (effects::has_solid(&v) || effects::has_revolve(&v)) {
                 // A 3D effect on a group or layer, or on type: the shaded faces of its solids.
-                effects::expand_leaf(d, &v, &mut stroke_art)
+                Ok::<_, OverBudget>(effects::expand_leaf(d, &v, &mut stroke_art))
             } else if container {
                 // A group's or layer's own fills and strokes become art among its members.
-                effects::evaluate_container(Some(&*d), &v).map(|mut m| {
-                    members.extend(expand_pieces(d, &mut m, false, brushes, skip, &mut kept, &mut stroke_art, raster));
-                    m
-                })
+                effects::evaluate_container(Some(&*d), &v)
+                    .map(|mut m| {
+                        members.extend(expand_pieces(d, &mut m, false, brushes, skip, &mut kept, &mut stroke_art, raster)?);
+                        Ok(m)
+                    })
+                    .transpose()
             } else if matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. })
                 && !effects::has_transform_art(&v)
                 && !effects::has_transform_copies(&v)
             {
-                effects::expand_leaf(d, &v, &mut stroke_art)
+                Ok(effects::expand_leaf(d, &v, &mut stroke_art))
             } else {
                 // Type, images, symbol instances, live objects (and paths whose Transform effect copies
                 // them, each copy an object of its own, or changes their fills and strokes): through
@@ -1440,12 +1475,18 @@ fn expanded_node(
                 let row_raster = image.is_some() && effects::has_instance_row_raster(&n);
                 let outlined = effects::expand_outlined(Some(&*d), &v, symbol.as_ref())
                     .or_else(|| if row_raster { effects::instance_as_art(Some(&*d), &v, symbol.as_ref()) } else { None });
-                outlined.map(|mut m| {
-                    let mut budget = vectorcraft_doc::MAX_SYMBOL_NODES;
-                    expand_nested_instances(d, &mut m, 1, &mut budget, raster);
-                    expand_pieces(d, &mut m, true, brushes, skip, &mut kept, &mut stroke_art, raster);
-                    m
-                })
+                outlined
+                    .map(|mut m| {
+                        let mut budget = vectorcraft_doc::MAX_SYMBOL_NODES;
+                        expand_nested_instances(d, &mut m, 1, &mut budget, raster);
+                        expand_pieces(d, &mut m, true, brushes, skip, &mut kept, &mut stroke_art, raster)?;
+                        Ok(m)
+                    })
+                    .transpose()
+            };
+            let Ok(m) = m else {
+                leave(d, out, raster);
+                return None;
             };
             // A 3D effect's shadow blurred by the light's Softness keeps its blur in the art: it
             // expands in turn, to an image.

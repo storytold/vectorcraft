@@ -61,6 +61,32 @@ fn file_ends_with_exit() {
     assert!(matches!(last, Item::Cmd("Exit", "app.quit", _)), "{last:?}");
 }
 
+/// Help starts with Search Commands…, the command search's own command, showing its shortcut,
+/// then a separator; the menus list it once.
+#[test]
+fn help_starts_with_search_commands() {
+    let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let tree = menu_tree();
+    let (_, help) = tree.iter().find(|(t, _)| *t == "Help").unwrap();
+    assert!(matches!(help[0], Item::Cmd("Search Commands…", "help.commandPalette", _)), "{:?}", help[0]);
+    assert!(matches!(help[1], Item::Sep), "{:?}", help[1]);
+    let Some(Entry::Item(row)) = entry(&app, &help[0]) else { panic!("Search Commands… is not shown") };
+    assert!(row.enabled);
+    assert_eq!(row.shortcut, shortcut_of("help.commandPalette"));
+    assert!(row.shortcut.is_some(), "the search's shortcut shows next to the item");
+    fn count(items: &[Item]) -> usize {
+        items
+            .iter()
+            .map(|it| match it {
+                Item::Cmd(_, "help.commandPalette", _) => 1,
+                Item::Sub(_, children) => count(children),
+                _ => 0,
+            })
+            .sum()
+    }
+    assert_eq!(tree.iter().map(|(_, items)| count(items)).sum::<usize>(), 1);
+}
+
 /// No application menu in the window (as in Illustrator): the bar starts at File.
 #[test]
 fn the_bar_starts_at_file() {
@@ -414,6 +440,39 @@ fn center_on_top_and_bottom_are_type_on_a_path_items() {
     };
     // Once round, the middle of the top edge an eighth of the way round.
     assert!((start - 0.625).abs() < 1e-6, "{start}");
+}
+
+/// Type › Size ends with a separator and Other…, which runs `type.highlightFontSize`: dimmed
+/// without selected type, enabled with it, and never checked.
+#[test]
+fn type_size_ends_with_other() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let id = "type.highlightFontSize";
+    assert!(!enabled(&app, id), "no document");
+    app.run("file.new", json!({})).unwrap();
+    let items: Vec<Item> = menu_tree()
+        .into_iter()
+        .filter(|(menu, _)| *menu == "Type")
+        .flat_map(|(_, items)| items)
+        .filter_map(|item| match item {
+            Item::Sub("Size", children) => Some(children),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    let n = items.len();
+    assert!(n > 2, "{n} items");
+    assert!(matches!(items[n - 2], Item::Sep), "a separator comes before Other…");
+    assert!(matches!(&items[n - 1], Item::Cmd("Other…", c, p) if *c == id && p.is_null()), "Other… comes last");
+    assert!(items[..n - 2].iter().all(|i| matches!(i, Item::Cmd(_, "text.setStyle", _))), "the sizes come first");
+    assert!(!enabled(&app, id), "nothing selected");
+    let path = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [path]})).unwrap();
+    assert!(!enabled(&app, id), "a path selected");
+    let text = app.run("text.create", json!({"x": 10, "y": 100, "text": "Size"})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [text]})).unwrap();
+    assert!(enabled(&app, id), "type selected");
+    assert_eq!(checked(&app, id, &Value::Null), None);
 }
 
 /// Type › Dynamic Text Presets › Circle, Arch and Bow run `type.dynamicTextPreset` with their
