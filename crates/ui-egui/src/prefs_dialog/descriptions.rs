@@ -298,6 +298,15 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
         "pasteTextFormatting",
         "Keep Formatting keeps the styles of text copied from VectorCraft type when it is pasted into type; Keep Plain Text gives it the style where it lands.",
     ),
+    // Appearance of Black
+    (
+        "blackOnScreen",
+        "Display All Blacks as Rich Black shows pure CMYK black (black ink alone at 100%) as RGB black on the canvas; Display All Blacks Accurately converts it with the CMYK profile.",
+    ),
+    (
+        "blackOutput",
+        "Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG and TIFF, or other printing.",
+    ),
 ];
 
 /// The sentence that describes the setting `key`, in English, or `None` when it has none yet.
