@@ -89,6 +89,8 @@ fn with_status(mut ui: Vec<UiRequest>, warnings: Vec<String>) -> Vec<UiRequest> 
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiRequest {
     Dialog(String, Value),
+    /// Show and select the panel with this id where it is (Window › Transform for `transform`).
+    Panel(String),
     SwitchTool(String),
     /// A message for the status bar: the `warning` of a command the tool ran (Liquify skipping
     /// type under the brush).
@@ -1551,6 +1553,7 @@ impl Session {
                     }
                 }
                 Action::Dialog(k, p) => ui.push(UiRequest::Dialog(k, p)),
+                Action::Panel(panel) => ui.push(UiRequest::Panel(panel)),
                 Action::SwitchTool(t) => ui.push(UiRequest::SwitchTool(t)),
                 Action::Notify(what) => {
                     let view = self.last_view;

@@ -1333,6 +1333,41 @@ fn f7_hides_and_restores_the_whole_expanded_group() {
     assert!(showing(&h.app.ui, "properties"));
 }
 
+/// A tool's request for the Transform panel (a double-click on a shape's corner widget) shows and
+/// selects it wherever it is: closed, floating, behind another tab, in an icon column or in a dock
+/// hidden by Tab. Asking again keeps it on show.
+#[test]
+fn a_tools_panel_request_shows_the_panel_and_a_second_keeps_it_shown() {
+    let mut h = Harness::new();
+    let ask_twice = |h: &mut Harness, case: &str| {
+        for n in 1..=2 {
+            crate::canvas::apply_requests(&mut h.app, Ok(vec![vectorcraft_engine::UiRequest::Panel("transform".into())]));
+            h.frame(vec![]);
+            assert!(visible(&h.app.ui, "transform"), "{case}: request {n}");
+        }
+    };
+    if h.layout().contains(&"transform".to_string()) {
+        h.app.run("window.panel.close", json!({"panel": "transform"})).unwrap();
+    }
+    assert!(!visible(&h.app.ui, "transform"));
+    ask_twice(&mut h, "closed");
+    h.app.run("window.panel.float", json!({"panel": "transform"})).unwrap();
+    h.frame(vec![]);
+    ask_twice(&mut h, "floating");
+    h.app.run("window.panel.move", json!({"panel": "transform", "anchor": "properties"})).unwrap();
+    h.app.run("window.panel.activate", json!({"panel": "properties"})).unwrap();
+    h.frame(vec![]);
+    assert!(!visible(&h.app.ui, "transform"));
+    ask_twice(&mut h, "behind another tab");
+    h.app.run("window.collapseDock", json!({"collapsed": true})).unwrap();
+    h.frame(vec![]);
+    assert!(in_iconic_column(&h.layout(), "transform"));
+    ask_twice(&mut h, "in an icon column");
+    h.app.ui.dock = false;
+    assert!(!visible(&h.app.ui, "transform"));
+    ask_twice(&mut h, "in a hidden dock");
+}
+
 #[test]
 fn f7_restores_only_tabs_hidden_with_the_group() {
     let mut h = Harness::new();
