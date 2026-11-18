@@ -5386,6 +5386,8 @@ digits	Malayalam	Malaiàlam
 	Variable Options	Opcions de variable
 	Variable Options…	Opcions de variable…
 	Variable Width Profile	Perfil d’amplada variable
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
 	Variables	Variables
 	Variation	Variació
 	Variation:	Variació:

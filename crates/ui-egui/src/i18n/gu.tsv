@@ -4392,6 +4392,8 @@
 	Variable Font	વેરિએબલ ફૉન્ટ
 	Variable Options…	વેરિએબલ વિકલ્પો…
 	Variable Width Profile	વેરિએબલ પહોળાઈ પ્રોફાઇલ
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	સ્ટ્રોકનું બ્રશ પોતાનું કદ જાળવે છે, તેથી પહોળાઈ પ્રોફાઇલ તેને બદલતી નથી. પ્રોફાઇલ વાપરવા માટે બ્રશ દૂર કરો.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	સ્ટ્રોકનું બ્રશ પોતાનું કદ જાળવે છે, તેથી પહોળાઈ પ્રોફાઇલ તેને બદલતી નથી. પ્રોફાઇલ વાપરવા માટે બ્રશ દૂર કરો.
 	Variables	વેરિએબલ્સ
 	Variation:	વેરિએશન:
 	Vector Effects	વેક્ટર અસરો

@@ -5513,6 +5513,8 @@ digits	Malayalam	馬來亞拉姆數字
 	V Spacing:	垂直間距：
 	V:	V：
 	Variable Width Profile	可變寬度描述檔
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	筆畫的筆刷會保持自身大小，因此寬度描述檔不會改變它。移除筆刷即可使用描述檔。
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	筆畫的筆刷會保持自身大小，因此寬度描述檔不會改變它。移除筆刷即可使用描述檔。
 	Variables	變數
 	New Variable	新增變數
 	Delete Variable	刪除變數

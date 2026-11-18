@@ -4120,6 +4120,8 @@ digits	Malayalam	Малаялам
 	V Spacing:	В. разстояние:
 	V:	В:
 	Variable Width Profile	Профил с променлива ширина
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Четката на щриха запазва собствения си размер, затова профилът на ширината не го променя. Премахнете четката, за да използвате профил.
 	Variables	Променливи
 	New Variable	Нова променлива
 	Delete Variable	Изтриване на променлива

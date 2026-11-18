@@ -1245,6 +1245,14 @@ pub fn has_brush(n: &Node) -> bool {
     n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some() && s.visible))
 }
 
+/// Does `stroke` draw with a brush of `lib` (the document's [`library`])? [`stroke_pieces`] sizes
+/// brush art from the brush and the stroke weight and does not read the stroke's width profile, so
+/// the profile does not change what such a stroke draws. A stroke without a brush, or one that
+/// names a brush `lib` lacks, draws a plain stroke, which follows the profile.
+pub fn keeps_brush_size(lib: &[Brush], stroke: &StrokeLayer) -> bool {
+    stroke.brush.as_deref().is_some_and(|name| lib.iter().any(|b| b.name == name))
+}
+
 /// How far brush art can paint past the visual box of `n`: `16 × w + 8`, where `w` is the widest
 /// stroke of `n` (at least 1), when `n` has a visible brushed stroke with a paint; 0 when it has
 /// none, as a brushed stroke without a paint draws no brush art. This is the room the renderer and

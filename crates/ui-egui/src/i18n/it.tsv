@@ -4323,6 +4323,8 @@ digits	Malayalam	Malayalam
 	V Spacing:	Spaziatura verticale:
 	V:	V:
 	Variable Width Profile	Profilo larghezza variabile
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Il pennello della traccia mantiene la propria dimensione, quindi un profilo di larghezza non la modifica. Rimuovi il pennello per usare un profilo.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Il pennello della traccia mantiene la propria dimensione, quindi un profilo di larghezza non la modifica. Rimuovi il pennello per usare un profilo.
 	Variables	Variabili
 	New Variable	Nuova variabile
 	Delete Variable	Elimina variabile
