@@ -11,7 +11,10 @@
 //! the side the path bends toward; with Shift held at the press, on the other side. On a straight
 //! stretch, at a cusp, at a corner, or where the circle would reach past the canvas, the pointer
 //! shows "Straight segment", "Cusp", "Corner" or "Circle too large" instead, and a click draws
-//! nothing.
+//! nothing. The pointer passes over the circles the tool drew until an edit, Undo or Redo is made
+//! outside the tool.
+
+use std::collections::HashSet;
 
 use serde_json::json;
 use vectorcraft_doc::{MAX_COORD, NodeId};
@@ -55,14 +58,19 @@ pub struct CurvatureCircleTool {
     /// The press in progress, where the pointer was pressed: what a release draws.
     press: Option<(Hit, bool)>,
     from: Point,
+    /// The circles the tool drew since the history last moved outside it.
+    drawn: HashSet<NodeId>,
 }
 
-/// The nearest point within reach of `p` on the paths a click can pick, guides left out; of paths
-/// at the same distance, a selected one, then the one on top.
-fn hit_at(cx: &ToolContext, p: Point) -> Option<Hit> {
+/// The nearest point within reach of `p` on the paths a click can pick, guides and the paths in
+/// `skip` left out; of paths at the same distance, a selected one, then the one on top.
+fn hit_at(cx: &ToolContext, p: Point, skip: &HashSet<NodeId>) -> Option<Hit> {
     let tol = cx.tol(SNAP_PX).max(cx.snap_tol());
     let mut best: Option<(Hit, f64)> = None;
     for id in crate::draw2::candidate_paths(cx) {
+        if skip.contains(&id) {
+            continue;
+        }
         let Some(pd) = cx.doc.node(id).filter(|n| !n.is_guide()).and_then(|n| n.path_data()) else { continue };
         // A path whose control points' box lies out of reach holds no point within reach.
         if pd.control_bounds().is_none_or(|b| !b.inflate(tol, tol).contains(p)) {
@@ -112,11 +120,11 @@ impl Tool for CurvatureCircleTool {
         }
         match ev.kind {
             PointerKind::Move => {
-                self.hover = hit_at(cx, ev.pos).map(|h| (h, ev.mods.shift));
+                self.hover = hit_at(cx, ev.pos, &self.drawn).map(|h| (h, ev.mods.shift));
                 vec![]
             }
             PointerKind::Down => {
-                self.press = hit_at(cx, ev.pos).map(|h| (h, ev.mods.shift));
+                self.press = hit_at(cx, ev.pos, &self.drawn).map(|h| (h, ev.mods.shift));
                 self.hover = self.press;
                 self.from = ev.pos;
                 vec![]
@@ -131,13 +139,13 @@ impl Tool for CurvatureCircleTool {
             }
             PointerKind::Up => {
                 let press = self.press.take();
-                self.hover = hit_at(cx, ev.pos).map(|h| (h, ev.mods.shift));
+                self.hover = hit_at(cx, ev.pos, &self.drawn).map(|h| (h, ev.mods.shift));
                 let Some((hit, convex)) = press else { return vec![] };
                 if ev.pos.distance(self.from) >= cx.tol(DRAG_PX) || !matches!(found(cx, hit, convex), Some(Found::Circle(_))) {
                     return vec![];
                 }
                 let p = json!({"id": hit.id.0, "subpath": hit.subpath, "segment": hit.segment, "t": hit.t, "convex": convex});
-                vec![Action::Exec("shape.curvatureCircle".into(), p)]
+                vec![Action::Exec("shape.curvatureCircle".into(), p), Action::Notify("created".into())]
             }
             PointerKind::DoubleClick | PointerKind::TripleClick => vec![],
         }
@@ -167,9 +175,20 @@ impl Tool for CurvatureCircleTool {
         true
     }
 
+    /// The command selects the circle it drew; the tool adds it to the circles the pointer passes
+    /// over.
+    fn notify(&mut self, cx: &ToolContext, what: &str) {
+        if what == "created"
+            && let [id] = cx.selection.objects[..]
+        {
+            self.drawn.insert(id);
+        }
+    }
+
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.hover = None;
         self.press = None;
+        self.drawn.clear();
         vec![]
     }
 
@@ -180,10 +199,11 @@ impl Tool for CurvatureCircleTool {
     }
 
     /// An edit, Undo or Redo made outside the tool, or another document, may move or remove the
-    /// path under the pointer.
+    /// path under the pointer, and the pointer reaches the circles the tool drew again.
     fn history_moved(&mut self) {
         self.hover = None;
         self.press = None;
+        self.drawn.clear();
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
@@ -194,7 +214,7 @@ impl Tool for CurvatureCircleTool {
             Some(Found::Circle(c)) => {
                 let r = c.radius;
                 let path = shapes::ellipse(Rect::new(c.center.x - r, c.center.y - r, c.center.x + r, c.center.y + r)).to_bezpath();
-                // Drawn solid when longer than DASHED_PX on screen.
+                // The outline is drawn solid when it is longer than DASHED_PX on screen.
                 let dashed = std::f64::consts::TAU * r <= cx.tol(DASHED_PX);
                 o.push(Overlay::Path { path, color, width: 1.0, dashed });
                 o.push(Overlay::Line { a: c.center, b: c.at, color, dashed: false });

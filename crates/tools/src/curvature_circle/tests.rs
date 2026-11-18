@@ -30,10 +30,11 @@ fn click(t: &mut CurvatureCircleTool, cx: &ToolContext, p: (f64, f64), mods: Mod
     acts
 }
 
-/// The one command `acts` runs: its params.
+/// The one command `acts` runs, followed by the tool's notice that it drew: the command's params.
 fn params(acts: &[Action]) -> serde_json::Value {
-    let [Action::Exec(c, v)] = acts else { panic!("one command: {acts:?}") };
+    let [Action::Exec(c, v), Action::Notify(what)] = acts else { panic!("one command: {acts:?}") };
     assert_eq!(c, "shape.curvatureCircle");
+    assert_eq!(what, "created");
     v.clone()
 }
 
@@ -133,14 +134,14 @@ fn the_pointer_reaches_a_path_within_5_screen_points() {
     assert_eq!(click(&mut t, &cx, (200.0, 200.0), Mods::default()), vec![]);
     assert!(t.overlays(&cx).is_empty());
     assert_eq!(click(&mut t, &cx, (306.0, 200.0), Mods::default()), vec![]);
-    assert_eq!(click(&mut t, &cx, (304.0, 200.0), Mods::default()).len(), 1);
+    assert_eq!(click(&mut t, &cx, (304.0, 200.0), Mods::default()).len(), 2);
     let zoomed = ToolContext { zoom: 2.0, ..cx };
     assert_eq!(click(&mut t, &zoomed, (303.0, 200.0), Mods::default()), vec![]);
-    assert_eq!(click(&mut t, &zoomed, (302.0, 200.0), Mods::default()).len(), 1);
+    assert_eq!(click(&mut t, &zoomed, (302.0, 200.0), Mods::default()).len(), 2);
     // A larger snapping tolerance reaches farther, with Smart Guides off or on.
     for smart_guides in [false, true] {
         let wide = ToolContext { snapping_tolerance: 10.0, smart_guides, ..cx };
-        assert_eq!(click(&mut t, &wide, (309.0, 200.0), Mods::default()).len(), 1, "{smart_guides}");
+        assert_eq!(click(&mut t, &wide, (309.0, 200.0), Mods::default()).len(), 2, "{smart_guides}");
         assert_eq!(click(&mut t, &wide, (311.0, 200.0), Mods::default()), vec![], "{smart_guides}");
     }
 }
@@ -175,6 +176,26 @@ fn a_selected_guide_is_left_out() {
     let mut t = CurvatureCircleTool::default();
     assert_eq!(click(&mut t, &cx, (300.0, 200.0), Mods::default()), vec![]);
     assert!(t.overlays(&cx).is_empty());
+}
+
+/// After a click on a circle drawn with the Ellipse tool, the next hover and click pass over the
+/// circle the tool drew (selected and on top of it) and use the circle under it again, until an
+/// edit made outside the tool.
+#[test]
+fn the_next_click_passes_over_the_circle_just_drawn() {
+    let d = doc_with(&[circle(), circle()]);
+    let ids: Vec<NodeId> = d.layers[0].children().unwrap().iter().rev().map(|n| n.id).collect();
+    let (drawn, under) = (ids[0], ids[1]);
+    let s = Selection { objects: vec![drawn], ..Selection::default() };
+    let p = paint();
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let mut t = CurvatureCircleTool::default();
+    t.notify(&cx, "created");
+    t.pointer(&cx, &ev(PointerKind::Move, (302.0, 200.0), Mods::default()));
+    assert_eq!(t.hover.map(|(h, _)| h.id), Some(under));
+    assert_eq!(params(&click(&mut t, &cx, (302.0, 200.0), Mods::default()))["id"], json!(under.0));
+    t.history_moved();
+    assert_eq!(params(&click(&mut t, &cx, (302.0, 200.0), Mods::default()))["id"], json!(drawn.0));
 }
 
 /// A press that a second finger or a canceled touch drops draws nothing on the release, and an
@@ -247,7 +268,7 @@ fn a_drag_draws_nothing() {
     t.pointer(&cx, &ev(PointerKind::Up, (250.0, 200.0), Mods::default()));
     assert!(t.overlays(&cx).is_empty());
     assert_eq!(press(&mut t, (300.0, 202.0)), vec![]);
-    assert_eq!(press(&mut t, (300.0, 201.0)).len(), 1);
+    assert_eq!(press(&mut t, (300.0, 201.0)).len(), 2);
     // A release that far away with no drag before it is not a click either.
     t.pointer(&cx, &ev(PointerKind::Down, (300.0, 200.0), Mods::default()));
     assert_eq!(t.pointer(&cx, &ev(PointerKind::Up, (300.0, 230.0), Mods::default())), vec![]);

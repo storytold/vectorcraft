@@ -200,3 +200,25 @@ fn the_curvature_circle_tool_draws_the_circle_where_it_clicks() {
     click(&mut s, Mods::default(), 20.0, 20.0);
     assert_eq!((undo_len(&s), object_count(&s)), (undo + 2, count + 2));
 }
+
+/// After a click at a parabola's vertex, a click at (280, 236), 2.4 pt from the circle just drawn
+/// and about 3.1 pt from the parabola, passes over that circle and draws the parabola's circle
+/// there; after an Undo, the pointer reaches the circle again.
+#[test]
+fn the_next_click_passes_over_the_circle_the_tool_drew() {
+    let mut s = session();
+    parabola(&mut s);
+    s.select_tool("curvatureCircle", view()).unwrap();
+    click(&mut s, Mods::default(), 200.0, 200.0);
+    let first = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert!(bounds_are(&s, first, Rect::new(100.0, 200.0, 300.0, 400.0)));
+    click(&mut s, Mods::default(), 280.0, 236.0);
+    let second = *s.doc().unwrap().selection.objects.first().unwrap();
+    assert_ne!(second, first);
+    let r = s.doc().unwrap().doc.bounds_of(&[second], false).unwrap().width() / 2.0;
+    assert!(r > 150.0, "the parabola's circle at x = 280 is larger than at its vertex: {r}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let count = object_count(&s);
+    click(&mut s, Mods::default(), 280.0, 241.0);
+    assert_eq!(object_count(&s), count + 1, "the circle drawn first is within reach again");
+}

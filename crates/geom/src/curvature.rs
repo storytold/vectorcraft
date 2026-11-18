@@ -80,8 +80,8 @@ pub fn curvature_circle(c: CubicBez, t: f64, convex: bool) -> Result<CurvatureCi
 /// the next or previous segment at a corner, the path has no single direction: that is a
 /// [`NoCircle::Corner`]. A segment `sp` lacks is a [`NoCircle::Cusp`]. Segments with no length
 /// between the two are passed over, and a closed subpath with one segment of length meets itself.
-/// The anchor is smooth when it is marked smooth with handles that do not point back, or when the
-/// two segments leave it within [`SMOOTH_TURN`] of one direction.
+/// The anchor is smooth when it is marked smooth with handles that turn by less than 90°, or when
+/// the two segments leave it within [`SMOOTH_TURN`] of one direction.
 pub fn curvature_circle_on(sp: &SubPath, seg: usize, t: f64, convex: bool) -> Result<CurvatureCircle, NoCircle> {
     let n = sp.segment_count();
     if seg >= n {
@@ -119,7 +119,7 @@ fn neighbor(sp: &SubPath, seg: usize, forward: bool) -> Option<(CubicBez, bool)>
 }
 
 /// Is the join at anchor `anchor` smooth: marked smooth (with no segment of no length passed
-/// over) with the directions `a` into it and `b` out of it not pointing back, or `a` and `b` the
+/// over) with the directions `a` into it and `b` out of it less than 90° apart, or `a` and `b` the
 /// same within [`SMOOTH_TURN`]?
 fn smooth(sp: &SubPath, anchor: usize, skipped: bool, a: Vec2, b: Vec2) -> bool {
     let marked = !skipped && sp.anchors.get(anchor).is_some_and(|an| an.kind == AnchorKind::Smooth && an.has_in() && an.has_out());
@@ -349,8 +349,8 @@ mod tests {
     }
 
     /// An anchor whose handles turn by a thousandth of a radian, as rounded coordinates leave them,
-    /// is smooth; one marked smooth is smooth unless its handles point back the way they came; a
-    /// turn of 2° is a corner.
+    /// is smooth; one marked smooth is smooth unless its handles turn by 90° or more; a turn of 2°
+    /// is a corner.
     #[test]
     fn a_nearly_smooth_or_marked_smooth_anchor_has_a_circle() {
         let mid = |out_x: f64, kind: AnchorKind| {
@@ -370,6 +370,10 @@ mod tests {
         back.anchors.get_mut(1).unwrap().h_out = Point::new(100.0, -40.0);
         assert_eq!(curvature_circle_on(&back, 0, 1.0, false), Err(NoCircle::Corner));
         assert_eq!(curvature_circle_on(&back, 1, 0.0, false), Err(NoCircle::Corner));
+        // Marked smooth, with the out handle square to the in handle: a turn of 90°.
+        let mut square = mid(100.0, AnchorKind::Smooth);
+        square.anchors.get_mut(1).unwrap().h_out = Point::new(150.0, 0.0);
+        assert_eq!(curvature_circle_on(&square, 0, 1.0, false), Err(NoCircle::Corner));
     }
 
     /// An arc's cubic is taken only up to a quarter turn, with both ends on one circle and handles
