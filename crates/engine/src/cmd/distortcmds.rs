@@ -214,6 +214,15 @@ fn uniform() -> WidthProfile {
 /// Width points closer than this (in t) are at the same place: a discontinuous point.
 const SAME_T: f64 = 1e-6;
 
+/// The outgoing half of the discontinuous width point whose incoming half is point `a`: point `a`
+/// and the next one are the two halves when they are the only points within 1e-6 (in t) of `a`'s
+/// place. None when `a` is out of range or not such an incoming half.
+pub fn width_point_pair(points: &[(f64, f64, f64)], a: usize) -> Option<usize> {
+    let t = points.get(a)?.0;
+    let at: Vec<usize> = (0..points.len()).filter(|i| (points[*i].0 - t).abs() <= SAME_T).collect();
+    (at == [a, a + 1]).then_some(a + 1)
+}
+
 /// The stroke of `id` that width point commands edit (a compound path's for its members).
 fn stroke_mut(d: &mut Document, id: NodeId) -> Result<&mut vectorcraft_doc::StrokeLayer> {
     let id = stroke_owner(d, id);
@@ -316,11 +325,10 @@ fn set_pair(
     single: Option<bool>,
 ) -> Result<usize> {
     const C: &str = "stroke.widthPoint.set";
-    let at = points.get(i).map_or(f64::NAN, |q| q.0);
-    let halves: Vec<usize> = (0..points.len()).filter(|k| (points[*k].0 - at).abs() <= SAME_T).collect();
-    if halves != [i, j] {
+    if width_point_pair(points, i) != Some(j) {
         return Err(bad(C, "`index` and `outIndex` must be the two halves of one discontinuous width point"));
     }
+    let at = points[i].0;
     let (old_in, old_out) = (points[i], points[j]);
     if (old_in.0 - inc.0).abs() > SAME_T {
         return Err(bad(C, "a discontinuous width point keeps its place"));

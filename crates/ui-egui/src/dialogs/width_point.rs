@@ -21,6 +21,7 @@ use egui::vec2;
 use serde_json::{Value, json};
 use vectorcraft_doc::Unit;
 use vectorcraft_engine::doc::NodeId;
+use vectorcraft_engine::width_point_pair;
 
 use super::swatch_options::{grid, label};
 use super::{DialogSpec, run_and_close};
@@ -29,10 +30,6 @@ use crate::{VectorcraftApp, widgets};
 
 /// The dialog kind of Width Point Edit.
 pub const KIND: &str = "widthPoint";
-
-/// Width points closer than this (in t) are the two halves of one discontinuous point, as the
-/// engine and the Width tool count them.
-const SAME_T: f64 = 1e-6;
 
 pub(super) const SPEC: DialogSpec =
     DialogSpec { heading: |_| tl!("Width Point Edit").into(), body, confirm, discard: Some("Delete"), min_width: 300.0, ..DialogSpec::FORM };
@@ -45,17 +42,12 @@ fn point(app: &VectorcraftApp, id: u64, index: usize) -> Option<(f64, f64, f64)>
 }
 
 /// The incoming and outgoing halves of the discontinuous point that width point `index` of `id`
-/// belongs to, or none when it is a continuous point. As `stroke.widthPoint.set` pairs them, a
-/// point `a` and the next one are the two halves when they are the only points within
-/// [`SAME_T`] of `a`'s place, so either half finds the same pair.
+/// belongs to, or none when it is a continuous point. The halves are paired by
+/// [`width_point_pair`], as `stroke.widthPoint.set` pairs them, so either half finds the same pair.
 fn halves(app: &VectorcraftApp, id: u64, index: usize) -> Option<(usize, usize)> {
     let points = &app.session.active()?.doc.node(NodeId(id))?.appearance.stroke()?.profile.as_ref()?.points;
     points.get(index)?;
-    let pair = |a: usize| {
-        let t = points.get(a)?.0;
-        let at: Vec<usize> = (0..points.len()).filter(|i| (points[*i].0 - t).abs() <= SAME_T).collect();
-        (at == [a, a + 1]).then_some((a, a + 1))
-    };
+    let pair = |a: usize| width_point_pair(points, a).map(|b| (a, b));
     pair(index).or_else(|| index.checked_sub(1).and_then(pair))
 }
 
