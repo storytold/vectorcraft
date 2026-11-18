@@ -462,15 +462,21 @@ pub struct InkSettings {
     /// Halftone screen angle (degrees); `None`: the ink's default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub angle: Option<f64>,
+    /// A spot ink prints as process inks: no plate of its own, its color on the process plates.
+    /// Off by default. [`PrintOutput::spots_to_process`] converts every spot ink whatever this
+    /// says; process inks and Registration ignore it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub convert_to_process: bool,
 }
 
 impl Default for InkSettings {
     fn default() -> Self {
-        Self { name: String::new(), print: true, frequency: None, angle: None }
+        Self { name: String::new(), print: true, frequency: None, angle: None, convert_to_process: false }
     }
 }
 
-/// An ink of a separation, with its options resolved ([`super::inks`]).
+/// An ink of a separation, with its options resolved ([`super::print_inks`],
+/// [`super::document_inks`]).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrintInk {
@@ -479,6 +485,10 @@ pub struct PrintInk {
     pub print: bool,
     pub frequency: f64,
     pub angle: f64,
+    /// A spot ink printing as process inks (its own option or Convert All Spot Colors to
+    /// Process): it has no plate.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub convert_to_process: bool,
 }
 
 /// The default halftone screen ruling (lpi).

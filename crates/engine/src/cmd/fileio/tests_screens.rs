@@ -546,20 +546,19 @@ fn type_in_a_missing_family_is_named_once_for_every_format() {
     assert!(fallback[0].contains("Nonexistent Sans Probe"), "{fallback:?}");
 }
 
-/// What a later file loses comes before a note on the options that an earlier file gave: the
-/// first artboard's WebP gives only the lossy WebP note, the second's also says its type doesn't
-/// fit.
+/// What a later file loses comes before a note on the options: the second artboard's WebP says
+/// its type doesn't fit, before the note on the row's option that WebP doesn't read.
 #[test]
 fn what_any_file_loses_comes_before_the_notes_on_the_options() {
     let mut s = session(2);
     let second = s.doc().unwrap().doc.artboards[1].rect;
     let area = json!({"width": 30, "height": 8});
     s.execute("text.create", &json!({"x": second.x0 + 2.0, "y": second.y0 + 2.0, "size": 12, "area": area, "text": "Ab\nCd\nEf\nGh"})).unwrap();
-    let r = export(&mut s, json!({"formats": [{"format": "webp", "lossless": false}]}));
+    let r = export(&mut s, json!({"formats": [{"format": "webp", "interlaced": true}]}));
     let warnings: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
     assert_eq!(warnings.len(), 2, "{warnings:?}");
     assert!(warnings[0].contains("doesn't fit its frame"), "{warnings:?}");
-    assert!(warnings[1].starts_with("lossy WebP"), "{warnings:?}");
+    assert!(warnings[1].starts_with("`formats[0].interlaced` was not used"), "{warnings:?}");
 }
 
 #[test]
@@ -1461,4 +1460,26 @@ fn an_export_preset_adds_no_notes() {
     s.execute("document.exportPresets.save", &json!({"name": "Mixed", "settings": {"formats": [{"format": "png", "quality": 80}]}})).unwrap();
     let r = export(&mut s, json!({"exportPreset": "Mixed"}));
     assert!(unused(&r).is_empty(), "{r}");
+}
+
+/// Assets, layers and selected objects each write a native, `.ai` or EPS file of their own art:
+/// every piece's file holds its own artboard, named after it, not the first piece's.
+#[test]
+fn each_piece_writes_its_own_native_document() {
+    let mut s = session(1);
+    s.execute("shape.ellipse", &json!({"x": 2, "y": 2, "width": 10, "height": 10})).unwrap();
+    let ids: Vec<u64> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id.0).collect();
+    let mut assets = vec![];
+    for (id, name) in ids.iter().zip(["Square", "Circle"]) {
+        assets.push(s.execute("assets.add", &json!({"ids": [id], "name": name})).unwrap()["assets"][0].as_u64().unwrap());
+    }
+    let r = export(&mut s, json!({"assets": assets, "formats": [{"format": "vectorcraft"}, {"format": "eps"}]}));
+    let written = files(&r);
+    assert_eq!(written.len(), 4, "{r}");
+    for (name, bytes) in written {
+        let native = if name.ends_with(".eps") { vectorcraft_eps::native(&bytes).expect("native document") } else { bytes };
+        let doc = vectorcraft_format::load(&native).unwrap();
+        let board = doc.artboards[0].name.clone();
+        assert!(name.contains(&board), "{name} holds the artboard {board}");
+    }
 }

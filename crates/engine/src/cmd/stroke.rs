@@ -220,8 +220,10 @@ fn own_stroke_or_leaves(s: &Session, p: &Value) -> Result<Vec<vectorcraft_doc::N
         })
     };
     let (mut out, rest): (Vec<_>, Vec<_>) = picked.into_iter().partition(own);
+    // A leaf already listed is skipped; a set keeps this linear in the number of leaves.
+    let mut seen: std::collections::HashSet<vectorcraft_doc::NodeId> = out.iter().copied().collect();
     for id in super::leaf_targets(s, &rest)? {
-        if !out.contains(&id) {
+        if seen.insert(id) {
             out.push(id);
         }
     }
@@ -429,6 +431,52 @@ impl Session {
         painted(first, true, &mut nodes);
         node_stroke(nodes.first()?)
     }
+
+    /// Do all the strokes that `stroke.set` edits without `ids` or `item` draw with a brush
+    /// ([`vectorcraft_brush::keeps_brush_size`])? If they do, a width profile changes none of
+    /// them, and the result is `Some`, holding whether any of them has a width profile. The result
+    /// is `None` when a profile changes at least one of them.
+    ///
+    /// The strokes are the ones `stroke.set` edits:
+    /// - the Appearance panel's active stroke row in each target that has an equal row
+    ///   ([`ItemTarget::per_target`]), and the top stroke in the others;
+    /// - else a selected group's own stroke;
+    /// - else the top strokes of the objects it paints ([`own_stroke_or_leaves`]).
+    ///
+    /// The art of graph designs is left out, and so are images and symbol instances without an
+    /// active row. The result is also `None` with nothing selected, with an object inside a symbol
+    /// instance selected, with type among the targets while no Appearance row is active for it,
+    /// and with a target that has no stroke row, since `stroke.set` gives such a target a plain
+    /// stroke.
+    pub fn brushed_strokes_profiled(&self) -> Option<bool> {
+        const C: &str = "stroke.set";
+        let st = self.active()?;
+        if st.selected_symbol_part().is_some() {
+            return None;
+        }
+        let p = json!({});
+        let item = item_target(self, &p, C).ok()?.of_kind(self, false);
+        let ids = if item == ItemTarget::Top { own_stroke_or_leaves(self, &p).ok()? } else { item.targets(self, &p).ok()? };
+        let mut ids = super::appearance::drop_design_art_rows(self, ids, item, false, C).ok()?;
+        if item == ItemTarget::Top {
+            ids.retain(|id| !matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::SymbolInstance { .. })));
+        }
+        let mut strokes = vec![];
+        for (id, each) in ids.iter().zip(item.per_target(self, &ids)) {
+            let n = st.doc.node(*id)?;
+            let row = each?.resolve(&n.appearance, false, C).ok()?;
+            if row.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                return None;
+            }
+            strokes.push(n.appearance.stroke_at(row).filter(|s| s.brush.is_some())?);
+        }
+        if strokes.is_empty() {
+            return None;
+        }
+        // The library is read only when every stroke names a brush.
+        let lib = vectorcraft_brush::library(&st.doc);
+        strokes.iter().all(|s| vectorcraft_brush::keeps_brush_size(&lib, s)).then(|| strokes.iter().any(|s| s.profile.is_some()))
+    }
 }
 
 impl DocState {
@@ -549,6 +597,10 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         let Some(st) = n.appearance.stroke_at_mut(index) else { return Ok(()) };
         arrows_and_profile(st);
         if let Some(b) = &brush {
+            // The path's own brush settings (Options of Selected Object) go with the brush they set.
+            if st.brush != *b {
+                st.brush_options.clear();
+            }
             st.brush = b.clone();
         }
         Ok(())
@@ -674,6 +726,7 @@ fn profile_list(s: &mut Session, _: &Value) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vectorcraft_doc::NodeId;
 
     #[test]
     fn weight_steps_follow_units_and_stop_at_their_bounds() {
@@ -688,5 +741,94 @@ mod tests {
         let mm = Unit::Millimeters.to_pt(1.0);
         assert!((step_weight(mm, Unit::Millimeters, true) - 2.0 * mm).abs() < 1e-9);
         assert!((step_weight(mm, Unit::Millimeters, false) - 0.75 * mm).abs() < 1e-9);
+    }
+
+    fn run(s: &mut Session, id: &str, p: Value) -> Value {
+        s.execute(id, &p).unwrap_or_else(|e| panic!("{id} {p}: {e}"))
+    }
+
+    fn made(v: Value) -> NodeId {
+        NodeId(v["id"].as_u64().unwrap_or_else(|| panic!("no id in {v}")))
+    }
+
+    /// The targets of [`own_stroke_or_leaves`] merged by a linear search of the growing list.
+    fn listed_merge(s: &Session, p: &Value) -> Vec<NodeId> {
+        let d = &s.doc().unwrap().doc;
+        let own = |id: &NodeId| {
+            d.node(*id).is_some_and(|n| {
+                matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. }) && !n.is_compound_shape() && n.appearance.stroke().is_some()
+            })
+        };
+        let (mut out, rest): (Vec<_>, Vec<_>) = super::super::targets(s, p).unwrap().into_iter().partition(own);
+        for id in super::super::leaf_targets(s, &rest).unwrap() {
+            if !out.contains(&id) {
+                out.push(id);
+            }
+        }
+        out
+    }
+
+    /// `stroke.set` with no `item` lists the same targets in the same order as a linear merge:
+    /// groups and layers with a stroke of their own (repeats kept), the leaves of plain groups and
+    /// layers, compound paths and compound shapes for their members, and each leaf once, also
+    /// when it is named both directly and through its group.
+    #[test]
+    fn stroke_targets_match_the_listed_merge() {
+        let mut s = Session::new();
+        run(&mut s, "file.new", json!({"width": 2000, "height": 400}));
+        let base = s.doc().unwrap().doc.layers[0].id;
+        let mut x = 0.0;
+        let mut rect = |s: &mut Session| {
+            x += 120.0;
+            made(run(s, "shape.rectangle", json!({"x": x, "y": 100, "width": 100, "height": 100})))
+        };
+        let (a, b) = (rect(&mut s), rect(&mut s));
+        let plain = made(run(&mut s, "object.group", json!({"ids": [a.0, b.0]})));
+        let (c, d) = (rect(&mut s), rect(&mut s));
+        let owned = made(run(&mut s, "object.group", json!({"ids": [c.0, d.0]})));
+        run(&mut s, "appearance.addStroke", json!({"ids": [owned.0]}));
+        let (e, f) = (rect(&mut s), rect(&mut s));
+        run(&mut s, "select.set", json!({"ids": [e.0, f.0]}));
+        let compound = made(run(&mut s, "object.compoundPath.make", json!({})));
+        let (g, h) = (rect(&mut s), rect(&mut s));
+        run(&mut s, "select.set", json!({"ids": [g.0, h.0]}));
+        let shape = made(run(&mut s, "object.compoundShape.make", json!({})));
+        let lone = rect(&mut s);
+        let layer = made(run(&mut s, "layer.new", json!({})));
+        let (j, k) = (rect(&mut s), rect(&mut s));
+        run(&mut s, "appearance.addStroke", json!({"ids": [layer.0]}));
+        {
+            let doc = &s.doc().unwrap().doc;
+            assert_eq!((doc.parent_of(j), doc.parent_of(k)), (Some(layer), Some(layer)), "the new layer holds the last two");
+            assert_eq!((doc.parent_of(e), doc.parent_of(g)), (Some(compound), Some(shape)));
+            assert!(doc.node(owned).unwrap().appearance.stroke().is_some() && doc.node(layer).unwrap().appearance.stroke().is_some());
+        }
+        let named = json!({"ids": [plain.0, a.0, owned.0, owned.0, c.0, e.0, compound.0, g.0, lone.0, layer.0, j.0]});
+        let cases = [
+            named.clone(),
+            json!({"ids": [j.0, h.0, f.0, b.0, plain.0, layer.0, owned.0, k.0, shape.0]}),
+            json!({"ids": [base.0, layer.0, base.0]}),
+            json!({"ids": [d.0, owned.0, base.0]}),
+            json!({"ids": []}),
+        ];
+        for p in &cases {
+            assert_eq!(own_stroke_or_leaves(&s, p).unwrap(), listed_merge(&s, p), "{p}");
+        }
+        run(&mut s, "select.set", json!({"ids": [lone.0, owned.0, f.0, plain.0, b.0, layer.0]}));
+        assert_eq!(own_stroke_or_leaves(&s, &json!({})).unwrap(), listed_merge(&s, &json!({})), "the selection");
+
+        // The edit reaches every listed target, counting a repeated one once, and leaves the other
+        // member of the group with its own stroke alone.
+        let want = listed_merge(&s, &named);
+        assert_eq!(want.iter().filter(|id| **id == owned).count(), 2, "{want:?}");
+        let distinct: std::collections::HashSet<_> = want.iter().collect();
+        let before = s.doc().unwrap().doc.node(d).unwrap().clone();
+        let r = run(&mut s, "stroke.set", json!({"ids": named["ids"], "weight": 3}));
+        let doc = &s.doc().unwrap().doc;
+        assert_eq!(r["objects"], distinct.len(), "{r} {want:?}");
+        for id in &want {
+            assert_eq!(doc.node(*id).unwrap().appearance.stroke().map(|st| st.width), Some(3.0), "{id:?}");
+        }
+        assert_eq!(doc.node(d), Some(&before), "a member reached only through its group's own stroke is left alone");
     }
 }

@@ -215,7 +215,7 @@ fn stream_kind(pdf: &Pdf, id: ObjectIdentifier, dict: &Dict<'_>) -> String {
 }
 
 /// `bytes` for a message, in whole megabytes, or gigabytes when it is a whole number of them.
-fn decoded_size(bytes: usize) -> String {
+pub(crate) fn decoded_size(bytes: usize) -> String {
     const GB: usize = 1 << 30;
     if bytes >= GB && bytes.is_multiple_of(GB) { format!("{} GB", bytes / GB) } else { format!("{} MB", bytes >> 20) }
 }
@@ -259,6 +259,18 @@ impl Opened {
     /// The native document the PDF carries, as [`editing`](crate::editing) reads it.
     pub fn editing(&self) -> Option<crate::Editing> {
         crate::editing::editing_in(&self.pdf)
+    }
+
+    /// Does the PDF list the editing file among its attachments, also when
+    /// [`editing`](Self::editing) can't read it?
+    pub fn has_editing_file(&self) -> bool {
+        crate::editing::has_editing_file_in(&self.pdf)
+    }
+
+    /// Is the PDF's attachment name tree too large to search to its end? It may then list an
+    /// editing file that [`editing`](Self::editing) doesn't find, besides the one it reads.
+    pub fn editing_search_cut(&self) -> bool {
+        crate::editing::editing_search_cut_in(&self.pdf)
     }
 
     /// The private data of an Illustrator `.ai`, as [`illustrator_data`] reads it.
@@ -323,10 +335,13 @@ pub struct TrimPages {
     pub bleed: [f64; 4],
 }
 
-/// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
-/// uses the shared reader's immutable per-document limits, and its input copy is fallible.
+/// The shared reader's options: files of any size are accepted. Ordinary stream decoding uses the shared reader's immutable per-document limits, and its input
+/// copy is fallible. One image may decode to the bytes and pixels of
+/// [`crate::streams::image_limits`] for this build, past the shared reader's defaults.
 pub(crate) fn open_options() -> craft_pdf::OpenOptions {
-    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, ..Default::default() }
+    let (bytes, pixels) = crate::streams::image_limits(crate::streams::LARGE_IMAGES);
+    let decode_limits = craft_pdf::syntax::DecodeLimits::default().with_max_decoded_image(bytes).with_max_image_pixels(pixels);
+    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, decode_limits }
 }
 
 pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
