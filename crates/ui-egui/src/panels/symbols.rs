@@ -2,6 +2,7 @@
 //! selects a symbol (it becomes the Symbol Sprayer's current symbol); double-click opens it in symbol editing mode. Symbol
 //! libraries open in library panels ([`SymbolLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -441,6 +442,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         if widgets::icon_button_enabled(ui, "link-2-off", tl!("Break Link to Symbol"), false, inst, 24.0).clicked() {
             app.run("symbol.breakLink", json!({})).ok();
         }
+        // Opens Symbol Options on the current symbol, as the panel menu's Symbol Options… does;
+        // Alt does the same.
+        if widgets::icon_button_enabled(ui, "dc-options", tl!("Symbol Options"), false, sel.is_some(), 24.0).clicked() {
+            app.run("ui.symbolOptions", json!({"edit": true, "name": sel})).ok();
+        }
         ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
         let new = widgets::icon_button_enabled(ui, "dc-new-item", tl!("New Symbol"), false, has_sel, 24.0);
         // A symbol dragged from the panel and dropped on New Symbol is duplicated, with or without
@@ -728,9 +734,15 @@ impl LibraryKind for SymbolLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.symbol_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a symbol's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
+    }
+    /// A built-in library's symbol in the UI language; a User Defined or loaded library's symbol as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, symbollib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
     /// The symbol's art on white, as the Symbols panel shows it.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, s: &LibSymbol, selected: bool, hovered: bool) {
@@ -946,12 +958,20 @@ mod tests {
 
     /// Clicks the menu item labeled `label` with `modifiers` held.
     fn click_menu_held(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers) {
+        click_menu_held_then(ctx, app, label, modifiers, vec![]);
+    }
+
+    /// Clicks the menu item labeled `label` with `modifiers` held, `after` following the release in
+    /// its frame.
+    fn click_menu_held_then(ctx: &egui::Context, app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers, after: Vec<egui::Event>) {
         let held = egui::Event::ModifiersChanged(modifiers);
         let labels = menu_frame(ctx, app, vec![held.clone()]);
         let item = labels.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center()).unwrap_or_else(|| panic!("{label} in the menu"));
         let press = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers };
         menu_frame(ctx, app, vec![held.clone(), egui::Event::PointerMoved(item), press(true)]);
-        menu_frame(ctx, app, vec![held, press(false)]);
+        let mut last = vec![held, press(false)];
+        last.extend(after);
+        menu_frame(ctx, app, last);
     }
 
     /// Redefine Symbol in the panel menu with Shift held updates the symbol and leaves the
@@ -1009,12 +1029,53 @@ mod tests {
 
     /// Clicks the panel's New Symbol button with `modifiers` held.
     fn click_new(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
+        click_button_then(app, "New Symbol", modifiers, vec![]);
+    }
+
+    /// Clicks the panel's button labeled `label` with `modifiers` held, `after` following the
+    /// release in its frame.
+    fn click_button_then(app: &mut VectorcraftApp, label: &str, modifiers: egui::Modifiers, after: Vec<egui::Event>) {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let out = frame_held(&ctx, app, vec![], modifiers);
-        let at = clickable(&out).into_iter().find(|(l, _)| l == "New Symbol").expect("a New Symbol button").1;
+        let at = clickable(&out).into_iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
         let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
-        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+        let mut events = vec![egui::Event::PointerMoved(at), press(true), press(false)];
+        events.extend(after);
+        frame_held(&ctx, app, events, modifiers);
+    }
+
+    /// Shift held as the primary button goes up on New Symbol, on the panel's button or in its
+    /// menu, or on Redefine Symbol in the menu, keeps the selected art as ordinary art, though Shift
+    /// is let go later in the same frame. Alt held as the button goes up on Delete Symbol deletes
+    /// an unused symbol without asking, in the same case.
+    #[test]
+    fn shift_or_alt_let_go_after_the_release_in_the_same_frame_still_counts() {
+        let let_go = || vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)];
+        let menu_ctx = || {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            ctx
+        };
+        let (mut app, _) = leaf_dot_and_rect();
+        click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT, let_go());
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_button_then(&mut app, "New Symbol", egui::Modifiers::SHIFT | egui::Modifiers::ALT, let_go());
+        assert_eq!(dialog_kind(&app), None, "Alt skips Symbol Options");
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol button with Shift and Alt: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_menu_held_then(&menu_ctx(), &mut app, "New Symbol…", egui::Modifiers::SHIFT, let_go());
+        crate::dialogs::confirm(&mut app).unwrap();
+        assert_eq!(art(&app, "New Symbol"), (0, 1), "New Symbol… with Shift: the rectangle stays ordinary art");
+        let (mut app, _) = leaf_dot_and_rect();
+        click_menu_held_then(&menu_ctx(), &mut app, "Redefine Symbol", egui::Modifiers::SHIFT, let_go());
+        assert_eq!(art(&app, "Dot"), (0, 1), "Redefine Symbol with Shift: the rectangle stays ordinary art");
+        let mut app = leaf_and_dot();
+        click_button_then(&mut app, "Delete Symbol", egui::Modifiers::ALT, let_go());
+        assert!(app.ui.dialog.is_none(), "Alt deletes an unused symbol without asking");
+        assert_eq!(symbols(&mut app), ["Leaf"]);
     }
 
     /// The New Symbol button with Shift held opens Symbol Options, whose OK keeps the selected art
@@ -1038,6 +1099,58 @@ mod tests {
         assert_eq!(undo_len(&app), undo + 1, "one undo step");
         click_new(&mut app, egui::Modifiers::ALT);
         assert_eq!(art(&app, "New Symbol 3"), (1, 0), "Alt alone: the rectangle becomes an instance");
+    }
+
+    /// The center of the panel's Symbol Options button, and of Break Link to Symbol and New Symbol
+    /// beside it, in a frame of `app`.
+    fn options_button(app: &mut VectorcraftApp) -> (Pos2, Pos2, Pos2) {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let found = clickable(&frame_held(&ctx, app, vec![], egui::Modifiers::NONE));
+        let at = |label: &str| found.iter().find(|(l, _)| l == label).unwrap_or_else(|| panic!("a {label} button")).1;
+        (at("Break Link to Symbol"), at("Symbol Options"), at("New Symbol"))
+    }
+
+    /// Clicks the panel at `at` with `modifiers` held.
+    fn click_at(app: &mut VectorcraftApp, at: Pos2, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        frame_held(&ctx, app, vec![], modifiers);
+        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
+        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+    }
+
+    /// The bottom bar's Symbol Options button sits between Break Link to Symbol and New Symbol and
+    /// opens Symbol Options on the current symbol, as the panel menu's item does, with or without
+    /// Alt, and adds no undo step; in a document without symbols it is disabled and opens nothing.
+    #[test]
+    fn symbol_options_button_edits_the_current_symbol() {
+        let mut app = leaf_and_dot();
+        app.run("select.all", json!({})).unwrap();
+        let (break_link, options, new) = options_button(&mut app);
+        assert!(break_link.x < options.x && options.x < new.x, "Break Link, Symbol Options, New Symbol: {break_link:?} {options:?} {new:?}");
+        let undo = undo_len(&app);
+        for (current, modifiers) in [("Dot", egui::Modifiers::NONE), ("Leaf", egui::Modifiers::ALT)] {
+            app.run("symbol.setCurrent", json!({ "name": current })).unwrap();
+            click_at(&mut app, options, modifiers);
+            let d = app.ui.dialog.as_ref().expect("Symbol Options opens");
+            assert_eq!(d.kind, crate::dialogs::symbol_options::KIND);
+            assert_eq!((d.fields.get("name"), d.fields.get("__edit")), (Some(&json!(current)), Some(&json!(true))), "{modifiers:?}");
+            crate::dialogs::cancel(&mut app);
+        }
+        assert_eq!(undo_len(&app), undo, "opening the dialog adds no undo step");
+        assert_eq!(symbols(&mut app), ["Leaf", "Dot"]);
+        let mut empty = VectorcraftApp::new(Session::new(), Default::default());
+        empty.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        for (app, disabled) in [(&mut app, false), (&mut empty, true)] {
+            let out = frame_held(&ctx, app, vec![], egui::Modifiers::NONE);
+            let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+            let button = &nodes.iter().find(|(_, n)| n.label().is_some_and(|l| l.trim() == "Symbol Options")).expect("a Symbol Options button").1;
+            assert_eq!(button.is_disabled(), disabled, "disabled without a current symbol");
+        }
+        click_at(&mut empty, options, egui::Modifiers::NONE);
+        assert_eq!(dialog_kind(&empty), None, "no symbol, no dialog");
     }
 
     /// Art dropped on the panel with Shift held as the primary button goes up becomes a new
@@ -1871,12 +1984,7 @@ mod tests {
 
     /// Clicks the panel's Delete Symbol button with `modifiers` held.
     fn click_delete(app: &mut VectorcraftApp, modifiers: egui::Modifiers) {
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let out = frame_held(&ctx, app, vec![], modifiers);
-        let at = clickable(&out).into_iter().find(|(l, _)| l == "Delete Symbol").expect("a Delete Symbol button").1;
-        let press = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers };
-        frame_held(&ctx, app, vec![egui::Event::PointerMoved(at), press(true), press(false)], modifiers);
+        click_button_then(app, "Delete Symbol", modifiers, vec![]);
     }
 
     /// Clicks the panel menu's Delete Symbol item.

@@ -3,7 +3,8 @@
 //! shows the shape outlined in black and filled with white, under a red slash. Clicking a style applies it to the
 //! selection (Alt-click adds it on top); Shift-click adds to the panel's selection every style from
 //! the last one clicked without Shift through this one; Cmd/Ctrl-click adds or removes one;
-//! double-click opens Graphic Style Options. Dragging a style moves it in the list, applies it
+//! double-click opens Graphic Style Options. Dragging a style moves it in the list (dropped on
+//! another style with Alt held, replaces that style with its look), applies it
 //! to the art it is dropped on (`canvas::panel_drop`), or, dropped on New Graphic Style, adds a
 //! copy of it and of the styles highlighted with it at the end of the list; art dragged off the
 //! canvas or the Appearance panel's thumbnail dropped on the panel becomes a new style, and
@@ -13,6 +14,7 @@
 //! the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -368,6 +370,8 @@ struct Events {
     new_from: Option<NodeId>,
     /// Art or an appearance dropped on a style with Alt held: the style takes this object's look.
     replaced: Option<(String, NodeId)>,
+    /// A style dropped on another with Alt held: the second (`.0`) takes the first's (`.1`) look.
+    restyled: Option<(String, String)>,
     /// The style the right button is held on.
     large: Option<usize>,
     /// A style is dragged over a tile or row.
@@ -387,7 +391,8 @@ fn clicked(ui: &Ui, resp: &Response, name: &str) -> Option<Click> {
 
 /// Clicks, drags and the right button on the tile or row `resp` of style `i` of `d` (`list`: rows
 /// stack downwards). A drag from it carries the style ([`PanelDrag::GraphicStyle`]); a style
-/// dragged over it lands before or after it by the pointer's half. Art (its first object) or the
+/// dragged over it lands before or after it by the pointer's half, or with Alt held outlines it
+/// and, released there, replaces it with the dragged style's look. Art (its first object) or the
 /// Appearance panel's thumbnail held over it with Alt outlines it, and released there replaces the
 /// style with that object's look; without Alt it is left to the list ([`zone_input`]).
 fn cell_input(ui: &Ui, resp: &Response, d: &Document, i: usize, list: bool, ev: &mut Events) {
@@ -414,6 +419,11 @@ fn cell_input(ui: &Ui, resp: &Response, d: &Document, i: usize, list: bool, ev: 
         if moving == name {
             // Dropped on itself: it stays where it is.
             resp.dnd_release_payload::<PanelDrag>();
+        } else if alt_held(ui) {
+            widgets::drop_target_outline(ui, resp.rect);
+            if resp.dnd_release_payload::<PanelDrag>().is_some() {
+                ev.restyled = Some((name.clone(), moving.clone()));
+            }
         } else {
             let r = resp.rect;
             let at = ui.input(|i| i.pointer.interact_pos()).unwrap_or(r.center());
@@ -530,6 +540,9 @@ fn act(app: &mut VectorcraftApp, ui: &Ui, s: &Shown, ev: Events, picker: bool) {
         && !app.session.graphic_style_of(id).is_some_and(|(g, linked)| linked && g.name == name)
     {
         run(app, "graphicStyle.redefine", json!({ "name": name, "id": id.0 }));
+    }
+    if let Some((name, from)) = ev.restyled {
+        run(app, "graphicStyle.redefine", json!({ "name": name, "from": from }));
     }
     match ev.click {
         Some(Click::Pick(name, _)) if picker => {
@@ -908,9 +921,15 @@ impl LibraryKind for GraphicStyleLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.style_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a style's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|s| found(&s.style().name)).map(|s| Row { name: &s.style().name, item: Some(s) }).collect()
+    }
+    /// A built-in library's style in the UI language; a User Defined or loaded library's style as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, STYLE_LIBRARIES.iter().any(|b| b.id == id)).into()
     }
     /// The style on the Graphic Styles panel's preview shape.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, s: &LibStyle, selected: bool, hovered: bool) {
@@ -1535,10 +1554,10 @@ mod tests {
             assert_eq!(doc(&app).graphic_style("Red").unwrap().appearance, red.appearance, "{view:?}");
             app.run("edit.undo", json!({})).unwrap();
 
-            // A style dragged onto Red with Alt moves and replaces nothing.
+            // A style dragged onto Red without Alt moves and replaces nothing.
             let last = n.last().unwrap().clone();
             egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle(last.clone()));
-            frame_at(&mut app, at, release(at, alt), alt);
+            frame_at(&mut app, at, release(at, none), none);
             assert_eq!(names(&app)[0], last, "{view:?}");
             assert_eq!(doc(&app).graphic_style("Red").unwrap().appearance, red.appearance, "{view:?}");
             app.run("edit.undo", json!({})).unwrap();
@@ -1554,6 +1573,91 @@ mod tests {
                 assert_eq!(doc(&app).graphic_style("Red").unwrap().appearance, red.appearance, "{view:?} {payload:?}");
                 assert_eq!(steps(&app), before, "{view:?} {payload:?}");
             }
+        }
+    }
+
+    /// A style dropped on another with Alt held replaces that style's look with its own: the
+    /// replaced style keeps its name, place and id, and its art follows, in one undo step; the
+    /// dragged style and its art stay as they are. Without Alt the style moves; dropped on itself
+    /// it does nothing.
+    #[test]
+    fn a_style_dropped_on_another_with_alt_replaces_that_style() {
+        let mut app = app();
+        let rect = app.session.active().unwrap().doc.layers[0].children().unwrap()[0].id;
+        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [rect.0]})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Red", "id": rect.0})).unwrap();
+        app.run("graphicStyle.move", json!({"name": "Red", "to": 0})).unwrap();
+        app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 20, "height": 20})).unwrap();
+        let oval = app.session.active().unwrap().selection.objects[0];
+        app.run("paint.setFill", json!({"color": "#00ff00", "ids": [oval.0]})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Green", "id": oval.0})).unwrap();
+        let ctx = egui::Context::default();
+        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 600.0)));
+        // One frame of the panel with `events` and `modifiers` held: whether a drop-target outline
+        // the size of one style's tile or row is drawn around `at`.
+        let frame_at = |app: &mut VectorcraftApp, at: egui::Pos2, events: Vec<egui::Event>, modifiers: egui::Modifiers| {
+            let events = std::iter::once(egui::Event::ModifiersChanged(modifiers)).chain(events).collect();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: screen, events, ..Default::default() }, |ui| show(app, ui));
+            out.textures_delta.clear();
+            let accent = Tokens::get(&ctx).accent;
+            out.shapes.iter().any(|c| match &c.shape {
+                egui::Shape::Rect(r) => r.stroke.width == 1.5 && r.stroke.color == accent && r.rect.contains(at) && r.rect.height() < 45.0,
+                _ => false,
+            })
+        };
+        let release = |at: egui::Pos2, modifiers: egui::Modifiers| {
+            let up = egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: false, modifiers };
+            vec![egui::Event::PointerMoved(at), up]
+        };
+        let (none, alt) = (egui::Modifiers::default(), egui::Modifiers::ALT);
+        let doc = |app: &VectorcraftApp| app.session.active().unwrap().doc.clone();
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let (red, green) = (doc(&app).graphic_style("Red").unwrap().clone(), doc(&app).graphic_style("Green").unwrap().clone());
+        let (red_fill, green_fill) = (red.appearance.fill_paint(), green.appearance.fill_paint());
+        assert_ne!(red_fill, green_fill);
+        // The first style: the top of the list's first row, or its first tile.
+        for (view, at) in [(View::SmallList, pos2(60.0, 9.0)), (View::Thumbnail, pos2(20.0, 20.0))] {
+            app.ui.graphic_styles_view = view;
+            frame_at(&mut app, at, vec![], none);
+            let n = names(&app);
+            assert_eq!(n[0], "Red", "{view:?}");
+            let before = steps(&app);
+            // Held over Red with Alt it is outlined; without Alt it is not (the insertion marker shows instead).
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Green".into()));
+            assert!(!frame_at(&mut app, at, vec![egui::Event::PointerMoved(at)], none), "{view:?}: no outline without Alt");
+            assert!(frame_at(&mut app, at, vec![egui::Event::PointerMoved(at)], alt), "{view:?}: outlined with Alt");
+            assert_eq!((names(&app), steps(&app)), (n.clone(), before), "{view:?}: holding it there changes nothing");
+
+            // Released there with Alt: Red takes Green's look and keeps its name, place and id.
+            frame_at(&mut app, at, release(at, alt), alt);
+            let d = doc(&app);
+            assert_eq!(names(&app), n, "{view:?}: no style moves");
+            let g = d.graphic_style("Red").unwrap();
+            assert_eq!((g.id, &g.appearance), (red.id, &green.appearance), "{view:?}");
+            assert_eq!(d.node(rect).unwrap().appearance.fill_paint(), green_fill, "{view:?}: the linked rectangle follows");
+            assert_eq!(d.node(rect).unwrap().extras().graphic_style, Some(red.id), "{view:?}");
+            assert_eq!(d.graphic_style("Green").unwrap(), &green, "{view:?}: Green stays as it was");
+            assert_eq!(d.node(oval).unwrap().extras().graphic_style, Some(green.id), "{view:?}: the oval stays linked to Green");
+            assert_eq!(steps(&app), before + 1, "{view:?}: one undo step");
+            app.run("edit.undo", json!({})).unwrap();
+            let d = doc(&app);
+            assert_eq!(d.graphic_style("Red").unwrap(), &red, "{view:?}: undo restores the style");
+            assert_eq!(d.node(rect).unwrap().appearance.fill_paint(), red_fill, "{view:?}");
+            assert_eq!(d.node(rect).unwrap().extras().graphic_style, Some(red.id), "{view:?}");
+
+            // Red dropped on itself with Alt changes nothing and records nothing.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Red".into()));
+            frame_at(&mut app, at, release(at, alt), alt);
+            assert_eq!((names(&app), steps(&app)), (n.clone(), before), "{view:?}");
+            assert_eq!(doc(&app).graphic_style("Red").unwrap(), &red, "{view:?}");
+
+            // Without Alt, Green moves before Red and Red keeps its look.
+            egui::DragAndDrop::set_payload(&ctx, PanelDrag::GraphicStyle("Green".into()));
+            frame_at(&mut app, at, release(at, none), none);
+            assert_eq!(names(&app)[0], "Green", "{view:?}");
+            assert_eq!(doc(&app).graphic_style("Red").unwrap(), &red, "{view:?}");
+            app.run("edit.undo", json!({})).unwrap();
+            assert_eq!(names(&app), n, "{view:?}");
         }
     }
 
