@@ -967,12 +967,12 @@ mod tests {
         let xml = r#"<variableSets><variableSet><variables><variable varName="Logo" trait="other"/></variables></variableSet></variableSets>"#;
         app.run("variable.loadLibrary", json!({"xml": xml})).unwrap();
         assert_eq!(app.ui.status, status, "the load gives no warning");
-        let warning = "variables that aren't text were left out: other (1)";
+        let warning = "variables that aren't text were left out: `other` (1)";
         let langs: Vec<Lang> = Lang::all().filter(|l| l.code() != "en").collect();
         assert!(langs.len() >= 23, "{} languages", langs.len());
         for l in langs {
             let shown = message(l, warning);
-            assert!(!shown.contains("left out") && shown.contains("other") && shown.contains('1'), "{}: {shown}", l.code());
+            assert!(!shown.contains("left out") && shown.contains("`other` (1)"), "{}: {shown}", l.code());
         }
     }
 
@@ -992,6 +992,8 @@ mod tests {
         assert_eq!(app.ui.status, "a new document won't read these variables back with their kind: `#Tag`");
         let warning = app.ui.status.clone();
         app.run("variable.define", json!({"name": "%Rate", "kind": "text"})).unwrap();
+        // A new document reads a `%` header's values as paths of graph data files.
+        app.run("dataset.new", json!({"name": "Rates", "values": {"%Rate": "5"}})).unwrap();
         app.run("dataset.export", json!({"path": path})).unwrap();
         assert_eq!(app.ui.status, "a new document refuses this file because of these variables: `%Rate`");
         let refuses = app.ui.status.clone();

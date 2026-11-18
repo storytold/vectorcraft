@@ -32,8 +32,8 @@ pub use para_style::{
 pub use runs::PATH_LEAD_MAX;
 pub use runs::{INLINE_CHAR, INLINE_MAX_SCALE, InlineArt, RubyAlign, RubyPosition, RubySpan, TextKind, TextRun, TextStyleDef, TypeAntiAlias};
 pub use tabs_lists::{
-    Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, NumberStyle, ParaList, TabAlign,
-    TabStop,
+    Bullet, DEFAULT_TAB_INTERVAL, LIST_HANGING_INDENT, LIST_LEVEL_INDENT, LIST_LEVELS, ListAlign, ListCounts, MAX_LIST_START, NumberStyle, ParaList,
+    TabAlign, TabStop,
 };
 pub use wrap::{resolve_wrap, wrap_outline, wrap_sources, wrap_work};
 

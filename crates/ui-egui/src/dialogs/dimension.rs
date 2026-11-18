@@ -211,7 +211,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         Ok(o) => {
             let sample = o.label(72.0, false).unwrap_or_default();
             let t = Tokens::get(ui.ctx());
-            ui.label(RichText::new(format!("{}: {sample}", tl!("Preview (1 inch on the page)"))).color(t.text));
+            ui.label(RichText::new(format!("{} {sample}", crate::i18n::colon(tl!("Preview (1 inch on the page)")))).color(t.text));
         }
         Err(e) => {
             ui.colored_label(Tokens::get(ui.ctx()).text, e);
