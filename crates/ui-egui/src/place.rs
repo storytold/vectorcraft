@@ -96,6 +96,11 @@ const ASKED: &str = "__placeCursorAsk";
 /// document; hidden from the dialog's fields and removed before the file is placed.
 const DROPPED: &str = "__dropTarget";
 
+/// The `file.place` param that holds the import options a Shift-click of the place cursor set
+/// aside ([`set_aside_import_options`]): the file is placed with them when no import options dialog
+/// opens for it. Removed before any dialog opens.
+const SET_ASIDE: &str = "__placeCursorOptions";
+
 /// A place cursor thumbnail: decoded when the cursor is loaded, uploaded when first drawn (and
 /// again in a new graphics context).
 struct Thumb {
@@ -195,8 +200,10 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     };
     let ask = show.unwrap_or(true);
     let mut p = p.clone();
+    let mut set_aside = None;
     if let Some(o) = p.as_object_mut() {
         o.remove("showImportOptions");
+        set_aside = o.remove(SET_ASIDE);
     }
     if !ask {
         // Placed with the options confirmed last for the format.
@@ -240,6 +247,11 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
     // `importSlices` itself.
     if ask && matches!(read, Read::ForUser { .. }) && crate::dialogs::psd_import::offer_place(app, &p) {
         return Ok(json!({ "dialog": crate::dialogs::psd_import::KIND }));
+    }
+    if let (Some(Value::Object(kept)), Some(o)) = (set_aside, p.as_object_mut()) {
+        for (k, v) in kept {
+            o.entry(k).or_insert(v);
+        }
     }
     if ["at", "rect", "replace"].iter().all(|k| p.get(k).is_none())
         && let Some(v) = app.view()
@@ -421,7 +433,8 @@ fn line(i: Result<Value, String>, units: vectorcraft_doc::Unit) -> String {
     match (i["pixelWidth"].as_u64(), i["pixelHeight"].as_u64()) {
         (Some(w), Some(h)) => {
             let ppi = i["ppi"][0].as_f64().unwrap_or(72.0);
-            format!("{w} × {h} px, {} ppi, {} ({size})", fmt_ppi(ppi), i["colorMode"].as_str().unwrap_or("RGB"))
+            let ppi = crate::i18n::fill_once(tl!("{n} ppi"), &[("n", &fmt_ppi(ppi))]);
+            format!("{w} × {h} px, {ppi}, {} ({size})", i["colorMode"].as_str().unwrap_or("RGB"))
         }
         _ => format!("{} ({size})", i["format"].as_str().unwrap_or_default().to_uppercase()),
     }
@@ -511,7 +524,8 @@ fn queue_files(app: &mut VectorcraftApp, p: &Value, read: Read, asks: bool) -> R
 /// read off the UI thread where the files the user places are ([`crate::placing::start`]), else at
 /// once. When the Place dialog loaded the cursor with Show Import Options on, a file that has
 /// import options asks for them first (Cancel leaves it unplaced); otherwise only an encrypted PDF
-/// asks, for its password. An error shows in the status bar.
+/// asks, for its password. A Shift-click (`showImportOptions: true`) asks for them however the
+/// cursor was loaded. An error shows in the status bar.
 pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     // Read within the automation roots of whoever loaded the cursor, even on a click of the person
     // at the keyboard: an agent's queue reaches no file it wasn't given.
@@ -519,9 +533,13 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     forget_older_queue(app);
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
         let locked = is_locked(app, p);
-        if app.place.queue_asks || locked {
+        // A Shift-click asks for the file's import options whatever the cursor was loaded with.
+        let shift_click = p.get("showImportOptions") == Some(&Value::Bool(true));
+        if app.place.queue_asks || locked || shift_click {
             let mut p = clicked_at_full_size(app, p);
-            if !app.place.queue_asks {
+            if shift_click {
+                set_aside_import_options(&mut p);
+            } else if !app.place.queue_asks {
                 // Only its password is asked for, as File › Place with Show Import Options off.
                 p["showImportOptions"] = json!(false);
             }
@@ -543,6 +561,26 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
             let _ = engine(app, "file.place", p);
         }
     });
+}
+
+/// Move the import options the place cursor's file `p` was loaded with for its format (`text`,
+/// `dxf`, a PDF's `page` and `crop`, a PSD file's `layers`, `hiddenLayers` and `importSlices`) to
+/// [`SET_ASIDE`], so that a Shift-click opens its import options dialog; a file whose dialog does
+/// not open is placed with them.
+fn set_aside_import_options(p: &mut Value) {
+    let ext = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::extension).unwrap_or_default();
+    let keys: &[&str] = match ext.as_str() {
+        "pdf" | "ai" | "ait" => &["page", "crop"],
+        "dxf" => &["dxf"],
+        "psd" | "pdd" | "psb" => &["layers", "hiddenLayers", "importSlices"],
+        _ if crate::dialogs::text_import::is_text(p) => &["text"],
+        _ => &[],
+    };
+    let Some(o) = p.as_object_mut() else { return };
+    let kept: serde_json::Map<String, Value> = keys.iter().filter_map(|k| Some((k.to_string(), o.remove(*k)?))).collect();
+    if !kept.is_empty() {
+        o.insert(SET_ASIDE.into(), Value::Object(kept));
+    }
 }
 
 /// The cursor was loaded again since [`show_thumbnails`] (`tool.setOption` with a `queue`, a
@@ -653,7 +691,7 @@ pub fn paint_cursor(app: &mut VectorcraftApp, ctx: &egui::Context, painter: &egu
 // ---------- drops ----------
 
 impl VectorcraftApp {
-    /// Where file `name` dropped with the pointer at `pos` (screen points) goes: as in Illustrator,
+    /// Where file `name` dropped with the pointer at `pos` (screen points) goes:
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
     /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
@@ -890,5 +928,22 @@ pub(crate) fn link_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui, id: u64,
         }
     } else if button(ui, tl!("Unembed…"), UNEMBED_WIDTH) {
         crate::panels::links::unembed(app, id, name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Place dialog's line about an image writes its resolution with the `{n} ppi` row.
+    #[test]
+    fn the_file_line_writes_the_ppi_unit_in_the_interface_language() {
+        let info = json!({ "pixelWidth": 300, "pixelHeight": 150, "ppi": [300.0, 300.0], "colorMode": "RGB", "width": 72.0, "height": 36.0 });
+        let en = line(Ok(info.clone()), vectorcraft_doc::Unit::Points);
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let fr = line(Ok(info), vectorcraft_doc::Unit::Points);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(en.starts_with("300 × 150 px, 300 ppi, RGB ("), "{en}");
+        assert!(fr.starts_with("300 × 150 px, 300 ppp, RGB ("), "{fr}");
     }
 }
