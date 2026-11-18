@@ -76,6 +76,9 @@ pub struct DimensionTool {
     /// for that click (a snap or Shift can move the point away from it): placed with the pointer
     /// still at either, it is aligned.
     second: Option<(Point, Point)>,
+    /// While a Linear dimension is placed with its line on the level of another dimension's line:
+    /// the ends of that other line. A Smart Guide runs along the level across both lines.
+    level_guide: Option<(Point, Point)>,
 }
 
 /// What a linear dimension between `a` and `b` measures with the pointer at `p` while it is
@@ -285,6 +288,44 @@ fn on_dimensions(cx: &ToolContext, p: Point) -> Option<(Point, bool)> {
     best.end.map(|(_, q)| (q, true)).or_else(|| best.line.map(|(_, q)| (q, false)))
 }
 
+/// Where the line of the linear dimension `d`, placed through `p`, lands on the level of the line
+/// of a visible, unlocked linear dimension already drawn that runs parallel to it, within `reach`
+/// of `p` across the line (the nearest level wins, then the nearest line): the point to place `d`
+/// through, and the ends of that other line. A dimension that measures the same two points as `d`
+/// is skipped, because the preview of `d` itself is one. Bounded work, as in [`on_dimensions`].
+fn line_level(cx: &ToolContext, d: &Dimension, p: Point, reach: f64) -> Option<(Point, (Point, Point))> {
+    type Best = Option<(f64, f64, f64, (Point, Point))>;
+    fn visit(n: &Node, d: &Dimension, p: Point, reach: f64, budget: &mut usize, best: &mut Best) {
+        if *budget == 0 || !n.visible || n.locked {
+            return;
+        }
+        *budget -= 1;
+        if let Some(other) = &n.extras().dimension {
+            let (u, normal) = (d.direction(), d.normal());
+            if other.mode == DimensionMode::Linear && (other.a, other.b) != (d.a, d.b) && u.cross(other.direction()).abs() <= 1e-6 {
+                let ends = other.line_ends();
+                let shift = (ends.0 - p).dot(normal);
+                let along = (ends.0 - p).dot(u).abs().min((ends.1 - p).dot(u).abs());
+                if shift.is_finite() && shift.abs() <= reach && best.is_none_or(|(s, a, _, _)| (shift.abs(), along) < (s, a)) {
+                    *best = Some((shift.abs(), along, shift, ends));
+                }
+            }
+            return;
+        }
+        for c in n.children().into_iter().flatten().rev() {
+            visit(c, d, p, reach, budget, best);
+        }
+    }
+    if d.mode != DimensionMode::Linear {
+        return None;
+    }
+    let (mut budget, mut best) = (20_000usize, None);
+    for n in cx.doc.layers.iter().rev() {
+        visit(n, d, p, reach, &mut budget, &mut best);
+    }
+    best.map(|(_, _, shift, ends)| (p + d.normal() * shift, ends))
+}
+
 /// The point of `edge` closest to `p`.
 fn nearest_on(cx: &ToolContext, edge: &SegmentRef, p: Point) -> Option<Point> {
     use vectorcraft_geom::kurbo::ParamCurveNearest;
@@ -435,6 +476,7 @@ impl DimensionTool {
         p
     }
     fn preview(&mut self, cx: &ToolContext, p: Point) -> Vec<Action> {
+        self.level_guide = None;
         let Some(d) = &mut self.pending else { return vec![] };
         if matches!(d.mode, DimensionMode::Radius | DimensionMode::Diameter)
             && let Some(Target::Radial { center, radius, .. }) = self.press.as_ref().and_then(|(_, t)| t.as_ref())
@@ -462,10 +504,14 @@ impl DimensionTool {
         if d.resolve(cx.doc).is_err() {
             return vec![];
         }
-        d.place(p);
+        // With Smart Guides on, a linear dimension's line lands on the level of a parallel
+        // dimension line already drawn within the Smart Guides snapping tolerance.
+        let level = if cx.smart_guides { line_level(cx, d, p, cx.tol(cx.snapping_tolerance)) } else { None };
+        d.place(level.map_or(p, |(on_level, _)| on_level));
         if d.validate().is_err() {
             return vec![];
         }
+        self.level_guide = level.map(|(_, ends)| ends);
         let mut actions = vec![];
         if !self.began {
             actions.push(Action::Begin("Create Dimension".into()));
@@ -495,6 +541,7 @@ impl DimensionTool {
         self.snap.clear();
         self.snapped = None;
         self.second = None;
+        self.level_guide = None;
     }
     /// A plain click: picks a point or a line, or measures a circle's radius.
     fn click(&mut self, cx: &ToolContext, p: Point, target: Option<Target>, mods: Mods) -> Vec<Action> {
@@ -733,6 +780,21 @@ impl Tool for DimensionTool {
         // The Smart Guides of the point the next click picks (after the rubber band).
         if linear_pick {
             out.extend(self.snap.guides().iter().cloned());
+        }
+        // A dimension line placed on the level of another: one alignment guide across both lines,
+        // unless Alignment Guides are off.
+        if cx.alignment_guides
+            && let (Some(d), Some((c, e))) = (&self.pending, self.level_guide)
+        {
+            let (a, b) = d.line_ends();
+            let u = d.direction();
+            let along = |q: &Point| q.to_vec2().dot(u);
+            let ends = [a, b, c, e];
+            if let (Some(lo), Some(hi)) =
+                (ends.iter().min_by(|p, q| along(p).total_cmp(&along(q))), ends.iter().max_by(|p, q| along(p).total_cmp(&along(q))))
+            {
+                out.push(Overlay::Line { a: *lo, b: *hi, color: cx.smart_guide_color, dashed: false });
+            }
         }
         out
     }
