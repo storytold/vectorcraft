@@ -118,8 +118,9 @@ pub fn inflate_meshed(
 }
 
 /// Revolve's surface ([`crate::revolve`]) as a mesh. As the effect draws it, a sweep of less than
-/// 360° caps its ends with sectors and leaves its two cut sides open ([`Revolve::cap_ends`]). The
-/// walls of holes under `rule`, such as the counter of an O, face into the hole.
+/// 360° caps its ends with sectors and closes its two cut sides with flat faces ([`Revolve::cap_ends`]).
+/// The walls of holes under `rule`, such as the counter of an O, face into the hole, and the cut
+/// sides leave those holes open.
 pub fn revolve_mesh(path: &PathData, rule: FillRule, bounds: Rect, options: Revolve) -> Result<Mesh, String> {
     let mut faces = vec![];
     crate::revolve_faces(path, rule, bounds, options, Some(&mut faces))?;
@@ -127,7 +128,7 @@ pub fn revolve_mesh(path: &PathData, rule: FillRule, bounds: Rect, options: Revo
 }
 
 /// The area-weighted normal of `contours` (Newell's method).
-fn newell(contours: &[Vec<V3>]) -> V3 {
+pub(crate) fn newell(contours: &[Vec<V3>]) -> V3 {
     let mut n = V3::default();
     for c in contours {
         for (a, b) in c.iter().zip(c.iter().cycle().skip(1)).take(c.len()) {
@@ -210,7 +211,7 @@ fn spend(work: &mut usize, steps: usize) -> Result<(), String> {
 
 /// The triangles covering one face: `contours` (outlines one way round, holes the other) on the
 /// plane across `normal` (its Newell normal).
-fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) -> Result<Vec<[V3; 3]>, String> {
+pub(crate) fn triangulate(contours: &[Vec<V3>], normal: V3, work: &mut usize) -> Result<Vec<[V3; 3]>, String> {
     // Cut the face on the coordinate plane it is least slanted to, turned so outlines run
     // counterclockwise.
     let (ax, ay, az) = (normal.0.abs(), normal.1.abs(), normal.2.abs());

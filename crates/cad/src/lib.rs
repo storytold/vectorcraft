@@ -1,4 +1,4 @@
-//! CAD interchange: a hand-written ASCII DXF writer (versions R12 to 2018) and a reader on
+//! CAD interchange: a DXF writer (versions R12 to 2018) on `craft_dxf::drawing` and a reader on
 //! `craft_dxf::model`, and an HP-GL/2 plot file reader and writer.
 //!
 //! [`export`] writes the visible art of a document into one DXF drawing: each layer becomes a DXF
@@ -7,6 +7,8 @@
 //! hatches, type text entities or glyph outlines, and placed images image entities linked to PNG
 //! or JPEG files the caller writes next to the drawing. Coordinates are y-up, in drawing units: `scale` units per
 //! `unit` of the art, with the origin at the bottom-left corner of [`DxfOptions::region`].
+//! [`export_drawings`] writes one such drawing for each of several regions, applying the live
+//! effects once for all of them.
 //!
 //! What DXF can't hold (blending modes, opacity masks, raster effects, gradients, patterns,
 //! clipping) is approximated or left out, and each such loss comes back as a warning.
@@ -15,7 +17,7 @@
 //! [`hpgl::import`] reads an HP-GL plotter file, and [`hpgl::export`] writes one: see [`hpgl`].
 //!
 //! - `aci`: the 256-colour index palette and the nearest index of a colour.
-//! - `writer`: group codes, handles and the file's sections, tables and objects.
+//! - The ASCII file around those entities is written by `craft_dxf::drawing`.
 //! - `scene`: the document walk that turns objects into entities.
 //! - `import`: the reader, entities to art, blocks to symbols.
 //! - `hpgl`: the HP-GL reader, the pen's moves to paths, and the writer, paths to pen moves.
@@ -24,7 +26,6 @@ mod aci;
 pub mod hpgl;
 pub mod import;
 mod scene;
-mod writer;
 
 use vectorcraft_doc::{Document, Unit};
 use vectorcraft_geom::Rect;
@@ -136,8 +137,24 @@ impl DxfVersion {
         self >= Self::R2004
     }
     /// Text is UTF-8 (earlier versions escape what isn't ASCII as `\U+XXXX`).
-    fn utf8(self) -> bool {
+    pub fn utf8(self) -> bool {
         self >= Self::R2007
+    }
+}
+
+impl From<DxfVersion> for craft_dxf::drawing::Format {
+    fn from(v: DxfVersion) -> Self {
+        match v {
+            DxfVersion::R12 => Self::R12,
+            DxfVersion::R13 => Self::R13,
+            DxfVersion::R14 => Self::R14,
+            DxfVersion::R2000 => Self::R2000,
+            DxfVersion::R2004 => Self::R2004,
+            DxfVersion::R2007 => Self::R2007,
+            DxfVersion::R2010 => Self::R2010,
+            DxfVersion::R2013 => Self::R2013,
+            DxfVersion::R2018 => Self::R2018,
+        }
     }
 }
 
@@ -421,18 +438,43 @@ pub const SCALE_RANGE: std::ops::RangeInclusive<f64> = 1e-6..=1e6;
 /// Write `doc` as a DXF drawing with `opts`. Live geometry effects are applied first; template
 /// layers, guides and hidden objects are left out.
 pub fn export(doc: &Document, opts: &DxfOptions) -> Result<DxfOutput, String> {
+    Ok(export_drawings(doc, opts, &[(opts.region, opts.crop)])?.pop().unwrap_or_default())
+}
+
+/// Write `doc` as one DXF drawing for each `(region, crop)` of `drawings`, in order, each as
+/// [`export`] writes it with `opts` and that region and crop. Live geometry effects are applied
+/// once for all the drawings.
+pub fn export_drawings(doc: &Document, opts: &DxfOptions, drawings: &[(Rect, bool)]) -> Result<Vec<DxfOutput>, String> {
+    export_drawings_with(doc, opts, drawings, bake_for_drawings)
+}
+
+/// `doc` with its live geometry effects applied and its symbols' art placed, or `None` when
+/// nothing changes.
+fn bake_for_drawings(doc: &Document) -> Option<Document> {
+    // Symbols' art is placed without clipping, as the scene places it.
+    let layers = vectorcraft_effects::WrittenLayers { hidden: true, non_printing: true, hidden_objects: false };
+    vectorcraft_effects::bake_document_placing_symbols(doc, false, layers)
+}
+
+/// [`export_drawings`] with `bake` applying the live effects.
+fn export_drawings_with(
+    doc: &Document,
+    opts: &DxfOptions,
+    drawings: &[(Rect, bool)],
+    bake: impl Fn(&Document) -> Option<Document>,
+) -> Result<Vec<DxfOutput>, String> {
     if !(opts.scale.is_finite() && SCALE_RANGE.contains(&opts.scale)) {
         return Err(format!("scale must be a number from {} to {}, not {}", SCALE_RANGE.start(), SCALE_RANGE.end(), opts.scale));
     }
-    let r = opts.region;
-    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) {
+    if drawings.iter().any(|(r, _)| ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite())) {
         return Err("the export region is not finite".into());
     }
-    // Symbols' art is placed without clipping, as the scene places it.
-    let baked =
-        vectorcraft_effects::bake_document_placing_symbols(doc, false, vectorcraft_effects::WrittenLayers { hidden: true, non_printing: true });
+    if drawings.is_empty() {
+        return Ok(vec![]);
+    }
+    let baked = bake(doc);
     let doc = baked.as_ref().unwrap_or(doc);
-    Ok(scene::Scene::new(doc, opts).run())
+    Ok(drawings.iter().map(|&(region, crop)| scene::Scene::new(doc, &DxfOptions { region, crop, ..opts.clone() }).run()).collect())
 }
 
 #[cfg(test)]

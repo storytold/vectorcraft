@@ -316,7 +316,7 @@ fn apply(layout: &mut Layout<String>, action: Action<String>) -> Result<Vec<Stri
 }
 
 /// The docking commands VectorCraft handles here: `window.panel` (the Window menu), its own
-/// `window.panel.collapse` and `window.collapseDock`, the Tools panel's float and dock
+/// `window.panel.collapse`, `window.panel.cycleOptions` and `window.collapseDock`, the Tools panel's float and dock
 /// ([`crate::tools_float`]) and craft-ui's shared ids. Workspaces stay [`crate::workspaces`]'.
 pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     if let Some(result) = crate::tools_float::command(app, id, params) {
@@ -326,6 +326,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, params: &Value) -> Opt
         "window.panel" => return Some(show_panel(app, params)),
         "window.collapseDock" => return Some(crate::menus::opt_bool(params, "collapsed").and_then(|c| collapse_dock(app, c))),
         "window.panels.peek" => return Some(peek::command(app, params)),
+        "window.panel.cycleOptions" => return Some(sizes::command(app, params)),
         "window.panel.collapse" => {
             let minimized = match crate::menus::opt_bool(params, "collapsed") {
                 Ok(c) => c,
@@ -1127,6 +1128,7 @@ fn known(action: &Action<String>) -> bool {
 pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     let area = area_id();
     let ctx = ui.ctx().clone();
+    crate::tools_float::set_dock_area_left(&ctx, ui.available_rect_before_wrap().left());
     let changed_workspace = ctx.data_mut(|data| {
         let previous = data.get_temp::<u64>(area.with("generation"));
         data.insert_temp(area.with("generation"), app.ui.docking_generation);
@@ -1304,6 +1306,40 @@ pub(crate) fn modal_open(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
         || ctx.memory(|m| m.areas().is_visible(&crate::dialogs::modal::backdrop()))
 }
 
+/// Is a modal window open in this pass: a dialog, the About window, a file dialog, the update
+/// prompt, or a window such as a progress window drawn over the modal backdrop in this pass?
+pub(crate) fn modal_window_up(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
+    app.ui.dialog.is_some()
+        || app.ui.about
+        || app.file_dialog_open()
+        || crate::updates_ui::blocks_input(app)
+        || crate::dialogs::modal::drawn_this_pass(ctx)
+}
+
+/// The key of whether a modal window was up in the last pass ([`close_overlays_for_modal`]).
+fn modal_window_up_id() -> egui::Id {
+    egui::Id::unique("modal-window-up")
+}
+
+/// While a modal window is up ([`modal_window_up`]), keeps the command palette closed, so a palette
+/// opened over it from the macOS menu bar or by an automation command does not take the keyboard
+/// from the window. In the pass the window opens, also closes a tool group's flyout, the All Tools
+/// drawer and any open popup, whatever opened the window: a press in the window, a pick in the
+/// macOS menu bar, an automation command or a run that ends in a dialog. Popups the window itself
+/// opens later stay open. Called after every window of the pass has drawn.
+pub(crate) fn close_overlays_for_modal(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let up = modal_window_up(app, ctx);
+    let was = ctx.data_mut(|d| std::mem::replace(d.get_temp_mut_or_default::<bool>(modal_window_up_id()), up));
+    if up {
+        app.ui.palette_open = false;
+    }
+    if up && !was {
+        app.ui.flyout = None;
+        app.ui.tools_drawer = false;
+        egui::Popup::close_all(ctx);
+    }
+}
+
 /// Keys, text and clipboard events that a floating panel's own OS window left over run the main
 /// window's shortcuts, tool keys and clipboard on its next frame ([`VectorcraftApp::raw_input_hook`]).
 /// craft-ui forwards nothing while a field in that window has the keyboard. A field of the main
@@ -1376,6 +1412,7 @@ pub(crate) fn floating_size(panel: &str) -> egui::Vec2 {
         // Tall enough to show its Corners and Shared Edges sections, last in it, which the Corner
         // Tool's and Shared Edge Merge Tool's menu items open.
         crate::addons::pathtools::ID => egui::vec2(260.0, 660.0),
+        crate::addons::packaging::preview::ID => egui::vec2(520.0, 440.0),
         _ => egui::vec2(260.0, 360.0),
     }
 }
@@ -1472,13 +1509,21 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
         crate::panels::panel_menu_items(self.app, ui, id);
     }
 
-    fn group_header_width(&self, panels: &[String], _active: &String, floating: bool, _strip_width: f32) -> f32 {
+    fn group_header_width(&self, panels: &[String], active: &String, floating: bool, _strip_width: f32) -> f32 {
         let flyout = self.app.ui.open_panel.as_ref().is_some_and(|panel| panels.contains(panel));
-        if floating || flyout { 52.0 } else { 28.0 }
+        let cycle = if sizes::has_sizes(active) { sizes::CELL } else { 0.0 };
+        cycle + if floating || flyout { 52.0 } else { 28.0 }
     }
 
     fn group_header(&mut self, ui: &mut egui::Ui, panels: &[String], active: &String, floating: bool) {
-        let header = ui.max_rect();
+        let mut header = ui.max_rect();
+        // The double triangle comes first, for a panel with display sizes.
+        if sizes::has_sizes(active) {
+            let split = (header.left() + sizes::CELL).min(header.right());
+            let cell = egui::Rect::from_min_max(header.min, egui::pos2(split, header.bottom()));
+            sizes::button(self.app, ui, cell, active);
+            header.min.x = split;
+        }
         let flyout = self.app.ui.open_panel.clone().filter(|panel| panels.contains(panel));
         let menu_cell = if floating || flyout.is_some() {
             let split = (header.right() - 28.0).max(header.left());
@@ -1523,6 +1568,7 @@ impl craft_ui::docking::DockContent<String> for PanelContent<'_> {
 }
 
 mod peek;
+mod sizes;
 
 #[cfg(test)]
 mod tests;
