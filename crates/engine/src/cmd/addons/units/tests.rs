@@ -76,6 +76,12 @@ fn values_read_as_number_fields_read_them() {
     assert!(near(pt(&mut s, json!({"value": "1,500+2", "unit": "mm"})), 3.5 * 72.0 / 25.4));
     // A sum of 128 signs still reads.
     assert!(near(pt(&mut s, json!({"value": format!("1{}", "+1".repeat(128))})), 129.0));
+    // x, X and × multiply as * does, and each counts toward the 128 signs.
+    assert!(near(pt(&mut s, json!({"value": "2x3 mm"})), 6.0 * 72.0 / 25.4));
+    assert!(near(pt(&mut s, json!({"value": "10X2"})), 20.0));
+    assert!(near(pt(&mut s, json!({"value": "0,5×4 in"})), 144.0));
+    assert!(near(pt(&mut s, json!({"value": format!("1{}", "x1".repeat(128))})), 1.0));
+    assert!(s.execute("addon.units.convert", &json!({"value": format!("1{}", "x1".repeat(129))})).is_err());
 }
 
 #[test]
