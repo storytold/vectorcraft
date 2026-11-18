@@ -638,6 +638,9 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     // The saved ruler guides become nodes on their layers (after the guides beyond the canvas are
     // dropped, and after `fix_next_id`: new ids start above the file's).
     doc.guides_into_nodes();
+    // Untrusted: a clipping mark only on a clip's first member, where the file keeps its clipping
+    // path (versions before marks left marks on paths moved within or out of their clips).
+    doc.tidy_clipping_marks();
     // A clip's clipping path, first in the file, goes on top of its art, marked (after the ruler
     // guides become nodes: it goes under them).
     doc.put_clipping_paths(vectorcraft_doc::ClippingPathAt::Top);

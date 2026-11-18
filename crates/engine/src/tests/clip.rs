@@ -715,3 +715,45 @@ fn type_on_top_still_clips_when_its_clip_group_is_flattened() {
     assert!(!opaque(&after, (b.x1 + 4.0) as u32, cy), "beside the type, the art is clipped away");
     assert!(!opaque(&after, ((b.x0 + b.x1) / 2.0) as u32, cy), "in the counter too");
 }
+
+/// A file as versions that took a clip's first member as its clipping path saved it after the
+/// clipping path's row was dragged up within its clip, and another path's row out of its clip:
+/// both paths kept their marks. Opened, the clip clips by its first member, as such a version
+/// showed it, the path outside is a plain path, and Make Clipping Mask with it selected takes the
+/// topmost object.
+#[test]
+fn marks_a_file_kept_off_a_clips_first_member_come_off() {
+    let mut s = session();
+    let art = id_of(&s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 80, "height": 80})).unwrap());
+    let circle = ellipse(&mut s, 20.0, 40.0);
+    select(&mut s, &[art, circle]);
+    let g = id_of(&s.execute("object.clippingMask.make", &json!({})).unwrap());
+    let stray = ellipse(&mut s, 0.0, 10.0);
+    let mut v: Value = serde_json::from_slice(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    fn find_mut(v: &mut Value, id: NodeId) -> Option<&mut Value> {
+        if v.get("id").and_then(Value::as_u64) == Some(id.0) && v.get("kind").is_some() {
+            return Some(v);
+        }
+        match v {
+            Value::Object(o) => o.values_mut().find_map(|c| find_mut(c, id)),
+            Value::Array(a) => a.iter_mut().find_map(|c| find_mut(c, id)),
+            _ => None,
+        }
+    }
+    // The circle, marked, above the art; the stray path marked.
+    let members = find_mut(&mut v, g).unwrap()["kind"]["children"].as_array_mut().unwrap();
+    assert_eq!(members.iter().map(|c| c["id"].as_u64().unwrap()).collect::<Vec<_>>(), [circle.0, art.0], "first in the file");
+    members.reverse();
+    find_mut(&mut v, stray).unwrap()["kind"]["clipping"] = json!(true);
+    let data = vectorcraft_format::base64_encode(&serde_json::to_vec(&v).unwrap());
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "old.vectorcraft", "dataBase64": data})).unwrap();
+    let marked = |o: &Session, id: NodeId| o.doc().unwrap().doc.node(id).unwrap().is_clipping_path();
+    assert_eq!(clips_by(&o, g), Some(art), "the first member clips");
+    assert_eq!(child_ids(&o, g), [circle, art], "on top");
+    assert!(!marked(&o, circle) && !marked(&o, stray));
+    let top = id_of(&o.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 30, "height": 30})).unwrap());
+    select(&mut o, &[stray, top]);
+    let made = id_of(&o.execute("object.clippingMask.make", &json!({})).unwrap());
+    assert_eq!(clips_by(&o, made), Some(top));
+}

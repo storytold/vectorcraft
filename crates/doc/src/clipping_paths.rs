@@ -55,6 +55,22 @@ impl Document {
         }
     }
 
+    /// Untrusted, in a document just read from a file, before [`Self::put_clipping_paths`] puts the
+    /// clipping paths on top: a clip's clipping path is its first member there, so a mark anywhere
+    /// else is taken off. Versions that took a clip's first member as its clipping path kept the
+    /// mark on a path moved within its clip or out of it, and clipped by the member that came first
+    /// instead; a mark on another member of a clip, or outside any clip, is such a mark (or one
+    /// written by hand). The first member of each clip is then its clipping path, as those versions
+    /// showed it. In the same stored art as `put_clipping_paths`, opacity-mask art included.
+    pub fn tidy_clipping_marks(&mut self) {
+        for s in &mut self.symbols {
+            tidy_tree(&mut s.art);
+        }
+        for root in self.other_roots_mut() {
+            tidy_tree(root);
+        }
+    }
+
     /// The roots of the stored art other than the symbols': the layers, the art of graph designs
     /// and pattern swatches (the original of a pattern being edited too) and the mounted art.
     fn other_roots_mut(&mut self) -> impl Iterator<Item = &mut Arc<Node>> {
@@ -135,6 +151,43 @@ fn own(n: &Node, at: ClippingPathAt) -> Option<(Node, usize, usize)> {
     }
     children.insert(to.min(children.len()), path);
     Some((m, from, to))
+}
+
+/// [`tidied`] in place for the tree `root`, whose root is in no clip.
+fn tidy_tree(root: &mut Arc<Node>) {
+    if let Some(n) = tidied(root, false) {
+        *root = Arc::new(n);
+    }
+}
+
+/// `n` with the clipping marks in it taken off except on the first member of each clip (`first`:
+/// `n` is one), or None when none is. The root of opacity-mask art is in no clip.
+fn tidied(n: &Arc<Node>, first: bool) -> Option<Node> {
+    let mut out = (!first && n.is_clipping_path()).then(|| {
+        let mut m = (**n).clone();
+        m.set_clipping_path(false);
+        m
+    });
+    if let Some(art) = n.extras().mask.as_deref().and_then(|m| tidied(&m.art, false)) {
+        let m = out.get_or_insert_with(|| (**n).clone());
+        if let Some(mask) = m.extras_mut().mask.as_mut() {
+            mask.art = Arc::new(art);
+        }
+    }
+    let clips = n.clips();
+    let changed: Vec<(usize, Node)> =
+        n.children().into_iter().flatten().enumerate().filter_map(|(i, c)| tidied(c, clips && i == 0).map(|c| (i, c))).collect();
+    if !changed.is_empty() {
+        let m = out.get_or_insert_with(|| (**n).clone());
+        if let Some(children) = m.children_mut() {
+            for (i, c) in changed {
+                if let Some(slot) = children.get_mut(i) {
+                    *slot = Arc::new(c);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// [`followed`] in place for the tree `root`.
@@ -218,6 +271,49 @@ mod tests {
 
     fn ids(n: &Node) -> Vec<u64> {
         n.children().unwrap().iter().map(|c| c.id.0).collect()
+    }
+
+    /// A file keeps each clipping path first in its clip: a mark on another member (one moved up
+    /// within its clip), a second mark in one clip, and marks outside clips (in a group, in the
+    /// layer) come off, in symbol art too, and the first member of each clip is its clipping path.
+    #[test]
+    fn marks_off_a_clips_first_member_come_off_a_file() {
+        let marked = |id: u64| {
+            let mut n = (*rect(id)).clone();
+            n.set_clipping_path(true);
+            Arc::new(n)
+        };
+        let mut d = Document::new(100.0, 100.0);
+        let layer = d.layers[0].id;
+        let moved_up = Node::new(NodeId(101), NodeKind::Group { children: vec![rect(102), marked(103)], clip: true });
+        let two = Node::new(NodeId(104), NodeKind::Group { children: vec![marked(105), marked(106)], clip: true });
+        let plain = Node::group(NodeId(107), vec![marked(108), rect(109)]);
+        for (i, n) in [moved_up, two, plain, (*marked(110)).clone()].into_iter().enumerate() {
+            d.insert(Some(layer), i, n).unwrap();
+        }
+        let art = Node::new(NodeId(113), NodeKind::Group { children: vec![rect(111), marked(112)], clip: true });
+        d.symbols.push(Symbol { name: "s".into(), art: Arc::new(art), dynamic: false });
+
+        d.tidy_clipping_marks();
+        d.put_clipping_paths(ClippingPathAt::Top);
+        let marks = |d: &Document, id: u64| d.node(NodeId(id)).unwrap().is_clipping_path();
+        let clips_by = |n: &Node| n.clipping_path().map(|c| c.id.0);
+        let moved_up = d.node(NodeId(101)).unwrap();
+        assert_eq!((ids(moved_up), clips_by(moved_up)), (vec![103, 102], Some(102)), "the first member clips, on top");
+        assert!(marks(&d, 102) && !marks(&d, 103));
+        let two = d.node(NodeId(104)).unwrap();
+        assert_eq!((ids(two), clips_by(two)), (vec![106, 105], Some(105)));
+        assert!(!marks(&d, 106));
+        assert!(!marks(&d, 108) && !marks(&d, 110), "outside clips");
+        let art = d.symbols[0].art.clone();
+        assert_eq!((ids(&art), clips_by(&art)), (vec![112, 111], Some(111)));
+        assert!(!art.children().unwrap()[0].is_clipping_path());
+        // A document whose marks are where a file keeps them is left as it is.
+        let mut again = d.clone();
+        again.put_clipping_paths(ClippingPathAt::First);
+        let first = again.clone();
+        again.tidy_clipping_marks();
+        assert_eq!(serde_json::to_value(&again).unwrap(), serde_json::to_value(&first).unwrap());
     }
 
     #[test]
