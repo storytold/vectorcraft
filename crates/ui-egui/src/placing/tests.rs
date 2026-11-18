@@ -661,6 +661,134 @@ fn a_deferred_swatch_paste_uses_its_original_layer() {
     assert_eq!(st.current_layer(), Some(second));
 }
 
+/// A bitmap pasted from another app while a group is isolated goes into that group when the
+/// isolation ends and the current layer, which does not hold the group, is locked while the bitmap
+/// is decoded.
+#[test]
+fn a_bitmap_pasted_into_an_isolated_group_stays_there_when_another_layer_is_locked() {
+    let (mut app, _) = pasting_app(true, Some(Flavour { mime: PNG, data: picture(Png, 60, 40) }), None, true);
+    let first = app.session.doc().unwrap().doc.layers[0].id;
+    app.run("layer.new", json!({})).unwrap();
+    let squares: Vec<Value> =
+        (0..2).map(|i| app.run("shape.rectangle", json!({"x": 10 + 30 * i, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone()).collect();
+    app.run("select.set", json!({"ids": squares})).unwrap();
+    let group = NodeId(app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.none", json!({})).unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    app.run("object.isolate", json!({"id": group.0})).unwrap();
+    app.session.doc_mut().unwrap().active_layer = Some(first);
+    crate::menus::invoke(&mut app, "edit.paste", json!({}));
+    app.run("object.exitIsolation", json!({})).unwrap();
+    app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.selection.objects.first().and_then(|i| st.doc.parent_of(*i)), Some(group), "pasted into the group isolated at the paste");
+    assert_eq!(st.isolation, None, "the isolation ended meanwhile stays ended");
+}
+
+/// A bitmap pasted from another app whose layer is locked while it is decoded goes into the layer
+/// current then, also when the objects selected at the paste, which it selects again, are in
+/// another layer.
+#[test]
+fn a_bitmap_whose_layer_is_locked_meanwhile_is_not_pasted_next_to_the_selection() {
+    let (mut app, _) = pasting_app(true, Some(Flavour { mime: PNG, data: picture(Png, 60, 40) }), None, true);
+    let first = app.session.doc().unwrap().doc.layers[0].id;
+    app.run("layer.new", json!({})).unwrap();
+    let selected = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    let second = app.session.doc().unwrap().current_layer().unwrap();
+    app.run("layer.new", json!({})).unwrap();
+    let third = app.session.doc().unwrap().current_layer().unwrap();
+    app.run("select.set", json!({"ids": [selected]})).unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    assert_eq!(app.session.doc().unwrap().selection.objects.len(), 1);
+    crate::menus::invoke(&mut app, "edit.paste", json!({}));
+    app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
+    app.run("layer.setCurrent", json!({"id": third.0})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    let pasted = st.selection.objects.first().and_then(|i| st.doc.layer_containing(*i));
+    assert_eq!(pasted, Some(third), "pasted into the current layer, not {second:?}");
+}
+
+/// In Draw Inside, a bitmap decoded off the UI thread is pasted inside the object Draw Inside draws
+/// into, in another layer, when the layer current at the paste is locked meanwhile.
+#[test]
+fn a_bitmap_pasted_in_draw_inside_stays_inside_when_its_layer_is_locked() {
+    let (mut app, _) = pasting_app(true, Some(Flavour { mime: PNG, data: picture(Png, 60, 40) }), None, true);
+    let first = app.session.doc().unwrap().doc.layers[0].id;
+    app.run("layer.new", json!({})).unwrap();
+    let path = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 200, "height": 200})).unwrap()["id"].clone();
+    app.run("layer.new", json!({})).unwrap();
+    let third = app.session.doc().unwrap().current_layer().unwrap();
+    app.run("select.set", json!({"ids": [path]})).unwrap();
+    app.run("view.drawMode", json!({"mode": "inside"})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    crate::menus::invoke(&mut app, "edit.paste", json!({}));
+    app.run("view.drawMode", json!({"mode": "normal"})).unwrap();
+    app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
+    app.run("layer.setCurrent", json!({"id": third.0})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    let group = st.selection.objects.first().and_then(|i| st.doc.parent_of(*i));
+    assert!(
+        group.is_some_and(|g| st.doc.node(g).is_some_and(|n| n.children().is_some_and(|c| c.iter().any(|n| n.id.0 == path.as_u64().unwrap())))),
+        "pasted inside the path"
+    );
+}
+
+/// Paste in Front does not paste inside the object Draw Inside draws into: a bitmap decoded off the
+/// UI thread goes into the layer current at the paste when that object is locked meanwhile.
+#[test]
+fn a_bitmap_pasted_in_front_in_draw_inside_keeps_its_layer() {
+    let (mut app, _) = pasting_app(true, Some(Flavour { mime: PNG, data: picture(Png, 60, 40) }), None, true);
+    let first = app.session.doc().unwrap().doc.layers[0].id;
+    app.run("layer.new", json!({})).unwrap();
+    let second = app.session.doc().unwrap().current_layer().unwrap();
+    let path = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 200, "height": 200})).unwrap()["id"].clone();
+    app.run("layer.new", json!({})).unwrap();
+    let third = app.session.doc().unwrap().current_layer().unwrap();
+    app.run("select.set", json!({"ids": [path]})).unwrap();
+    app.run("view.drawMode", json!({"mode": "inside"})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
+    app.run("layer.setProps", json!({"ids": [second.0], "locked": true})).unwrap();
+    app.run("layer.setCurrent", json!({"id": third.0})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.selection.objects.first().and_then(|i| st.doc.layer_containing(*i)), Some(first), "pasted into the layer current at the paste");
+}
+
+/// A paste waiting for its Swatch Conflict dialog whose layer is locked before the dialog's OK
+/// goes into the layer current at the OK, not into the topmost layer.
+#[test]
+fn a_deferred_swatch_paste_whose_layer_is_locked_meanwhile_uses_the_current_layer() {
+    let (mut app, _) = pasting_app(true, None, None, true);
+    app.run("swatch.new", json!({"name": "Brand", "color": "#ff0000", "global": true})).unwrap();
+    let source = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [source], "swatch": "Brand"})).unwrap();
+    app.run("edit.copy", json!({})).unwrap();
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    app.run("swatch.new", json!({"name": "Brand", "color": "#0000ff", "global": true})).unwrap();
+    let first = app.session.doc().unwrap().doc.layers[0].id;
+    app.run("layer.new", json!({})).unwrap();
+    let second = app.session.doc().unwrap().current_layer().unwrap();
+    app.run("layer.new", json!({})).unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    crate::menus::invoke(&mut app, "edit.paste", json!({}));
+    placed(&mut app);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
+    app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
+    app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+    app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.selection.objects.first().and_then(|i| st.doc.layer_containing(*i)), Some(second));
+}
+
 #[test]
 fn a_queued_paste_stacks_after_a_deferred_swatch_confirmation() {
     for id in ["edit.pasteInFront", "edit.pasteInBack"] {
@@ -968,6 +1096,166 @@ fn a_bitmap_read_off_the_ui_thread_is_pasted_into_its_layer() {
     let st = app.session.doc().unwrap();
     assert_eq!(st.doc.layer_containing(st.selection.objects[0]), Some(first), "pasted next to the object selected at the paste");
     assert_eq!(st.current_layer(), Some(second), "the layer of the object selected meanwhile stays current");
+}
+
+/// An app placing off the UI thread with three layers, the bottom one current → the app, a TIFF
+/// file to place and the layers from the bottom up.
+fn three_layers(test: &str) -> (VectorcraftApp, String, [NodeId; 3]) {
+    let mut app = app(true);
+    let path = saved(test, "a.tif", &picture(Tiff, 60, 40));
+    let first = app.session.doc().unwrap().doc.layers[0].id;
+    app.run("layer.new", json!({})).unwrap();
+    let second = app.session.doc().unwrap().current_layer().unwrap();
+    app.run("layer.new", json!({})).unwrap();
+    let third = app.session.doc().unwrap().current_layer().unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    (app, path, [first, second, third])
+}
+
+/// A file read off the UI thread after the Place dialog's OK is placed into the layer that was
+/// current at the OK, and a layer made current while it is read stays current.
+#[test]
+fn a_file_read_off_the_ui_thread_is_placed_into_its_layer() {
+    let (mut app, a, [first, second, _]) = three_layers("into-its-layer");
+    app.run("file.place", json!({"paths": [a]})).unwrap();
+    assert_eq!(crate::dialogs::confirm(&mut app).unwrap()["background"], true);
+    app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.doc.layer_containing(st.selection.objects[0]), Some(first), "placed into the layer current at the OK");
+    assert_eq!(st.current_layer(), Some(second), "the layer made current meanwhile stays current");
+}
+
+/// A file dropped on the canvas goes into the layer current at the drop, not into a group in
+/// another layer isolated while the file is read, and the group stays isolated.
+#[test]
+fn a_dropped_file_is_placed_into_the_layer_current_at_the_drop() {
+    let (mut app, a, [first, second, _]) = three_layers("drop-into-its-layer");
+    app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+    let squares: Vec<Value> =
+        (0..2).map(|i| app.run("shape.rectangle", json!({"x": 10 + 30 * i, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone()).collect();
+    app.run("select.set", json!({"ids": squares})).unwrap();
+    let group = NodeId(app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap());
+    app.run("select.none", json!({})).unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    let doc = app.session.doc().unwrap().uid;
+    let drop = DropTarget::Place(DropAt { doc, reverts: 0, at: vectorcraft_geom::Point::new(200.0, 150.0), embed: false });
+    crate::place::drop_files(&mut app, vec![(drop, ("a.tif".into(), Some(a), vec![]))]);
+    app.run("object.isolate", json!({"id": group.0})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.doc.parent_of(st.selection.objects[0]), Some(first), "placed into the layer current at the drop");
+    assert_eq!(st.isolation, Some(group), "the group stays isolated");
+}
+
+/// An object selected in another layer while a placed file is read makes that layer current, and
+/// it stays current after the file is placed into the layer current at the OK.
+#[test]
+fn a_file_placed_while_an_object_in_another_layer_is_selected_keeps_its_layer() {
+    let (mut app, a, [first, second, _]) = three_layers("select-meanwhile");
+    app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+    let square = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("file.place", json!({"paths": [a]})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    app.run("select.set", json!({"ids": [square]})).unwrap();
+    assert_eq!(app.session.doc().unwrap().current_layer(), Some(second));
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.doc.layer_containing(st.selection.objects[0]), Some(first), "placed into the layer current at the OK");
+    assert_eq!(st.current_layer(), Some(second), "the layer of the object selected meanwhile stays current");
+}
+
+/// Replace swaps the object selected at the OK in its own layer, and a layer made current while the
+/// file is read stays current after Replace selects that object again.
+#[test]
+fn a_replace_read_off_the_ui_thread_keeps_the_layer_made_current_meanwhile() {
+    let (mut app, a, [first, second, _]) = three_layers("replace-meanwhile");
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    crate::place::run_for_user(&mut app, &json!({"path": a, "replace": true})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    let image = st.selection.objects[0];
+    assert!(matches!(st.doc.node(image).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Image(_))), "{}", app.ui.status);
+    assert_eq!(st.doc.layer_containing(image), Some(first), "the image takes the replaced object's place");
+    assert_eq!(st.current_layer(), Some(second), "the layer made current meanwhile stays current");
+}
+
+/// A file whose layer is deleted or locked while it is read goes where new art goes now: into the
+/// layer current then, not into the topmost layer.
+#[test]
+fn a_file_whose_layer_is_deleted_or_locked_meanwhile_goes_into_the_current_layer() {
+    let mut found = vec![];
+    let mut wanted = vec![];
+    for change in ["delete", "lock", "hide"] {
+        let (mut app, a, [first, second, _]) = three_layers(&format!("layer-{change}"));
+        app.run("file.place", json!({"paths": [a]})).unwrap();
+        crate::dialogs::confirm(&mut app).unwrap();
+        match change {
+            "delete" => app.run("layer.delete", json!({"ids": [first.0]})).unwrap(),
+            "lock" => app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap(),
+            _ => app.run("layer.setProps", json!({"ids": [first.0], "visible": false})).unwrap(),
+        };
+        app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+        placed(&mut app);
+        let st = app.session.doc().unwrap();
+        let image = st.selection.objects.first().copied();
+        found.push((change, image.and_then(|i| st.doc.layer_containing(i)), st.current_layer()));
+        wanted.push((change, Some(second), Some(second)));
+    }
+    assert_eq!(found, wanted, "placed into the current layer, which stays current");
+}
+
+/// Place does not draw inside an object: with Draw Inside on for an object in another layer, a file
+/// whose layer is locked while it is read goes into the layer current then.
+#[test]
+fn a_file_placed_with_draw_inside_on_follows_its_layer() {
+    let (mut app, a, [first, second, _]) = three_layers("draw-inside");
+    app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+    let inside = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 200, "height": 200})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [inside]})).unwrap();
+    app.run("view.drawMode", json!({"mode": "inside"})).unwrap();
+    app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    assert_eq!(app.session.draw_inside.map(|t| t.0), inside.as_u64());
+    app.run("file.place", json!({"paths": [a]})).unwrap();
+    crate::dialogs::confirm(&mut app).unwrap();
+    app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap();
+    app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    assert_eq!(st.selection.objects.first().and_then(|i| st.doc.layer_containing(*i)), Some(second), "placed into the current layer");
+}
+
+/// A bitmap pasted from another app whose layer is deleted, locked or hidden while it is decoded
+/// goes into the layer current then, not into the topmost layer.
+#[test]
+fn a_bitmap_whose_layer_is_deleted_or_locked_meanwhile_is_pasted_into_the_current_layer() {
+    let mut found = vec![];
+    let mut wanted = vec![];
+    for change in ["delete", "lock", "hide"] {
+        let (mut app, _) = pasting_app(true, Some(Flavour { mime: PNG, data: picture(Png, 60, 40) }), None, true);
+        let first = app.session.doc().unwrap().doc.layers[0].id;
+        app.run("layer.new", json!({})).unwrap();
+        let second = app.session.doc().unwrap().current_layer().unwrap();
+        app.run("layer.new", json!({})).unwrap();
+        app.run("layer.setCurrent", json!({"id": first.0})).unwrap();
+        crate::menus::invoke(&mut app, "edit.paste", json!({}));
+        match change {
+            "delete" => app.run("layer.delete", json!({"ids": [first.0]})).unwrap(),
+            "lock" => app.run("layer.setProps", json!({"ids": [first.0], "locked": true})).unwrap(),
+            _ => app.run("layer.setProps", json!({"ids": [first.0], "visible": false})).unwrap(),
+        };
+        app.run("layer.setCurrent", json!({"id": second.0})).unwrap();
+        placed(&mut app);
+        let st = app.session.doc().unwrap();
+        found.push((change, st.selection.objects.first().and_then(|i| st.doc.layer_containing(*i))));
+        wanted.push((change, Some(second)));
+    }
+    assert_eq!(found, wanted, "pasted into the current layer");
 }
 
 /// The Place dialog's OK with one file, with several (the place cursor and its thumbnails), a

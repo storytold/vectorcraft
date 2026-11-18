@@ -121,7 +121,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Separations Preview",
             [],
             None,
-            "{on?: bool, plates?: [names], toggle?: plate, only?: plate} Separations Preview: show the chosen plates (one plate = greyscale ink coverage) → {on, plates: [{name, spot, visible, rgb}]}",
+            "{on?: bool, plates?: [names], toggle?: plate, only?: plate, soloToggle?: plate (only that plate, or every plate when it is the only one shown)} Separations Preview: show the chosen plates (one plate = grayscale ink coverage) → {on, plates: [{name, spot, visible, rgb}]}",
             always,
             separations
         ),
@@ -754,10 +754,12 @@ fn map_art_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof
 }
 
 /// `f` applied to the colors in `n`'s subtree that [`proof::map_node_colors`] does not visit: the
-/// effect colors ([`map_effect_colors`]), the series paints and label styles a graph keeps
+/// effect colors ([`map_effect_colors`]), the Hue Shift key colors of strokes' own brush settings
+/// ([`map_stroke_brush_keys`]), the series paints and label styles a graph keeps
 /// ([`map_graph_colors`]) and the art of every opacity mask.
 fn map_more_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
     map_effect_colors(&mut n.appearance, f);
+    map_stroke_brush_keys(&mut n.appearance, f);
     if let Some(e) = n.extras_if_any() {
         if let Some(g) = e.graph.as_deref_mut() {
             map_graph_colors(g, f);
@@ -769,6 +771,23 @@ fn map_more_colors(n: &mut vectorcraft_doc::Node, f: &mut dyn FnMut(&Color, proo
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut().filter(|c| !c.is_ruler_guide()) {
             map_more_colors(Arc::make_mut(c), f);
+        }
+    }
+}
+
+/// `f` applied to the Hue Shift key color of each stroke's own brush settings in appearance `a`
+/// (Options of Selected Object, `colorization.key` of [`StrokeLayer::brush_options`]); a key
+/// that does not read is left as it is.
+///
+/// [`StrokeLayer::brush_options`]: vectorcraft_doc::StrokeLayer::brush_options
+fn map_stroke_brush_keys(a: &mut vectorcraft_doc::Appearance, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
+    for it in &mut a.items {
+        let vectorcraft_doc::AppearanceItem::Stroke(st) = it else { continue };
+        let Some(c) = st.brush_options.get_mut("colorization").and_then(Value::as_object_mut) else { continue };
+        let Some(key) = c.get("key").and_then(|k| serde_json::from_value::<Color>(k.clone()).ok()) else { continue };
+        let n = f(&key, None);
+        if n != key {
+            c.insert("key".into(), json!(n));
         }
     }
 }
@@ -1035,6 +1054,13 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if let Some(n) = text_param(p, "only", C)? {
         v.separations = Some(vec![check(n)?]);
+    }
+    // The panel's Alt-click on a plate's eye: that plate alone, or every plate when it already
+    // shows alone among the active document's plates.
+    if let Some(n) = text_param(p, "soloToggle", C)? {
+        let n = check(n)?;
+        let alone = v.separations.as_ref().is_some_and(|vis| all.iter().filter(|a| vis.contains(a)).eq([&n]));
+        v.separations = Some(if alone { all.clone() } else { vec![n] });
     }
     if let Some(n) = text_param(p, "toggle", C)? {
         let n = check(n)?;
