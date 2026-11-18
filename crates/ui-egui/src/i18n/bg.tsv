@@ -105,6 +105,7 @@
 	Add Anchor Point	Добавяне на опорна точка
 	Add Anchor Point Tool	Инструмент „Добавяне на опорна точка“
 	Add Anchor Points	Добавяне на опорни точки
+	Add Around	Добавяне около обекта
 	Add Effect	Добавяне на ефект
 	Add Freeform Line	Добавяне на свободна линия
 	Add Freeform Point	Добавяне на свободна точка
@@ -182,6 +183,7 @@
 	Angle:	Ъгъл:
 	Angles	Ъгли
 	Animated Zoom	Анимирано мащабиране
+	Anti Alias	Заглаждане
 	Anti-alias	Заглаждане
 	Anti-Alias	Заглаждане
 	Anti-alias Rasters	Заглаждане на растери
@@ -348,6 +350,8 @@ font-technology	Variable	Променливи
 	Brush Definition	Дефиниция на четка
 	Brush Libraries	Библиотеки с четки
 	Brush Options…	Опции за четката…
+	Options of Selected Object…	Опции на избрания обект…
+	Options of Selected Object	Опции на избрания обект
 	Brush Strokes	Щрихи с четка
 	Brushes	Четки
 	Built-in Libraries	Вградени библиотеки
@@ -539,6 +543,7 @@ font-technology	Variable	Променливи
 	Color Mixer (Shift-click the chip)	Цветов смесител (Shift-щракване върху блокчето)
 	Color Mode	Цветен режим
 	Color Mode:	Цветен режим:
+	Color Model	Цветен модел
 	Color Model:	Цветен модел:
 	Color Models	Цветни модели
 	Color Picker	Палитра с цвят
@@ -559,12 +564,18 @@ font-technology	Variable	Променливи
 	Saturation and brightness	Насищане и яркост
 	Color field	Цветово поле
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Изглед „Колело“
+	Box View	Изглед „Квадрат“
+	Box Channel	Канал на квадрата
+	Color box	Цветови квадрат
+	Color Wheel Options	Опции на цветното колело
 	Color Type:	Цветен тип:
 	Color:	Цвят:
 	Colorize	Оцветяване
 	Colors	Цветове
 	Colors:	Цветове:
 	Column Graph Tool	Инструмент „Колонна диаграма“
+	Columns	Колони
 	Columns:	Колони:
 	Column…	Колона…
 	Combine Slices	Обединяване на парчетата
@@ -1040,6 +1051,7 @@ font-technology	Variable	Променливи
 	Enable text access for screen readers	Разрешаване на достъп до текст за екранни четци
 	Enable Touch Gestures	Разрешаване на докосващи жестове
 	Switch Selection and Drawing Modes	Превключване между режим на селекция и рисуване
+	Select Last Selection Tool	Избор на последния инструмент за селекция
 	Enable Touch Workspace	Разрешаване на работно пространство за докосване
 	Encoding	Кодиране
 	Encoding:	Кодиране:
@@ -1162,7 +1174,7 @@ font-technology	Variable	Променливи
 	Extrude & Bevel…	Избутване и фасетка…
 	3D (Classic)	3D (класически)
 	Extrude & Bevel (Classic)…	Избутване и фасетка (класически)…
-	Revolve (Classic)…	Завъртане (класическо)…
+	Revolve (Classic)…	Завъртане около ос (класическо)…
 	Rotate (Classic)…	Ротация (класическа)…
 	Surface	Повърхност
 	Wireframe	Телена рамка
@@ -2452,6 +2464,8 @@ font-technology	Variable	Променливи
 	Other Library…	Друга библиотека…
 	Some scripts were not listed	Някои скриптове не са изброени
 	The Scripts folder cannot be read	Папката Scripts не може да бъде прочетена
+	Loading scripts…	Зареждане на скриптовете…
+	The Scripts folder is still being read	Папката Scripts все още се чете
 	Other Script…	Друг скрипт…
 	Out of Gamut Warning	Предупреждение за излизане извън цветовата гама
 	Out of Web Color Warning	Предупреждение за цвят извън уеб палитрата
@@ -2480,6 +2494,9 @@ font-technology	Variable	Променливи
 	Overprint	Напечатване върху друго
 	Overprint and Transparency Flattener	Сплескване на надпечатването и прозрачността
 	Overprint and Transparency Flattener Options	Опции за сплескване на надпечатването и прозрачността
+	Custom…	Потребителски…
+	Custom Transparency Flattener Options	Потребителски опции за сплескване на прозрачността
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS няма алфа прозрачност, а „Надпечати“ определя дали надпечатванията се запазват.
 	Overprint Black…	Напечатване на черното върху друго…
 	Overprint Fill	Напечатване на запълването върху друго
 	Overprint Preview	Преглед на напечатването върху друго
@@ -2584,6 +2601,7 @@ font-technology	Variable	Променливи
 	Play Current Selection	Изпълнение на текущия избор
 	Save Actions…	Запазване на действия…
 	Load Actions…	Зареждане на действия…
+	Replace Actions…	Замяна на действия…
 	Reset Actions	Нулиране на действия
 	Replace the current actions with the default set?	Да се заменят ли текущите действия с набора по подразбиране?
 	Append adds the default set after the current sets instead.	С „Добавяне“ наборът по подразбиране се добавя след текущите набори.
@@ -2949,6 +2967,8 @@ digits	Malayalam	Малаялам
 	Reselect	Избиране отново
 	Reset	Нулиране
 	Reset Bounding Box	Нулиране на ограничителната рамка
+	Rotate Bounding Box	Завъртане на ограничителната рамка
+	Rotate Bounding Box…	Завъртане на ограничителната рамка…
 	Reset Envelope Mesh	Нулиране на мрежата на обвивката
 	Reset Envelope Shape	Нулиране на формата на обвивката
 	Reset Essentials	Нулиране на основните
@@ -2989,6 +3009,7 @@ digits	Malayalam	Малаялам
 	Reshape Segment	Преоформяне на сегмент
 	Reshape Tool	Инструмент „Преоформяне“
 	Reshape Type Area	Преоформяне на текстова област
+	Resolution	Разделителна способност
 	Resolution:	Разделителна способност:
 	Responsive	Адаптивен
 	Restore	Възстановяване
@@ -3045,6 +3066,29 @@ digits	Malayalam	Малаялам
 	The unit for East Asian type measurements, which no field uses yet.	Единицата за мерките на източноазиатски текст, която засега не се използва от нито едно поле.
 	When on, a number typed without a unit into a field in picas is read in points.	Когато е включено, число, въведено без единица в поле в пики, се чете в точки.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	При XML ID имената на обектите се показват като XML ID в Слоеве, Променливи и Опции за слоя.
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Стъпката за размер на текста и междуредие: Cmd/Ctrl+Shift+. и Cmd/Ctrl+Shift+, променят размера с една стъпка, а с Alt – с пет; в хоризонтален текст Alt със стрелка нагоре или надолу променя междуредието с една стъпка, а с Cmd/Ctrl – с пет.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Стъпката за разредка и кернинг в хилядни от em: в хоризонтален текст Alt със стрелка наляво или надясно променя кернинга при курсора или разредката на избрания текст с една стъпка, а с Cmd/Ctrl – с пет.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Стъпката за изместване на базовата линия: в хоризонтален текст Alt и Shift със стрелка нагоре или надолу преместват базовата линия с една стъпка, а с Cmd/Ctrl – с пет.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Показва опциите за японски и друг източноазиатски текст в панелите Знак, Абзац, OpenType и Глифи, както и командата Съставни шрифтове.
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Показва опциите за арабски, иврит и индийски текст в панелите Знак и Абзац, например посока на абзаца, кашиди и цифри.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Инструментите за селекция избират текст само по базовата му линия, рамката на текста в област или пътя му, а не навсякъде в кутията му.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Менютата за шрифтове показват всеки шрифт с английското му име; ако е изключено, шрифт, който има име и на собствения си език, показва това име.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Новият текст в област започва с включен автоматичен размер, така че правоъгълна рамка с хоризонтален текст става по-висока или по-ниска според текста си.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Списъците с шрифтове и менюто Шрифт показват мостра на всеки шрифт до името му.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Мострите на шрифтовете се рисуват с тъмен текст на бяло независимо от яркостта на интерфейса; това важи само докато визуализациите на шрифтове в менюто са включени.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Колко висок е всеки ред в списъците на полетата за шрифт, например в панела Знак, и съответно колко голяма е всяка мостра.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Колко от последно използваните шрифтове, от 1 до 15, показват Скорошни шрифтове и списъците с шрифтове, най-новите първи.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Когато смените шрифта или стила на шрифта на текст, знаците, за които новият шрифт няма глиф, запазват предишния си шрифт.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Розово открояване върху платното отбелязва глифите, заменени от функции на OpenType, например лигатури; то не се отпечатва и не се експортира.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	С инструмента Текст избирането на един знак показва до него върху платното ред с алтернативните му глифи за избор.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Розово открояване върху платното отбелязва текст, изобразен със заместващ шрифт, защото шрифтът му липсва; то не се отпечатва и не се експортира.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Новият текст, създаден с инструмент за текст, започва с избран примерен текст, който въвеждането заменя.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Въвеждането на знак за списък, например 1. или *, и след това интервал в началото на абзац превръща абзаца в списък.
+	Fonts in this folder show in the font menus and can be used without being installed.	Шрифтовете в тази папка се показват в менютата за шрифтове и могат да се използват, без да са инсталирани.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Прилагането на графичен стил към текст премахва собствените запълване или контур на знаците, където стилът има такива, така че се вижда боята на стила.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	Подравняване и Разпределяне измерват точковия текст по мастилото на глифите му вместо по em-кутията му.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	Подравняване и Разпределяне измерват текста в област по мастилото на глифите му вместо по рамката му.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Ограничаващата рамка и панелът Трансформиране измерват точковия текст по мастилото на глифите му вместо по em-кутията му.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Прилепва рисуването, преместването и мащабирането към подразделенията на мрежата, дори когато мрежата е скрита; докато е включено, „Прилепване към пиксел“ не действа.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Цветът на водачите, които не са избрани; работна област с „Етикет на водачите“ рисува своите водачи в цвета на етикета.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Рисува водачите като плътни линии или като точки, включително водачите, които вече са в документа.
@@ -3130,6 +3174,7 @@ digits	Malayalam	Малаялам
 	Rounded Rectangle Tool	Инструмент „Закръглен правоъгълник“
 	Rounded Rectangle…	Закръглен правоъгълник…
 	Row Size:	Размер на реда:
+	Rows	Ленти
 	Rows:	Ленти:
 	Rule:	Линия:
 	Rulers	Линийки
@@ -3631,6 +3676,11 @@ digits	Malayalam	Малаялам
 	Opacity Masks	Маски за непрозрачност
 	Objects with Effects	Обекти с ефекти
 	Path Length	Дължина на пътя
+	Grid Size	Размер на мрежата
+	Grid Colors	Цветове на мрежата
+	Flattener Preset	Предварителна настройка за сплескване
+	X	X
+	Y	Y
 	Spot Colors	Спот цветове
 	Spot Colors…	Спот цветове…
 	Spread:	Разпространение:
@@ -5013,6 +5063,9 @@ axis	Both	И двете
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Изхвърлен е {n} възстановен документ|Изхвърлени са {n} възстановени документа
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Възстановен е {n} документ: запазете го, за да го съхраните|Възстановени са {n} документа: запазете ги, за да ги съхраните
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Отворено с {n} бележка: {first}|Отворено с {n} бележки: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Копирано с {n} бележка: {first}|Копирано с {n} бележки: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Изрязано с {n} бележка: {first}|Изрязано с {n} бележки: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Трасирано с {n} бележка: {first}|Трасирано с {n} бележки: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Отворено с {n} бележка: {first}|{notice}. Отворено с {n} бележки: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} е запазен с {n} бележка: {first}|{path} е запазен с {n} бележки: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вградено е {n} изображение; {missing} липсват: първо ги свържете наново|Вградени са {n} изображения; {missing} липсват: първо ги свържете наново
@@ -5387,6 +5440,7 @@ lighting	Light	Светлина
 @msg	missing panel layout	липсващо оформление на панели
 @msg	unsupported native docking operation	неподдържана вградена операция за скачване
 	Linux Display Server	Дисплейен сървър за Linux
+	Low-Latency Drawing	Рисуване с ниско забавяне
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland) при свързана писалка
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Ако писалката на графичния таблет не рисува, изберете опция X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
@@ -6066,6 +6120,8 @@ theme	Appearance	Външен вид
 	Reset Tracking and Kerning	Нулиране на разредката и кернинга
 	Reset Horizontal Scale	Нулиране на хоризонталния мащаб
 	Highlight Font Name	Маркиране на името на шрифта
+	Highlight Font Size	Маркиране на размера на шрифта
+	Other…	Друг…
 	Highlight Kerning	Маркиране на кернинга
 	Highlight Tracking	Маркиране на разредката
 @msg	span must be "object" or "selection", got {v}	span трябва да е "object" или "selection", а не {v}
@@ -6690,6 +6746,12 @@ anchor	Points:	Точки:
 @msg	`segment` must be "straight" or "curved"	`segment` трябва да е "straight" или "curved"
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` трябва да е "free", "keepAngles" или "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` трябва да е [x, y]
+
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Преобразувател на мерни единици
+	Unit Converter Panel	Панел „Преобразувател на мерни единици“
+	Copy with Units	Копиране с мерните единици
+	From Selection	От селекцията
 
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Избиране по вид цвят
