@@ -3479,6 +3479,7 @@ theme	Appearance	Wygląd
 	Delete Brush	Usuń pędzel
 	Delete Color	Usuń kolor
 	Restore Generated Table	Przywróć wygenerowaną tablicę
+	Unshift All Colors	Cofnij przesunięcie wszystkich kolorów
 	Delete Symbol	Usuń symbol
 	Delete the selected symbol?	Usunąć zaznaczony symbol?
 	Delete the selected symbols?	Usunąć zaznaczone symbole?
@@ -5214,6 +5215,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	choose a location for the package	wybierz lokalizację pakietu
 @msg	clipboard is empty	schowek jest pusty
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: w tablicy kolorów musi zostać co najmniej jeden kolor
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` wskazuje kolor, który wskazuje też inny klucz
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nie jest kolorem w rodzaju "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksymalnie {MAX_TABLE} kolorów
 @msg	command `{0}` is not available right now: {1}	polecenie `{0}` jest teraz niedostępne: {1}

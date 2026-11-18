@@ -3274,6 +3274,7 @@ theme	Appearance	Tampilan
 	Delete Brush	Hapus kuas
 	Delete Color	Hapus warna
 	Restore Generated Table	Pulihkan tabel yang dibuat
+	Unshift All Colors	Batalkan pergeseran semua warna
 	Delete Symbol	Hapus simbol
 	Delete the selected symbol?	Hapus simbol yang dipilih?
 	Delete the selected symbols?	Hapus simbol yang dipilih?
@@ -4804,6 +4805,7 @@ imageTrace	Outline	Kontur
 @msg	choose a location for the package	pilih lokasi untuk paket
 @msg	clipboard is empty	papan klip kosong
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: setidaknya satu warna harus tetap ada di tabel warna
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` menyebut warna yang juga disebut kunci lain
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` bukan warna seperti "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: maksimal {MAX_TABLE} warna
 @msg	command `{0}` is not available right now: {1}	perintah `{0}` tidak tersedia saat ini: {1}

@@ -1057,6 +1057,7 @@ font-technology	Variable	Változó
 	Delete Brush	Ecset törlése
 	Delete Color	Szín törlése
 	Restore Generated Table	Előállított tábla visszaállítása
+	Unshift All Colors	Az összes szín eltolásának visszavonása
 	Delete Character Style	Karakterstílus törlése
 	Delete Data Set	Adatkészlet törlése
 	Delete Empty Artboards	Üres rajztáblák törlése
@@ -5467,6 +5468,7 @@ imageTrace	Outline	Körvonal
 @msg	clipboard is empty	a vágólap üres
 @msg	closing needs three anchors	a lezáráshoz három horgonypont kell
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: legalább egy színnek a színtáblában kell maradnia
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: a(z) `{k}` olyan színt nevez meg, amelyet egy másik kulcs is megnevez
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` nem szín (például "#ff8800")
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: legfeljebb {MAX_TABLE} szín
 @msg	column must be true or a number from 1	a column értéke true vagy 1-től kezdődő szám lehet

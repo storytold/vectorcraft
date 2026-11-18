@@ -1165,6 +1165,7 @@ antiAlias	Sharp	Nítid
 	Delete Brush	Suprimeix el pinzell
 	Delete Color	Suprimeix el color
 	Restore Generated Table	Restaura la taula generada
+	Unshift All Colors	Desfés el desplaçament de tots els colors
 	Delete Character Style	Suprimeix l’estil de caràcter
 	Delete Data Set	Suprimeix el conjunt de dades
 	Delete Data Sets	Suprimeix els conjunts de dades
@@ -5876,6 +5877,7 @@ digits	Malayalam	Malaiàlam
 @msg	clipboard is empty	el porta-retalls és buit
 @msg	closing needs three anchors	el tancament necessita tres punts d’ancoratge
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: almenys un color ha de quedar a la taula de colors
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` indica un color que també indica una altra clau
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no és un color com "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: com a màxim {MAX_TABLE} colors
 @msg	column docks a set as a dock column, with no anchor or icon	column acobla un conjunt com a columna d’acoblament, sense àncora ni icona
