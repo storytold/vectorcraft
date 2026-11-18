@@ -60,6 +60,7 @@ pub mod graph_design;
 pub mod graph_type;
 pub mod graphic_style_options;
 pub mod halftone;
+pub mod hpgl_options;
 pub mod hyphenation;
 pub mod import_pdf;
 pub mod indexed_color;
@@ -420,6 +421,7 @@ registry! {
     DivideSlices: [slices::DIVIDE] => slices::DIVIDE_SPEC,
     EpsOptions: [eps_options::KIND] => eps_options::SPEC,
     EpsFlattenerOptions: [eps_options::CUSTOM_KIND] => eps_options::CUSTOM_SPEC,
+    HpglOptions: [hpgl_options::KIND] => hpgl_options::SPEC,
     Recovery: [crate::recovery::KIND] => recovery::SPEC,
     PluginStopped: [safe_mode::STOPPED] => safe_mode::STOPPED_SPEC,
     SafeMode: [safe_mode::KIND] => safe_mode::SPEC,
