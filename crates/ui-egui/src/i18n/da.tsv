@@ -816,6 +816,19 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Paste without Formatting	Indsæt uden formatering
 	Clear	Fjern
 	Find and Replace…	Find og erstat…
+	Find and Replace	Find og erstat
+	Find:	Find:
+	Replace With:	Erstat med:
+	Replace & Find	Erstat og find
+	Replace All	Erstat alle
+	Match Case	Forskel på store og små bogstaver
+	Find Whole Word	Find hele ord
+	Search Backwards	Søg baglæns
+	Check Hidden Layers	Kontrollér skjulte lag
+	Check Locked Layers	Kontrollér låste lag
+@msg	No matches found	Ingen forekomster fundet
+@msg	Matches replaced: {n}	Erstattede forekomster: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ingen forekomst af `find` ved byte {_1}..{_2} i objekt {_3}
 	Find Next	Find næste
 	Spelling	Stavekontrol
 	Auto Spell Check	Automatisk stavekontrol
@@ -2950,6 +2963,16 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	To Center	Mod midten
 	To Edge	Mod kanten
 	Create Object Mosaic…	Opret objektmosaik…
+	Create Object Mosaic	Opret objektmosaik
+	Current Size:	Aktuel størrelse:
+	New Size:	Ny størrelse:
+	Tile Spacing:	Mellemrum mellem fliser:
+	Number of Tiles:	Antal fliser:
+	Constrain Ratio:	Begræns forhold:
+	Result:	Resultat:
+	Resize Using Percentages	Tilpas størrelse med procenter
+	Delete Raster	Slet rasterbillede
+	Use Ratio	Brug forhold
 	Vector Halftone…	Vektorhalvtone…
 	Create Trim Marks	Opret beskæringsmærker
 	Flatten Transparency…	Udjævn gennemsigtighed…
@@ -5863,6 +5886,7 @@ antiAlias	Sharp	Skarp
 	Preserve Editing Capabilities	Bevar redigeringsfunktioner
 	Responsive	Responsiv
 	Show Code	Vis kode
+	Show in Browser	Vis i browser
 	Style Attributes	Stilattributter
 	Style Attributes (Entity References)	Stilattributter (enhedsreferencer)
 	Styling:	Styling:
@@ -6879,6 +6903,8 @@ axis	Both	Begge
 	Show	Vis
 	Copy Width Point	Kopiér breddepunkt
 	Duplicate Artboard	Duplikér tegneflade
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klik for at tilføje en kunstplade på denne side, Alt-klik for at duplikere kunstpladen med dens grafik
+	Click to add an artboard on this side	Klik for at tilføje en kunstplade på denne side
 	Area / Path Type	Arealtekst / kurvetekst
 	Decrease Font Size	Formindsk skriftstørrelse
 	Increase Font Size	Forøg skriftstørrelse
@@ -7136,6 +7162,7 @@ font-technology	Variable	Variable
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Hvor tæt på skærmen markøren eller et trukket punkt skal komme på grafik, for at de smarte hjælpelinjer fastgør til den; afstanden er den samme ved alle zoomniveauer.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Fastgør enden af et linjesegment eller en cirkel tegnet fra midten, så den rører en nærliggende kurve.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Fastgør enden af et linjesegment, så det møder et nærliggende lige segment i en ret vinkel.
+	Edit type set in fonts that aren't available?	Rediger tekst i skrifttyper, der ikke er tilgængelige?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Viser hvert udsnits nummer i en boks i dets øverste venstre hjørne på lærredet; når den er slået fra, vises udsnittenes konturer stadig.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Farven på konturerne af bruger- og objektudsnit og på boksene med deres numre; automatiske udsnit bruger en svagere nuance af den.
 	Reset all preferences to their defaults?	Nulstil alle præferencer til standard?
@@ -7421,6 +7448,7 @@ imageTrace	Outline	Kontur
 @msg	Installed plug-in {_1}	Installerede plug-in'en {_1}
 @msg	Internal error: {msg} (please report this bug)	Intern fejl: {msg} (meld venligst denne fejl)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Live Paint-fletning: markér en Live Paint-gruppe og de kurver, der skal tilføjes
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` og `Edge` er navnene på fladerne og kanterne i en Live Paint-gruppe: giv kurven et andet navn
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	Live Paint tager kurver og sammensatte kurver: konvertér først tekst, billeder og andre objekter til kurver
 @msg	Live Paint: select paths or compound paths	Live Paint: markér kurver eller sammensatte kurver
 @msg	Live Paint: these paths are too degenerate to paint	Live Paint: disse kurver er for degenererede til at blive malet
@@ -8713,6 +8741,11 @@ mark-style	Japanese	Japansk
 	The active document changed while the screen color sampler was open	Det aktive dokument ændrede sig, mens skærmfarvesampleren var åben
 	This system has no screen color sampler	Dette system har ingen skærmfarvesampler
 	Color blindness – Tritanopia-type	Farveblindhed – tritanopitype
+	Show Color Vision Preview	Vis eksempel på farvesyn
+	Protanopia	Protanopi
+	Deuteranopia	Deuteranopi
+	Tritanopia	Tritanopi
+	Achromatopsia	Akromatopsi
 	Panels Except Tools and Control	Paneler undtagen værktøjer og kontrol
 	Reset Tracking and Kerning	Nulstil sporing og kerning
 	Reset Horizontal Scale	Nulstil vandret skalering
@@ -9338,6 +9371,7 @@ axis	Y Axis	Y-akse
 	Checkpoint	Kontrolpunkt
 	Inventory Icons	Inventarikoner
 	Skill Icons	Færdighedsikoner
+	Weather Icons	Vejrikoner
 	Attack	Angreb
 	Defend	Forsvar
 	Heal	Helbredelse
@@ -9453,6 +9487,252 @@ axis	Y Axis	Y-akse
 	Stars	Stjerner
 	Triangles	Trekanter
 	Sparkles	Gnister
+	Warm Gray	Varm grå
+	Cool Gray	Kølig grå
+	Neutrals	Neutrale toner
+	Ivory	Elfenben
+	Linen	Hør
+	Oat	Havre
+	Greige	Greige
+	Stone	Sten
+	Taupe	Taupe
+	Slate	Skifer
+	Clay	Ler
+	Terracotta	Terrakotta
+	Ochre	Okker
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliven
+	Moss	Mos
+	Rosy	Rosa
+	Neutral	Neutral
+	Golden	Gylden
+	Pastel	Pastel
+	Pastel Red	Pastelrød
+	Pastel Orange	Pastelorange
+	Pastel Amber	Pastelrav
+	Pastel Yellow	Pastelgul
+	Pastel Lime	Pastellime
+	Pastel Green	Pastelgrøn
+	Pastel Teal	Pastelblågrøn
+	Pastel Cyan	Pastelcyan
+	Pastel Azure	Pastelazur
+	Pastel Blue	Pastelblå
+	Pastel Violet	Pastelviolet
+	Pastel Magenta	Pastelmagenta
+	Soft Red	Blød rød
+	Soft Orange	Blød orange
+	Soft Amber	Blød rav
+	Soft Yellow	Blød gul
+	Soft Lime	Blød lime
+	Soft Green	Blød grøn
+	Soft Teal	Blød blågrøn
+	Soft Cyan	Blød cyan
+	Soft Azure	Blød azur
+	Soft Blue	Blød blå
+	Soft Violet	Blød violet
+	Soft Magenta	Blød magenta
+	Vivid Red	Intens rød
+	Vivid Orange	Intens orange
+	Vivid Amber	Intens rav
+	Vivid Yellow	Intens gul
+	Vivid Lime	Intens lime
+	Vivid Green	Intens grøn
+	Vivid Teal	Intens blågrøn
+	Vivid Cyan	Intens cyan
+	Vivid Azure	Intens azur
+	Vivid Blue	Intens blå
+	Vivid Violet	Intens violet
+	Vivid Magenta	Intens magenta
+	Deep	Dybe
+	Deep Red	Dyb rød
+	Deep Orange	Dyb orange
+	Deep Amber	Dyb rav
+	Deep Yellow	Dyb gul
+	Deep Lime	Dyb lime
+	Deep Green	Dyb grøn
+	Deep Teal	Dyb blågrøn
+	Deep Cyan	Dyb cyan
+	Deep Azure	Dyb azur
+	Deep Blue	Dyb blå
+	Deep Violet	Dyb violet
+	Deep Magenta	Dyb magenta
+	Gold	Guld
+	Silver	Sølv
+	Bronze	Bronze
+	Copper	Kobber
+	Brass	Messing
+	Rose Gold	Rosaguld
+	Gunmetal	Gunmetal
+	Platinum	Platin
+	Pewter	Tin
+	Ember	Glød
+	Lagoon	Lagune
+	Dusk	Skumring
+	Clay to Teal	Ler til blågrøn
+	Plum to Olive	Blomme til oliven
+	Complementary Coral	Koral komplementær
+	Split Complementary Coral	Koral delt komplementær
+	Analogous Coral	Koral analog
+	Triad Coral	Koral triade
+	Tetrad Coral	Koral tetrad
+	Pentagram Coral	Koral pentagram
+	Complementary Teal	Blågrøn komplementær
+	Split Complementary Teal	Blågrøn delt komplementær
+	Analogous Teal	Blågrøn analog
+	Triad Teal	Blågrøn triade
+	Tetrad Teal	Blågrøn tetrad
+	Pentagram Teal	Blågrøn pentagram
+	Soft Spectrum	Blødt spektrum
+	Red to Amber	Rød til rav
+	Orange to Yellow	Orange til gul
+	Amber to Lime	Rav til lime
+	Yellow to Green	Gul til grøn
+	Lime to Teal	Lime til blågrøn
+	Green to Cyan	Grøn til cyan
+	Teal to Azure	Blågrøn til azur
+	Cyan to Blue	Cyan til blå
+	Azure to Violet	Azur til violet
+	Blue to Magenta	Blå til magenta
+	Violet to Red	Violet til rød
+	Magenta to Orange	Magenta til orange
+	Dawn	Daggry
+	Noon	Middag
+	Sunset	Solnedgang
+	Night	Nat
+	Overcast	Overskyet
+	White to Black	Hvid til sort
+	Light Grays	Lyse gråtoner
+	Dark Grays	Mørke gråtoner
+	Warm Grays	Varme gråtoner
+	Cool Grays	Kølige gråtoner
+	Fade to Transparent	Udtoning til gennemsigtig
+	White Fade	Hvid udtoning
+	Vignette	Vignet
+	Mist	Dis
+	Petal	Kronblad
+	Fern	Bregne
+	Smoke	Røg
+	Honey	Honning
+	Seafoam	Havskum
+	Lavender	Lavendel
+	Driftwood	Drivtømmer
+	Ink Wash	Tuschlavering
+	Tide	Tidevand
+	Bloom	Blomstring
+	Dew	Dug
+	Pollen	Pollen
+	Lichen	Lav
+	Prism Veil	Prismeslør
+	Opal Ribbon	Opalbånd
+	Pearl Flash	Perleglimt
+	Aurora Foil	Nordlysfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Sølvtidevand
+	Rose Quartz Gleam	Rosakvartsglans
+	Moonstone Shift	Månestensskær
+	Violet Edge	Violet kant
+	Mint Halo	Mynteglorie
+	Amber Corona	Ravkorona
+	Polar Glint	Polarglimt
+	Pastel Orbit	Pastelbane
+	Coral and Navy	Koral og marineblå
+	Plum and Lime	Blomme og lime
+	Teal and Gold	Blågrøn og guld
+	Indigo and Peach	Indigo og fersken
+	Forest and Rose	Skov og rosa
+	Red Glow	Rød glød
+	Orange Glow	Orange glød
+	Amber Glow	Ravglød
+	Yellow Glow	Gul glød
+	Lime Glow	Limeglød
+	Green Glow	Grøn glød
+	Teal Glow	Blågrøn glød
+	Cyan Glow	Cyanglød
+	Azure Glow	Azurglød
+	Blue Glow	Blå glød
+	Violet Glow	Violet glød
+	Magenta Glow	Magentaglød
+	Polka Dots	Prikker
+	Vertical Stripes	Lodrette striber
+	Horizontal Stripes	Vandrette striber
+	Diagonal Stripes	Diagonale striber
+	Checkerboard	Skakbræt
+	Diamonds	Ruder
+	Crosses	Kryds
+	Coarse Grit	Groft korn
+	Stipple	Punktering
+	Scratches	Ridser
+	Sparse Flecks	Spredte pletter
+	Dense Flecks	Tætte pletter
+	Sine Bands	Sinusbånd
+	Ripple Lines	Bølgelinjer
+	Interference Rings	Interferensringe
+	Offset Rings	Forskudte ringe
+	Warped Checks	Forvredne tern
+	Pinched Stripes	Klemte striber
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Strålende linser
+	Soft Shadow	Blød skygge
+	Hard Shadow	Hård skygge
+	Lifted Card	Løftet kort
+	Neon Tube	Neonrør
+	Inner Light	Indre lys
+	Feathered	Blød kant
+	Haze	Dunst
+	Double Rule	Dobbelt streg
+	Triple Rule	Tredobbelt streg
+	Dashed Border	Stiplet kant
+	Dotted Border	Prikket kant
+	Offset Keyline	Forskudt konturlinje
+	Inset Keyline	Indre konturlinje
+	Outside Stroke	Ydre streg
+	Pointer	Viser
+	Highlighter	Overstregningstusch
+	Sketchy Line	Skitseagtig linje
+	Scribble Fill	Kruseduldefyld
+	Wobble	Slinger
+	Zig Zag Edge	Zigzagkant
+	Wavy Edge	Bølget kant
+	Puffy	Oppustet
+	Starburst	Stjerneudbrud
+	Glossy	Blank
+	Brushed Metal	Børstet metal
+	Spotlight	Spotlys
+	Sunset Band	Solnedgangsbånd
+	Sea Glass	Havglas
+	Pearl	Perle
+	Chrome Rim	Kromkant
+	Glow Orb	Lyskugle
+	Pill Badge	Pillemærke
+	Round Badge	Rundt mærke
+	Flag Wave	Vajende flag
+	Bulge	Bule
+	Twisted	Snoet
+	Echo	Ekko
+	Spiral Copies	Spiralkopier
+	Multiply Tint	Multiplikationstone
+	Darken Veil	Mørkere slør
+	Ghosted	Spøgelsesagtig
+	Two Tone	Tofarvet
+	Overlay Glaze	Overlejringsglasur
+	Screen Light	Skærmlys
+	Soft Light Wash	Blødt lys-lavering
+	Cyan Neon	Cyan neon
+	Magenta Laser	Magenta laser
+	Amber Tube	Ravfarvet rør
+	Electric Lime	Elektrisk lime
+	Pulse Violet	Pulserende violet
+	Cobalt Phosphor	Koboltfosfor
+	Burst	Udbrud
+	Rounded Square	Afrundet kvadrat
+	Sun	Sol
+	Moon	Måne
+	Cloud	Sky
+	Rain	Regn
+	Thunder	Torden
+	Snow	Sne
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger
@@ -10220,6 +10500,7 @@ breakText	Glyphs	Glyffer
 @msg	A joint does not close by {gap} pt.	En samling lukker ikke med {gap} pt.
 @msg	Two panels pass through each other.	To paneler går gennem hinanden.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer skal være "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	en linje eller anden åben kurve, der ikke omslutter noget område, tilføjer intet område til den sammensatte figur; anvend først Objekt › Kurve › Streg til kontur på den for at tage den med
 	Pressure Sensitive	Trykfølsom
 	Flex Ribbon	Fleksibelt bånd
 	Pulse Stroke	Pulserende strøg

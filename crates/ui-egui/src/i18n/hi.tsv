@@ -474,6 +474,252 @@ antiAlias	Sharp	शार्प
 	Stars	तारे
 	Triangles	त्रिभुज
 	Sparkles	चमक
+	Warm Gray	वार्म ग्रे
+	Cool Gray	कूल ग्रे
+	Neutrals	न्यूट्रल रंग
+	Ivory	हाथीदाँत
+	Linen	लिनन
+	Oat	जई
+	Greige	ग्रेज
+	Stone	पत्थर
+	Taupe	टोप
+	Slate	स्लेट
+	Clay	मिट्टी
+	Terracotta	टेराकोटा
+	Ochre	गेरू
+	Umber	अम्बर मिट्टी
+	Sand	रेत
+	Olive	जैतूनी
+	Moss	काई
+	Rosy	गुलाबी आभा
+	Neutral	न्यूट्रल
+	Golden	सुनहरा
+	Pastel	पेस्टल
+	Pastel Red	पेस्टल लाल
+	Pastel Orange	पेस्टल नारंगी
+	Pastel Amber	पेस्टल एम्बर
+	Pastel Yellow	पेस्टल पीला
+	Pastel Lime	पेस्टल लाइम
+	Pastel Green	पेस्टल हरा
+	Pastel Teal	पेस्टल टील
+	Pastel Cyan	पेस्टल सियान
+	Pastel Azure	पेस्टल आसमानी
+	Pastel Blue	पेस्टल नीला
+	Pastel Violet	पेस्टल बैंगनी
+	Pastel Magenta	पेस्टल मैजेंटा
+	Soft Red	सॉफ़्ट लाल
+	Soft Orange	सॉफ़्ट नारंगी
+	Soft Amber	सॉफ़्ट एम्बर
+	Soft Yellow	सॉफ़्ट पीला
+	Soft Lime	सॉफ़्ट लाइम
+	Soft Green	सॉफ़्ट हरा
+	Soft Teal	सॉफ़्ट टील
+	Soft Cyan	सॉफ़्ट सियान
+	Soft Azure	सॉफ़्ट आसमानी
+	Soft Blue	सॉफ़्ट नीला
+	Soft Violet	सॉफ़्ट बैंगनी
+	Soft Magenta	सॉफ़्ट मैजेंटा
+	Vivid Red	चटक लाल
+	Vivid Orange	चटक नारंगी
+	Vivid Amber	चटक एम्बर
+	Vivid Yellow	चटक पीला
+	Vivid Lime	चटक लाइम
+	Vivid Green	चटक हरा
+	Vivid Teal	चटक टील
+	Vivid Cyan	चटक सियान
+	Vivid Azure	चटक आसमानी
+	Vivid Blue	चटक नीला
+	Vivid Violet	चटक बैंगनी
+	Vivid Magenta	चटक मैजेंटा
+	Deep	गहरे
+	Deep Red	गहरा लाल
+	Deep Orange	गहरा नारंगी
+	Deep Amber	गहरा एम्बर
+	Deep Yellow	गहरा पीला
+	Deep Lime	गहरा लाइम
+	Deep Green	गहरा हरा
+	Deep Teal	गहरा टील
+	Deep Cyan	गहरा सियान
+	Deep Azure	गहरा आसमानी
+	Deep Blue	गहरा नीला
+	Deep Violet	गहरा बैंगनी
+	Deep Magenta	गहरा मैजेंटा
+	Gold	सोना
+	Silver	चाँदी
+	Bronze	काँसा
+	Copper	ताँबा
+	Brass	पीतल
+	Rose Gold	रोज़ गोल्ड
+	Gunmetal	गनमेटल
+	Platinum	प्लैटिनम
+	Pewter	प्यूटर
+	Ember	अंगारा
+	Lagoon	लैगून
+	Dusk	साँझ
+	Clay to Teal	मिट्टी से टील
+	Plum to Olive	आलूबुखारा से जैतूनी
+	Complementary Coral	कोरल, पूरक
+	Split Complementary Coral	कोरल, विभाजित पूरक
+	Analogous Coral	कोरल, अनुरूप
+	Triad Coral	कोरल, त्रिक
+	Tetrad Coral	कोरल, चतुष्क
+	Pentagram Coral	कोरल, पेंटाग्राम
+	Complementary Teal	टील, पूरक
+	Split Complementary Teal	टील, विभाजित पूरक
+	Analogous Teal	टील, अनुरूप
+	Triad Teal	टील, त्रिक
+	Tetrad Teal	टील, चतुष्क
+	Pentagram Teal	टील, पेंटाग्राम
+	Soft Spectrum	सॉफ़्ट स्पेक्ट्रम
+	Red to Amber	लाल से एम्बर
+	Orange to Yellow	नारंगी से पीला
+	Amber to Lime	एम्बर से लाइम
+	Yellow to Green	पीला से हरा
+	Lime to Teal	लाइम से टील
+	Green to Cyan	हरा से सियान
+	Teal to Azure	टील से आसमानी
+	Cyan to Blue	सियान से नीला
+	Azure to Violet	आसमानी से बैंगनी
+	Blue to Magenta	नीला से मैजेंटा
+	Violet to Red	बैंगनी से लाल
+	Magenta to Orange	मैजेंटा से नारंगी
+	Dawn	भोर
+	Noon	दोपहर
+	Sunset	सूर्यास्त
+	Night	रात
+	Overcast	बादल
+	White to Black	सफ़ेद से काला
+	Light Grays	हल्के ग्रे
+	Dark Grays	गहरे ग्रे
+	Warm Grays	वार्म ग्रे रंग
+	Cool Grays	कूल ग्रे रंग
+	Fade to Transparent	पारदर्शी तक फ़ेड
+	White Fade	सफ़ेद फ़ेड
+	Vignette	विनेट
+	Mist	धुंध
+	Petal	पंखुड़ी
+	Fern	फ़र्न
+	Smoke	धुआँ
+	Honey	शहद
+	Seafoam	समुद्री झाग
+	Lavender	लैवेंडर
+	Driftwood	बहती लकड़ी
+	Ink Wash	स्याही वॉश
+	Tide	ज्वार
+	Bloom	खिलना
+	Dew	ओस
+	Pollen	पराग
+	Lichen	लाइकेन
+	Prism Veil	प्रिज़्म परदा
+	Opal Ribbon	ओपल रिबन
+	Pearl Flash	मोती चमक
+	Aurora Foil	ऑरोरा फ़ॉइल
+	Iris Sheen	आइरिस आभा
+	Frost Spectrum	पाला स्पेक्ट्रम
+	Silver Tide	चाँदी ज्वार
+	Rose Quartz Gleam	रोज़ क्वार्ट्ज़ दमक
+	Moonstone Shift	चंद्रमणि झिलमिल
+	Violet Edge	बैंगनी किनारा
+	Mint Halo	पुदीना हलो
+	Amber Corona	एम्बर कोरोना
+	Polar Glint	ध्रुवीय झलक
+	Pastel Orbit	पेस्टल कक्षा
+	Coral and Navy	कोरल व नेवी
+	Plum and Lime	आलूबुखारा व लाइम
+	Teal and Gold	टील व सोना
+	Indigo and Peach	इंडिगो व आड़ू
+	Forest and Rose	जंगल व गुलाब
+	Red Glow	लाल ग्लो
+	Orange Glow	नारंगी ग्लो
+	Amber Glow	एम्बर ग्लो
+	Yellow Glow	पीला ग्लो
+	Lime Glow	लाइम ग्लो
+	Green Glow	हरा ग्लो
+	Teal Glow	टील ग्लो
+	Cyan Glow	सियान ग्लो
+	Azure Glow	आसमानी ग्लो
+	Blue Glow	नीला ग्लो
+	Violet Glow	बैंगनी ग्लो
+	Magenta Glow	मैजेंटा ग्लो
+	Polka Dots	पोल्का डॉट्स
+	Vertical Stripes	खड़ी धारियाँ
+	Horizontal Stripes	आड़ी धारियाँ
+	Diagonal Stripes	तिरछी धारियाँ
+	Checkerboard	चेकरबोर्ड
+	Diamonds	डायमंड
+	Crosses	क्रॉस
+	Coarse Grit	मोटा दाना
+	Stipple	बिंदुकारी
+	Scratches	खरोंचें
+	Sparse Flecks	विरल छींटे
+	Dense Flecks	घने छींटे
+	Sine Bands	साइन पट्टियाँ
+	Ripple Lines	लहर रेखाएँ
+	Interference Rings	व्यतिकरण छल्ले
+	Offset Rings	खिसके छल्ले
+	Warped Checks	मुड़े चेक
+	Pinched Stripes	सिकुड़ी धारियाँ
+	Chevron Pulse	शेवरॉन स्पंदन
+	Radiating Lenses	विकिरित लेंस
+	Soft Shadow	सॉफ़्ट छाया
+	Hard Shadow	कड़ी छाया
+	Lifted Card	उठा कार्ड
+	Neon Tube	नियॉन ट्यूब
+	Inner Light	भीतरी रोशनी
+	Feathered	फ़ेदर किया
+	Haze	कुहासा
+	Double Rule	दोहरी रेखा
+	Triple Rule	तिहरी रेखा
+	Dashed Border	डैश बॉर्डर
+	Dotted Border	डॉट बॉर्डर
+	Offset Keyline	खिसकी कीलाइन
+	Inset Keyline	भीतरी कीलाइन
+	Outside Stroke	बाहरी स्ट्रोक
+	Pointer	पॉइंटर
+	Highlighter	हाइलाइटर
+	Sketchy Line	स्केच रेखा
+	Scribble Fill	स्क्रिबल फ़िल
+	Wobble	डगमग
+	Zig Zag Edge	ज़िगज़ैग किनारा
+	Wavy Edge	लहरदार किनारा
+	Puffy	फूला
+	Starburst	तारा विस्फोट
+	Glossy	चमकदार
+	Brushed Metal	ब्रश्ड मेटल
+	Spotlight	स्पॉटलाइट
+	Sunset Band	सूर्यास्त पट्टी
+	Sea Glass	समुद्री काँच
+	Pearl	मोती
+	Chrome Rim	क्रोम किनारा
+	Glow Orb	ग्लो गोला
+	Pill Badge	पिल बैज
+	Round Badge	गोल बैज
+	Flag Wave	लहराता झंडा
+	Bulge	उभार
+	Twisted	ऐंठा
+	Echo	प्रतिध्वनि
+	Spiral Copies	सर्पिल कॉपियाँ
+	Multiply Tint	मल्टिप्लाई टिंट
+	Darken Veil	डार्कन परदा
+	Ghosted	धुंधला
+	Two Tone	दो टोन
+	Overlay Glaze	ओवरले ग्लेज़
+	Screen Light	स्क्रीन रोशनी
+	Soft Light Wash	सॉफ़्ट लाइट वॉश
+	Cyan Neon	सियान नियॉन
+	Magenta Laser	मैजेंटा लेज़र
+	Amber Tube	एम्बर ट्यूब
+	Electric Lime	इलेक्ट्रिक लाइम
+	Pulse Violet	पल्स वायलेट
+	Cobalt Phosphor	कोबाल्ट फ़ॉस्फ़र
+	Burst	विस्फोट
+	Rounded Square	गोल कोनों वाला वर्ग
+	Sun	सूरज
+	Moon	चाँद
+	Cloud	बादल
+	Rain	बारिश
+	Thunder	गरज
+	Snow	बर्फ़
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -576,6 +822,7 @@ antiAlias	Sharp	शार्प
 	Checkpoint	चेकपॉइंट
 	Inventory Icons	इन्वेंटरी आइकन
 	Skill Icons	कौशल आइकन
+	Weather Icons	मौसम आइकन
 	Attack	आक्रमण
 	Defend	रक्षा
 	Heal	उपचार
@@ -936,6 +1183,11 @@ antiAlias	Sharp	शार्प
 	Color blindness – Deuteranopia-type	कलर ब्लाइंडनेस – ड्यूटेरानोपिया प्रकार
 	Color blindness – Protanopia-type	रंग अंधापन - प्रोटानोपिया प्रकार
 	Color blindness – Tritanopia-type	कलर ब्लाइंडनेस – ट्राइटेनोपिया प्रकार
+	Show Color Vision Preview	कलर विज़न प्रीव्यू दिखाएँ
+	Protanopia	प्रोटानोपिया
+	Deuteranopia	ड्यूटेरानोपिया
+	Tritanopia	ट्राइटेनोपिया
+	Achromatopsia	एक्रोमैटोप्सिया
 	Color Burn	कलर बर्न
 	Color conversion:	रंग रूपांतरण:
 	Color Dodge	कलर डॉज
@@ -1179,6 +1431,15 @@ antiAlias	Sharp	शार्प
 	Create New Swatch…	नया स्वॉच बनाएँ…
 	Create Object Mosaic	ऑब्जेक्ट मोज़ेक बनाएँ
 	Create Object Mosaic…	ऑब्जेक्ट मोज़ेक बनाएँ…
+	Current Size:	वर्तमान साइज़:
+	New Size:	नया साइज़:
+	Tile Spacing:	टाइल स्पेसिंग:
+	Number of Tiles:	टाइलों की संख्या:
+	Constrain Ratio:	अनुपात सीमित करें:
+	Result:	परिणाम:
+	Resize Using Percentages	प्रतिशत से साइज़ बदलें
+	Delete Raster	रास्टर इमेज हटाएँ
+	Use Ratio	अनुपात इस्तेमाल करें
 	Create Outlines	आउटलाइन बनाएँ
 	Create Path	पाथ बनाएँ
 	Create PDF layers from layers and sublayers	लेयर्स और सबलेयरों से PDF लेयरें बनाएं
@@ -1596,6 +1857,8 @@ antiAlias	Sharp	शार्प
 	Duplicate Anchors	एंकर की प्रति बनाएँ
 	Duplicate and Offset 10 pt	डुप्लिकेट और ऑफ़सेट 10 pt
 	Duplicate Artboard	आर्टबोर्ड की प्रति बनाएँ
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	इस ओर आर्टबोर्ड जोड़ने के लिए क्लिक करें; इस आर्टबोर्ड की उसके आर्टवर्क सहित प्रति बनाने के लिए Alt-क्लिक करें
+	Click to add an artboard on this side	इस ओर आर्टबोर्ड जोड़ने के लिए क्लिक करें
 	Duplicate Artboards	आर्टबोर्ड्स की प्रति बनाएँ
 	Duplicate Brush	डुप्लिकेट ब्रश
 	Duplicate Character Style	कैरेक्टर स्टाइल की प्रति बनाएँ
@@ -1962,6 +2225,19 @@ antiAlias	Sharp	शार्प
 	Filters	फिल्टर
 	Find	खोजें
 	Find and Replace…	खोजें और बदलें…
+	Find and Replace	खोजें और बदलें
+	Find:	खोजें:
+	Replace With:	इससे रिप्लेस करें:
+	Replace & Find	रिप्लेस करें और खोजें
+	Replace All	सभी रिप्लेस करें
+	Match Case	केस मिलाएँ
+	Find Whole Word	पूरा शब्द खोजें
+	Search Backwards	पीछे की ओर खोजें
+	Check Hidden Layers	छिपी हुई लेयर्स जाँचें
+	Check Locked Layers	लॉक की गई लेयर्स जाँचें
+@msg	No matches found	कोई मिलान नहीं मिला
+@msg	Matches replaced: {n}	रिप्लेस किए गए मिलान: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	ऑब्जेक्ट {_3} के बाइट {_1}..{_2} पर `find` का कोई मिलान नहीं है
 	Find Font	फ़ॉन्ट खोजें
 	Find Font Files	फ़ॉन्ट फ़ाइल का पता लगाएं
 	Find Font…	फ़ॉन्ट खोजें…
@@ -4357,6 +4633,7 @@ antiAlias	Sharp	शार्प
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	स्मार्ट गाइड्स के स्नैप करने के लिए पॉइंटर या ड्रैग किया गया पॉइंट स्क्रीन पर आर्ट के कितने पास आना चाहिए; यह दूरी हर ज़ूम पर समान रहती है।
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	लाइन सेगमेंट के सिरे को, या केंद्र से ड्रॉ किए गए वृत्त को, इस तरह स्नैप करता है कि वह पास के वक्र को छुए।
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	लाइन सेगमेंट के सिरे को इस तरह स्नैप करता है कि वह पास के सीधे सेगमेंट से समकोण पर मिले।
+	Edit type set in fonts that aren't available?	जो फ़ॉन्ट उपलब्ध नहीं हैं, उनमें सेट टेक्स्ट एडिट करें?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	कैनवास पर हर स्लाइस का नंबर उसके ऊपरी बाएँ कोने में एक बॉक्स में दिखाता है; बंद होने पर भी स्लाइस की आउटलाइन दिखती रहती हैं।
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	यूज़र और ऑब्जेक्ट स्लाइस की आउटलाइन और उनके नंबर बॉक्स का रंग; ऑटो स्लाइस इसकी हल्की छाया इस्तेमाल करते हैं।
 	Reset all preferences to their defaults?	सभी प्रेफ़रेंसेज़ को उनके डिफ़ॉल्ट पर रीसेट करें?
@@ -4889,6 +5166,7 @@ antiAlias	Sharp	शार्प
 	Show Center	केंद्र दिखाएँ
 	Show Center Mark	शो सेंटर मार्क
 	Show Code	कोड दिखाएं
+	Show in Browser	ब्राउज़र में दिखाएँ
 	Show color bars	रंग सलाखों दिखाएँ
 	Show brightness and hue on wheel	व्हील पर ब्राइटनेस और ह्यू दिखाएँ
 	Show saturation and hue on wheel	व्हील पर सैचुरेशन और ह्यू दिखाएँ
@@ -5902,7 +6180,7 @@ antiAlias	Sharp	शार्प
 	Visibility	दृश्यता
 	Visible & Printable Layers	दृश्यमान और प्रिंट करने योग्य लेयरें
 	Visible Layers	दृश्यमान लेयरें
-	Vivid	विद
+	Vivid	चटक
 	Volume	आयतन
 	W:	W:
 	Warm	गर्म
@@ -7658,6 +7936,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	फ़ाइल में कोई प्रीव्यू के साथ जुड़े चित्र एक प्लेसहोल्डर दिखाते हैं जब तक कि उनकी फ़ाइलें नहीं मिलती: उन्हें लिंक पैनल में फिर से लिंक करें
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft की सीमाओं से आगे के लिंक्ड टाइप एरिया छोड़ दिए गए
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	लाइव पेंट मर्ज: जोड़ने के लिए एक लाइव पेंट समूह और पाथ सिलेक्ट करें
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` और `Edge` लाइव पेंट समूह के फेस और एज के नाम हैं: पाथ को कोई दूसरा नाम दें
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	लाइव पेंट पाथ और कंपाउंड पाथ लेता है: पहले टाइप, इमेज और अन्य ऑब्जेक्ट्स को पाथ में बदलें
 @msg	Live Paint: select paths or compound paths	लाइव पेंट: पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	Live Paint: these paths are too degenerate to paint	लाइव पेंट: इन पाथ को पेंट करने के लिए बहुत अलग किया जाता है
@@ -8696,6 +8975,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	the CMYK image couldn't be written	CMYK इमेज को नहीं लिखा जा सकता
 @msg	the Color Picker is not open	रंग पिकर खुला नहीं है
 @msg	the compound shape is too complex to expand	मिश्रित आकार का विस्तार करने के लिए बहुत जटिल है
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	कोई रेखा या अन्य खुला पाथ जो कोई क्षेत्र नहीं घेरता, मिश्रित आकार में कोई क्षेत्र नहीं जोड़ता; इसे शामिल करने के लिए पहले उस पर ऑब्जेक्ट › पाथ › स्ट्रोक को आउटलाइन में बदलें लागू करें
 @msg	the compressed file unpacks to more than {_1} MB	संकुचित फ़ाइल {_1} MB से अधिक के लिए अनपैक
 @msg	the compressed file unpacks to more than VectorCraft reads ({_1} MB of document, {_2} MB per image)	संपीड़ित फ़ाइल खुलकर उससे बड़ी हो जाती है जितना VectorCraft पढ़ता है (डॉक्यूमेंट के {_1} MB, हर इमेज के {_2} MB)
 @msg	the container of the listed objects is gone	सूचीबद्ध ऑब्जेक्ट्स का कंटेनर चला गया है
