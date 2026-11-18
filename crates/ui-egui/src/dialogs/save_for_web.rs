@@ -2,8 +2,9 @@
 //! as the web image Save writes, beside the original (Original, Optimized, 2-Up and 4-Up views,
 //! each with its file size and download time), and the settings: format (GIF, JPEG, PNG-8,
 //! PNG-24), colour reduction, colours, dither, transparency and matte, interlacing, web snap,
-//! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort, Delete Color
-//! and Restore Generated Table), image size and anti-aliasing, Clip to Artboard, sRGB, metadata,
+//! lossy, JPEG quality, the colour table (lock, map to transparent, web shift, sort, Delete Color,
+//! Restore Generated Table, a double-click that shifts a color to one picked in the Color Picker,
+//! and Unshift All Colors), image size and anti-aliasing, Clip to Artboard, sRGB, metadata,
 //! slices and HTML output, and presets.
 //!
 //! Fields are the `document.exportForWeb` settings (`webExport.settings` gives them; set one with
@@ -11,7 +12,8 @@
 //! `optimized`, `2up`, `4up`), `__zoom` (`fit` or a percentage), `__kbps` (connection speed),
 //! `__color` (the colour table's selected colour, by source: the one Lock, Transparent and Web
 //! Shift edit, and where a Shift-click range starts), `__colors` (every selected color, by source,
-//! which Delete Color deletes; when it is empty, `__color` alone), `__presetName` (shown while saving a
+//! which Delete Color deletes; when it is empty, `__color` alone), `__editColor` (a source color:
+//! the Color Picker opens on it, as a double-click on its swatch opens it), `__presetName` (shown while saving a
 //! preset) and `__hasSlices`. Optimize to File Size… (`__optimizeOpen: true`) shows `__optimizeK` (the desired size in K),
 //! `__optimizeStart` (`current`, `auto`) and with slices `__optimizeUse` (`allSlices`,
 //! `eachSlice`, `currentSlice`); `__optimizeGo: true` runs `webExport.optimizeToFileSize` and
@@ -55,6 +57,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 
 /// The preview area (panes and their captions) and the settings column.
 const PREVIEW_W: f32 = 620.0;
+/// The narrowest the panes get in a narrow window.
+const MIN_PREVIEW_W: f32 = 240.0;
 const PREVIEW_H: f32 = 470.0;
 const SIDE_W: f32 = 296.0;
 const GAP: f32 = 16.0;
@@ -533,12 +537,22 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     {
         app.status(e);
     }
+    take_shift(d);
     let settings = settings_of(app, d);
     let mut browser = false;
-    ui.horizontal_top(|ui| {
+    // In a window too narrow for both, the panes are narrower, so the settings beside them and the
+    // buttons below stay in view. The room is the screen's (the window's own width follows what it
+    // drew last), less a column for the bar of the body while it scrolls; the settings column is as
+    // wide as it was drawn last.
+    let bar = if super::modal::body_view(ui).is_some() { ui.spacing().scroll.allocated_width() } else { 0.0 };
+    let room = ui.ctx().content_rect().width() - 2.0 * (f32::from(super::MARGIN) + super::EDGE_GAP) - bar;
+    let rest_id = egui::Id::unique("save-for-web-beside-panes");
+    let rest = ui.ctx().data(|m| m.get_temp::<f32>(rest_id)).unwrap_or(ui.spacing().item_spacing.x + GAP + SIDE_W);
+    let preview_w = (room.min(ui.available_width()) - rest).clamp(MIN_PREVIEW_W, PREVIEW_W);
+    let row = ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            ui.set_width(PREVIEW_W);
-            browser = preview_area(app, ui, d, &settings);
+            ui.set_width(preview_w);
+            browser = preview_area(app, ui, d, &settings, preview_w);
         });
         ui.add_space(GAP);
         ui.vertical(|ui| {
@@ -546,23 +560,33 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             side(app, ui, d, settings.as_ref().ok());
         });
     });
+    let drawn = row.response.rect.width() - preview_w;
+    if (ui.ctx().data_mut(|m| std::mem::replace(m.get_temp_mut_or(rest_id, rest), drawn)) - drawn).abs() > 0.5 {
+        ui.ctx().request_repaint();
+    }
     optimize_on_enter(ui.ctx(), d);
     if browser && let Err(e) = app.run("file.saveForWeb.browser", params(d)) {
         app.status(e);
     }
+    // A double-clicked swatch (or an agent's `__editColor`) opens the Color Picker last, over the
+    // dialog as it now is.
+    if let Some(source) = d.fields.remove("__editColor").and_then(|v| v.as_str().map(String::from)) {
+        let start = d.fields.remove("__editStart").and_then(|v| v.as_str().map(String::from)).unwrap_or_else(|| source.clone());
+        edit_color(d, &source, &start);
+    }
     false
 }
 
-/// The view tabs, the panes and the zoom and speed row. Returns whether Preview in Browser was
-/// clicked.
-fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, settings: &Result<WebSettings, String>) -> bool {
+/// The view tabs, the panes (`width` wide) and the zoom and speed row. Returns whether Preview in
+/// Browser was clicked.
+fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, settings: &Result<WebSettings, String>, width: f32) -> bool {
     let t = Tokens::get(ui.ctx());
     let view = VIEWS.iter().position(|v| *v == d.str("__view")).unwrap_or(2);
     if let Some(i) = widgets::tab_bar(ui, &VIEW_LABELS, view) {
         d.fields.insert("__view".into(), json!(VIEWS[i]));
     }
     ui.add_space(4.0);
-    let (area, resp) = ui.allocate_exact_size(egui::vec2(PREVIEW_W, PREVIEW_H), egui::Sense::click_and_drag());
+    let (area, resp) = ui.allocate_exact_size(egui::vec2(width, PREVIEW_H), egui::Sense::click_and_drag());
     let pan_id = egui::Id::unique("save-for-web-pan");
     let mut pan: egui::Vec2 = ui.ctx().data(|m| m.get_temp(pan_id)).unwrap_or_default();
     if resp.dragged() {
@@ -607,6 +631,17 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
     }
     ui.add_space(6.0);
     let mut browser = false;
+    // Preview in Browser goes on a row of its own when the panes are too narrow for it beside the
+    // two lists (its width as `widgets::secondary_button` draws it).
+    let label = tl!("Preview in Browser");
+    let button_w = (ui.painter().layout_no_wrap(label.to_string(), crate::theme::semibold(12.5), t.text).size().x + 32.0).max(72.0);
+    let mut beside = false;
+    let mut button = |ui: &mut egui::Ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, label));
+            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
+        });
+    };
     ui.horizontal(|ui| {
         let z = ZOOMS.iter().position(|z| *z == d.str("__zoom")).unwrap_or(2);
         let zoom = ui.name_inputs(tl!("Zoom"), |ui| widgets::dropdown(ui, "sfw-zoom", ZOOM_LABELS[z], &ZOOM_LABELS, 110.0));
@@ -623,11 +658,15 @@ fn preview_area(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, set
         {
             d.fields.insert("__kbps".into(), json!(s));
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let b = ui.add_enabled(!io::is_web(app), |ui: &mut egui::Ui| widgets::secondary_button(ui, tl!("Preview in Browser")));
-            browser = b.on_disabled_hover_text(tl!("Needs the desktop app")).clicked();
-        });
+        beside = ui.available_width() >= button_w;
+        if beside {
+            button(ui);
+        }
     });
+    if !beside {
+        ui.add_space(4.0);
+        ui.horizontal(button);
+    }
     browser
 }
 
@@ -732,7 +771,8 @@ fn side(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, s: Option<&
     presets_row(app, ui, d, s);
     optimize_rows(ui, d, s, &art_key(app));
     widgets::divider(ui);
-    egui::ScrollArea::vertical().id_salt("sfw-settings").max_height(PREVIEW_H - 40.0).auto_shrink([false, true]).show(ui, |ui| {
+    let list_h = super::modal::list_height(ui, PREVIEW_H - 40.0);
+    egui::ScrollArea::vertical().id_salt("sfw-settings").max_height(list_h).auto_shrink([false, true]).show(ui, |ui| {
         let choice = |ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, options: &[(&str, &str)]| {
             form::choice(ui, d, key, label, (LABEL_W, FIELD_W), options);
         };
@@ -1057,7 +1097,9 @@ fn matte_row(ui: &mut egui::Ui, d: &mut Dialog) {
 /// ones with a square, web-safe ones with a diamond, transparent ones over the grid), the buttons
 /// that edit the selected colour, Delete Color and the table's menu, plus the sort order. A click
 /// selects one color, a Shift-click the colors from the anchor, and a Ctrl-click
-/// (Command-click on macOS) adds or removes one. Returns an error for a deletion that would leave
+/// (Command-click on macOS) adds or removes one; a double-click on an opaque color asks for the
+/// Color Picker (`__editColor`), and a color shifted by hand shows its source color at the upper
+/// left and its new color at the lower right. Returns an error for a deletion that would leave
 /// no color.
 fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Result<(), String> {
     let t = Tokens::get(ui.ctx());
@@ -1086,15 +1128,20 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
         .colors
         .iter()
         .map(|c| (*c, false))
-        .chain(shot.mapped.iter().map(|c| (TableColor { color: *c, source: *c, transparent: true, locked: false, web_shifted: false }, true)))
+        .chain(
+            shot.mapped
+                .iter()
+                .map(|c| (TableColor { color: *c, source: *c, transparent: true, locked: false, web_shifted: false, shifted: false }, true)),
+        )
         .collect();
     const CELL: f32 = 15.0;
     let per_row = ((SIDE_W - 8.0) / (CELL + 2.0)).floor().max(1.0) as usize;
     let lines = rows.len().div_ceil(per_row).max(1);
-    let (area, resp) = ui.allocate_exact_size(egui::vec2(SIDE_W - 8.0, lines as f32 * (CELL + 2.0)), egui::Sense::click());
+    let (area, _) = ui.allocate_exact_size(egui::vec2(SIDE_W - 8.0, lines as f32 * (CELL + 2.0)), egui::Sense::hover());
     // The colors that can be selected, in table order (for Shift-click ranges).
     let order: Vec<String> = rows.iter().filter(|(c, mapped)| !c.transparent || *mapped).map(|(c, _)| hex(c.source)).collect();
     let mut clicked = None;
+    let mut edit = None;
     let p = ui.painter();
     for (i, (c, mapped)) in rows.iter().enumerate() {
         let r = egui::Rect::from_min_size(
@@ -1113,6 +1160,15 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
             }
         } else {
             p.rect_filled(r, 0.0, fill);
+            if c.shifted {
+                // Shifted by hand: the source color at the upper left, the new one at the lower right.
+                let [red, g, b] = c.source;
+                p.add(egui::Shape::convex_polygon(
+                    vec![r.left_top(), r.right_top(), r.left_bottom()],
+                    egui::Color32::from_rgb(red, g, b),
+                    egui::Stroke::NONE,
+                ));
+            }
         }
         let mark = if c.color.iter().map(|v| u32::from(*v)).sum::<u32>() > 380 { egui::Color32::BLACK } else { egui::Color32::WHITE };
         if c.locked {
@@ -1130,18 +1186,37 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
         let pickable = !c.transparent || *mapped;
         let ringed = pickable && picked.iter().any(|h| h.eq_ignore_ascii_case(&hex(c.source)));
         p.rect_stroke(r, 0.0, egui::Stroke::new(if ringed { 2.0 } else { 1.0 }, if ringed { t.accent } else { t.border }), egui::StrokeKind::Outside);
-        if pickable && resp.clicked() && resp.interact_pointer_pos().is_some_and(|pos| r.contains(pos)) {
+        if !pickable {
+            continue;
+        }
+        let resp = ui.interact(r, swatch_id(&hex(c.source)), egui::Sense::click());
+        if resp.clicked() {
             clicked = Some(hex(c.source));
+        }
+        // A double-click edits an opaque color: the picker opens on the color as shown, or on the
+        // source color for a color already shifted by hand.
+        if resp.double_clicked() && !c.transparent {
+            edit = Some((hex(c.source), hex(if c.shifted { c.source } else { c.color })));
         }
     }
     if let Some(c) = clicked {
         let m = ui.input(|i| i.modifiers);
         pick(d, &order, &c, m.shift, m.command);
     }
+    if let Some((source, start)) = edit {
+        d.fields.insert("__editColor".into(), json!(source));
+        d.fields.insert("__editStart".into(), json!(start));
+    }
+    let shifted = |c: &str| table.shifted.keys().any(|k| k.eq_ignore_ascii_case(c));
+    // The colors the table shows, by source: Lock, Transparent, Web Shift and Delete Color act only
+    // on these.
+    let palette: Vec<String> =
+        shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
+    let shown = palette.iter().any(|p| p.eq_ignore_ascii_case(&selected));
     ui.add_space(4.0);
     let on = |list: &[String]| list.iter().any(|h| h.eq_ignore_ascii_case(&selected));
     ui.horizontal(|ui| {
-        ui.add_enabled_ui(!selected.is_empty(), |ui| {
+        ui.add_enabled_ui(shown, |ui| {
             for (list, on_label, off_label) in [
                 ("transparent", tl!("Restore"), tl!("Transparent")),
                 ("webShift", tl!("Unshift"), tl!("Web Shift")),
@@ -1152,26 +1227,39 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
                     "webShift" => &table.web_shift,
                     _ => &table.locked,
                 };
-                let is_on = on(current);
-                if widgets::flat_button(ui, if is_on { on_label } else { off_label }, 88.0).clicked() {
+                // A color shifted by hand stays locked until it is unshifted.
+                let fixed = list == "locked" && shifted(&selected);
+                let is_on = on(current) || fixed;
+                let label = if is_on { on_label } else { off_label };
+                if ui.add_enabled(!fixed, |ui: &mut egui::Ui| widgets::flat_button(ui, label, 88.0)).clicked() {
                     toggle(d, list, &selected, !is_on);
+                    // Web Shift replaces a shift by hand.
+                    if list == "webShift" && !is_on {
+                        unshift(d, &selected);
+                    }
                 }
             }
         });
     });
-    // Delete Color (the button and the table's menu) and Restore Generated Table.
-    let (mut delete, mut restore) = (false, false);
+    // Delete Color (the button and the table's menu) and Restore Generated Table. Delete Color
+    // takes only selected colors the table shows (`palette`, by source).
+    let deletable = !selected_in(d, &palette).is_empty();
+    let (mut delete, mut restore, mut unshift_all) = (false, false, false);
     ui.horizontal(|ui| {
-        delete |= widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Color"), false, !picked.is_empty(), 24.0).clicked();
+        delete |= widgets::icon_button_enabled(ui, "trash-2", tl!("Delete Color"), false, deletable, 24.0).clicked();
         let menu = widgets::icon_button(ui, "menu", tl!("Color Table"), false, 24.0);
         let open = menu.clicked();
         let _ = widgets::popover(&menu, open, |ui| {
-            if widgets::menu_item(ui, tl!("Delete Color"), !picked.is_empty(), false) {
+            if widgets::menu_item(ui, tl!("Delete Color"), deletable, false) {
                 delete = true;
                 ui.close();
             }
             if widgets::menu_item(ui, tl!("Restore Generated Table"), table.is_custom(), false) {
                 restore = true;
+                ui.close();
+            }
+            if widgets::menu_item(ui, tl!("Unshift All Colors"), !table.shifted.is_empty() || !table.web_shift.is_empty(), false) {
+                unshift_all = true;
                 ui.close();
             }
         });
@@ -1188,12 +1276,18 @@ fn color_table(ui: &mut egui::Ui, d: &mut Dialog, s: Option<&WebSettings>) -> Re
     if restore {
         restore_table(d);
     }
+    if unshift_all {
+        unshift_all_colors(d);
+    }
     if delete {
-        let palette: Vec<String> =
-            shot.colors.iter().filter(|c| !c.transparent).map(|c| hex(c.source)).chain(shot.mapped.iter().map(|c| hex(*c))).collect();
         delete_colors(d, &palette)?;
     }
     Ok(())
+}
+
+/// The selected colors (by source) that `palette`, the colors the table shows, holds.
+pub(super) fn selected_in(d: &Dialog, palette: &[String]) -> Vec<String> {
+    selection(d).into_iter().filter(|c| palette.iter().any(|p| p.eq_ignore_ascii_case(c))).collect()
 }
 
 /// The colour table's selected colors, by source: `__colors`, else `__color`.
@@ -1245,11 +1339,14 @@ pub(super) fn pick(d: &mut Dialog, order: &[String], color: &str, shift: bool, c
 /// Delete Color: the selected colors join the color table's `deleted` list and leave its other
 /// lists. The first deletion fixes the palette (`customPalette`) to `palette`, the table's colors
 /// (by source) with the deleted ones, so the colors left do not change. A deletion that leaves no
-/// color, or only colors mapped to transparent, is refused with nothing changed. The selection is
-/// cleared.
+/// color, or only colors mapped to transparent, is refused with nothing changed. Only selected
+/// colors that `palette` holds are deleted; when it holds none of them, the table is left as it is
+/// and the selection is cleared. The selection is cleared after a deletion too.
 pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), String> {
-    let picked = selection(d);
+    let picked = selected_in(d, palette);
     if picked.is_empty() {
+        d.fields.remove("__colors");
+        d.fields.remove("__color");
         return Ok(());
     }
     let list = |d: &Dialog, key: &str| -> Vec<String> {
@@ -1285,6 +1382,9 @@ pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), St
             }
         }
     }
+    for c in &picked {
+        unshift(d, c);
+    }
     set_table(d, "customPalette", json!(custom));
     set_table(d, "deleted", json!(deleted));
     d.fields.remove("__colors");
@@ -1297,6 +1397,71 @@ pub(super) fn delete_colors(d: &mut Dialog, palette: &[String]) -> Result<(), St
 pub(super) fn restore_table(d: &mut Dialog) {
     set_table(d, "deleted", json!([]));
     set_table(d, "customPalette", json!([]));
+}
+
+/// The id of the color table's swatch for the source color `source` (`#rrggbb`).
+pub(super) fn swatch_id(source: &str) -> egui::Id {
+    egui::Id::unique(("sfw-swatch", source.to_ascii_lowercase()))
+}
+
+/// The field of the Color Picker's OK over Save for Web: the color the edited swatch shifts to.
+const SHIFT_TO: &str = "__shiftTo";
+
+/// The Color Picker over the dialog for the color table's source color `source`, on `start`; its
+/// OK shifts the color ([`shift_color`]) and its Cancel leaves the table as it was. Nothing opens
+/// when either is not a color.
+pub(super) fn edit_color(d: &mut Dialog, source: &str, start: &str) {
+    let (Some(_), Some(c)) = (vectorcraft_color::Color::from_hex(source), vectorcraft_color::Color::from_hex(start)) else { return };
+    d.fields.insert("__shiftSource".into(), json!(source));
+    *d = super::color_picker::over_effect(d, SHIFT_TO, c);
+}
+
+/// Back from the Color Picker: its OK's color shifts the color it was opened for.
+fn take_shift(d: &mut Dialog) {
+    let source = d.fields.remove("__shiftSource");
+    if let (Some(to), Some(source)) = (d.fields.remove(SHIFT_TO), source)
+        && let (Some(to), Some(source)) = (to.as_str(), source.as_str())
+    {
+        shift_color(d, source, to);
+    }
+}
+
+/// Shift the source color `source` to `to` (`colorTable.shifted`), wherever it is in the image; it
+/// is no longer web-shifted. Picking the source color itself takes the shift away. The color
+/// becomes the selection. Nothing changes when either is not a color.
+pub(super) fn shift_color(d: &mut Dialog, source: &str, to: &str) {
+    let hex = |h: &str| vectorcraft_color::Color::from_hex(h).map(|c| c.to_hex());
+    let (Some(source), Some(to)) = (hex(source), hex(to)) else { return };
+    unshift(d, &source);
+    if to != source {
+        let mut map = shifts(d);
+        map.insert(source.clone(), json!(to));
+        set_table(d, "shifted", Value::Object(map));
+    }
+    toggle(d, "webShift", &source, false);
+    d.fields.insert("__colors".into(), json!([source]));
+    d.fields.insert("__color".into(), json!(source));
+}
+
+/// The `colorTable.shifted` field.
+fn shifts(d: &Dialog) -> Map<String, Value> {
+    d.fields.get("colorTable").and_then(|t| t.get("shifted")).and_then(Value::as_object).cloned().unwrap_or_default()
+}
+
+/// Take the shift by hand of the source color `source` away.
+pub(super) fn unshift(d: &mut Dialog, source: &str) {
+    let mut map = shifts(d);
+    let before = map.len();
+    map.retain(|k, _| !k.eq_ignore_ascii_case(source));
+    if map.len() != before {
+        set_table(d, "shifted", Value::Object(map));
+    }
+}
+
+/// Unshift All Colors: no color is shifted by hand or web-shifted.
+pub(super) fn unshift_all_colors(d: &mut Dialog) {
+    set_table(d, "shifted", json!({}));
+    set_table(d, "webShift", json!([]));
 }
 
 /// Add `color` to the colour table's `list`, or take it out.
