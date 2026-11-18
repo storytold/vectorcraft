@@ -5717,8 +5717,8 @@ variable-list-end	{0}, {1}	{0} και {1}
 @msg	the layer effects of {n} layers weren't drawn	τα εφέ επιπέδου {n} επιπέδων δεν σχεδιάστηκαν
 @msg	the vector masks of 1 layer weren't applied	οι διανυσματικές μάσκες 1 επιπέδου δεν εφαρμόστηκαν
 @msg	the vector masks of {n} layers weren't applied	οι διανυσματικές μάσκες {n} επιπέδων δεν εφαρμόστηκαν
-@msg	the knockout of 1 layer wasn't applied	η εκκένωση 1 επιπέδου δεν εφαρμόστηκε
-@msg	the knockout of {n} layers wasn't applied	η εκκένωση {n} επιπέδων δεν εφαρμόστηκε
+@msg	the knockout of 1 layer wasn't applied	η διάτρηση 1 επιπέδου δεν εφαρμόστηκε
+@msg	the knockout of {n} layers wasn't applied	η διάτρηση {n} επιπέδων δεν εφαρμόστηκε
 @msg	1 layer was left out (hidden layers and the layers clipped to them)	1 επίπεδο παραλείφθηκε (κρυφά επίπεδα και τα επίπεδα που αποκόπτονται σε αυτά)
 @msg	{n} layers were left out (hidden layers and the layers clipped to them)	{n} επίπεδα παραλείφθηκαν (κρυφά επίπεδα και τα επίπεδα που αποκόπτονται σε αυτά)
 @msg	1 layer clipped to a fill layer that wasn't drawn was left out	1 επίπεδο που αποκόπτεται σε επίπεδο γεμίσματος που δεν σχεδιάστηκε παραλείφθηκε
