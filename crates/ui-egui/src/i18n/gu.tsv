@@ -1954,6 +1954,8 @@
 	Chroma	ક્રોમા
 	The largest chroma sRGB holds at this lightness and hue	આ લાઇટનેસ અને હ્યૂ પર sRGB સમાવી શકે તે સૌથી વધુ ક્રોમા
 	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
+@msg	`sliders` must be none or oklch	`sliders` none અથવા oklch હોવું જોઈએ
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH માટે કાર્યકારી RGB સ્પેસ તરીકે sRGB જરૂરી છે
 	Lightness	લાઇટનેસ
 	Lab Spot Colors:	Lab સ્પોટ રંગો:
 	Landscape	લેન્ડસ્કેપ

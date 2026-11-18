@@ -861,3 +861,21 @@ fn ui_color_wheel_sets_and_reads_the_sliders() {
     assert_eq!(e, "`sliders` must be none or oklch");
     assert_eq!(app.ui.color_wheel.view, crate::panels::color_wheel::View::Box, "an error changes nothing");
 }
+
+/// The `sliders` errors are translated in every catalog, and each translation keeps the accepted
+/// values.
+#[test]
+fn ui_color_wheel_sliders_errors_are_translated() {
+    let errors = [("`sliders` must be none or oklch", &["none", "oklch"][..]), ("OKLCH needs sRGB as the working RGB space", &["OKLCH", "sRGB"][..])];
+    for code in [
+        "bg", "bs", "ca", "cs", "da", "de", "el", "es", "fi", "fr", "gu", "hi", "hu", "id", "it", "ja", "ka", "ko", "nl", "pl", "pt-br", "ru", "sv", "tr",
+        "uk", "vi", "zh-hans", "zh-hant",
+    ] {
+        let lang = crate::i18n::Lang::from_code(code).expect("registered");
+        for (error, values) in errors {
+            let shown = crate::i18n::message(lang, error);
+            assert_ne!(shown, error, "{code}");
+            assert!(values.iter().all(|v| shown.contains(v)), "{code}: {shown}");
+        }
+    }
+}
