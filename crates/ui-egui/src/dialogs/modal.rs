@@ -83,24 +83,32 @@ pub(crate) fn over_parent(ctx: &egui::Context) {
 }
 
 /// Whether modal window `id`, drawn in this pass, opened in it: it was not drawn in the pass before,
-/// and the window drawn in the pass before was not one opened over it ([`over_parent`]).
+/// and none of the windows drawn in the pass before was one opened over it ([`over_parent`]).
 fn opened(ctx: &egui::Context, id: Id) -> bool {
     let pass = ctx.cumulative_pass_nr();
     ctx.data_mut(|m| {
-        // The window drawn in the pass before, if another.
-        let before =
-            m.get_temp::<(u64, Id)>(Id::unique(LAST_KEY)).filter(|&(at, other)| other != id && at.saturating_add(1) == pass).map(|(_, other)| other);
-        m.insert_temp(Id::unique(LAST_KEY), (pass, id));
+        // The windows drawn in this pass so far and in the pass before.
+        let (at, now, prev) = m.get_temp::<(u64, Vec<Id>, Vec<Id>)>(Id::unique(LAST_KEY)).unwrap_or_default();
+        let (mut now, prev) = if at == pass {
+            (now, prev)
+        } else if at.saturating_add(1) == pass {
+            (vec![], now)
+        } else {
+            (vec![], vec![])
+        };
+        let before: Vec<Id> = prev.iter().copied().filter(|&other| other != id).collect();
+        now.push(id);
+        m.insert_temp(Id::unique(LAST_KEY), (pass, now, prev));
         let last = std::mem::replace(m.get_temp_mut_or(id.with(SHOWN_KEY), u64::MAX), pass);
         if last != u64::MAX && last.saturating_add(1) >= pass {
             return false;
         }
         // Shown again as the window opened over it closed.
-        if before.is_some_and(|over| m.get_temp::<Id>(over.with(HOLDS_KEY)) == Some(id)) {
+        if before.iter().any(|over| m.get_temp::<Id>(over.with(HOLDS_KEY)) == Some(id)) {
             return false;
         }
-        // Opened over the window drawn in the pass before, it holds that one; otherwise none.
-        match before.filter(|_| m.get_temp::<u64>(Id::unique(OVER_KEY)) == Some(pass)) {
+        // Opened over the window drawn last in the pass before, it holds that one; otherwise none.
+        match before.last().copied().filter(|_| m.get_temp::<u64>(Id::unique(OVER_KEY)) == Some(pass)) {
             Some(under) => {
                 m.insert_temp(id.with(HOLDS_KEY), under);
             }
@@ -175,7 +183,8 @@ const WHOLE_KEY: &str = "modal-whole";
 const SHOWN_KEY: &str = "modal-shown";
 const TOP_ROWS_KEY: &str = "modal-top-rows";
 const TOP_WHOLE_KEY: &str = "modal-top-whole";
-/// For all modal windows: the pass the last one was drawn in and its id (`LAST_KEY`), and the pass
+/// For all modal windows: the pass the last one was drawn in, the ids of those drawn in that pass
+/// and of those drawn in the pass before it (`LAST_KEY`), and the pass
 /// in which the window drawn next was marked as opened over another ([`over_parent`], `OVER_KEY`).
 /// Under a modal window's id: the window it was opened over and hides (`HOLDS_KEY`).
 const LAST_KEY: &str = "modal-last";
@@ -350,10 +359,11 @@ mod tests {
     }
 
     /// Draw `frames` frames of a 400×300 screen from `time`, the first with `events`, with the modal
-    /// window named `open` open, if any: a heading and 60 rows, in [`scrolled_rows`] when
-    /// `in_rows`. A window named "over …" is opened over the one before it ([`over_parent`]).
-    /// Returns whether a first row could be seen in the last frame (inside the screen and its clip).
-    fn first_row_seen(ctx: &egui::Context, open: Option<&str>, in_rows: bool, events: Vec<egui::Event>, time: &mut f64, frames: usize) -> bool {
+    /// windows named in `open` open, in that order: the first a heading and 60 rows, in
+    /// [`scrolled_rows`] when `in_rows`, and any other a short alert. A window named "over …" is
+    /// opened over the one before it ([`over_parent`]). Returns whether a first row could be seen in
+    /// the last frame (inside the screen and its clip).
+    fn first_row_seen(ctx: &egui::Context, open: &[&str], in_rows: bool, events: Vec<egui::Event>, time: &mut f64, frames: usize) -> bool {
         let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0));
         let add = |ui: &mut egui::Ui| {
             for i in 0..60 {
@@ -367,13 +377,15 @@ mod tests {
             let input =
                 egui::RawInput { screen_rect: Some(screen), events: events.take().unwrap_or_default(), time: Some(*time), ..Default::default() };
             let mut out = ctx.run_ui(input, |ui| {
-                if let Some(name) = open {
+                for (i, &name) in open.iter().enumerate() {
                     if name.starts_with("over ") {
                         over_parent(ui.ctx());
                     }
                     show(ui.ctx(), name, Id::unique(("modal-reopen-test", name)), 0.0, 8, |ui| {
                         heading(ui, "Top");
-                        if in_rows {
+                        if i > 0 {
+                            ui.label("Alert");
+                        } else if in_rows {
                             scrolled_rows(ui, "rows", add);
                         } else {
                             add(ui);
@@ -411,32 +423,34 @@ mod tests {
             let ctx = egui::Context::default();
             crate::theme::apply(&ctx, Default::default());
             let mut time = 0.0;
-            assert!(first_row_seen(&ctx, Some("A"), in_rows, vec![], &mut time, 4), "rows {in_rows}: the window opens at its top");
-            assert!(!first_row_seen(&ctx, Some("A"), in_rows, wheel_down(), &mut time, 60), "rows {in_rows}: the wheel scrolls the first row away");
-            first_row_seen(&ctx, None, in_rows, vec![], &mut time, 2);
-            assert!(first_row_seen(&ctx, Some("A"), in_rows, vec![], &mut time, 4), "rows {in_rows}: opened again, the window starts at its top");
+            assert!(first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4), "rows {in_rows}: the window opens at its top");
+            assert!(!first_row_seen(&ctx, &["A"], in_rows, wheel_down(), &mut time, 60), "rows {in_rows}: the wheel scrolls the first row away");
+            first_row_seen(&ctx, &[], in_rows, vec![], &mut time, 2);
+            assert!(first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4), "rows {in_rows}: opened again, the window starts at its top");
         }
     }
 
     #[test]
     fn a_window_hidden_under_one_opened_over_it_keeps_its_scroll() {
         // As Keyboard Shortcuts is while Import Shortcut Set is open over it: it is not drawn, but it
-        // did not close. A window that another replaced did close.
+        // did not close. A window that another replaced did close. Either may have shown an alert
+        // of its own, drawn after it in the same passes.
+        let others: [(&[&str], bool); 4] = [(&["over B"], true), (&["over B", "Alert"], true), (&["C"], false), (&["C", "Alert"], false)];
         let mut wrong = vec![];
         for in_rows in [false, true] {
-            for (other, kept) in [("over B", true), ("C", false)] {
+            for (other, kept) in others {
                 let ctx = egui::Context::default();
                 crate::theme::apply(&ctx, Default::default());
                 let mut time = 0.0;
-                first_row_seen(&ctx, Some("A"), in_rows, vec![], &mut time, 4);
-                if first_row_seen(&ctx, Some("A"), in_rows, wheel_down(), &mut time, 60) {
+                first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4);
+                if first_row_seen(&ctx, &["A"], in_rows, wheel_down(), &mut time, 60) {
                     wrong.push(format!("rows {in_rows}: the wheel does not scroll A"));
                 }
-                if !first_row_seen(&ctx, Some(other), in_rows, vec![], &mut time, 4) {
-                    wrong.push(format!("rows {in_rows}: {other} does not open at its top"));
+                if !first_row_seen(&ctx, other, in_rows, vec![], &mut time, 4) {
+                    wrong.push(format!("rows {in_rows}: {other:?} does not open at its top"));
                 }
-                if first_row_seen(&ctx, Some("A"), in_rows, vec![], &mut time, 4) == kept {
-                    wrong.push(format!("rows {in_rows}: after {other}, A {} where it was scrolled to", if kept { "is not" } else { "is still" }));
+                if first_row_seen(&ctx, &["A"], in_rows, vec![], &mut time, 4) == kept {
+                    wrong.push(format!("rows {in_rows}: after {other:?}, A {} where it was scrolled to", if kept { "is not" } else { "is still" }));
                 }
             }
         }
@@ -455,6 +469,7 @@ mod tests {
             let mut text = String::from("12");
             let mut time = 0.0;
             let mut field = None;
+            let mut focus_given = false;
             let mut seen = vec![];
             for (height, typed) in [(900.0, "3"), (300.0, "4"), (900.0, "5")] {
                 let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, height));
@@ -477,8 +492,11 @@ mod tests {
                         });
                     });
                     out.textures_delta.clear();
-                    if let Some(id) = field.filter(|_| ctx.memory(|m| m.focused()).is_none()) {
+                    // The field is given the focus once, after the first frame; a resize that took it
+                    // away would leave the keys typed after it untaken.
+                    if let Some(id) = field.filter(|_| !focus_given) {
                         ctx.memory_mut(|m| m.request_focus(id));
+                        focus_given = true;
                     }
                 }
                 let key = if in_body { window.with(TALL_KEY) } else { window.with(WHOLE_KEY) };

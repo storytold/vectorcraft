@@ -1,6 +1,7 @@
 //! Dialogs in a short or narrow window: a dialog too large for the window scrolls instead of
 //! running off the screen. Every scroll bar here is drawn at rest (a solid bar style), so the tests
 //! can find it.
+
 use egui::{Pos2, Rect, Shape, vec2};
 use serde_json::json;
 use vectorcraft_engine::Session;
@@ -66,9 +67,13 @@ fn show_in(open: Open, size: egui::Vec2, scroll: bool) -> Shown {
             source: egui::MouseWheelSource::Unknown,
             modifiers: egui::Modifiers::NONE,
         };
-        let (_, w) = window(&ctx);
-        let before = Shown { shapes: std::mem::take(&mut shapes), window: w, body: None, whole: [false; 2] };
-        let at = whole_bar(&before).map_or(egui::pos2(w.right() - 23.0, w.center().y), |r| r.center());
+        let (id, w) = window(&ctx);
+        let (body, whole) = modal::scrolling(&ctx, id);
+        let before = Shown { shapes: std::mem::take(&mut shapes), window: w, body, whole };
+        // On the window's upright bar, else on its body's bar, else on its sideways bar, else at
+        // its right edge.
+        let sideways = bars(&before, true, true).into_iter().find(|r| r.width() >= 0.5 * w.width());
+        let at = whole_bar(&before).or(body_bar(&before)).or(sideways).map_or(egui::pos2(w.right() - 23.0, w.center().y), |r| r.center());
         shapes = frames(&mut app, vec![egui::Event::PointerMoved(at), wheel]);
     }
     let (id, window) = window(&ctx);
@@ -117,16 +122,7 @@ fn whole_bar(shown: &Shown) -> Option<Rect> {
 /// The texts `labels` the dialog drew, each with whether it can be seen (inside the screen and
 /// its clip).
 fn buttons(shown: &Shown, screen: Rect, labels: &[&str]) -> Vec<(String, bool)> {
-    fn walk(s: &Shape, clip: Rect, out: &mut Vec<(String, Rect, Rect)>) {
-        match s {
-            Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect(), clip)),
-            Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, out)),
-            _ => {}
-        }
-    }
-    let mut texts = vec![];
-    shown.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut texts));
-    texts
+    texts(shown)
         .into_iter()
         .filter(|(s, ..)| labels.contains(&s.as_str()))
         .map(|(s, r, clip)| (s, screen.contains_rect(r) && clip.contains_rect(r)))
@@ -347,21 +343,101 @@ fn keyboard_shortcuts_keeps_its_scroll_under_import_shortcut_set() {
     assert!(heading_seen(&mut app, vec![]), "opened again, Keyboard Shortcuts starts at its top");
 }
 
+/// Open Import Shortcut Set on a set of two shortcuts.
+fn open_shortcut_import(app: &mut VectorcraftApp) {
+    let kys = "/Menus {\n /Acme\\ Copy { /Modifiers 11 /Key 902 }\n /Acme\\ Paste { /Modifiers 11 /Key 903 }\n}\n";
+    crate::io::open_bytes(app, "Keys.kys", kys.as_bytes(), None).unwrap();
+}
+
 #[test]
 fn a_window_that_fits_itself_but_is_too_wide_scrolls_sideways() {
     // Import Shortcut Set sizes its lists from the window's height and is about 780 pt wide. An
     // 800 by 600 pixel window at a UI scale of 125% is 640 by 480 pt.
-    let open: Open = |app| {
-        let kys = "/Menus {\n /Acme\\ Copy { /Modifiers 11 /Key 902 }\n /Acme\\ Paste { /Modifiers 11 /Key 903 }\n}\n";
-        crate::io::open_bytes(app, "Keys.kys", kys.as_bytes(), None).unwrap();
-    };
-    let wide = show_in(open, vec2(1280.0, 900.0), false);
+    let wide = show_in(open_shortcut_import, vec2(1280.0, 900.0), false);
     let screen = Rect::from_min_size(Pos2::ZERO, vec2(640.0, 480.0));
     assert!(wide.window.width() > screen.width(), "Import Shortcut Set is wider than the window: {:?}", wide.window);
     assert_eq!(wide.whole, [false; 2], "in a large window it does not scroll");
-    let shown = show_in(open, screen.size(), false);
+    let shown = show_in(open_shortcut_import, screen.size(), false);
     assert!(screen.contains_rect(shown.window), "the dialog stays on the screen: {:?}", shown.window);
     assert_eq!(shown.whole, [true, false], "it scrolls sideways only");
     let sideways: Vec<Rect> = bars(&shown, true, true).into_iter().filter(|r| r.width() >= 0.5 * shown.window.width()).collect();
     assert!(!sideways.is_empty(), "its sideways bar is drawn: {:?}", bars(&shown, true, false));
+}
+
+#[test]
+fn a_window_wider_than_the_screen_scrolls_sideways_to_its_right_edge() {
+    // In a window 70% as wide as the dialog, the dialog scrolls sideways, and scrolled to its right
+    // edge, the text drawn furthest right in a large window can be seen.
+    let opens: [(&str, Open); 3] = [
+        ("Import Shortcut Set", open_shortcut_import),
+        ("Keyboard Shortcuts", crate::shortcut_editor::open),
+        ("Preferences", |app| crate::prefs_dialog::open(app, None)),
+    ];
+    let mut wrong = vec![];
+    for (name, open) in opens {
+        let wide = show_in(open, vec2(1600.0, 1000.0), false);
+        let Some((right, _)) = texts(&wide)
+            .into_iter()
+            .filter(|(_, r, _)| wide.window.contains_rect(*r))
+            .map(|(s, r, _)| (s, r.right()))
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+        else {
+            wrong.push(format!("{name}: no text in the large window"));
+            continue;
+        };
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2((0.7 * wide.window.width()).round(), 1000.0));
+        let shown = show_in(open, screen.size(), false);
+        let scrolled = show_in(open, screen.size(), true);
+        // Within 1 pt: a text's drawn box can reach a fraction of a point past the content's edge.
+        let seen =
+            |shown: &Shown| texts(shown).iter().any(|(s, r, clip)| *s == right && screen.contains_rect(*r) && clip.expand(1.0).contains_rect(*r));
+        let sideways = bars(&shown, true, true).into_iter().any(|r| r.width() >= 0.5 * shown.window.width());
+        if !screen.contains_rect(shown.window) || !shown.whole[0] || !sideways || seen(&shown) || !seen(&scrolled) {
+            let at = |shown: &Shown| texts(shown).into_iter().filter(|(s, ..)| *s == right).collect::<Vec<_>>();
+            wrong.push(format!(
+                "{name} in {:?}: window {:?}, scrolls {:?}, sideways bar {sideways}, {right:?} seen at first {} {:?}, scrolled {} {:?}, bars {:?}",
+                screen.size(),
+                shown.window,
+                shown.whole,
+                seen(&shown),
+                at(&shown),
+                seen(&scrolled),
+                at(&scrolled),
+                bars(&shown, true, true)
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Every text the dialog drew, with its rectangle and its clip.
+fn texts(shown: &Shown) -> Vec<(String, Rect, Rect)> {
+    fn walk(s: &Shape, clip: Rect, out: &mut Vec<(String, Rect, Rect)>) {
+        match s {
+            Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect(), clip)),
+            Shape::Vec(v) => v.iter().for_each(|s| walk(s, clip, out)),
+            _ => {}
+        }
+    }
+    let mut out = vec![];
+    shown.shapes.iter().for_each(|c| walk(&c.shape, c.clip_rect, &mut out));
+    out
+}
+
+#[test]
+fn a_dialog_with_buttons_in_its_body_scrolls_them_with_the_body() {
+    // Check Spelling draws its buttons inside its body: in a window too short for it, the heading
+    // stays in view and the buttons scroll with the body.
+    let open: Open = |app| {
+        check_spelling::open(app).unwrap();
+    };
+    let tall = show_in(open, vec2(1280.0, 900.0), false);
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(1024.0, (0.6 * tall.window.height()).round()));
+    let shown = show_in(open, screen.size(), false);
+    let scrolled = show_in(open, screen.size(), true);
+    let seen = |shown: &Shown, label: &str| buttons(shown, screen, &[label]).iter().any(|(_, seen)| *seen);
+    assert!(screen.contains_rect(shown.window), "the dialog stays on the screen: {:?}", shown.window);
+    assert!(body_bar(&shown).is_some() && shown.whole == [false; 2], "only the body scrolls ({:?}, {:?})", shown.body, shown.whole);
+    assert!(seen(&shown, "Check Spelling") && seen(&scrolled, "Check Spelling"), "the heading stays in view");
+    assert!(!seen(&shown, "Cancel") && seen(&scrolled, "Cancel"), "Cancel is out of view until the body is scrolled down");
 }

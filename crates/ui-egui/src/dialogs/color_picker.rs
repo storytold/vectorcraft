@@ -365,13 +365,13 @@ fn header(ui: &mut Ui, title: &str) {
 /// Draws the responsive picker and updates its color fields and live preview.
 /// Returns the requested action for the shared frame to confirm or cancel.
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
-    super::modal::fits_itself(ui);
     let channel = Channel::parse(&d.str("channel")).unwrap_or_default();
     let web = d.bool("webOnly");
     let swatches = d.bool("swatches");
     let p = picked(d);
     let original = d.fields.get("original").and_then(color_value).unwrap_or(p.color);
     let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
+    super::modal::fits_itself(ui);
     let (side, values_w, button_w, stacked) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let content_w = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
