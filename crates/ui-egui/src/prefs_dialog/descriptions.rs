@@ -224,7 +224,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     // Hyphenation
     (
         "hyphenationLanguage",
-        "New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.",
+        "New type takes this language while Document Setup's language is English: USA, unless [Normal Character Style] sets a language; type already in a document keeps its own language.",
     ),
     (
         "hyphenationExceptions",
@@ -234,6 +234,10 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "pluginsFolder",
         "On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.",
+    ),
+    (
+        "pluginInstructionBudget",
+        "Normal runs a plug-in filter or command within the plug-in's own instruction limit; Large raises that limit to at least 250 million, besides those for each byte of input, and keeps the same time limit.",
     ),
     ("scratchPrimary", "The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),
     ("scratchSecondary", "The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet."),

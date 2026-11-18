@@ -3267,9 +3267,10 @@ mark-style	Japanese	일본식
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	선 세그먼트의 끝을 가까운 직선 세그먼트와 직각으로 만나도록 스냅합니다.
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	캔버스에서 각 슬라이스의 번호를 왼쪽 위의 상자에 표시합니다. 끄더라도 슬라이스 윤곽선은 계속 표시됩니다.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	사용자 슬라이스와 개체 슬라이스의 윤곽선 및 번호 상자의 색상입니다. 자동 슬라이스에는 이 색상의 더 흐린 색조가 사용됩니다.
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국인 동안 새 텍스트는 이 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
+	New type takes this language while Document Setup's language is English: USA, unless [Normal Character Style] sets a language; type already in a document keeps its own language.	문서 설정의 언어가 영어: 미국인 동안 새 텍스트는 이 언어를 받습니다. 단, [기본 문자 스타일]에 언어가 설정되어 있으면 그 언어를 받습니다. 문서에 이미 있는 텍스트는 자체 언어를 유지합니다.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	하이픈 넣기가 켜진 단락에서는 목록의 단어가 입력한 하이픈 위치에서만 나뉘며, 하이픈이 없으면 나뉘지 않습니다. 언어나 대소문자는 상관없습니다.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	데스크톱 버전에서는 이 폴더의 .wasm 플러그인이 시작할 때와 여기에 새 폴더를 지정하고 확인을 클릭할 때 로드됩니다(안전 모드 제외). 웹 버전은 로드하지 않습니다.
+	Normal runs a plug-in filter or command within the plug-in's own instruction limit; Large raises that limit to at least 250 million, besides those for each byte of input, and keeps the same time limit.	표준은 플러그인의 필터나 명령을 플러그인 자체의 명령어 한도 안에서 실행합니다. 크게는 입력 바이트마다 주어지는 명령어와 별도로 이 한도를 2억 5천만 이상으로 올리며, 시간 한도는 그대로 둡니다.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	첫 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	두 번째 스크래치 디스크 선택: Startup, None 또는 폴더 경로. VectorCraft는 이 값을 저장하지만 아직 스크래치 디스크를 사용하지 않습니다.
 	Reset all preferences to their defaults?	모든 환경 설정을 기본값으로 재설정하시겠습니까?

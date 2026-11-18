@@ -3143,9 +3143,10 @@ digits	Malayalam	马拉雅拉姆数字
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
-	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	当文档设置的语言为英语：美国时，新文字使用此语言；文档中已有的文字保留自己的语言。
+	New type takes this language while Document Setup's language is English: USA, unless [Normal Character Style] sets a language; type already in a document keeps its own language.	当文档设置的语言为英语：美国时，新文字使用此语言，除非 [正常字符样式] 设置了语言；文档中已有的文字保留自己的语言。
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	在启用自动断字的段落中，列表中的单词只在其中键入的连字符处断开，没有连字符则不断开，与语言和大小写无关。
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	在桌面版中，此文件夹中的 .wasm 增效工具会在启动时以及在此处指定新文件夹并单击“确定”时载入，安全模式除外；Web 版不会载入它们。
+	Normal runs a plug-in filter or command within the plug-in's own instruction limit; Large raises that limit to at least 250 million, besides those for each byte of input, and keeps the same time limit.	正常在增效工具自身的指令上限内运行其滤镜或命令；大将此上限提高到至少 2.5 亿条，另加每个输入字节对应的指令，时间上限保持不变。
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第一个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	第二个暂存盘选择：Startup、None 或文件夹路径；VectorCraft 会存储它，但尚未使用暂存盘。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
