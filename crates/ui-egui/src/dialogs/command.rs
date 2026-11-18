@@ -85,8 +85,7 @@ fn heading_in(lang: crate::i18n::Lang, label: &str) -> String {
 /// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask and
 /// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes, and Path
 /// Precision Tools › Common Tangents and the bounding shapes (Add Bounding Rectangle… and Add
-/// Bounding Circle…). (Cancel rolls
-/// a preview back whichever dialog started it.)
+/// Bounding Circle…). (Cancel rolls a preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
