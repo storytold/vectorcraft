@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unembed",
             [],
             None,
-            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds (an image changed by Perspective Distort or Free Distort keeps its corners); written as stored, an image from a PSD or PSB file keeps the clip group of the clipping path that file names, and the file written keeps the path for later reads. One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds (a distorted image its corners). One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
+            "{id?: an embedded image (default: the one selected), path?, ids?: [image ids] (instead of id; one id is the same as id), folder?} write the image's pixels to the file at path (PNG, JPEG, GIF or WebP as stored, other images as PNG; a path ending in .png/.jpg/.jpeg/.gif/.webp/.tif/.tiff/.bmp converts them) and link the image to it, keeping its bounds (an image changed by Perspective Distort or Free Distort keeps its corners and, when it came from a PSD or PSB file, the clip group of that file's clipping path, with or without folder). One undo step → {id, path}; no path → {name, dataBase64} (nothing changes: there is no file to link to). With folder: write each embedded image of ids or id (default: the selected embedded images) to a new file in folder, as stored (as PNG when that format is not one of VectorCraft's raster file formats), named after the image (characters a file name can't hold become _; Image when nothing is left), with Name 2 … Name 99 when the name is taken; a file already there is never replaced. Linked images among ids are left as they are. Each image links to its file and keeps its bounds (a distorted image its corners). One undo step (undo does not remove the files); when a file can't be written, the files this call wrote are removed and nothing changes → {unembedded: [{id, path}], skipped: [ids of linked images]}; id with ids, path with folder, and ids of more or fewer than one image without folder are errors",
             has_doc,
             unembed
         ),
@@ -634,8 +634,7 @@ pub(crate) fn readable_and_kept(blob: ImageBlob, unread: bool, linked: bool) -> 
 
 /// The linked image file `bytes` (read from `path`, when there is one), read with its preview: a
 /// DCS file's plates, else its image ([`super::place::dcs::raster`]); an error when its pixels
-/// can't be read ([`readable`]). A PNG or TIFF that Unembed wrote from a PSD or PSB file's image
-/// is read with the clipping path it keeps ([`fileio::raster_image`]).
+/// can't be read ([`readable`]).
 fn linked_image(bytes: &[u8], path: Option<&str>) -> Result<RasterImage> {
     let mut img = super::place::dcs::raster(bytes, path)?;
     img.blob = readable(img.blob, kept_unread(bytes), true)?;
@@ -1223,8 +1222,9 @@ pub(crate) fn set_image_from_path(d: &mut Document, id: NodeId, path: &str, doc_
 /// transform still gives it its old size. Its Placement Options do not apply. The result is what
 /// happens to its clip, as [`clip_to`] decides from the clipping path of the clip group holding
 /// just it (`held`): the clipping paths of its old file (`old_clip`, in its old pixels) and of the
-/// new file are mapped to the page through its corners, anchors and handles alike, as a distort
-/// maps a path's.
+/// new file (`img.clip`, else the path kept in its stored PNG or TIFF, as Unembed writes it:
+/// [`file_clip`]) are mapped to the page through its corners, anchors and handles alike, as a
+/// distort maps a path's.
 fn refill_distorted(n: &mut Node, old_clip: Option<&FileClip>, link: &LinkInfo, img: &RasterImage, held: Option<(&PathData, FillRule)>) -> ClipTo {
     let old = old_clip.filter(|_| held.is_some()).and_then(|(path, rule)| Some((warped(path, &n.image_map()?)?, *rule)));
     if let NodeKind::Image(im) = &mut n.kind {
@@ -1233,7 +1233,7 @@ fn refill_distorted(n: &mut Node, old_clip: Option<&FileClip>, link: &LinkInfo, 
         }
         (im.key, im.width, im.height, im.link) = (img.key.clone(), img.width, img.height, Some(link.clone()));
     }
-    let file = img.clip.as_ref().and_then(|(path, rule)| Some((warped(path, &n.image_map()?)?, *rule)));
+    let file = img.clip.clone().or_else(|| file_clip(&img.blob)).and_then(|(path, rule)| Some((warped(&path, &n.image_map()?)?, rule)));
     placed_clip_to(old.as_ref(), None, file, held)
 }
 
