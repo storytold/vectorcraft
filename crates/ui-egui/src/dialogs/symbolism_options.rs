@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value, json};
 
-use super::{DialogResult, DialogSpec, form, run_and_close};
+use super::{DialogResult, DialogSpec, form, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::{VectorcraftApp, widgets};
 
@@ -50,7 +50,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
 /// OK: set the brush the Symbolism tools share (the tool keeps it within its ranges).
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
     let values: Map<String, Value> = KEYS.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.f64(k, 0.0)))).collect();
-    run_and_close(app, "tool.setOption", json!({ "tool": d.str("tool"), "values": values }))
+    set_tool_options_and_close(app, json!({ "tool": d.str("tool"), "values": values }))
 }
 
 #[cfg(test)]

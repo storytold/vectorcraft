@@ -1585,3 +1585,29 @@ fn row_context_menu_pick_from_swatches_and_limit_to_library() {
         assert_eq!(colors(h.state_mut()), 2, "Recolor Cancel restores the original artwork");
     }
 }
+
+/// With the Color Groups list shown, the Color Picker opened from a row and closed with Cancel
+/// leaves Recolor Artwork the size it was and where it was, in every frame.
+#[test]
+fn the_color_picker_leaves_the_dialog_in_place() {
+    use egui::accesskit::Role;
+
+    let mut app = app();
+    art(&mut app, &["#ff0000", "#0000ff"]);
+    let mut h = assign_harness(app, json!({}));
+    assert_eq!(field(h.state(), "groupStorage"), json!(true), "the list is shown");
+    let window = egui::Id::unique(("dialog", "recolor"));
+    let rect = |h: &egui_kittest::Harness<'_, VectorcraftApp>| h.ctx.memory(|m| m.area_rect(window));
+    let before = rect(&h).expect("dialog drawn");
+    row_context_menu(&mut h, 1);
+    h.get_by_label("   Pick from Swatches").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("colorPicker"));
+    assert_eq!(rect(&h), Some(before), "the dialog keeps its size while the picker is open");
+    h.get_by_role_and_label(Role::Button, "Cancel").click();
+    for step in 0..4 {
+        h.run_steps(1);
+        assert_eq!(rect(&h), Some(before), "frame {step} after Cancel");
+    }
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("recolor"));
+}

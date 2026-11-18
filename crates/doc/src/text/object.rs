@@ -304,17 +304,40 @@ impl TextObject {
     /// Update the paragraph styles for replacing bytes `start..end` of the current plain text by
     /// `insert` (call before changing the runs). The paragraph the range starts in keeps its
     /// style (merging paragraphs: the first one's wins); paragraphs the insertion starts take that
-    /// style too (Return continues the paragraph it splits); later paragraphs keep theirs.
+    /// style too (Return continues the paragraph it splits), without the number its list gives it
+    /// ([`ParaList::start`]); later paragraphs keep theirs. When an insertion that starts new
+    /// paragraphs is made at the start of a paragraph and some of that paragraph's text stays
+    /// after it, that number moves with the text to the last paragraph the insertion starts.
     pub fn splice_paras(&mut self, start: usize, end: usize, insert: &str) {
-        if self.paras.is_empty() {
+        let added = insert.bytes().filter(|&b| b == b'\n').count();
+        let numbered = |p: &ParaStyle| p.list.is_some_and(|l| l.start.is_some());
+        // With one style for every paragraph, the new paragraphs take it as it is unless its list
+        // gives the paragraph a number.
+        if self.paras.is_empty() && (added == 0 || !numbered(&self.para)) {
             return;
         }
         let r = self.paragraphs_in(start, end);
         let v = self.paragraph_styles();
-        let Some(keep) = v.get(r.start).cloned() else { return };
-        let added = insert.bytes().filter(|&b| b == b'\n').count();
+        let Some(mut keep) = v.get(r.start).cloned() else { return };
+        let given = keep.list.and_then(|l| l.start);
+        if let Some(l) = keep.list.as_mut() {
+            l.start = None;
+        }
         let mut out: Vec<ParaStyle> = v.iter().take(r.start + 1).cloned().collect();
         out.extend(std::iter::repeat_n(keep, added));
+        let text = self.plain_text();
+        let (at, to) = (start.min(end).min(text.len()), start.max(end).min(text.len()));
+        let at_para_start = text.as_bytes().get(..at).is_some_and(|b| b.last().is_none_or(|&c| c == b'\n'));
+        // The paragraph's text after the replaced bytes, which the last new paragraph then holds.
+        let text_kept = r.len() == 1 && text.as_bytes().get(to).is_some_and(|&c| c != b'\n');
+        if given.is_some() && added > 0 && at_para_start && text_kept {
+            if let Some(l) = out.get_mut(r.start).and_then(|p| p.list.as_mut()) {
+                l.start = None;
+            }
+            if let Some(l) = out.last_mut().and_then(|p| p.list.as_mut()) {
+                l.start = given;
+            }
+        }
         out.extend(v.iter().skip(r.end).cloned());
         self.paras = out;
         if let Some(first) = self.paras.first() {

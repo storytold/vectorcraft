@@ -28,11 +28,53 @@ fn blob_tip_fields_confirm_and_cancel() {
     assert_eq!(app.session.tool_options_of("blobBrush")["roundness"], json!(0.0));
 }
 
+/// OK with a Fidelity the Smooth tool refuses shows the error and keeps the dialog open, with
+/// nothing set; a Fidelity it takes then closes it.
+#[test]
+fn a_refused_fidelity_keeps_the_dialog_open() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "smooth"})).unwrap();
+    let before = app.session.tool_options_of("smooth");
+    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(0.01));
+    let e = super::super::confirm(&mut app).unwrap_err();
+    assert_eq!(e, "tool `smooth`: `fidelity` must be a number from 0.05 to 100");
+    assert!(app.ui.dialog.is_some(), "the dialog stays open");
+    assert_eq!(app.session.tool_options_of("smooth"), before);
+    app.ui.dialog.as_mut().unwrap().fields.insert("fidelity".into(), json!(5));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.tool_options_of("smooth")["fidelity"], json!(5.0));
+}
+
 #[test]
 fn the_tip_preview_is_as_flat_as_the_tip_the_brush_draws() {
     for roundness in [-5.0, 0.0, 0.05, 0.1, 1.0, 50.0, 100.0, 120.0] {
         let drawn = vectorcraft_tools::draw2::blob_tip(0.0, roundness).as_coeffs()[3] as f32;
         assert!((blob_tip_short_ratio(roundness) - drawn).abs() < 1e-6, "roundness {roundness}: drawn {drawn}");
+    }
+}
+
+/// A Roundness dot of the tip preview gives its distance from the center along the tip's short
+/// axis as a percentage of half the tip's length, on either side and at any Angle: 0% at the
+/// center, 100% at half the length and past it. A move along the long axis leaves it as it is, and
+/// the dots drawn for a Roundness give that Roundness back.
+#[test]
+fn a_roundness_dot_sets_its_distance_along_the_short_axis() {
+    for angle in [0.0, 30.0, 90.0, -135.0, 180.0] {
+        let (u, v) = blob_tip_axes(angle);
+        for (along, want) in [(0.0, 0.0), (4.5, 25.0), (-9.0, 50.0), (18.0, 100.0), (-18.0, 100.0), (40.0, 100.0), (-400.0, 100.0)] {
+            for sideways in [0.0, 7.0, -30.0] {
+                assert_eq!(blob_tip_roundness_at(v * along + u * sideways, angle), want, "angle {angle}, {along} along, {sideways} sideways");
+            }
+        }
+        let center = egui::pos2(32.0, 32.0);
+        for roundness in [0.0, 1.0, 37.0, 50.0, 99.0, 100.0] {
+            let [a, b] = blob_tip_dots(center, angle, roundness);
+            assert!(((a - center) + (b - center)).length() < 1e-4, "the dots face each other across the center");
+            for dot in [a, b] {
+                assert_eq!(blob_tip_roundness_at(dot - center, angle), roundness, "angle {angle}");
+            }
+        }
     }
 }
 
