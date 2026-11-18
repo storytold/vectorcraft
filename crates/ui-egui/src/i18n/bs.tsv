@@ -4601,6 +4601,8 @@ font-technology	Variable	Varijabilni
 	Couldn't paste from the clipboard: {e}	Nije moguće zalijepiti iz međuspremnika: {e}
 	Channel	Kanal
 	Circle	Krug
+	Circle Tool	Alat za krug
+	Circle too large	Krug je prevelik
 	Clip to Art	Isijeci prema crtežu
 	Colorize	Oboji
 	Gamma	Gama

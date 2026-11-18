@@ -466,6 +466,8 @@ font-technology	Variable	Μεταβλητές
 	Choose a folder	Επιλογή φακέλου
 	Choose…	Επιλογή…
 	Circle	Κύκλος
+	Circle Tool	Εργαλείο κύκλου
+	Circle too large	Ο κύκλος είναι πολύ μεγάλος
 	Classic Defaults	Κλασικές προεπιλογές
 	Clean Up…	Εκκαθάριση…
 	Clear	Εκκαθάριση
@@ -5081,8 +5083,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no active document	δεν υπάρχει ενεργό έγγραφο
 @msg	no active perspective plane	δεν υπάρχει ενεργό επίπεδο προοπτικής
 @msg	no anchor points selected	δεν έχουν επιλεγεί σημεία αγκύρωσης
-@msg	`points` must be three [x, y] pairs of numbers	το `points` πρέπει να είναι τρία ζεύγη αριθμών [x, y]
-@msg	direct-select three anchor points, or give `points`	επιλέξτε άμεσα τρία σημεία αγκύρωσης ή δώστε `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	το `points` πρέπει να είναι δύο ή τρία ζεύγη αριθμών [x, y]
+@msg	direct-select two or three anchor points, or give `points`	επιλέξτε άμεσα δύο ή τρία σημεία αγκύρωσης ή δώστε `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	κανένας κύκλος δεν περνά από αυτά τα σημεία: δύο είναι ίδια ή και τα τρία βρίσκονται σε μία ευθεία
 @msg	no app to open files here	δεν υπάρχει εφαρμογή για άνοιγμα αρχείων εδώ
 @msg	no artboard	δεν υπάρχει πίνακας σχεδίασης
