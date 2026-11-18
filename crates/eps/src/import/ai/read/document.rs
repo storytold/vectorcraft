@@ -336,6 +336,7 @@ fn repoint(n: &mut Node, renamed: &std::collections::BTreeMap<String, String>) {
 /// those the swatches take.
 pub fn palette(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> Option<PaletteSwatches> {
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     // The palette, the gradients and the patterns it names come before the art, so an error in the
     // art leaves them read.
     let _ = r.run();
@@ -396,6 +397,7 @@ pub fn brushes(data: &[u8], patterns: &[PatternDef], names: &mut obj::Names) -> 
     // Brush objects are plug-in objects: data without one isn't read again.
     memchr::memmem::find(data, b"BeginPluginObject")?;
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     // The brushes come before the art, so an error in the art leaves them read.
     let _ = r.run();
     let (mut lib, unread) = r.brush_library()?;
@@ -449,6 +451,7 @@ pub fn graphic_styles(data: &[u8], large_canvas: bool, names: &mut obj::Names) -
         return (vec![], 1.0);
     }
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     r.large_canvas = large_canvas.then_some(1.0);
     // The styles come before the art, so an error in the art leaves them read.
     let _ = r.run();
@@ -482,6 +485,7 @@ pub struct Symbols {
 pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
     crate::import::ai::find(data, b"BeginSymbol")?;
     let mut r = Reader::with_names(data, names.encoding);
+    r.defs_only = true;
     // The symbols come before the art, so an error in the art leaves them read.
     let _ = r.run();
     r.check_symbols();
@@ -536,10 +540,20 @@ pub fn symbols(data: &[u8], names: &mut obj::Names) -> Option<Symbols> {
     Some(Symbols { symbols, images, swatches, canvas_scale: r.canvas_scale, own_size: r.symbols_own_size })
 }
 
+/// A reader of all of `data` for what doesn't depend on how its art draws (its artboards, its
+/// variable library): it checks no envelope and no stroke with aligned dashes against its drawn
+/// look, so it spends none of the import's checks ([`super::MAX_CHECKED`],
+/// [`super::MAX_DASH_CHECKS`]), which are the layers' reader's.
+fn reader_aside(data: &[u8]) -> Reader<'_> {
+    let mut r = Reader::new(data);
+    (r.envelope_checks, r.dash_checks) = (0, 0);
+    r
+}
+
 /// [`artboards`] as far as reading `data` from its start gets: those read before an error, and
 /// those of a `/Document` still open when it stopped (its art can be what stopped it).
 fn artboards_read(data: &[u8], names: &mut obj::Names) -> (Vec<(String, Rect)>, Option<usize>) {
-    let mut r = Reader::new(data);
+    let mut r = reader_aside(data);
     r.names = obj::Names::new(names.encoding);
     let _ = r.run();
     let open: Vec<Obj> = r.frames.iter().filter_map(|f| if let Kind::Obj(o) = &f.kind { Some((**o).clone()) } else { None }).collect();
@@ -608,7 +622,7 @@ pub fn variables(data: &[u8], names: &mut obj::Names) -> VariableRead {
     if crate::import::ai::find(data, b"variableSets").is_none() {
         return VariableRead::default();
     }
-    let mut r = Reader::new(data);
+    let mut r = reader_aside(data);
     r.names = obj::Names::new(names.encoding);
     let _ = r.run();
     if r.variables.present {
