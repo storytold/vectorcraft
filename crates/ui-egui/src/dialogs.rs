@@ -25,7 +25,7 @@ pub mod char_style_options;
 pub mod check_spelling;
 pub mod color_balance;
 pub mod color_guide_options;
-mod color_picker;
+pub(crate) mod color_picker;
 mod command;
 pub mod composite_fonts;
 pub mod confirm;
@@ -167,7 +167,7 @@ pub(crate) use export_for_screens::{
     open_assets as open_export_for_screens_assets, preset_list as screen_preset_list, saved_options as screen_saved_options,
     saved_rows as screen_saved_rows, settings_format as screen_settings_format,
 };
-pub(crate) use form::{humanize, number_list_text, plugin_color_button, read_number_list, unit_suffix};
+pub(crate) use form::{humanize, number_list_text, plugin_color_button, ppi_suffix, read_number_list, unit_suffix};
 pub use new_document::{create_without_dialog as new_document_without_dialog, open as open_new_document, preset_card};
 pub(crate) use new_document::{popup_open as new_document_popup_open, preset_name};
 pub use png_options::open as open_raster_options;
@@ -441,6 +441,7 @@ registry! {
     ScriptGrowth: [script_run::GROWTH_KIND] => script_run::GROWTH_SPEC,
     ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
+    ScriptFiles: [script_run::PICKER_KIND] => script_run::PICKER_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
@@ -661,12 +662,16 @@ pub(crate) fn parent(d: &Dialog) -> Option<Dialog> {
 /// sets them as choosing it in the dialog does (Export for Screens' `exportPreset`, EPS Options'
 /// and Save PDF's `flattenerPreset`, which drop the Custom… options), a change
 /// to Export for Screens' sub-folder controls ends an applied preset's item folders, as it does in
-/// the dialog, and Transform Each's Relative / Absolute keeps the Scale fields' size. A value
+/// the dialog, Transform Each's Relative / Absolute keeps the Scale fields' size, and Recolor
+/// Artwork's `group` selects that color group and its `groupAction` runs the button at once. A value
 /// Composite Fonts' Show Sample can't take is refused.
 pub(crate) fn field_set(app: &mut VectorcraftApp, field: &str, old: Option<&Value>) -> Result<(), String> {
     if app.ui.dialog.as_ref().is_some_and(|d| d.kind == transform_each::KIND) {
         transform_each::field_set(app, field, old);
         return Ok(());
+    }
+    if app.ui.dialog.as_ref().is_some_and(|d| d.kind == recolor::KIND) {
+        return recolor::field_set(app, field);
     }
     if let Some(d) = app.ui.dialog.as_ref().filter(|d| d.kind == composite_fonts::KIND) {
         return composite_fonts::field_set(d, field);
@@ -716,6 +721,9 @@ pub fn cancel(app: &mut VectorcraftApp) {
         }
         if d.kind == script_run::NOTICE_KIND {
             script_run::notice_cancel(app, &d);
+        }
+        if d.kind == script_run::PICKER_KIND {
+            script_run::picker_cancel(app, &d);
         }
         missing_links::cancelled(app, &d);
         // Find Font's next open starts with an empty replacement search.

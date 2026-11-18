@@ -276,7 +276,7 @@ fn editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool, fi
                         *v = n;
                         set.push(name);
                     }
-                    dim(ui, "ppi");
+                    dim(ui, super::ppi_suffix().trim());
                 });
                 ui.end_row();
             }

@@ -76,6 +76,14 @@ pub struct TraceRuns {
     next_id: u64,
     /// Set by unit tests whose app traces off the UI thread.
     pub(crate) off_the_ui_thread: bool,
+    /// The status bar's message the latest Image Trace with notes left, with
+    /// [`crate::state::UiState::status_sets`] then.
+    pub(crate) notes_status: Option<(String, u64)>,
+}
+
+/// The status bar's line after an Image Trace with `n` notes, the first of them `first`.
+pub(crate) fn traced_with_notes(n: usize, first: &str) -> String {
+    crate::i18n::msg_n(n as u64, "Traced with {n} note: {first}", "Traced with {n} notes: {first}", &[("first", first)])
 }
 
 /// Does `app` trace off the UI thread? Where documents open off it ([`crate::opening::available`]),
