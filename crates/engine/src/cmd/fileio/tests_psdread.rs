@@ -648,9 +648,45 @@ fn relink_follows_the_clipping_path_of_a_distorted_psd() {
     assert_eq!(node(&s).image_corners().unwrap(), corners);
 }
 
+/// Update Links follows the clipping path of a linked PSD file for an image changed by Perspective
+/// Distort or Free Distort: the file's new clipping path is drawn through the image's corners, and
+/// a file without one leaves a plain group.
+#[test]
+fn update_links_follows_the_clipping_path_of_a_distorted_psd() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-update-distorted");
+    let cut = write_file(&dir, "cut.psd", &red_psd(&triangle_resources()));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"path": cut, "at": [50, 25]})).unwrap();
+    let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), NodeId(r["image"].as_u64().unwrap()));
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[0, 0], [100, 8], [90, 50], [6, 44]]})).unwrap();
+    let node = |s: &Session| s.doc().unwrap().doc.node(image).unwrap().clone();
+    let corners = node(&s).image_corners().unwrap();
+    let map = node(&s).image_map().unwrap();
+    let squared: Vec<[f64; 2]> = [[25.0, 12.5], [75.0, 12.5], [75.0, 37.5], [25.0, 37.5]]
+        .iter()
+        .map(|[x, y]| map.apply(vectorcraft_geom::Point::new(*x, *y)).unwrap())
+        .map(|p| [p.x, p.y])
+        .collect();
+    std::fs::write(&cut, red_psd(&square_resources())).unwrap();
+    s.execute("links.update", &json!({"ids": [image.0]})).unwrap();
+    let (anchors, even_odd, held) = clip_group(&s.doc().unwrap().doc, group);
+    let near = anchors.len() == squared.len() && anchors.iter().zip(&squared).all(|(p, q)| (p[0] - q[0]).abs() < 1e-6 && (p[1] - q[1]).abs() < 1e-6);
+    assert!(near && even_odd && held == image, "the file's new clipping path: {anchors:?} vs {squared:?}");
+    assert_eq!(node(&s).image_corners().unwrap(), corners);
+    std::fs::write(&cut, red_psd(&[])).unwrap();
+    s.execute("links.update", &json!({"ids": [image.0]})).unwrap();
+    match s.doc().unwrap().doc.node(group).map(|n| &n.kind) {
+        Some(NodeKind::Group { children, clip: false }) => assert_eq!(children.iter().map(|c| c.id).collect::<Vec<_>>(), [image]),
+        other => panic!("a plain group of the image: {other:?}"),
+    }
+    assert_eq!(node(&s).image_corners().unwrap(), corners);
+}
+
 /// Unembed keeps the clip group of the clipping path an embedded PSD file's image came with, for a
 /// plain image and for one changed by Perspective Distort or Free Distort, and so do reading the
-/// written file again and placing it.
+/// written file again, placing it and opening it.
 #[test]
 fn unembed_keeps_the_clipping_path_of_an_embedded_psd() {
     let dir = vectorcraft_testkit::TempDir::new("psd-unembed-clip");
@@ -693,6 +729,12 @@ fn unembed_keeps_the_clipping_path_of_an_embedded_psd() {
             let placed = NodeId(r["ids"][0].as_u64().unwrap());
             let (anchors, even_odd, _) = clip_group(&s.doc().unwrap().doc, placed);
             assert!(even_odd && anchors.len() == before.0.len(), "{kind}, place: {anchors:?} vs {:?}", before.0);
+            // Opening it gives a document of the image in that clip group.
+            s.execute("document.open", &json!({"path": path})).unwrap();
+            let d = &s.doc().unwrap().doc;
+            let top = d.layers[0].children().and_then(|c| c.first()).map(|c| c.id).expect("an object");
+            let (anchors, even_odd, _) = clip_group(d, top);
+            assert!(even_odd && anchors.len() == before.0.len(), "{kind}, open: {anchors:?} vs {:?}", before.0);
         }
     }
 }

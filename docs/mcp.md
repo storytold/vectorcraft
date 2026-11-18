@@ -6666,11 +6666,12 @@ Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.mak
 (`object.createObjectMosaic`), Create Gradient Mesh (`object.mesh.create`) and Place with Replace (`file.place` with
 `replace`) refuse a distorted image with an error that names the distortion. Update Links (`links.update`) and Relink
 (`links.relink`) put the file's pixels between a distorted image's corners, without applying its Placement Options or
-Relink's `preserve`. The clipping path a PSD, PSB or DCS file names is drawn through the corners: a clip group of the
-old file's clipping path takes the new file's, or becomes a plain group when the new file names none. Embed
-(`links.embed`) and Unembed (`links.unembed`) keep the corners, each in one undo step. Mask (`object.maskImage`) draws
-its clipping path through the image's corners. Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the
-result. These rules are VectorCraft's own.
+Relink's `preserve`; Relink then adds a `warnings` entry naming those images. The clipping path a PSD, PSB or DCS
+file names is drawn through the corners: the clip group of the old file's clipping path gets the new file's clipping
+path, or becomes a plain group when the new file names none. Embed (`links.embed`) and Unembed (`links.unembed`) keep
+the corners, each in one undo step. Mask (`object.maskImage`) draws its clipping path through the image's corners.
+Rasterize (`object.rasterize`) draws the image between its corners and makes a plain image of the result. These rules
+are VectorCraft's own.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.distort","params":{"corners":[[40,0],[60,0],[100,100],[0,100]]}}}
@@ -8777,7 +8778,7 @@ returns `{id, onCanvas: false, owner}`, and the panel says the link has no place
 file is missing stays linked: relink it first); `links.unembed {id, path}` writes an embedded image to a file
 (another extension converts it) and links to it, and without `path` returns `{name, dataBase64}`. An image from a PSD
 or PSB file written as stored (PNG, or TIFF for a CMYK file) keeps the clip group of the clipping path that file
-names, and the file written keeps the path for Place, Relink and Update Links.
+names, and the file written keeps the path: Open, Place, Relink and Update Links read the file with its clip group.
 `ids` of one image works as `id` does. `links.unembed {ids?, folder}` writes each embedded image of `ids` (or of
 `id`; default: the selected embedded images) to a new
 file in `folder`, in the format it is stored in (as PNG when that format is not one of VectorCraft's raster file formats), and links each image to its file, keeping its bounds, in one undo

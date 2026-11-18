@@ -693,11 +693,46 @@ fn relink_of_all_instances_keeps_the_corners_of_distorted_images_in_symbols() {
     let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
     let relinked = r["relinked"].as_array().unwrap();
     assert!(relinked.len() == 2 && relinked.contains(&json!(id.0)), "the image and the symbol's: {r}");
+    assert!(r.get("warnings").is_none(), "no preserve was given: {r}");
     let n = s.doc().unwrap().doc.node(id).unwrap().clone();
     assert_eq!((n.is_distorted_image(), n.image_corners().unwrap()), (true, before));
     assert_eq!((image(&s, id).width, image(&s, id).height), (60, 20));
     assert!(far(&s).distance(far_before) < 1e-9, "{:?} vs {far_before:?}", far(&s));
     assert_eq!(in_symbol(&s), [(Some(symbol_quad), (60, 20))], "the symbol's image keeps its corners");
+}
+
+/// Relink with scope `all` puts the new file's pixels between the corners of a distorted image in
+/// an opacity mask's art.
+#[test]
+fn relink_of_all_instances_keeps_the_corners_of_a_distorted_image_in_an_opacity_mask() {
+    let dir = Folder::new("distorted-relink-mask");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [mask.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[10, 10], [60, 15], [58, 50], [5, 45]]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    // The image in the art of `masked`'s opacity mask: (id, corners, pixel size).
+    let in_mask = |s: &Session| {
+        let mut out = vec![];
+        s.doc().unwrap().doc.visit_stored(|n, place| {
+            if let NodeKind::Image(im) = &n.kind
+                && place.mask_of == Some(masked)
+            {
+                out.push((n.id, n.image_quad(), (im.width, im.height)));
+            }
+        });
+        out
+    };
+    let [(mask_id, Some(quad), (20, 10))] = in_mask(&s)[..] else { panic!("one distorted image in the mask: {:?}", in_mask(&s)) };
+    let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "scope": "all"})).unwrap();
+    let relinked = r["relinked"].as_array().unwrap();
+    assert!(relinked.len() == 2 && relinked.contains(&json!(mask_id.0)), "the image and the mask's: {r}");
+    assert_eq!(in_mask(&s), [(mask_id, Some(quad), (60, 20))], "the mask's image keeps its corners");
 }
 
 /// Relink, Embed and Unembed keep a distorted image's corners, each in one undo step: Relink puts
@@ -727,7 +762,9 @@ fn relink_embed_and_unembed_keep_a_distorted_images_corners() {
 
     let undo = undo_len(&s);
     let r = s.execute("links.relink", &json!({"ids": [id.0], "path": other, "preserve": "fileDimensions"})).unwrap();
-    assert_eq!(r["relinked"], json!([id.0]), "{r}");
+    // The given preserve is reported as not applied.
+    let warning = format!("preserve was not applied to image {}: an image changed by Perspective Distort or Free Distort keeps its corners", id.0);
+    assert_eq!(r, json!({"relinked": [id.0], "notFound": [], "warnings": [warning]}));
     assert_eq!(undo_len(&s), undo + 1);
     assert!(distorted(&s));
     assert_eq!(corners(&s), before);

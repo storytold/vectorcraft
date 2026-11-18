@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. Images and placed documents inside symbols, graph designs, patterns, opacity masks and the art of stored brushes have ids of their own, as links.list gives them; those that show the same content as one read again are read again too. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns]}",
+            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. Images and placed documents inside symbols, graph designs, patterns, opacity masks and the art of stored brushes have ids of their own, as links.list gives them; those that show the same content as one read again are read again too. An image changed by Perspective Distort or Free Distort keeps its corners, with the file's pixels between them, and its Placement Options do not apply; the clipping path its file names is drawn through the corners, and a clip group of the old file's clipping path gets the new one, or becomes a plain group when the file names none. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns]}",
             has_doc,
             update
         ),
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Relink",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs, patterns and the art of stored brushes) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. An image changed by Perspective Distort or Free Distort keeps its corners, with the new file's pixels between them, whatever preserve or its Placement Options say; the clipping path its file names is drawn through the corners. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's)}",
+            "{ids?: [image or placed document ids] (default: the selected ones; with folder and nothing selected, every missing link), path | folder, scope?: selected (default: ids) | all (ids and every other object linked to the same file as one of them, in the layers, opacity-mask art, symbols, graph designs, patterns and the art of stored brushes) | missingInFolder (with path: ids, then every other missing link whose file name is in path's folder, each to the file of its name there; names not there are in notFound; with copy, only images are looked for) | each (with paths), paths?: [{ids, path}] (with scope each, in place of ids, path and folder: each link to its own file; an id in two entries is an error), copy?: false (with path or paths, for images of a saved document: copy the file into the document's folder and link to the copy; the names Name.png, Name 2.png … Name 99.png are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is used; an error for a DCS file that reads plate files of its own), preserve?: transforms|bounds|fileDimensions|fit|fill (how the new file takes each image's place this time, as links.placementOptions describes; default: each image's Placement Options; fit keeps the new file's aspect ratio inside the old bounds: Replace)} link images (or placed documents, each showing the same artboard or page of the new file) to the file at path, or each to the file of its link's name in folder; embedded images become linked; each keeps its bounds. An image changed by Perspective Distort or Free Distort keeps its corners, with the new file's pixels between them, whatever preserve or its Placement Options say, and its clipping is handled as links.update handles it. One undo step → {relinked: [ids], notFound: [file names], copied?: [{from, to}], kept?: [{from, to}] (with copy; to is the file name alone when the document's folder is outside the automation read roots), warnings?: (as links.update's, and one naming the distorted images that preserve was not applied to)}",
             has_doc,
             relink
         ),
@@ -634,8 +634,8 @@ pub(crate) fn readable_and_kept(blob: ImageBlob, unread: bool, linked: bool) -> 
 
 /// The linked image file `bytes` (read from `path`, when there is one), read with its preview: a
 /// DCS file's plates, else its image ([`super::place::dcs::raster`]); an error when its pixels
-/// can't be read ([`readable`]). A PNG or TIFF written from a PSD or PSB file's image (by Unembed)
-/// comes with the clipping path it keeps ([`fileio::raster_image`]).
+/// can't be read ([`readable`]). A PNG or TIFF that Unembed wrote from a PSD or PSB file's image
+/// is read with the clipping path it keeps ([`fileio::raster_image`]).
 fn linked_image(bytes: &[u8], path: Option<&str>) -> Result<RasterImage> {
     let mut img = super::place::dcs::raster(bytes, path)?;
     img.blob = readable(img.blob, kept_unread(bytes), true)?;
@@ -2255,8 +2255,10 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let relinked: Vec<u64> = reads.iter().flat_map(|(ids, _)| ids_json(ids)).collect();
+    let unpreserved = preserve.and_then(|_| unpreserved_note(&doc, &reads));
     drop(doc);
-    let warnings = spot_swatch_notes(&s.doc()?.doc, reads.iter().map(|(_, read)| read));
+    let mut warnings = spot_swatch_notes(&s.doc()?.doc, reads.iter().map(|(_, read)| read));
+    warnings.extend(unpreserved);
     if !reads.is_empty() {
         s.edit("Relink", |d, _| editing_brush_art(d, |d| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, preserve, None))))?;
     }
@@ -2277,6 +2279,23 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
         out["kept"] = json!(kept);
     }
     Ok(out)
+}
+
+/// The warning that Relink's `preserve` was not applied to the images of `reads` changed by
+/// Perspective Distort or Free Distort, which keep their corners, naming them; `None` when there
+/// are none.
+fn unpreserved_note(doc: &Document, reads: &[(Vec<NodeId>, Read)]) -> Option<String> {
+    let ids: Vec<String> = reads
+        .iter()
+        .filter(|(_, read)| matches!(read, Read::Image(_)))
+        .flat_map(|(ids, _)| ids)
+        .filter(|id| stored(doc, **id).is_some_and(Node::is_distorted_image))
+        .map(|id| id.0.to_string())
+        .collect();
+    let images = if ids.len() == 1 { "image" } else { "images" };
+    (!ids.is_empty()).then(|| {
+        format!("preserve was not applied to {images} {}: an image changed by Perspective Distort or Free Distort keeps its corners", ids.join(", "))
+    })
 }
 
 /// `links.relink {scope: "missingInFolder"}`: the other missing links of `st` (not `given`; only

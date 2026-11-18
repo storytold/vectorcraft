@@ -963,7 +963,7 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
 /// other samples become 8-bit RGBA. A PSD/PSB composite's stored image keeps its imported
 /// clipping path ([`image_clip`]), and a PNG or TIFF that keeps such a path (as Unembed writes
-/// it) comes with it.
+/// it) is read with that path.
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
