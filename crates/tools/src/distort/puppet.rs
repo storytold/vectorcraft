@@ -515,6 +515,15 @@ impl Tool for PuppetWarpTool {
             _ => {}
         }
     }
+    /// `showMesh`, `selectAllPins` and `expand`; `pins` and `selected` are read only.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "showMesh" | "selectAllPins" => c::boolean(key, value),
+            "expand" => c::number(key, value, 0.0, 1000.0),
+            _ => Err(c::unknown(key)),
+        }
+    }
     fn busy(&self) -> bool {
         self.drag.is_some()
     }
