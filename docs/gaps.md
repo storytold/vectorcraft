@@ -517,8 +517,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   afterwards opens in a floating window of its own (G7's Float in Window); documents already open stay where they
   are. Estimate unchanged.
 - **Done:** Hyphenation › Default Language is the language of new type, unless Document Setup chose one, and each
-  run hyphenates in its own language (Character panel). English and eleven Indian languages have break
-  points; other languages stay whole apart from the Exceptions list (#394, #4947).
+  run hyphenates in its own language (Character panel). English, eleven Indian languages, Bulgarian, Turkish
+  and Russian have break points, and German, Polish, Portuguese and Italian have them in builds that embed
+  their patterns; other languages stay whole apart from the Exceptions list (#394, #4947).
 - **Done (2026-11-14):** Layers panel row context menu: right-clicking a layer, group, or object row shows a context menu (Options…, Duplicate, Delete, Lock Others / Unlock All, Hide Others / Show All, Locate Object, Collect for Export) with proper selection behavior and Undo/Redo tracking. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Missing:** 2 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
   Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
@@ -703,7 +704,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   Extrude & Bevel, Inflate and Rotate with Position presets ([three-d.md](three-d.md), #1407). Colored Inflate has automatic smooth vector lighting from shared membrane normals. White-light Inflate keeps its polygon shading. Every 3D facet's seam has round joins ([three-d.md](three-d.md#seams)). All four take one to ten colored directional lights, with neutral ambient applied once, a light list and independent previewing controls. Standard, Diffuse, Top Left and Right select original rigs, shared with commands; manual settings show Custom.
 - **Missing:** materials (base, Substance, graphics), shadows,
   ray-traced rendering, angular cut caps, exact visibility for intersecting and concave surfaces, the rest of 3D
-  Classic (Map Art), Turntable, textures, map art and shading in 3D export.
+  Classic (Map Art), Turntable, and in 3D export the graphics on Revolve's side, materials and shading (graphics on
+  planes and Extrude & Bevel's caps are exported as textures).
 - **Impact:** specialist; Materials is the one menu stub left.
 - **Estimate:** 25–45 h; plan in `plan/` before coding.
 
