@@ -831,6 +831,12 @@ impl Tool for ShapeTool {
             _ => vec![],
         }
     }
+    /// Switching tools during a drag of a corner, pie or side widget cancels it, as Escape does:
+    /// the shape goes back.
+    fn deactivate(&mut self, cx: &ToolContext) -> Vec<Action> {
+        if self.widget.is_some() { self.key(cx, ToolKey::Escape, Mods::default()) } else { vec![] }
+    }
+
     /// ↑/↓ change a polygon's sides, a star's points or the rounded rectangle's radius while it is
     /// drawn; Escape turns a widget or selection drag back.
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
