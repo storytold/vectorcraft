@@ -702,8 +702,8 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
     // The type objects whose characters took the paint (no row targeted): only those change what a graph's labels keep
     // for their characters; a row edit is kept with the label's rows.
     let characters = std::cell::RefCell::new(Vec::new());
-    // Whether a target took the opacity, and whether one would have given it to its characters.
-    let (took_opacity, characters_skipped) = (std::cell::Cell::new(false), std::cell::Cell::new(false));
+    // The targets that took the opacity, and whether one would have given it to its characters.
+    let (took_opacity, characters_skipped) = (std::cell::RefCell::new(std::collections::BTreeSet::new()), std::cell::Cell::new(false));
     let paint_one = |n: &mut Node, index: Option<usize>, paint: &Paint| -> Result<()> {
         if index.is_none() && matches!(n.kind, NodeKind::Text(_)) {
             characters.borrow_mut().push(n.id);
@@ -779,7 +779,7 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
             for i in points {
                 if let Some(q) = m.points.get_mut(*i) {
                     q.opacity = o;
-                    took_opacity.set(true);
+                    took_opacity.borrow_mut().insert(n.id);
                 }
             }
             return;
@@ -788,7 +788,7 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
             if fill { n.appearance.fill_at_mut(index).map(|f| &mut f.opacity) } else { n.appearance.stroke_at_mut(index).map(|s| &mut s.opacity) };
         if let Some(item) = item {
             *item = o;
-            took_opacity.set(true);
+            took_opacity.borrow_mut().insert(n.id);
         }
     };
     // The objects counted: with a design's art, those with a row equal to the art's.
@@ -811,7 +811,7 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
         },
         |before, d, changed| {
             // An opacity that no target took is an error, which also takes back the paint given with it.
-            if opacity.is_some() && !took_opacity.get() {
+            if opacity.is_some() && took_opacity.borrow().is_empty() {
                 if characters_skipped.get() {
                     return Err(characters_have_no_opacity(cmd));
                 }
@@ -844,7 +844,9 @@ fn apply_paint_opacity(s: &mut Session, p: &Value, paint: Option<Paint>, opacity
         paint_new_art(s, paint, fill);
         s.remember_paint(paint);
     }
-    Ok(json!({"objects": ids.iter().collect::<std::collections::BTreeSet<_>>().len()}))
+    // An opacity alone counts only the targets that took it.
+    let objects = if paint.is_none() { took_opacity.borrow().len() } else { ids.iter().collect::<std::collections::BTreeSet<_>>().len() };
+    Ok(json!({"objects": objects}))
 }
 
 /// The instance whose object is selected with Direct Selection, and that object's path

@@ -298,7 +298,8 @@ fn type_beside_other_art_is_left_alone() {
     };
     let before = (node(&s, t), runs(&s));
     select(&mut s, &[r, t]);
-    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    let out = s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    assert_eq!(out["objects"], 1, "only the rectangle took the opacity");
     assert!((fill_opacity(&s, r) - 0.4).abs() < 1e-6);
     assert_eq!((node(&s, t), runs(&s)), before);
     select(&mut s, &[t]);
@@ -348,7 +349,8 @@ fn an_opacity_no_target_takes_is_an_error() {
     s.execute("paint.setFill", &json!({"opacity": 70})).unwrap();
     select(&mut s, &[a, b]);
     assert_eq!(proxies(&mut s)["fillOpacity"], 70.0, "the first selected object with a fill item answers");
-    s.execute("paint.setFill", &json!({"opacity": 20})).unwrap();
+    let out = s.execute("paint.setFill", &json!({"opacity": 20})).unwrap();
+    assert_eq!(out["objects"], 1, "the object without a fill item is not counted");
     assert!((fill_opacity(&s, b) - 0.2).abs() < 1e-6);
     assert!(node(&s, a).appearance.fill().is_none());
 }
