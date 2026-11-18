@@ -28,6 +28,7 @@ pub mod meshedit;
 pub mod mirror;
 pub mod nineslice;
 pub mod objects_on_path;
+pub mod option_check;
 pub mod params;
 pub mod pathtype;
 pub mod pen;
@@ -161,6 +162,18 @@ pub trait Tool: Send {
         Value::Null
     }
     fn set_option(&mut self, _key: &str, _value: &Value) {}
+    /// Whether [`Self::set_option`] takes `value` for option `key` as it is: an error names an
+    /// option the tool doesn't have, a value of the wrong type or a number out of range
+    /// (`tool.setOption` checks every option it is given with this before it sets any). A tool
+    /// without options takes none.
+    fn check_option(&self, key: &str, _value: &Value) -> Result<(), String> {
+        Err(option_check::unknown(key))
+    }
+    /// Whether [`Self::set_option`] takes all of `values`, set together in one call: by default
+    /// each one checked on its own with [`Self::check_option`].
+    fn check_options(&self, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+        values.iter().try_for_each(|(k, v)| self.check_option(k, v))
+    }
     /// Is an interaction in progress (drag, open pen path)?
     fn busy(&self) -> bool {
         false
@@ -273,8 +286,8 @@ pub trait Tool: Send {
         false
     }
     /// What the Info panel shows for the tool as it is now: the drag in progress (a move of the
-    /// selection, a gradient vector, a Scale, Rotate, Reflect or Shear tool drag), or the
-    /// Paintbrush's brush. None for a tool with nothing of its own to show.
+    /// selection, a gradient vector, a handle the Pen pulls out, a Scale, Rotate, Reflect or Shear
+    /// tool drag), or the Paintbrush's brush. None for a tool with nothing of its own to show.
     fn readout(&self, _cx: &ToolContext) -> Option<Readout> {
         None
     }
@@ -283,7 +296,8 @@ pub trait Tool: Send {
         vec![]
     }
     /// The tool, already active, is chosen again (its toolbar button, its shortcut, `tool.select`).
-    /// Most tools keep their state; the Blend tool finishes the blend it is adding to.
+    /// Most tools keep their state; the Blend tool finishes the blend it is adding to, and the Pen
+    /// ends the path it is drawing.
     fn chosen_again(&mut self, _cx: &ToolContext) -> Vec<Action> {
         vec![]
     }

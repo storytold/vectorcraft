@@ -53,17 +53,23 @@ pub fn entry<'a>(app: &VectorcraftApp, it: &'a Item) -> Option<Entry<'a>> {
             Entry::Item(Row {
                 command: Some((id, p)),
                 source: label,
-                label: effect_item_label(id, p)
-                    .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
-                    .or_else(|| spelling_item_label(id, p))
-                    .unwrap_or_else(|| display_label(app, id, label))
-                    .into(),
+                label: shown_label(app, id, p, label).into(),
                 shortcut: item_shortcut(id, p),
                 enabled,
                 checked,
             })
         }
     })
+}
+
+/// The label of the menu item that runs `id` with `p` and reads `label` in English, as the menus
+/// draw it in the UI language: an effect's own name (Pathfinder › Add), an object's name, a
+/// spelling suggestion, or [`display_label`].
+pub fn shown_label(app: &VectorcraftApp, id: &str, p: &Value, label: &str) -> String {
+    effect_item_label(id, p)
+        .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
+        .or_else(|| spelling_item_label(id, p))
+        .unwrap_or_else(|| display_label(app, id, label))
 }
 
 /// `Cmd+Shift+]` → `⇧⌘]` on macOS, `Ctrl+Shift+]` elsewhere.
@@ -109,13 +115,17 @@ pub struct MenuEntry {
     pub params: Value,
     pub enabled: bool,
     pub shortcut: String,
+    /// `path` as the menus draw it in the UI language: a plug-in's submenu and a Scripts folder
+    /// keep their names.
+    #[serde(skip)]
+    pub shown_path: Vec<String>,
 }
 
 /// Flattened menu for `ui.menu.list`.
 pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
     for (title, items) in menu_tree_named(app.session.prefs.font_names_in_english) {
-        flatten(app, vec![title.to_string()], &items, &mut out);
+        flatten(app, vec![title.to_string()], vec![crate::i18n::t(title).to_string()], &items, &mut out);
     }
     out
 }
@@ -123,7 +133,7 @@ pub fn menu_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
 /// Flattened canvas context menu for `ui.contextMenu.list` (paths are its submenus).
 pub fn context_entries(app: &VectorcraftApp) -> Vec<MenuEntry> {
     let mut out = vec![];
-    flatten(app, vec![], &context_items(app), &mut out);
+    flatten(app, vec![], vec![], &context_items(app), &mut out);
     out
 }
 
@@ -245,7 +255,7 @@ pub fn insertable_items(english_names: bool) -> Vec<InsertableItem> {
     out
 }
 
-fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
+pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String>, items: &[Item], out: &mut Vec<MenuEntry>) {
     for it in items {
         match it {
             Item::Cmd(l, id, p) => {
@@ -266,6 +276,7 @@ fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Ve
                     params: p.clone(),
                     enabled,
                     shortcut: item_shortcut(id, p).or_else(|| shortcut_of(id)).unwrap_or("").to_string(),
+                    shown_path: shown.clone(),
                 })
             }
             Item::Todo(l, sc) => out.push(MenuEntry {
@@ -275,11 +286,16 @@ fn flatten(app: &VectorcraftApp, path: Vec<String>, items: &[Item], out: &mut Ve
                 params: Value::Null,
                 enabled: false,
                 shortcut: sc.to_string(),
+                shown_path: shown.clone(),
             }),
             Item::Sub(l, ch) => {
                 let mut p = path.clone();
                 p.push(l.to_string());
-                flatten(app, p, ch, out);
+                // The menus draw a plug-in's submenu and a Scripts folder by their own names ([`entry`]).
+                let mut s = shown.clone();
+                let own = super::labels::holds_plugin_commands(ch) || crate::scripts_menu::is_folder(ch);
+                s.push(if own { l.to_string() } else { crate::i18n::t(l).to_string() });
+                flatten(app, p, s, ch, out);
             }
             _ => {}
         }

@@ -4473,6 +4473,58 @@ fn exit_isolation_leaves_a_locked_guide_path_deselected() {
     assert_eq!(selected(&s), vec![g]);
 }
 
+/// Exit Isolation Mode on an isolated sublayer isolates its parent layer and selects the sublayer, one
+/// layer per call, without an undo step; from the top-level layer it leaves isolation mode. `all: true`
+/// leaves from any depth, a hidden parent layer is not isolated (the call leaves), and a group in a
+/// sublayer still leaves in one call.
+#[test]
+fn exit_isolation_goes_up_one_layer_from_a_sublayer() {
+    let mut s = session();
+    let top = s.doc().unwrap().doc.layers[0].id;
+    let mid = id_of(&s.execute("layer.newSublayer", &json!({"parent": top.0})).unwrap());
+    let deep = id_of(&s.execute("layer.newSublayer", &json!({"parent": mid.0})).unwrap());
+    s.execute("layer.setCurrent", &json!({"id": deep.0})).unwrap();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    let isolation = |s: &Session| s.doc().unwrap().isolation;
+    let exit = |s: &mut Session, p: Value| s.execute("object.exitIsolation", &p).unwrap();
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    let before = history(&s);
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(mid), vec![deep]), "up from the deepest sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (Some(top), vec![mid]), "up from the middle sublayer");
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![top]), "out from the top-level layer");
+    assert_eq!(history(&s), before, "no undo step");
+
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": true}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![deep]), "all: true");
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    exit(&mut s, json!({"all": false}));
+    assert_eq!(isolation(&s), Some(mid), "all: false");
+    for bad in [json!({"all": 1}), json!({"all": "yes"}), json!({"all": null})] {
+        let e = s.execute("object.exitIsolation", &bad).unwrap_err().to_string();
+        assert!(e.contains("`all` must be true or false"), "{bad}: {e}");
+        assert_eq!(isolation(&s), Some(mid), "{bad}: still isolated");
+    }
+
+    // A parent layer hidden while its sublayer is isolated isn't isolated: the call leaves.
+    s.execute("object.isolate", &json!({"id": deep.0})).unwrap();
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": false})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!(isolation(&s), None, "hidden parent layer");
+    s.execute("layer.setProps", &json!({"id": mid.0, "visible": true})).unwrap();
+
+    sel(&mut s, &[a, b]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    s.execute("object.isolate", &json!({"id": g.0})).unwrap();
+    exit(&mut s, json!({}));
+    assert_eq!((isolation(&s), selected(&s)), (None, vec![g]), "a group in a sublayer");
+}
+
 /// Undo and Redo bring back a selection without the guides, ruler guides or guide paths, that
 /// Lock Guides has locked since, so a move after them leaves the guides where they are.
 #[test]
@@ -5688,4 +5740,21 @@ fn crop_image_trim_leaves_a_cmyk_image_alone() {
     s.execute("select.all", &json!({})).unwrap();
     let r = s.execute("object.cropImage", &json!({"trim": true})).unwrap();
     assert_eq!((r["trimmed"].as_bool(), r["width"].as_u64(), r["height"].as_u64()), (Some(false), Some(4), Some(2)), "{r}");
+}
+
+/// Lock Guides is not an undo step: it adds none, and undo and redo of the steps before it leave
+/// the guides locked.
+#[test]
+fn lock_guides_is_not_an_undo_step() {
+    let mut s = session();
+    let g = rect(&mut s, 200.0, 0.0, 10.0, 10.0);
+    sel(&mut s, &[g]);
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(s.guides_locked());
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(s.guides_locked());
 }

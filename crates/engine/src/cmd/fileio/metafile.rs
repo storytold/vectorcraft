@@ -26,13 +26,16 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>, kin
         Some(true) => pick.resolve(n).map_err(|e| bad(C, e))?.unwrap_or_else(|| (0..n).collect()),
         _ => vec![pick.one(n).map_err(|e| bad(C, e))?],
     };
+    let rects = boards
+        .iter()
+        .map(|&b| doc.artboards.get(b).map(|a| a.rect).ok_or_else(|| bad(C, format!("no artboard {}", b + 1))))
+        .collect::<Result<Vec<_>>>()?;
     // Raster effects (shadows, glows, blurs) as images, as PDF export does.
     let flat = crate::flatten_raster_effects(doc);
     let src = flat.as_ref().unwrap_or(doc);
+    let outs = vectorcraft_metafile::export_regions(src, &rects, kind).map_err(|e| bad(C, e))?;
     let mut enc = Encoded::default();
-    for b in boards {
-        let region = doc.artboards.get(b).ok_or_else(|| bad(C, format!("no artboard {}", b + 1)))?.rect;
-        let out = vectorcraft_metafile::export(src, region, kind).map_err(|e| bad(C, e))?;
+    for (b, out) in boards.into_iter().zip(outs) {
         enc.files.push((Some(b), out.bytes));
         for w in out.warnings {
             if !enc.warnings.contains(&w) {

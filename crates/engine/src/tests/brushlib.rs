@@ -110,6 +110,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "art-ribbons",
             "ink-and-wash",
             "calligraphic-nibs",
+            "pressure-sensitive",
             "bristle-brushes",
             "pattern-borders",
             "scatter-shapes",
@@ -131,19 +132,19 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         trails["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Speed Line", "Dash Trail", "Burst Ray", "Zigzag"]
     );
-    assert_eq!(libs[6]["count"].as_u64(), Some(4));
+    assert_eq!(libs[7]["count"].as_u64(), Some(4));
     let beams = run(&mut s, "brush.library", json!({"library": "energy-beams"}));
     assert_eq!(
         beams["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect::<Vec<_>>(),
         ["Laser Bolt", "Plasma Arc", "Charge Wave", "Spark Trail"]
     );
-    assert_eq!(libs[7]["count"].as_u64(), Some(4));
+    assert_eq!(libs[8]["count"].as_u64(), Some(4));
     let dry = run(&mut s, "brush.library", json!({"library": "Dry Media"}));
     assert_eq!(
         dry["brushes"].as_array().unwrap().iter().map(|b| (b["name"].as_str().unwrap(), b["type"].as_str().unwrap())).collect::<Vec<_>>(),
         [("Chalk Grain", "art"), ("Graphite Pencil", "art"), ("Wax Crayon", "art"), ("Charcoal Dust", "art")]
     );
-    assert_eq!((libs[8]["name"].as_str(), libs[8]["count"].as_u64()), (Some("Dry Media"), Some(4)));
+    assert_eq!((libs[9]["name"].as_str(), libs[9]["count"].as_u64()), (Some("Dry Media"), Some(4)));
     run(&mut s, "file.new", json!({"width": 200, "height": 200}));
     let id = run(&mut s, "shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 8}))["id"].as_u64().unwrap();
     let added = run(&mut s, "brush.addFromLibrary", json!({"library": "energy-beams", "name": "Laser Bolt", "apply": true, "ids": [id]}));
@@ -154,6 +155,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         ("art-ribbons", "art"),
         ("ink-and-wash", "art"),
         ("calligraphic-nibs", "calligraphic"),
+        ("pressure-sensitive", "art"),
         ("bristle-brushes", "bristle"),
         ("pattern-borders", "pattern"),
         ("scatter-shapes", "scatter"),
@@ -164,7 +166,7 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
         let (_, lib) = cmd::brushlib::library(&s, id).unwrap();
         assert!(lib.len() >= 4, "{id}");
         for b in &lib.brushes {
-            let kind = if b.name == "Brush Pen" { "calligraphic" } else { kind };
+            let kind = if ["Brush Pen", "Round Flow", "Chisel Flow"].contains(&b.name.as_str()) { "calligraphic" } else { kind };
             assert_eq!(b.kind.type_id(), kind, "{}", b.name);
             let mut line = vectorcraft_geom::BezPath::new();
             line.move_to((0.0, 0.0));
@@ -293,6 +295,52 @@ fn the_tech_circuit_library_constructs_adds_and_applies_each_brush() {
         assert_eq!(undo_len(&s), before);
     }
     let names: Vec<&str> = expected.iter().map(|(name, _)| *name).collect();
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
+}
+
+#[test]
+fn pressure_sensitive_brushes_widen_with_pen_pressure_and_survive_a_saved_library() {
+    let mut s = session();
+    let (_, lib) = cmd::brushlib::library(&s, "Pressure Sensitive").unwrap();
+    let names = ["Flex Ribbon", "Pulse Stroke", "Round Flow", "Chisel Flow"];
+    assert_eq!(lib.brushes.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), names);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 40, "x2": 190, "y2": 40}))["id"].as_u64().unwrap();
+    let mut curve = line_to(20.0);
+    curve.curve_to((60.0, -25.0), (140.0, 25.0), (180.0, 0.0));
+    for b in &lib.brushes {
+        let width_at = |pressure| {
+            let stroke = vectorcraft_doc::StrokeLayer {
+                pressure: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, pressure), (1.0, pressure)] }),
+                ..black_stroke()
+            };
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line_to(180.0), &stroke);
+            let points = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{} at pressure {pressure}", b.name);
+            let min = points.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+            let max = points.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+            max - min
+        };
+        let light = width_at(0.0);
+        let heavy = width_at(1.0);
+        for width in [light, heavy] {
+            assert!(width.is_finite() && width > 0.0, "{}: light={light}, heavy={heavy}", b.name);
+        }
+        assert!(heavy > light * 1.3, "{}: light={light}, heavy={heavy}", b.name);
+        for line in [line_to(2.0), curve.clone()] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &line, &black_stroke());
+            let points = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!points.is_empty() && points.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        }
+        let before = undo_len(&s);
+        let added = run(&mut s, "brush.addFromLibrary", json!({"library": "pressure-sensitive", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&added["added"]), [b.name.as_str()]);
+        assert_eq!(added["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+    }
     let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
     let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
     let reopened = vectorcraft_format::load(&bytes).unwrap();
