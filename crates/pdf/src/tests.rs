@@ -223,6 +223,60 @@ fn an_instance_whose_art_reaches_the_page_is_written() {
     assert!(fills.contains(&[255, 0, 0, 255]) && fills.contains(&[0, 0, 255, 255]), "{fills:?}");
 }
 
+/// 2,000 symbols, then two named "Mark" (a red square, then a blue one), with an instance of
+/// "Mark" at (25, 25) and, in a knockout group above a green square, a half-opaque one at (70, 70).
+/// With `second` the blue square's symbol is named that instead.
+fn marks(second: &str) -> Document {
+    let mut d = doc(100.0, 100.0);
+    for i in 0..2000 {
+        let art = rect_node(Rect::new(0.0, 0.0, 1.0, 1.0), Color::BLACK);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: format!("Filler {i}"), art: Arc::new(art) });
+    }
+    for (name, color) in [("Mark", Color::rgb(1.0, 0.0, 0.0)), (second, Color::rgb(0.0, 0.0, 1.0))] {
+        let art = rect_node(Rect::new(-10.0, -10.0, 10.0, 10.0), color);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+    }
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((25.0, 25.0)) }));
+    let green = rect_node(Rect::new(60.0, 60.0, 80.0, 80.0), Color::rgb(0.0, 1.0, 0.0));
+    let mut above = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((70.0, 70.0)) });
+    above.opacity = 0.5;
+    let mut group = Node::group(NodeId(0), vec![Arc::new(green), Arc::new(above)]);
+    group.knockout = vectorcraft_doc::Knockout::On;
+    add(&mut d, group);
+    d
+}
+
+/// Instances among many symbols are written with the first symbol of their name, the same bytes
+/// as when no other symbol has that name.
+#[test]
+fn instances_are_written_with_the_first_symbol_of_their_name() {
+    let d = marks("Mark");
+    assert!(uncompressed(&d) == uncompressed(&marks("Other")), "the files differ");
+    let fills: Vec<[u8; 4]> = leaves(&roundtrip(&d)).iter().filter_map(|n| Some(n.appearance.fill_paint().color()?.to_rgba8(1.0))).collect();
+    assert!(fills.contains(&[255, 0, 0, 255]) && !fills.contains(&[0, 0, 255, 255]), "{fills:?}");
+}
+
+/// An export of 300 instances with drop shadows, among 2,000 symbols, reads the symbol list once
+/// to find their symbols.
+#[test]
+fn an_export_reads_the_symbol_list_once() {
+    let mut d = marks("Other");
+    for i in 0..300 {
+        let xf = Affine::translate((f64::from(i % 20) * 5.0, f64::from(i / 20) * 5.0)) * Affine::scale(0.2);
+        let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf });
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "stylize.dropShadow".into(),
+            params: serde_json::json!({"x": 1, "y": 1, "blur": 0}),
+            visible: true,
+        });
+        add(&mut d, n);
+    }
+    let before = vectorcraft_doc::symbols_read();
+    export(&d, &PdfOptions::default()).expect("export");
+    let read = vectorcraft_doc::symbols_read() - before;
+    assert!(read <= d.symbols.len(), "{read} symbols read, {} in the document", d.symbols.len());
+}
+
 #[test]
 fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     // The symbol's art: a line from (0, 40) to (0, 60) with a 1 pt stroke painted by a 20 pt round
@@ -1393,6 +1447,41 @@ fn empty_and_populated_file_info_preserve_key_presence() {
     }
     assert!(s.contains("Synthetic title") && s.contains("Test author") && s.contains("test keyword"));
     assert!(s.contains("/ViewerPreferences<</DisplayDocTitle true>>"), "viewers should show the document title (#3646)");
+}
+
+/// The text of the `/Lang` entry of the catalog of `pdf` (a literal string), if any.
+fn catalog_lang(pdf: &[u8]) -> Option<String> {
+    let xref = crate::patch::Xref::read(pdf).expect("a cross-reference table");
+    let root = xref.trailer_ref(pdf, b"/Root").expect("a catalog");
+    let (start, end) = xref.dict(pdf, root).expect("the catalog's dictionary");
+    let catalog = String::from_utf8_lossy(&pdf[start..end]).into_owned();
+    let at = catalog.find("/Lang")? + "/Lang".len();
+    let rest = catalog[at..].trim_start().strip_prefix('(').expect("a literal string");
+    Some(rest[..rest.find(')').expect("a closed string")].to_string())
+}
+
+/// The catalog gives the document language chosen in Document Setup as its BCP 47 tag, in
+/// exported and printed PDFs, and the XMP packet says it too (#3644).
+#[test]
+fn the_catalog_gives_the_document_language() {
+    let mut d = doc(100.0, 100.0);
+    for (language, tag) in [(None, "en-US"), (Some("French"), "fr"), (Some("German: Swiss"), "de-CH")] {
+        if let Some(language) = language {
+            d.setup.language = language.into();
+        }
+        for opts in [PdfOptions::uncompressed(), PdfOptions::default()] {
+            let bytes = export(&d, &opts).unwrap();
+            assert_eq!(catalog_lang(&bytes).as_deref(), Some(tag), "{language:?}");
+        }
+        // Print to PDF writes its file with the same writer.
+        let printed = print(&d, &PrintOptions { created: Some(1_700_000_000), ..Default::default() }).unwrap();
+        assert_eq!(catalog_lang(&printed.bytes).as_deref(), Some(tag), "{language:?}: printed");
+        let s = uncompressed(&d);
+        assert!(s.contains(&format!("<dc:language><rdf:Bag><rdf:li>{tag}</rdf:li></rdf:Bag></dc:language>")), "{language:?}: {s}");
+    }
+    // A language without a tag (from a file) writes none rather than a guess.
+    d.setup.language = "Klingon".into();
+    assert_eq!(catalog_lang(&export(&d, &PdfOptions::uncompressed()).unwrap()), None);
 }
 
 /// A function or colour space built on itself is refused before the interpreter builds it (by
