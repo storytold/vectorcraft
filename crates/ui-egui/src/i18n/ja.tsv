@@ -5008,6 +5008,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	no bounds	境界がありません
 @msg	no current layer	現在のレイヤーがありません
 @msg	no key object	キーオブジェクトが設定されていません
+@msg	Align to Key Object isn't available with the Artboard tool	アートボードツールでは「キーオブジェクトに整列」を使用できません
 @msg	no previous transform	前回の変形がありません
 @msg	nothing to align	整列するものがありません
 @msg	select a clip group	クリップグループを選択してください

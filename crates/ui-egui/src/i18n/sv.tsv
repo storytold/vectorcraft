@@ -5137,6 +5137,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	no graphic style `{n}`	ingen grafisk stil `{n}`
 @msg	no interaction in progress	ingen interaktion pågår
 @msg	no key object	inget nyckelobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	Justera mot nyckelobjekt är inte tillgängligt med ritytsverktyget
 @msg	no library `{key}` (see {list})	inget bibliotek `{key}` (se {list})
 @msg	no native format	inget eget format
 @msg	no pages	inga sidor

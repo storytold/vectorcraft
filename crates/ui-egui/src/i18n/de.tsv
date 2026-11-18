@@ -5141,6 +5141,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	no graphic style `{n}`	kein Grafikstil `{n}`
 @msg	no interaction in progress	keine Interaktion im Gange
 @msg	no key object	kein Basisobjekt
+@msg	Align to Key Object isn't available with the Artboard tool	„An Basisobjekt ausrichten“ ist mit dem Zeichenflächen-Werkzeug nicht verfügbar
 @msg	no library `{key}` (see {list})	keine Bibliothek `{key}` (siehe {list})
 @msg	no native format	kein natives Format
 @msg	no pages	keine Seiten

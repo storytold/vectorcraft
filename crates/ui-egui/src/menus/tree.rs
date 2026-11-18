@@ -164,6 +164,11 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         cp("Vertical Align Top", "object.align", json!({"vertical": "top"})),
                         cp("Vertical Align Center", "object.align", json!({"vertical": "center"})),
                         cp("Vertical Align Bottom", "object.align", json!({"vertical": "bottom"})),
+                        Sep,
+                        // The Align panel's Align To choices, checked as the panel shows them.
+                        c("Align to Selection", "align.toSelection"),
+                        c("Align to Key Object", "align.toKeyObject"),
+                        c("Align to Artboard", "align.toArtboard"),
                     ],
                 ),
                 // The Align panel's Distribute Objects and Distribute Spacing buttons: each item runs

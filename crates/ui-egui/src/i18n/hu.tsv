@@ -5918,6 +5918,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	no graphic style `{n}`	nincs ilyen grafikai stílus: `{n}`
 @msg	no interaction in progress	nincs folyamatban lévő művelet
 @msg	no key object	nincs kulcsobjektum
+@msg	Align to Key Object isn't available with the Artboard tool	az „Igazítás a kulcsobjektumhoz” nem érhető el a Rajztábla eszközzel
 @msg	no library `{id}`	nincs ilyen könyvtár: `{id}`
 @msg	the library has another item of that kind named `{name}`	a könyvtárban már van egy másik ilyen fajta elem `{name}` néven
 @msg	no library `{key}` (see {list})	nincs ilyen könyvtár: `{key}` (lásd: {list})

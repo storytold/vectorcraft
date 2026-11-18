@@ -376,6 +376,24 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} the Align panel's Horizontal Distribute Space button: object.distributeSpacing {axis: \"horizontal\"} with to: \"key\" while there is a key, else the Align To choice, and spacing: the Distribute Spacing value while there is a key; with the Artboard tool chosen, the artboard command of the same name (artboard.distribute, artboard.distributeSpacing) with the same direction on the artboards the tool has selected, to: \"artboard\" (the active artboard) and spacing: the Distribute Spacing value while Align to Artboard is chosen, else \"selection\"",
     ),
     (
+        "align.toSelection",
+        "Align to Selection",
+        "",
+        "{} the Align panel's Align to Selection button: Align To becomes Selection (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: the choice the Align panel then shows: \"selection\", or \"artboard\" while one object is selected, since one object aligns to the artboard}; with the Artboard tool chosen the selected objects keep their key",
+    ),
+    (
+        "align.toKeyObject",
+        "Align to Key Object",
+        "",
+        "{} the Align panel's Align to Key Object button: with no key, the topmost of two or more selected objects becomes the key object, or a ruler guide selected with one object the key guide; the stored Selection or Artboard choice stays → {alignTo: \"key\"}; an error (\"no key object\") when there is no key and nothing to make one of, which includes a topmost selected object inside another selected object; an error (\"Align to Key Object isn't available with the Artboard tool\") with the Artboard tool chosen",
+    ),
+    (
+        "align.toArtboard",
+        "Align to Artboard",
+        "",
+        "{} the Align panel's Align to Artboard button: Align To becomes Artboard (saved with the preferences, ui.inspect › ui.align_to) and the key object, key guide or key anchor is let go → {alignTo: \"artboard\"}; with the Artboard tool chosen the selected objects keep their key",
+    ),
+    (
         "type.bold",
         "Bold",
         "",
