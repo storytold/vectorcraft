@@ -13435,16 +13435,22 @@ Commands:
   where it touches the upper one; where a straight side of a path lies along the line, the line covers the whole
   side. An ellipse drawn with the Ellipse tool, then moved, turned or scaled, is measured as an exact ellipse. Any
   other path must be closed, have one outline, bend the same way all around and have at most 10,000 segments; an open
-  path, a path that bends inward, a path without area, a group, a compound path or type is refused, and so are two
-  paths whose outlines are the same to within the touching tolerance given below. Two separate paths have two
-  external and two internal tangents. Overlapping paths have external tangents only. A path inside the other has
-  none. Paths that touch, from outside or from inside, share one tangent there instead: a line centered on the point
-  where they touch and as long as the narrower path is wide along it. Paths that meet at a corner or along a shared
-  stretch of outline get one such line, at the middle of the directions that touch both. Paths count as touching when
-  the gap between them is less than the tolerance, a billionth of the larger of their sizes and the distance between
-  their centers. The lines are stroked with the current stroke color and weight (black when the stroke is None), have
-  no fill, go directly above the upper of the two paths and are selected; one undo step. When there is no tangent of
-  the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
+  path, a path that bends inward, a path without area (other than a point, described below), a group, a compound
+  path or type is refused, and so are two paths whose outlines are the same to within the touching tolerance given
+  below. Two separate paths have two external and two internal tangents. Overlapping paths have external tangents
+  only. A path inside the other has none. Paths that touch, from outside or from inside, share one tangent there
+  instead: a line centered on the point where they touch and as long as the narrower path is wide along it. Paths
+  that meet at a corner or along a shared stretch of outline get one such line, at the middle of the directions that
+  touch both. Paths count as touching when the gap between them is less than the tolerance, a billionth of the larger
+  of their sizes and the distance between their centers. One of the two may be a point instead, a path of one
+  anchor: the lines then run from the point to where they touch the path, two when the point lies outside it (one
+  that lies along a straight side covers the whole side), one when the point lies on its outline (centered on the
+  point and as long as the path is wide along it, or the whole straight side the point lies on), and none when it
+  lies inside. Every `tangents` value gives the same lines, counted in `internal` when `tangents` is `internal` and
+  in `external` otherwise; the centerline runs from the point to the path's center. Two points are refused with
+  "select two closed paths". The lines are stroked with the current stroke color and weight (black when the stroke
+  is None), have no fill, go directly above the upper of the two paths and are selected; one undo step. When there
+  is no tangent of the kind asked for, nothing changes, and the result's `warning` says why. Common Tangents…
   opens a dialog (Tangents, Centerline) with Preview. → `{ids, external, internal, centerline, warning?}`
   (`centerline`: the centerline's id, or null).
 

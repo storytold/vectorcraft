@@ -7085,6 +7085,7 @@ breakText	Glyphs	Glif
 @msg	One path lies inside the other, so they have no common tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung persekutuan
 @msg	The paths overlap, so they have no internal tangents	Jalur-jalur saling tumpang tindih, sehingga tidak ada garis singgung dalam
 @msg	One path lies inside the other, so they have no internal tangents	Satu jalur berada di dalam jalur lainnya, sehingga tidak ada garis singgung dalam
+@msg	The point lies inside the path, so it has no tangents	Titik berada di dalam jalur, sehingga tidak ada garis singgung
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Perluas garis putus menjadi jalur
 @msg	select paths with dashed strokes to expand	pilih jalur dengan stroke putus-putus yang akan diperluas
