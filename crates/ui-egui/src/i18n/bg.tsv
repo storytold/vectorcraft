@@ -127,6 +127,7 @@
 	Add to Swatches	Добавяне към образци
 	Add Used Colors	Добавяне на използваните цветове
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
+	Plug-in Instruction Budget	Бюджет на инструкции за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
 	Adjust Adjoining Width Points	Регулиране на прилежащите точки за ширина
 	Incoming	Входяща
@@ -3362,6 +3363,9 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Търсене на команди, инструменти, панели и ефекти…
 	No commands match	Няма съвпадащи команди
 	{pos} of {total}: {name}	{pos} от {total}: {name}
+	No menu item	Няма елемент в менюто
+	Toolbar	Лента с инструменти
+	{toolbar}, in the {tool} group	{toolbar}, в групата на {tool}
 @plural	{n} result|{n} results	{n} резултат|{n} резултата
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди

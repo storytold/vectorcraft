@@ -257,6 +257,7 @@
 	Add Used Colors	उपयोग किए रंग जोड़ें
 	Additional Fonts Folder	अतिरिक्त फ़ॉन्ट फ़ोल्डर
 	Additional Plug-ins Folder	अतिरिक्त प्लग-इन फ़ोल्डर
+	Plug-in Instruction Budget	प्लग-इन निर्देश बजट
 	Adjust Adjoining Width Points	सटे हुए चौड़ाई पॉइंट समायोजित करें
 	Incoming	आने वाली ओर
 	Outgoing	जाने वाली ओर
@@ -4657,6 +4658,9 @@ antiAlias	Sharp	शार्प
 	Search commands, tools, panels and effects…	आदेश, टूल, पैनल्स और इफ़ेक्ट्स खोजें…
 	No commands match	कोई आदेश मेल नहीं खाता
 	{pos} of {total}: {name}	{total} में से {pos}: {name}
+	No menu item	कोई मेनू आइटम नहीं
+	Toolbar	टूलबार
+	{toolbar}, in the {tool} group	{toolbar}, {tool} समूह में
 @plural	{n} result|{n} results	{n} परिणाम|{n} परिणाम
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।|{n} में से {shown} परिणाम। इन्हें सीमित करने के लिए लिखते रहें।
 	Recent Commands	हाल के आदेश
@@ -6856,6 +6860,7 @@ antiAlias	Sharp	शार्प
 @msg	a linked JavaScript file is outside the read roots	एक लिंक की गई जावास्क्रिप्ट फ़ाइल पढ़ने की जड़ों के बाहर है
 @msg	a linked image file is outside the read roots	एक लिंक की गई छवि फ़ाइल पढ़ने की जड़ों के बाहर है
 @msg	a linked file's export folder is outside the read roots	एक लिंक की गई फ़ाइल का निर्यात फ़ोल्डर पढ़ने की जड़ों के बाहर है
+@msg	a linked file's editing data can't be read to check it against the read roots	एक लिंक की गई फ़ाइल का संपादन डेटा पढ़ने की जड़ों से जाँचने के लिए पढ़ा नहीं जा सकता
 @msg	the library's file is outside the read roots	लाइब्रेरी की फ़ाइल पढ़ने की जड़ों के बाहर है
 @msg	{file} names more than one linked JavaScript file	{file} एक से अधिक लिंक की गई जावास्क्रिप्ट फ़ाइलों से मेल खाता है
 @msg	automation path rejected: outside the write root {root}: {path}	स्वचालन पाथ खारिज: लिखने की जड़ के बाहर {root}: {path}
