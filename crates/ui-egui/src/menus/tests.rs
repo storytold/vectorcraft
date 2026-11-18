@@ -605,6 +605,30 @@ fn color_settings_and_assign_profile_show_the_separations_panel() {
     }
 }
 
+/// Edit › Refresh Monitor Profile, after Assign Profile…, asks the desktop app's next frame to read
+/// the display's profile; it is off and refused with the preference off or nothing to read it.
+#[test]
+fn refresh_monitor_profile_asks_for_a_reading_of_the_display_profile() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let entries = menu_entries(&app);
+    let at = |label: &str| entries.iter().position(|e| e.label == label && e.path == ["Edit"]);
+    assert_eq!(at("Refresh Monitor Profile"), at("Assign Profile…").map(|i| i + 1));
+    let e = &entries[at("Refresh Monitor Profile").unwrap()];
+    assert_eq!((e.command.as_deref(), e.shortcut.as_str()), (Some("view.refreshMonitorProfile"), ""));
+    // Nothing reads the display's profile (the web build, tests).
+    assert!(!enabled(&app, "view.refreshMonitorProfile"));
+    assert_eq!(app.run("view.refreshMonitorProfile", json!({})).unwrap_err(), "this build doesn't read display profiles");
+    app.display_profile.attach_reader();
+    assert!(enabled(&app, "view.refreshMonitorProfile"));
+    assert_eq!(app.run("view.refreshMonitorProfile", json!({})).unwrap(), json!({"requested": true}));
+    assert!(app.display_profile.take_request());
+    // With the preference off nothing is asked for.
+    app.session.prefs.monitor_profile_display = false;
+    assert!(!enabled(&app, "view.refreshMonitorProfile"));
+    assert_eq!(app.run("view.refreshMonitorProfile", json!({})).unwrap_err(), "turn on Use Monitor Profile for Canvas first");
+    assert!(!app.display_profile.read_requested());
+}
+
 #[test]
 fn saved_views_store_and_restore_the_view() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
