@@ -5511,6 +5511,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	no such spine point	selkärangan pistettä ei ole
 @msg	`with` must be a list of at most 10000 spine point indexes	`with`-arvon on oltava luettelo, jossa on enintään 10000 selkärangan pisteen indeksiä
 @msg	`with` moves points, not a handle	`with` siirtää pisteitä, ei kahvaa
+@msg	`link` and `independent` cannot both be true	`link` ja `independent` eivät voi olla molemmat true
+@msg	`link` places a handle: give `handle`	`link` sijoittaa kahvan: anna `handle`
 @msg	no such spine segment	selkärangan segmenttiä ei ole
 @msg	no such subpath	alipolkua ei ole
 @msg	no such user library	käyttäjäkirjastoa ei ole

@@ -2239,7 +2239,7 @@ naming the key, and leave the document and its undo history as they were: `opaci
 The blend and envelope commands refuse a string, a number or another value that is not true or false with
 `` `smooth` must be true or false ``, naming the key, and leave the document, its undo history and the options new
 blends and envelopes start with as they were: `smooth` in `object.blend.make` and `object.blend.options`;
-`independent` in `object.blend.spine.moveAnchor`; `perpendicular` in `object.blend.spine.reshapeSegment`; `horizontal`
+`independent` and `link` in `object.blend.spine.moveAnchor`; `perpendicular` in `object.blend.spine.reshapeSegment`; `horizontal`
 in `object.envelope.makeWithWarp`, `resetWithWarp` and `options`, also when an `orientation` is given; `maintainShape`
 in `object.envelope.resetWithMesh`; `antiAlias`, `distortAppearance`, `distortLinearGradients` and
 `distortPatternFills` in `object.envelope.options`; and `editing` in `object.envelope.editContents`. A null is read as
@@ -6380,7 +6380,8 @@ on the cut paths ([the help page](https://helpx.adobe.com/illustrator/desktop/dr
 VectorCraft's own rules: every stroke row is reset, hidden ones included; a path of several subpaths has one appearance,
 so a cut in one subpath centers the strokes of its other subpaths too, closed ones included; a cut member of a compound
 path centers the compound path's strokes; strokes already centered are left as they are. The Pen with Alt
-held over a selected path's handle, anchor or segment works as the Anchor Point tool. `press_key` Escape between two
+held over a selected path's handle, anchor or segment works as the Anchor Point tool, except that an Alt-drag on a
+handle still moves that handle alone. `press_key` Escape between two
 `pointer_gesture` calls of an Anchor Point drag cancels it: the path goes back and no undo step is added. `path.reshapeSegment {id,
 subpath?, segment, t, dx, dy, perpendicular?}` (a segment dragged with Direct Selection or the Anchor Point tool) moves the segment's
 point at `t` by `dx`, `dy`: a smooth anchor at either end stays smooth, its other handle turning with the moved one.
@@ -6399,6 +6400,14 @@ is not a whole number of 0 or more, such as 1.5, -1 or "1" ("`subpath` must be a
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 `path.moveAnchor` to the point the anchor is at, and `path.setHandle` to the point the handle is at on an anchor that
 keeps its kind, leave the document as it is and record no undo step.
+`path.setHandle` with `link: true` (the Anchor Point tool's Alt-drag on a handle) places the handle and makes the
+anchor smooth: the other handle turns to lie in line on the far side of the anchor and keeps its length. A retracted
+other handle is pulled out to the placed handle's length when a segment leaves the anchor on its side, and stays
+retracted at an end of an open path. A handle placed on its anchor gives no direction, so only that handle moves. A
+request that leaves the anchor as it is records no undo step, and `link: true` with `independent: true` is refused
+("`link` and `independent` cannot both be true"), as is an x or y of 1e9 pt or more in size with `link: true`
+("x and y must be finite"). `object.blend.spine.moveAnchor` takes `link` with `handle` in the
+same way for a blend's spine point; without `handle` it is refused. These rules are VectorCraft's own.
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
@@ -6516,7 +6525,7 @@ Left out or null, `width` is 8 pt. The range is VectorCraft's own value.
 
 These commands refuse a string, a number or another value that is not true or false with
 `` `closed` must be true or false ``, naming the key; the document does not change and no undo step is recorded:
-`independent` in `path.close` and `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
+`independent` in `path.close` and `path.setHandle`; `link` in `path.setHandle`; `patterns` in `path.moveAnchors`; `closed`, `keepSelected` and
 `fill` in `path.freehand` (and in `brush.freehand`); `closed` and the `corner` of a point in `path.curvature`; `corner`
 in `path.curvatureEdit`; `perpendicular` in `path.reshapeSegment`; and `keepSelected`, `mergeOnlySelection` and
 `merge` in `path.blob`. A null is read as a key left out.
