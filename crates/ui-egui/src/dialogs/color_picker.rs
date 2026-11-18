@@ -103,11 +103,22 @@ impl Channel {
             Channel::Green => "G",
         }
     }
-    fn is_hsb(self) -> bool {
+    /// The channel's name, translated: Hue, Saturation, Brightness, Red, Green or Blue.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Channel::Hue => tl!("Hue"),
+            Channel::Saturation => tl!("Saturation"),
+            Channel::Brightness => tl!("Brightness"),
+            Channel::Red => tl!("Red"),
+            Channel::Green => tl!("Green"),
+            Channel::Blue => tl!("Blue"),
+        }
+    }
+    pub(crate) fn is_hsb(self) -> bool {
         matches!(self, Channel::Hue | Channel::Saturation | Channel::Brightness)
     }
     /// Indices of (slider, field x, field y) into the channel's space: [h, s, b] or [r, g, b].
-    fn axes(self) -> (usize, usize, usize) {
+    pub(crate) fn axes(self) -> (usize, usize, usize) {
         match self {
             Channel::Hue => (0, 1, 2),
             Channel::Saturation => (1, 0, 2),
@@ -119,7 +130,7 @@ impl Channel {
     }
     /// The color field's axes (across, up) as keys and screen readers see them: hue in degrees,
     /// saturation and brightness in percent, red, green and blue from 0 to 255.
-    fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
+    pub(crate) fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
         let axis = |i: usize| {
             let (name, units, suffix) = match (self.is_hsb(), i) {
                 (true, 0) => (tl!("Hue"), 360.0, "°"),
@@ -282,6 +293,19 @@ pub(super) fn over_effect(parent: &Dialog, field: &str, colour: Color) -> Dialog
     );
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     store(&mut d, &Picked::of(colour));
+    d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
+    d
+}
+
+/// The entry of the dialog's color list that a Color Picker opened with [`over_list_entry`] sets.
+const COLOUR_INDEX: &str = "__colourIndex";
+
+/// The Color Picker over the dialog `parent`, on `colour`, that sets entry `index` of the dialog's
+/// list of colors `field` (Document Setup's `gridColors`) with its OK and goes back to it, leaving
+/// the other entries as they are. Cancel goes back to `parent` as it was. It previews nothing.
+pub(super) fn over_list_entry(parent: &Dialog, field: &str, index: usize, colour: Color) -> Dialog {
+    let mut d = over_effect(parent, field, colour);
+    d.fields.insert(COLOUR_INDEX.into(), json!(index));
     d
 }
 
@@ -360,6 +384,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
     let p = picked(d);
     let original = d.fields.get("original").and_then(color_value).unwrap_or(p.color);
     let gamut = gamut_fix(app, ui.ctx(), "picker-gamut", &p.color);
+    super::modal::fits_itself(ui);
     let (side, values_w, button_w, stacked) = layout_size(ui);
     let field_w = side + SLIDER_GAP + SLIDER_W;
     let content_w = if stacked { field_w.max(values_w) } else { field_w + COLUMN_GAP + values_w };
@@ -406,10 +431,19 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                             let track = |z: f32| c32(&Picked::of(slider_color(channel, z, x, y)).snapped(web).color);
                             let (v, suffix, max) = channel_value(channel, &p);
                             let shown = widgets::SliderValue::field(v as f64, 0.0..=max as f64, suffix, 0);
-                            if let (Some(z), _) =
-                                widgets::channel_slider_valued(ui, "cp-slider", tl!(channel.label()), Some(shown), z, vec2(SLIDER_W, side), &track)
-                            {
-                                pick = Some(field_pick(channel, z, x, y));
+                            match widgets::channel_slider_stepped(
+                                ui,
+                                "cp-slider",
+                                tl!(channel.label()),
+                                Some(shown),
+                                z,
+                                true,
+                                vec2(SLIDER_W, side),
+                                &track,
+                            ) {
+                                (Some(z), ..) => pick = Some(field_pick(channel, z, x, y)),
+                                (None, _, Some(v)) => pick = Some(field_pick(channel, (v / max as f64) as f32, x, y)),
+                                _ => {}
                             }
                         });
                     }
@@ -495,13 +529,18 @@ fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
     if unchanged || !selected {
         return;
     }
-    let _ = app.session.begin_interaction(if artboard {
+    let label = if artboard {
         "Artboard Options"
     } else if d.bool("stroke") {
         "Stroke Color"
     } else {
         "Fill Color"
-    });
+    };
+    // A failure to begin (typing that can't be kept) shows, and nothing previews.
+    if let Err(e) = app.begin_interaction(label) {
+        app.status(e);
+        return;
+    }
     if let Err(e) = app.session.preview(cmd, &params) {
         app.status(e.to_string());
     }
@@ -724,7 +763,20 @@ fn swatch_list(app: &VectorcraftApp, ui: &mut Ui, d: &mut Dialog, current: &Colo
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(field) = d.fields.get(COLOUR_FIELD).and_then(Value::as_str) {
         let mut parent = super::parent(d).ok_or("the dialog it was opened over is no longer open")?;
-        parent.fields.insert(field.to_string(), json!(picked(d).color.to_hex()));
+        let hex = json!(picked(d).color.to_hex());
+        match d.fields.get(COLOUR_INDEX) {
+            None => {
+                parent.fields.insert(field.to_string(), hex);
+            }
+            Some(index) => {
+                let entry = index
+                    .as_u64()
+                    .and_then(|i| usize::try_from(i).ok())
+                    .and_then(|i| parent.fields.get_mut(field)?.as_array_mut()?.get_mut(i))
+                    .ok_or("no such color")?;
+                *entry = hex;
+            }
+        }
         // The dialog previews the new colour when it comes back: end this picker's interaction, as
         // Cancel does, so the dialog starts its preview afresh.
         let _ = app.session.cancel_interaction();

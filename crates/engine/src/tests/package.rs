@@ -405,6 +405,177 @@ fn a_confined_package_refuses_a_linked_javascript_file_outside_the_read_root() {
     assert_eq!(r["links"], 1, "{r}");
 }
 
+/// A confined request packages no linked file it would copy as it is (a PDF with Preserve Editing,
+/// or a native document it does not rewrite) whose native document keeps an Export for Screens
+/// folder outside its read roots: the package is refused before anything is written, with an error
+/// that names no file or folder. A native document the package rewrites leaves the folder out, a
+/// folder inside the roots is packaged, and the person's package copies every file.
+#[test]
+fn a_confined_package_refuses_a_linked_file_that_keeps_an_export_folder_outside_the_read_root() {
+    let away = Folder::new("package-folder-away");
+    let home = Folder::new("package-folder-home");
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned()];
+    let out = home.file("out");
+    let package = |s: &mut Session, p: Value| crate::file_access::confine(Some(&roots), || s.execute("file.package", &p));
+    let refused = |s: &mut Session, p: Value| {
+        let e = package(s, p.clone()).expect_err("refused");
+        assert!(matches!(e, EngineError::BadParams { .. }), "{p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked file's export folder is outside the read roots"), "{p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{p} names {h}: {e}");
+        }
+        assert!(!std::path::Path::new(&out).exists(), "{p}");
+    };
+    let mut part = session();
+    run(&mut part, "shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30}));
+    std::fs::create_dir_all(home.0.join("art")).unwrap();
+    let native = home.file("art/part.vectorcraft");
+    let pdf = home.file("art/part.pdf");
+    let keep = |part: &mut Session, folder: &str| {
+        std::sync::Arc::make_mut(&mut part.doc_mut().unwrap().doc).export_settings = serde_json::from_value(json!({"folder": folder})).unwrap();
+        save(part, &native);
+        let r = run(part, "document.serialize", json!({"format": "pdf"}));
+        write(&pdf, &vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    };
+    keep(&mut part, &away.0.to_string_lossy());
+    let poster = |placed: &str| {
+        let mut s = session();
+        let r = run(&mut s, "file.place", json!({"path": placed, "link": true}));
+        assert_eq!(r["linked"], true, "{r}");
+        save(&mut s, &home.file("poster.vectorcraft"));
+        s
+    };
+    let mut s = poster(&pdf);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    let mut s = poster(&native);
+    refused(&mut s, json!({"folder": out, "relink": false}));
+    // Rewritten, the copy leaves the folder out.
+    let r = package(&mut s, json!({"folder": out})).unwrap();
+    assert_eq!(r["links"], 1, "{r}");
+    let copied = std::fs::read(std::path::Path::new(&out).join("poster Folder/Links/part.vectorcraft")).unwrap();
+    assert_eq!(vectorcraft_format::load_file(&copied).unwrap().doc.export_settings.get("folder"), None);
+    std::fs::remove_dir_all(&out).unwrap();
+    // A folder inside the read roots.
+    keep(&mut part, &home.file("screens"));
+    let mut s = poster(&pdf);
+    assert_eq!(package(&mut s, json!({"folder": out})).unwrap()["links"], 1);
+}
+
+/// A confined request packages no linked file whose native document it can't read to check against
+/// its read roots: a PDF that needs a password to open, and a native document that doesn't load,
+/// even inside the roots. The package is refused before anything is written, with an error that
+/// names no file or folder. A PDF without editing data is copied, and the person's package copies
+/// every file.
+#[test]
+fn a_confined_package_refuses_a_linked_file_whose_editing_data_cannot_be_read() {
+    let home = Folder::new("package-unreadable-home");
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let out = home.file("out");
+    let package = |s: &mut Session, p: Value| crate::file_access::confine(Some(&roots), || s.execute("file.package", &p));
+    let refused = |s: &mut Session, p: Value| {
+        let e = package(s, p.clone()).expect_err("refused");
+        assert!(matches!(e, EngineError::BadParams { .. }), "{p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked file's editing data can't be read to check it against the read roots"), "{p}: {e}");
+        assert!(!e.contains(home.0.to_string_lossy().as_ref()) && !e.contains("part."), "{p}: {e}");
+        assert!(!std::path::Path::new(&out).exists(), "{p}");
+    };
+    let mut part = session();
+    run(&mut part, "shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30}));
+    std::fs::create_dir_all(home.0.join("art")).unwrap();
+    let native = home.file("art/part.vectorcraft");
+    let pdf = home.file("art/part.pdf");
+    save(&mut part, &native);
+    let pdf_of =
+        |part: &mut Session, p: Value| vectorcraft_format::base64_decode(run(part, "document.serialize", p)["dataBase64"].as_str().unwrap()).unwrap();
+    let editable = pdf_of(&mut part, json!({"format": "pdf"}));
+    let locked = pdf_of(&mut part, json!({"format": "pdf", "security": {"openPassword": "open sesame"}}));
+    assert!(vectorcraft_pdf::editing_with(&locked, Some("open sesame")).is_some(), "the locked PDF carries editing data");
+    let plain = pdf_of(&mut part, json!({"format": "pdf", "preserveEditing": false}));
+    let poster = |placed: &str| {
+        let mut s = session();
+        let r = run(&mut s, "file.place", json!({"path": placed, "link": true}));
+        assert_eq!(r["linked"], true, "{r}");
+        save(&mut s, &home.file("poster.vectorcraft"));
+        s
+    };
+    write(&pdf, &editable);
+    let mut s = poster(&pdf);
+    write(&pdf, &locked);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    // A package prepared in the confined request and written on another thread.
+    let prepared = crate::file_access::confine(Some(&roots), || s.prepare_package(&json!({"folder": out}))).unwrap();
+    let e =
+        std::thread::spawn(move || prepared.write(&mut |_, _| Ok(())).map(|_| ()).map_err(|e| e.to_string())).join().unwrap().expect_err("refused");
+    assert!(e.contains("a linked file's editing data can't be read to check it against the read roots"), "{e}");
+    assert!(!std::path::Path::new(&out).exists());
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    // A PDF listing the editing file without its data (`EF` renamed, the same length).
+    let at = editable.windows(4).position(|w| w.starts_with(b"/EF") && !w[3].is_ascii_alphanumeric()).expect("the editing file's EF");
+    let mut detached = editable.clone();
+    detached[at..at + 3].copy_from_slice(b"/XF");
+    assert!(vectorcraft_pdf::editing(&detached).is_none(), "the editing data can't be resolved");
+    write(&pdf, &detached);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    // A PDF without editing data.
+    write(&pdf, &plain);
+    assert_eq!(package(&mut s, json!({"folder": out})).unwrap()["links"], 1);
+    std::fs::remove_dir_all(&out).unwrap();
+    // A PDF whose attachments are too many to search to their end, with a readable editing file
+    // listed before the ones left unsearched.
+    let cut = attachments_cut_short(&vectorcraft_pdf::editing(&editable).unwrap().data);
+    assert!(vectorcraft_pdf::editing(&cut).is_some(), "the editing data is read");
+    write(&pdf, &cut);
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+    // A native document that doesn't load, rewritten or copied as it is.
+    let mut s = poster(&native);
+    write(&native, b"not a document");
+    refused(&mut s, json!({"folder": out}));
+    refused(&mut s, json!({"folder": out, "relink": false}));
+    assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "the person's package");
+}
+
+/// A one-page PDF carrying `native` as its editing file, listed first in an attachment name tree
+/// whose second subtree has 70,000 nodes, more than are searched.
+fn attachments_cut_short(native: &[u8]) -> Vec<u8> {
+    let name = vectorcraft_pdf::EDITING_FILE;
+    let mut stream = format!("<< /Length {} >>\nstream\n", native.len()).into_bytes();
+    stream.extend_from_slice(native);
+    stream.extend_from_slice(b"\nendstream");
+    let objects = [
+        b"<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>".to_vec(),
+        b"<< /Type /Pages /Kids [6 0 R] /Count 1 >>".to_vec(),
+        format!("<< /Kids [4 0 R << /Kids [{}] >>] >>", "<< /Names [] >> ".repeat(70_000)).into_bytes(),
+        format!("<< /Names [({name}) << /Type /Filespec /UF ({name}) /EF << /F 5 0 R >> >>] >>").into_bytes(),
+        stream,
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>".to_vec(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(body);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
+    for at in &offsets {
+        out.extend_from_slice(format!("{at:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).as_bytes());
+    out
+}
+
 /// A missing link stored as a path relative to the document names a file inside a confined
 /// request's read root: the package report and Document Info give its stored path.
 #[test]

@@ -401,11 +401,12 @@ impl Writer<'_> {
     fn brush_out(&mut self, b: &Brush) -> Option<BrushOut> {
         let plugin = crate::import::brush_plugin_name(&b.kind);
         let section = format!("Brush Art {}", self.brush_set.sections + 1);
-        // The art as the reader reads it: a section is read with y down, and an Art brush's art is
-        // turned over after that (its section's y up is the right of the path).
+        // The art as the reader reads it: a section is read with y down, and a Scatter or Art
+        // brush's art is turned over after that (its section's y up is down the page in each
+        // Scatter copy and the right of the path in Art).
         let (params, art) = match &b.kind {
             BrushKind::Calligraphic(c) => (calligraphic_params(c), None),
-            BrushKind::Scatter(s) => (scatter_params(s, &section)?, Some((s.art.clone(), Affine::FLIP_Y))),
+            BrushKind::Scatter(s) => (scatter_params(s, &section)?, Some((s.art.clone(), Affine::IDENTITY))),
             BrushKind::Art(a) => (art_params(a, &section)?, Some((a.art.clone(), Affine::IDENTITY))),
             BrushKind::Pattern(_) | BrushKind::Bristle(_) => return None,
         };
@@ -565,14 +566,14 @@ impl Writer<'_> {
     /// Does the reader read the brushed strokes of style text `text` with their brushes on them?
     pub(super) fn brushed_style_reads(&mut self, text: &str) -> bool {
         self.brush_set();
-        let section = super::styles::known_style("x", text);
+        let Some(parsed) = self.styles.parsed.get(text) else { return false };
         let written = &self.brush_set.written;
         let read = self.brush_set.read.get_or_insert_with(|| {
             let brushes: Vec<(&str, &str, &str, Option<&Node>)> =
                 written.iter().map(|b| (b.plugin, b.brush.name.as_str(), b.params.as_str(), b.art.as_ref())).collect();
             crate::import::BrushesRead::new(&brushes)
         });
-        read.style_reads(section.as_bytes(), "x")
+        read.style_reads(parsed)
     }
 
     /// The brushes' art in a non-printing block, then the brush manager's order and the brushes in
