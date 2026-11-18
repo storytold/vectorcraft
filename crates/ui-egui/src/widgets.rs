@@ -651,6 +651,15 @@ mod field_number_tests {
         assert_eq!(field_number("50% / 2", "%", false), Some(25.0));
     }
 
+    /// A resolution field reads the unit it shows: "200 ppp" in a French interface.
+    #[test]
+    fn a_resolution_field_reads_its_translated_unit() {
+        crate::i18n::set_current(crate::i18n::Lang::from_code("fr").unwrap());
+        let read = [field_number("200 ppp", &crate::dialogs::ppi_suffix(), false), field_number("200", &crate::dialogs::ppi_suffix(), false)];
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(read, [Some(200.0), Some(200.0)]);
+    }
+
     /// A thousands comma is refused inside Kerning's pair of parentheses and before `%` or the
     /// suffix, as it is in plain text, rather than read as a decimal comma (`(1,000)` as 1).
     #[test]
