@@ -51,10 +51,22 @@ pub fn dropdown_icon_names(
     icon_size: f32,
     icon: impl Fn(&Ui, Rect, usize, egui::Color32, bool),
 ) -> Option<usize> {
+    dropdown_icon_names_sized(ui, id, current, options, width, Vec2::splat(icon_size), icon)
+}
+
+/// [`dropdown_icon_names`] with icons of any size, for a picture wider than it is tall, such as a
+/// line with an arrowhead.
+pub fn dropdown_icon_names_sized(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    current: Option<usize>,
+    options: &[&str],
+    width: f32,
+    icon_size: Vec2,
+    icon: impl Fn(&Ui, Rect, usize, egui::Color32, bool),
+) -> Option<usize> {
     let icon = &icon;
-    let atom = move |i: usize, highlighted: bool| {
-        egui::Atom::paint(Vec2::splat(icon_size), move |ui, a| icon(ui, a.rect, i, a.fallback_text_color, highlighted))
-    };
+    let atom = move |i: usize, highlighted: bool| egui::Atom::paint(icon_size, move |ui, a| icon(ui, a.rect, i, a.fallback_text_color, highlighted));
     let shown = match current.and_then(|i| options.get(i).map(|name| (i, *name))) {
         Some((i, name)) => (atom(i, false), egui::RichText::new(name).size(12.0)).into_atoms(),
         None => egui::RichText::new("").size(12.0).into_atoms(),

@@ -670,7 +670,8 @@ fn warnings_fit_below_the_preview_without_widening_the_dialog() {
     }
     let after = ctx.memory(|m| m.area_rect(id)).unwrap();
     assert!((before.size() - after.size()).length() < 1.0, "{before:?} vs {after:?}");
-    click_at(&ctx, &mut app, warnings[1].center());
+    // The cube icon left of the web correction corrects the color too.
+    click_at(&ctx, &mut app, warnings[1].center() - vec2(19.0, 0.0));
     assert!(is_web_safe(&picked(app.ui.dialog.as_ref().unwrap()).color), "web correction remains clickable");
 }
 

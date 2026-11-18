@@ -48,6 +48,53 @@ pub(crate) fn put_options(fields: &mut Map<String, Value>, o: &FlattenOptions) {
     }
 }
 
+/// The options `fields` hold over `base` as they were entered, values out of range included, for
+/// the editor to show while [`FlattenOptions::from_params_with`] refuses them, and the keys of the
+/// values of the wrong type, which take `base`'s value here and show blank in the editor.
+pub(crate) fn entered_options(fields: &Map<String, Value>, base: &FlattenOptions) -> (FlattenOptions, Vec<String>) {
+    let Ok(Value::Object(mut v)) = serde_json::to_value(base) else { return (base.clone(), Vec::new()) };
+    let mut unread = Vec::new();
+    for (k, val) in fields {
+        let Some(slot) = v.get_mut(k) else { continue };
+        let old = std::mem::replace(slot, val.clone());
+        if serde_json::from_value::<FlattenOptions>(Value::Object(v.clone())).is_err() {
+            v.insert(k.clone(), old);
+            unread.push(k.clone());
+        }
+    }
+    (serde_json::from_value(Value::Object(v)).unwrap_or_else(|_| base.clone()), unread)
+}
+
+/// The options a dialog's `fields` hold, for [`fields_editor`]: `current` when they are valid, else
+/// the values entered over the default preset's, with the keys of the values of the wrong type.
+pub(crate) fn shown_options(fields: &Map<String, Value>, current: &Result<FlattenOptions, String>) -> (FlattenOptions, Vec<String>) {
+    match current {
+        Ok(o) => (o.clone(), Vec::new()),
+        Err(_) => entered_options(fields, &FlattenOptions::default()),
+    }
+}
+
+/// [`options_editor`] on the option fields of a dialog: `o` and `unread` from [`shown_options`].
+/// Each option whose control was set is written into `fields`, also when it equals the value shown,
+/// so that it replaces a value of the wrong type; the other fields stay as they were entered. With
+/// `fixed_preserve`, the two Preserve switches show but can't be changed.
+pub(crate) fn fields_editor(
+    ui: &mut egui::Ui,
+    id: &str,
+    fields: &mut Map<String, Value>,
+    o: &mut FlattenOptions,
+    unread: &[String],
+    fixed_preserve: bool,
+) {
+    let set = editor(ui, id, o, true, fixed_preserve, unread);
+    let Ok(Value::Object(m)) = serde_json::to_value(&*o) else { return };
+    for k in set {
+        if let Some(v) = m.get(k) {
+            fields.insert(k.into(), v.clone());
+        }
+    }
+}
+
 /// The options the fields hold (a `preset` not loaded yet: its own).
 fn options(d: &Dialog, saved: &[FlattenerPreset]) -> Result<FlattenOptions, String> {
     if d.str("preset") != d.str(APPLIED) {
@@ -101,10 +148,9 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         save_row(app, ui, d);
     }
     ui.add_space(10.0);
-    let mut o = current.clone().unwrap_or_default();
-    if options_editor(ui, "flatten-dialog", &mut o, true) {
-        put_options(&mut d.fields, &o);
-    }
+    // Values refused stay as entered, so that changing another option keeps them.
+    let (mut o, unread) = shown_options(&d.fields, &current);
+    fields_editor(ui, "flatten-dialog", &mut d.fields, &mut o, &unread, false);
     if let Err(e) = &current {
         ui.label(egui::RichText::new(e).color(Tokens::get(ui.ctx()).text_dim).size(11.5));
     }
@@ -180,8 +226,19 @@ const FIELD: f32 = 56.0;
 /// panel edit them: the raster/vector balance, both resolutions and the six switches. Returns true
 /// when one changed.
 pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool) -> bool {
-    let t = Tokens::get(ui.ctx());
     let before = o.clone();
+    editor(ui, id, o, enabled, false, &[]);
+    *o != before
+}
+
+/// The option controls, with the value fields of the options named in `unread` blank. With
+/// `fixed_preserve`, Preserve Alpha Transparency and Preserve Overprints and Spot Colors show but
+/// can't be changed (the file format or another control sets them). Returns the keys of the
+/// options whose controls were set, also to the value they showed.
+fn editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions, enabled: bool, fixed_preserve: bool, unread: &[String]) -> Vec<&'static str> {
+    let t = Tokens::get(ui.ctx());
+    let mut set = Vec::new();
+    let field_value = |key: &str, v: f64| (!unread.iter().any(|k| k == key)).then_some(v);
     let dim = |ui: &mut egui::Ui, s: &str| {
         ui.label(egui::RichText::new(tl!(s)).color(t.text_dim).size(11.5));
     };
@@ -203,44 +260,51 @@ pub(crate) fn options_editor(ui: &mut egui::Ui, id: &str, o: &mut FlattenOptions
             );
             if let Some(b) = x.map(|x| (x as f64 * 100.0).round()).or(keyed) {
                 o.balance = b;
+                set.push("balance");
             }
             dim(ui, tl!("Vectors"));
+            let value = field_value("balance", o.balance);
             if let Some(v) =
-                widgets::range_field_named(ui, (id, "balance"), Some(tl!("Raster/Vector Balance:")), o.balance, 0.0..=100.0, "", 0, FIELD - 12.0)
+                widgets::range_field_named(ui, (id, "balance"), Some(tl!("Raster/Vector Balance:")), value, 0.0..=100.0, "", 0, FIELD - 12.0)
             {
                 o.balance = v;
+                set.push("balance");
             }
         });
         ui.add_space(4.0);
         egui::Grid::new((id, "resolutions")).num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
-            for (label, key) in [(tl!("Line Art and Text Resolution:"), 0), (tl!("Gradient and Mesh Resolution:"), 1)] {
+            for (label, key, name) in
+                [(tl!("Line Art and Text Resolution:"), 0, "lineArtPpi"), (tl!("Gradient and Mesh Resolution:"), 1, "gradientPpi")]
+            {
                 widgets::dim_label(ui, label);
                 ui.horizontal(|ui| {
                     let v = if key == 0 { &mut o.line_art_ppi } else { &mut o.gradient_ppi };
-                    if let Some(n) = widgets::range_field_named(ui, (id, key), Some(label), *v, 1.0..=2400.0, "", 0, FIELD) {
+                    if let Some(n) = widgets::range_field_named(ui, (id, key), Some(label), field_value(name, *v), 1.0..=2400.0, "", 0, FIELD) {
                         *v = n;
+                        set.push(name);
                     }
-                    dim(ui, "ppi");
+                    dim(ui, super::ppi_suffix().trim());
                 });
                 ui.end_row();
             }
         });
         ui.add_space(4.0);
-        let switches: [(&str, &mut bool); 6] = [
-            (tl!("Convert All Text to Outlines"), &mut o.text_to_outlines),
-            (tl!("Convert All Strokes to Outlines"), &mut o.strokes_to_outlines),
-            (tl!("Clip Complex Regions"), &mut o.clip_complex_regions),
-            (tl!("Anti-alias Rasters"), &mut o.anti_alias),
-            (tl!("Preserve Alpha Transparency"), &mut o.preserve_alpha),
-            (tl!("Preserve Overprints and Spot Colors"), &mut o.preserve_overprints),
+        let switches: [(&str, &mut bool, bool, &'static str); 6] = [
+            (tl!("Convert All Text to Outlines"), &mut o.text_to_outlines, false, "textToOutlines"),
+            (tl!("Convert All Strokes to Outlines"), &mut o.strokes_to_outlines, false, "strokesToOutlines"),
+            (tl!("Clip Complex Regions"), &mut o.clip_complex_regions, false, "clipComplexRegions"),
+            (tl!("Anti-alias Rasters"), &mut o.anti_alias, false, "antiAlias"),
+            (tl!("Preserve Alpha Transparency"), &mut o.preserve_alpha, fixed_preserve, "preserveAlpha"),
+            (tl!("Preserve Overprints and Spot Colors"), &mut o.preserve_overprints, fixed_preserve, "preserveOverprints"),
         ];
-        for (label, v) in switches {
-            if widgets::check(ui, label, *v, enabled) {
+        for (label, v, fixed, key) in switches {
+            if widgets::check(ui, label, *v, enabled && !fixed) {
                 *v = !*v;
+                set.push(key);
             }
         }
     });
-    *o != before
+    set
 }
 
 #[cfg(test)]
@@ -393,5 +457,43 @@ mod tests {
         frame(&mut app);
         assert!(super::super::confirm(&mut app).unwrap_err().contains("resolutions"));
         assert!(app.ui.dialog.is_some());
+    }
+
+    /// Changing a switch beside a value out of range keeps the values entered.
+    #[test]
+    fn a_switch_changed_beside_a_bad_value_keeps_the_values_entered() {
+        let mut app = scene();
+        app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("balance".into(), json!(20));
+        d.fields.insert("gradientPpi".into(), json!(9000));
+        d.fields.insert("lineArtPpi".into(), json!("many"));
+        let mut f = super::super::tests_eps::Frames::new();
+        let (_, at) = f.control(&mut app, "Convert All Text to Outlines", egui::accesskit::Role::CheckBox);
+        let before = app.ui.dialog.as_ref().unwrap().bool("textToOutlines");
+        f.click(&mut app, at);
+        let d = app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.bool("textToOutlines"), !before, "the switch changes");
+        assert_eq!((d.f64("balance", 0.0), d.f64("gradientPpi", 0.0)), (20.0, 9000.0), "the other values stay as entered");
+        assert_eq!(d.fields["lineArtPpi"], json!("many"), "a value of the wrong type stays to be refused");
+        assert!(super::super::confirm(&mut app).is_err());
+        let d = app.ui.dialog.as_mut().unwrap();
+        d.fields.insert("lineArtPpi".into(), json!(300));
+        assert!(super::super::confirm(&mut app).unwrap_err().contains("resolutions"));
+    }
+
+    /// A value of the wrong type shows blank, and typing the default preset's value into its
+    /// field replaces it, so OK flattens.
+    #[test]
+    fn the_default_value_typed_over_a_value_of_the_wrong_type_replaces_it() {
+        let mut app = scene();
+        app.run("ui.flattenTransparencyDialog", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("lineArtPpi".into(), json!("many"));
+        let default = FlattenOptions::default().line_art_ppi;
+        let mut f = super::super::tests_eps::Frames::new();
+        f.type_into(&mut app, "Line Art and Text Resolution:", &default.to_string());
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["lineArtPpi"], json!(default));
+        super::super::confirm(&mut app).unwrap();
+        assert!(app.ui.dialog.is_none() && !transparent_left(&app));
     }
 }
