@@ -43,6 +43,7 @@ impl<'p> Builder<'p> {
             image_keys: HashMap::new(),
             raster_scales: HashMap::new(),
             cmyk_keys: HashSet::new(),
+            intent_cmyk: None,
             separation_paints: HashMap::new(),
             opaque: HashSet::new(),
             warnings: vec![],

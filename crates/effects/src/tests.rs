@@ -1709,6 +1709,115 @@ fn twist_joins_its_pieces_smoothly() {
 }
 
 #[test]
+fn twist_boundary_handles_follow_the_inward_tangent() {
+    let line = PathData::single(SubPath::polyline(&[Point::new(40.0, 30.0), Point::new(60.0, 30.0)], false));
+    let bounds = Rect::new(40.0, 30.0, 60.0, 30.0);
+    for angle in [90.0_f64, 400.0, -720.0] {
+        let out = apply_geometry(&[fx("distort.twist", json!({"angle": angle}))], &line, bounds);
+        let anchors = &out.subpaths[0].anchors;
+        let start = anchors.first().unwrap();
+        let end = anchors.last().unwrap();
+        assert_eq!(start.p, Point::new(40.0, 30.0));
+        assert_eq!(end.p, Point::new(60.0, 30.0));
+        for (actual, expected) in [
+            (start.h_out - start.p, vectorcraft_geom::Vec2::new(1.0, -angle.to_radians())),
+            (end.h_in - end.p, vectorcraft_geom::Vec2::new(-1.0, angle.to_radians())),
+        ] {
+            assert!(actual.hypot() > 1e-9);
+            let error = (actual.x * expected.y - actual.y * expected.x).atan2(actual.dot(expected)).to_degrees().abs();
+            assert!(error < 0.05, "{angle} degrees: boundary tangent differs by {error} degrees");
+        }
+    }
+}
+
+#[test]
+fn twist_large_coordinate_joins_preserve_boundary_sides() {
+    use vectorcraft_geom::Anchor;
+
+    let center = 1e16;
+    for offset in [32.0, 64.0] {
+        let p = Point::new(center + offset, 0.0);
+        let line = PathData::single(SubPath::new(
+            vec![
+                Anchor::corner(Point::new(p.x - 18.0, 0.0)),
+                Anchor::with_handles(p, Point::new(p.x - 6.0, 0.0), Point::new(p.x + 6.0, 0.0)),
+                Anchor::corner(Point::new(p.x + 18.0, 0.0)),
+            ],
+            false,
+        ));
+        let out = crate::distort::twist(&line, Rect::new(center - 64.0, 0.0, center + 64.0, 0.0), 90.0, 3);
+        let join = &out.subpaths[0].anchors[1];
+        if offset == 64.0 {
+            assert_eq!(join.h_out, Point::new(p.x + 6.0, 0.0));
+            let actual = join.h_in - join.p;
+            let expected = vectorcraft_geom::Vec2::new(-1.0, std::f64::consts::FRAC_PI_2);
+            let error = actual.cross(expected).atan2(actual.dot(expected)).abs();
+            assert!(error < 1e-9, "{actual:?}");
+        } else {
+            let incoming = join.p - join.h_in;
+            let outgoing = join.h_out - join.p;
+            assert!(incoming.cross(outgoing).abs() < 1e-9, "{incoming:?} {outgoing:?}");
+            assert!(incoming.dot(outgoing) > 0.0);
+        }
+    }
+}
+
+#[test]
+fn twist_fractional_boundary_handles_use_each_sides_derivative() {
+    use vectorcraft_geom::Anchor;
+
+    for (bounds, step) in [(Rect::new(40.1, 30.0, 60.3, 30.0), 1.0), (Rect::new(-60.3, 30.0, -40.1, 30.0), 1.0)] {
+        for x in [bounds.x0, bounds.x1] {
+            for angle in [90.0_f64, 400.0, -720.0] {
+                let p = Point::new(x, 30.0);
+                let line = PathData::single(SubPath::new(
+                    vec![
+                        Anchor::corner(Point::new(x - 3.0 * step, 30.0)),
+                        Anchor::with_handles(p, Point::new(x - step, 30.0), Point::new(x + step, 30.0)),
+                        Anchor::corner(Point::new(x + 3.0 * step, 30.0)),
+                    ],
+                    false,
+                ));
+                let out = crate::distort::twist(&line, bounds, angle, 3);
+                assert!(
+                    out.subpaths[0].anchors.iter().all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite()),
+                    "x={x} angle={angle}: {:?}",
+                    out.subpaths[0].anchors
+                );
+                let join = &out.subpaths[0].anchors[1];
+                assert!(join.p.distance(p) < 1e-10, "{:?}", join.p);
+                let a = angle.to_radians();
+                let expected = if x == bounds.x0 { [(-1.0, 0.0), (1.0, -a)] } else { [(-1.0, a), (1.0, 0.0)] };
+                for (actual, (dx, dy)) in [join.h_in - join.p, join.h_out - join.p].into_iter().zip(expected) {
+                    let expected = vectorcraft_geom::Vec2::new(dx, dy);
+                    let error = actual.cross(expected).atan2(actual.dot(expected)).abs();
+                    assert!(error < 1e-9, "x={x} angle={angle}: {actual:?}, join={join:?}, source={:?}", line.subpaths[0].anchors[1]);
+                }
+            }
+        }
+    }
+    let bounds = Rect::new(1e16, 30.0, 1e16 + 18.0, 30.0);
+    let center = bounds.center();
+    let line = PathData::single(SubPath::polyline(&[Point::new(center.x - 4.0, center.y), center, Point::new(center.x + 4.0, center.y)], false));
+    let out = crate::distort::twist(&line, bounds, 90.0, 3);
+    assert_eq!(out.subpaths[0].anchors[1].p, center);
+    let bounds = Rect::new(0.0, 30.0, 2e16, 30.0);
+    let p = Point::new(bounds.x1 - 8.0, 30.0);
+    let line = PathData::single(SubPath::new(
+        vec![
+            Anchor::corner(Point::new(p.x - 12.0, p.y)),
+            Anchor::with_handles(p, Point::new(p.x - 4.0, p.y), Point::new(p.x + 4.0, p.y)),
+            Anchor::corner(Point::new(p.x + 12.0, p.y)),
+        ],
+        false,
+    ));
+    let out = crate::distort::twist(&line, bounds, 90.0, 3);
+    let join = &out.subpaths[0].anchors[1];
+    assert!(join.p.y - p.y > 10.0, "{:?}", join.p);
+    assert!(join.h_out.y - join.p.y < -4.0, "{join:?}");
+}
+
+#[test]
 fn twist_fixes_the_outer_circle_and_rotates_inside() {
     let out = run("distort.twist", json!({"angle": 0}), &square());
     assert_eq!(out, square());
