@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, SPREAD, SPREAD_CAPPED};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, GRAPHS, HUE_STOPS, PERCEPTUAL_STOPS, SPREAD, SPREAD_CAPPED};
 
 #[cfg(test)]
 thread_local! {
@@ -710,10 +710,7 @@ impl<'a> Writer<'a> {
             Color::Cmyk { c, m, y, k } => Ink::Cmyk([c, m, y, k].map(unit)),
             // The CMYK equivalent of the RGB values as written.
             Color::Rgb { r, g, b } => Ink::Rgb(self.cms.to_cmyk(&ai_ops::as_written(*color), intent).map(unit), [r, g, b].map(unit)),
-            Color::Lab { .. } => {
-                let rgb = color.to_rgb().map(unit);
-                Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), rgb)
-            }
+            Color::Lab { .. } => Ink::Rgb(self.cms.to_cmyk(color, intent).map(unit), ai_ops::rgb_values(*color)),
         }
     }
 
@@ -755,11 +752,11 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
-        // A gradient mixed around the hue wheel (the format's gradients mix their stops' colors
-        // directly): the stops on its curve, no more than the reader reads, in a definition of
-        // its own.
-        if g.gradient.method.is_hue() {
-            self.warn(HUE_STOPS);
+        // A gradient mixed by the Perceptual method or around the hue wheel (the format's
+        // gradients mix their stops' colors directly): the stops on its curve, in process colors,
+        // no more than the reader reads, in a definition of its own.
+        if !g.gradient.method.is_classic() {
+            self.warn(if g.gradient.method.is_hue() { HUE_STOPS } else { PERCEPTUAL_STOPS });
             let curve = g.gradient.as_classic_curve();
             let gradient = if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() };
             let p = GradientPaint { gradient, swatch: None, ..g.clone() };
@@ -1213,32 +1210,35 @@ impl<'a> Writer<'a> {
         coverage
     }
 
+    /// Appends `samples` to `s` as upper-case hex digits on comment lines: each line starts with `%`,
+    /// holds [`HEX_LINE`] digits (the last line may hold fewer) and ends with a newline. An empty
+    /// `samples` appends no line.
+    pub(super) fn push_hex(s: &mut String, samples: &[u8]) {
+        const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+        const PER_LINE: usize = HEX_LINE / 2;
+        const _: () = assert!(HEX_LINE > 0 && HEX_LINE.is_multiple_of(2));
+        let lines = samples.len().div_ceil(PER_LINE);
+        s.reserve(samples.len().saturating_mul(2).saturating_add(lines.saturating_mul(2)));
+        for line in samples.chunks(PER_LINE) {
+            s.push('%');
+            for &c in line {
+                s.push(char::from(DIGITS[usize::from(c >> 4)]));
+                s.push(char::from(DIGITS[usize::from(c & 0x0F)]));
+            }
+            s.push('\n');
+        }
+    }
+
     /// An image's lines (§8.4): `%AI5_File:`, `%AI5_BeginRaster`, matrix `m` as `[ a b c d tx ty ]`
     /// and the numbers `operands` with `XI`, `samples` in hex on comment lines of [`HEX_LINE`]
     /// digits, `%AI5_EndRaster`, then `F`.
     fn raster(&mut self, m: Affine, operands: &str, samples: &[u8]) {
-        let mut hex = String::with_capacity(samples.len() * 2 + samples.len() / HEX_LINE * 2 + 2);
-        hex.push('%');
-        let mut on_line = 0;
-        for c in samples {
-            let _ = write!(hex, "{c:02X}");
-            on_line += 2;
-            if on_line >= HEX_LINE {
-                hex.push_str("\n%");
-                on_line = 0;
-            }
-        }
-        if hex.ends_with('%') {
-            hex.pop();
-        } else {
-            hex.push('\n');
-        }
         let [a, b, c, d, e, f] = m.as_coeffs();
         let s = &mut self.body;
         s.push_str("%AI5_File:\n%AI5_BeginRaster\n[ ");
         ps::push_nums(s, &[a, b, c, d, e, f]);
         let _ = writeln!(s, "] {operands} XI");
-        s.push_str(&hex);
+        Self::push_hex(s, samples);
         s.push_str("%AI5_EndRaster\nF\n");
     }
 }
