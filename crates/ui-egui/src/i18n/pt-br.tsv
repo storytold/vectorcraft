@@ -147,6 +147,7 @@
 	Add to Selection	Adicionar à Seleção
 	Add to Swatches	Adicionar às Amostras
 	Additional Plug-ins Folder	Pasta Adicional de Plug-ins
+	Plug-in Instruction Budget	Orçamento de Instruções de Plug-ins
 	Additional Fonts Folder	Pasta Adicional de Fontes
 	Adjust Adjoining Width Points	Ajustar Pontos de Largura Adjacentes
 	Incoming	Entrada
@@ -547,6 +548,11 @@ antiAlias	Sharp	Nítido
 	Color blindness – Deuteranopia-type	Daltonismo – tipo deuteranopia
 	Color blindness – Protanopia-type	Daltonismo – tipo protanopia
 	Color blindness – Tritanopia-type	Daltonismo – tipo tritanopia
+	Show Color Vision Preview	Mostrar Visualização da Visão de Cores
+	Protanopia	Protanopia
+	Deuteranopia	Deuteranopia
+	Tritanopia	Tritanopia
+	Achromatopsia	Acromatopsia
 	Color conversion:	Conversão de cor:
 	Color images	Imagens coloridas
 	Color:	Cor:
@@ -653,6 +659,16 @@ antiAlias	Sharp	Nítido
 	Create New Swatch…	Criar Nova Amostra…
 	Create New {kind} Style	Criar Novo Estilo de {kind}
 	Create Object Mosaic…	Criar Mosaico de Objetos…
+	Create Object Mosaic	Criar Mosaico de Objetos
+	Current Size:	Tamanho atual:
+	New Size:	Novo tamanho:
+	Tile Spacing:	Espaçamento dos ladrilhos:
+	Number of Tiles:	Número de ladrilhos:
+	Constrain Ratio:	Restringir proporção:
+	Result:	Resultado:
+	Resize Using Percentages	Redimensionar usando porcentagens
+	Delete Raster	Excluir imagem rasterizada
+	Use Ratio	Usar proporção
 	Create Outlines	Criar Contornos
 	Create PDF layers from layers and sublayers	Criar camadas de PDF a partir das camadas e subcamadas
 	Create PDF-Compatible File	Criar Arquivo Compatível com PDF
@@ -732,6 +748,7 @@ antiAlias	Sharp	Nítido
 	Delete Brush	Excluir Pincel
 	Delete Color	Excluir Cor
 	Restore Generated Table	Restaurar Tabela Gerada
+	Unshift All Colors	Desfazer Mudança de Todas as Cores
 	Delete Character Style	Excluir Estilo de Caractere
 	Delete Empty Artboards	Excluir Mesas de Trabalho Vazias
 	Delete Freeform Point	Excluir Ponto Livre
@@ -894,6 +911,8 @@ antiAlias	Sharp	Nítido
 	Duotone Gradients	Gradientes Duotônicos
 	Duplicate	Duplicar
 	Duplicate Artboard	Duplicar Mesa de Trabalho
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Clique para adicionar uma prancheta deste lado, Alt-clique para duplicar esta prancheta com sua arte
+	Click to add an artboard on this side	Clique para adicionar uma prancheta deste lado
 	Copy Artboard	Copiar Mesa de Trabalho
 	Cut Artboard	Recortar Mesa de Trabalho
 	Rename Artboards	Renomear Mesas de Trabalho
@@ -1203,6 +1222,19 @@ antiAlias	Sharp	Nítido
 	Find Font…	Localizar Fonte…
 	Find Next	Localizar Próximo
 	Find and Replace…	Localizar e Substituir…
+	Find and Replace	Localizar e Substituir
+	Find:	Localizar:
+	Replace With:	Substituir por:
+	Replace & Find	Substituir e Localizar
+	Replace All	Substituir Tudo
+	Match Case	Diferenciar Maiúsculas de Minúsculas
+	Find Whole Word	Localizar Palavra Inteira
+	Search Backwards	Pesquisar para Trás
+	Check Hidden Layers	Verificar Camadas Ocultas
+	Check Locked Layers	Verificar Camadas Bloqueadas
+@msg	No matches found	Nenhuma correspondência encontrada
+@msg	Matches replaced: {n}	Correspondências substituídas: {n}
+@msg	no match of `find` at bytes {_1}..{_2} of object {_3}	nenhuma correspondência de `find` nos bytes {_1}..{_2} do objeto {_3}
 	First Page	Primeira Página
 	First-line Left Indent	Recuo Esquerdo da Primeira Linha
 	Fisheye…	Olho de Peixe…
@@ -2729,6 +2761,9 @@ digits	Malayalam	Malaiala
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Quão perto na tela o ponteiro ou um ponto arrastado precisa chegar da arte para que as guias inteligentes se ajustem a ela; a distância é a mesma em qualquer zoom.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Ajusta a extremidade de um segmento de linha, ou um círculo desenhado a partir do centro, para que toque uma curva próxima.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Ajusta a extremidade de um segmento de linha para que encontre um segmento reto próximo em ângulo reto.
+	Edit type set in fonts that aren't available?	Editar o texto em fontes que não estão disponíveis?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra na tela o número de cada fatia em uma caixa no canto superior esquerdo dela; quando desativado, os contornos das fatias continuam visíveis.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	A cor dos contornos das fatias de usuário e de objeto e das caixas com seus números; as fatias automáticas usam um tom mais apagado dessa cor.
 	Reset all preferences to their defaults?	Redefinir todas as preferências para o padrão?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Os padrões são aplicados quando você clica em OK em Preferências. Cancelar ali mantém suas preferências atuais.
 	Restored documents open unsaved: save them to keep them.	Os documentos restaurados abrem sem salvar: salve-os para mantê-los.
@@ -2925,6 +2960,12 @@ digits	Malayalam	Malaiala
 	Search commands, tools, panels and effects…	Pesquisar comandos, ferramentas, painéis e efeitos…
 	No commands match	Nenhum comando corresponde
 	{pos} of {total}: {name}	{pos} de {total}: {name}
+	No menu item	Nenhum item de menu
+	Toolbar	Barra de Ferramentas
+	{toolbar}, in the {tool} group	{toolbar}, no grupo {tool}
+	In the menu bar: {path}	Na barra de menus: {path}
+	In the {group} group: press and hold to open it	No grupo {group}: mantenha pressionado para abri-lo
+	{home}, not shown now	{home}, não exibido agora
 @plural	{n} result|{n} results	{n} resultado|{n} resultados
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} de {n} resultado. Continue digitando para filtrá-los.|{shown} de {n} resultados. Continue digitando para filtrá-los.
 	Recent Commands	Comandos recentes
@@ -3052,6 +3093,7 @@ digits	Malayalam	Malaiala
 	Show Brush Size	Mostrar Tamanho do Pincel
 	Show Center	Mostrar Centro
 	Show Code	Mostrar Código
+	Show in Browser	Mostrar no Navegador
 	Show Corner Widget	Mostrar Widget de Canto
 	Show East Asian Options	Mostrar Opções do Leste Asiático
 	Show Edges	Mostrar Bordas
@@ -4156,6 +4198,7 @@ axis	Both	Ambos
 @msg	Installed plug-in {_1}	Plug-in {_1} instalado
 @msg	Internal error: {msg} (please report this bug)	Erro interno: {msg} (relate este bug)
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	Mesclar Pintura dinâmica: selecione um grupo de Pintura dinâmica e os traçados a adicionar
+@msg	`Face` and `Edge` name the faces and edges of a Live Paint group: give the path another name	`Face` e `Edge` são os nomes das faces e arestas de um grupo de Pintura dinâmica: dê outro nome ao traçado
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	A pintura dinâmica aceita traçados e traçados compostos: converta primeiro texto, imagens e outros objetos em traçados
 @msg	Live Paint: select paths or compound paths	Pintura dinâmica: selecione traçados ou traçados compostos
 @msg	Live Paint: these paths are too degenerate to paint	Pintura dinâmica: estes traçados são degenerados demais para pintar
@@ -4346,6 +4389,7 @@ axis	Both	Ambos
 @msg	choose a location for the package	escolha um local para o pacote
 @msg	clipboard is empty	a área de transferência está vazia
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: pelo menos uma cor deve permanecer na tabela de cores
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` indica uma cor que outra chave também indica
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` não é uma cor como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: no máximo {MAX_TABLE} cores
 @msg	command `{0}` is not available right now: {1}	o comando `{0}` não está disponível agora: {1}
@@ -4968,6 +5012,7 @@ variable-list-end	{0}, {1}	{0} e {1}
 @msg	a linked JavaScript file is outside the read roots	um arquivo JavaScript vinculado está fora das raízes de leitura
 @msg	a linked image file is outside the read roots	um arquivo de imagem vinculado está fora das raízes de leitura
 @msg	a linked file's export folder is outside the read roots	a pasta de exportação de um arquivo vinculado está fora das raízes de leitura
+@msg	a linked file's editing data can't be read to check it against the read roots	não é possível ler os dados de edição de um arquivo vinculado para verificá-los em relação às raízes de leitura
 @msg	automation path rejected: outside the write root {root}: {path}	caminho da automação rejeitado: fora da raiz de gravação {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	caminho da automação rejeitado: fora das raízes de gravação {roots}: {path}
 @msg	automation path rejected: path is empty	caminho da automação rejeitado: o caminho está vazio
@@ -7135,6 +7180,7 @@ axis	Y Axis	Eixo Y
 	Checkpoint	Ponto de verificação
 	Inventory Icons	Ícones de inventário
 	Skill Icons	Ícones de habilidade
+	Weather Icons	Ícones de clima
 	Attack	Ataque
 	Defend	Defesa
 	Heal	Cura
@@ -7256,6 +7302,252 @@ axis	Y Axis	Eixo Y
 	Stars	Estrelas
 	Triangles	Triângulos
 	Sparkles	Brilhos
+	Warm Gray	Cinza Quente
+	Cool Gray	Cinza Frio
+	Neutrals	Neutros
+	Ivory	Marfim
+	Linen	Linho
+	Oat	Aveia
+	Greige	Greige
+	Stone	Pedra
+	Taupe	Taupe
+	Slate	Ardósia
+	Clay	Argila
+	Terracotta	Terracota
+	Ochre	Ocre
+	Umber	Sombra
+	Sand	Areia
+	Olive	Oliva
+	Moss	Musgo
+	Rosy	Rosado
+	Neutral	Neutro
+	Golden	Dourado
+	Pastel	Pastel
+	Pastel Red	Vermelho Pastel
+	Pastel Orange	Laranja Pastel
+	Pastel Amber	Âmbar Pastel
+	Pastel Yellow	Amarelo Pastel
+	Pastel Lime	Lima Pastel
+	Pastel Green	Verde Pastel
+	Pastel Teal	Verde-azulado Pastel
+	Pastel Cyan	Ciano Pastel
+	Pastel Azure	Azure Pastel
+	Pastel Blue	Azul Pastel
+	Pastel Violet	Violeta Pastel
+	Pastel Magenta	Magenta Pastel
+	Soft Red	Vermelho Suave
+	Soft Orange	Laranja Suave
+	Soft Amber	Âmbar Suave
+	Soft Yellow	Amarelo Suave
+	Soft Lime	Lima Suave
+	Soft Green	Verde Suave
+	Soft Teal	Verde-azulado Suave
+	Soft Cyan	Ciano Suave
+	Soft Azure	Azure Suave
+	Soft Blue	Azul Suave
+	Soft Violet	Violeta Suave
+	Soft Magenta	Magenta Suave
+	Vivid Red	Vermelho Vívido
+	Vivid Orange	Laranja Vívido
+	Vivid Amber	Âmbar Vívido
+	Vivid Yellow	Amarelo Vívido
+	Vivid Lime	Lima Vívido
+	Vivid Green	Verde Vívido
+	Vivid Teal	Verde-azulado Vívido
+	Vivid Cyan	Ciano Vívido
+	Vivid Azure	Azure Vívido
+	Vivid Blue	Azul Vívido
+	Vivid Violet	Violeta Vívido
+	Vivid Magenta	Magenta Vívido
+	Deep	Profundas
+	Deep Red	Vermelho Profundo
+	Deep Orange	Laranja Profundo
+	Deep Amber	Âmbar Profundo
+	Deep Yellow	Amarelo Profundo
+	Deep Lime	Lima Profundo
+	Deep Green	Verde Profundo
+	Deep Teal	Verde-azulado Profundo
+	Deep Cyan	Ciano Profundo
+	Deep Azure	Azure Profundo
+	Deep Blue	Azul Profundo
+	Deep Violet	Violeta Profundo
+	Deep Magenta	Magenta Profundo
+	Gold	Ouro
+	Silver	Prata
+	Bronze	Bronze
+	Copper	Cobre
+	Brass	Latão
+	Rose Gold	Ouro Rosé
+	Gunmetal	Grafite Metálico
+	Platinum	Platina
+	Pewter	Estanho
+	Ember	Brasa
+	Lagoon	Lagoa
+	Dusk	Anoitecer
+	Clay to Teal	Argila a Verde-azulado
+	Plum to Olive	Ameixa a Oliva
+	Complementary Coral	Coral Complementar
+	Split Complementary Coral	Coral Complementar Dividida
+	Analogous Coral	Coral Análoga
+	Triad Coral	Coral em Tríade
+	Tetrad Coral	Coral em Tétrade
+	Pentagram Coral	Coral em Pentagrama
+	Complementary Teal	Verde-azulado Complementar
+	Split Complementary Teal	Verde-azulado Complementar Dividida
+	Analogous Teal	Verde-azulado Análoga
+	Triad Teal	Verde-azulado em Tríade
+	Tetrad Teal	Verde-azulado em Tétrade
+	Pentagram Teal	Verde-azulado em Pentagrama
+	Soft Spectrum	Espectro Suave
+	Red to Amber	Vermelho a Âmbar
+	Orange to Yellow	Laranja a Amarelo
+	Amber to Lime	Âmbar a Lima
+	Yellow to Green	Amarelo a Verde
+	Lime to Teal	Lima a Verde-azulado
+	Green to Cyan	Verde a Ciano
+	Teal to Azure	Verde-azulado a Azure
+	Cyan to Blue	Ciano a Azul
+	Azure to Violet	Azure a Violeta
+	Blue to Magenta	Azul a Magenta
+	Violet to Red	Violeta a Vermelho
+	Magenta to Orange	Magenta a Laranja
+	Dawn	Amanhecer
+	Noon	Meio-dia
+	Sunset	Pôr do Sol
+	Night	Noite
+	Overcast	Nublado
+	White to Black	Branco a Preto
+	Light Grays	Cinzas Claros
+	Dark Grays	Cinzas Escuros
+	Warm Grays	Cinzas Quentes
+	Cool Grays	Cinzas Frios
+	Fade to Transparent	Esmaecer a Transparente
+	White Fade	Esmaecer Branco
+	Vignette	Vinheta
+	Mist	Névoa
+	Petal	Pétala
+	Fern	Samambaia
+	Smoke	Fumaça
+	Honey	Mel
+	Seafoam	Espuma do Mar
+	Lavender	Lavanda
+	Driftwood	Madeira Flutuante
+	Ink Wash	Aguada de Nanquim
+	Tide	Maré
+	Bloom	Florescer
+	Dew	Orvalho
+	Pollen	Pólen
+	Lichen	Líquen
+	Prism Veil	Véu Prismático
+	Opal Ribbon	Fita de Opala
+	Pearl Flash	Lampejo Perolado
+	Aurora Foil	Folha Aurora
+	Iris Sheen	Brilho Íris
+	Frost Spectrum	Espectro Gelado
+	Silver Tide	Maré Prateada
+	Rose Quartz Gleam	Reflexo de Quartzo Rosa
+	Moonstone Shift	Reflexo de Pedra da Lua
+	Violet Edge	Borda Violeta
+	Mint Halo	Halo Menta
+	Amber Corona	Coroa Âmbar
+	Polar Glint	Cintilação Polar
+	Pastel Orbit	Órbita Pastel
+	Coral and Navy	Coral e Azul-marinho
+	Plum and Lime	Ameixa e Lima
+	Teal and Gold	Verde-azulado e Ouro
+	Indigo and Peach	Índigo e Pêssego
+	Forest and Rose	Floresta e Rosa
+	Red Glow	Brilho Vermelho
+	Orange Glow	Brilho Laranja
+	Amber Glow	Brilho Âmbar
+	Yellow Glow	Brilho Amarelo
+	Lime Glow	Brilho Lima
+	Green Glow	Brilho Verde
+	Teal Glow	Brilho Verde-azulado
+	Cyan Glow	Brilho Ciano
+	Azure Glow	Brilho Azure
+	Blue Glow	Brilho Azul
+	Violet Glow	Brilho Violeta
+	Magenta Glow	Brilho Magenta
+	Polka Dots	Bolinhas
+	Vertical Stripes	Listras Verticais
+	Horizontal Stripes	Listras Horizontais
+	Diagonal Stripes	Listras Diagonais
+	Checkerboard	Xadrez
+	Diamonds	Losangos
+	Crosses	Cruzes
+	Coarse Grit	Grão Grosso
+	Stipple	Pontilhado
+	Scratches	Arranhões
+	Sparse Flecks	Pintas Esparsas
+	Dense Flecks	Pintas Densas
+	Sine Bands	Faixas Senoidais
+	Ripple Lines	Linhas Ondulantes
+	Interference Rings	Anéis de Interferência
+	Offset Rings	Anéis Deslocados
+	Warped Checks	Xadrez Deformado
+	Pinched Stripes	Listras Estranguladas
+	Chevron Pulse	Pulso de Chevrons
+	Radiating Lenses	Lentes Radiantes
+	Soft Shadow	Sombra Suave
+	Hard Shadow	Sombra Dura
+	Lifted Card	Cartão Elevado
+	Neon Tube	Tubo de Neon
+	Inner Light	Luz Interna
+	Feathered	Bordas Suaves
+	Haze	Bruma
+	Double Rule	Fio Duplo
+	Triple Rule	Fio Triplo
+	Dashed Border	Borda Tracejada
+	Dotted Border	Borda Pontilhada
+	Offset Keyline	Fio Deslocado
+	Inset Keyline	Fio Interno
+	Outside Stroke	Traçado Externo
+	Pointer	Ponteiro
+	Highlighter	Marca-texto
+	Sketchy Line	Linha Esboçada
+	Scribble Fill	Preenchimento Rabiscado
+	Wobble	Tremido
+	Zig Zag Edge	Borda em Zigue-zague
+	Wavy Edge	Borda Ondulada
+	Puffy	Inflado
+	Starburst	Explosão Estelar
+	Glossy	Brilhante
+	Brushed Metal	Metal Escovado
+	Spotlight	Holofote
+	Sunset Band	Faixa de Pôr do Sol
+	Sea Glass	Vidro do Mar
+	Pearl	Pérola
+	Chrome Rim	Borda Cromada
+	Glow Orb	Orbe Luminoso
+	Pill Badge	Selo Pílula
+	Round Badge	Selo Redondo
+	Flag Wave	Bandeira Ondulada
+	Bulge	Protuberância
+	Twisted	Torcido
+	Echo	Eco
+	Spiral Copies	Cópias em Espiral
+	Multiply Tint	Tinta Multiplicar
+	Darken Veil	Véu Escurecer
+	Ghosted	Fantasma
+	Two Tone	Bicolor
+	Overlay Glaze	Veladura Sobrepor
+	Screen Light	Luz Tela
+	Soft Light Wash	Aguada Luz Suave
+	Cyan Neon	Neon Ciano
+	Magenta Laser	Laser Magenta
+	Amber Tube	Tubo Âmbar
+	Electric Lime	Lima Elétrica
+	Pulse Violet	Violeta Pulsante
+	Cobalt Phosphor	Fósforo Cobalto
+	Burst	Explosão
+	Rounded Square	Quadrado Arredondado
+	Sun	Sol
+	Moon	Lua
+	Cloud	Nuvem
+	Rain	Chuva
+	Thunder	Trovão
+	Snow	Neve
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -7818,6 +8110,7 @@ breakText	Glyphs	Glifos
 @msg	One path lies inside the other, so they have no common tangents	Um demarcador está dentro do outro, então eles não têm tangentes comuns
 @msg	The paths overlap, so they have no internal tangents	Os demarcadores se sobrepõem, então eles não têm tangentes internas
 @msg	One path lies inside the other, so they have no internal tangents	Um demarcador está dentro do outro, então eles não têm tangentes internas
+@msg	The point lies inside the path, so it has no tangents	O ponto está dentro do demarcador, então ele não tem tangentes
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Expandir traços em demarcadores
 @msg	select paths with dashed strokes to expand	selecione demarcadores com traçado tracejado para expandir
@@ -9739,6 +10032,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the character's size can't be measured	não é possível medir o tamanho do caractere
 @msg	the code runs past its last instruction	o código passa da última instrução
 @msg	the compound shape is too complex to expand	a forma composta é complexa demais para expandir
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	uma linha ou outro caminho aberto que não envolve nenhuma área não acrescenta nenhuma área à forma composta; para incluí-lo, aplique primeiro Objeto › Caminho › Contornar Traçado a ele
 @msg	the container of the listed objects is gone	o contêiner dos objetos listados não existe mais
 @msg	the copy `{user_id}` can't be read as a library	a cópia `{user_id}` não pode ser lida como uma biblioteca
 @msg	the copy would leave the canvas	a cópia sairia da tela
@@ -10176,6 +10470,11 @@ swatch	Yellow Green	Verde-amarelado
 @msg	A panel is not joined to the rest by a crease.	Um painel não está unido ao restante por nenhuma linha de vinco.
 @msg	A fold line is on a non-printing layer.	Uma linha de dobra está em uma camada não imprimível.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Painéis: {panels}, dobradiças: {hinges}, erros: {errors}, avisos: {warnings}
+	Pressure Sensitive	Sensível à pressão
+	Flex Ribbon	Fita flexível
+	Pulse Stroke	Traço pulsante
+	Round Flow	Fluxo redondo
+	Chisel Flow	Fluxo chanfrado
 	Fold Preview	Visualização da Dobra
 	Fold	Dobra
 	Show Fold Lines	Mostrar Linhas de Dobra

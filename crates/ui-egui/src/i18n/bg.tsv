@@ -127,6 +127,7 @@
 	Add to Swatches	Добавяне към образци
 	Add Used Colors	Добавяне на използваните цветове
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
+	Plug-in Instruction Budget	Бюджет на инструкции за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
 	Adjust Adjoining Width Points	Регулиране на прилежащите точки за ширина
 	Incoming	Входяща
@@ -704,6 +705,16 @@ font-technology	Variable	Променливи
 	Create New Swatch…	Създаване на нов образец…
 	Create New {kind} Style	Създаване на нов стил за {kind}
 	Create Object Mosaic…	Създаване на обектова мозайка…
+	Create Object Mosaic	Създаване на обектова мозайка
+	Current Size:	Текущ размер:
+	New Size:	Нов размер:
+	Tile Spacing:	Разстояние между плочките:
+	Number of Tiles:	Брой плочки:
+	Constrain Ratio:	Ограничаване на съотношението:
+	Result:	Резултат:
+	Resize Using Percentages	Преоразмеряване с проценти
+	Delete Raster	Изтриване на растерното изображение
+	Use Ratio	Използване на съотношението
 	Create Outlines	Създаване на контур
 	Create Path	Създаване на път
 	Create PDF layers from layers and sublayers	Създаване на PDF слоеве от слоеве и подслоеве
@@ -792,6 +803,7 @@ font-technology	Variable	Променливи
 	Delete Brush	Изтриване на четка
 	Delete Color	Изтриване на цвят
 	Restore Generated Table	Възстановяване на генерираната таблица
+	Unshift All Colors	Преместване назад на всички цветове
 	Delete Character Style	Изтриване на стил за знаци
 	Delete Empty Artboards	Изтриване на празни работни области
 	Delete Freeform Point	Изтриване на свободна точка
@@ -967,6 +979,8 @@ font-technology	Variable	Променливи
 	Duplicate	Дублиране
 	Duplicate and Offset 10 pt	Дублиране и отместване с 10 pt
 	Duplicate Artboard	Дублиране на работна област
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Щракнете, за да добавите работна област от тази страна, Alt-щракване дублира тази работна област заедно с графиката ѝ
+	Click to add an artboard on this side	Щракнете, за да добавите работна област от тази страна
 	Copy Artboard	Копиране на работна област
 	Cut Artboard	Изрязване на работна област
 	Rename Artboards	Преименуване на работни области
@@ -1253,6 +1267,16 @@ font-technology	Variable	Променливи
 	Fill: click for swatches, Shift-click for the color mixer	Запълване: щракнете за образци, Shift-щракване за смесителя на цветове
 	Find	Търсене
 	Find and Replace…	Търсене и замяна…
+	Find and Replace	Търсене и замяна
+	Find:	Търсене:
+	Replace With:	Замяна с:
+	Replace & Find	Замяна и търсене
+	Replace All	Замяна на всички
+	Match Case	Съвпадение на малки и главни букви
+	Find Whole Word	Търсене на цяла дума
+	Search Backwards	Търсене назад
+	Check Hidden Layers	Проверка на скритите слоеве
+	Check Locked Layers	Проверка на заключените слоеве
 	Find Font	Търсене на шрифт
 	Find Font…	Търсене на шрифт…
 	Find Next	Търсене на следващ
@@ -3143,6 +3167,9 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Колко близо на екрана показалецът или влачена точка трябва да стигне до обект, за да прилепнат интелигентните водачи; разстоянието е еднакво при всеки мащаб.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Прилепва края на линеен сегмент или окръжност, начертана от центъра си, така че да докосва близка крива.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Прилепва края на линеен сегмент така, че да среща близък прав сегмент под прав ъгъл.
+	Edit type set in fonts that aren't available?	Да се редактира ли текст с шрифтове, които не са налични?
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показва номера на всяка отрязана част в каре в горния ѝ ляв ъгъл върху платното; когато е изключено, контурите на отрязаните части остават видими.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Цветът на контурите на потребителските и обектните отрязани части и на каретата с номерата им; автоматичните отрязани части използват по-блед нюанс на този цвят.
 	Reset all preferences to their defaults?	Да се нулират ли всички настройки до стойностите по подразбиране?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Стойностите по подразбиране се прилагат, когато щракнете върху ОК в Настройки. Отказ там запазва текущите ви настройки.
 	Restore Recovered Documents	Възстановяване на възстановените документи
@@ -3360,6 +3387,12 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Търсене на команди, инструменти, панели и ефекти…
 	No commands match	Няма съвпадащи команди
 	{pos} of {total}: {name}	{pos} от {total}: {name}
+	No menu item	Няма елемент в менюто
+	Toolbar	Лента с инструменти
+	{toolbar}, in the {tool} group	{toolbar}, в групата на {tool}
+	In the menu bar: {path}	В лентата с менюта: {path}
+	In the {group} group: press and hold to open it	В групата {group}: натиснете и задръжте, за да я отворите
+	{home}, not shown now	{home}, не се показва сега
 @plural	{n} result|{n} results	{n} резултат|{n} резултата
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} от {n} резултат. Продължете да пишете, за да ги стесните.|{shown} от {n} резултата. Продължете да пишете, за да ги стесните.
 	Recent Commands	Последни команди
@@ -3503,6 +3536,7 @@ digits	Malayalam	Малаялам
 	Show Brush Size	Показване на размера на четката
 	Show Center	Показване на център
 	Show Code	Показване на код
+	Show in Browser	Показване в браузър
 	Show Color Groups	Показване на цътни групи
 	Show Color Swatches	Показване на цветни образци
 	Show Corner Widget	Показване на уиджета за ъгъл
@@ -4679,6 +4713,7 @@ axis	Both	И двете
 @msg	choose a location for the package	изберете местоположение за пакета
 @msg	clipboard is empty	клипбордът е празен
 @msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: поне един цвят трябва да остане в цветовата таблица
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` назовава цвят, който друг ключ също назовава
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не е цвят като "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: най-много {MAX_TABLE} цвята
 @msg	command `{0}` is not available right now: {1}	команда `{0}` не е налична в момента: {1}
@@ -6161,6 +6196,11 @@ theme	Appearance	Външен вид
 	The active document changed while the screen color sampler was open	Активният документ се промени, докато взимането на цвят от екрана беше отворено
 	This system has no screen color sampler	Тази система няма инструмент за взимане на цвят от екрана
 	Color blindness – Tritanopia-type	Цветна слепота – тип тританопия
+	Show Color Vision Preview	Показване на преглед на цветовото зрение
+	Protanopia	Протанопия
+	Deuteranopia	Девтеранопия
+	Tritanopia	Тританопия
+	Achromatopsia	Ахроматопсия
 	Panels Except Tools and Control	Панели без инструменти и контрол
 
 # Type › Reset Tracking and Kerning
@@ -6499,6 +6539,7 @@ axis	Y Axis	Y ос
 	Checkpoint	Контролна точка
 	Inventory Icons	Икони на инвентара
 	Skill Icons	Икони на умения
+	Weather Icons	Икони за времето
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -6614,6 +6655,252 @@ axis	Y Axis	Y ос
 	Stars	Звезди
 	Triangles	Триъгълници
 	Sparkles	Искри
+	Warm Gray	Топло сиво
+	Cool Gray	Студено сиво
+	Neutrals	Неутрални
+	Ivory	Слонова кост
+	Linen	Лен
+	Oat	Овес
+	Greige	Грейж
+	Stone	Камък
+	Taupe	Сиво-кафяво
+	Slate	Шисти
+	Clay	Глина
+	Terracotta	Теракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Пясък
+	Olive	Маслинено
+	Moss	Мъх
+	Rosy	Розовеещо
+	Neutral	Неутрално
+	Golden	Златисто
+	Pastel	Пастелни
+	Pastel Red	Пастелно червено
+	Pastel Orange	Пастелно оранжево
+	Pastel Amber	Пастелно кехлибарено
+	Pastel Yellow	Пастелно жълто
+	Pastel Lime	Пастелно лаймово
+	Pastel Green	Пастелно зелено
+	Pastel Teal	Пастелно синьо-зелено
+	Pastel Cyan	Пастелен циан
+	Pastel Azure	Пастелно лазурно
+	Pastel Blue	Пастелно синьо
+	Pastel Violet	Пастелно виолетово
+	Pastel Magenta	Пастелна магента
+	Soft Red	Меко червено
+	Soft Orange	Меко оранжево
+	Soft Amber	Меко кехлибарено
+	Soft Yellow	Меко жълто
+	Soft Lime	Меко лаймово
+	Soft Green	Меко зелено
+	Soft Teal	Меко синьо-зелено
+	Soft Cyan	Мек циан
+	Soft Azure	Меко лазурно
+	Soft Blue	Меко синьо
+	Soft Violet	Меко виолетово
+	Soft Magenta	Мека магента
+	Vivid Red	Ярко червено
+	Vivid Orange	Ярко оранжево
+	Vivid Amber	Ярко кехлибарено
+	Vivid Yellow	Ярко жълто
+	Vivid Lime	Ярко лаймово
+	Vivid Green	Ярко зелено
+	Vivid Teal	Ярко синьо-зелено
+	Vivid Cyan	Ярък циан
+	Vivid Azure	Ярко лазурно
+	Vivid Blue	Ярко синьо
+	Vivid Violet	Ярко виолетово
+	Vivid Magenta	Ярка магента
+	Deep	Наситени
+	Deep Red	Тъмночервено
+	Deep Orange	Тъмнооранжево
+	Deep Amber	Тъмно кехлибарено
+	Deep Yellow	Тъмножълто
+	Deep Lime	Тъмно лаймово
+	Deep Green	Тъмнозелено
+	Deep Teal	Тъмно синьо-зелено
+	Deep Cyan	Тъмен циан
+	Deep Azure	Тъмно лазурно
+	Deep Blue	Тъмносиньо
+	Deep Violet	Тъмновиолетово
+	Deep Magenta	Тъмна магента
+	Gold	Злато
+	Silver	Сребро
+	Bronze	Бронз
+	Copper	Мед
+	Brass	Месинг
+	Rose Gold	Розово злато
+	Gunmetal	Оръжеен метал
+	Platinum	Платина
+	Pewter	Калай
+	Ember	Жарава
+	Lagoon	Лагуна
+	Dusk	Здрач
+	Clay to Teal	От глина до синьо-зелено
+	Plum to Olive	От слива до маслинено
+	Complementary Coral	Коралово, комплементарни
+	Split Complementary Coral	Коралово, сплит-комплементарни
+	Analogous Coral	Коралово, аналогови
+	Triad Coral	Коралово, триада
+	Tetrad Coral	Коралово, тетрада
+	Pentagram Coral	Коралово, петограм
+	Complementary Teal	Синьо-зелено, комплементарни
+	Split Complementary Teal	Синьо-зелено, сплит-комплементарни
+	Analogous Teal	Синьо-зелено, аналогови
+	Triad Teal	Синьо-зелено, триада
+	Tetrad Teal	Синьо-зелено, тетрада
+	Pentagram Teal	Синьо-зелено, петограм
+	Soft Spectrum	Мек спектър
+	Red to Amber	От червено до кехлибарено
+	Orange to Yellow	От оранжево до жълто
+	Amber to Lime	От кехлибарено до лаймово
+	Yellow to Green	От жълто до зелено
+	Lime to Teal	От лаймово до синьо-зелено
+	Green to Cyan	От зелено до циан
+	Teal to Azure	От синьо-зелено до лазурно
+	Cyan to Blue	От циан до синьо
+	Azure to Violet	От лазурно до виолетово
+	Blue to Magenta	От синьо до магента
+	Violet to Red	От виолетово до червено
+	Magenta to Orange	От магента до оранжево
+	Dawn	Зазоряване
+	Noon	Пладне
+	Sunset	Залез
+	Night	Нощ
+	Overcast	Облачно
+	White to Black	От бяло до черно
+	Light Grays	Светлосиви
+	Dark Grays	Тъмносиви
+	Warm Grays	Топли сиви
+	Cool Grays	Студени сиви
+	Fade to Transparent	Преливане към прозрачно
+	White Fade	Бяло преливане
+	Vignette	Винетка
+	Mist	Мъгла
+	Petal	Венчелистче
+	Fern	Папрат
+	Smoke	Дим
+	Honey	Пчелен мед
+	Seafoam	Морска пяна
+	Lavender	Лавандула
+	Driftwood	Изхвърлено дърво
+	Ink Wash	Лавиран туш
+	Tide	Прилив
+	Bloom	Цъфтеж
+	Dew	Роса
+	Pollen	Прашец
+	Lichen	Лишей
+	Prism Veil	Призмен воал
+	Opal Ribbon	Опалова лента
+	Pearl Flash	Перлен проблясък
+	Aurora Foil	Фолио полярно сияние
+	Iris Sheen	Ирисов отблясък
+	Frost Spectrum	Скрежен спектър
+	Silver Tide	Сребърен прилив
+	Rose Quartz Gleam	Блясък на розов кварц
+	Moonstone Shift	Преливане на лунен камък
+	Violet Edge	Виолетов ръб
+	Mint Halo	Ментов ореол
+	Amber Corona	Кехлибарена корона
+	Polar Glint	Полярен проблясък
+	Pastel Orbit	Пастелна орбита
+	Coral and Navy	Коралово и тъмносиньо
+	Plum and Lime	Слива и лайм
+	Teal and Gold	Синьо-зелено и злато
+	Indigo and Peach	Индиго и праскова
+	Forest and Rose	Гора и роза
+	Red Glow	Червено сияние
+	Orange Glow	Оранжево сияние
+	Amber Glow	Кехлибарено сияние
+	Yellow Glow	Жълто сияние
+	Lime Glow	Лаймово сияние
+	Green Glow	Зелено сияние
+	Teal Glow	Синьо-зелено сияние
+	Cyan Glow	Цианово сияние
+	Azure Glow	Лазурно сияние
+	Blue Glow	Синьо сияние
+	Violet Glow	Виолетово сияние
+	Magenta Glow	Магентено сияние
+	Polka Dots	Едри точки
+	Vertical Stripes	Вертикални ивици
+	Horizontal Stripes	Хоризонтални ивици
+	Diagonal Stripes	Диагонални ивици
+	Checkerboard	Шахматна дъска
+	Diamonds	Ромбове
+	Crosses	Кръстчета
+	Coarse Grit	Едро зърно
+	Stipple	Пунктир
+	Scratches	Драскотини
+	Sparse Flecks	Редки петънца
+	Dense Flecks	Гъсти петънца
+	Sine Bands	Синусоидни ленти
+	Ripple Lines	Вълнисти линии
+	Interference Rings	Интерференчни пръстени
+	Offset Rings	Отместени пръстени
+	Warped Checks	Изкривени квадрати
+	Pinched Stripes	Притиснати ивици
+	Chevron Pulse	Пулсиращи шеврони
+	Radiating Lenses	Излъчващи лещи
+	Soft Shadow	Мека сянка
+	Hard Shadow	Твърда сянка
+	Lifted Card	Повдигната карта
+	Neon Tube	Неонова тръба
+	Inner Light	Вътрешна светлина
+	Feathered	Размити ръбове
+	Haze	Омара
+	Double Rule	Двойна линия
+	Triple Rule	Тройна линия
+	Dashed Border	Пунктирана рамка
+	Dotted Border	Точкова рамка
+	Offset Keyline	Отместен контур
+	Inset Keyline	Вътрешен контур
+	Outside Stroke	Външен щрих
+	Pointer	Показалец
+	Highlighter	Маркер
+	Sketchy Line	Скицирана линия
+	Scribble Fill	Драскано запълване
+	Wobble	Клатене
+	Zig Zag Edge	Зигзагообразен ръб
+	Wavy Edge	Вълнист ръб
+	Puffy	Надут
+	Starburst	Звезден взрив
+	Glossy	Лъскав
+	Brushed Metal	Шлифован метал
+	Spotlight	Прожектор
+	Sunset Band	Ивица на залеза
+	Sea Glass	Морско стъкло
+	Pearl	Перла
+	Chrome Rim	Хромиран кант
+	Glow Orb	Светеща сфера
+	Pill Badge	Значка-капсула
+	Round Badge	Кръгла значка
+	Flag Wave	Развяващо се знаме
+	Bulge	Издутина
+	Twisted	Усукан
+	Echo	Ехо
+	Spiral Copies	Копия по спирала
+	Multiply Tint	Оттенък умножение
+	Darken Veil	Воал потъмняване
+	Ghosted	Призрачен
+	Two Tone	Двуцветен
+	Overlay Glaze	Глазура прекриване
+	Screen Light	Светлина екран
+	Soft Light Wash	Лавиране мека светлина
+	Cyan Neon	Циан неон
+	Magenta Laser	Магента лазер
+	Amber Tube	Кехлибарена тръба
+	Electric Lime	Електрически лайм
+	Pulse Violet	Пулсиращо виолетово
+	Cobalt Phosphor	Кобалтов фосфор
+	Burst	Взрив
+	Rounded Square	Закръглен квадрат
+	Sun	Слънце
+	Moon	Луна
+	Cloud	Облак
+	Rain	Дъжд
+	Thunder	Гръм
+	Snow	Сняг
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб
@@ -7026,6 +7313,7 @@ breakText	Glyphs	Глифи
 @msg	One path lies inside the other, so they have no common tangents	Единият път е вътре в другия, затова нямат общи допирателни
 @msg	The paths overlap, so they have no internal tangents	Пътищата се припокриват, затова нямат вътрешни допирателни
 @msg	One path lies inside the other, so they have no internal tangents	Единият път е вътре в другия, затова нямат вътрешни допирателни
+@msg	The point lies inside the path, so it has no tangents	Точката е вътре в пътя, затова няма допирателни
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Разширяване на тиретата в пътища
 @msg	select paths with dashed strokes to expand	изберете пътища с прекъснат щрих за разширяване
@@ -7368,3 +7656,8 @@ breakText	Glyphs	Глифи
 @msg	A joint does not close by {gap} pt.	Една връзка не се затваря с {gap} pt.
 @msg	Two panels pass through each other.	Два панела минават един през друг.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer трябва да е "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"
+	Pressure Sensitive	Чувствителни на натиск
+	Flex Ribbon	Гъвкава лента
+	Pulse Stroke	Пулсиращ щрих
+	Round Flow	Кръгъл поток
+	Chisel Flow	Скосен поток

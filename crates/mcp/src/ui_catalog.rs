@@ -144,6 +144,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
     (
+        "file.export.svg.browser",
+        "Show in Browser",
+        "",
+        "{svg?: {…SVG options}, exportSelection?} SVG Options' Show in Browser: write the SVG of one page (with exportSelection the selection's crop, else the first artboard the options choose) and its linked images to a new temporary folder and open it in the default browser (desktop; refused for control and MCP requests) → {path, warnings}",
+    ),
+    (
         "file.export.png",
         "Export As PNG…",
         "",
@@ -688,7 +694,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.float",
         "Float Panel",
         "",
-        "{panel: id or \"tools\", x?, y?, width?, height?, group?: bool, column?: bool or n, onto?: id, above?: id, below?: id, collapsed?: bool} float a panel (with `group`, its whole group; with `column`, its whole dock column or floating window) as a floating window with its top-left corner at x, y in window points (default: inside the dock area, cascaded), as dragging its tab out does; a whole floating window keeps its rect unless given one. `onto` makes it a tab of the floating group holding that panel instead; `above` / `below` a group of its own above or below the group holding that panel, in its floating window or dock column. `collapsed` then minimizes (true) or restores (false) its window or group. A hidden panel shows first. \"tools\" floats the Tools panel at x, y. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", x?, y?, width?, height?, group?: bool, column?: bool or n, onto?: id, above?: id, below?: id, collapsed?: bool} float a panel (with `group`, its whole group; with `column`, its whole dock column or floating window) as a floating window with its top-left corner at x, y in window points (default: inside the dock area, cascaded), as dragging its tab out does; a whole floating window keeps its rect unless given one. Supplied geometry also moves or resizes an existing native window; omitted components keep their current values. `onto` makes it a tab of the floating group holding that panel instead; `above` / `below` a group of its own above or below the group holding that panel, in its floating window or dock column. `collapsed` then minimizes (true) or restores (false) its window or group. A hidden panel shows first. \"tools\" floats the Tools panel at x, y. Returns {layout, closed, floating}",
     ),
     (
         "window.panel.dock",
@@ -871,7 +877,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{effect: id, index?: int (edit that applied effect in place, prefilled; OK runs effect.setParams), item?: appearance item index|null (the fill/stroke whose effects, null the object's; default: the Appearance panel's active item), aligned?: bool (index and item are rows of the first selected object's stack, which OK edits in each object where it has them, as effect.setParams does)} open the effect's dialog with live preview; without `index`, an effect already in that list first opens `effectExists` (confirm edits it, discard adds another) → {pending: \"effectExists\"}",
     ),
-    ("ui.paramDialog", "Command Dialog", "", "{command, label?, params} open a parameter dialog for any command"),
+    (
+        "ui.paramDialog",
+        "Command Dialog",
+        "",
+        "{command, label?, params} open a parameter dialog for any command. For edit.findReplace it opens Find and Replace (dialog `findReplace`), which stays open: fields find, replace, matchCase, wholeWord, backwards, hiddenLayers, lockedLayers, and action, which ui.dialog.confirm runs: find (the next match, edit.findNext, shown in the dialog with its place among the matches), replace (the match found, edit.replaceMatch), replaceFind (both), replaceAll (edit.findReplace) or done (close). After each one action is find again. Replace and Replace & Find change a match that find reached with the find text and options as they are now, and find one otherwise. The dialog opens on the last search, with the fields params gives in its place (a null field gives none; a field of the wrong type is an error, and ui.dialog.confirm then runs no action), and Edit › Find Next goes on from it in the same document while the dialog is closed",
+    ),
     (
         "ui.recolorDialog",
         "Recolor Artwork…",
@@ -1026,7 +1037,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.symbolOptions",
         "Symbol Options…",
         "F8",
-        "{name?} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}. With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}",
+        "{name?, edit?, keepArt?: false} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}, with keepArt: true when it was opened with keepArt: true (the selection stays ordinary art). With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}; keepArt: true is then an error",
     ),
     (
         "tool.options",
@@ -1443,7 +1454,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.colorWheel",
         "Color Wheel Options",
         "",
-        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); keys left out keep their values, params that are not an object, another key or a value off the list are an error and change nothing, both are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel}",
+        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue, vision?: bool} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); vision shows Show Color Vision Preview's row under the wheel or the box, four chips with the current color as simulated for protanopia, deuteranopia and tritanopia (the simulations of view.proofSetup's protanopia, deuteranopia and tritanopia targets) and for achromatopsia (the gray with the color's CIE L*), each named with its hex value in its tooltip and to screen readers, and taking the keyboard focus; a click or a key on a chip does not apply its color; keys left out or null keep their values ({} reads them), params that are not an object, another key or a value off the list are an error and change nothing, the settings are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel, vision}",
     ),
     (
         "ui.savePdfDialog",

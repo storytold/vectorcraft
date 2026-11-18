@@ -360,6 +360,8 @@ pub struct Session {
     /// Set while [`Session::tool_typed_text`] passes keyboard input to the active tool
     /// ([`vectorcraft_tools::ToolContext::typed_from_keyboard`]).
     keyboard_text: bool,
+    /// The messages `app.toast` and [`Session::toast`] queued for the app to show; not saved.
+    pub(crate) toasts: cmd::toast::Queue,
 }
 
 impl Default for Session {
@@ -415,7 +417,7 @@ use history::history_budget_for;
 pub use history::{History, HistoryEntry, NamedStep, default_history_budget};
 pub(crate) use interaction::PreviewCopies;
 pub use interaction::{Interaction, LastTransform, UndoGroup, UndoScope};
-pub use prefs::{DrawMode, Prefs};
+pub use prefs::{DrawMode, PluginBudget, Prefs};
 pub use sanity::TOO_DEEP;
 pub(crate) use sanity::{deselect_hidden, is_guide_path};
 #[cfg(test)]
