@@ -284,6 +284,8 @@ pub const DYNAMIC_LABELS: &[&str] = &[
     "Show Edges",
     "Hide Corner Widget",
     "Show Corner Widget",
+    "Hide Shape Widgets",
+    "Show Shape Widgets",
     "Hide Text Threads",
     "Show Text Threads",
     "Hide Hidden Characters",
