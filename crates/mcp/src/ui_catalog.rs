@@ -143,7 +143,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} opens SVG Options; with params = document.export {path?, svg?: {…SVG options}, range?…} (a .svgz path writes it gzipped)",
     ),
-    ("file.export.png", "Export As PNG…", "", "{path?, …document.export options}; no path: pick the file, then PNG Options"),
+    (
+        "file.export.png",
+        "Export As PNG…",
+        "",
+        "{path?, …document.export options}; no path: pick the file, then PNG Options with supplied options retained and defaults for omitted options",
+    ),
     (
         "file.exportForScreens",
         "Export for Screens…",
@@ -161,6 +166,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("app.home", "Home", "", "{} shows the Home screen (new file presets, Open) over the open documents; choosing a document tab returns to it"),
     ("edit.preferences", "Preferences…", "Cmd+K", "{category?} open Preferences (engine: prefs.get / prefs.set / prefs.list)"),
     ("edit.keyboardShortcuts", "Keyboard Shortcuts…", "Cmd+Alt+Shift+K", "{}"),
+    (
+        "view.refreshMonitorProfile",
+        "Refresh Monitor Profile",
+        "",
+        "{} read the display's profile for Use Monitor Profile for Canvas (monitorProfileDisplay) again on the next frame, without waiting for the 10-second reading or the 1-second display check; while a reading runs, the request waits for it to end → {requested: true}, before the profile is read (ui.inspect › displayProfile reports the reading, and readRequested while it waits); an error while the preference is off, and where nothing reads the display's profile (the web build)",
+    ),
     (
         "edit.autoSpellCheck",
         "Auto Spell Check",
@@ -233,7 +244,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "",
         "{} toggle drawing the gaps of the selected Live Paint groups (those livePaint.info lists) in each group's Gap Preview Color while edges show → true when on",
     ),
-    ("type.hiddenCharacters", "Show Hidden Characters", "Cmd+Alt+I", "{} toggle markers for spaces, paragraph ends and story ends"),
+    (
+        "type.hiddenCharacters",
+        "Show Hidden Characters",
+        "Cmd+Alt+I",
+        "{} toggle markers for spaces, tabs, nonbreaking and fixed-width spaces, discretionary hyphens, forced line breaks, paragraph ends and story ends",
+    ),
     ("type.alignLeft", "Align left", "Cmd+Shift+L", "{} align the selected type's paragraphs (or those the Type tool's selection touches) left"),
     (
         "type.alignCenter",
@@ -260,7 +276,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.bulletsAndNumbering",
         "Bullets and Numbering…",
         "",
-        "{tab?: \"bullets\"|\"numbers\"} open Bullets and Numbering (More Options in the Paragraph panel's Bullets and Numbered List presets) on the paragraphs the Paragraph panel acts on, filled in with the values it shows, on that tab (without it, Numbers when the paragraphs are a numbered list, else Bullets) (dialog `bulletsAndNumbering`: tab (bullets|numbers), list (none|bullet|number: the kind of the preset picked), bullet (dot|dash|circle|square), number (arabic|upperLetters|lowerLetters|upperRoman|lowerRoman|twoDigits|threeDigits), listAlign (left|right), listLevel (1..9; 1 for paragraphs in no list), leftIndent, firstLineIndent (pt)): the type shows the dialog's values while it is open, OK runs text.setFormat with the values that changed (and the indents it shows when a preset puts the paragraphs in a list), as one undo step, and Cancel puts the type back; a preset picked for paragraphs in no list whose indents are 0 fills in 18 and -18 pt; an error with no type selected or an unknown tab",
+        "{tab?: \"bullets\"|\"numbers\"} open Bullets and Numbering (More Options in the Paragraph panel's Bullets and Numbered List presets) on the paragraphs the Paragraph panel acts on, filled in with the values it shows, on that tab (without it, Numbers when the paragraphs are a numbered list, else Bullets) (dialog `bulletsAndNumbering`: tab (bullets|numbers), list (none|bullet|number: the kind of the preset picked), bullet (dot|dash|circle|square), number (arabic|upperLetters|lowerLetters|upperRoman|lowerRoman|twoDigits|threeDigits), listAlign (left|right), listLevel (1..9; 1 for paragraphs in no list), leftIndent, firstLineIndent (pt), startAt (bool: the Numbers tab's Start at box, on when the paragraphs have the same number of their own, blank when those differ; on sends startNumber, off sends restartNumbering false), startNumber (1..999999999: its number, 1 until one is typed)): the type shows the dialog's values while it is open, OK runs text.setFormat with the values that changed (and the indents it shows when a preset puts the paragraphs in a list), as one undo step, and Cancel puts the type back; a preset picked for paragraphs in no list whose indents are 0 fills in 18 and -18 pt; an error with no type selected or an unknown tab",
     ),
     (
         "type.convertListToText",
@@ -375,6 +391,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Highlight Font Name",
         "Cmd+Alt+Shift+F",
         "{} show the Character panel if it is hidden and open its font family menu, whose search field takes the keyboard focus: type to search, Enter applies the highlighted font → {field: \"fontName\"}. Without selected type (or text the Type tool edits) the panel shows, and the error says to select type first",
+    ),
+    (
+        "type.highlightFontSize",
+        "Highlight Font Size",
+        "",
+        "{} (Type › Size › Other…) show the Character panel if it is hidden and give its Font Size field the keyboard focus with its value selected (blank where the selected sizes differ): type a size and press Enter → {field: \"fontSize\"}. Without selected type (or text the Type tool edits) the panel shows, and the error says to select type first",
     ),
     (
         "type.highlightKerning",
@@ -506,7 +528,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolsBesideCanvas",
         "Keep Tools Beside the Canvas",
         "",
-        "{on?: bool} dock the Tools panel between the left-side panels and the canvas (true) or at the window's left edge (false, the default), or toggle (omitted or null; any other value is an error); a floating Tools panel stays floating and docks at the chosen place when it is docked again. Kept with the workspace; a workspace saved without it docks Tools at the window's edge. Returns the new state",
+        "{on?: bool} dock the Tools panel between the left-side panels and the canvas (true) or at the window's left edge (false, the default), or toggle (omitted or null; any other value is an error); a floating Tools panel stays floating and docks at the chosen place when it is docked again. Dropping a floating Tools panel on the canvas's left edge, right of panels docked on the left, turns it on, and on the window's left edge turns it off; with no panels docked on the left, or in the column both edges share beside panels collapsed to icons, a drop leaves it as it is. Kept with the workspace; a workspace saved without it docks Tools at the window's edge. Returns the new state",
     ),
     (
         "window.floatTools",
@@ -666,7 +688,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.panel.float",
         "Float Panel",
         "",
-        "{panel: id or \"tools\", x?, y?, width?, height?, group?: bool, column?: bool or n, onto?: id, above?: id, below?: id, collapsed?: bool} float a panel (with `group`, its whole group; with `column`, its whole dock column or floating window) as a floating window with its top-left corner at x, y in window points (default: inside the dock area, cascaded), as dragging its tab out does; a whole floating window keeps its rect unless given one. `onto` makes it a tab of the floating group holding that panel instead; `above` / `below` a group of its own above or below the group holding that panel, in its floating window or dock column. `collapsed` then minimizes (true) or restores (false) its window or group. A hidden panel shows first. \"tools\" floats the Tools panel at x, y. Returns {layout, closed, floating}",
+        "{panel: id or \"tools\", x?, y?, width?, height?, group?: bool, column?: bool or n, onto?: id, above?: id, below?: id, collapsed?: bool} float a panel (with `group`, its whole group; with `column`, its whole dock column or floating window) as a floating window with its top-left corner at x, y in window points (default: inside the dock area, cascaded), as dragging its tab out does; a whole floating window keeps its rect unless given one. Supplied geometry also moves or resizes an existing native window; omitted components keep their current values. `onto` makes it a tab of the floating group holding that panel instead; `above` / `below` a group of its own above or below the group holding that panel, in its floating window or dock column. `collapsed` then minimizes (true) or restores (false) its window or group. A hidden panel shows first. \"tools\" floats the Tools panel at x, y. Returns {layout, closed, floating}",
     ),
     (
         "window.panel.dock",
@@ -792,7 +814,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.tile",
         "Tile",
         "",
-        "{} show every open document and each further view of one (window.newWindow) at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of panes, rounded up), each fitted to its pane; the current window's pane takes the tools, a click in another pane makes its window the current one; the tabs stay; windows floating come back under the tabs first; with fewer than two windows open the view stays as it is; returns {tiled, panes}",
+        "{layout?: grid|vertical|horizontal|2up|3up|4up|6up} show the open documents and each further view of one (window.newWindow) at once, edge to edge in the document area, one pane each, each fitted to its pane: `grid` (the default) in a grid (columns: the square root of the number of panes, rounded up), `vertical` side by side in one row (Tile All Vertically), `horizontal` stacked in one column (Tile All Horizontally), `2up`, `3up`, `4up` and `6up` at most that many panes (2up and 3up side by side, 4up two by two, 6up three by two) with the other windows under their tabs: the first windows in tab order, the current window in the last pane when it is not among them; the current window's pane takes the tools, a click in another pane makes its window the current one; the tabs stay; windows floating come back under the tabs first; with fewer than two windows open the view and the layout stay as they are; any other `layout` is an error; returns {tiled, panes, layout}",
     ),
     (
         "window.arrange.floatInWindow",
@@ -826,10 +848,16 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools) → {tool}; a tool that cannot be chosen returns the error"),
     (
+        "tool.selectLastSelection",
+        "Select Last Selection Tool",
+        "Cmd+~",
+        "{} choose the selection tool chosen last (Selection, Direct Selection or Group Selection; none yet: the Selection tool), keeping the active tool when it is that tool; choosing Magic Wand, Lasso or any other tool does not change which one it chooses → {tool}. Default shortcut Ctrl+` on Windows and Linux, none on macOS, where Cmd+` switches windows",
+    ),
+    (
         "tool.setOption",
         "Tool Option",
         "",
-        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` reads them). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen",
+        "{key, value} | {values: {key: value…}}, tool?: id (default: the active tool) → the tool's options (`{}` or no params reads them; params that are not an object are an error). The options a tool keeps (Liquify brush and tool options, Mirror & Cut, Puppet Warp, drawing tools…) last across tool switches and are saved with the preferences; another tool's are stored for when it is chosen. Every option is checked before any is set: an option the tool doesn't have, a value of the wrong type, a number out of the tool's range or an unknown choice is an error naming the tool and the option, and nothing changes. The Live Paint tools' width and the Shape Builder's gapLength are set to the nearest end of their range instead",
     ),
     (
         "tool.toggleTouchMode",
@@ -872,6 +900,25 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ("help.about", "About VectorCraft", "", "{}"),
     ("help.checkForUpdates", "Check for Updates…", "", "{}"),
     ("help.commandPalette", "Search Commands…", "Cmd+Shift+/", "{}"),
+    (
+        "help.discover",
+        "VectorCraft Help…",
+        "F1",
+        "{query?: string (at most 1024 characters, VectorCraft's limit)} show the Help panel without toggling it closed; a supplied query searches tools, menu commands, and built-in tutorials; omission keeps the current search. Returns {query, results: [{kind: tool|command|tutorial, id, label, path, shortcut}], selected: index|null}",
+    ),
+    (
+        "help.discover.search",
+        "Search",
+        "",
+        "{query: string (at most 1024 characters, VectorCraft's limit)} search tools, menu commands, and built-in tutorials and show the Help panel; empty or whitespace-only text clears the results. Returns the help.discover result",
+    ),
+    (
+        "help.discover.choose",
+        "Select",
+        "",
+        "{index: zero-based result index} show a tool's location, a tutorial's steps in Help, or a command's menu path and shortcut without running it; an invalid index is an error. Returns {result: chosen result, location: tool location, tutorial id, or command path}",
+    ),
+    ("help.discover.back", "Back", "", "{} return from a Help result to its search results without changing the query"),
     (
         "help.safeMode",
         "Safe Mode…",
@@ -925,7 +972,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.brushOptions",
         "Brush Options…",
         "",
-        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
+        "{name?} (default: the selected path's brush, else the current brush) open its Brush Options, what double-clicking a brush in the Brushes panel opens (dialog `brushOptions`): Calligraphic (fields name, angle −180..180, roundness 0..100, size 0..1296 pt, angleMode/roundnessMode/sizeMode: fixed|random|pressure, angleVariation/roundnessVariation/sizeVariation), Bristle (fields name, shape, size, length, density, thickness, opacity, stiffness), Scatter (fields sizeMin/sizeMax/sizeMode, spacingMin/spacingMax/spacingMode, scatterMin/scatterMax/scatterMode, rotationMin/rotationMax/rotationMode with modes fixed|random|pressure, rotationRelativeTo: page|path, hueJitter 0..180°), Art (fields width %, scaleMode: proportional|stretch|betweenGuides, guideStart/guideEnd % of the art length, direction: leftToRight|rightToLeft|topToBottom|bottomToTop, flipAlong, flipAcross) or Pattern (fields scale %, spacing %, fit: stretch|addSpace|approximate, flipAlong, flipAcross); Scatter, Art and Pattern also colorization: none|tints|tintsAndShades|hueShift, keyColor, and tips: true opens Colorization Tips (what each method does, beside a sample of the brush painted with it), as the Tips button beside Method does; OK runs brush.options",
+    ),
+    (
+        "ui.brushObjectOptions",
+        "Options of Selected Object…",
+        "",
+        "{} open the Brushes panel menu's Options of Selected Object (dialog `brushOptions` with `__object`): the Brush Options of the brush that the first selected brushed path paints with, at that path's own settings, without the name field; Art shows width, widthMax/widthMode, flipAlong, flipAcross and overlap, and Pattern scale, spacing, flipAlong, flipAcross and fit, each with colorization; OK runs brush.objectOptions on the brushed paths selected when it opened, with the values changed since it opened (one end of a range or one colorization field changed leaves each path's other values as they are), and the brush stays as it is. An error with nothing painted with a brush selected, for paths painted with brushes of different types and for a bristle brush",
     ),
     (
         "ui.graphicStyleOptions",
@@ -973,7 +1026,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.symbolOptions",
         "Symbol Options…",
         "F8",
-        "{name?} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}. With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}",
+        "{name?, edit?, keepArt?: false} open Symbol Options (dialog `symbolOptions`, fields `name`, `exportType`: movieClip|graphic, `registration` 0..8). Without `name` and with a selection: New Symbol (default name the first free \"New Symbol\"/\"New Symbol N\", Export Type Movie Clip, Registration centre); OK runs symbol.new {name, exportType, registration}, with keepArt: true when it was opened with keepArt: true (the selection stays ordinary art). With `edit: true` or `name`: edit that symbol; OK runs symbol.options {name, newName?, exportType, registration}; keepArt: true is then an error",
     ),
     (
         "tool.options",
@@ -1097,7 +1150,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.navigatorPanelOptions",
         "Panel Options…",
         "",
-        "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them)} set the Navigator panel's options, the color its view box is drawn in and solid dashes (kept with the UI state) → {color, solidDashes}; with neither, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
+        "{color?: #rrggbb or a preset name (Light Red, the default, then the layer colors such as \"Light Blue\"), solidDashes?: bool (Draw Dashed Lines as Solid Lines, off by default: the Navigator's thumbnail draws dashed strokes without their dashes; the canvas, printing and exports keep them), viewArtboardContentsOnly?: bool (View Artboard Contents Only in the panel menu, on by default and for UI state saved without it: the thumbnail fits the artboards and draws only the art inside them, cut at each artboard's edges; off, it also shows the art on the pasteboard)} set the Navigator panel's options, the color its view box is drawn in, solid dashes and artboard contents only (kept with the UI state) → {color, solidDashes, viewArtboardContentsOnly}; with none, open its Panel Options (dialog `navigatorPanelOptions`, fields color, solidDashes; OK sets them); an error for a value that is not a color or not true or false, which changes nothing",
     ),
     (
         "ui.layersExpand",
@@ -1146,6 +1199,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Flattener Preview",
         "",
         "{highlight?: none|rasterizedRegions|transparentObjects|allAffected|expandedPatterns|outlinedStrokes|outlinedText|allRasterized, overprints?: preserve|simulate|discard, preset?: name (loads its options), options?: {option keys, over the preset's}, showOptions?} set the Flattener Preview panel (ui.inspect: ui.flattener_preview), show it and refresh its snapshot → what flattener.preview answers for it",
+    ),
+    (
+        "ui.foldPreview",
+        "Fold Preview",
+        "",
+        "{amount?: 0..1 (how far the blank is folded), view?: front|back|left|right|top|bottom|threeQuarter, rotateX?: deg -180..180 (the top toward the viewer), rotateY?: deg -180..180 (the right side toward the viewer), zoom?: 0.1..8 (1 fits the folded blank), perspective?: deg 0..160 (field of view; 0 for none), inside?: #rrggbb, the name of a swatch with a plain color, or empty for white (the board's inside), showFoldLines?: bool, base?: [x, y] (the panel under this point stays in place; an error when it is in no panel) or null (the largest panel)} set the Fold Preview window (ui.inspect: ui.fold_preview), which folds the blank that the document's shown fold lines make (addon.packaging.fold) with the document's art printed on the outside, show it and draw it again; view and zoom also center the view. A value of the wrong kind or out of range is an error and sets nothing → the window's settings and frame: the last frame's {width, height (pixels), foldMs, drawMs} or null",
     ),
     (
         "ui.copyScriptConsole",
@@ -1264,7 +1323,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.expandDialog",
         "Expand…",
         "",
-        "{} open Expand for the selection (dialog `expand`, fields object, fill, stroke (all on; one the selection has nothing for is disabled, see object.expand.info), gradient: objects|mesh, steps 1..1000 (255)): OK runs object.expand with them as one undo step; dimmed, and an error, while the selection has an appearance effect.expandAppearance expands (object.expand.info's appearance)",
+        "{immediate?: bool (false)} open Expand for the selection (dialog `expand`, fields object, fill, stroke (all on; one the selection has nothing for is disabled, see object.expand.info), gradient: objects|mesh, steps 1..1000 (255), or the choices OK last expanded with since the app started): OK runs object.expand with them as one undo step and keeps them until the app quits; immediate: true (the menu item chosen with Alt/Option) runs object.expand at once with those choices (the defaults before any OK), and opens the dialog instead when none of them has something to expand in the selection; dimmed, and an error, while the selection has an appearance effect.expandAppearance expands (object.expand.info's appearance)",
     ),
     (
         "attributes.openUrl",
@@ -1379,6 +1438,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Toggle RGB Percent",
         "",
         "{} switch the Color panel's R, G and B between percent and 0 to 255, as a double-click right of an RGB field does (ui.colorPanel {rgbPercent}); the color does not change, and the choice is kept with the preferences; a parameter is an error and changes nothing → true when they show in percent",
+    ),
+    (
+        "ui.colorWheel",
+        "Color Wheel Options",
+        "",
+        "{view?: wheel|box, channel?: hue|saturation|brightness|red|green|blue} show the Color Wheel panel's wheel or its box, as the panel menu's Wheel View and Box View do, and pick the box's channel, as Box Channel does: the box is a color field with the channel's strip at its right, and the field shows the other two components (hue: saturation across and brightness up; saturation: hue across and brightness up; brightness: hue across and saturation up; red: blue across and green up; green: blue across and red up; blue: red across and green up); keys left out keep their values, params that are not an object, another key or a value off the list are an error and change nothing, both are kept with the preferences, and the command does not open the panel (window.panel {panel: \"colorWheel\"} does) (ui.inspect: ui.color_wheel) → {view, channel}",
     ),
     (
         "ui.savePdfDialog",
@@ -1636,6 +1701,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path? | data?: the file's text} read an action set file (.vcactions) at path, else a picked one, and add its set after the Actions panel's sets; a set named like one in the panel gets the next free number (Print 2), and the other sets stay. Files of another version, over 8 MiB, with more than 1,000 actions or with an action of more than 10,000 steps are refused, and so is any set, .aia ones too, that Save Actions… would write larger than 8 MiB (a file with less white space, or a name that gets a number); the panel menu's Load Actions… (disabled where there is no open dialog, the web) → {set: index, name, actions: n}. An action set another app saved as text (.aia, starting /version; read with actionSet.read) comes in with its actions. A step with a label and no recorded values comes in when exactly one menu command has that label (in English or the interface language, any case, no final …), and that command is directly in a top menu, can be recorded in actions, is what its menu bar item runs with no values and opens no dialog (never a submenu's item, a file or document command, Paste, Undo, Redo or an add-on's command), with no params and excluded from playback when it is off in the file. A Set Selection step (found by its internal name, whatever its label) comes in as select.byNote {note, caseSensitive, wholeWord} when it has exactly three recorded values: text (ustring, UTF-8; 1 to 1,024 bytes once trimmed), word and case (boolean, 0 or 1); with any other values it is left out. The other steps, every other step with no label and every other step recorded with values (a recorded menu item too) among them, are left out → {set, name, actions, skipped: [{action, step: its label, else its name}] (the first 1,000), leftOut: n}, and the status bar says how many were left out; a set with no name takes the file's name, else Actions; a file actionSet.read marks truncated is refused, and text that starts /version and isn't an action set gives \"not an action set file\"",
     ),
     (
+        "ui.actionSet.replace",
+        "Replace Actions…",
+        "",
+        "{path? | data?: the file's text} read an action set file at path, else a picked one, as ui.actionSet.load reads it (.vcactions and .aia, with the same limits, errors and reports of left-out steps and unknown commands), and replace every set in the Actions panel, the built-in Default Actions set included, with the file's set, which keeps its name. The set becomes current and selected, the panel's selected action and step and its expanded actions are cleared, and an open Set Options, New Action, Batch or step dialog that names a set closes; when the panel already holds only a set that saves alike, in that state, nothing changes, the set keeps its ids and changed is false. Omitted params count as {}. Params of another type, another key, a path or data that is not a string, a file that can't be read or is refused, a canceled pick, or a replace while an action records or plays (also while it waits at a stop) is an error and changes nothing. No undo step is recorded. The panel menu's Replace Actions… (disabled where there is no open dialog, the web, and while an action records or plays) → {changed, set: 0, name, actions: n, unknownCommands?, unknownCount?, skipped?, leftOut?}",
+    ),
+    (
         "ui.actionSet.delete",
         "Delete Action Sets",
         "",
@@ -1664,7 +1735,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.epsOptionsDialog",
         "EPS Options Dialog",
         "",
-        "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
+        "{path?, useArtboards?, range?, …document.exportEps options} open EPS Options (dialog `epsOptions`: fields = these options over the ones used last; Custom… sets `flattener`, which a flattenerPreset given without it drops); OK checks them, remembers them and writes path (else asks). Export As… → EPS opens it too",
     ),
     (
         "file.saveForWeb",

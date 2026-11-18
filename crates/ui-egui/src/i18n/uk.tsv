@@ -113,6 +113,7 @@
 	Add Anchor Point	Додати опорну точку
 	Add Anchor Point Tool	Інструмент «Додати опорну точку»
 	Add Anchor Points	Додати опорні точки
+	Add Around	Додати навколо об’єкта
 	Add Effect	Додати ефект
 	Add Freeform Line	Додати довільну лінію
 	Add Freeform Point	Додати довільну точку
@@ -134,8 +135,12 @@
 	Add to Swatches	Додати до зразків
 	Add Used Colors	Додати використані кольори
 	Additional Plug-ins Folder	Папка додаткових модулів
+	Plug-in Instruction Budget	Бюджет інструкцій модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
 	Adjust Adjoining Width Points	Налаштувати суміжні точки ширини
+	Incoming	Вхідна
+	Outgoing	Вихідна
+	Single Width Only	Лише одна ширина
 	Adjust Color Balance…	Налаштувати колірний баланс…
 	Adjust Colors	Налаштувати кольори
 	Adjust Options:	Параметри налаштування:
@@ -190,6 +195,7 @@
 	Angle:	Кут:
 	Angles	Кути
 	Animated Zoom	Анімоване масштабування
+	Anti Alias	Згладжування
 	Anti-alias	Згладжування
 	Anti-Alias	Згладжування
 	Anti-alias Rasters	Згладжувати растрові зображення
@@ -299,7 +305,7 @@ font-technology	Variable	Варіативні
 	Background Contents	Вміст фону
 	Background:	Фон:
 	Backspace	Backspace
-	Bar Graph Tool	Інструмент «Гістограма»
+	Bar Graph Tool	Інструмент «Лінійчата діаграма»
 	Baseline	Базова лінія
 	Baseline Shift	Зміщення базової лінії
 	Basic Latin	Основна латиниця
@@ -357,6 +363,12 @@ font-technology	Variable	Варіативні
 	Brush Definition	Визначення пензля
 	Brush Libraries	Бібліотеки пензлів
 	Brush Options…	Параметри пензля…
+	Options of Selected Object…	Параметри виділеного об’єкта…
+	Options of Selected Object	Параметри виділеного об’єкта
+@msg	no path painted with a brush is selected	не виділено контур, намальований пензлем
+@msg	the selected paths are painted with brushes of different types	виділені контури намальовано пензлями різних типів
+@msg	give `params` or `reset`, not both	укажіть `params` або `reset`, але не обидва
+@msg	a bristle brush has no options of its own on a path	щетинний пензель не має власних параметрів на контурі
 	Brush Strokes	Мазки пензля
 	Brushes	Пензлі
 	Built-in Libraries	Вбудовані бібліотеки
@@ -413,6 +425,12 @@ font-technology	Variable	Варіативні
 	Character Alignment	Вирівнювання символів
 	Character / Paragraph	Символ / Абзац
 	Character Rotation	Поворот символів
+	Chinese Big 5	Китайська Big 5
+	Cyrillic	Кирилиця
+	Greek	Грецька
+	Turkish	Турецька
+	Baltic	Балтійська
+	Central European	Центральноєвропейська
 	Character Set:	Набір символів:
 	Character Style	Стиль символу
 	Character Style Options	Параметри стилю символу
@@ -475,6 +493,8 @@ font-technology	Variable	Варіативні
 	Choose a folder	Виберіть папку
 	Choose…	Вибрати…
 	Circle	Коло
+	Circle Tool	Інструмент «Коло»
+	Circle too large	Коло завелике
 	Classic Defaults	Класичні значення за промовчанням
 	Clean Up…	Очистити…
 	Clear	Очистити
@@ -550,6 +570,7 @@ font-technology	Variable	Варіативні
 	Color Mixer (Shift-click the chip)	Змішувач кольорів (Shift+клацання на зразку)
 	Color Mode	Колірний режим
 	Color Mode:	Колірний режим:
+	Color Model	Колірна модель
 	Color Model:	Колірна модель:
 	Color Models	Колірні моделі
 	Color Picker	Палітра кольорів
@@ -570,12 +591,18 @@ font-technology	Variable	Варіативні
 	Saturation and brightness	Насиченість і яскравість
 	Color field	Колірне поле
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Вигляд «Коло»
+	Box View	Вигляд «Квадрат»
+	Box Channel	Канал квадрата
+	Color box	Колірний квадрат
+	Color Wheel Options	Параметри колірного кола
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати
 	Colors	Кольори
 	Colors:	Кольори:
 	Column Graph Tool	Інструмент «Гістограма»
+	Columns	Стовпці
 	Columns:	Стовпці:
 	Column…	Стовпець…
 	Combine Slices	Об’єднати фрагменти
@@ -786,6 +813,9 @@ font-technology	Variable	Варіативні
 	Delete Artboard	Видалити монтажну область
 	Delete Artboards	Видалити монтажні області
 	Delete Brush	Видалити пензель
+	Delete Color	Видалити колір
+	Restore Generated Table	Відновити створену таблицю
+	Unshift All Colors	Скасувати зсув усіх кольорів
 	Delete Character Style	Видалити стиль символу
 	Delete Empty Artboards	Видалити порожні монтажні області
 	Delete Freeform Point	Видалити довільну точку
@@ -854,6 +884,7 @@ font-technology	Variable	Варіативні
 	Direct Selection Tool	Інструмент «Пряме виділення»
 	Direction Handles	Маркери напряму
 	Disable Auto Add/Delete	Вимкнути авто-додавання/видалення
+	Interpolate Control Points When Moving Anchors	Інтерполювати маркери напряму під час переміщення опорних точок
 	Disable Opacity Mask	Вимкнути маску непрозорості
 	Discard	Відкинути
 	Preserve	Зберігати
@@ -1047,6 +1078,9 @@ font-technology	Variable	Варіативні
 	Cap Height	Висота великих літер
 	x-Height	Висота малих літер
 	ICF Box	Рамка ICF
+	Ascent	Підйом
+	x Height	Висота малих літер
+	Em Box Height	Висота кегельного майданчика
 	Show Sample	Показати зразок
 	Hide Sample	Приховати зразок
 	Max Ascent/Descent	Макс. висота/глибина
@@ -1079,6 +1113,7 @@ font-technology	Variable	Варіативні
 	Enable text access for screen readers	Дозволити доступ до тексту для програм читання з екрану
 	Enable Touch Gestures	Увімкнути сенсорні жести
 	Switch Selection and Drawing Modes	Перемкнути режими виділення та малювання
+	Select Last Selection Tool	Вибрати останній інструмент виділення
 	Enable Touch Workspace	Включити сенсорне робоче середовище
 	Encoding	Кодування
 	Encoding:	Кодування:
@@ -1259,6 +1294,8 @@ font-technology	Variable	Варіативні
 	Files	Файли
 	Files of a PDF standard can't be password-protected.	Файли стандарту PDF не можуть бути захищені паролем.
 	Files of this standard tag their colours with ICC profiles.	Файли цього стандарту позначають свої кольори профілями ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Файли цього стандарту позначають свої кольори профілями ICC, крім кольорів CMYK у профілі призначення виведення, які записуються як DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	З «Не включати профілі» та призначенням виведення CMYK кожен колір CMYK записується як DeviceCMYK, якщо його не перетворено в призначення CMYK з іншим профілем.
 	Fill	Заливка
 	Fill & Stroke	Заливка та обведення
 	Fill (X), double-click for the Color Picker	Заливка (X), двічі клацніть на палітрі кольорів
@@ -1308,6 +1345,8 @@ font-technology	Variable	Варіативні
 	Reset Tracking and Kerning	Скинути трекінг і кернінг
 	Reset Horizontal Scale	Скинути масштаб по горизонталі
 	Highlight Font Name	Виділити назву шрифту
+	Highlight Font Size	Виділити розмір шрифту
+	Other…	Інший…
 	Highlight Kerning	Виділити кернінг
 	Highlight Tracking	Виділити трекінг
 	Spacing	Інтервал
@@ -2016,7 +2055,7 @@ file-filter	Templates	Шаблони
 	Line Cut	Розрізання ліній
 	Line Cut Tool	Інструмент «Розрізання ліній»
 	Line Endings:	Закінчення ліній:
-	Line Graph Tool	Інструмент «Лінійчаста діаграма»
+	Line Graph Tool	Інструмент «Графік»
 	Line Segment	Відрізок
 	Line Segment Tool	Інструмент «Відрізок»
 	Line Segment Tool Options	Параметри інструменту «Відрізок»
@@ -2062,6 +2101,7 @@ file-filter	Templates	Шаблони
 	Load SVG into Clipboard	Завантажити SVG у буфер обміну
 	Load Text into Clipboard	Завантажити текст у буфер обміну
 	Local Libraries	Локальні бібліотеки
+	Locate Layer	Знайти шар
 	Locate Object	Знайти об’єкт
 	Locate Selected Objects	Знаходити виділені об’єкти
 	Location	Розташування
@@ -2256,6 +2296,7 @@ file-filter	Templates	Шаблони
 	Scatter:	Розсіювання:
 	Rotation:	Поворот:
 	Rotation relative to:	Поворот відносно:
+	Hue Jitter:	Розкид відтінку:
 	Brush Scale Options	Параметри масштабування пензля
 	Scale Proportionately	Масштабувати пропорційно
 	Stretch to Fit Stroke Length	Розтягнути за довжиною обведення
@@ -2292,6 +2333,7 @@ file-filter	Templates	Шаблони
 	Black becomes the stroke color and white stays white. Other colors become tints of the stroke color by their lightness.	Чорний стає кольором обведення, а білий залишається білим. Інші кольори стають відтінками кольору обведення, і що світліший колір, то світліший його відтінок.
 	Black and white stay as they are. Dark colors become shades of the stroke color and light colors become tints of it.	Чорний залишається чорним, а білий залишається білим. Інші кольори стають тінями кольору обведення, якщо вони темні, і його відтінками, якщо вони світлі.
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Ключовий колір стає кольором обведення. Інші кольори зсуваються по колірному колу на стільки ж, на скільки ключовий колір, і зберігають насиченість та яскравість.
+	Roundness	Округлість
 	Roundness:	Округлість:
 	Fixed	Фіксований
 	Pressure	Натиск
@@ -2597,6 +2639,9 @@ file-filter	Templates	Шаблони
 	Overprint	Накладення
 	Overprint and Transparency Flattener	Накладання та зведення прозорості
 	Overprint and Transparency Flattener Options	Параметри накладання та зведення прозорості
+	Custom…	Користувацькі…
+	Custom Transparency Flattener Options	Користувацькі параметри зведення прозорості
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	У EPS немає альфа-прозорості, а параметр «Накладення» визначає, чи зберігаються накладення.
 	Overprint Black…	Накладення чорного…
 	Overprint Fill	Накладання заливки
 	Overprint Preview	Перегляд накладання
@@ -2646,6 +2691,13 @@ file-filter	Templates	Шаблони
 	Pathfinders:	Обробка контурів:
 	Paths	Контури
 	Path Length	Довжина контурів
+	Grid Size	Розмір сітки
+	Grid Colors	Кольори сітки
+	Flattener Preset	Набір зведення
+	X	X
+	Y	Y
+	Orange	Помаранчевий
+	Purple	Фіолетовий
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	Контури: {paths} Опорні точки: {anchors} Кольори: {colors}
 	Pattern	Візерунок
 	Pattern Editing	Редагування візерунка
@@ -2683,7 +2735,7 @@ diagnostics	ui	інтерфейс
 	Perspective Grid Settings	Параметри сітки перспективи
 	Perspective Grid Tool	Інструмент «Сітка перспективи»
 	Perspective Plane Options…	Параметри площини перспективи…
-	Perspective Selection Tool	Інструмент "Виділення в перспективі"
+	Perspective Selection Tool	Інструмент «Виділення в перспективі»
 	Phone 390×844	Телефон 390×844
 	Picas	Піки
 	Pie Graph Tool	Інструмент «Кругова діаграма»
@@ -2705,6 +2757,7 @@ diagnostics	ui	інтерфейс
 	Play Current Selection	Відтворити поточне виділення
 	Save Actions…	Зберегти дії…
 	Load Actions…	Завантажити дії…
+	Replace Actions…	Замінити дії…
 	Reset Actions	Скинути дії
 	Replace the current actions with the default set?	Замінити поточні дії набором за умовчанням?
 	Append adds the default set after the current sets instead.	Кнопка «Додати» натомість додає набір за умовчанням після поточних наборів.
@@ -2720,6 +2773,10 @@ diagnostics	ui	інтерфейс
 	Polar Grid Tool	Інструмент «Полярна сітка»
 	Polygon	Багатокутник
 	Polygon Properties:	Властивості багатокутника:
+	Line Properties:	Властивості лінії:
+	Line Length:	Довжина лінії:
+	Line Angle:	Кут лінії:
+	Constrain Pie Angle	Зберігати кут сектора
 	Polygon Tool	Інструмент «Багатокутник»
 	Portrait	Книжкова
 	Power Saving (integrated)	Енергозбереження (вбудована)
@@ -2881,6 +2938,9 @@ digits	Malayalam	Малаялам
 	Real World:	Реальний світ:
 	Real-time Drawing and Editing	Малювання та редагування у реальному часі
 	Use Monitor Profile for Canvas	Використовувати профіль монітора для полотна
+	Refresh Monitor Profile	Оновити профіль монітора
+@msg	turn on Use Monitor Profile for Canvas first	спочатку увімкніть «Використовувати профіль монітора для полотна»
+@msg	this build doesn't read display profiles	ця збірка не читає профілі дисплеїв
 	The canvas is drawn in sRGB.	Полотно відображається в sRGB.
 	Canvas display profile:	Профіль дисплея для полотна:
 	The system matches the window to the display's colors.	Система узгоджує кольори вікна з дисплеєм.
@@ -3073,6 +3133,8 @@ digits	Malayalam	Малаялам
 	Reselect	Виділити знову
 	Reset	Скинути
 	Reset Bounding Box	Скинути обмежувальну рамку
+	Rotate Bounding Box	Повернути обмежувальну рамку
+	Rotate Bounding Box…	Повернути обмежувальну рамку…
 	Reset Envelope Mesh	Скинути сітку оболонки
 	Reset Envelope Shape	Скинути форму оболонки
 	Reset Essentials	Скинути «Основні»
@@ -3114,6 +3176,7 @@ digits	Malayalam	Малаялам
 	Reshape Segment	Змінити форму сегмента
 	Reshape Tool	Інструмент «Зміна форми»
 	Reshape Type Area	Змінити форму текстової області
+	Resolution	Роздільна здатність
 	Resolution:	Роздільна здатність:
 	Responsive	Адаптивний
 	Restore	Відновити
@@ -3140,6 +3203,7 @@ digits	Malayalam	Малаялам
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Колесо миші з натиснутою Cmd/Ctrl прокручує полотно по горизонталі.
 	Dragging sideways on a numeric field's label changes the field's value.	Перетягування вбік по підпису числового поля змінює значення поля.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Жест обертання двома пальцями на трекпаді обертає вигляд полотна.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Коли ви переміщуєте опорні точки, кожна крива з одним переміщеним кінцем зберігає форму відносно своїх кінців.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Поки ви утримуєте клавішу інструмента, його вибрано, а після відпускання знову вибирається попередній інструмент.
 	Shows the bounding box while you move the selection or draw a shape.	Показує обмежувальну рамку, поки ви переміщуєте виділення або малюєте фігуру.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	«Створити мітки підрізування» малює мітки в японському стилі замість західних.
@@ -3170,6 +3234,29 @@ digits	Malayalam	Малаялам
 	The unit for East Asian type measurements, which no field uses yet.	Одиниця для розмірів східноазіатського тексту, якої поки не використовує жодне поле.
 	When on, a number typed without a unit into a field in picas is read in points.	Якщо ввімкнено, число, введене без одиниці в поле в піках, читається в пунктах.
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	З XML ID назви об’єктів показуються як XML ID у «Шарах», «Змінних» і «Параметрах шару».
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	Крок розміру тексту й інтерліньяжу: Cmd/Ctrl+Shift+. і Cmd/Ctrl+Shift+, змінюють розмір на один крок, а разом з Alt — на п’ять; у горизонтальному тексті Alt зі стрілкою вгору або вниз змінює інтерліньяж на один крок, а з Cmd/Ctrl — на п’ять.
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	Крок трекінгу й кернінгу в тисячних частках em: у горизонтальному тексті Alt зі стрілкою вліво або вправо змінює кернінг біля курсора або трекінг виділеного тексту на один крок, а з Cmd/Ctrl — на п’ять.
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	Крок зсуву базової лінії: у горизонтальному тексті Alt і Shift зі стрілкою вгору або вниз зсувають базову лінію на один крок, а з Cmd/Ctrl — на п’ять.
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	Показує параметри японського та іншого східноазійського тексту на панелях «Символ», «Абзац», «OpenType» і «Гліфи», а також команду «Складені шрифти».
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	Показує параметри арабського, івритського та індійського тексту на панелях «Символ» і «Абзац», наприклад напрямок абзацу, кашиди й цифри.
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	Інструменти виділення виділяють текст лише на його базовій лінії, рамці тексту в області або його контурі, а не будь-де всередині його рамки.
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	Меню шрифтів показують кожен шрифт під англійською назвою; якщо вимкнено, шрифт, що має назву власною мовою, показує цю назву.
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	Новий текст в області починається з увімкненим авторозміром, тож прямокутна рамка горизонтального тексту збільшується або зменшується у висоту під свій текст.
+	Font lists and the Type › Font menu show a sample of each font beside its name.	Списки шрифтів і меню «Шрифт» показують зразок кожного шрифту поруч із його назвою.
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	Зразки шрифтів малюються темним текстом на білому за будь-якої яскравості інтерфейсу; це діє, лише поки ввімкнено попередній перегляд шрифтів у меню.
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	Висота кожного рядка в списках полів шрифту, як-от на панелі «Символ», а отже, і розмір кожного зразка.
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	Скільки останніх використаних шрифтів, від 1 до 15, показують «Останні шрифти» та списки шрифтів, починаючи з найновішого.
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	Коли ви змінюєте шрифт або накреслення тексту, символи, для яких новий шрифт не має гліфа, зберігають попередній шрифт.
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	Рожеве підсвічування на полотні позначає гліфи, замінені функціями OpenType, як-от лігатури; воно не друкується й не експортується.
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	З інструментом «Текст» виділення одного символу показує поруч із ним на полотні ряд його альтернативних гліфів для вибору.
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	Рожеве підсвічування на полотні позначає текст, намальований замінним шрифтом, бо його шрифту бракує; воно не друкується й не експортується.
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	Новий текст, створений текстовим інструментом, починається з виділеного тексту-заповнювача, який замінюється введеним текстом.
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	Якщо на початку абзацу ввести маркер списку, як-от 1. або *, а потім пробіл, абзац стає списком.
+	Fonts in this folder show in the font menus and can be used without being installed.	Шрифти з цієї теки з’являються в меню шрифтів, і їх можна використовувати без встановлення.
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	Застосування графічного стилю до тексту прибирає власну заливку чи обведення символів там, де вони є в стилю, щоб було видно фарбу стилю.
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	«Вирівняти» й «Розподілити» вимірюють текст із точки за фарбою його гліфів, а не за його em-квадратом.
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	«Вирівняти» й «Розподілити» вимірюють текст в області за фарбою його гліфів, а не за його рамкою.
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	Обмежувальна рамка й панель «Трансформування» вимірюють текст із точки за фарбою його гліфів, а не за його em-квадратом.
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	Прив’язує малювання, переміщення й масштабування до поділок сітки, навіть коли сітку приховано; поки параметр увімкнено, «Прив’язати до пікселя» не діє.
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	Колір невиділених напрямних; монтажна область із «Міткою напрямних» малює свої напрямні кольором мітки.
 	Draws guides as solid lines or as dots, including the guides already in the document.	Малює напрямні суцільними лініями або крапками, включно з напрямними, які вже є в документі.
@@ -3197,6 +3284,8 @@ digits	Malayalam	Малаялам
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	Наскільки близько на екрані вказівник або перетягувана точка мають підійти до об’єкта, щоб розумні напрямні їх прив’язали; відстань однакова за будь-якого масштабу.
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	Прив’язує кінець відрізка або коло, намальоване від центру, так, щоб воно торкалося найближчої кривої.
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	Прив’язує кінець відрізка так, щоб він зустрічав найближчий прямий сегмент під прямим кутом.
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Показує на полотні номер кожного фрагмента в рамці в його лівому верхньому куті; коли параметр вимкнено, контури фрагментів і далі видно.
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	Колір контурів користувацьких і об’єктних фрагментів та рамок з їхніми номерами; автоматичні фрагменти використовують блідіший відтінок цього кольору.
 	Reset all preferences to their defaults?	Скинути всі налаштування до значень за промовчанням?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Значення за промовчанням застосовуються, коли ви натискаєте ОК у вікні «Налаштування». Скасувати там зберігає поточні налаштування.
 	Restore Recovered Documents	Відновити відновлені документи
@@ -3251,6 +3340,7 @@ digits	Malayalam	Малаялам
 	Rounded Rectangle Tool	Інструмент «Округлений прямокутник»
 	Rounded Rectangle…	Округлений прямокутник…
 	Row Size:	Розмір рядка:
+	Rows	Рядки
 	Rows:	Рядки:
 	Rule:	Лінійка:
 	Rulers	Лінійки
@@ -3427,6 +3517,14 @@ digits	Malayalam	Малаялам
 	Search commands, tools, panels and effects…	Пошук команд, інструментів, панелей та ефектів…
 	No commands match	Немає відповідних команд
 	{pos} of {total}: {name}	{pos} з {total}: {name}
+	No menu item	Немає пункту меню
+	Toolbar	Панель інструментів
+	{toolbar}, in the {tool} group	{toolbar}, у групі «{tool}»
+	In the menu bar: {path}	У рядку меню: {path}
+	In the {group} group: press and hold to open it	У групі {group}: натисніть і утримуйте, щоб відкрити її
+	{home}, not shown now	{home}, зараз не показано
+	Tool	Інструмент
+	Command	Команда
 @plural	{n} result|{n} results	{n} результат|{n} результати|{n} результатів
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	{shown} з {n} результату. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.|{shown} з {n} результатів. Продовжуйте вводити, щоб звузити їх.
 	Recent Commands	Нещодавні команди
@@ -3507,6 +3605,7 @@ digits	Malayalam	Малаялам
 	Set Slice Rectangle	Вказати прямокутник фрагмента
 	Set Tab Stops	Задати табуляції
 	Set Text	Задати текст
+	Set the current fill or stroke to the selected color	Призначити вибраний колір поточній заливці або обведенню
 	Set the selected color to the current color	Призначити поточний колір вибраному кольору
 	Set Zoom	Задати масштаб
 	Settings…	Параметри…
@@ -3630,7 +3729,7 @@ digits	Malayalam	Малаялам
 	Show Vivid/Muted	Показати яскраві/приглушені
 	Show Warm/Cool	Показати теплі/холодні
 	Show {kind} Brushes	Показати пензлі {kind}
-	Show/hide plate (Alt-click: only this plate)	Показати/приховати пластину (Alt+клацання: тільки цю пластину)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Показати/приховати пластину (Alt+клацання: тільки цю пластину; повторне Alt+клацання: усі пластини)
 	Show:	Показати:
 	Shown with the optimised preview.	Показано оптимізованим переглядом.
 	Side 1:	Сторона 1:
@@ -3776,8 +3875,8 @@ effect	Points	Точки
 	Spread:	Розворот:
 	Square	Квадрат
 	Squeeze…	Стиснення…
-	Stacked Bar Graph Tool	Інструмент "Гістограма з накопиченням"
-	Stacked Column Graph Tool	Інструмент "Гістограма з накопиченням"
+	Stacked Bar Graph Tool	Інструмент «Лінійчата діаграма з накопиченням»
+	Stacked Column Graph Tool	Інструмент «Гістограма з накопиченням»
 	Stair Step	Ступінчастий
 	Standard Ligatures	Стандартні лігатури
 	Standard Vertical Roman Alignment	Стандартне римське вертикальне вирівнювання
@@ -3941,7 +4040,7 @@ effect	Points	Точки
 	Composite Fonts	Складені шрифти
 	Export Composite Fonts	Експорт складених шрифтів
 	Import Composite Fonts	Імпорт складених шрифтів
-@msg	each font must be {name, parts}	кожен шрифт має бути у вигляді {name, parts}
+@msg	each font must be {{name, parts}}	кожен шрифт має бути у вигляді {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	невідомий ключ `{k}`; шрифт приймає name і parts
 @msg	each font needs a name	кожен шрифт повинен мати назву
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не може бути назвою складеного шрифту (від 1 до {COMPOSITE_NAME_MAX} символів, без керівних символів)
@@ -3954,7 +4053,7 @@ effect	Points	Точки
 @msg	two composite fonts are named `{_1}`	два складені шрифти мають назву `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` є назвою встановленого шрифту
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} використовує `{font}`, а це складений шрифт
-@msg	give fonts: [{name, parts}…]	вкажіть fonts: [{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	вкажіть fonts: [{{name, parts}}…]
 @msg	path is empty	path порожній
 @msg	fonts must be a list of composite fonts	fonts має бути списком складених шрифтів
 @msg	names must be strings	names мають бути рядками
@@ -4037,6 +4136,13 @@ effect	Points	Точки
 	Thumbnail View	Мініатюри
 	Thumbnails:	Мініатюри:
 	Tile	Плитка
+	Tile All Vertically	Усі плиткою вертикально
+	Tile All Horizontally	Усі плиткою горизонтально
+	2-Up Layout	Макет на 2
+	3-Up Layout	Макет на 3
+	4-Up Layout	Макет на 4
+	6-Up Layout	Макет на 6
+	Arrange Documents	Упорядкувати документи
 	Tile Edge Color	Колір краю плитки
 	Tile Edge Color…	Колір краю плитки…
 	Tile Full Pages	Плитка цілих сторінок
@@ -4232,6 +4338,8 @@ effect	Points	Точки
 	V Spacing:	Інтервал по вертикалі:
 	V:	В:
 	Variable Width Profile	Профіль змінної ширини
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	Пензель обведення зберігає власний розмір, тому профіль ширини його не змінює. Щоб використати профіль, заберіть пензель.
 	Variables	Змінні
 	New Variable	Нова змінна
 	Delete Variable	Видалити змінну
@@ -4296,7 +4404,7 @@ effect	Points	Точки
 	Vertical:	По вертикалі:
 	Very High	Дуже висока
 	View	Перегляд
-	View Artboard Only	Перегляд лише монтажної області
+	View Artboard Contents Only	Перегляд лише вмісту монтажної області
 	View Opacity Mask	Перегляд маски непрозорості
 	View PDF after saving	Переглядати PDF після збереження
 	View {n}	Вигляд {n}
@@ -4349,7 +4457,7 @@ effect	Points	Точки
 	Zoom In	Збільшити
 	Zoom Out	Зменшити
 	Zoom to Selection	Масштаб виділення
-	Zoom Tool	Інструмент «Масштаб»
+	Zoom Tool	Інструмент «Лупа»
 	Zoom with Mouse Wheel	Масштабувати колесом миші
 	Scroll Sideways with Cmd/Ctrl + Wheel	Прокручувати по горизонталі колесом із Cmd/Ctrl
 	Scrub Numeric Fields by Dragging	Змінювати числові поля перетягуванням
@@ -4511,6 +4619,7 @@ imageTrace	Outline	Контур
 	Bevel	Скіс
 	Offset	Зміщення
 	Axis	Вісь
+	Axis Angle	Кут осі
 axis	Horizontal	Горизонтальна
 axis	Vertical	Вертикальна
 axis	Both	Обидві
@@ -4582,6 +4691,13 @@ axis	Both	Обидві
 	Show External Script Warning	Показувати попередження про зовнішні скрипти
 	A Script Is Running	Виконується скрипт
 	Script Alert	Повідомлення скрипту
+	Script File Access	Доступ скрипту до файлів
+	The script asks to read a file you choose.	Скрипт просить дозволу прочитати вибраний вами файл.
+	The script asks to read and write a file you choose.	Скрипт просить дозволу читати й записувати вибраний вами файл.
+	The script asks to read and write a folder you choose, with everything in it.	Скрипт просить дозволу читати й записувати вибрану вами папку з усім її вмістом.
+	Allow Once	Дозволити один раз
+	Always Allow This Script	Завжди дозволяти цей скрипт
+	Deny	Заборонити
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
 	Stop the script and undo what it did? Then quit again.	Зупинити скрипт і скасувати його зміни? Потім вийдіть ще раз.
@@ -4598,6 +4714,8 @@ axis	Both	Обидві
 @msg	the script is no longer in the Scripts folder	скрипт більше не міститься в папці Scripts
 	Some scripts were not listed	Деякі сценарії не показано
 	The Scripts folder cannot be read	Не вдалося прочитати папку Scripts
+	Loading scripts…	Завантаження сценаріїв…
+	The Scripts folder is still being read	Папка Scripts ще читається
 @msg	the script's run is no longer available	виконання скрипта більше не доступне
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	невдала команда змінила кроки скасування, які не вдалося відновити, тому скрипт зупинено
 @msg	a recovery copy could not be written, so the script was not run	не вдалося записати копію для відновлення, тому скрипт не виконано
@@ -4610,8 +4728,6 @@ axis	Both	Обидві
 @msg	Script file could not be read	Не вдалося прочитати файл скрипта
 @msg	Script folder has more than 2,048 entries	Тека скрипта має понад 2048 елементів
 @msg	Script file open mode must be r, w, e or a	Режим відкриття файлу скрипта має бути r, w, e або a
-@msg	Script file writing is not available	Запис файлів скрипта недоступний
-@msg	Script file dialogs are not available	Діалогові вікна файлів скрипта недоступні
 @msg	Script files cannot be opened in another application	Файли скрипта не можна відкрити в іншому застосунку
 @msg	Script file access is unavailable on the web	Доступ до файлів скрипта у вебверсії недоступний
 @msg	Script has 256 files open	Скрипт має 256 відкритих файлів
@@ -4728,6 +4844,27 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	there is no script engine named {name}	рушія скриптів з назвою {name} немає
 @msg	Running a script	Виконується скрипт
 @msg	Copied the script report	Звіт про сценарій скопійовано
+@msg	Script file access denied: {path}	Доступ скрипту до файлів заборонено: {path}
+@msg	Script file access to the app's own folders is not allowed	Скрипту не дозволено доступ до власних папок застосунку
+@msg	Script file cannot encode the text	Файл скрипту не може закодувати текст
+@msg	Script file could not be written	Не вдалося записати файл скрипту
+@msg	Script file dialogs need a person to answer them	Для відповіді на файлові діалоги скрипту потрібна людина
+@msg	Script file is not open for writing	Файл скрипту не відкрито для запису
+@msg	Script file name is already in use	Ім’я файлу скрипту вже використовується
+@msg	Script file name must be a name without a folder	Ім’я файлу скрипту має бути іменем без папки
+@msg	Script file permission can be kept only for a script run from a file	Дозвіл на файли можна зберегти лише для скрипту, запущеного з файлу
+@msg	Script file permission could not be saved	Не вдалося зберегти дозвіл скрипту на файли
+@msg	Script folder is not empty	Папка скрипту не порожня
+@msg	Script files cannot make aliases	Файли скрипту не можуть створювати псевдоніми
+@msg	Script file hidden setting cannot be changed	Не можна змінити параметр прихованості файлу скрипту
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: файловий діалог не можна відкрити всередині зворотного виклику вбудованої функції, гетера, перетворення або файлу, який виконує $.evalFile; викличте його з власного коду скрипту
+@msg	the script wrote more file data than one run may write (32 MiB)	скрипт записав більше даних файлів, ніж може записати один запуск (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового діалогу скрипту має бути одним із: once, always, deny, stop
+@msg	choose a file or folder first, or deny	спершу виберіть файл або папку чи відмовте
+@msg	the script file permissions could not be saved: {e}	не вдалося зберегти дозволи скриптів на файли: {e}
+@msg	this script's file access can be allowed only once	доступ цього скрипту до файлів можна дозволити лише один раз
+@msg	Only the person at the keyboard can allow a script's file access	Дозволити скрипту доступ до файлів може лише людина за клавіатурою
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт отримує щонайбільше 2 048 файлів: файли, вибрані після них, пропущено
 @msg	Copied the link info	Відомості про зв’язок скопійовано
 @msg	Corners edits the corners of a path	«Кути» редагує кути контуру
 @msg	Couldn't copy to the system clipboard: {e}	Не вдалося скопіювати до системного буфера обміну: {e}
@@ -4803,6 +4940,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Saved {path}	Збережено: {path}
 @msg	Select text or click into text with the Type tool to insert glyphs	Виділіть текст або клацніть всередині тексту інструментом «Текст», щоб вставити гліфи
 @msg	Shape Builder: no region under the pointer	Створення фігур: під вказівником немає області
+@msg	Shape Builder: select all paths you want to merge	Створення фігур: виділіть усі контури, які потрібно об’єднати
 @msg	Shape Builder: select paths or compound paths	Створення фігур: виділіть контури або складені контури
 @msg	Show All Hidden Attributes: nothing is hidden	Показати всі приховані атрибути: нічого не приховано
 @msg	Split Into Grid: select paths large enough for the grid	Поділ на сітку: виділіть контури, досить великі для сітки
@@ -4858,6 +4996,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` більше за `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	укажіть принаймні один із параметрів `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` має бути grayscale, rgb, hsb, cmyk або websafe
+@msg	`view` must be wheel or box	`view` має бути wheel або box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я
@@ -4946,6 +5086,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	bad trailer	неприпустимий трейлер
 @msg	balance must be between 0 and 100	balance має бути від 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	крок пакету {_1} (`{id}`) не виконано: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	крок дії {_1} (`{id}`) не виконано: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness має бути dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	не вдалося закодувати документ: {0}
 @msg	can't parse shortcut `{c}`	не вдалося розібрати поєднання `{c}`
@@ -4965,6 +5106,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	choose a folder to export to	виберіть папку для експорту
 @msg	choose a location for the package	виберіть розташування для пакета
 @msg	clipboard is empty	буфер обміну порожній
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: у колірній таблиці має залишитися принаймні один колір
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted: `{k}` позначає колір, який позначає й інший ключ
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` не є кольором, наприклад "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: не більше {MAX_TABLE} кольорів
 @msg	command `{0}` is not available right now: {1}	команда `{0}` зараз недоступна: {1}
@@ -5032,9 +5175,15 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no PNG encoder	немає кодера PNG
 @msg	no active document	немає активного документа
 @msg	no active perspective plane	немає активної площини перспективи
+@msg	the perspective grid is hidden	сітку перспективи приховано
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	Автоматичне розміщення площини вимкнено: увімкніть anchorPoint або gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint має бути true або false
+@msg	gridlineIntersection must be true or false	gridlineIntersection має бути true або false
+@msg	tolerance must be 0 or more	tolerance має бути 0 або більше
+@msg	give `at` or `clear`, not both	укажіть `at` або `clear`, але не обидва
 @msg	no anchor points selected	опорні точки не виділені
-@msg	`points` must be three [x, y] pairs of numbers	`points` має містити три пари чисел [x, y]
-@msg	direct-select three anchor points, or give `points`	виділіть три опорні точки прямим виділенням або задайте `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` має містити дві або три пари чисел [x, y]
+@msg	direct-select two or three anchor points, or give `points`	виділіть дві або три опорні точки прямим виділенням або задайте `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	через ці точки не проходить жодне коло: дві точки збігаються або всі три лежать на одній прямій
 @msg	no app to open files here	тут немає програми для відкриття файлів
 @msg	no artboard	немає монтажної області
@@ -5136,6 +5285,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	no such user library	такої користувацької бібліотеки немає
 @msg	no such view	такого виду немає
 @msg	no such width point	такої точки ширини немає
+@msg	`single` must be `incoming` or `outgoing`	`single` має бути `incoming` або `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` і `outIndex` мають бути двома половинами однієї розривної точки ширини
+@msg	a discontinuous width point keeps its place	розривна точка ширини зберігає своє місце
 @msg	no swatch `{name}`	немає зразка `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	немає бібліотеки зразків `{l}` (див. swatch.library.list)
 @msg	no symbol instances selected	екземпляри символів не виділені
@@ -5395,6 +5547,13 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	більше ніж {MAX_CSV_ROWS} наборів даних: «Імпортувати набори даних» читає не більше {MAX_CSV_ROWS}
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	більше ніж {MAX_CSV_COLS} змінних: «Імпортувати набори даних» читає не більше {MAX_CSV_COLS}
 @msg	variables that aren't text were left out: {kinds}	змінні, що не є текстовими, пропущено: {kinds}
+variable-kind	Visibility	Видимість
+variable-kind	Linked File	Пов’язаний файл
+variable-kind	Graph Data	Дані діаграми
+variable-kind	Unknown	Невідомо
+variable-list-two	{0}, {1}	{0} і {1}
+variable-list-middle	{0}, {1}	{0}, {1}
+variable-list-end	{0}, {1}	{0} і {1}
 @msg	a new document won't read these variables back with their kind: {names}	новий документ не прочитає ці змінні назад з їхнім видом: {names}
 @msg	a new document refuses this file because of these variables: {names}	новий документ відхиляє цей файл через ці змінні: {names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	заголовок `{header}` для `{name}` буде прочитано як змінну `{other}`: перейменуйте одну з них
@@ -5420,6 +5579,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	{label}: lost track of a shape's style	{label}: втрачено стиль фігури
 @msg	{label}: select paths	{label}: виділіть контури
 @msg	{label}: select paths, compound paths, groups or text	{label}: виділіть контури, складені контури, групи або текст
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	лінія чи інший відкритий контур, що не охоплює площі, не змінює форми результату; щоб включити його, спершу застосуйте до нього Об’єкт › Контур › Обвести обведення
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} дав порожній результат: лінія чи інший відкритий контур не охоплює площі; щоб включити його, спершу застосуйте до нього Об’єкт › Контур › Обвести обведення
 @msg	{label}…	{label}…
 @msg	{name}: CRC mismatch	{name}: розбіжність CRC
 @msg	{name}: no local header	{name}: немає локального заголовка
@@ -5446,6 +5607,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Скасовано {n} відновлений документ|Скасовано {n} відновлені документи|Скасовано {n} відновлених документів
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Відновлено {n} документ: збережіть його, щоб залишити|Відновлено {n} документи: збережіть їх, щоб залишити|Відновлено {n} документів: збережіть їх, щоб залишити
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Відкрито з {n} приміткою: {first}|Відкрито з {n} примітками: {first}|Відкрито з {n} примітками: {first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Скопійовано з {n} приміткою: {first}|Скопійовано з {n} примітками: {first}|Скопійовано з {n} примітками: {first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Вирізано з {n} приміткою: {first}|Вирізано з {n} примітками: {first}|Вирізано з {n} примітками: {first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Зображення трасовано з {n} приміткою: {first}|Зображення трасовано з {n} примітками: {first}|Зображення трасовано з {n} примітками: {first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Відкрито з {n} приміткою: {first}|{notice}. Відкрито з {n} примітками: {first}|{notice}. Відкрито з {n} примітками: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Збережено: {path} з {n} приміткою: {first}|Збережено: {path} з {n} примітками: {first}|Збережено: {path} з {n} примітками: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображення; відсутніх: {missing}. Спочатку відновіть їхні зв’язки|Вбудовано {n} зображень; відсутніх: {missing}. Спочатку відновіть їхні зв’язки
@@ -5472,6 +5636,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	All colors are within the CMYK gamut	Усі кольори входять у колірне охоплення CMYK
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} колір виходить за межі колірного охоплення CMYK|{n} кольори виходять за межі колірного охоплення CMYK|{n} кольорів виходять за межі колірного охоплення CMYK
 @msg	Unembedded to {_1}	Вилучено у {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	Вилучено {n} зображення у {folder}|Вилучено {n} зображення у {folder}|Вилучено {n} зображень у {folder}
+@msg	every numbered name for {name} is taken in that folder	усі нумеровані імена для {name} уже зайняті в цій папці
 @msg	Reset {_1}	Скинуто: {_1}
 @msg	Sent to {_1}	Відправлено до {_1}
 @msg	{_1} files	{_1} файлів
@@ -5487,6 +5653,8 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	Reload the page to go on (changes not saved yet may be lost).	Перезавантажте сторінку, щоб продовжити (незбережені зміни можуть бути втрачені).
 @msg	tool (a tool id) is required	потрібно tool (ідентифікатор інструменту)
 @msg	{tool} isn't in a toolbar group of several tools	{tool} не входить до групи панелі інструментів з кількох інструментів
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	Режим презентації приховує панелі інструментів: щоб показати їх, змініть режим екрану
+@msg	Tab has hidden the toolbars: press Tab to show them	клавіша Tab приховала панелі інструментів: щоб показати їх, натисніть Tab
 @msg	onto must name a panel floating in another group	onto має називати панель, що плаває в іншій групі
 @msg	below and above must name a panel floating in another group	below і above мають називати панель, що плаває в іншій групі
 @msg	give only one of onto, below and above	вкажіть лише один із onto, below і above
@@ -5601,6 +5769,9 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	automation path rejected: outside the read root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для читання {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для читання {roots}: {path}
 @msg	a linked JavaScript file is outside the read roots	зв’язаний файл JavaScript перебуває поза кореневими папками для читання
+@msg	a linked image file is outside the read roots	зв’язаний файл зображення перебуває поза кореневими папками для читання
+@msg	a linked file's export folder is outside the read roots	папка експорту зв’язаного файлу перебуває поза кореневими папками для читання
+@msg	a linked file's editing data can't be read to check it against the read roots	не вдається прочитати дані редагування зв’язаного файлу, щоб звірити їх із кореневими папками для читання
 @msg	automation path rejected: outside the write root {root}: {path}	шлях автоматизації відхилено: поза кореневою папкою для запису {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	шлях автоматизації відхилено: поза кореневими папками для запису {roots}: {path}
 @msg	automation path rejected: path is empty	шлях автоматизації відхилено: шлях порожній
@@ -5826,6 +5997,7 @@ lighting	Light	Світло
 @msg	missing panel layout	Відсутнє розташування панелей
 @msg	unsupported native docking operation	Непідтримувана власна операція прикріплення
 	Linux Display Server	Дисплейний сервер Linux
+	Low-Latency Drawing	Малювання з низькою затримкою
 	X11 (XWayland) When a Pen Is Attached	X11 (XWayland), коли підключено перо
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	Якщо перо графічного планшета не малює, виберіть варіант X11 (XWayland).
 	X11 (XWayland)	X11 (XWayland)
@@ -5880,6 +6052,7 @@ lighting	Light	Світло
 	Cove	Викружка
 	Depth	Глибина
 	Front	Спереду
+	Side	Збоку
 	Isometric Bottom	Ізометрія знизу
 	Isometric Left	Ізометрія ліворуч
 	Isometric Right	Ізометрія праворуч
@@ -5974,7 +6147,7 @@ lighting	Light	Світло
 @msg	each of `{GRAPHICS}` must be an object	кожен елемент `{GRAPHICS}` має бути об’єктом
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	елементи `{GRAPHICS}` приймають symbol, face, x, y, scale і rotation, а не `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	кожному елементу `{GRAPHICS}` потрібен `symbol`, назва символу
-@msg	`{GRAPHICS}` face must be front or back	face у `{GRAPHICS}` має бути front або back
+@msg	`{GRAPHICS}` face must be front, back or side	face у `{GRAPHICS}` має бути front, back або side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} у `{GRAPHICS}` має бути числом від {lo} до {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` має бути масивом
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Графіка наноситься на об’єкти типів «Площина», «Видавлювання» та «Обертання»
@@ -6990,6 +7163,12 @@ anchor	Points:	Точки:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` має бути "free", "keepAngles" або "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` має бути [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Конвертер одиниць
+	Unit Converter Panel	Панель «Конвертер одиниць»
+	Copy with Units	Копіювати з одиницями
+	From Selection	З виділення
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Виділити за типом кольору
 	Objects with Spot Colors	Об’єкти з плашковими кольорами
@@ -7215,6 +7394,14 @@ breakText	Glyphs	Гліфи
 	Remove Gaps	Прибрати проміжки
 @msg	that makes too many pieces (at most 100000): make the dashes longer	так вийде забагато частин (не більше 100000): подовжте штрихи
 @msg	select paths, or segments, to divide	виділіть контури або сегменти для розділення
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Плавний міст…
+	Smooth Bridge	Плавний міст
+	Keep Originals	Зберегти оригінали
+@msg	select two circles to bridge	виділіть два кола для з’єднання
+@msg	one circle is inside the other	одне коло всередині іншого
+@msg	the circles are too far apart for this radius: raise the radius	кола надто далеко одне від одного для цього радіуса: збільште радіус
+@msg	the circles are too far apart for this radius	кола надто далеко одне від одного для цього радіуса
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Спільні дотичні…
 	Common Tangents	Спільні дотичні
@@ -7231,6 +7418,7 @@ breakText	Glyphs	Гліфи
 @msg	One path lies inside the other, so they have no common tangents	Один контур лежить усередині іншого, тому вони не мають спільних дотичних
 @msg	The paths overlap, so they have no internal tangents	Контури перекриваються, тому вони не мають внутрішніх дотичних
 @msg	One path lies inside the other, so they have no internal tangents	Один контур лежить усередині іншого, тому вони не мають внутрішніх дотичних
+@msg	The point lies inside the path, so it has no tangents	Точка лежить усередині контуру, тому вона не має дотичних
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	Розібрати штрихи на контури
 @msg	select paths with dashed strokes to expand	виділіть контури зі штриховим обведенням для розбору
@@ -7761,6 +7949,14 @@ breakText	Glyphs	Гліфи
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` містить понад {MAX_ANSWERS} відповідей
 @msg	`answers` is larger than 1 MiB	`answers` більший за 1 МіБ
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` призначений лише для запуску, у якому немає кого запитати: у застосунку людина сама відповідає на кожне діалогове вікно
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` має бути цілим числом від 1 до {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` має вкладеність понад 64 рівні
+@msg	`args` must be an object	`args` має бути об’єктом
+@msg	`args` is larger than 1 MiB	`args` більший за 1 МіБ
+@msg	`path` is empty	параметр `path` порожній
+@msg	`installed` takes a `path`, not a `source`	`installed` приймає `path`, а не `source`
+@msg	`path` must name a .js or .jsx file	`path` має вказувати на файл .js або .jsx
+@msg	give exactly one of `path` and `source`	укажіть рівно одне з: `path`, `source`
 @msg	`answers` must be a list of answers	`answers` має бути списком відповідей
 @msg	`artboard` must be the index of an artboard of the document	`artboard` має бути індексом монтажної області документа
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` має бути [x, y]
@@ -7912,7 +8108,7 @@ breakText	Glyphs	Гліфи
 @msg	`scale` must be a number from 0.001 to 1000	`scale` має бути числом від 0.001 до 1000
 @msg	`scale` must be a number in (0, 100]	`scale` має бути числом у діапазоні (0, 100]
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` має бути непорожнім масивом
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` має бути "document", {artboards} або {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` має бути "document", {{artboards: [index, …]}} або {{layers: [id, …]}}
 @msg	`scope` must be "selection" or "document", not {other}	`scope` має бути "selection" або "document", а не {other}
 @msg	`script` must be a string	`script` має бути рядком
 @msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` — це непорожній список індексів рядів
@@ -7988,6 +8184,8 @@ breakText	Glyphs	Гліфи
 @msg	`{f}` is the copy of a document open now	`{f}` — це копія документа, відкритого зараз
 @msg	`{id}` is no writable format (see document.formats)	`{id}` не є форматом, доступним для запису (див. document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` не є завантаженою бібліотекою
+@msg	`{file}` has no swatches of its own	у `{file}` немає власних зразків
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	у `{_1}` є зразки візерунків, яких файл .vcswatches не може містити
 @msg	`{key}` has no colours	`{key}` не містить кольорів
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` містить понад {MAX_EDIT_WORDS} слів
 @msg	`{key}` is a design name	`{key}` — це назва дизайну
@@ -8278,7 +8476,13 @@ breakText	Glyphs	Гліфи
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel має бути {own} (режим документа), grayscale або bitmap
 @msg	colour groups can't go into colour groups	групи кольорів не можна поміщати в групи кольорів
 @msg	colour, mode and spot apply to solid-colour swatches only	colour, mode і spot застосовуються лише до зразків суцільного кольору
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	стовпець {column}: `{cell}` — це стовпець `%` файлів даних діаграм, які не читаються
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	рядок {line}, стовпець {column}: файл даних діаграми `{path}` для `{var}` задано відносним шляхом: укажіть `base` або абсолютний шлях
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	рядок {line}, стовпець {column}: не вдається прочитати файл даних діаграми для `{var}`: {e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	рядок {line}, стовпець {column}: перехід до файлу даних діаграми `{path}` для `{var}` не виконується: {r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	рядок {line}, стовпець {column}: файл даних діаграми `{path}` для `{var}` більший за {MAX_GRAPH_DATA_FILE} байтів
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	рядок {line}, стовпець {column}: файл даних діаграми `{path}` для `{var}` дає значення діаграми довше за {MAX_GRAPH_CSV} байтів
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	рядок {line}, стовпець {column}: файли даних діаграм разом містять понад {MAX_GRAPH_FILES_TOTAL} байтів
+@msg	`base` is empty	`base` порожнє
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	стовпець {column}: `{cell}` указує `{name}`, а це змінна типу {_1}
 @msg	column {column}: `{cell}` names no variable	стовпець {column}: `{cell}` не вказує жодної змінної
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	стовпець {column}: ім’я змінної довше за {MAX_NAME} символів
@@ -8289,6 +8493,7 @@ breakText	Glyphs	Гліфи
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	складені фігури приймають контури, складені контури, групи, складені фігури, текст, переходи й оболонки
 @msg	compound {_1} must contain exactly one open path to join	складений об’єкт {_1} має містити рівно один відкритий контур для з’єднання
 @msg	connect needs a path other than the one extended	для connect потрібен контур, відмінний від того, що продовжується
+@msg	connect needs extend	для connect потрібен extend
 @msg	connect needs id	для connect потрібен id
 @msg	connect path has no open end	контур для connect не має відкритого кінця
 @msg	continuation must be an array of path chunks	continuation має бути масивом частин контуру
@@ -8800,7 +9005,7 @@ breakText	Glyphs	Гліфи
 @msg	nothing to print: every artboard picked is blank	немає чого друкувати: усі вибрані монтажні області порожні
 @msg	nothing to print: the document has no art that prints	немає чого друкувати: документ не містить графіки, яка друкується
 @msg	nothing to repeat	немає чого повторювати
-@msg	numbers out of order in {_1} quantifier	числа в неправильному порядку у квантифікаторі {_1}
+@msg	numbers out of order in {{}} quantifier	числа в неправильному порядку у квантифікаторі {{}}
 @msg	object is not a path	об’єкт не є контуром
 @msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	прозорість об’єкта не можна перенести на виділені символи; вимкніть «Прозорість» у параметрах піпетки або виділіть увесь об’єкт
 @msg	object {_1} can't be set as point type	об’єкт {_1} не можна зробити текстом із точки
@@ -9157,7 +9362,7 @@ breakText	Glyphs	Гліфи
 @msg	the page has no area	сторінка не має площі
 @msg	the page's type in an unread object's box isn't in its page art	тексту сторінки в рамці непрочитаного об’єкта немає в графіці цієї сторінки
 @msg	the paint behind the proxy is not a gradient	фарба за індикатором не є градієнтом
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	фарба не є довільним градієнтом (застосуйте його за допомогою paint.editGradient {kind})
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	фарба не є довільним градієнтом (застосуйте його за допомогою paint.editGradient {{kind: "freeform"}})
 @msg	the parameters or body do not form one function	параметри або тіло не утворюють одну функцію
 @msg	the parent must be a layer or sublayer	батьківським елементом має бути шар або підшар
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	вставлений фільтр SVG {name} малює інакше, ніж фільтр документа з таким іменем, а вільного імені для нього немає
@@ -9526,3 +9731,18 @@ breakText	Glyphs	Гліфи
 @msg	A panel is not joined to the rest by a crease.	Панель не з’єднана з рештою жодною лінією біговки.
 @msg	A fold line is on a non-printing layer.	Лінія згину лежить на шарі, що не друкується.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Панелі: {panels}, шарніри: {hinges}, помилки: {errors}, попередження: {warnings}
+	Pressure Sensitive	Чутливі до натиску
+	Flex Ribbon	Гнучка стрічка
+	Pulse Stroke	Пульсуючий штрих
+	Round Flow	Круглий потік
+	Chisel Flow	Косий потік
+	Fold Preview	Перегляд згину
+	Fold	Згин
+	Show Fold Lines	Показати лінії згину
+	Three-Quarter	Три чверті
+	Open a document to preview its folded shape.	Відкрийте документ, щоб переглянути його у складеному вигляді.
+@msg	Check the fold lines first.	Спершу перевірте лінії згину.
+@msg	Panels: {panels}, hinges: {hinges}	Панелі: {panels}, шарніри: {hinges}
+@msg	Other blanks not shown: {count}	Інші розгортки не показано: {count}
+@msg	A joint does not close by {gap} pt.	Стик не змикається на {gap} pt.
+@msg	Two panels pass through each other.	Дві панелі проходять одна крізь одну.

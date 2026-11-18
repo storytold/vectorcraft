@@ -1,4 +1,4 @@
-//! The menu bar (Illustrator's menu tree) and UI-level commands.
+//! The menu bar (the full menu tree) and UI-level commands.
 //!
 //! Items bound to a command id run through [`VectorcraftApp::run`]. Items not implemented yet are
 //! listed (disabled, with their shortcut) so the full surface is visible and discoverable; the
@@ -37,9 +37,6 @@ fn cp(label: &'static str, id: &'static str, p: Value) -> Item {
 fn todo(label: &'static str) -> Item {
     Item::Todo(label, "")
 }
-fn todos(label: &'static str, sc: &'static str) -> Item {
-    Item::Todo(label, sc)
-}
 fn sub(label: &'static str, items: Vec<Item>) -> Item {
     Item::Sub(label, items)
 }
@@ -64,8 +61,11 @@ pub(crate) use bar::{home_key, home_showing};
 #[cfg(test)]
 use bar::{menu_body, pointer_reaches_title};
 pub use context::{context_items, context_menu_body, ruler_menu_body, ruler_unit_items};
+#[cfg(test)]
+use entries::flatten;
 pub use entries::{
-    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, plays_in_app, pretty_shortcut, shown_shortcut,
+    InsertableItem, MenuEntry, Row, context_entries, entry, insertable, insertable_items, menu_entries, plays_in_app, pretty_shortcut, shown_label,
+    shown_shortcut,
 };
 pub(crate) use invoke::graph_dialog;
 #[cfg(test)]
@@ -80,6 +80,7 @@ pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 use slots::RECENT_FONT_IDS;
 pub use state::{checked, enabled, plugin_revision, shortcut_of, shown_state};
 pub(crate) use submenus::PATH_EFFECTS;
+pub(crate) use tree::arrange_documents_items;
 pub use tree::{menu_tree, menu_tree_named};
 pub use ui_commands::UI_COMMANDS;
 

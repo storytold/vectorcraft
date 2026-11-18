@@ -68,6 +68,7 @@
 	Add Anchor Point	添加锚点
 	Add Anchor Point Tool	添加锚点工具
 	Add Anchor Points	添加锚点
+	Add Around	围绕对象添加
 	Add Effect	添加效果
 	Add Freeform Line	添加自由曲线
 	Add Freeform Point	添加自由点
@@ -89,8 +90,12 @@
 	Add to Swatches	添加到色板
 	Add Used Colors	添加已用颜色
 	Additional Plug-ins Folder	附加增效工具文件夹
+	Plug-in Instruction Budget	增效工具指令预算
 	Additional Fonts Folder	附加字体文件夹
 	Adjust Adjoining Width Points	调整相邻宽度点
+	Incoming	入侧
+	Outgoing	出侧
+	Single Width Only	仅保留一个宽度
 	Adjust Color Balance…	调整色彩平衡…
 	Adjust Colors	调整颜色
 	Adjust Options:	调整选项：
@@ -144,6 +149,7 @@
 	Angle:	角度：
 	Angles	角度
 	Animated Zoom	动画缩放
+	Anti Alias	消除锯齿
 	Anti-alias	消除锯齿
 	Anti-Alias	消除锯齿
 	Anti-alias Rasters	栅格消除锯齿
@@ -311,6 +317,12 @@ antiAlias	Sharp	锐利
 	Brush Definition	画笔定义
 	Brush Libraries	画笔库
 	Brush Options…	画笔选项…
+	Options of Selected Object…	所选对象的选项…
+	Options of Selected Object	所选对象的选项
+@msg	no path painted with a brush is selected	未选择用画笔绘制的路径
+@msg	the selected paths are painted with brushes of different types	所选路径使用了不同类型的画笔
+@msg	give `params` or `reset`, not both	请提供 `params` 或 `reset`，不能同时提供
+@msg	a bristle brush has no options of its own on a path	鬃毛画笔在路径上没有自己的选项
 	Brush Strokes	画笔描边
 	Brushes	画笔
 	Built-in Libraries	内置库
@@ -366,6 +378,12 @@ antiAlias	Sharp	锐利
 	Character Alignment	字符对齐
 	Character / Paragraph	字符/段落
 	Character Rotation	字符旋转
+	Chinese Big 5	繁体中文 Big 5
+	Cyrillic	西里尔文
+	Greek	希腊文
+	Turkish	土耳其文
+	Baltic	波罗的海文
+	Central European	中欧文
 	Character Set:	字符集：
 	Character Style	字符样式
 	Character Style Options	字符样式选项
@@ -428,6 +446,8 @@ antiAlias	Sharp	锐利
 	Choose a folder	选择文件夹
 	Choose…	选择…
 	Circle	圆形
+	Circle Tool	圆形工具
+	Circle too large	圆形过大
 	Classic Defaults	经典默认
 	Clean Up…	清理…
 	Clear	清除
@@ -501,6 +521,7 @@ antiAlias	Sharp	锐利
 	Color Mixer (Shift-click the chip)	颜色混合器 (Shift+单击色块)
 	Color Mode	颜色模式
 	Color Mode:	颜色模式：
+	Color Model	颜色模型
 	Color Model:	颜色模型：
 	Color Models	颜色模型
 	Color Picker	拾色器
@@ -521,12 +542,18 @@ antiAlias	Sharp	锐利
 	Saturation and brightness	饱和度和亮度
 	Color field	颜色区域
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
+	Wheel View	色轮视图
+	Box View	方块视图
+	Box Channel	方块色版
+	Color box	颜色方块
+	Color Wheel Options	色轮选项
 	Color Type:	颜色类型：
 	Color:	颜色：
 	Colorize	上色
 	Colors	颜色数
 	Colors:	颜色：
 	Column Graph Tool	柱形图工具
+	Columns	列数
 	Columns:	列数：
 	Column…	列…
 	Combine Slices	组合切片
@@ -734,6 +761,9 @@ antiAlias	Sharp	锐利
 	Delete Artboard	删除画板
 	Delete Artboards	删除画板
 	Delete Brush	删除画笔
+	Delete Color	删除颜色
+	Restore Generated Table	恢复生成的颜色表
+	Unshift All Colors	取消偏移所有颜色
 	Delete Character Style	删除字符样式
 	Delete Empty Artboards	删除空白画板
 	Delete Freeform Point	删除自由点
@@ -801,6 +831,7 @@ antiAlias	Sharp	锐利
 	Direct Selection Tool	直接选择工具
 	Direction Handles	方向手柄
 	Disable Auto Add/Delete	禁用自动添加/删除锚点
+	Interpolate Control Points When Moving Anchors	移动锚点时插值方向手柄
 	Disable Opacity Mask	禁用不透明度蒙版
 	Discard	不存储
 	Discard Empty Type	丢弃空文字
@@ -903,7 +934,7 @@ antiAlias	Sharp	锐利
 	Drop Shadow	制作阴影
 	Drop Shadow…	阴影…
 	Duotone Gradients	双色调渐变
-	Duplicate	复制
+	Duplicate	创建副本
 	Duplicate and Offset 10 pt	复制并偏移 10 pt
 	Duplicate Artboard	复制画板
 	Copy Artboard	拷贝画板
@@ -984,6 +1015,9 @@ antiAlias	Sharp	锐利
 	Cap Height	大写字母高度
 	x-Height	x 字高
 	ICF Box	ICF 框
+	Ascent	上缘
+	x Height	x 字高
+	Em Box Height	全角字框高度
 	Show Sample	显示样本
 	Hide Sample	隐藏样本
 	Max Ascent/Descent	最大上升/下降
@@ -1016,6 +1050,7 @@ antiAlias	Sharp	锐利
 	Enable text access for screen readers	启用屏幕阅读器的文字访问
 	Enable Touch Gestures	启用触控手势
 	Switch Selection and Drawing Modes	切换选择与绘图模式
+	Select Last Selection Tool	切换到上次使用的选择工具
 	Enable Touch Workspace	启用触控工作区
 	Encoding	编码
 	Encoding:	编码：
@@ -1195,6 +1230,8 @@ antiAlias	Sharp	锐利
 	Files	文件
 	Files of a PDF standard can't be password-protected.	PDF 标准的文件无法设置密码保护。
 	Files of this standard tag their colours with ICC profiles.	此标准的文件会以 ICC 配置文件标记颜色。
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	此标准的文件会以 ICC 配置文件标记颜色，但输出意图配置文件中的 CMYK 颜色会写为 DeviceCMYK。
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	选择“不包含配置文件”且输出意图为 CMYK 时，除非转换为其他配置文件的 CMYK 目标，否则每种 CMYK 颜色都会写为 DeviceCMYK。
 	Fill	填色
 	Fill & Stroke	填色和描边
 	Fill (X), double-click for the Color Picker	填色 (X)，双击打开拾色器
@@ -1245,6 +1282,8 @@ antiAlias	Sharp	锐利
 	Reset Tracking and Kerning	重置字距和字偶距
 	Reset Horizontal Scale	重置水平缩放
 	Highlight Font Name	突出显示字体名称
+	Highlight Font Size	突出显示字号
+	Other…	其他…
 	Highlight Kerning	突出显示字偶距
 	Highlight Tracking	突出显示字距
 	Spacing	间距
@@ -1939,6 +1978,7 @@ file-filter	Templates	模板
 	Load SVG into Clipboard	将 SVG 载入剪贴板
 	Load Text into Clipboard	将文本载入剪贴板
 	Local Libraries	本地库
+	Locate Layer	查找图层
 	Locate Object	查找对象
 	Locate Selected Objects	查找所选对象
 	Location	位置
@@ -2129,6 +2169,7 @@ file-filter	Templates	模板
 	Scatter:	散布：
 	Rotation:	旋转：
 	Rotation relative to:	旋转相对于：
+	Hue Jitter:	色相抖动：
 	Brush Scale Options	画笔缩放选项
 	Scale Proportionately	等比缩放
 	Stretch to Fit Stroke Length	伸展以适合描边长度
@@ -2155,6 +2196,7 @@ file-filter	Templates	模板
 	Approximate path	近似路径
 	Colorization	着色
 	Key Color:	主色：
+	Roundness	圆度
 	Roundness:	圆度：
 	Fixed	固定
 	Pressure	压力
@@ -2457,6 +2499,9 @@ file-filter	Templates	模板
 	Overprint	叠印
 	Overprint and Transparency Flattener	叠印和透明度拼合器
 	Overprint and Transparency Flattener Options	叠印和透明度拼合器选项
+	Custom…	自定义…
+	Custom Transparency Flattener Options	自定义透明度拼合器选项
+	EPS has no alpha transparency, and Overprints sets whether overprints are kept.	EPS 没有 Alpha 透明度，“叠印”决定是否保留叠印。
 	Overprint Black…	黑色叠印…
 	Overprint Fill	叠印填色
 	Overprint Preview	叠印预览
@@ -2507,6 +2552,11 @@ file-filter	Templates	模板
 	Pathfinders:	路径查找器：
 	Paths	路径
 	Path Length	路径长度
+	Grid Size	网格大小
+	Grid Colors	网格颜色
+	Flattener Preset	拼合预设
+	X	X
+	Y	Y
 	Paths: {paths}    Anchors: {anchors}    Colors: {colors}	路径：{paths}    锚点：{anchors}    颜色：{colors}
 	Pattern	图案
 	Pattern Editing	图案编辑
@@ -2566,6 +2616,7 @@ diagnostics	ui	界面
 	Play Current Selection	播放当前选择项目
 	Save Actions…	存储动作…
 	Load Actions…	载入动作…
+	Replace Actions…	替换动作…
 	Reset Actions	重置动作
 	Replace the current actions with the default set?	要用默认动作组替换当前动作吗？
 	Append adds the default set after the current sets instead.	“追加”会改为将默认动作组添加到当前动作组之后。
@@ -2581,6 +2632,10 @@ diagnostics	ui	界面
 	Polar Grid Tool	极坐标网格工具
 	Polygon	多边形
 	Polygon Properties:	多边形属性：
+	Line Properties:	直线属性：
+	Line Length:	直线长度：
+	Line Angle:	直线角度：
+	Constrain Pie Angle	约束扇形角度
 	Polygon Tool	多边形工具
 	Portrait	纵向
 	Portuguese	葡萄牙语
@@ -2743,6 +2798,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
 	Use Monitor Profile for Canvas	画布使用显示器配置文件
+	Refresh Monitor Profile	刷新显示器配置文件
+@msg	turn on Use Monitor Profile for Canvas first	请先打开“画布使用显示器配置文件”
+@msg	this build doesn't read display profiles	此版本不读取显示器配置文件
 	The canvas is drawn in sRGB.	画布以 sRGB 绘制。
 	Canvas display profile:	画布显示配置文件：
 	The system matches the window to the display's colors.	系统会使窗口匹配显示器的颜色。
@@ -2933,6 +2991,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Reselect	重新选择
 	Reset	重置
 	Reset Bounding Box	重置定界框
+	Rotate Bounding Box	旋转定界框
+	Rotate Bounding Box…	旋转定界框…
 	Reset Envelope Mesh	重置封套网格
 	Reset Envelope Shape	重置封套形状
 	Reset Essentials	重置基本功能
@@ -2973,6 +3033,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Reshape Segment	整形线段
 	Reshape Tool	整形工具
 	Reshape Type Area	调整区域文字轮廓
+	Resolution	分辨率
 	Resolution:	分辨率：
 	Responsive	响应式
 	Restore	恢复
@@ -2999,6 +3060,7 @@ digits	Malayalam	马拉雅拉姆数字
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	按住 Cmd/Ctrl 滚动鼠标滚轮会横向滚动画布。
 	Dragging sideways on a numeric field's label changes the field's value.	在数值字段的标签上横向拖动可更改字段的值。
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	在触控板上用双指旋转手势可旋转画布视图。
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	移动锚点时，只有一端移动的每条曲线都会保持其相对于两端的形状。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	按住工具的快捷键时选择该工具，松开后重新选择之前的工具。
 	Shows the bounding box while you move the selection or draw a shape.	移动所选对象或绘制形状时显示定界框。
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	创建裁切标记绘制日式标记，而不是西式标记。
@@ -3029,6 +3091,29 @@ digits	Malayalam	马拉雅拉姆数字
 	The unit for East Asian type measurements, which no field uses yet.	用于东亚文字度量的单位，目前还没有字段使用。
 	When on, a number typed without a unit into a field in picas is read in points.	开启后，在以派卡为单位的字段中输入的不带单位的数字按点读取。
 	With XML ID, object names show as XML IDs in the Layers panel, the Variables panel and Layer Options.	选择 XML ID 时，图层、变量和图层选项中的对象名称显示为 XML ID。
+	The step for type size and leading: Cmd/Ctrl+Shift+. and Cmd/Ctrl+Shift+, change the size by one step, or five with Alt too; in horizontal type, Alt with the Up or Down Arrow changes the leading by one step, or five with Cmd/Ctrl.	文字大小和行距的步长：Cmd/Ctrl+Shift+. 和 Cmd/Ctrl+Shift+, 将字号改变一步，同时按 Alt 则改变五步；在横排文字中，Alt 加上下箭头将行距改变一步，同时按 Cmd/Ctrl 则改变五步。
+	The step for tracking and kerning, in thousandths of an em: in horizontal type, Alt with the Left or Right Arrow changes the kerning at the caret or the tracking of the selected text by one step, or five with Cmd/Ctrl.	字距调整和字偶间距的步长，单位为千分之一 em：在横排文字中，Alt 加左右箭头将插入点处的字偶间距或所选文字的字距调整改变一步，同时按 Cmd/Ctrl 则改变五步。
+	The step for baseline shift: in horizontal type, Alt and Shift with the Up or Down Arrow move the baseline by one step, or five with Cmd/Ctrl.	基线偏移的步长：在横排文字中，Alt、Shift 加上下箭头将基线移动一步，同时按 Cmd/Ctrl 则移动五步。
+	Shows the options for Japanese and other East Asian type in the Character, Paragraph, OpenType and Glyphs panels, and Type › Composite Fonts.	在字符、段落、OpenType 和字形面板中显示日文及其他东亚文字的选项，并显示复合字体命令。
+	Shows the options for Arabic, Hebrew and Indic type in the Character and Paragraph panels, such as paragraph direction, kashidas and digits.	在字符和段落面板中显示阿拉伯文、希伯来文和印度系文字的选项，例如段落方向、卡希达和数字。
+	The selection tools select type only on its baseline, its area's frame or its path, not anywhere inside its box.	选择工具只在文字的基线、区域文字的框架或其路径上选择文字，而不是在其框内任意位置。
+	Font menus list each font by its English name; off, a font that also has a name in its own language shows that name.	字体菜单以英文名称列出每种字体；关闭时，也有本国语言名称的字体会显示该名称。
+	New area type starts with Auto Size on, so a rectangular frame of horizontal type grows or shrinks in height to fit its text.	新的区域文字开启自动调整大小，因此横排文字的矩形框架会随文字增高或缩短。
+	Font lists and the Type › Font menu show a sample of each font beside its name.	字体列表和字体菜单在每种字体的名称旁显示该字体的样本。
+	Font samples are drawn in dark type on white, whatever the interface's brightness; it applies only while in-menu font previews are on.	无论界面亮度如何，字体样本都以深色文字绘制在白色上；仅在菜单内字体预览开启时生效。
+	How tall each row is in the font lists of font fields, such as the Character panel's, and so how large each sample is.	字体字段（例如字符面板中的字段）列表中每行的高度，也就是每个样本的大小。
+	How many of the fonts used last, from 1 to 15, Type › Recent Fonts and the font lists show, newest first.	最近字体和字体列表显示多少个最近使用的字体（1 到 15），最新的在前。
+	When you change the font or font style of text, characters the new font has no glyph for keep the font they had.	更改文字的字体或字体样式时，新字体中没有字形的字符会保留原来的字体。
+	A pink highlight on the canvas marks glyphs that OpenType features replaced, such as ligatures; it does not print or export.	画布上的粉色高亮标出被 OpenType 功能替换的字形，例如连字；高亮不会打印或导出。
+	With the Type tool, selecting one character shows a row of its alternate glyphs beside it on the canvas to choose from.	使用文字工具选中一个字符时，画布上会在其旁边显示一排可供选择的替代字形。
+	A pink highlight on the canvas marks text drawn in a substitute font because its font is missing; it does not print or export.	画布上的粉色高亮标出因缺少字体而用替代字体绘制的文字；高亮不会打印或导出。
+	New type made with a Type tool starts with placeholder text, selected, so typing replaces it.	用文字工具新建的文字以选中的占位符文字开始，输入的内容会替换它。
+	Typing a list marker such as 1. or * and then a space at the start of a paragraph makes the paragraph a list.	在段落开头输入 1. 或 * 等列表标记再输入空格，该段落会变成列表。
+	Fonts in this folder show in the font menus and can be used without being installed.	此文件夹中的字体会显示在字体菜单中，无需安装即可使用。
+	Applying a graphic style to type removes the characters' own fill or stroke where the style has one, so the style's paint shows.	对文字应用图形样式时，样式有填色或描边的地方会移除字符自身的填色或描边，从而显示样式的颜色。
+	Align and Distribute measure point type by the ink of its glyphs instead of its em box.	对齐和分布按字形的墨迹而不是全角框测量点文字。
+	Align and Distribute measure area type by the ink of its glyphs instead of its frame.	对齐和分布按字形的墨迹而不是框架测量区域文字。
+	The bounding box and the Transform panel measure point type by the ink of its glyphs instead of its em box.	定界框和变换面板按字形的墨迹而不是全角框测量点文字。
 	Snaps drawing, moving and scaling to the grid's subdivisions, even while the grid is hidden; while it is on, Snap to Pixel does not apply.	即使网格已隐藏，绘制、移动和缩放也会对齐到网格的细分；开启期间，“对齐像素”不起作用。
 	The color of guides that are not selected; an artboard with a Guide Label draws its own guides in the label's color instead.	未选中参考线的颜色；设置了参考线标签的画板会用标签颜色绘制自己的参考线。
 	Draws guides as solid lines or as dots, including the guides already in the document.	将参考线绘制为实线或点，包括文档中已有的参考线。
@@ -3056,6 +3141,8 @@ digits	Malayalam	马拉雅拉姆数字
 	How near on screen the pointer or a dragged point must come to art for Smart Guides to snap to it; the distance is the same at every zoom.	指针或拖动的点在屏幕上需离图稿多近，智能参考线才会吸附；该距离在任何缩放比例下都相同。
 	Snaps the end of a line segment, or a circle drawn from its center, so that it touches a nearby curve.	吸附线段的端点或从中心绘制的圆，使其与附近的曲线相切。
 	Snaps the end of a line segment so that it meets a nearby straight segment at a right angle.	吸附线段的端点，使其与附近的直线段成直角相交。
+	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	在画布上于每个切片左上角的方框中显示其编号；关闭时，切片轮廓仍会显示。
+	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	用户切片和对象切片的轮廓及其编号方框的颜色；自动切片使用此颜色较淡的色调。
 	Reset all preferences to their defaults?	将所有首选项重置为默认值？
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	在首选项中点击确定后才会应用默认值。在那里点击取消会保留当前首选项。
 	Restore Recovered Documents	恢复已恢复的文档
@@ -3107,6 +3194,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Rounded Rectangle	圆角矩形
 	Rounded Rectangle Tool	圆角矩形工具
 	Rounded Rectangle…	圆角矩形…
+	Rows	行数
 	Rows:	行数：
 	Rule:	规则：
 	Rulers	标尺
@@ -3254,6 +3342,12 @@ digits	Malayalam	马拉雅拉姆数字
 	Search commands, tools, panels and effects…	搜索命令、工具、面板和效果…
 	No commands match	没有匹配的命令
 	{pos} of {total}: {name}	第 {pos} 个，共 {total} 个：{name}
+	No menu item	无菜单项
+	Toolbar	工具栏
+	{toolbar}, in the {tool} group	{toolbar}，位于 {tool} 组中
+	In the menu bar: {path}	在菜单栏中：{path}
+	In the {group} group: press and hold to open it	在“{group}”组中：按住即可打开
+	{home}, not shown now	{home}，当前未显示
 @plural	{n} result|{n} results	{n} 个结果
 @plural	{shown} of {n} result. Keep typing to narrow them.|{shown} of {n} results. Keep typing to narrow them.	共 {n} 个结果，显示 {shown} 个。继续输入以缩小范围。
 	Recent Commands	最近使用的命令
@@ -3331,6 +3425,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Set Slice Rectangle	设置切片矩形
 	Set Tab Stops	设置制表位
 	Set Text	设置文本
+	Set the current fill or stroke to the selected color	将当前填色或描边设为选择的颜色
 	Set the selected color to the current color	将选择的颜色设为当前颜色
 	Set Zoom	设置缩放
 	Settings…	设置…
@@ -3452,7 +3547,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Vivid/Muted	显示鲜艳/柔和
 	Show Warm/Cool	显示暖色/冷色
 	Show {kind} Brushes	显示{kind}画笔
-	Show/hide plate (Alt-click: only this plate)	显示／隐藏色版 (Alt-单击：仅此色版)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	显示／隐藏色版 (Alt-单击：仅此色版；再次 Alt-单击：所有色版)
 	Show:	显示：
 	Shown with the optimised preview.	与优化预览一起显示。
 	Side 1:	侧边 1：
@@ -3761,7 +3856,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Composite Fonts	复合字体
 	Export Composite Fonts	导出复合字体
 	Import Composite Fonts	导入复合字体
-@msg	each font must be {name, parts}	每个字体都必须是 {name, parts}
+@msg	each font must be {{name, parts}}	每个字体都必须是 {{name, parts}}
 @msg	unknown key `{k}`; a font takes name and parts	未知键 `{k}`；字体可用的键为 name 和 parts
 @msg	each font needs a name	每个字体都需要名称
 @msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能用作复合字体的名称（1 到 {COMPOSITE_NAME_MAX} 个字符，不含控制字符）
@@ -3774,7 +3869,7 @@ digits	Malayalam	马拉雅拉姆数字
 @msg	two composite fonts are named `{_1}`	有两个复合字体都名为 `{_1}`
 @msg	`{_1}` is the name of an installed font	`{_1}` 是已安装字体的名称
 @msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了复合字体 `{font}`
-@msg	give fonts: [{name, parts}…]	请指定 fonts：[{name, parts}…]
+@msg	give fonts: [{{name, parts}}…]	请指定 fonts：[{{name, parts}}…]
 @msg	path is empty	path 为空
 @msg	fonts must be a list of composite fonts	fonts 必须是复合字体列表
 @msg	names must be strings	names 必须是字符串
@@ -3856,6 +3951,13 @@ digits	Malayalam	马拉雅拉姆数字
 	Threshold	阈值
 	Thumbnail View	缩略图视图
 	Tile	平铺
+	Tile All Vertically	全部垂直平铺
+	Tile All Horizontally	全部水平平铺
+	2-Up Layout	双联布局
+	3-Up Layout	三联布局
+	4-Up Layout	四联布局
+	6-Up Layout	六联布局
+	Arrange Documents	排列文档
 	Tile Edge Color	拼贴边缘颜色
 	Tile Edge Color…	拼贴边缘颜色…
 	Tile Full Pages	并排完整页面
@@ -4061,6 +4163,8 @@ digits	Malayalam	马拉雅拉姆数字
 	V Spacing:	垂直间距：
 	V:	V：
 	Variable Width Profile	变量宽度配置文件
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	描边的画笔保持其自身大小，因此宽度配置文件不会改变它。移除画笔即可使用配置文件。
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	描边的画笔保持其自身大小，因此宽度配置文件不会改变它。移除画笔即可使用配置文件。
 	Variables	变量
 	New Variable	新建变量
 	Delete Variable	删除变量
@@ -4070,6 +4174,13 @@ digits	Malayalam	马拉雅拉姆数字
 @msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	数据集超过 {MAX_CSV_ROWS} 个：“导入数据集”最多读取 {MAX_CSV_ROWS} 个
 @msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	变量超过 {MAX_CSV_COLS} 个：“导入数据集”最多读取 {MAX_CSV_COLS} 个
 @msg	variables that aren't text were left out: {kinds}	已省略非文本变量：{kinds}
+variable-kind	Visibility	可见性
+variable-kind	Linked File	链接文件
+variable-kind	Graph Data	图表数据
+variable-kind	Unknown	未知
+variable-list-two	{0}, {1}	{0}和{1}
+variable-list-middle	{0}, {1}	{0}、{1}
+variable-list-end	{0}, {1}	{0}和{1}
 @msg	a new document won't read these variables back with their kind: {names}	新文档不会按原类型读回这些变量：{names}
 @msg	a new document refuses this file because of these variables: {names}	新文档会因这些变量而拒绝此文件：{names}
 @msg	the header `{header}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` 的标题 `{header}` 会被读作变量 `{other}`：请重命名其中一个
@@ -4133,7 +4244,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Vertical:	垂直：
 	Very High	极高
 	View	视图
-	View Artboard Only	仅查看画板
+	View Artboard Contents Only	仅查看画板内容
 	View Opacity Mask	查看不透明度蒙版
 	View PDF after saving	存储后查看 PDF
 	View {n}	查看 {n}
@@ -4394,6 +4505,7 @@ imageTrace	Outline	轮廓
 @msg	Live Paint: select paths or compound paths	实时上色：请选择路径或复合路径
 @msg	Live Paint: these paths are too degenerate to paint	实时上色：这些路径过于退化，无法上色
 @msg	Shape Builder: no region under the pointer	形状生成器：指针下方没有区域
+@msg	Shape Builder: select all paths you want to merge	形状生成器：请选择要合并的所有路径
 @msg	Shape Builder: select paths or compound paths	形状生成器：请选择路径或复合路径
 @msg	image data `{_1}` is missing	缺少图像数据 `{_1}`
 @msg	no Live Paint edge near that point	该点附近没有实时上色边缘
@@ -4448,6 +4560,7 @@ imageTrace	Outline	轮廓
 @msg	Expand: no gradient fills	扩展：没有渐变填色
 @msg	Expand: nothing to expand	扩展：没有可扩展的内容
 @msg	batch step {_1} (`{id}`) failed: {e}	批处理步骤 {_1} (`{id}`) 失败：{e}
+@msg	action step {_1} (`{id}`) failed: {reason}	动作步骤 {_1} (`{id}`) 失败：{reason}
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP 文件为 RGB 或灰度：colorModel rgb 或 gray
 @msg	Targa files are RGB: colorModel rgb	Targa 文件为 RGB：colorModel rgb
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`：none、art 或 type
@@ -4541,8 +4654,8 @@ imageTrace	Outline	轮廓
 @msg	image would be too large; lower the resolution	图像将过大；请降低分辨率
 @msg	clipboard is empty	剪贴板为空
 @msg	no anchor points selected	未选择锚点
-@msg	`points` must be three [x, y] pairs of numbers	`points` 必须是三对数字 [x, y]
-@msg	direct-select three anchor points, or give `points`	请直接选择三个锚点，或提供 `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` 必须是两对或三对数字 [x, y]
+@msg	direct-select two or three anchor points, or give `points`	请直接选择两个或三个锚点，或提供 `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	没有圆经过这些点：有两点相同，或三点共线
 @msg	select at least two objects	请至少选择两个对象
 @msg	exit isolation mode first	请先退出隔离模式
@@ -4584,6 +4697,8 @@ imageTrace	Outline	轮廓
 @msg	{label}: lost track of a shape's style	{label}：丢失了某个形状的样式
 @msg	{label}: select paths	{label}：请选择路径
 @msg	{label}: select paths, compound paths, groups or text	{label}：请选择路径、复合路径、编组或文字
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	直线或其他不围成区域的开放路径不会改变结果的形状；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 生成了空结果：直线或其他开放路径不围成区域；要包含它，请先对其应用“对象 › 路径 › 轮廓化描边”
 @msg	already editing a pattern	已在编辑图案
 @msg	no pattern `{name}`	没有图案 `{name}`
 @msg	not in pattern editing mode	不在图案编辑模式中
@@ -4659,6 +4774,8 @@ imageTrace	Outline	轮廓
 @msg	Create Outlines: select text objects	创建轮廓：请选择文本对象
 @msg	paste unavailable	无法粘贴
 @msg	Save for Web: the image is empty	存储为 Web 所用格式：图像为空
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted：颜色表中至少要保留一种颜色
+@msg	colorTable.shifted: `{k}` names a color another key names	colorTable.shifted：`{k}` 与另一个键指的是同一种颜色
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}：`{h}` 不是颜色，例如 "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}：最多 {MAX_TABLE} 种颜色
 @msg	no artboard {i} (0-based; the document has {_1})	没有画板 {i} (从 0 开始计数；文档有 {_1} 个)
@@ -4895,6 +5012,12 @@ imageTrace	Outline	轮廓
 @msg	no preset editor	没有预设编辑器
 @msg	no perspective grid preset named `{name}`	没有名为 `{name}` 的透视网格预设
 @msg	no active perspective plane	没有活动的透视平面
+@msg	the perspective grid is hidden	透视网格已隐藏
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	自动平面定位已关闭：请打开 anchorPoint 或 gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint 必须为 true 或 false
+@msg	gridlineIntersection must be true or false	gridlineIntersection 必须为 true 或 false
+@msg	tolerance must be 0 or more	tolerance 必须大于或等于 0
+@msg	give `at` or `clear`, not both	请给出 `at` 或 `clear`，不能两者都给
 @msg	plane must be left, right or ground	plane 必须是 left、right 或 ground
 @msg	missing `id` (see plugin.list)	缺少 `id` (请参阅 plugin.list)
 @msg	no plug-in {id} is installed	未安装增效工具 {id}
@@ -4945,6 +5068,9 @@ imageTrace	Outline	轮廓
 @msg	`{color}` is not a colour (#rrggbb or a preset name)	`{color}` 不是颜色 (#rrggbb 或预设名称)
 @msg	give the path `id` and the width point `index`	请给出路径的 `id` 和宽度点的 `index`
 @msg	no such width point	没有此宽度点
+@msg	`single` must be `incoming` or `outgoing`	`single` 必须是 `incoming` 或 `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` 和 `outIndex` 必须是同一个不连续宽度点的两半
+@msg	a discontinuous width point keeps its place	不连续宽度点保持原位
 @msg	onto must name a panel floating in another group	onto 必须指定浮动在另一个组中的面板
 @msg	below and above must name a panel floating in another group	below 和 above 必须指定浮动在另一个组中的面板
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
@@ -4974,6 +5100,8 @@ imageTrace	Outline	轮廓
 @msg	No saved views (View → New View…)	没有已保存的视图 (视图 → 新建视图…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` 必须是其菜单项会打开对话框的命令 (请参阅 ui.menuDialog)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必须是 grayscale、rgb、hsb、cmyk 或 websafe
+@msg	`view` must be wheel or box	`view` 必须是 wheel 或 box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必须是 hue、saturation、brightness、red、green 或 blue
 @msg	`{key}` must be true or false	`{key}` 必须是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同时为 true
 @msg	`select` must be true or false	`select` 必须是 true 或 false
@@ -5052,6 +5180,13 @@ imageTrace	Outline	轮廓
 	Show External Script Warning	显示外部脚本警告
 	A Script Is Running	脚本正在运行
 	Script Alert	脚本提示
+	Script File Access	脚本文件访问
+	The script asks to read a file you choose.	脚本请求读取您选择的文件。
+	The script asks to read and write a file you choose.	脚本请求读写您选择的文件。
+	The script asks to read and write a folder you choose, with everything in it.	脚本请求读写您选择的文件夹及其中的所有内容。
+	Allow Once	允许一次
+	Always Allow This Script	始终允许此脚本
+	Deny	拒绝
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
 	Stop the script and undo what it did? Then quit again.	要停止脚本并撤销其更改吗？然后请再次退出。
@@ -5068,6 +5203,8 @@ imageTrace	Outline	轮廓
 @msg	the script is no longer in the Scripts folder	脚本已不在 Scripts 文件夹中
 	Some scripts were not listed	部分脚本未列出
 	The Scripts folder cannot be read	无法读取 Scripts 文件夹
+	Loading scripts…	正在载入脚本…
+	The Scripts folder is still being read	仍在读取 Scripts 文件夹
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
@@ -5080,8 +5217,6 @@ imageTrace	Outline	轮廓
 @msg	Script file could not be read	无法读取脚本文件
 @msg	Script folder has more than 2,048 entries	脚本文件夹的条目超过 2,048 个
 @msg	Script file open mode must be r, w, e or a	脚本文件的打开模式必须是 r、w、e 或 a
-@msg	Script file writing is not available	脚本文件写入不可用
-@msg	Script file dialogs are not available	脚本文件对话框不可用
 @msg	Script files cannot be opened in another application	脚本文件无法在其他应用程序中打开
 @msg	Script file access is unavailable on the web	网页版无法访问脚本文件
 @msg	Script has 256 files open	脚本已打开 256 个文件
@@ -5198,6 +5333,27 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
+@msg	Script file access denied: {path}	脚本的文件访问被拒绝：{path}
+@msg	Script file access to the app's own folders is not allowed	不允许脚本访问应用自身的文件夹
+@msg	Script file cannot encode the text	脚本的文件无法编码该文本
+@msg	Script file could not be written	无法写入脚本的文件
+@msg	Script file dialogs need a person to answer them	脚本的文件对话框需要有人回答
+@msg	Script file is not open for writing	脚本的文件未以写入方式打开
+@msg	Script file name is already in use	脚本的文件名已被使用
+@msg	Script file name must be a name without a folder	脚本的文件名必须是不含文件夹的名称
+@msg	Script file permission can be kept only for a script run from a file	只有从文件运行的脚本才能保留文件权限
+@msg	Script file permission could not be saved	无法保存脚本的文件权限
+@msg	Script folder is not empty	脚本的文件夹不为空
+@msg	Script files cannot make aliases	脚本的文件无法创建别名
+@msg	Script file hidden setting cannot be changed	无法更改脚本文件的隐藏设置
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：文件对话框不能在内置函数、getter、转换或 $.evalFile 运行的文件的回调中打开；请从脚本自身的代码中调用
+@msg	the script wrote more file data than one run may write (32 MiB)	脚本写入的文件数据超过了一次运行可写入的上限 (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	脚本文件对话框的 `answer` 必须是以下之一：once、always、deny、stop
+@msg	choose a file or folder first, or deny	请先选择文件或文件夹，或拒绝
+@msg	the script file permissions could not be saved: {e}	无法保存脚本的文件权限：{e}
+@msg	this script's file access can be allowed only once	此脚本的文件访问只能允许一次
+@msg	Only the person at the keyboard can allow a script's file access	只有键盘前的人才能允许脚本访问文件
+@msg	A script is given at most 2,048 files: the files picked after them were left out	脚本最多获得 2,048 个文件：之后选择的文件已被略去
 @msg	Copied the link info	已复制链接信息
 @msg	Exported {path}	已导出 {path}
 @msg	no CSS to copy: select objects with CSS of their own	没有可复制的 CSS：请选择带有自身 CSS 的对象
@@ -5234,6 +5390,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	All colors are within the CMYK gamut	所有颜色皆在 CMYK 色域内
 @msgplural	{n} color is out of the CMYK gamut|{n} colors are out of the CMYK gamut	{n} 个颜色超出 CMYK 色域
 @msg	Unembedded to {_1}	已取消嵌入到 {_1}
+@msgplural	Unembedded {n} image to {folder}|Unembedded {n} images to {folder}	已将 {n} 张图像取消嵌入到 {folder}
+@msg	every numbered name for {name} is taken in that folder	该文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	no swatch library `{l}` (see swatch.library.list)	没有色板库 `{l}` (请参阅 swatch.library.list)
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭
@@ -5259,6 +5417,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已丢弃 {n} 个恢复的文档
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已还原 {n} 个恢复的文档：请保存以保留它们
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已打开，有 {n} 条注释：{first}
+@msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	已复制，有 {n} 条注释：{first}
+@msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	已剪切，有 {n} 条注释：{first}
+@msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	已描摹图像，有 {n} 条注释：{first}
 @msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已打开，有 {n} 条注释：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已保存 {path}，有 {n} 条注释：{first}
 @msg	Saving recovery data for {_1}	正在保存 {_1} 的恢复数据
@@ -5286,6 +5447,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	the {tool} tool has no options	{tool} 工具没有选项
 @msg	unknown tool `{tool}`	未知工具 `{tool}`
 @msg	{tool} isn't in a toolbar group of several tools	{tool} 不在包含多个工具的工具栏组中
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	演示模式会隐藏工具栏：请更改屏幕模式以显示工具栏
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab 已隐藏工具栏：请按 Tab 以显示工具栏
 @msg	no such document	没有此文档
 @msg	{_1}: not saved, so not closed	{_1}：未保存，因此未关闭
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` 是内置工作区；请选择其他名称
@@ -5333,6 +5496,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	automation path rejected: outside the read root {root}: {path}	已拒绝自动化路径：位于读取根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	已拒绝自动化路径：位于所有读取根目录 {roots} 之外：{path}
 @msg	a linked JavaScript file is outside the read roots	链接的 JavaScript 文件位于所有读取根目录之外
+@msg	a linked image file is outside the read roots	链接的图像文件位于所有读取根目录之外
+@msg	a linked file's export folder is outside the read roots	链接文件的导出文件夹位于所有读取根目录之外
+@msg	a linked file's editing data can't be read to check it against the read roots	无法读取链接文件的编辑数据，因此无法对照读取根目录进行检查
 @msg	automation path rejected: outside the write root {root}: {path}	已拒绝自动化路径：位于写入根目录 {root} 之外：{path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	已拒绝自动化路径：位于所有写入根目录 {roots} 之外：{path}
 @msg	automation path rejected: path is empty	已拒绝自动化路径：路径为空
@@ -5842,6 +6008,7 @@ font-technology	Variable	可变
 	Bevel	斜角
 	Offset	偏移
 	Axis	轴
+	Axis Angle	轴角度
 axis	Horizontal	水平
 axis	Vertical	垂直
 axis	Both	两者
@@ -5891,7 +6058,7 @@ axis	Both	两者
 	Constrain	约束
 	Perspective Distort	透视扭曲
 
-# Photoshop-style raster effects (Effect menu, their dialogs).
+# Raster effects (Effect menu, their dialogs).
 	Radial Blur…	径向模糊…
 	Blur Center	模糊中心
 	Smart Blur…	智能模糊…
@@ -6103,6 +6270,7 @@ lighting	Light	光源
 	Horizontal Guide	水平参考线
 	Move Guide to Layer	将参考线移至图层
 	Linux Display Server	Linux 显示服务器
+	Low-Latency Drawing	低延迟绘图
 	X11 (XWayland) When a Pen Is Attached	连接手写笔时使用 X11 (XWayland)
 	If a drawing tablet's pen doesn't draw, choose an X11 (XWayland) option.	如果数位板的笔无法绘画，请选择一个 X11 (XWayland) 选项。
 	X11 (XWayland)	X11 (XWayland)
@@ -6154,6 +6322,7 @@ lighting	Light	光源
 	Cove	凹圆
 	Depth	深度
 	Front	正面
+	Side	侧面
 	Isometric Bottom	等角底部
 	Isometric Left	等角左侧
 	Isometric Right	等角右侧
@@ -6248,7 +6417,7 @@ lighting	Light	光源
 @msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` 的每个条目必须是对象
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 的条目接受 symbol、face、x、y、scale 和 rotation，不接受 `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` 的每个条目都需要 `symbol`，即符号的名称
-@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必须是 front 或 back
+@msg	`{GRAPHICS}` face must be front, back or side	`{GRAPHICS}` 的 face 必须是 front、back 或 side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
@@ -7223,6 +7392,12 @@ anchor	Points:	点：
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` 必须是 "free"、"keepAngles" 或 "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` 必须是 [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	单位换算器
+	Unit Converter Panel	单位换算器面板
+	Copy with Units	复制时包含单位
+	From Selection	从所选对象
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	按颜色类型选择
 	Objects with Spot Colors	使用专色的对象
@@ -7447,6 +7622,14 @@ breakText	Glyphs	字形
 	Remove Gaps	移除间隙
 @msg	that makes too many pieces (at most 100000): make the dashes longer	这会产生过多片段（最多 100000 个）：请加长短划线
 @msg	select paths, or segments, to divide	请选择要分割的路径或线段
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	平滑桥接…
+	Smooth Bridge	平滑桥接
+	Keep Originals	保留原稿
+@msg	select two circles to bridge	请选择两个要桥接的圆
+@msg	one circle is inside the other	一个圆位于另一个圆内部
+@msg	the circles are too far apart for this radius: raise the radius	对于此半径，两个圆相距太远：请增大半径
+@msg	the circles are too far apart for this radius	对于此半径，两个圆相距太远
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	公切线…
 	Common Tangents	公切线
@@ -7463,6 +7646,7 @@ breakText	Glyphs	字形
 @msg	One path lies inside the other, so they have no common tangents	一条路径位于另一条之内，因此它们没有公切线
 @msg	The paths overlap, so they have no internal tangents	路径相互重叠，因此它们没有内公切线
 @msg	One path lies inside the other, so they have no internal tangents	一条路径位于另一条之内，因此它们没有内公切线
+@msg	The point lies inside the path, so it has no tangents	该点位于路径之内，因此没有切线
 # Path Precision Tools add-on: Expand Dashes into Paths.
 	Expand Dashes into Paths	将短划线扩展为路径
 @msg	select paths with dashed strokes to expand	请选择要扩展的虚线描边路径
@@ -7819,6 +8003,14 @@ breakText	Glyphs	字形
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 中的回答超过 {MAX_ANSWERS} 个
 @msg	`answers` is larger than 1 MiB	`answers` 大于 1 MiB
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 仅用于无人可问的运行：在应用中，由用户回答每个对话框
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` 必须是 1 到 {_1} 之间的整数
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` 的嵌套超过 64 层
+@msg	`args` must be an object	`args` 必须是对象
+@msg	`args` is larger than 1 MiB	`args` 大于 1 MiB
+@msg	`path` is empty	`path` 为空
+@msg	`installed` takes a `path`, not a `source`	`installed` 需要 `path`，而不是 `source`
+@msg	`path` must name a .js or .jsx file	`path` 必须指向 .js 或 .jsx 文件
+@msg	give exactly one of `path` and `source`	`path` 和 `source` 中必须且只能给出一个
 @msg	`answers` must be a list of answers	`answers` 必须是回答的列表
 @msg	`artboard` must be the index of an artboard of the document	`artboard` 必须是文档中某个画板的索引
 @msg	`artboardsAt` must be [x, y]	`artboardsAt` 必须是 [x, y]
@@ -7862,7 +8054,7 @@ breakText	Glyphs	字形
 @msg	`rows` must be lists of numbers or nulls, not {r}	`rows` 必须是由数字或 null 组成的列表，不能是 {r}
 @msg	`scale` must be a number from 0.001 to 1000	`scale` 必须是 0.001 到 1000 之间的数字
 @msg	`scope.{key}` must be a non-empty array	`scope.{key}` 必须是非空数组
-@msg	`scope` must be "document", {artboards} or {layers}	`scope` 必须是 "document"、{artboards} 或 {layers}
+@msg	`scope` must be "document", {{artboards: [index, …]}} or {{layers: [id, …]}}	`scope` 必须是 "document"、{{artboards: [index, …]}} 或 {{layers: [id, …]}}
 @msg	`side` must be "left", "right", "top" or "bottom"	`side` 必须是 "left"、"right"、"top" 或 "bottom"
 @msg	`side` places the artboard: leave out x, y, width and height	`side` 决定画板的位置：请不要给出 x、y、width 和 height
 @msg	`source` is the only path in series group `target`	`source` 是系列组 `target` 中唯一的路径
@@ -8048,7 +8240,7 @@ breakText	Glyphs	字形
 @msg	not a regular expression	不是正则表达式
 @msg	not an action set: the text doesn't start with /version and a number	不是动作组：文本不是以 /version 和一个数字开头
 @msg	nothing to repeat	没有可重复的内容
-@msg	numbers out of order in {_1} quantifier	量词 {_1} 中的数字顺序颠倒
+@msg	numbers out of order in {{}} quantifier	量词 {{}} 中的数字顺序颠倒
 @msg	object {_1} needs a 3D effect	对象 {_1} 需要有 3D 效果
 @msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	对象 {_1}：空心的突出与斜角没有端面：请打开“端点”后再贴图
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	对象 {_1}：深度为 0 时对象只有一个面：请将图形贴到正面
@@ -8121,7 +8313,7 @@ breakText	Glyphs	字形
 @msg	the library's file is outside the read roots	库文件位于可读取的根目录之外
 @msg	the line is too long, or the paths it passes too many, to check	线条过长，或它经过的路径过多，无法检查
 @msg	the method needs an XML value	此方法需要 XML 值
-@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	该上色不是自由渐变 (请用 paint.editGradient {kind} 应用一个)
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {{kind: "freeform"}})	该上色不是自由渐变 (请用 paint.editGradient {{kind: "freeform"}} 应用一个)
 @msg	the parameters or body do not form one function	参数或函数体不能构成一个函数
 @msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	粘贴的 SVG 滤镜 {name} 与文档中同名滤镜的绘制结果不同，且没有可用的空闲名称
 @msg	the paths are too many or too tangled to find where they cross	路径过多或过于交错，无法找出它们的交叉位置
@@ -8413,6 +8605,8 @@ breakText	Glyphs	字形
 @msg	`{f}` is the copy of a document open now	`{f}` 是当前已打开文档的副本
 @msg	`{id}` is no writable format (see document.formats)	`{id}` 不是可写入的格式 (参见 document.formats)
 @msg	`{id}` isn't a loaded library	`{id}` 不是已载入的库
+@msg	`{file}` has no swatches of its own	`{file}` 没有自己的色板
+@msg	`{_1}` has pattern swatches, which a .vcswatches file can't hold	`{_1}` 含有图案色板，.vcswatches 文件无法保存
 @msg	`{key}` has no colours	`{key}` 中没有颜色
 @msg	`{key}` is a design name	`{key}` 是设计名称
 @msg	`{key}` is a design name or a list of them	`{key}` 是一个设计名称或设计名称的列表
@@ -8635,7 +8829,13 @@ breakText	Glyphs	字形
 @msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel 必须是 {own} (文档的模式)、grayscale 或 bitmap
 @msg	colour groups can't go into colour groups	颜色组不能放入颜色组
 @msg	colour, mode and spot apply to solid-colour swatches only	colour、mode 和 spot 只适用于纯色色板
-@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	第 {column} 列：`{cell}` 是图表数据文件的 `%` 列，不会读取
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 是相对路径：请提供 `base` 或绝对路径
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	第 {line} 行，第 {column} 列：无法读取 `{var}` 的图表数据文件：{e}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	第 {line} 行，第 {column} 列：未跟随 `{var}` 的图表数据文件 `{path}`：{r}
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 超过 {MAX_GRAPH_DATA_FILE} 字节
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	第 {line} 行，第 {column} 列：`{var}` 的图表数据文件 `{path}` 得到的图表值超过 {MAX_GRAPH_CSV} 字节
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	第 {line} 行，第 {column} 列：图表数据文件总计超过 {MAX_GRAPH_FILES_TOTAL} 字节
+@msg	`base` is empty	`base` 为空
 @msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	第 {column} 列：`{cell}` 指定了 `{name}`，而它是 {_1} 变量
 @msg	column {column}: `{cell}` names no variable	第 {column} 列：`{cell}` 没有对应的变量
 @msg	column {column}: the variable name is longer than {MAX_NAME} characters	第 {column} 列：变量名称超过 {MAX_NAME} 个字符
@@ -8646,6 +8846,7 @@ breakText	Glyphs	字形
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	复合形状接受路径、复合路径、编组、复合形状、文字、混合和封套
 @msg	compound {_1} must contain exactly one open path to join	复合对象 {_1} 必须恰好包含一条要连接的开放路径
 @msg	connect needs a path other than the one extended	connect 需要一条不同于被延伸路径的路径
+@msg	connect needs extend	connect 需要 extend
 @msg	connect needs id	connect 需要 id
 @msg	connect path has no open end	connect 的路径没有开放的端点
 @msg	copy needs path: the file to copy into the document's folder	copy 需要 path：即要复制到文档所在文件夹的文件
@@ -9757,4 +9958,19 @@ breakText	Glyphs	字形
 @msg	A panel is not joined to the rest by a crease.	一个面板没有通过任何压痕线与其余部分相连。
 @msg	A fold line is on a non-printing layer.	一条折线位于不打印的图层上。
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	面板：{panels}，铰链：{hinges}，错误：{errors}，警告：{warnings}
+	Fold Preview	折叠预览
+	Fold	折叠
+	Show Fold Lines	显示折线
+	Three-Quarter	四分之三视图
+	Open a document to preview its folded shape.	打开文档以预览其折叠后的形状。
+@msg	Check the fold lines first.	请先检查折线。
+@msg	Panels: {panels}, hinges: {hinges}	面板：{panels}，铰链：{hinges}
+@msg	Other blanks not shown: {count}	未显示的其他展开图：{count}
+@msg	A joint does not close by {gap} pt.	有一处接缝相差 {gap} pt 未闭合。
+@msg	Two panels pass through each other.	两个面板相互穿插。
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+	Pressure Sensitive	压感画笔
+	Flex Ribbon	柔韧色带
+	Pulse Stroke	脉动笔触
+	Round Flow	圆头流线
+	Chisel Flow	斜头流线
