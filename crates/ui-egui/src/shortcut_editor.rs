@@ -3797,7 +3797,22 @@ mod tests {
         let (csv_off, csv_on) = (String::from_utf8_lossy(csv_off), String::from_utf8_lossy(csv_on));
         assert!(!csv_off.contains(&hold), "off, the CSV file lists no hold");
         assert!(csv_on.contains(&swap[0].shortcut), "on, the CSV file lists it: {}", swap[0].shortcut);
-        assert_eq!(sheet_off, sheet_off_again, "the sheet is the same each time");
+        // The writer stamps each file with the clock: its dates and its ID (fixed width), which differ
+        // between two exports a second apart. The rest of the file is the same each time.
+        let unstamped = |pdf: &[u8]| {
+            let mut b: Vec<u8> = pdf.iter().map(|&c| if c.is_ascii_digit() { b'0' } else { c }).collect();
+            for key in [&b"InstanceID>"[..], b"DocumentID>", b"/ID["] {
+                let mut at = 0;
+                while let Some(i) = b[at..].windows(key.len()).position(|w| w == key) {
+                    let start = at + i + key.len();
+                    let end = b[start..].iter().position(|&c| c == b'<' || c == b']').map_or(b.len(), |e| start + e);
+                    b[start..end].fill(b'?');
+                    at = end;
+                }
+            }
+            b
+        };
+        assert_eq!(unstamped(sheet_off), unstamped(sheet_off_again), "the sheet is the same each time");
         assert_ne!(sheet_off, sheet_on, "on, the sheet lists the hold");
     }
 
