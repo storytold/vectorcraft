@@ -745,6 +745,56 @@ fn the_profile_follows_the_preset_access_and_reset() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The first run's style of text object `id`.
+fn first_run(s: &Session, id: &Value) -> vectorcraft_doc::CharStyle {
+    let n = s.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id.as_u64().unwrap())).cloned().unwrap();
+    let vectorcraft_doc::NodeKind::Text(t) = &n.kind else { panic!("not type: {n:?}") };
+    t.runs[0].style.clone()
+}
+
+#[test]
+fn a_profiles_normal_character_style_is_the_default_font() {
+    let (mut s, dir) = with_profiles("default-font");
+    // The Print profile's [Normal Character Style] becomes Source Serif 4 Regular at 9 pt.
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    let attrs = json!({"font_family": "Source Serif 4", "font_style": "Regular", "size": 9, "charAlign": "emBoxBottom"});
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": attrs})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    // New type in a document from the profile takes the font, size and Character Alignment.
+    s.execute("file.new", &json!({"preset": "A4"})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Serif"})).unwrap();
+    assert!(made.get("warning").is_none(), "{made}");
+    let st = first_run(&s, &made["id"]);
+    assert_eq!((st.font_family.as_str(), st.font_style.as_str(), st.size), ("Source Serif 4", "Regular", 9.0));
+    assert_eq!(st.char_align, vectorcraft_doc::CharAlign::EmBoxBottom);
+    // A font, size or Character Alignment given to the command still wins.
+    let made = s
+        .execute("text.create", &json!({"x": 20, "y": 80, "text": "Sans", "font": "Source Sans 3", "size": 14, "charAlign": "romanBaseline"}))
+        .unwrap();
+    let st = first_run(&s, &made["id"]);
+    assert_eq!((st.font_family.as_str(), st.size, st.char_align), ("Source Sans 3", 14.0, vectorcraft_doc::CharAlign::RomanBaseline));
+    // A family given alone starts in Regular, not the style's Bold, and without its axis settings.
+    let attrs = json!({"font_style": "Bold", "fontAxes": {"wght": 700}});
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": attrs})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 120, "text": "Inter", "font": "Inter"})).unwrap();
+    let st = first_run(&s, &made["id"]);
+    assert_eq!((st.font_family.as_str(), st.font_style.as_str()), ("Inter", "Regular"));
+    assert!(st.font_axes.is_empty(), "{:?}", st.font_axes);
+    // A font of the style that isn't available is reported, as one given to the command is.
+    s.execute("charStyle.setAttrs", &json!({"name": "[Normal Character Style]", "attrs": {"font_family": "No Such Family 7498"}})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 160, "text": "Missing"})).unwrap();
+    assert!(made["warning"].as_str().is_some_and(|w| w.contains("No Such Family 7498")), "{made}");
+
+    // A document from a profile left as shipped starts type in the default font and size.
+    s.execute("file.new", &json!({"profile": "Web"})).unwrap();
+    let made = s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Default"})).unwrap();
+    let st = first_run(&s, &made["id"]);
+    let default = vectorcraft_doc::CharStyle::default();
+    assert_eq!((st.font_family, st.size), (default.font_family, default.size));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn profile_errors_name_the_file_by_its_name_outside_the_read_roots() {
     let (mut s, dir) = with_profiles("errors");

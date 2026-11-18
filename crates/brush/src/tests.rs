@@ -1033,6 +1033,165 @@ fn stain_mixes_type_strokes_too() {
     assert_eq!(run_paints(&[art]), [(Paint::solid(blue), Paint::solid(blue))]);
 }
 
+/// A scatter brush of rectangles filled `fill`, with `colorization` and `hue_jitter`.
+fn jittered(fill: Color, colorization: Colorization, hue_jitter: f64) -> Brush {
+    let mut art = rect_art(10.0, 4.0);
+    art.appearance.set_fill(Paint::solid(fill));
+    Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art, colorization, hue_jitter, ..Default::default() }) }
+}
+
+/// The fill color of each copy.
+fn fill_colors(out: &[Node]) -> Vec<Color> {
+    out.iter().map(|n| n.appearance.fill_paint().color().unwrap()).collect()
+}
+
+/// How far hue `h` is from `from`, in degrees, either way round.
+fn hue_gap(h: f32, from: f32) -> f32 {
+    let d = (h - from).rem_euclid(360.0);
+    d.min(360.0 - d)
+}
+
+#[test]
+fn hue_jitter_turns_each_copy_the_same_every_time() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    let b = jittered(Color::rgb(1.0, 0.0, 0.0), Colorization::None, 90.0);
+    let out = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(out.len(), 20);
+    assert_eq!(stroke_pieces(&doc, &b, &path, &stroke(1.0)), out, "the same stroke draws the same colors");
+    let colors = fill_colors(&out);
+    let hues: Vec<f32> = colors.iter().map(|c| c.to_hsb()[0]).collect();
+    assert!(hues.iter().all(|h| hue_gap(*h, 0.0) <= 90.01), "{hues:?}");
+    assert!(hues.iter().any(|h| hue_gap(*h, 0.0) > 10.0), "the copies turn: {hues:?}");
+    let distinct: std::collections::HashSet<String> = colors.iter().map(Color::to_hex).collect();
+    assert!(distinct.len() > 10, "each copy turns by its own amount: {distinct:?}");
+    // Saturation and brightness stay; the copies stay where they were, at their size and angle.
+    assert!(colors.iter().all(|c| near(f64::from(c.to_hsb()[1]), 1.0, 1e-3) && near(f64::from(c.to_hsb()[2]), 1.0, 1e-3)), "{colors:?}");
+    let plain = stroke_pieces(&doc, &jittered(Color::rgb(1.0, 0.0, 0.0), Colorization::None, 0.0), &path, &stroke(1.0));
+    let boxes = |o: &[Node]| o.iter().map(|n| n.geometric_bounds().unwrap()).collect::<Vec<_>>();
+    assert_eq!(boxes(&out), boxes(&plain));
+    // Another path draws other amounts.
+    let other = fill_colors(&stroke_pieces(&doc, &b, &line(0.0, 10.0, 200.0, 10.0), &stroke(1.0)));
+    assert_ne!(other, colors);
+}
+
+#[test]
+fn hue_jitter_of_zero_changes_nothing() {
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &jittered(red, Colorization::None, 0.0), &line(0.0, 0.0, 200.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty() && fill_colors(&out).iter().all(|c| *c == red));
+    // A brush without hue jitter is saved as before, and one saved before reads as 0.
+    let v = serde_json::to_value(jittered(red, Colorization::None, 0.0)).unwrap();
+    assert!(v.get("hue_jitter").is_none(), "{v}");
+    let mut old = serde_json::to_value(jittered(red, Colorization::None, 45.0)).unwrap();
+    assert_eq!(old.as_object_mut().unwrap().remove("hue_jitter"), Some(serde_json::json!(45.0)));
+    let BrushKind::Scatter(s) = Brush::from_json(old).unwrap().kind else { panic!("not a scatter brush") };
+    assert_eq!(s.hue_jitter, 0.0, "a brush saved without the key reads as 0");
+    let mut with = v.clone();
+    with["hue_jitter"] = serde_json::json!(45.0);
+    let BrushKind::Scatter(s) = Brush::from_json(with).unwrap().kind else { panic!("not a scatter brush") };
+    assert_eq!(s.hue_jitter, 45.0);
+    // Values outside 0..180 are clamped.
+    for (given, kept) in [(500.0, 180.0), (-20.0, 0.0)] {
+        let mut v = v.clone();
+        v["hue_jitter"] = serde_json::json!(given);
+        let BrushKind::Scatter(s) = Brush::from_json(v).unwrap().kind else { panic!("not a scatter brush") };
+        assert_eq!(s.hue_jitter, kept, "{given}");
+    }
+}
+
+#[test]
+fn hue_jitter_turns_after_the_colorization() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    // Tints: black art takes the blue stroke color, which then turns.
+    let blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 1.0);
+    let hues: Vec<f32> =
+        fill_colors(&stroke_pieces(&doc, &jittered(Color::BLACK, Colorization::Tints, 30.0), &path, &blue)).iter().map(|c| c.to_hsb()[0]).collect();
+    assert!(!hues.is_empty() && hues.iter().all(|h| hue_gap(*h, 240.0) <= 30.01), "{hues:?}");
+    assert!(hues.iter().any(|h| hue_gap(*h, 240.0) > 3.0), "{hues:?}");
+    // A gray stroke color has no hue: its tints stay as they are.
+    let gray = StrokeLayer::new(Paint::solid(Color::rgb(0.5, 0.5, 0.5)), 1.0);
+    let turned = stroke_pieces(&doc, &jittered(Color::BLACK, Colorization::Tints, 180.0), &path, &gray);
+    let still = stroke_pieces(&doc, &jittered(Color::BLACK, Colorization::Tints, 0.0), &path, &gray);
+    assert_eq!(fill_colors(&turned), fill_colors(&still));
+    // Nor does black ink alone, nor a gray, as a process stroke color.
+    for key in [Color::cmyk(0.0, 0.0, 0.0, 1.0), Color::cmyk(0.0, 0.0, 0.0, 0.5), Color::gray(0.4)] {
+        let key = StrokeLayer::new(Paint::solid(key), 1.0);
+        let turned = stroke_pieces(&doc, &jittered(Color::BLACK, Colorization::Tints, 180.0), &path, &key);
+        let still = stroke_pieces(&doc, &jittered(Color::BLACK, Colorization::Tints, 0.0), &path, &key);
+        assert_eq!(fill_colors(&turned), fill_colors(&still), "{key:?}");
+    }
+    // A turned process color stays a process color, turned over its C, M and Y with its K kept.
+    let cmyk = fill_colors(&stroke_pieces(&doc, &jittered(Color::cmyk(0.0, 1.0, 1.0, 0.25), Colorization::None, 60.0), &path, &stroke(1.0)));
+    assert!(cmyk.iter().any(|c| *c != Color::cmyk(0.0, 1.0, 1.0, 0.25)), "{cmyk:?}");
+    for c in &cmyk {
+        let Color::Cmyk { c, m, y, k } = *c else { panic!("not CMYK: {c:?}") };
+        assert_eq!(k, 0.25);
+        // Full ink in one channel and none in another, as the color before it.
+        assert!(near(f64::from(c.max(m).max(y)), 1.0, 1e-4) && near(f64::from(c.min(m).min(y)), 0.0, 1e-4), "{c} {m} {y}");
+    }
+    // An RGB color keeps its saturation and brightness in its own values.
+    let rgb = fill_colors(&stroke_pieces(&doc, &jittered(Color::rgb(0.8, 0.2, 0.4), Colorization::None, 90.0), &path, &stroke(1.0)));
+    for c in &rgb {
+        let Color::Rgb { r, g, b } = *c else { panic!("not RGB: {c:?}") };
+        assert!(near(f64::from(r.max(g).max(b)), 0.8, 1e-4) && near(f64::from(r.min(g).min(b)), 0.2, 1e-4), "{c:?}");
+    }
+    // A Lab color keeps its lightness and chroma.
+    let lab = fill_colors(&stroke_pieces(&doc, &jittered(Color::lab(50.0, 40.0, 30.0), Colorization::None, 90.0), &path, &stroke(1.0)));
+    assert!(lab.iter().any(|c| *c != Color::lab(50.0, 40.0, 30.0)), "{lab:?}");
+    for c in &lab {
+        let Color::Lab { l, a, b } = *c else { panic!("not Lab: {c:?}") };
+        assert!(l == 50.0 && near(f64::from(a.hypot(b)), 50.0, 1e-3), "{c:?}");
+    }
+}
+
+/// Hue jitter turns type's characters, the colors Tints and Shades and Hue Shift give, and a color
+/// linked to a swatch (which loses the link); a pattern paint stays.
+#[test]
+fn hue_jitter_turns_type_every_colorization_and_linked_colors() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let typed = |hue_jitter| Brush {
+        name: "s".into(),
+        kind: BrushKind::Scatter(Scatter { art: type_art(red.clone(), red.clone()), hue_jitter, ..Default::default() }),
+    };
+    let still = run_paints(&stroke_pieces(&doc, &typed(0.0), &path, &stroke(1.0)));
+    let turned = run_paints(&stroke_pieces(&doc, &typed(90.0), &path, &stroke(1.0)));
+    assert!(!still.is_empty() && still.iter().all(|p| *p == (red.clone(), red.clone())), "{still:?}");
+    assert_eq!(turned.len(), still.len());
+    assert!(turned.iter().any(|p| *p != (red.clone(), red.clone())), "the characters turn: {turned:?}");
+    assert!(turned.iter().all(|(f, s)| f == s), "a copy's character fill and stroke turn by the same amount: {turned:?}");
+    // Tints and Shades and Hue Shift: the colors they give turn.
+    let blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 1.0);
+    for colorization in [Colorization::TintsAndShades, Colorization::HueShift { key: Color::rgb(1.0, 0.0, 0.0) }] {
+        let art = Color::rgb(1.0, 0.0, 0.0);
+        let still = fill_colors(&stroke_pieces(&doc, &jittered(art, colorization, 0.0), &path, &blue));
+        let turned = fill_colors(&stroke_pieces(&doc, &jittered(art, colorization, 45.0), &path, &blue));
+        assert_eq!(turned.len(), still.len());
+        assert_ne!(turned, still, "{colorization:?}");
+        for (t, s) in turned.iter().zip(&still) {
+            assert!(hue_gap(t.to_hsb()[0], s.to_hsb()[0]) <= 45.01, "{colorization:?}: {t:?} from {s:?}");
+        }
+    }
+    // A color linked to a swatch turns and loses the link; a pattern paint stays.
+    let linked = Paint::Solid { color: Color::rgb(1.0, 0.0, 0.0), swatch: Some("Red".into()), tint: 1.0 };
+    let pattern = Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY };
+    let mut art = rect_art(10.0, 4.0);
+    art.appearance.set_fill(linked.clone());
+    art.appearance.set_stroke(pattern.clone());
+    let b = |hue_jitter| Brush { name: "s".into(), kind: BrushKind::Scatter(Scatter { art: art.clone(), hue_jitter, ..Default::default() }) };
+    let still = stroke_pieces(&doc, &b(0.0), &path, &stroke(1.0));
+    let turned = stroke_pieces(&doc, &b(90.0), &path, &stroke(1.0));
+    assert!(!still.is_empty() && still.iter().all(|n| n.appearance.fill_paint() == linked));
+    assert_eq!(turned.len(), still.len());
+    for n in &turned {
+        assert!(matches!(n.appearance.fill_paint(), Paint::Solid { swatch: None, .. }), "{:?}", n.appearance.fill_paint());
+        assert_eq!(n.appearance.stroke().map(|s| &s.paint), Some(&pattern));
+    }
+}
+
 /// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
 /// swatch links.
 #[test]

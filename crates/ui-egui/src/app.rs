@@ -82,6 +82,7 @@ impl VectorcraftApp {
                 slices: None,
                 print_tiling: None,
                 live_paint_gaps: None,
+                find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
                 selection_marks: Default::default(),
@@ -89,6 +90,7 @@ impl VectorcraftApp {
                 selection_box: None,
                 selection_bounds: None,
                 content_bounds: None,
+                three_d_exportable: None,
                 pixel_aligned: None,
                 symbol_instances: None,
                 plugin_keys: Default::default(),
@@ -162,6 +164,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            toasts: Default::default(),
             recovery: Default::default(),
             host_modifiers: Default::default(),
             forwarded: Vec::new(),
@@ -195,6 +198,7 @@ impl VectorcraftApp {
             input_frames: vec![],
             shortcuts_frames: vec![],
             held_tool: Vec::new(),
+            hold_keys: Default::default(),
             synthetic_injected: false,
             injected_events: vec![],
             injected_generation: InputGeneration::default(),
@@ -636,6 +640,7 @@ impl VectorcraftApp {
         // After every window this pass may open, and before the palette's field takes the keyboard.
         panel_docking::close_overlays_for_modal(self, &ctx);
         palette::show(self, &ctx);
+        crate::toasts::show(self, &ctx);
         // After every panel had its chance to draw in this pass.
         crate::panels::three_d::end_stale_drag(self, &ctx);
         if self.custom_titlebar {
