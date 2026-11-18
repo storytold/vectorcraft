@@ -25,6 +25,8 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
         // Not focusable (`Sense::click()` is): Tab goes through the dialog's controls, not the backdrop.
         ui.allocate_rect(ctx.content_rect(), egui::Sense::CLICK);
     });
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| d.insert_temp(drawn_pass_id(), pass));
     let shown = egui::Window::new(title)
         .id(id)
         .order(egui::Order::Foreground)
@@ -42,6 +44,17 @@ pub(crate) fn show_at<R>(ctx: &egui::Context, title: &str, id: Id, initial: Vec2
 /// the app would get.
 pub(crate) fn backdrop() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Middle, Id::unique("modal-dim"))
+}
+
+/// The key of the pass in which [`show_at`] last drew a modal window.
+fn drawn_pass_id() -> Id {
+    Id::unique("modal-drawn-pass")
+}
+
+/// Whether [`show_at`] drew a modal window in this pass. Unlike the backdrop's visibility, which
+/// also counts the last pass, it is false in the pass after the window closes.
+pub(crate) fn drawn_this_pass(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<u64>(drawn_pass_id())) == Some(ctx.cumulative_pass_nr())
 }
 
 /// The dialog's heading, which also moves the window ([`drag_band`]).
