@@ -6688,6 +6688,37 @@ perspective grid shows with an active plane, a Shift-click opens the size dialog
 {"name":"run_command","arguments":{"command":"shape.circleThroughPoints","params":{"points":[[0,0],[80,0],[0,60]]}}}
 ```
 
+## Curvature circle
+
+`shape.curvatureCircle {id, subpath?, segment, t, convex?}` draws the circle that touches path `id` at `t` (0 to 1) on
+segment `segment` of subpath `subpath` (0 when left out) and bends as the path bends there (its circle of curvature),
+as a live ellipse with the current paint, and selects it. The circle goes on the side the path bends toward; with
+`convex: true` it goes on the other side. A segment that is the usual cubic of a circular arc of 90° or less (its two
+ends the same distance from the center, and each handle 4/3 · tan(θ/4) of the radius long for an arc of θ) gives a
+circle with the arc's own radius, and on a circle drawn with the Ellipse tool the result is the circle itself. The
+result is `{id, cx, cy, radius, nominal}`, where `nominal` is true for such an arc, and one undo removes the circle.
+The circle is not pixel-aligned, even while [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid) is on.
+The command returns an error and draws nothing on a straight segment or the turning point of an S curve, at a cusp,
+at an anchor whose handle is drawn back onto it, at a corner anchor (`t` 0 or 1 where two segments meet at an angle
+of more than half a degree and the anchor is not marked smooth, or where they turn by 90° or more; segments of no
+length between them are passed over), when the circle would reach past the canvas (4,000,000 pt from the
+origin), when `t` is not from 0 to 1, when `id` is a guide, and when the path, subpath or segment does not exist.
+
+The Curvature Circle tool, after the Circle tool in the Ellipse tool's toolbar group, draws with this command. The
+pointer snaps to the nearest path that is not a guide within 5 screen points, or within Smart Guides › Snapping
+Tolerance when that is larger, and the tool shows the circle that matches the path there as a dashed outline (solid
+once it is more than 50,000 screen points around), a small cross at its center, a line from the center to the point
+it touches and, with Measurement Labels on, its radius by the pointer, followed by an asterisk for an arc's own
+radius. A click draws the circle, and a press dragged 2 screen points or more, or canceled with Escape, draws nothing;
+Shift held at the press puts the circle on the other side of the path. On a straight segment, at a cusp, at a corner
+anchor, or where the circle would reach past the canvas, the pointer shows "Straight segment", "Cusp", "Corner" or
+"Circle too large", and a click draws nothing. The pointer passes over the circles the tool drew until an edit, Undo
+or Redo is made outside the tool.
+
+```json
+{"name":"run_command","arguments":{"command":"shape.curvatureCircle","params":{"id":12,"segment":0,"t":0.5}}}
+```
+
 ## Editing a path with the Curvature tool
 
 The Curvature tool edits any selected path, whatever drew it, keeping its shape except where edited (#798). Each edit
