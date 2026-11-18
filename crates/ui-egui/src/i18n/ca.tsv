@@ -224,6 +224,9 @@
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
 	Adjust Adjoining Width Points	Ajusta els punts d’amplada contigus
+	Incoming	Entrant
+	Outgoing	Sortint
+	Single Width Only	Només una amplada
 	Adjust Color Balance…	Ajusta l’equilibri de color…
 	Adjust Colors	Ajusta els colors
 	Adjust Options:	Opcions d’ajust:
@@ -436,6 +439,7 @@ antiAlias	Sharp	Nítid
 	Average…	Mitjana…
 	Away from the Line	Allunyat de la línia
 	Axis	Eix
+	Axis Angle	Angle de l’eix
 	Axis side	Costat de l’eix
 	Axis:	Eix:
 	B4	B4
@@ -685,6 +689,12 @@ antiAlias	Sharp	Nítid
 	Character options	Opcions de caràcter
 	Paragraph options	Opcions de paràgraf
 	Character Rotation	Rotació de caràcters
+	Chinese Big 5	Xinès Big 5
+	Cyrillic	Ciríl·lic
+	Greek	Grec
+	Turkish	Turc
+	Baltic	Bàltic
+	Central European	Centreeuropeu
 	Character Set:	Joc de caràcters:
 	Character Style	Estil de caràcter
 	Character Style Options	Opcions de l’estil de caràcter
@@ -708,6 +718,8 @@ antiAlias	Sharp	Nítid
 	Chrome	Crom
 	Chrome…	Crom…
 	Circle	Cercle
+	Circle Tool	Eina de cercle
+	Circle too large	El cercle és massa gran
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -1141,6 +1153,8 @@ antiAlias	Sharp	Nítid
 	Delete Artboard	Suprimeix el tauler
 	Delete Artboards	Suprimeix els taulers
 	Delete Brush	Suprimeix el pinzell
+	Delete Color	Suprimeix el color
+	Restore Generated Table	Restaura la taula generada
 	Delete Character Style	Suprimeix l’estil de caràcter
 	Delete Data Set	Suprimeix el conjunt de dades
 	Delete Data Sets	Suprimeix els conjunts de dades
@@ -1250,6 +1264,7 @@ antiAlias	Sharp	Nítid
 	Direction:	Direcció:
 	Directives	Directrius
 	Disable Auto Add/Delete	Desactiva l’addició i la supressió automàtiques
+	Interpolate Control Points When Moving Anchors	Interpola les manetes de direcció en moure punts d’ancoratge
 	Disable Opacity Mask	Desactiva la màscara d’opacitat
 	Discard	Descarta
 	Discard Empty Type	Descarta el text buit
@@ -1722,6 +1737,8 @@ digits	Malayalam	Malaiàlam
 	Files	Fitxers
 	Files of a PDF standard can't be password-protected.	Els fitxers d’un estàndard PDF no es poden protegir amb contrasenya.
 	Files of this standard tag their colours with ICC profiles.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC.
+	Files of this standard tag their colors with ICC profiles, except CMYK colors in the output intent's profile, which are written as DeviceCMYK.	Els fitxers d’aquest estàndard etiqueten els colors amb perfils ICC, excepte els colors CMYK del perfil d’intenció de sortida, que s’escriuen com a DeviceCMYK.
+	With Don't include profiles and a CMYK output intent, every CMYK color is written as DeviceCMYK unless it is converted to a CMYK destination of another profile.	Amb «No incloguis els perfils» i una intenció de sortida CMYK, cada color CMYK s’escriu com a DeviceCMYK, tret que es converteixi a una destinació CMYK d’un altre perfil.
 	Fill	Farciment
 	Fill & Stroke	Farciment i traç
 	Fill (X), double-click for the Color Picker	Farciment (X), fes doble clic per al selector de color
@@ -1874,6 +1891,7 @@ digits	Malayalam	Malaiàlam
 	from the format's public description	de la descripció pública del format
 	from your earlier imports	de les importacions anteriors
 	Front	Davant
+	Side	Lateral
 	Frosted	Glaçat
 	Full Document	Document complet
 	Full Justify	Justificació completa
@@ -2562,6 +2580,7 @@ digits	Malayalam	Malaiàlam
 	Loads native code	Carrega codi natiu
 	Local Libraries	Biblioteques locals
 	Locate Library…	Localitza la biblioteca…
+	Locate Layer	Localitza la capa
 	Locate Object	Localitza l’objecte
 	Locate Selected Objects	Localitza els objectes seleccionats
 	Location	Ubicació
@@ -3393,6 +3412,10 @@ digits	Malayalam	Malaiàlam
 	Polar Grid Tool Options	Opcions de l’eina de quadrícula polar
 	Polygon	Polígon
 	Polygon Properties:	Propietats del polígon:
+	Line Properties:	Propietats de la línia:
+	Line Length:	Longitud de la línia:
+	Line Angle:	Angle de la línia:
+	Constrain Pie Angle	Restringeix l’angle del sector
 	Polygon Tool	Eina de polígon
 	Portrait	Vertical
 	Portrait (flipped)	Vertical (invertit)
@@ -3591,6 +3614,9 @@ digits	Malayalam	Malaiàlam
 	Real World:	Món real:
 	Real-time Drawing and Editing	Dibuix i edició en temps real
 	Use Monitor Profile for Canvas	Utilitza el perfil del monitor per al llenç
+	Refresh Monitor Profile	Actualitza el perfil del monitor
+@msg	turn on Use Monitor Profile for Canvas first	activeu primer «Utilitza el perfil del monitor per al llenç»
+@msg	this build doesn't read display profiles	aquesta versió no llegeix perfils de pantalla
 	The canvas is drawn in sRGB.	El llenç es dibuixa en sRGB.
 	Canvas display profile:	Perfil de pantalla del llenç:
 	The system matches the window to the display's colors.	El sistema ajusta la finestra als colors de la pantalla.
@@ -3876,6 +3902,7 @@ digits	Malayalam	Malaiàlam
 	The mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	La roda del ratolí amb Cmd/Ctrl premut desplaça el llenç en horitzontal.
 	Dragging sideways on a numeric field's label changes the field's value.	Arrossegar en horitzontal sobre l’etiqueta d’un camp numèric canvia el valor del camp.
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
+	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quan moveu punts d’ancoratge, cada corba amb un extrem desplaçat conserva la forma respecte dels seus extrems.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
 	Create Trim Marks draws Japanese-style marks instead of Roman ones.	Crea marques de retall dibuixa marques d’estil japonès en lloc de romanes.
@@ -4016,6 +4043,7 @@ digits	Malayalam	Malaiàlam
 	Rotate…	Gira…
 	Rotation	Rotació
 	Rotation relative to:	Rotació relativa a:
+	Hue Jitter:	Variació del to:
 	Rotation X	Rotació X
 	Rotation Y	Rotació Y
 	Rotation Z	Rotació Z
@@ -4036,6 +4064,7 @@ digits	Malayalam	Malaiàlam
 	Rounded Rectangle	Rectangle arrodonit
 	Rounded Rectangle Tool	Eina de rectangle arrodonit
 	Rounded Rectangle…	Rectangle arrodonit…
+	Roundness	Arrodoniment
 	Roundness:	Arrodoniment:
 	Row Size:	Mida de la fila:
 	Rows	Files
@@ -4439,6 +4468,7 @@ digits	Malayalam	Malaiàlam
 	Set Slice Rectangle	Defineix el rectangle del tall
 	Set Tab Stops	Defineix les tabulacions
 	Set Text	Defineix el text
+	Set the current fill or stroke to the selected color	Defineix el color seleccionat com a farciment o traç actual
 	Set the selected color to the current color	Defineix el color seleccionat com a color actual
 	Set Zoom	Defineix el zoom
 	Set:	Defineix:
@@ -4585,7 +4615,7 @@ digits	Malayalam	Malaiàlam
 	Show Vivid/Muted	Mostra els vius/apagats
 	Show Warm/Cool	Mostra els càlids/freds
 	Show {kind} Brushes	Mostra els pinzells {kind}
-	Show/hide plate (Alt-click: only this plate)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa)
+	Show/hide plate (Alt-click: only this plate; Alt-click again: all plates)	Mostra o amaga la planxa (Alt+clic: només aquesta planxa; Alt+clic de nou: totes les planxes)
 	Show:	Mostra:
 	Shown with the optimised preview.	Es mostra amb la previsualització optimitzada.
 	Shrink Text to Fit	Redueix el text perquè hi càpiga
@@ -5368,6 +5398,8 @@ digits	Malayalam	Malaiàlam
 	Variable Options	Opcions de variable
 	Variable Options…	Opcions de variable…
 	Variable Width Profile	Perfil d’amplada variable
+	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
+@msg	The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.	El pinzell del traç manté la seva pròpia mida, de manera que un perfil d’amplada no el canvia. Traieu el pinzell per fer servir un perfil.
 	Variables	Variables
 	Variation	Variació
 	Variation:	Variació:
@@ -5825,6 +5857,7 @@ digits	Malayalam	Malaiàlam
 @msg	Choose two nonzero angle arms	Trieu dos braços d’angle no nuls
 @msg	clipboard is empty	el porta-retalls és buit
 @msg	closing needs three anchors	el tancament necessita tres punts d’ancoratge
+@msg	colorTable.deleted: at least one color has to stay in the color table	colorTable.deleted: almenys un color ha de quedar a la taula de colors
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no és un color com "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: com a màxim {MAX_TABLE} colors
 @msg	column docks a set as a dock column, with no anchor or icon	column acobla un conjunt com a columna d’acoblament, sense àncora ni icona
@@ -6018,6 +6051,14 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	is a prompt's answer, whose `value` must be a string or null	és la resposta d'un prompt, i el seu `value` ha de ser una cadena o null
 @msg	must have `kind` alert, confirm or prompt	ha de tenir `kind` alert, confirm o prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
+@msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` ha de ser un nombre enter d’1 a {_1}
+@msg	`args{place}` is nested more than 64 levels deep	`args{place}` està imbricat en més de 64 nivells
+@msg	`args` must be an object	`args` ha de ser un objecte
+@msg	`args` is larger than 1 MiB	`args` ocupa més d'1 MiB
+@msg	`path` is empty	`path` és buit
+@msg	`installed` takes a `path`, not a `source`	`installed` admet un `path`, no un `source`
+@msg	`path` must name a .js or .jsx file	`path` ha d’indicar un fitxer .js o .jsx
+@msg	give exactly one of `path` and `source`	indiqueu exactament un de `path` i `source`
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
 @msg	Script file access denied: {path}	S’ha denegat l’accés de l’script als fitxers: {path}
@@ -6247,9 +6288,15 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu
 @msg	no active perspective plane	no hi ha cap pla de perspectiva actiu
+@msg	the perspective grid is hidden	la quadrícula de perspectiva està oculta
+@msg	Automatic Plane Positioning is off: turn on anchorPoint or gridlineIntersection (perspective.widget.options)	El posicionament automàtic del pla està desactivat: activeu anchorPoint o gridlineIntersection (perspective.widget.options)
+@msg	anchorPoint must be true or false	anchorPoint ha de ser true o false
+@msg	gridlineIntersection must be true or false	gridlineIntersection ha de ser true o false
+@msg	tolerance must be 0 or more	tolerance ha de ser 0 o més
+@msg	give `at` or `clear`, not both	indiqueu `at` o `clear`, no tots dos
 @msg	no anchor points selected	no hi ha cap punt d’ancoratge seleccionat
-@msg	`points` must be three [x, y] pairs of numbers	`points` han de ser tres parells de nombres [x, y]
-@msg	direct-select three anchor points, or give `points`	seleccioneu directament tres punts d’ancoratge o indiqueu `points`
+@msg	`points` must be two or three [x, y] pairs of numbers	`points` han de ser dos o tres parells de nombres [x, y]
+@msg	direct-select two or three anchor points, or give `points`	seleccioneu directament dos o tres punts d’ancoratge o indiqueu `points`
 @msg	no circle passes through these points: two are the same or all three lie on one line	cap cercle no passa per aquests punts: dos són iguals o tots tres són en una mateixa recta
 @msg	no app to open files here	aquí no hi ha cap aplicació per obrir fitxers
 @msg	no artboard	no hi ha tauler
@@ -6373,6 +6420,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	no such user library	no existeix aquesta biblioteca d’usuari
 @msg	no such view	no existeix aquesta vista
 @msg	no such width point	no existeix aquest punt d’amplada
+@msg	`single` must be `incoming` or `outgoing`	`single` ha de ser `incoming` o `outgoing`
+@msg	`index` and `outIndex` must be the two halves of one discontinuous width point	`index` i `outIndex` han de ser les dues meitats d’un mateix punt d’amplada discontinu
+@msg	a discontinuous width point keeps its place	un punt d’amplada discontinu manté la seva posició
 @msg	no swatch `{name}`	no hi ha la mostra `{name}`
 @msg	no swatch library `{l}` (see swatch.library.list)	no hi ha la biblioteca de mostres `{l}` (vegeu swatch.library.list)
 @msg	no symbol `{n}`	no hi ha el símbol `{n}`
@@ -6695,7 +6745,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	each of `{GRAPHICS}` must be an object	cada element de `{GRAPHICS}` ha de ser un objecte
 @msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	les entrades de `{GRAPHICS}` admeten symbol, face, x, y, scale i rotation, no `{k}`
 @msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada element de `{GRAPHICS}` necessita `symbol`, el nom d’un símbol
-@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` ha de ser front o back
+@msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` ha de ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
@@ -7018,6 +7068,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	{path}: {e}	{path}: {e}
 @msg	{status} ({e})	{status} ({e})
 @msg	{tool} isn't in a toolbar group of several tools	{tool} no forma part d’un grup de diverses eines a la barra d’eines
+@msg	Presentation Mode hides the toolbars: change the screen mode to show them	el Mode de presentació amaga les barres d’eines: canvieu el mode de pantalla per mostrar-les
+@msg	Tab has hidden the toolbars: press Tab to show them	Tab ha amagat les barres d’eines: premeu Tab per mostrar-les
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» demana un pressupost elevat (cada execució fins a {minutes} minuts i {times} vegades les instruccions habituals): una persona l’ha d’aprovar a l’aplicació d’escriptori, o passa `allowHeavy: true` en una sessió iniciada amb --allow-plugin-grants
 # Plug-in host messages: manifests, modules, runs and plug-in output
 @msg	`name` must be 1-64 printable characters	`name` ha de tenir 1-64 caràcters imprimibles
@@ -7736,6 +7788,14 @@ breakText	Glyphs	Glifs
 	Remove Gaps	Elimina les separacions
 @msg	that makes too many pieces (at most 100000): make the dashes longer	això fa massa trossos (com a màxim 100000): allargueu els guions
 @msg	select paths, or segments, to divide	seleccioneu camins o segments per dividir
+# Path Precision Tools add-on: Smooth Bridge.
+	Smooth Bridge…	Pont suau…
+	Smooth Bridge	Pont suau
+	Keep Originals	Conserva els originals
+@msg	select two circles to bridge	seleccioneu dos cercles per unir-los
+@msg	one circle is inside the other	un cercle és dins de l’altre
+@msg	the circles are too far apart for this radius: raise the radius	els cercles estan massa separats per a aquest radi: augmenteu el radi
+@msg	the circles are too far apart for this radius	els cercles estan massa separats per a aquest radi
 # Path Precision Tools add-on: Common Tangents.
 	Common Tangents…	Tangents comunes…
 	Common Tangents	Tangents comunes
@@ -8247,4 +8307,15 @@ breakText	Glyphs	Glifs
 @msg	A panel is not joined to the rest by a crease.	Un panell no està unit a la resta per cap línia d’hendit.
 @msg	A fold line is on a non-printing layer.	Una línia de plegat és en una capa que no s’imprimeix.
 @msg	Panels: {panels}, hinges: {hinges}, errors: {errors}, warnings: {warnings}	Panells: {panels}, frontisses: {hinges}, errors: {errors}, avisos: {warnings}
+	Fold Preview	Previsualització del plegat
+	Fold	Plegat
+	Show Fold Lines	Mostra les línies de plegat
+	Three-Quarter	Tres quarts
+	Open a document to preview its folded shape.	Obre un document per previsualitzar-ne la forma plegada.
+@msg	Check the fold lines first.	Primer comprova les línies de plegat.
+@msg	Panels: {panels}, hinges: {hinges}	Panells: {panels}, frontisses: {hinges}
+@msg	Other blanks not shown: {count}	Altres troquelats no mostrats: {count}
+@msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
+@msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: utilitzeu "{_1}" o "{_2}"
