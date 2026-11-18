@@ -532,6 +532,24 @@ pub(super) fn export_overflow_warning(d: &Document, layers: &[Arc<Node>], areas:
     super::typecmd::export_overflow_warning(&overflow)
 }
 
+/// The objects behind production findings. Resource art points to its first visible owner on
+/// the canvas, so a finding can be located without selecting an id outside the layer tree.
+#[derive(Default)]
+pub(super) struct PreflightType {
+    pub fonts: BTreeMap<UsedFont, BTreeSet<NodeId>>,
+    pub overflow: BTreeSet<NodeId>,
+    pub images: BTreeMap<NodeId, NodeId>,
+}
+
+pub(super) fn preflight_type(d: &Document, layers: &[Arc<Node>], areas: &[Rect]) -> PreflightType {
+    let mut walk = Printed::new(d);
+    walk.preflight = Some(PreflightType::default());
+    for l in layers {
+        walk.node(l, Some(areas));
+    }
+    walk.preflight.unwrap_or_default()
+}
+
 /// The walk of [`printed_type`].
 struct Printed<'a> {
     d: &'a Document,
@@ -546,13 +564,25 @@ struct Printed<'a> {
     /// The symbols and patterns whose art was walked.
     symbols: BTreeSet<String>,
     patterns: BTreeSet<String>,
+    preflight: Option<PreflightType>,
+    owner: Option<NodeId>,
 }
 
 impl<'a> Printed<'a> {
     /// A walk of `d` among its own objects, nothing found yet.
     fn new(d: &'a Document) -> Self {
         let boxes = d.symbol_boxes();
-        Self { d, boxes, own: true, fonts: BTreeSet::new(), overflow: BTreeSet::new(), symbols: BTreeSet::new(), patterns: BTreeSet::new() }
+        Self {
+            d,
+            boxes,
+            own: true,
+            fonts: BTreeSet::new(),
+            overflow: BTreeSet::new(),
+            symbols: BTreeSet::new(),
+            patterns: BTreeSet::new(),
+            preflight: None,
+            owner: None,
+        }
     }
 
     /// Adds the fonts of `n` and its descendants that print, and the ids of those that don't fit
@@ -560,6 +590,15 @@ impl<'a> Printed<'a> {
     /// art of a symbol, opacity mask, pattern or placed document, in brush pieces, or in a live
     /// object) all of them but those outside the clipping path of a clip group.
     fn node(&mut self, n: &Node, areas: Option<&[Rect]>) {
+        let previous = self.owner;
+        if self.own {
+            self.owner = Some(n.id);
+        }
+        self.node_contents(n, areas);
+        self.owner = previous;
+    }
+
+    fn node_contents(&mut self, n: &Node, areas: Option<&[Rect]>) {
         if !n.visible || matches!(n.kind, NodeKind::Layer { template: true, .. }) {
             return;
         }
@@ -571,6 +610,14 @@ impl<'a> Printed<'a> {
             && !open
             && !self.meets(n, a)
         {
+            // An entirely overset frame paints nothing, but is still a delivery problem. Keep
+            // the export walk unchanged; only preflight checks the frame itself in this case.
+            if let (Some(p), Some(owner), NodeKind::Text(t)) = (&mut self.preflight, self.owner, &n.kind)
+                && n.geometric_bounds().is_some_and(|b| a.iter().any(|r| r.intersect(b).area() > 0.0 || r.contains_rect(b)))
+                && vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).overflow
+            {
+                p.overflow.insert(owner);
+            }
             return;
         }
         // The art that its opacity mask, pattern paints and brushed strokes draw.
@@ -616,16 +663,33 @@ impl<'a> Printed<'a> {
                 if overflows && self.own {
                     self.overflow.insert(n.id);
                 }
+                if overflows && let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                    p.overflow.insert(owner);
+                }
                 for r in runs {
-                    self.fonts.extend(run_fonts(r));
+                    let fonts = run_fonts(r);
+                    if let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                        for font in &fonts {
+                            p.fonts.entry(font.clone()).or_default().insert(owner);
+                        }
+                    }
+                    self.fonts.extend(fonts);
                     // Inline graphics draw their symbols' art.
                     if let Some(art) = r.inline.as_ref().filter(|_| draws_inline(r)) {
                         self.symbol(&art.symbol);
                     }
                 }
             }
+            NodeKind::Image(_) => {
+                if let (Some(p), Some(owner)) = (&mut self.preflight, self.owner) {
+                    p.images.entry(n.id).or_insert(owner);
+                }
+            }
             NodeKind::SymbolInstance { symbol, .. } => self.symbol(symbol),
             NodeKind::PlacedDocument(p) => {
+                if let (Some(report), Some(owner)) = (&mut self.preflight, self.owner) {
+                    report.images.entry(n.id).or_insert(owner);
+                }
                 for art in p.art(n) {
                     self.art(&art);
                 }

@@ -17,10 +17,12 @@ pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
 /// What an in-window menu click on `target` (a [`click_target`]) runs with `held` held: Object ›
 /// Unlock All and Object › Show All chosen with Shift+Alt (Shift+Option) act only inside the groups
 /// that hold the selected objects (`scope: "group"`); Select Linked, Embedded, Missing and Modified
-/// chosen with Shift add to the selection (`add: true`).
+/// chosen with Shift add to the selection (`add: true`); Object › Expand… chosen with Alt (Option)
+/// expands at once with the choices its dialog last expanded with (`immediate: true`).
 pub(crate) fn with_held_keys(target: (String, Value), held: egui::Modifiers) -> (String, Value) {
     match target.0.as_str() {
         "object.unlockAll" | "object.showAll" if held.shift && held.alt => (target.0, json!({"scope": "group"})),
+        "ui.expandDialog" if held.alt => (target.0, json!({"immediate": true})),
         // Select Linked, Embedded, Missing and Modified with Shift add to the selection.
         crate::addons::select::link_status::COMMAND if held.shift => (target.0, crate::addons::select::link_status::with_shift(target.1)),
         _ => target,
@@ -53,7 +55,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         // Transform Each opens on the values it was last confirmed with (#1732).
         "object.transformEach" => (crate::dialogs::transform_each::KIND, crate::dialogs::transform_each::open_fields(app)),
         "object.reflect" => ("reflect", json!({"axis": "vertical", "angle": 90})),
-        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal"})),
+        "object.shear" => ("shear", json!({"angle": 0, "axis": "horizontal", "axisAngle": 0})),
         "path.average" => ("average", json!({"axis": "both"})),
         // Average & Join opens on the joined anchor chosen last (Corner the first time).
         "path.averageJoin" if app.ui.average_join.is_object() => ("averageJoin", app.ui.average_join.clone()),
@@ -77,6 +79,7 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
             (crate::addons::pathtools::set_corners::KIND, crate::addons::pathtools::set_corners::fields(app))
         }
         crate::addons::pathtools::dashes::COMMAND => (crate::addons::pathtools::dashes::KIND, crate::addons::pathtools::dashes::fields()),
+        crate::addons::pathtools::bridge::COMMAND => (crate::addons::pathtools::bridge::KIND, crate::addons::pathtools::bridge::fields()),
         crate::addons::pathtools::tangent_circle::COMMAND => {
             (crate::addons::pathtools::tangent_circle::KIND, crate::addons::pathtools::tangent_circle::fields(app))
         }
@@ -302,6 +305,18 @@ fn open_view_dialog(app: &mut VectorcraftApp, id: &str, p: &Value) -> bool {
     // Edit Custom Dictionary…: the custom dictionary's words in a list, to add, delete or change.
     if id == crate::dialogs::custom_dictionary::COMMAND && p.as_object().is_none_or(|o| o.is_empty()) {
         if let Err(e) = crate::dialogs::custom_dictionary::open(app) {
+            app.status(e);
+        }
+        return true;
+    }
+    // Find Next with no text to find, as its menu item runs it: the next match of the last Find
+    // and Replace search, or the dialog when there has been none.
+    if id == crate::dialogs::find_replace::NEXT
+        && p.get("find").is_none_or(|f| f.as_str() == Some(""))
+        && p.as_object().is_none_or(|o| o.len() <= 1)
+        && app.session.active().is_some()
+    {
+        if let Err(e) = crate::dialogs::find_replace::find_next(app) {
             app.status(e);
         }
         return true;
