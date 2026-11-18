@@ -8569,6 +8569,7 @@ breakText	Glyphs	Glifos
 @msg	A joint does not close by {gap} pt.	Una unión no cierra por {gap} pt.
 @msg	Two panels pass through each other.	Dos paneles se atraviesan entre sí.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+@msg	a line or other open path that encloses no area contributes no area to the compound shape; to include it, apply Object › Path › Outline Stroke to it first	una línea u otro trazado abierto que no encierra ningún área no aporta ningún área a la forma compuesta; para incluirlo, aplícale primero Objeto › Trazado › Contornear trazo
 	Pressure Sensitive	Sensible a la presión
 	Flex Ribbon	Cinta flexible
 	Pulse Stroke	Trazo pulsante
