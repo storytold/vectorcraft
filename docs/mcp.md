@@ -5543,7 +5543,10 @@ anchors that don't change a result's shape off it, and `removeUnpainted` makes D
 of objects with no fill (or only hidden fills). Both default to false; `{}` reads the options. Each Shape Mode and
 Pathfinder command (`object.pathfinder.unite` … `minusBack`) also takes `precision`, `removeRedundantPoints` and
 `removeUnpainted` for one run; the values it used join its journal entry, so a replay or an action gives the same art
-whatever the options are then.
+whatever the options are then. Unite, Minus Front, Intersect, Exclude and Minus Back close open paths, so a straight
+line encloses no area and does not change the result's shape. When a selected object is or holds such a path, the reply's
+`warning` says so and names Object › Path › Outline Stroke. When such a path leaves the result empty (Intersect, a line
+at the back in Minus Front, or a line in front in Minus Back), the error says so too.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.pathfinder.options","params":{"precision":0.1,"removeUnpainted":true}}}

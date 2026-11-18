@@ -2142,6 +2142,8 @@ file-filter	Templates	範本
 @msg	{label}: lost track of a shape's style	{label}：遺失了某個形狀的樣式
 @msg	{label}: select paths	{label}：請選取路徑
 @msg	{label}: select paths, compound paths, groups or text	{label}：請選取路徑、複合路徑、群組或文字
+@msg	a line or other open path that encloses no area does not change the result's shape; to include it, apply Object › Path › Outline Stroke to it first	直線或其他不圍成區域的開放路徑不會改變結果的形狀；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
+@msg	{label} produced an empty result: a line or other open path encloses no area; to include it, apply Object › Path › Outline Stroke to it first	{label} 產生了空的結果：直線或其他開放路徑不圍成區域；若要納入，請先對其套用「物件 › 路徑 › 外框筆畫」
 @msg	already editing a pattern	已在編輯圖樣
 @msg	no pattern `{name}`	沒有圖樣 `{name}`
 @msg	not in pattern editing mode	不在圖樣編輯模式中
