@@ -2080,6 +2080,22 @@ fn a_dimension_of_the_same_points_lines_up_and_the_line_follows_the_pointer() {
     assert_eq!(recipe(&s, id).line_ends(), (pt(200.0, 186.0), pt(300.0, 186.0)));
 }
 
+/// With Real-time Drawing off, a dimension hidden or deleted by a command while another is placed
+/// is no longer a level: no guide runs along its level.
+#[test]
+fn a_dimension_hidden_or_deleted_while_another_is_placed_is_no_longer_a_level() {
+    let plain = ViewInfo::default();
+    for cmd in ["object.hide", "edit.clear"] {
+        let (mut s, first) = level_start(plain);
+        run(&mut s, "prefs.set", json!({"key": "realTimeDrawing", "value": false}));
+        linear_click(&mut s, plain, 200.0, 200.0);
+        linear_click(&mut s, plain, 300.0, 200.0);
+        assert!(!guide_lines(&mut s, plain, 250.0, 172.5).is_empty(), "{cmd}: on the level before");
+        run(&mut s, cmd, json!({"ids": [first]}));
+        assert!(guide_lines(&mut s, plain, 250.0, 172.5).is_empty(), "{cmd}: no level after");
+    }
+}
+
 /// A dimension dragged out from a segment, with its line within the Smart Guides snapping
 /// tolerance of the level of another dimension's parallel line, lands on that level.
 #[test]
