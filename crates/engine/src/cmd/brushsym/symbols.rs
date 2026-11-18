@@ -625,6 +625,10 @@ pub(super) fn symbol_update(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     let mut art = selection_art(s, p)?.ok_or_else(|| EngineError::Other("nothing selected".into()))?;
+    // Nor can art that holds an instance of it, directly or through the symbols it nests.
+    if crate::cmd::symboledit::holds_symbol(&s.doc()?.doc, &art, &name, &mut Default::default()) {
+        return Err(EngineError::Other("a symbol can't hold an instance of itself".into()));
+    }
     crate::cmd::threads::keep_shown_text(&s.doc()?.doc, &mut art);
     let (art, size, c) = normalize(art)?;
     let old = natural_size(&s.doc()?.doc, &name);

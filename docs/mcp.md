@@ -3647,6 +3647,10 @@ already walks Image Trace. Short agent entry points:
   when that document is no longer open; plug-ins cannot call it), `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask and its bounding box, square after
   `object.resetBoundingBox`; a hidden or locked instance's
   art stays hidden or locked and is not selected), `symbol.replace`,
+  `symbol.update {name, ids?|id?}` (Redefine Symbol: the selection, or `ids`, becomes the symbol's art and an instance
+  of it in one undo step; art that holds an instance of the symbol (opacity masks included), directly or through the art
+  of the symbols it holds instances of, is refused and nothing changes; the Symbols panel sends it with the dragged art's `ids` when art dragged
+  off the canvas is released on a symbol's tile or row with Alt (Option on macOS) held),
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
   `artboard`, the active one the app passes, or in a document without artboards on `viewCenter`, the view's center the
