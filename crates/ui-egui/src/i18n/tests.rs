@@ -373,6 +373,33 @@ fn turkish_draw_labels_use_the_drawing_verb() {
     assert_eq!(message(tr_lang, "Scale must be drawing:real, for example 1:10"), "Ölçek çizim:gerçek biçiminde olmalıdır, örneğin 1:10");
 }
 
+/// Turkish rows that name the Revolve or Extrude & Bevel effect use the catalog's label for that
+/// effect, so a message about Revolve does not read as Rotate. `Revolve angle` names a control,
+/// not the effect, and keeps its own wording.
+#[test]
+fn turkish_three_d_rows_use_the_effect_labels() {
+    let tr_lang = Lang::from_code("tr").expect("tr registered");
+    let revolve = message(tr_lang, "Revolve");
+    let extrude = message(tr_lang, "Extrude & Bevel");
+    assert_eq!(revolve, "Eksen Etrafında Döndür");
+    assert_eq!(extrude, "Ekstrüzyon ve Eğim");
+    let (entries, _) = parse_entries(tr_lang.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, t) in &entries {
+        let names_revolve = src.split(|c: char| !c.is_alphanumeric()).any(|w| w == "Revolve") && src != "Revolve angle";
+        if (names_revolve && (!t.contains(revolve.as_str()) || t.contains("Revolve")))
+            || (src.contains("Extrude & Bevel") && !t.contains(extrude.as_str()))
+        {
+            wrong.push(format!("{src:?} -> {t:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "Turkish rows that do not use the effect label:\n{}", wrong.join("\n"));
+    assert_eq!(
+        message(tr_lang, "the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)"),
+        "nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Eksen Etrafında Döndür, Şişir veya Döndür)"
+    );
+}
+
 /// The Catalan catalog registers under `ca`, claims complete menus and messages, and passes
 /// locale resolution, vocabulary and count formatting checks.
 #[test]

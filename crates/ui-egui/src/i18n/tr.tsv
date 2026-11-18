@@ -5679,7 +5679,7 @@ effect	Soft	Yumuşak
 	Show axis	Ekseni göster
 	Reset all	Tümünü sıfırla
 	Reset to default	Varsayılana sıfırla
-	Reset all Revolve settings to their defaults.	Tüm Revolve ayarlarını varsayılan değerlerine sıfırlayın.
+	Reset all Revolve settings to their defaults.	Tüm Eksen Etrafında Döndür ayarlarını varsayılan değerlerine sıfırlayın.
 	Drag values or labels. Double-click a value to type.	Değerleri veya etiketleri sürükleyin. Yazmak için bir değeri çift tıklayın.
 	Drag rings to rotate. Shift snaps to 15°.	Döndürmek için halkaları sürükleyin. Kaydırma 15°'ye sabitlenir.
 	Track cube	Döndürme küpü
@@ -5867,22 +5867,22 @@ lighting	Light	Işık
 @msg	The 3D projection is not finite	3D izdüşümü sonlu değil
 @msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D gölgesi çok karmaşık; Gölgeler'i kapatın veya resmi basitleştirin
 @msg	The shape contains invalid coordinates	Şekil geçersiz koordinatlar içeriyor
-@msg	Revolve profile contains invalid coordinates	Döndür profili geçersiz koordinatlar içeriyor
-@msg	Revolve profile is too complex	Döndür profili çok karmaşık
-@msg	Revolve projection is not finite	Döndür izdüşümü sonlu değil
-@msg	Revolve requires finite profile coordinates within 100 million points	Döndür, 100 milyon pt sınırı içinde sonlu profil koordinatları gerektirir
-@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Döndür yüzeyi çok karmaşık; Segmentler değerini azaltın veya profili basitleştirin
-@msg	Revolve surface is too complex; simplify the profile	Döndür yüzeyi çok karmaşık; profili basitleştirin
-@msg	Revolve visibility cannot split the projected boundary	Döndür görünürlüğü izdüşümü alınan sınırı bölemiyor
-@msg	Revolve visibility creates too many fragments	Döndür görünürlüğü çok fazla parça oluşturuyor
-@msg	Revolve visibility creates too many vector anchors	Döndür görünürlüğü çok fazla vektör bağlantı noktası oluşturuyor
-@msg	Revolve visibility exceeds its geometry work limit	Döndür görünürlüğü geometri işlem sınırını aşıyor
-@msg	Revolve visibility exceeds its spatial index limit	Döndür görünürlüğü uzamsal dizin sınırını aşıyor
-@msg	Revolve visibility has too many boundary crossings	Döndür görünürlüğünde çok fazla sınır kesişimi var
-@msg	Revolve visibility has too many input anchors	Döndür görünürlüğünde çok fazla girdi bağlantı noktası var
-@msg	Revolve visibility requires convex cap sectors	Döndür görünürlüğü dışbükey kapak dilimleri gerektirir
-@msg	Revolve visibility requires finite projected faces	Döndür görünürlüğü sonlu izdüşüm yüzleri gerektirir
-@msg	Too many Revolve faces for visibility evaluation	Görünürlük değerlendirmesi için çok fazla Döndür yüzü var
+@msg	Revolve profile contains invalid coordinates	Eksen Etrafında Döndür profili geçersiz koordinatlar içeriyor
+@msg	Revolve profile is too complex	Eksen Etrafında Döndür profili çok karmaşık
+@msg	Revolve projection is not finite	Eksen Etrafında Döndür izdüşümü sonlu değil
+@msg	Revolve requires finite profile coordinates within 100 million points	Eksen Etrafında Döndür, 100 milyon pt sınırı içinde sonlu profil koordinatları gerektirir
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Eksen Etrafında Döndür yüzeyi çok karmaşık; Segmentler değerini azaltın veya profili basitleştirin
+@msg	Revolve surface is too complex; simplify the profile	Eksen Etrafında Döndür yüzeyi çok karmaşık; profili basitleştirin
+@msg	Revolve visibility cannot split the projected boundary	Eksen Etrafında Döndür görünürlüğü izdüşümü alınan sınırı bölemiyor
+@msg	Revolve visibility creates too many fragments	Eksen Etrafında Döndür görünürlüğü çok fazla parça oluşturuyor
+@msg	Revolve visibility creates too many vector anchors	Eksen Etrafında Döndür görünürlüğü çok fazla vektör bağlantı noktası oluşturuyor
+@msg	Revolve visibility exceeds its geometry work limit	Eksen Etrafında Döndür görünürlüğü geometri işlem sınırını aşıyor
+@msg	Revolve visibility exceeds its spatial index limit	Eksen Etrafında Döndür görünürlüğü uzamsal dizin sınırını aşıyor
+@msg	Revolve visibility has too many boundary crossings	Eksen Etrafında Döndür görünürlüğünde çok fazla sınır kesişimi var
+@msg	Revolve visibility has too many input anchors	Eksen Etrafında Döndür görünürlüğünde çok fazla girdi bağlantı noktası var
+@msg	Revolve visibility requires convex cap sectors	Eksen Etrafında Döndür görünürlüğü dışbükey kapak dilimleri gerektirir
+@msg	Revolve visibility requires finite projected faces	Eksen Etrafında Döndür görünürlüğü sonlu izdüşüm yüzleri gerektirir
+@msg	Too many Revolve faces for visibility evaluation	Görünürlük değerlendirmesi için çok fazla Eksen Etrafında Döndür yüzü var
 @msg	input contains NaN or infinite coordinates	girdi NaN veya sonsuz koordinatlar içeriyor
 @msg	input path could not be closed	girdi yolu kapatılamadı
 @msg	the shapes are too degenerate to combine	şekiller birleştirilemeyecek kadar yozlaşmış
@@ -7522,7 +7522,7 @@ axis	Y Axis	Y ekseni
 @msg	nothing to repeat	yinelenecek bir şey yok
 @msg	numbers out of order in {{}} quantifier	{{}} niceleyicisinde sayılar sırasız
 @msg	object {_1} needs a 3D effect	{_1} nesnesinde bir 3D efekti olmalıdır
-@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	nesne {_1}: içi boş bir Kalıp Çıkarma ve Eğim efektinin kapakları yoktur: bir grafik eşlemek için Kapak seçeneğini açın
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	nesne {_1}: içi boş bir Ekstrüzyon ve Eğim efektinin kapakları yoktur: bir grafik eşlemek için Kapak seçeneğini açın
 @msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	nesne {_1}: derinlik 0 olduğunda nesnenin tek yüzü vardır: grafiklerini ön yüze eşleyin
 @msg	object {_1}: {_2}	nesne {_1}: {_2}
 @msg	object {_1}: {e}	nesne {_1}: {e}
@@ -7663,7 +7663,7 @@ axis	Y Axis	Y ekseni
 @msg	{what} is not a function	{what} bir işlev değil
 @msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what} bir yaprağa {MAX_COPIES_PER_SHEET} taneden fazla kopya yazdırırdı: ölçeğini büyütün
 @msg	{what} {i} out of range	{what} {i} aralık dışında
-@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Bir profil tek bir Döndürme efektini destekler. Bunun yerine mevcut efektin seçeneklerini düzenleyin.
+@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Bir profil tek bir Eksen Etrafında Döndür efektini destekler. Bunun yerine mevcut efektin seçeneklerini düzenleyin.
 @msg	Add Points at Crossings: a path went missing	Kesişimlere Nokta Ekle: bir yol kayboldu
 @msg	CSS options: {e}	CSS seçenekleri: {e}
 @msg	CSV has a header but no data rows	CSV'de bir başlık var ama veri satırı yok
